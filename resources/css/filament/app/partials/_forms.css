@@ -1,0 +1,14 @@
+.fi-tabs-item {
+    &.fi-active {
+        background-color: #4f39f6;
+    }
+}
+
+.fi-tabs-item {
+    &.fi-active {
+        & .fi-tabs-item-label,
+        & > .fi-icon {
+            color: #fff;
+        }
+    }
+}

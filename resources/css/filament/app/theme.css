@@ -1,0 +1,14 @@
+@import "../../../../vendor/filament/filament/resources/css/theme.css";
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/resources/*/**';
+@source '../../../../vendor/codewithdennis/filament-advanced-choice/resources/**/*.blade.php';
+@source '../../../../resources/views/filament/forms/*/**';
+
+@import "./partials/_variables.css";
+@import "./partials/_layout.css";
+@import "./partials/_groups.css";
+@import "./partials/_sidebar.css";
+@import "./partials/_page.css";
+@import "./partials/_table.css";
+@import "./partials/_forms.css";

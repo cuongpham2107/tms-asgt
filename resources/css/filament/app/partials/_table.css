@@ -1,0 +1,89 @@
+.fi-ta-table {
+    & > thead {
+        & > tr {
+            background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));
+        }
+    }
+}
+.fi-ta-header-cell {
+    color: white;
+    border-left: 1px solid rgb(241 245 249 / var(--tw-border-opacity, 1));
+}
+
+.fi-ta-cell {
+    border-left: 1px solid rgb(241 245 249 / var(--tw-border-opacity, 1));
+}
+html.dark .fi-ta-table {
+    & > thead {
+        & > tr {
+            background-color: rgb(2 6 23 / var(--tw-bg-opacity, 1));
+        }
+    }
+}
+html.dark .fi-ta-header-cell {
+    color: white;
+    border-left: 1px solid rgb(241 245 249 / var(--tw-border-opacity, 0.06));
+}
+
+html.dark .fi-ta-cell {
+    border-left: 1px solid rgb(241 245 249 / var(--tw-border-opacity, 0.06));
+}
+tr.draft-order-table-row > td {
+    background-color: #f8fafc;
+}
+
+tr.assigned-order-table-row > td {
+    background-color: #eff6ff;
+}
+
+tr.sent-order-table-row > td,
+tr.started-order-table-row > td,
+tr.delivering-order-table-row > td,
+tr.driver-swap-order-table-row > td {
+    background-color: #ecfeff;
+}
+
+tr.arrived-pickup-order-table-row > td,
+tr.arrived-delivery-order-table-row > td {
+    background-color: #fffbeb;
+}
+
+tr.delivered-order-table-row > td,
+tr.completed-order-table-row > td {
+    background-color: #f0fdf4;
+}
+
+tr.cancelled-order-table-row > td,
+tr.trashed-order-table-row > td {
+    background-color: #fef2f2;
+}
+
+html.dark tr.draft-order-table-row > td {
+    background-color: #1f2937;
+}
+
+html.dark tr.assigned-order-table-row > td {
+    background-color: #172554;
+}
+
+html.dark tr.sent-order-table-row > td,
+html.dark tr.started-order-table-row > td,
+html.dark tr.delivering-order-table-row > td,
+html.dark tr.driver-swap-order-table-row > td {
+    background-color: #083344;
+}
+
+html.dark tr.arrived-pickup-order-table-row > td,
+html.dark tr.arrived-delivery-order-table-row > td {
+    background-color: #422006;
+}
+
+html.dark tr.delivered-order-table-row > td,
+html.dark tr.completed-order-table-row > td {
+    background-color: #14532d;
+}
+
+html.dark tr.cancelled-order-table-row > td,
+html.dark tr.trashed-order-table-row > td {
+    background-color: #450a0a;
+}

@@ -1,0 +1,44 @@
+.fi-sidebar-nav-groups {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 2.5);
+}
+
+.fi-sidebar-group {
+    margin: 0;
+}
+
+.fi-sidebar-group-btn {
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 1.5);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.fi-sidebar-group-items {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 0.5);
+    padding-inline: calc(var(--spacing) * 2);
+}
+
+.fi-sidebar-group.fi-active > .fi-sidebar-group-btn,
+.fi-sidebar-group.fi-collapsed > .fi-sidebar-group-btn {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.fi-sidebar-group-dropdown-trigger-btn {
+    justify-content: flex-start;
+}
+
+html.dark .fi-sidebar-group-btn {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+html.dark .fi-sidebar-group.fi-active > .fi-sidebar-group-btn,
+html.dark .fi-sidebar-group.fi-collapsed > .fi-sidebar-group-btn {
+    color: rgba(255, 255, 255, 0.4);
+}

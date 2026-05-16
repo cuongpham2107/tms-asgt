@@ -1,0 +1,69 @@
+.fi-logo {
+    color: #ffffff;
+    height: 2.5rem !important;
+}
+.fi-topbar-start img.fi-logo {
+    display: none !important;
+}
+.fi-main {
+    background-color: rgb(245 246 250 / var(--tw-bg-opacity, 1));
+}
+
+html.dark .fi-main {
+    background-color: rgb(9 14 25 / var(--tw-bg-opacity, 1));
+}
+
+html.dark .fi-main .fi-section,
+html.dark .fi-main .fi-section-content,
+html.dark .fi-main .fi-stats-overview-stat,
+html.dark .fi-main .fi-table,
+html.dark .fi-main .fi-infolist,
+html.dark .fi-main .fi-form {
+    background-color: rgb(15 23 42 / 0.82);
+}
+
+.fi-sidebar {
+    background: var(--sidebar-bg);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.fi-sidebar .fi-sidebar-header-ctn,
+.fi-sidebar .fi-sidebar-footer {
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.fi-sidebar-nav {
+    padding-inline: calc(var(--spacing) * 2.5);
+    padding-block: calc(var(--spacing) * 3);
+    scrollbar-gutter: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.fi-sidebar-nav::-webkit-scrollbar {
+    display: none;
+}
+
+html.dark .fi-sidebar {
+    background: var(--sidebar-bg);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+html.dark .fi-sidebar .fi-sidebar-header-ctn,
+html.dark .fi-sidebar .fi-sidebar-footer {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+html.dark .fi-topbar {
+    background-color: rgb(15 23 42 / var(--tw-bg-opacity, 1));
+    border-color: rgb(30 41 59 / var(--tw-border-opacity, 1));
+}
+
+html.dark .fi-topbar-start,
+html.dark .fi-topbar-end {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+html.dark .fi-brand {
+    color: rgb(226 232 240 / var(--tw-text-opacity, 1));
+}

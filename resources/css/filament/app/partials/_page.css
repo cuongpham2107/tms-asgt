@@ -1,0 +1,3 @@
+.fi-page-content {
+    row-gap: calc(var(--spacing) * 4);
+}
