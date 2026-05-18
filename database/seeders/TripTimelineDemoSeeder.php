@@ -51,8 +51,8 @@ class TripTimelineDemoSeeder extends Seeder
                 'vehicle_id' => $vehicleIds['20C-08678'],
                 'shift_type' => 'full',
                 'start_km' => 12350.0,
-                'start_gps_lat' => 10.8100000,
-                'start_gps_lng' => 106.6700000,
+                'start_gps_lat' => 21.2142000,
+                'start_gps_lng' => 105.8027000,
                 'updated_at' => $now,
                 'created_at' => $now,
             ]
@@ -65,8 +65,8 @@ class TripTimelineDemoSeeder extends Seeder
                 'vehicle_id' => $vehicleIds['51D-23456'],
                 'shift_type' => 'night_half',
                 'start_km' => 45021.0,
-                'start_gps_lat' => 10.8550000,
-                'start_gps_lng' => 106.7570000,
+                'start_gps_lat' => 21.0285000,
+                'start_gps_lng' => 105.8542000,
                 'updated_at' => $now,
                 'created_at' => $now,
             ]
@@ -79,8 +79,8 @@ class TripTimelineDemoSeeder extends Seeder
                 'vehicle_id' => $vehicleIds['51D-23456'],
                 'shift_type' => 'full',
                 'start_km' => 8200.0,
-                'start_gps_lat' => 10.7500000,
-                'start_gps_lng' => 106.6800000,
+                'start_gps_lat' => 21.1861000,
+                'start_gps_lng' => 106.0763000,
                 'updated_at' => $now,
                 'created_at' => $now,
             ]
@@ -102,7 +102,7 @@ class TripTimelineDemoSeeder extends Seeder
             ['order_id' => $orderIds['ORD-2026-0412-001'], 'sequence' => 1],
             [
                 'location_id' => $locationIds['ALSC'],
-                'address' => 'ALSC - Ga hàng hóa Tân Sơn Nhất',
+                'address' => 'ALSC - Ga hàng hóa Nội Bài',
                 'contact_person' => 'ALSC cargo',
                 'contact_phone' => '0902000001',
                 'status' => 'pending',
@@ -120,7 +120,7 @@ class TripTimelineDemoSeeder extends Seeder
             ['order_id' => $orderIds['ORD-2026-0412-006'], 'sequence' => 1],
             [
                 'location_id' => $locationIds['BN'],
-                'address' => '123 Nguyễn Văn Linh, Q.7, TP.HCM',
+                'address' => 'KCN Tiên Sơn, Bắc Ninh',
                 'contact_person' => 'Kho BN',
                 'contact_phone' => '0902000006',
                 'status' => 'pending',
@@ -132,7 +132,7 @@ class TripTimelineDemoSeeder extends Seeder
             ['order_id' => $orderIds['ORD-2026-0412-006'], 'sequence' => 2],
             [
                 'location_id' => $locationIds['TN'],
-                'address' => '15 Đại lộ Bình Dương, Thủ Dầu Một',
+                'address' => 'KCN Yên Bình, Thái Nguyên',
                 'contact_person' => 'Kho TN',
                 'contact_phone' => '0902000011',
                 'status' => 'pending',
@@ -159,31 +159,31 @@ class TripTimelineDemoSeeder extends Seeder
 
         // ORD-2026-0412-001 (sent): 4 checkpoints — Hoàng chở SEMV→ALSC
         $this->seedCheckpoints($orderIds['ORD-2026-0412-001'], $userIds['driver.hoang@example.com'], $shiftHoang, [
-            ['started',          $now->copy()->setTime(14, 5, 0), $dp001, 12351.0, 10.8110, 106.6720, 'Xuất phát từ bãi xe SEMV'],
-            ['arrived_pickup',   $now->copy()->setTime(14, 30, 0), $dp001, 12355.0, 10.8150, 106.6750, 'Đến SEMV lấy dây đai'],
-            ['left_pickup',      $now->copy()->setTime(15, 0, 0), $dp001, 12355.0, 10.8150, 106.6750, 'Đã load xong, rời SEMV'],
-            ['arrived_delivery', $now->copy()->setTime(15, 45, 0), $dp001, 12370.0, 10.8200, 106.6600, 'Đến ALSC, chờ bốc xếp'],
+            ['started',          $now->copy()->setTime(14, 5, 0), $dp001, 12351.0, 21.1861, 106.0763, 'Xuất phát từ bãi xe SEMV'],
+            ['arrived_pickup',   $now->copy()->setTime(14, 30, 0), $dp001, 12355.0, 21.1980, 106.0520, 'Đến SEMV lấy dây đai'],
+            ['left_pickup',      $now->copy()->setTime(15, 0, 0), $dp001, 12355.0, 21.2100, 106.0100, 'Đã load xong, rời SEMV'],
+            ['arrived_delivery', $now->copy()->setTime(15, 45, 0), $dp001, 12370.0, 21.2142, 105.8027, 'Đến ALSC, chờ bốc xếp'],
         ]);
 
         // ORD-2026-0412-006 (started): 8 checkpoints — Phúc→An, BN→BD
         $this->seedCheckpoints($orderIds['ORD-2026-0412-006'], $userIds['driver.an@example.com'], $shiftAn, [
-            ['started',          $now->copy()->setTime(8, 5, 0), $dpIds006[0], 8201.2, 10.7512, 106.6810, 'Xuất phát từ bãi, kiểm tra xe OK'],
-            ['arrived_pickup',   $now->copy()->setTime(8, 45, 0), $dpIds006[0], 8220.5, 10.7425, 106.6950, 'Đến kho BN lấy container seal tạm'],
-            ['left_pickup',      $now->copy()->setTime(9, 20, 0), $dpIds006[0], 8220.5, 10.7425, 106.6950, 'Đã load hàng xong, rời kho BN'],
-            ['driver_swap',      $now->copy()->setTime(10, 0, 0), $dpIds006[0], 8245.0, 10.7700, 106.7100, 'Đảo lái tại Bình Thạnh — bàn giao cho An'],
-            ['arrived_delivery', $now->copy()->setTime(11, 30, 0), $dpIds006[1], 8298.3, 10.9800, 106.6500, 'Đến kho Thủ Dầu Một, chờ bốc xếp'],
-            ['arrived_delivery', $now->copy()->setTime(12, 45, 0), $dpIds006[1], 8320.1, 11.0050, 106.6700, 'Điểm giao thứ 2 — Bình Dương'],
-            ['arrived_delivery', $now->copy()->setTime(14, 15, 0), $dpIds006[1], 8355.7, 11.0300, 106.6850, 'Điểm giao cuối — KCN VSIP'],
-            ['completed',        $now->copy()->setTime(15, 0, 0), $dpIds006[1], 8360.0, 11.0320, 106.6870, 'Đã giao hết hàng, khách ký nhận đủ'],
+            ['started',          $now->copy()->setTime(8, 5, 0), $dpIds006[0], 8201.2, 21.0285, 105.8542, 'Xuất phát từ bãi, kiểm tra xe OK'],
+            ['arrived_pickup',   $now->copy()->setTime(8, 45, 0), $dpIds006[0], 8220.5, 21.1167, 105.9583, 'Đến kho BN lấy container seal tạm'],
+            ['left_pickup',      $now->copy()->setTime(9, 20, 0), $dpIds006[0], 8220.5, 21.1861, 106.0763, 'Đã load hàng xong, rời kho BN'],
+            ['driver_swap',      $now->copy()->setTime(10, 0, 0), $dpIds006[0], 8245.0, 21.3019, 105.8995, 'Đảo lái tại Sóc Sơn — bàn giao cho An'],
+            ['arrived_delivery', $now->copy()->setTime(11, 30, 0), $dpIds006[1], 8298.3, 21.4200, 105.8900, 'Đến kho Phổ Yên, chờ bốc xếp'],
+            ['arrived_delivery', $now->copy()->setTime(12, 45, 0), $dpIds006[1], 8320.1, 21.5150, 105.8750, 'Điểm giao thứ 2 — Thái Nguyên'],
+            ['arrived_delivery', $now->copy()->setTime(14, 15, 0), $dpIds006[1], 8355.7, 21.5942, 105.8482, 'Điểm giao cuối — KCN Yên Bình'],
+            ['completed',        $now->copy()->setTime(15, 0, 0), $dpIds006[1], 8360.0, 21.5960, 105.8500, 'Đã giao hết hàng, khách ký nhận đủ'],
         ]);
 
         // ORD-2026-0411-001 (completed): 5 checkpoints total
         $this->seedCheckpoints($orderIds['ORD-2026-0411-001'], $userIds['driver.phuc@example.com'], $shiftPhuc, [
-            ['started',          $now->copy()->subDay()->setTime(20, 0, 0), $dp001Old, 45080.0, 10.8800, 106.7600, 'Bắt đầu chuyến giao hàng đông lạnh'],
-            ['arrived_pickup',   $now->copy()->subDay()->setTime(20, 30, 0), $dp001Old, 45095.0, 10.8850, 106.7580, 'Đến điểm lấy hàng đông lạnh'],
-            ['left_pickup',      $now->copy()->subDay()->setTime(21, 0, 0), $dp001Old, 45095.0, 10.8850, 106.7580, 'Đã load xong, kiểm tra nhiệt độ 2°C'],
-            ['arrived_delivery', $now->copy()->subDay()->setTime(22, 30, 0), $dp001Old, 45140.0, 11.0100, 106.7020, 'Đến kho Tây Nam, chờ dỡ hàng'],
-            ['completed',        $now->copy()->subDay()->setTime(23, 0, 0), $dp001Old, 45160.0, 11.0150, 106.7060, 'Đã giao hàng xong, ký nhận đầy đủ'],
+            ['started',          $now->copy()->subDay()->setTime(20, 0, 0), $dp001Old, 45080.0, 21.0285, 105.8542, 'Bắt đầu chuyến giao hàng đông lạnh'],
+            ['arrived_pickup',   $now->copy()->subDay()->setTime(20, 30, 0), $dp001Old, 45095.0, 21.1167, 105.9583, 'Đến điểm lấy hàng đông lạnh'],
+            ['left_pickup',      $now->copy()->subDay()->setTime(21, 0, 0), $dp001Old, 45095.0, 21.1861, 106.0763, 'Đã load xong, kiểm tra nhiệt độ 2°C'],
+            ['arrived_delivery', $now->copy()->subDay()->setTime(22, 30, 0), $dp001Old, 45140.0, 21.3019, 105.8995, 'Đến kho Phổ Yên, chờ dỡ hàng'],
+            ['completed',        $now->copy()->subDay()->setTime(23, 0, 0), $dp001Old, 45160.0, 21.5942, 105.8482, 'Đã giao hàng xong, ký nhận đầy đủ'],
         ]);
 
         // ── Summary ──────────────────────────────────────────────────

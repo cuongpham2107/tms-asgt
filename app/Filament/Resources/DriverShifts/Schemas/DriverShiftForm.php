@@ -36,7 +36,7 @@ class DriverShiftForm
                     ->required(),
                 TextInput::make('start_km')
                     ->label('Km bắt đầu')
-                    ->prefixIcon(Heroicon::OutlinedGauge)
+                    ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                     ->numeric(),
                 TextInput::make('start_gps_lat')
                     ->label('GPS lat bắt đầu')
@@ -51,7 +51,7 @@ class DriverShiftForm
                     ->prefixIcon(Heroicon::OutlinedCalendarDays),
                 TextInput::make('end_km')
                     ->label('Km kết thúc')
-                    ->prefixIcon(Heroicon::OutlinedGauge)
+                    ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                     ->numeric(),
                 TextInput::make('end_gps_lat')
                     ->label('GPS lat kết thúc')
@@ -61,7 +61,7 @@ class DriverShiftForm
                     ->numeric(),
                 TextInput::make('total_km')
                     ->label('Tổng km')
-                    ->prefixIcon(Heroicon::OutlinedGauge)
+                    ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                     ->numeric(),
                 TextInput::make('total_km_loaded')
                     ->label('Km có tải')

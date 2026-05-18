@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Pages;
 
 use App\Enums\OrderStatus;
+use App\Filament\Resources\Orders\Actions\CreateBulkOrdersAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHHHKAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHNAction;
 use App\Filament\Resources\Orders\OrderResource;
@@ -14,6 +15,7 @@ use App\Models\Order;
 use App\Models\OrderCategory;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class ListOrders extends ListRecords
 {
@@ -117,7 +119,7 @@ class ListOrders extends ListRecords
         parent::mount();
 
         $this->orderPlaceFilters = OrderCategory::query()
-            ->orderBy('sort_order')
+            ->orderBy('sort_order', 'asc')
             ->pluck('code', 'code')
             ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
             ->toArray();
@@ -129,6 +131,7 @@ class ListOrders extends ListRecords
             //  HHHK hoặc Hàng ngoài
             CreateOrderHHHKAction::make(),
             CreateOrderHNAction::make(),
+            CreateBulkOrdersAction::make(),
         ];
     }
 
@@ -222,7 +225,7 @@ class ListOrders extends ListRecords
                 'vehicle',
             ])
             ->where('status', '!=', OrderStatus::Draft->value)
-            ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', auth()->id()))
+            ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(
                 $this->activeOrderTypeFilter !== 'all',
                 fn (Builder $query): Builder => $query->whereHas(

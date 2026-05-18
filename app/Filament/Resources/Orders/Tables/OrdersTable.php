@@ -12,6 +12,7 @@ use App\Filament\Resources\Orders\Actions\SendOrderAction;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Models\Order;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
@@ -157,7 +158,7 @@ class OrdersTable extends BaseTable
         }
 
         $arrowIcon = <<<'SVG'
-                        <svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"  
+                        <svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"
                             fill="currentColor" viewBox="0 0 24 24" >
                             <path d="M6 13h8.09l-3.3 3.29 1.42 1.42 5.7-5.71-5.7-5.71-1.42 1.42 3.3 3.29H6z"></path>
                         </svg>
@@ -185,7 +186,7 @@ class OrdersTable extends BaseTable
             '
                             <div class="
                                 flex items-center flex-wrap gap-2
-                                p-2 
+                                p-2
                             ">
                                 '.$timeline.'
                             </div>

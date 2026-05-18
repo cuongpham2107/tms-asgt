@@ -8,6 +8,7 @@ use App\Enums\VehicleStatus;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderCategory;
 use App\Models\OrderType;
@@ -16,20 +17,20 @@ use CodeWithDennis\FilamentAdvancedChoice\Filament\Forms\Components\RadioCard;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\FusedGroup;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
-use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -64,7 +65,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                                     ->options(function () {
                                         return OrderCategory::query()
                                             // ->whereHas('orderType', fn ($query) => $query->where('code', 'external'))
-                                            ->orderBy('sort_order')
+                                            ->orderBy('sort_order', 'asc')
                                             ->pluck('code', 'id')
                                             ->toArray();
                                     })
@@ -147,7 +148,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                                         ->required(),
 
                                 ])
-                                    ->label('Địa chỉ nhận hàng')
+                                    ->label('Điểm nhận hàng')
                                     ->columns(3)
                                     ->columnSpanFull(),
                                 TextInput::make('pickup_contact')
@@ -167,9 +168,9 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                                 //     ->required()
                                 //     ->columnSpanFull(),
                                 Repeater::make('deliveryPoints')
-                                    ->label('Địa chỉ giao hàng')
+                                    ->label('Điểm giao hàng')
                                     ->helperText(function (Get $get): string {
-                                        $orderCategory = OrderCategory::find($get('order_category_id'));
+                                        $orderCategory = OrderCategory::query()->find($get('order_category_id'));
 
                                         if ($orderCategory !== null) {
                                             return 'Chưa có điểm đến phụ. Mặc định đến: '.$orderCategory->code;
@@ -177,38 +178,63 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
 
                                         return 'Thêm một hoặc nhiều điểm đến cho đơn hàng';
                                     })
-                                    ->reorderableWithDragAndDrop()
-                                    ->orderColumn('sequence')
-                                    ->defaultItems(0)
-                                    ->relationship('deliveryPoints')
-                                    ->table([
-                                        // Columns
-                                        TableColumn::make('Địa điểm')
-                                            ->markAsRequired()
-                                            ->alignment(Alignment::Start),
-                                        TableColumn::make('Khu vực phân loại')
-                                            ->width('100px'),
-                                        TableColumn::make('Người liên hệ')
-                                            ->width('150px'),
-                                        TableColumn::make('Số điện thoại')
-                                            ->width('150px'),
-                                    ])
-                                    ->compact()
-                                    ->schema([
-                                        // Forms
-                                        TextInput::make('address')
-                                            ->label('Số nhà, tên đường')
-                                            ->placeholder('Ví dụ: 34 Lê Lợi'),
-                                        Select::make('location_id')
-                                            ->relationship('location', 'name')
-                                            ->native(false)
-                                            ->required(),
-                                        TextInput::make('contact_person')
-                                            ->placeholder('Ví dụ: Nguyễn Văn A'),
-                                        TextInput::make('contact_phone')
-                                            ->placeholder('Ví dụ: 0901234567')
-                                            ->tel(),
+                                    ->collapsible()
+                                    ->itemLabel(function (array $state): ?string {
+                                        $parts = [];
 
+                                        if (isset($state['location_id']) && $location = Location::query()->find($state['location_id'])) {
+                                            $parts[] = $location->name;
+                                        }
+
+                                        if (! empty($state['address'])) {
+                                            $parts[] = $state['address'];
+                                        }
+
+                                        if (! empty($state['total_packages'])) {
+                                            $parts[] = $state['total_packages'].' kiện';
+                                        }
+
+                                        if (! empty($state['total_weight'])) {
+                                            $parts[] = $state['total_weight'].' tấn';
+                                        }
+
+                                        return count($parts) > 0 ? implode(' - ', $parts) : 'Điểm giao hàng mới';
+                                    })
+                                    ->reorderableWithDragAndDrop()
+                                    ->defaultItems(0)
+                                    ->schema([
+                                        Grid::make(12)
+                                            ->schema([
+                                                Select::make('location_id')
+                                                    ->label('Điểm giao hàng')
+                                                    ->options(fn (): array => Location::query()->pluck('name', 'id')->toArray())
+                                                    ->searchable()
+                                                    ->preload()
+                                                    ->native(false)
+                                                    ->required()
+                                                    ->columnSpan(4),
+                                                TextInput::make('address')
+                                                    ->label('Số nhà, tên đường giao')
+                                                    ->placeholder('Ví dụ: 34 Lê Lợi')
+                                                    ->columnSpan(8),
+                                                TextInput::make('contact_person')
+                                                    ->label('Người nhận')
+                                                    ->placeholder('Ví dụ: Nguyễn Văn A')
+                                                    ->columnSpan(4),
+                                                TextInput::make('contact_phone')
+                                                    ->label('Số điện thoại nhận')
+                                                    ->placeholder('Ví dụ: 0901234567')
+                                                    ->tel()
+                                                    ->columnSpan(3),
+                                                TextInput::make('total_packages')
+                                                    ->label('Số kiện')
+                                                    ->numeric()
+                                                    ->columnSpan(2),
+                                                TextInput::make('total_weight')
+                                                    ->label('Trọng lượng (tấn)')
+                                                    ->numeric()
+                                                    ->columnSpan(3),
+                                            ]),
                                     ])
                                     ->columnSpanFull(),
                                 DateTimePicker::make('planned_loading_at')
@@ -251,7 +277,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
             ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
                 try {
                     DB::transaction(function () use ($data, $schema, $forceAssignedWhenTransportProvided): void {
-                        $createdBy = auth()->id();
+                        $createdBy = Auth::id();
 
                         if ($createdBy === null) {
                             throw new \RuntimeException('Không xác định được người dùng đang đăng nhập.');
@@ -266,7 +292,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         }
 
                         $todayOrderCount = Order::query()
-                            ->whereDate('created_at', today())
+                            ->whereDate('created_at', '=', now()->toDateString(), 'and')
                             ->count() + 1;
 
                         $orderCode = sprintf('ORD-%s-%03d', now()->format('Ymd'), $todayOrderCount);
@@ -314,6 +340,8 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                                 'location_id' => $deliveryPoint['location_id'] ?? null,
                                 'contact_person' => $deliveryPoint['contact_person'] ?? null,
                                 'contact_phone' => $deliveryPoint['contact_phone'] ?? null,
+                                'total_packages' => $deliveryPoint['total_packages'] ?? null,
+                                'total_weight' => $deliveryPoint['total_weight'] ?? null,
                                 'sequence' => $index + 1,
                             ])
                             ->all();

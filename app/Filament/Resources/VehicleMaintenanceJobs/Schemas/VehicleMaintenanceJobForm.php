@@ -68,7 +68,7 @@ class VehicleMaintenanceJobForm
                     ->prefixIcon(Heroicon::OutlinedUser),
                 TextInput::make('km_at_service')
                     ->label('Km lúc bảo dưỡng')
-                    ->prefixIcon(Heroicon::OutlinedGauge)
+                    ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                     ->numeric(),
                 DatePicker::make('next_service_date')
                     ->label('Bảo dưỡng tiếp theo')

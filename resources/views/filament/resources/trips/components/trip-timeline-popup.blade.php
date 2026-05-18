@@ -1,10 +1,14 @@
 @php
     use App\Models\Order;
+    use Illuminate\Support\Facades\Storage;
+
     /** @var Order $order */
     $checkpoints = $order->tripCheckpoints()
         ->with(['driver', 'deliveryPoint.location', 'photos'])
         ->orderBy('occurred_at', 'desc')
         ->get();
+
+    $photoUrl = static fn ($photo): string => $photo->photo_url ?: Storage::disk('public')->url($photo->photo_path);
 
     $iconMap = [
         'started'          => ['icon' => 'heroicon-o-play-circle',     'color' => 'blue'],
@@ -96,6 +100,23 @@
                                 @if ($cp->km_reading) <span>{{ number_format((float) $cp->km_reading, 1, ',', '.') }} km</span> @endif
                                 @if ($cp->gps_lat && $cp->gps_lng) <span>{{ number_format((float) $cp->gps_lat, 4, ',', '.') }}, {{ number_format((float) $cp->gps_lng, 4, ',', '.') }}</span> @endif
                                 @if ($cp->voice_note) <span class="italic">{{ $cp->voice_note }}</span> @endif
+                            </div>
+                        @endif
+                        @if ($cp->photos->isNotEmpty())
+                            <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                                @foreach ($cp->photos as $photo)
+                                    @php
+                                        $url = $photoUrl($photo);
+                                    @endphp
+
+                                    <a href="{{ $url }}" target="_blank" rel="noopener noreferrer"
+                                       class="group block overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
+                                        <img src="{{ $url }}"
+                                             alt="Ảnh hành trình {{ $cp->checkpoint_type->getLabel() }}"
+                                             loading="lazy"
+                                             class="h-24 w-full object-cover transition duration-150 group-hover:scale-105" />
+                                    </a>
+                                @endforeach
                             </div>
                         @endif
                     </div>

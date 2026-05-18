@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\DriverShifts\Widgets\DriverShiftCalendarWidget;
 use App\Filament\Widgets\OperationsStatsWidget;
 use App\Filament\Widgets\VehicleMapWidget;
 use Filament\Pages\Dashboard as BaseDashboard;
@@ -16,6 +17,7 @@ class Dashboard extends BaseDashboard
         return [
             OperationsStatsWidget::class,
             VehicleMapWidget::class,
+            DriverShiftCalendarWidget::class,
         ];
     }
 }

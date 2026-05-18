@@ -77,16 +77,16 @@ class DemoOperationsSeeder extends Seeder
         // 2. CUSTOMERS — 10
         // ═══════════════════════════════════════════════════════════════
         $customers = [
-            ['ASGL',   'ASG Logistics',         '028-3822-1111', 'KCN VSIP 1, Bình Dương',               'OPS ASGL'],
-            ['ALSC',   'ALSC Vietnam',          '028-3844-2222', 'Sân bay Tân Sơn Nhất, TP.HCM',          'Cargo ALSC'],
-            ['BIGCGV', 'Siêu thị BigC Gò Vấp',  '028-3895-6789', '242 Quang Trung, Gò Vấp, TP.HCM',       'Kho BigC'],
-            ['KLDNA',  'Kho Lạnh Đông Nam Á',   '028-3756-0123', 'KCN Tân Bình, TP.HCM',                  'Kho lạnh'],
-            ['MMMEGA', 'MM Mega Market',        '028-3777-8899', 'KCN Linh Trung, Thủ Đức',               'Kho MM'],
-            ['SATRA',  'Satra Logistics',       '028-3933-4455', 'Cảng Cát Lái, Q.2, TP.HCM',             'Cảng vụ'],
-            ['POTLOG', 'Potato Logistics VN',   '028-3999-1122', 'ICD Tân Cảng, Q.Bình Thạnh',            'Kho ICD'],
-            ['BACHHO', 'Bách Hóa Xanh',         '028-3555-6677', 'Kho tổng Bình Dương',                   'Kho BHX'],
-            ['DHLVN',  'DHL Vietnam',           '028-3838-9000', 'Tân Sơn Nhất, cargo terminal',          'Air Ops'],
-            ['FEDEXV', 'FedEx VN',              '028-3737-8000', 'Long Thành, Đồng Nai',                  'Hub FedEx'],
+            ['ASGL',   'ASG Logistics',         '024-3822-1111', 'KCN Yên Phong, Bắc Ninh',               'OPS ASGL'],
+            ['ALSC',   'ALSC Vietnam',          '024-3844-2222', 'Ga hàng hóa Nội Bài, Hà Nội',            'Cargo ALSC'],
+            ['BIGCGV', 'Siêu thị BigC Long Biên', '024-3895-6789', 'Long Biên, Hà Nội',                    'Kho BigC'],
+            ['KLDNA',  'Kho Lạnh Đông Bắc',     '024-3756-0123', 'KCN Quang Minh, Mê Linh, Hà Nội',        'Kho lạnh'],
+            ['MMMEGA', 'MM Mega Market',        '024-3777-8899', 'Kho Gia Lâm, Hà Nội',                    'Kho MM'],
+            ['SATRA',  'Satra Logistics',       '024-3933-4455', 'ICD Tiên Sơn, Bắc Ninh',                 'Cảng vụ'],
+            ['POTLOG', 'Potato Logistics VN',   '024-3999-1122', 'KCN Yên Bình, Thái Nguyên',              'Kho ICD'],
+            ['BACHHO', 'Bách Hóa Xanh',         '024-3555-6677', 'Kho tổng Từ Sơn, Bắc Ninh',              'Kho BHX'],
+            ['DHLVN',  'DHL Vietnam',           '024-3838-9000', 'Ga hàng hóa Nội Bài',                    'Air Ops'],
+            ['FEDEXV', 'FedEx VN',              '024-3737-8000', 'Sóc Sơn, Hà Nội',                        'Hub FedEx'],
         ];
 
         foreach ($customers as $c) {
@@ -103,16 +103,16 @@ class DemoOperationsSeeder extends Seeder
         // 3. LOCATIONS — 10
         // ═══════════════════════════════════════════════════════════════
         $locations = [
-            ['SEMV', 'SEMV',               'Khu Công Nghệ Cao, TP. Thủ Đức',      'pickup'],
-            ['ALSC', 'ALSC',               'Ga hàng hóa Tân Sơn Nhất',            'delivery'],
+            ['SEMV', 'SEMV',               'KCN Yên Phong, Bắc Ninh',             'pickup'],
+            ['ALSC', 'ALSC',               'Ga hàng hóa Nội Bài, Hà Nội',         'delivery'],
             ['NBA',  'Nội Bài A',          'Nội Bài, Hà Nội',                     'warehouse'],
             ['NBO',  'Nội Bài kho ngoài',  'Sóc Sơn, Hà Nội',                     'warehouse'],
-            ['TN',   'Tây Nam',            '15 Đại lộ Bình Dương, Thủ Dầu Một',  'delivery'],
-            ['BN',   'Bắc Nam',            '123 Nguyễn Văn Linh, Q.7, TP.HCM',   'delivery'],
+            ['TN',   'Thái Nguyên',        'KCN Yên Bình, Thái Nguyên',           'delivery'],
+            ['BN',   'Bắc Ninh',           'KCN Tiên Sơn, Bắc Ninh',              'delivery'],
             ['PROV', 'Đi tỉnh',            'Đa tuyến liên tỉnh',                   'other'],
-            ['CATLA', 'Cát Lái',           'Cảng Cát Lái, Q.2, TP.HCM',           'pickup'],
-            ['ICD',  'ICD Tân Cảng',       'Q.Bình Thạnh, TP.HCM',                'warehouse'],
-            ['TANSO', 'Tân Sơn Nhất',      'Sân bay Tân Sơn Nhất',                'pickup'],
+            ['CATLA', 'ICD Tiên Sơn',      'Tiên Du, Bắc Ninh',                   'pickup'],
+            ['ICD',  'ICD Gia Lâm',        'Gia Lâm, Hà Nội',                     'warehouse'],
+            ['TANSO', 'Nội Bài Cargo',     'Sân bay Nội Bài, Hà Nội',             'pickup'],
         ];
 
         foreach ($locations as $l) {
@@ -129,13 +129,13 @@ class DemoOperationsSeeder extends Seeder
         // 4. VEHICLES — 10
         // ═══════════════════════════════════════════════════════════════
         $vehicles = [
-            ['20C-08678', 'normal',       'ASGT',     'Hyundai',  2022, 7.0,  'Diesel',  12345.5, 'Porter - Xe tuyến HK',   'driver.hoang', 'on',      'company'],
-            ['99H-00948', 'normal',       'ASGT',     'Toyota',   2021, 5.0,  'Diesel',  28500.8, 'Hiace - Xe tuyến city', 'driver.toan',  'on',      'company'],
+            ['20C-08678', 'normal',       'ASGT',     'Hyundai',  2022, 7.0,  'Diesel',  12345.5, 'Porter - Xe tuyến HK',   'driver.hoang', 'running', 'company'],
+            ['99H-00948', 'normal',       'ASGT',     'Toyota',   2021, 5.0,  'Diesel',  28500.8, 'Hiace - Xe tuyến city', 'driver.toan',  'running', 'company'],
             ['51D-23456', 'container',    'Tam Bảo',  'Hino',     2020, 15.0, 'Diesel',  45172.0, 'Container lạnh 300S',    'driver.phuc',  'running', 'rent'],
             ['51C-12345', 'normal',       'ASGT',     'Hyundai',  2022, 5.0,  'Diesel',  8200.3,  'Porter - Xe dự phòng',  'driver.an',    'on',      'company'],
-            ['51E-34567', 'cold',         'ASGT',     'Isuzu',    2023, 8.0,  'Diesel',  15600.0, 'Xe lạnh Isuzu',          'driver.binh',  'on',      'company'],
+            ['51E-34567', 'cold',         'ASGT',     'Isuzu',    2023, 8.0,  'Diesel',  15600.0, 'Xe lạnh Isuzu',          'driver.binh',  'running', 'company'],
             ['29H-12345', 'container',    'Thuê Bắc', 'Hino',     2021, 18.0, 'Diesel',  62000.0, 'Container thuê Bắc',     'driver.tuan',  'running', 'rent'],
-            ['51G-56789', 'flatbed',      'ASGT',     'Hyundai',  2024, 10.0, 'Diesel',  3400.0,  'Flatbed mới',            'driver.hai',   'on',      'company'],
+            ['51G-56789', 'flatbed',      'ASGT',     'Hyundai',  2024, 10.0, 'Diesel',  3400.0,  'Flatbed mới',            'driver.hai',   'running', 'company'],
             ['60C-11111', 'bat_wing',     'ASGT',     'Hino',     2020, 12.0, 'Diesel',  38000.0, 'Bat-wing Hino',          'driver.son',   'bdsc',    'company'],
             ['51H-22222', 'anti_vibration', 'ASGT',    'Mitsubishi', 2023, 6.0, 'Diesel',  9200.0,  'Xe chống rung',          null,           'off',     'company'],
             ['51K-33333', 'other',        'Thuê Nam', 'Dongfeng',  2019, 9.0,  'Diesel',  72000.0, 'Xe thuê ngoài',          null,           'off',     'rent'],
@@ -371,8 +371,8 @@ class DemoOperationsSeeder extends Seeder
                     'vehicle_id' => $vid($s[1]),
                     'shift_type' => $s[2],
                     'start_km' => $s[5],
-                    'start_gps_lat' => 10.75 + (rand(-500, 500) / 10000),
-                    'start_gps_lng' => 106.68 + (rand(-500, 500) / 10000),
+                    'start_gps_lat' => 21.125 + (rand(-500, 500) / 10000),
+                    'start_gps_lng' => 105.95 + (rand(-500, 500) / 10000),
                     'updated_at' => $now,
                     'created_at' => $shiftDate,
                 ]
@@ -467,8 +467,8 @@ class DemoOperationsSeeder extends Seeder
                         'shift_id' => $shiftId,
                         'delivery_point_id' => $useDp,
                         'km_reading' => $km + ($i * rand(5, 30)),
-                        'gps_lat' => 10.70 + (($i + 1) * 0.05) + (rand(-20, 20) / 1000),
-                        'gps_lng' => 106.65 + (($i + 1) * 0.01) + (rand(-20, 20) / 1000),
+                        'gps_lat' => 21.02 + (($i + 1) * 0.055) + (rand(-20, 20) / 1000),
+                        'gps_lng' => 105.82 + (($i + 1) * 0.035) + (rand(-20, 20) / 1000),
                         'voice_note' => $this->voiceNoteForType($type),
                         'created_at' => $now->copy()->addDays($dayOff),
                     ]

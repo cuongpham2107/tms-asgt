@@ -10,7 +10,7 @@
         if (!el) return;
         mapboxgl.accessToken = '{{ config('services.mapbox.token') }}';
         const vehicles = {{ \Illuminate\Support\Js::from($this->getVehicles()) }};
-        const map = new mapboxgl.Map({ container: 'dashboard-map', style: 'mapbox://styles/mapbox/streets-v12', center: [106.6297, 10.8231], zoom: 10 });
+        const map = new mapboxgl.Map({ container: 'dashboard-map', style: 'mapbox://styles/mapbox/streets-v12', center: [105.95, 21.125], zoom: 10 });
         map.addControl(new mapboxgl.NavigationControl(), 'top-right');
         const colors = { on: '#22c55e', running: '#f59e0b', bdsc: '#ef4444', off: '#9ca3af' };
         vehicles.forEach(v => {

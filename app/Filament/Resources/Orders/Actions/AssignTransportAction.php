@@ -26,7 +26,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
             ->modal()
             ->modalHeading('Gán phương tiện và lái xe')
             ->modalDescription('Chọn phương tiện và lái xe cho đơn hàng này.')
-            ->modalWidth('2xl')
+            ->modalWidth('5xl')
             ->stickyModalFooter()
             ->schema([
                 VehiclePicker::make('vehicle_id')

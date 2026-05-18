@@ -146,6 +146,7 @@ class TripsTable extends BaseTable
                     ->icon('heroicon-o-map-pin')
                     ->color('primary')
                     ->modal()
+                    ->modalWidth('5xl')
                     ->modalHeading(fn (Order $record): string => 'Hành trình — '.$record->order_code)
                     ->modalContent(fn (Order $record) => view('filament.resources.trips.components.trip-timeline-popup', [
                         'order' => $record,

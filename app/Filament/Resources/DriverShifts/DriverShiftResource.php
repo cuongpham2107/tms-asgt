@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\DriverShifts;
 
 use App\Filament\BaseResource;
+use App\Filament\Resources\DriverShifts\Pages\CalendarDriverShifts;
 use App\Filament\Resources\DriverShifts\Pages\CreateDriverShift;
 use App\Filament\Resources\DriverShifts\Pages\EditDriverShift;
 use App\Filament\Resources\DriverShifts\Pages\ListDriverShifts;
@@ -57,7 +58,8 @@ class DriverShiftResource extends BaseResource
     public static function getPages(): array
     {
         return [
-            'index' => ListDriverShifts::route('/'),
+            'index' => CalendarDriverShifts::route('/'),
+            'table' => ListDriverShifts::route('/table'),
             // 'create' => CreateDriverShift::route('/create'),
             // 'edit' => EditDriverShift::route('/{record}/edit'),
         ];

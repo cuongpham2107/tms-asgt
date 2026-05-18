@@ -19,22 +19,54 @@ abstract class CreatesOrderTransportCards
                 $query->whereHas('driverShifts')
                     ->orWhereHas('vehiclesAsDriver');
             })
-            ->withCount('orders')
-            ->with(['driverShifts' => fn ($query) => $query->latest('start_time')])
+            ->withCount([
+                'orders',
+                'orders as active_orders_count' => fn ($q) => $q->whereIn('status', [
+                    OrderStatus::Assigned->value,
+                    OrderStatus::Sent->value,
+                    OrderStatus::Started->value,
+                    OrderStatus::ArrivedPickup->value,
+                    OrderStatus::Delivering->value,
+                    OrderStatus::ArrivedDelivery->value,
+                ], 'and', false),
+            ])
+            ->with([
+                'driverShifts' => fn ($query) => $query->latest('start_time')->limit(1),
+                'vehiclesAsDriver' => fn ($query) => $query->limit(1),
+            ])
             ->orderBy('name')
             ->get()
             ->map(function (User $driver): array {
                 $latestShift = $driver->driverShifts->first();
+                $hasActiveShift = $latestShift && $latestShift->end_time === null;
+                $assignedVehicle = $driver->vehiclesAsDriver->first();
+                $activeOrders = (int) $driver->active_orders_count;
+                $isAvailable = $activeOrders === 0;
 
                 return [
                     'value' => $driver->id,
                     'leading' => '👤',
                     'title' => $driver->name,
-                    'subtitle' => $driver->email.' · '.$driver->phone,
+                    'subtitle' => $driver->phone ?: ($driver->email ?? ''),
+                    'badge' => $isAvailable ? 'Sẵn sàng' : 'Đang chạy ('.$activeOrders.')',
+                    'badgeClasses' => $isAvailable
+                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
+                        : 'border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200',
+                    'statusDot' => $isAvailable ? 'success' : 'warning',
+                    'details' => array_filter([
+                        ['icon' => 'heroicon-m-identification', 'label' => 'GPLX', 'value' => $driver->license_class ? ($driver->license_class.($driver->license_number ? ' · '.$driver->license_number : '')) : 'Chưa cập nhật'],
+                        ['icon' => 'heroicon-m-truck', 'label' => 'Xe gán', 'value' => $assignedVehicle?->plate_number ?? 'Chưa gán xe'],
+                        ['icon' => 'heroicon-m-clock', 'label' => 'Ca trực', 'value' => $hasActiveShift ? ('Đang '.$latestShift->shift_type?->getLabel()) : ($latestShift?->shift_type?->getLabel() ?? 'Chưa có ca')],
+                        ['icon' => 'heroicon-m-document-text', 'label' => 'Tổng chuyến', 'value' => number_format((int) $driver->orders_count, 0, ',', '.')],
+                    ]),
                     'meta' => [
-                        number_format((int) $driver->orders_count, 0, ',', '.').' chuyến',
-                        $latestShift?->shift_type?->getLabel() ?? 'Chưa có ca',
+                        $driver->license_class ?? '',
+                        $assignedVehicle?->plate_number ?? '',
                     ],
+                    'isSuggested' => $isAvailable && $hasActiveShift,
+                    'suggestionScore' => $isAvailable ? ($hasActiveShift ? 1000 : 500) : 0,
+                    'suggestedBadge' => 'Gợi ý',
+                    'suggestedBadgeClasses' => 'border border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800/40 dark:bg-primary-900/30 dark:text-primary-200',
                 ];
             })
             ->all();
@@ -51,6 +83,16 @@ abstract class CreatesOrderTransportCards
                     ->when($selectedVehicleId, fn ($query): mixed => $query->orWhere('id', $selectedVehicleId));
             })
             ->with('driver')
+            ->withCount([
+                'orders as active_orders_count' => fn ($q) => $q->whereIn('status', [
+                    OrderStatus::Assigned->value,
+                    OrderStatus::Sent->value,
+                    OrderStatus::Started->value,
+                    OrderStatus::ArrivedPickup->value,
+                    OrderStatus::Delivering->value,
+                    OrderStatus::ArrivedDelivery->value,
+                ], 'and', false),
+            ])
             ->orderBy('plate_number')
             ->get()
             ->map(function (Vehicle $vehicle) use ($requiredWeight, $pickupLocationId): array {
@@ -69,24 +111,45 @@ abstract class CreatesOrderTransportCards
                     : 0;
 
                 $statusLabel = $vehicle->getStatusLabel();
-                $statusClasses = self::getStatusBadgeClasses($vehicle->getStatusColor());
+                $statusColor = $vehicle->getStatusColor();
+                $statusClasses = self::getStatusBadgeClasses($statusColor);
+                $activeOrders = (int) $vehicle->active_orders_count;
+                $mileage = $vehicle->current_mileage ? number_format((float) $vehicle->current_mileage, 0, ',', '.').' km' : 'N/A';
+
+                $fuelLabels = [
+                    'diesel' => 'Diesel',
+                    'gasoline' => 'Xăng',
+                    'electric' => 'Điện',
+                    'hybrid' => 'Hybrid',
+                ];
+                $fuelLabel = $fuelLabels[$vehicle->fuel_type] ?? 'Chưa rõ';
 
                 return [
                     'value' => $vehicle->id,
                     'leading' => '🚚',
                     'title' => $vehicle->plate_number,
-                    'subtitle' => $make.' · '.$vehicle->getVehicleTypeLabel().' · '.$loadCapacity.' tấn',
-                    'meta' => [
-                        $vehicle->driver?->name ?? 'Chưa phân xe',
-                        'Vị trí hiện tại: '.($currentLocation['name'] ?? 'Chưa xác định'),
-                        $isCapacityMatch ? 'Đủ tải cho đơn' : 'Không đủ tải cho đơn',
-                    ],
+                    'subtitle' => $make.' · '.$vehicle->getVehicleTypeLabel(),
                     'badge' => $statusLabel,
                     'badgeClasses' => $statusClasses,
-                    'suggestedBadge' => 'Gợi ý',
+                    'statusDot' => $statusColor,
+                    'details' => array_filter([
+                        ['icon' => 'heroicon-m-scale', 'label' => 'Tải trọng', 'value' => $loadCapacity.' tấn'.($requiredWeight > 0 ? ($isCapacityMatch ? ' ✓' : ' ✗') : '')],
+                        ['icon' => 'heroicon-m-user', 'label' => 'Lái xe', 'value' => $vehicle->driver?->name ?? 'Chưa phân lái'],
+                        ['icon' => 'heroicon-m-map-pin', 'label' => 'Vị trí', 'value' => $currentLocation['name'] ?? 'Chưa xác định'],
+                        ['icon' => 'heroicon-m-cog-6-tooth', 'label' => 'ODO', 'value' => $mileage],
+                        $activeOrders > 0 ? ['icon' => 'heroicon-m-document-text', 'label' => 'Đơn đang chạy', 'value' => (string) $activeOrders] : null,
+                    ]),
+                    'meta' => [
+                        $vehicle->driver?->name ?? '',
+                        $vehicle->getVehicleTypeLabel(),
+                        $loadCapacity.' tấn',
+                        $currentLocation['name'] ?? '',
+                    ],
+                    'suggestedBadge' => 'Phù hợp nhất',
                     'suggestedBadgeClasses' => 'border border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800/40 dark:bg-primary-900/30 dark:text-primary-200',
                     'isSuggested' => $isSuggested,
                     'suggestionScore' => $suggestionScore,
+                    'capacityMatch' => $isCapacityMatch,
                 ];
             })
             ->all();
@@ -109,7 +172,7 @@ abstract class CreatesOrderTransportCards
                 OrderStatus::ArrivedDelivery->value,
                 OrderStatus::Delivered->value,
                 OrderStatus::DriverSwap->value,
-            ])
+            ], 'and', false)
             ->with('pickupLocation')
             ->latest('created_at')
             ->first();

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\OrderPlans\Pages;
 
 use App\Filament\Resources\OrderPlans\OrderPlanResource;
+use App\Filament\Resources\Orders\Actions\CreateBulkOrdersAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHHHKAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHNAction;
 use App\Models\OrderCategory;
@@ -49,7 +50,7 @@ class ListOrderPlans extends ListRecords
         parent::mount();
 
         $this->orderPlaceFilters = OrderCategory::query()
-            ->orderBy('sort_order')
+            ->orderBy('sort_order', 'asc')
             ->pluck('code', 'code')
             ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
             ->toArray();
@@ -61,6 +62,7 @@ class ListOrderPlans extends ListRecords
             // Keep created orders as drafts when created from the Plan page
             CreateOrderHHHKAction::make(false),
             CreateOrderHNAction::make(false),
+            CreateBulkOrdersAction::make(false),
         ];
     }
 

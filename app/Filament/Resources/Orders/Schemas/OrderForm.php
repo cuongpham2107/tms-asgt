@@ -7,22 +7,22 @@ use App\Enums\Priority;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
+use App\Models\Location;
 use App\Models\OrderCategory;
 use App\Models\OrderType;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Schemas\Components\FusedGroup;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
 
 class OrderForm extends CreatesOrderTransportCards
@@ -130,59 +130,64 @@ class OrderForm extends CreatesOrderTransportCards
 
                                         return 'Thêm một hoặc nhiều điểm đến cho đơn hàng';
                                     })
+                                    ->collapsible()
+                                    ->itemLabel(function (array $state): ?string {
+                                        $parts = [];
+
+                                        if (isset($state['location_id']) && $location = Location::query()->find($state['location_id'])) {
+                                            $parts[] = $location->name;
+                                        }
+
+                                        if (! empty($state['address'])) {
+                                            $parts[] = $state['address'];
+                                        }
+
+                                        if (! empty($state['total_packages'])) {
+                                            $parts[] = $state['total_packages'].' kiện';
+                                        }
+
+                                        if (! empty($state['total_weight'])) {
+                                            $parts[] = $state['total_weight'].' tấn';
+                                        }
+
+                                        return count($parts) > 0 ? implode(' - ', $parts) : 'Điểm giao hàng mới';
+                                    })
                                     ->reorderableWithDragAndDrop()
                                     ->orderColumn('sequence')
                                     ->defaultItems(0)
                                     ->relationship('deliveryPoints')
-                                    ->table(fn (Get $get): array => self::isExternalOrder($get)
-                                        ? [
-                                            TableColumn::make('Địa điểm')
-                                                ->markAsRequired()
-                                                ->alignment(Alignment::Start),
-                                            TableColumn::make('Khu vực phân loại')
-                                                ->width('100px'),
-                                            TableColumn::make('Người liên hệ')
-                                                ->width('150px'),
-                                            TableColumn::make('Số điện thoại')
-                                                ->width('150px'),
-                                        ]
-                                        : [
-                                            TableColumn::make('Địa điểm')
-                                                ->markAsRequired()
-                                                ->alignment(Alignment::Start),
-                                            TableColumn::make('Số kiện')
-                                                ->width('100px'),
-                                            TableColumn::make('Trọng lượng')
-                                                ->width('100px'),
-                                        ])
-                                    ->compact()
-                                    ->schema(fn (Get $get): array => self::isExternalOrder($get)
-                                        ? [
-                                            TextInput::make('address')
-                                                ->label('Số nhà, tên đường')
-                                                ->placeholder('Ví dụ: 34 Lê Lợi'),
-                                            Select::make('location_id')
-                                                ->label('Khu vực phân loại')
-                                                ->relationship('location', 'name')
-                                                ->native(false)
-                                                ->required(),
-                                            TextInput::make('contact_person')
-                                                ->placeholder('Ví dụ: Nguyễn Văn A'),
-                                            TextInput::make('contact_phone')
-                                                ->placeholder('Ví dụ: 0901234567')
-                                                ->tel(),
-                                        ]
-                                        : [
-                                            Select::make('location_id')
-                                                ->label('Địa điểm')
-                                                ->relationship('location', 'name')
-                                                ->native(false)
-                                                ->required(),
-                                            TextInput::make('total_packages')
-                                                ->numeric(),
-                                            TextInput::make('total_weight')
-                                                ->numeric(),
-                                        ])
+                                    ->schema([
+                                        Grid::make(12)
+                                            ->schema([
+                                                Select::make('location_id')
+                                                    ->label('Điểm giao hàng')
+                                                    ->relationship('location', 'name')
+                                                    ->native(false)
+                                                    ->required()
+                                                    ->columnSpan(4),
+                                                TextInput::make('address')
+                                                    ->label('Số nhà, tên đường giao')
+                                                    ->placeholder('Ví dụ: 34 Lê Lợi')
+                                                    ->columnSpan(8),
+                                                TextInput::make('contact_person')
+                                                    ->label('Người nhận')
+                                                    ->placeholder('Ví dụ: Nguyễn Văn A')
+                                                    ->columnSpan(4),
+                                                TextInput::make('contact_phone')
+                                                    ->label('Số điện thoại nhận')
+                                                    ->placeholder('Ví dụ: 0901234567')
+                                                    ->tel()
+                                                    ->columnSpan(3),
+                                                TextInput::make('total_packages')
+                                                    ->label('Số kiện')
+                                                    ->numeric()
+                                                    ->columnSpan(2),
+                                                TextInput::make('total_weight')
+                                                    ->label('Trọng lượng (tấn)')
+                                                    ->numeric()
+                                                    ->columnSpan(3),
+                                            ]),
+                                    ])
                                     ->columnSpanFull(),
                                 DateTimePicker::make('planned_loading_at')
                                     ->label('Thời gian dự kiến đóng hàng')

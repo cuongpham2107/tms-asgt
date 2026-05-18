@@ -50,7 +50,7 @@ class VehicleMaintenanceScheduleForm
                     ->required(),
                 TextInput::make('km_interval')
                     ->label('Chu kỳ km')
-                    ->prefixIcon(Heroicon::OutlinedGauge)
+                    ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                     ->numeric(),
                 TextInput::make('km_current')
                     ->label('Km hiện tại')

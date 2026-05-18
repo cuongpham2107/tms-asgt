@@ -37,6 +37,7 @@ return [
 
     'mapbox' => [
         'token' => env('MAPBOX_TOKEN'),
+        'server_token' => env('MAPBOX_TOKEN'), // Optional: token riêng cho server (nếu có)
     ],
 
 ];

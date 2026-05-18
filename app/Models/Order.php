@@ -8,6 +8,7 @@ use App\Enums\Priority;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
@@ -108,6 +109,11 @@ class Order extends Model
     public function tripCheckpoints(): HasMany
     {
         return $this->hasMany(TripCheckpoint::class);
+    }
+
+    public function tripPhotos(): HasManyThrough
+    {
+        return $this->hasManyThrough(TripPhoto::class, TripCheckpoint::class, 'order_id', 'trip_checkpoint_id');
     }
 
     public function parentOrder(): BelongsTo
