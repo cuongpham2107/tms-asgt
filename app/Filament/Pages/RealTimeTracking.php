@@ -24,12 +24,12 @@ class RealTimeTracking extends Page
     ];
 
     private const NORTHERN_DEMO_POINTS = [
-        ['lat' => 21.0285, 'lng' => 105.8542], // Hà Nội
-        ['lat' => 21.2142, 'lng' => 105.8027], // Nội Bài
-        ['lat' => 21.1861, 'lng' => 106.0763], // Bắc Ninh
-        ['lat' => 21.5942, 'lng' => 105.8482], // Thái Nguyên
-        ['lat' => 21.1167, 'lng' => 105.9583], // Đông Anh / Sóc Sơn
-        ['lat' => 21.3019, 'lng' => 105.8995], // Phổ Yên
+        ['lat' => 21.0285, 'lng' => 105.8542],
+        ['lat' => 21.2142, 'lng' => 105.8027],
+        ['lat' => 21.1861, 'lng' => 106.0763],
+        ['lat' => 21.5942, 'lng' => 105.8482],
+        ['lat' => 21.1167, 'lng' => 105.9583],
+        ['lat' => 21.3019, 'lng' => 105.8995],
     ];
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMap;
@@ -65,32 +65,33 @@ class RealTimeTracking extends Page
         $this->cachedVehicles = Vehicle::query()
             ->with([
                 'driver',
-                'driverShifts' => fn ($query) => $query
+                'driverShifts' => fn ($q) => $q
                     ->with('driver')
                     ->whereNull('end_time')
                     ->latest('start_time'),
-                'documents' => fn ($query) => $query
+                'documents' => fn ($q) => $q
                     ->whereIn('status', ['expiring_soon', 'expired'])
                     ->orderBy('expiry_date'),
-                'maintenanceJobs' => fn ($query) => $query
+                'maintenanceJobs' => fn ($q) => $q
                     ->whereNotIn('status', ['completed', 'cancelled'])
-                    ->where(fn ($query) => $query
+                    ->where(fn ($q) => $q
                         ->where('status', 'overdue')
                         ->orWhereDate('planned_date', '<=', today()->addDays(3)))
                     ->orderBy('planned_date'),
-                'maintenanceSchedules' => fn ($query) => $query
+                'maintenanceSchedules' => fn ($q) => $q
                     ->where('is_active', true)
                     ->whereIn('alert_status', ['warning', 'due', 'overdue']),
-                'orders' => fn ($query) => $query
+                'orders' => fn ($q) => $q
                     ->with([
                         'customer',
                         'deliveryPoints.location',
                         'driver',
                         'orderCategory',
                         'pickupLocation',
-                        'tripCheckpoints' => fn ($query) => $query->orderBy('occurred_at'),
+                        // withCount('photos') nếu TripCheckpoint có quan hệ photos
+                        'tripCheckpoints' => fn ($q) => $q->orderBy('occurred_at'),
                     ])
-                    ->where(fn (Builder $query): Builder => $query
+                    ->where(fn (Builder $q): Builder => $q
                         ->whereIn('status', $activeStatuses)
                         ->orWhereDate('planned_loading_at', $trackingDate))
                     ->orderByDesc('planned_loading_at'),
@@ -106,7 +107,6 @@ class RealTimeTracking extends Page
     {
         $activeStatuses = $this->activeOrderStatuses();
         $trackingDate = $this->trackingDate();
-
         $vehicles = $this->getRawVehicles();
 
         return $vehicles->map(function (Vehicle $vehicle) use ($activeStatuses, $trackingDate): array {
@@ -114,9 +114,11 @@ class RealTimeTracking extends Page
 
             /** @var Collection<int, Order> $allOrders */
             $allOrders = $vehicle->orders ?? collect();
-            $activeOrders = $allOrders->filter(fn (Order $order): bool => in_array($this->orderStatusValue($order), $activeStatuses, true))
+            $activeOrders = $allOrders
+                ->filter(fn (Order $o): bool => in_array($this->orderStatusValue($o), $activeStatuses, true))
                 ->sortByDesc('planned_loading_at');
-            $todayOrders = $allOrders->filter(fn (Order $order): bool => $order->planned_loading_at?->isSameDay($trackingDate) ?? false)
+            $todayOrders = $allOrders
+                ->filter(fn (Order $o): bool => $o->planned_loading_at?->isSameDay($trackingDate) ?? false)
                 ->sortByDesc('planned_loading_at');
 
             $selectedOrders = $activeOrders->isNotEmpty()
@@ -126,41 +128,79 @@ class RealTimeTracking extends Page
             $trackingOrder = $activeOrders->first() ?? $todayOrders->first();
             $routePoints = $this->routePointsForOrder($trackingOrder, $vehicle->id);
             $latestPoint = $routePoints->last();
+
             $hasShiftGps = $latestShift?->start_gps_lat !== null && $latestShift?->start_gps_lng !== null;
             $shiftPosition = $hasShiftGps
-                ? $this->normalizeDemoCoordinate((float) $latestShift->start_gps_lat, (float) $latestShift->start_gps_lng, $vehicle->id)
+                ? $this->normalizeDemoCoordinate(
+                    (float) $latestShift->start_gps_lat,
+                    (float) $latestShift->start_gps_lng,
+                    $vehicle->id
+                )
                 : null;
+
             $fallbackPosition = $this->fallbackPositionForVehicle($vehicle);
             $lat = $latestPoint['lat'] ?? ($shiftPosition['lat'] ?? $fallbackPosition['lat']);
             $lng = $latestPoint['lng'] ?? ($shiftPosition['lng'] ?? $fallbackPosition['lng']);
+
             $trackingStatus = $this->trackingStatusForVehicle($vehicle, $activeOrders);
             $trackingDriver = $trackingOrder?->driver?->name
                 ?? $latestShift?->driver?->name
                 ?? $vehicle->driver?->name
                 ?? 'Không lái';
 
-            $orders = $selectedOrders->map(function (Order $order): array {
-                $firstDelivery = $order->deliveryPoints?->sortBy('sequence')->first();
+            // ── Orders (up to 3) ──────────────────────────────────────────────
+            $orders = $selectedOrders->map(
+                function (Order $order) use ($activeStatuses): array {
+                    /** @var Collection<int, TripCheckpoint> $checkpoints */
+                    $checkpoints = $order->tripCheckpoints ?? collect();
+                    $latestCheckpoint = $checkpoints->sortByDesc('occurred_at')->first();
 
-                /** @var Collection<int, TripCheckpoint> $checkpoints */
-                $checkpoints = $order->tripCheckpoints ?? collect();
-                $latestCheckpoint = $checkpoints->sortByDesc('occurred_at')->first();
+                    // Tất cả điểm giao hàng theo thứ tự
+                    $deliveryPoints = $order->deliveryPoints
+                        ?->sortBy('sequence')
+                        ->map(fn ($dp) => [
+                            'sequence' => $dp->sequence,
+                            'name' => $dp->address ?? $dp->location?->name ?? '—',
+                            'contact' => $dp->contact_person,
+                            'phone' => $dp->contact_phone,
+                            'status' => $dp->status instanceof BackedEnum
+                                ? $dp->status->value
+                                : (string) ($dp->status ?? 'pending'),
+                            'arrived_at' => $this->formatDateTime($dp->arrived_at),
+                            'delivered_at' => $this->formatDateTime($dp->delivered_at),
+                        ])
+                        ->values()
+                        ->toArray() ?? [];
 
-                return [
-                    'id' => $order->id,
-                    'order_code' => $order->order_code,
-                    'status' => $this->orderStatusValue($order),
-                    'status_label' => $order->status?->getLabel() ?? $this->orderStatusValue($order),
-                    'pickup' => $order->pickup_address ?? $order->pickupLocation?->name ?? null,
-                    'delivery' => $firstDelivery?->address ?? $firstDelivery?->location?->name ?? null,
-                    'customer' => $order->customer?->name ?? null,
-                    'planned_loading_at' => $this->formatDateTime($order->planned_loading_at),
-                    'latest_checkpoint' => $latestCheckpoint?->checkpoint_type?->getLabel(),
-                    'latest_checkpoint_at' => $this->formatDateTime($latestCheckpoint?->occurred_at),
-                    'total_packages' => $order->total_packages,
-                    'total_weight' => $order->total_weight,
-                ];
-            })->values()->toArray();
+                    $firstDelivery = $order->deliveryPoints?->sortBy('sequence')->first();
+
+                    // Đơn hàng quá giờ: đã qua planned_loading_at nhưng chưa hoàn thành
+                    $isOverdue = $order->planned_loading_at?->isPast()
+                        && ! in_array($this->orderStatusValue($order), [
+                            OrderStatus::Delivered->value,
+                            OrderStatus::Completed->value,
+                            OrderStatus::Cancelled->value,
+                        ], true);
+
+                    return [
+                        'id' => $order->id,
+                        'order_code' => $order->order_code,
+                        'status' => $this->orderStatusValue($order),
+                        'status_label' => $order->status?->getLabel() ?? $this->orderStatusValue($order),
+                        'route_color' => $this->routeColorForOrder($order, $activeStatuses),
+                        'is_overdue' => $isOverdue,
+                        'pickup' => $order->pickup_address ?? $order->pickupLocation?->name ?? null,
+                        'delivery' => $firstDelivery?->address ?? $firstDelivery?->location?->name ?? null,
+                        'customer' => $order->customer?->name ?? null,
+                        'planned_loading_at' => $this->formatDateTime($order->planned_loading_at),
+                        'latest_checkpoint' => $latestCheckpoint?->checkpoint_type?->getLabel(),
+                        'latest_checkpoint_at' => $this->formatDateTime($latestCheckpoint?->occurred_at),
+                        'total_packages' => $order->total_packages,
+                        'total_weight' => $order->total_weight,
+                        'delivery_points' => $deliveryPoints,
+                    ];
+                }
+            )->values()->toArray();
 
             $alerts = $this->alertsForVehicle(
                 vehicle: $vehicle,
@@ -168,32 +208,6 @@ class RealTimeTracking extends Page
                 hasRoute: $routePoints->count() >= 2,
                 activeOrders: $activeOrders,
             );
-            dd([
-                'id' => $vehicle->id,
-                'plate' => $vehicle->plate_number,
-                'status' => $trackingStatus['value'],
-                'status_label' => $trackingStatus['label'],
-                'vehicle_status' => $vehicle->status?->value ?? $vehicle->status,
-                'vehicle_status_label' => $vehicle->getStatusLabel(),
-                'driver' => $trackingDriver,
-                'vehicle_type' => $vehicle->vehicle_type?->value,
-                'vehicle_type_label' => $vehicle->vehicle_type?->getLabel() ?? 'Xe thường',
-                'owner_type' => $vehicle->type?->value,
-                'owner_type_label' => $vehicle->type?->getLabel() ?? null,
-                'lat' => $lat,
-                'lng' => $lng,
-                'heading' => 0,
-                'position_source' => $latestPoint !== null ? 'GPS checkpoint' : ($hasShiftGps ? 'GPS vào ca' : 'Vị trí mô phỏng miền Bắc'),
-                'today_category' => $this->todayCategoryForOrders($todayOrders, $activeStatuses),
-                'today_order_count' => $todayOrders->count(),
-                'route' => $routePoints->values()->toArray(),
-                'route_order_code' => $trackingOrder?->order_code,
-                'route_start' => $routePoints->first()['label'] ?? null,
-                'route_end' => $routePoints->last()['label'] ?? null,
-                'has_alerts' => count($alerts) > 0,
-                'alerts' => $alerts,
-                'orders' => $orders,
-            ]);
 
             return [
                 'id' => $vehicle->id,
@@ -210,10 +224,16 @@ class RealTimeTracking extends Page
                 'lat' => $lat,
                 'lng' => $lng,
                 'heading' => 0,
-                'position_source' => $latestPoint !== null ? 'GPS checkpoint' : ($hasShiftGps ? 'GPS vào ca' : 'Vị trí mô phỏng miền Bắc'),
+                'position_source' => $latestPoint !== null
+                    ? 'GPS checkpoint'
+                    : ($hasShiftGps ? 'GPS vào ca' : 'Vị trí mô phỏng'),
                 'today_category' => $this->todayCategoryForOrders($todayOrders, $activeStatuses),
                 'today_order_count' => $todayOrders->count(),
+                // Route cho bản đồ: chỉ điểm đầu + cuối để Directions API vẽ đường
                 'route' => $routePoints->values()->toArray(),
+                // Tất cả checkpoints để vẽ marker annotation
+                'checkpoints' => $routePoints->values()->toArray(),
+                'route_color' => $this->routeColorForOrder($trackingOrder, $activeStatuses),
                 'route_order_code' => $trackingOrder?->order_code,
                 'route_start' => $routePoints->first()['label'] ?? null,
                 'route_end' => $routePoints->last()['label'] ?? null,
@@ -222,7 +242,6 @@ class RealTimeTracking extends Page
                 'orders' => $orders,
             ];
         })->toArray();
-
     }
 
     /** @return array<string, int> */
@@ -234,39 +253,41 @@ class RealTimeTracking extends Page
 
         return [
             'total' => $vehicles->count(),
-            'running' => $vehicles->filter(function (Vehicle $v) use ($activeStatuses) {
-                return $v->status === VehicleStatus::Running || $v->orders->whereIn('status', $activeStatuses)->isNotEmpty();
-            })->count(),
-            'on' => $vehicles->filter(function (Vehicle $v) use ($activeStatuses) {
-                return $v->status === VehicleStatus::On && $v->orders->whereIn('status', $activeStatuses)->isEmpty();
-            })->count(),
+            'running' => $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::Running ||
+                $v->orders->whereIn('status', $activeStatuses)->isNotEmpty()
+            )->count(),
+            'on' => $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::On &&
+                $v->orders->whereIn('status', $activeStatuses)->isEmpty()
+            )->count(),
             'bdsc' => $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::Bdsc)->count(),
             'off' => $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::Off)->count(),
-            'alerts' => $vehicles->filter(function (Vehicle $v) {
-                return in_array($v->status?->value ?? $v->status, [VehicleStatus::Off->value, VehicleStatus::Bdsc->value])
-                    || $v->documents->isNotEmpty()
-                    || $v->maintenanceJobs->isNotEmpty()
-                    || $v->maintenanceSchedules->isNotEmpty();
-            })->count(),
-            'today_total' => $vehicles->filter(function (Vehicle $v) use ($trackingDate) {
-                return $v->orders->filter(fn (Order $o) => $o->planned_loading_at?->isSameDay($trackingDate) ?? false)->isNotEmpty();
-            })->count(),
-            'today_running' => $vehicles->filter(function (Vehicle $v) use ($trackingDate, $activeStatuses) {
-                return $v->orders->filter(fn (Order $o) => ($o->planned_loading_at?->isSameDay($trackingDate) ?? false) && in_array($this->orderStatusValue($o), $activeStatuses, true))->isNotEmpty();
-            })->count(),
+            'alerts' => $vehicles->filter(fn (Vehicle $v) => in_array($v->status?->value ?? $v->status, [VehicleStatus::Off->value, VehicleStatus::Bdsc->value]) ||
+                $v->documents->isNotEmpty() ||
+                $v->maintenanceJobs->isNotEmpty() ||
+                $v->maintenanceSchedules->isNotEmpty()
+            )->count(),
+            'today_total' => $vehicles->filter(fn (Vehicle $v) => $v->orders->filter(fn (Order $o) => $o->planned_loading_at?->isSameDay($trackingDate) ?? false)->isNotEmpty()
+            )->count(),
+            'today_running' => $vehicles->filter(fn (Vehicle $v) => $v->orders->filter(fn (Order $o) => ($o->planned_loading_at?->isSameDay($trackingDate) ?? false) &&
+                    in_array($this->orderStatusValue($o), $activeStatuses, true)
+            )->isNotEmpty()
+            )->count(),
             'today_planned' => $vehicles->filter(function (Vehicle $v) use ($trackingDate) {
-                $plannedStatuses = [OrderStatus::Draft->value, OrderStatus::Assigned->value, OrderStatus::Sent->value];
+                $s = [OrderStatus::Draft->value, OrderStatus::Assigned->value, OrderStatus::Sent->value];
 
-                return $v->orders->filter(fn (Order $o) => ($o->planned_loading_at?->isSameDay($trackingDate) ?? false) && in_array($this->orderStatusValue($o), $plannedStatuses, true))->isNotEmpty();
+                return $v->orders->filter(fn (Order $o) => ($o->planned_loading_at?->isSameDay($trackingDate) ?? false) &&
+                    in_array($this->orderStatusValue($o), $s, true)
+                )->isNotEmpty();
             })->count(),
             'today_completed' => $vehicles->filter(function (Vehicle $v) use ($trackingDate) {
-                $completedStatuses = [OrderStatus::Delivered->value, OrderStatus::Completed->value];
+                $s = [OrderStatus::Delivered->value, OrderStatus::Completed->value];
 
-                return $v->orders->filter(fn (Order $o) => ($o->planned_loading_at?->isSameDay($trackingDate) ?? false) && in_array($this->orderStatusValue($o), $completedStatuses, true))->isNotEmpty();
+                return $v->orders->filter(fn (Order $o) => ($o->planned_loading_at?->isSameDay($trackingDate) ?? false) &&
+                    in_array($this->orderStatusValue($o), $s, true)
+                )->isNotEmpty();
             })->count(),
-            'today_idle' => $vehicles->filter(function (Vehicle $v) use ($trackingDate) {
-                return $v->orders->filter(fn (Order $o) => $o->planned_loading_at?->isSameDay($trackingDate) ?? false)->isEmpty();
-            })->count(),
+            'today_idle' => $vehicles->filter(fn (Vehicle $v) => $v->orders->filter(fn (Order $o) => $o->planned_loading_at?->isSameDay($trackingDate) ?? false)->isEmpty()
+            )->count(),
         ];
     }
 
@@ -275,23 +296,26 @@ class RealTimeTracking extends Page
         return $this->trackingDate()->format('d/m/Y');
     }
 
+    // ── Private helpers ───────────────────────────────────────────────────────
+
     private function trackingDate(): CarbonInterface
     {
         if ($this->cachedTrackingDate !== null) {
             return $this->cachedTrackingDate;
         }
 
-        if (Order::whereDate('planned_loading_at', '=', today(), 'and')->whereNotNull('vehicle_id', 'and')->exists()) {
+        if (Order::whereDate('planned_loading_at', '=', today(), 'and')
+            ->whereNotNull('vehicle_id', 'and')->exists()) {
             return $this->cachedTrackingDate = today();
         }
 
-        $latestPlannedAt = Order::query()
+        $latest = Order::query()
             ->whereNotNull('planned_loading_at', 'and')
             ->whereNotNull('vehicle_id', 'and')
             ->max('planned_loading_at');
 
-        return $this->cachedTrackingDate = $latestPlannedAt !== null
-            ? Carbon::parse($latestPlannedAt)->startOfDay()
+        return $this->cachedTrackingDate = $latest !== null
+            ? Carbon::parse($latest)->startOfDay()
             : today();
     }
 
@@ -313,7 +337,43 @@ class RealTimeTracking extends Page
     }
 
     /**
-     * @return Collection<int, array{lat: float, lng: float, label: string, occurred_at: ?string, checkpoint_type: ?string}>
+     * Màu tuyến đường theo trạng thái đơn:
+     *   xanh lá  = hoàn thành
+     *   xanh dương = đang chạy (đúng giờ)
+     *   đỏ       = đang chạy nhưng quá giờ
+     *   xám      = kế hoạch chưa xuất phát
+     *
+     * @param  array<int, string>  $activeStatuses
+     */
+    private function routeColorForOrder(?Order $order, array $activeStatuses): string
+    {
+        if ($order === null) {
+            return '#9ca3af';
+        }
+
+        $status = $this->orderStatusValue($order);
+
+        if (in_array($status, [OrderStatus::Delivered->value, OrderStatus::Completed->value], true)) {
+            return '#22c55e'; // xanh lá — hoàn thành
+        }
+
+        if (in_array($status, $activeStatuses, true)) {
+            return $order->planned_loading_at?->isPast()
+                ? '#ef4444'  // đỏ — quá giờ
+                : '#3b82f6'; // xanh dương — đang chạy
+        }
+
+        return '#9ca3af'; // xám — kế hoạch
+    }
+
+    /**
+     * Các GPS checkpoint của đơn hàng — dùng để vẽ route line + annotation markers.
+     *
+     * @return Collection<int, array{
+     *   lat: float, lng: float, label: string,
+     *   occurred_at: ?string, checkpoint_type: ?string,
+     *   km_reading: ?float, voice_note: ?string, photo_count: int, sequence: int
+     * }>
      */
     private function routePointsForOrder(?Order $order, int $vehicleId): Collection
     {
@@ -325,18 +385,29 @@ class RealTimeTracking extends Page
         $checkpoints = $order->tripCheckpoints ?? collect();
 
         return $checkpoints
-            ->filter(fn (TripCheckpoint $checkpoint): bool => $checkpoint->gps_lat !== null && $checkpoint->gps_lng !== null)
+            ->filter(fn (TripCheckpoint $c): bool => $c->gps_lat !== null && $c->gps_lng !== null)
             ->sortBy('occurred_at')
             ->values()
             ->map(function (TripCheckpoint $checkpoint, int $index) use ($vehicleId): array {
-                $coordinate = $this->normalizeDemoCoordinate((float) $checkpoint->gps_lat, (float) $checkpoint->gps_lng, $vehicleId + $index);
+                $coord = $this->normalizeDemoCoordinate(
+                    (float) $checkpoint->gps_lat,
+                    (float) $checkpoint->gps_lng,
+                    $vehicleId + $index
+                );
 
                 return [
-                    'lat' => $coordinate['lat'],
-                    'lng' => $coordinate['lng'],
+                    'lat' => $coord['lat'],
+                    'lng' => $coord['lng'],
                     'label' => $checkpoint->checkpoint_type?->getLabel() ?? 'Checkpoint',
                     'occurred_at' => $this->formatDateTime($checkpoint->occurred_at),
                     'checkpoint_type' => $checkpoint->checkpoint_type?->value,
+                    'km_reading' => $checkpoint->km_reading !== null
+                        ? (float) $checkpoint->km_reading
+                        : null,
+                    'voice_note' => $checkpoint->voice_note,
+                    // Thêm withCount('photos') vào eager load nếu có quan hệ photos
+                    'photo_count' => $checkpoint->photos_count ?? 0,
+                    'sequence' => $index + 1,
                 ];
             })
             ->values();
@@ -352,11 +423,11 @@ class RealTimeTracking extends Page
             return 'idle_today';
         }
 
-        if ($todayOrders->contains(fn (Order $order): bool => in_array($this->orderStatusValue($order), $activeStatuses, true))) {
+        if ($todayOrders->contains(fn (Order $o): bool => in_array($this->orderStatusValue($o), $activeStatuses, true))) {
             return 'running_today';
         }
 
-        if ($todayOrders->contains(fn (Order $order): bool => in_array($this->orderStatusValue($order), [OrderStatus::Delivered->value, OrderStatus::Completed->value], true))) {
+        if ($todayOrders->contains(fn (Order $o): bool => in_array($this->orderStatusValue($o), [OrderStatus::Delivered->value, OrderStatus::Completed->value], true))) {
             return 'completed_today';
         }
 
@@ -367,12 +438,17 @@ class RealTimeTracking extends Page
      * @param  Collection<int, Order>  $activeOrders
      * @return array<int, array{level: string, label: string}>
      */
-    private function alertsForVehicle(Vehicle $vehicle, bool $hasGps, bool $hasRoute, Collection $activeOrders): array
-    {
+    private function alertsForVehicle(
+        Vehicle $vehicle,
+        bool $hasGps,
+        bool $hasRoute,
+        Collection $activeOrders
+    ): array {
         $alerts = [];
 
         if ($vehicle->status === VehicleStatus::Off) {
-            $alerts[] = ['level' => 'danger', 'label' => 'Xe đang tắt'.($vehicle->off_reason ? ': '.$vehicle->off_reason : '')];
+            $alerts[] = ['level' => 'danger',
+                'label' => 'Xe đang tắt'.($vehicle->off_reason ? ': '.$vehicle->off_reason : '')];
         }
 
         if ($vehicle->status === VehicleStatus::Bdsc) {
@@ -382,7 +458,9 @@ class RealTimeTracking extends Page
         foreach ($vehicle->documents as $document) {
             $alerts[] = [
                 'level' => $document->status?->value === 'expired' ? 'danger' : 'warning',
-                'label' => ($document->doc_type?->getLabel() ?? 'Giấy tờ').' '.$document->status?->getLabel().' '.$this->formatDate($document->expiry_date),
+                'label' => ($document->doc_type?->getLabel() ?? 'Giấy tờ')
+                    .' '.$document->status?->getLabel()
+                    .' '.$this->formatDate($document->expiry_date),
             ];
         }
 
@@ -405,7 +483,7 @@ class RealTimeTracking extends Page
             $alerts[] = ['level' => 'warning', 'label' => 'Chưa có dữ liệu GPS thực tế'];
         }
 
-        if ($activeOrders->isNotEmpty() && (! $hasRoute)) {
+        if ($activeOrders->isNotEmpty() && ! $hasRoute) {
             $alerts[] = ['level' => 'warning', 'label' => 'Chưa đủ GPS checkpoint để vẽ đường đi'];
         }
 
@@ -442,10 +520,7 @@ class RealTimeTracking extends Page
         $point = self::NORTHERN_DEMO_POINTS[$vehicle->id % count(self::NORTHERN_DEMO_POINTS)];
         $offset = (($vehicle->id % 7) - 3) / 10000;
 
-        return [
-            'lat' => $point['lat'] + $offset,
-            'lng' => $point['lng'] - $offset,
-        ];
+        return ['lat' => $point['lat'] + $offset, 'lng' => $point['lng'] - $offset];
     }
 
     /** @return array{lat: float, lng: float} */
@@ -459,10 +534,7 @@ class RealTimeTracking extends Page
         $latDelta = ($lat - 10.8231) * 0.22;
         $lngDelta = ($lng - 106.6297) * 0.22;
 
-        return [
-            'lat' => $anchor['lat'] + $latDelta,
-            'lng' => $anchor['lng'] + $lngDelta,
-        ];
+        return ['lat' => $anchor['lat'] + $latDelta, 'lng' => $anchor['lng'] + $lngDelta];
     }
 
     private function isHoChiMinhDemoCoordinate(float $lat, float $lng): bool
