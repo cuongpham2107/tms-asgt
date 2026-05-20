@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Locations\Schemas;
 
 use App\Enums\LocationType;
+use App\Filament\Forms\Components\MapboxLocationPicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -37,6 +39,13 @@ class LocationForm
                     ->default(LocationType::Warehouse->value)
                     ->native(false)
                     ->required(),
+                Hidden::make('lat'),
+                Hidden::make('lng'),
+                MapboxLocationPicker::make('coordinates')
+                    ->label('Chọn vị trí trên bản đồ')
+                    ->latField('lat')
+                    ->lngField('lng')
+                    ->columnSpanFull(),
                 Toggle::make('is_active')
                     ->label('Đang hoạt động')
                     ->required(),

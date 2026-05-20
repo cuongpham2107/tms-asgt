@@ -13,10 +13,8 @@ return new class extends Migration
     {
         Schema::create('order_categories', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('order_type_id')
-                ->constrained('order_types')
-                ->cascadeOnDelete()
-                ->comment('Thuộc loại đơn nào');
+            $table->enum('type', ['HHHK', 'external'])->default('HHHK')
+                ->comment('Loại đơn: HHHK hoặc Hàng ngoài');
             $table->string('code', 30)->comment('Mã phân nhánh, ví dụ: NBA, TN, BN, NBO, province');
             $table->string('name')->comment('Tên hiển thị, ví dụ: Nội bộ A, Tây Nam, Bắc Nam...');
             $table->string('color', 20)->nullable()->comment('Màu badge riêng cho category này');
@@ -24,9 +22,9 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            // code phải unique trong cùng 1 order_type
-            $table->unique(['order_type_id', 'code']);
-            $table->index('order_type_id');
+            // code phải unique trong cùng 1 type
+            $table->unique(['type', 'code']);
+            $table->index('type');
         });
     }
 

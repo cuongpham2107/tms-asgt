@@ -30,7 +30,6 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -282,25 +281,12 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
             ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
                 try {
                     DB::transaction(function () use ($data, $schema, $forceAssignedWhenTransportProvided): void {
-                        $createdBy = Auth::id();
+                        $createdBy = auth()->id();
 
                         if ($createdBy === null) {
                             throw new \RuntimeException('Không xác định được người dùng đang đăng nhập.');
                         }
 
-                        $orderTypeId = OrderType::query()
-                            ->where('code', 'external')
-                            ->value('id');
-
-                        if ($orderTypeId === null) {
-                            throw new \RuntimeException('Không tìm thấy loại đơn Hàng ngoài.');
-                        }
-
-                        $todayOrderCount = Order::query()
-                            ->whereDate('created_at', '=', now()->toDateString(), 'and')
-                            ->count() + 1;
-
-                        $orderCode = sprintf('ORD-%s-%03d', now()->format('Ymd'), $todayOrderCount);
                         $pickupProvinceName = self::resolveProvinceName($data['pickup_province_code'] ?? null);
                         $pickupWardName = self::resolveWardName(
                             $data['pickup_province_code'] ?? null,
@@ -315,28 +301,46 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
 
                         $pickupAddress = $pickupAddressParts !== [] ? implode(', ', $pickupAddressParts) : null;
 
-                        $order = Order::query()->create([
-                            'order_code' => $orderCode,
-                            'order_type_id' => $orderTypeId,
-                            'order_category_id' => $data['order_category_id'],
-                            'customer_id' => $data['customer_id'],
-                            'cargo_name' => $data['cargo_name'] ?? null,
-                            'cargo_type' => $data['cargo_type'] ?? 'GCR',
-                            'total_packages' => $data['total_packages'] ?? null,
-                            'total_weight' => $data['total_weight'] ?? null,
-                            'pickup_address' => $pickupAddress,
-                            'pickup_contact' => $data['pickup_contact'] ?? null,
-                            'pickup_phone' => $data['pickup_phone'] ?? null,
-                            'planned_loading_at' => $data['planned_loading_at'] ?? null,
-                            'driver_id' => $data['driver_id'] ?? null,
-                            'vehicle_id' => $data['vehicle_id'] ?? null,
-                            'status' => filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null)
-                                ? OrderStatus::Assigned->value
-                                : OrderStatus::Draft->value,
-                            'priority' => $data['priority'] ?? Priority::Medium->value,
-                            'created_by' => $createdBy,
-                            'notes' => $data['notes'] ?? null,
-                        ]);
+                        $order = null;
+
+                        for ($attempt = 0; $attempt < 5; $attempt++) {
+                            $orderCode = self::generateOrderCode();
+
+                            try {
+                                $order = Order::query()->create([
+                                    'order_code' => $orderCode,
+                                    'type' => 'external',
+                                    'order_category_id' => $data['order_category_id'],
+                                    'customer_id' => $data['customer_id'],
+                                    'cargo_name' => $data['cargo_name'] ?? null,
+                                    'cargo_type' => $data['cargo_type'] ?? 'GCR',
+                                    'total_packages' => $data['total_packages'] ?? null,
+                                    'total_weight' => $data['total_weight'] ?? null,
+                                    'pickup_address' => $pickupAddress,
+                                    'pickup_contact' => $data['pickup_contact'] ?? null,
+                                    'pickup_phone' => $data['pickup_phone'] ?? null,
+                                    'planned_loading_at' => $data['planned_loading_at'] ?? null,
+                                    'driver_id' => $data['driver_id'] ?? null,
+                                    'vehicle_id' => $data['vehicle_id'] ?? null,
+                                    'status' => filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null)
+                                        ? OrderStatus::Assigned->value
+                                        : OrderStatus::Draft->value,
+                                    'priority' => $data['priority'] ?? Priority::Medium->value,
+                                    'created_by' => $createdBy,
+                                    'notes' => $data['notes'] ?? null,
+                                ]);
+
+                                break;
+                            } catch (Throwable $e) {
+                                if (! self::isOrderCodeDuplicate($e) || $attempt === 4) {
+                                    throw $e;
+                                }
+                            }
+                        }
+
+                        if ($order === null) {
+                            throw new \RuntimeException('Không thể tạo mã đơn hàng sau nhiều lần thử.');
+                        }
 
                         $deliveryPoints = collect($schema->getRawState()['deliveryPoints'] ?? [])
                             ->values()

@@ -45,12 +45,12 @@ class AssignTransportAction extends CreatesOrderTransportCards
             ])
             ->action(function (Order $record, array $data): void {
                 try {
-                    $record->update([
+                    Order::query()->whereKey($record->id)->update([
                         'vehicle_id' => $data['vehicle_id'] ?? null,
                         'driver_id' => $data['driver_id'] ?? null,
                         'status' => (filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null))
-                            ? OrderStatus::Assigned
-                            : $record->status,
+                            ? OrderStatus::Assigned->value
+                            : $record->status->value,
                     ]);
 
                     if (filled($data['vehicle_id'] ?? null)) {

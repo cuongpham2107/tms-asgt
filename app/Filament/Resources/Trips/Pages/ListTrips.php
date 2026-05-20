@@ -76,7 +76,6 @@ class ListTrips extends ListRecords
                 'deliveryPoints.location',
                 'driver.driverShifts',
                 'orderCategory',
-                'orderType',
                 'pickupLocation',
                 'tripCheckpoints.deliveryPoint.location',
                 'vehicle',

@@ -9,17 +9,18 @@ use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 class OrderCategoriesTable extends BaseTable
 {
     public static function configure(Table $table): Table
     {
         return parent::applyDefaults($table)
-            ->modifyQueryUsing(fn (Builder $query) => $query->with('orderType'))
             ->columns([
-                TextColumn::make('orderType.name')
+                TextColumn::make('type')
                     ->label('Loại đơn')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state?->getLabel() ?? '-')
+                    ->color(fn ($state) => $state?->getColor() ?? 'gray')
                     ->searchable(),
                 TextColumn::make('code')
                     ->label('Mã')

@@ -26,7 +26,6 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -202,44 +201,48 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided) {
                 try {
                     DB::transaction(function () use ($data, $schema, $forceAssignedWhenTransportProvided): void {
-                        $createdBy = Auth::id();
+                        $createdBy = auth()->id();
 
                         if ($createdBy === null) {
                             throw new \RuntimeException('Không xác định được người dùng đang đăng nhập.');
                         }
 
-                        $orderTypeId = OrderType::query()
-                            ->where('code', 'HHHK')
-                            ->value('id');
+                        $order = null;
 
-                        if ($orderTypeId === null) {
-                            throw new \RuntimeException('Không tìm thấy loại đơn HHHK.');
+                        for ($attempt = 0; $attempt < 5; $attempt++) {
+                            $orderCode = self::generateOrderCode();
+
+                            try {
+                                $order = Order::query()->create([
+                                    'order_code' => $orderCode,
+                                    'type' => 'HHHK',
+                                    'order_category_id' => $data['order_category_id'],
+                                    'customer_id' => $data['customer_id'],
+                                    'pickup_location_id' => $data['pickup_location_id'] ?? null,
+                                    'planned_loading_at' => $data['planned_loading_at'] ?? null,
+                                    'driver_id' => $data['driver_id'] ?? null,
+                                    'vehicle_id' => $data['vehicle_id'] ?? null,
+                                    'total_packages' => $data['total_packages'] ?? null,
+                                    'total_weight' => $data['total_weight'] ?? null,
+                                    'status' => filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null)
+                                        ? OrderStatus::Assigned->value
+                                        : OrderStatus::Draft->value,
+                                    'priority' => $data['priority'] ?? Priority::Medium->value,
+                                    'created_by' => $createdBy,
+                                    'notes' => $data['notes'] ?? null,
+                                ]);
+
+                                break;
+                            } catch (Throwable $e) {
+                                if (! self::isOrderCodeDuplicate($e) || $attempt === 4) {
+                                    throw $e;
+                                }
+                            }
                         }
 
-                        $todayOrderCount = Order::query()
-                            ->whereDate('created_at', '=', now()->toDateString(), 'and')
-                            ->count() + 1;
-
-                        $orderCode = sprintf('ORD-%s-%03d', now()->format('Ymd'), $todayOrderCount);
-
-                        $order = Order::query()->create([
-                            'order_code' => $orderCode,
-                            'order_type_id' => $orderTypeId,
-                            'order_category_id' => $data['order_category_id'],
-                            'customer_id' => $data['customer_id'],
-                            'pickup_location_id' => $data['pickup_location_id'] ?? null,
-                            'planned_loading_at' => $data['planned_loading_at'] ?? null,
-                            'driver_id' => $data['driver_id'] ?? null,
-                            'vehicle_id' => $data['vehicle_id'] ?? null,
-                            'total_packages' => $data['total_packages'] ?? null,
-                            'total_weight' => $data['total_weight'] ?? null,
-                            'status' => filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null)
-                                ? OrderStatus::Assigned->value
-                                : OrderStatus::Draft->value,
-                            'priority' => $data['priority'] ?? Priority::Medium->value,
-                            'created_by' => $createdBy,
-                            'notes' => $data['notes'] ?? null,
-                        ]);
+                        if ($order === null) {
+                            throw new \RuntimeException('Không thể tạo mã đơn hàng sau nhiều lần thử.');
+                        }
                         $deliveryPoints = collect($schema->getRawState()['deliveryPoints'] ?? [])
                             ->values()
                             ->map(fn (array $deliveryPoint, int $index): array => [

@@ -83,9 +83,9 @@ class DriverSwapAction
                     'created_by' => Auth::id(),
                 ]);
 
-                $record->update([
+                Order::query()->whereKey($record->id)->update([
                     'driver_id' => $toDriverId,
-                    'status' => OrderStatus::DriverSwap,
+                    'status' => OrderStatus::DriverSwap->value,
                 ]);
 
                 Notification::make()

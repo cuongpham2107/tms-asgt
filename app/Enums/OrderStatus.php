@@ -56,10 +56,10 @@ enum OrderStatus: string implements HasColor, HasLabel
         };
     }
 
-    /** Có thể gán xe/lái: trước khi gửi lệnh */
+    /** Có thể gán xe/lái: chỉ khi đang ở trạng thái Nháp */
     public function canAssign(): bool
     {
-        return in_array($this, [self::Draft, self::Assigned]);
+        return $this === self::Draft;
     }
 
     /** Có thể gửi lệnh cho lái xe */
@@ -86,16 +86,16 @@ enum OrderStatus: string implements HasColor, HasLabel
         return in_array($this, [self::Draft, self::Assigned]);
     }
 
-    /** Có thể xóa (soft delete) */
+    /** Có thể xóa (soft delete): trước khi lái xe đến điểm giao hàng */
     public function canDelete(): bool
     {
-        return in_array($this, [self::Draft, self::Cancelled]);
+        return ! in_array($this, [self::ArrivedDelivery, self::Delivered, self::Completed, self::Trashed]);
     }
 
-    /** Có thể tạo chuyến quay đầu */
+    /** Có thể tạo chuyến quay đầu: chỉ khi đơn đang chạy thực tế */
     public function canCreateReturn(): bool
     {
-        return in_array($this, [self::Sent, self::Started, self::ArrivedPickup, self::Delivering]);
+        return in_array($this, [self::Started, self::ArrivedPickup, self::Delivering]);
     }
 
     /** Có thể đảo lái */

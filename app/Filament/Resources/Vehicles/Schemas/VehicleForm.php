@@ -44,7 +44,7 @@ class VehicleForm
 
                         Select::make('vehicle_type')
                             ->label('Loại xe')
-                            ->prefixIcon(Heroicon::OutlinedSquare3Stack3D)
+                            ->prefixIcon(Heroicon::OutlinedSquare3Stack3d)
                             ->required()
                             ->default('normal')
                             ->native(false)
@@ -61,17 +61,19 @@ class VehicleForm
                             ->label('Hãng xe')
                             ->prefixIcon(Heroicon::OutlinedBuildingOffice)
                             ->native(false)
+                            ->required()
                             ->options([
-                                'hyundai' => 'Hyundai',
-                                'isuzu' => 'Isuzu',
-                                'kia' => 'Kia',
-                                'thaco' => 'Thaco',
-                                'fuso' => 'Fuso',
-                                'dongfeng' => 'Dongfeng',
-                                'ford' => 'Ford',
-                                'toyota' => 'Toyota',
-                                'mitsubishi' => 'Mitsubishi',
-                                'other' => 'Khác',
+                                'Hyundai' => 'Hyundai',
+                                'Isuzu' => 'Isuzu',
+                                'Hino' => 'Hino',
+                                'Kia' => 'Kia',
+                                'Thaco' => 'Thaco',
+                                'Fuso' => 'Fuso',
+                                'Dongfeng' => 'Dongfeng',
+                                'Ford' => 'Ford',
+                                'Toyota' => 'Toyota',
+                                'Mitsubishi' => 'Mitsubishi',
+                                'Other' => 'Khác',
                             ]),
                         TextInput::make('model_year')
                             ->label('Năm sản xuất')
@@ -89,11 +91,11 @@ class VehicleForm
                             ->label('Loại nhiên liệu')
                             ->native(false)
                             ->options([
-                                'diesel' => 'Diesel',
-                                'gasoline' => 'Xăng',
-                                'electric' => 'Điện',
-                                'hybrid' => 'Hybrid',
-                                'other' => 'Khác',
+                                'Diesel' => 'Diesel',
+                                'Gasoline' => 'Xăng',
+                                'Electric' => 'Điện',
+                                'Hybrid' => 'Hybrid',
+                                'Other' => 'Khác',
                             ]),
                         TextInput::make('current_mileage')
                             ->label('Số km hiện tại')

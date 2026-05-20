@@ -51,16 +51,17 @@ class VehicleInfolist
                         TextEntry::make('make')
                             ->label('Hãng xe')
                             ->formatStateUsing(fn ($state) => match ($state) {
-                                'hyundai' => 'Hyundai',
-                                'isuzu' => 'Isuzu',
-                                'kia' => 'Kia',
-                                'thaco' => 'Thaco',
-                                'fuso' => 'Fuso',
-                                'dongfeng' => 'Dongfeng',
-                                'ford' => 'Ford',
-                                'toyota' => 'Toyota',
-                                'mitsubishi' => 'Mitsubishi',
-                                'other' => 'Khác',
+                                'Hyundai' => 'Hyundai',
+                                'Isuzu' => 'Isuzu',
+                                'Hino' => 'Hino',
+                                'Kia' => 'Kia',
+                                'Thaco' => 'Thaco',
+                                'Fuso' => 'Fuso',
+                                'Dongfeng' => 'Dongfeng',
+                                'Ford' => 'Ford',
+                                'Toyota' => 'Toyota',
+                                'Mitsubishi' => 'Mitsubishi',
+                                'Other' => 'Khác',
                                 default => $state,
                             })
                             ->placeholder('—'),
@@ -77,11 +78,11 @@ class VehicleInfolist
                         TextEntry::make('fuel_type')
                             ->label('Loại nhiên liệu')
                             ->formatStateUsing(fn ($state) => match ($state) {
-                                'diesel' => 'Diesel',
-                                'gasoline' => 'Xăng',
-                                'electric' => 'Điện',
-                                'hybrid' => 'Hybrid',
-                                'other' => 'Khác',
+                                'Diesel' => 'Diesel',
+                                'Gasoline' => 'Xăng',
+                                'Electric' => 'Điện',
+                                'Hybrid' => 'Hybrid',
+                                'Other' => 'Khác',
                                 default => $state,
                             })
                             ->placeholder('—'),

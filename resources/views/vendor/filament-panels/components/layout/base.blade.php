@@ -92,6 +92,37 @@
 
         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::STYLES_AFTER, scopes: $renderHookScopes) }}
 
+        {{-- Mapbox Location Picker — must run before Alpine initializes --}}
+        <script>
+        document.addEventListener('alpine:init', function () {
+            if (Alpine.data('mapboxLocationPicker')) return;
+            Alpine.data('mapboxLocationPicker', function (c) {
+                return {
+                    lat: null, lng: null, map: null, marker: null, ready: false,
+                    init: function () { var s = this, a = 0; (function t() { if (s.ready) return; if (!s.$refs.map) { if (++a < 50) setTimeout(t, 100); return; } s.initMap(); })(); },
+                    initMap: function () {
+                        if (this.ready) return;
+                        if (typeof window.mapboxgl === 'undefined') { var s = this; return setTimeout(function () { s.initMap(); }, 200); }
+                        this.ready = true; var gl = window.mapboxgl; gl.accessToken = c.accessToken;
+                        this.map = new gl.Map({ container: this.$refs.map, style: 'mapbox://styles/mapbox/streets-v12', center: [c.defaultLng, c.defaultLat], zoom: c.defaultZoom });
+                        this.map.addControl(new gl.NavigationControl(), 'top-right');
+                        var s = this;
+                        this.map.on('click', function (e) { s.setLocation(e.lngLat.lat, e.lngLat.lng); });
+                        setTimeout(function () { try { var il = s.$wire.get('data.' + c.latField), ig = s.$wire.get('data.' + c.lngField); if (il && ig) s.setLocation(+il, +ig, false); } catch (e) {} }, 300);
+                    },
+                    setLocation: function (la, lo, f) {
+                        if (f === undefined) f = true; this.lat = la; this.lng = lo;
+                        this.$wire.set('data.' + c.latField, (+la).toFixed(7)); this.$wire.set('data.' + c.lngField, (+lo).toFixed(7));
+                        if (this.marker) { this.marker.setLngLat([lo, la]); }
+                        else { var s = this; this.marker = new window.mapboxgl.Marker({ draggable: true }).setLngLat([lo, la]).addTo(this.map); this.marker.on('dragend', function () { var p = s.marker.getLngLat(); s.setLocation(p.lat, p.lng); }); }
+                        if (f && this.map) this.map.flyTo({ center: [lo, la], zoom: 15 });
+                    },
+                    clear: function () { this.lat = null; this.lng = null; this.$wire.set('data.' + c.latField, null); this.$wire.set('data.' + c.lngField, null); if (this.marker) { this.marker.remove(); this.marker = null; } },
+                };
+            });
+        });
+        </script>
+
         @if (! filament()->hasDarkMode())
             <script>
                 localStorage.setItem('theme', 'light')

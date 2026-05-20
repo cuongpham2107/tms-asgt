@@ -41,8 +41,8 @@ class CancelOrderAction
                         return;
                     }
 
-                    $record->update([
-                        'status' => OrderStatus::Cancelled,
+                    Order::query()->whereKey($record->id)->update([
+                        'status' => OrderStatus::Cancelled->value,
                         'cancelled_at' => now(),
                         'cancel_reason' => $data['cancel_reason'],
                     ]);

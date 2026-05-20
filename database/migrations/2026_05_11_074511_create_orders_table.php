@@ -15,9 +15,8 @@ return new class extends Migration
             $table->id();
             $table->string('order_code', 50)->unique()->comment('Mã đơn hàng tự sinh');
 
-            // Phân loại đơn — FK thay cho enum
-            $table->foreignId('order_type_id')
-                ->constrained('order_types')
+            // Phân loại đơn
+            $table->enum('type', ['HHHK', 'external'])->default('HHHK')
                 ->comment('Loại đơn: HHHK hoặc Hàng ngoài');
             $table->foreignId('order_category_id')
                 ->constrained('order_categories')
@@ -100,7 +99,7 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->index('order_code');
-            $table->index(['order_type_id', 'order_category_id']);
+            $table->index(['type', 'order_category_id']);
             $table->index('status');
             $table->index('created_by');
             $table->index('planned_loading_at');

@@ -14,39 +14,10 @@ class OrderTypeCategorySeeder extends Seeder
     {
         $now = now();
 
-        DB::table('order_types')->upsert(
-            [
-                [
-                    'code' => 'HHHK',
-                    'name' => 'Hàng hàng không',
-                    'color' => 'blue',
-                    'sort_order' => 1,
-                    'is_active' => true,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ],
-                [
-                    'code' => 'external',
-                    'name' => 'Hàng ngoài',
-                    'color' => 'green',
-                    'sort_order' => 2,
-                    'is_active' => true,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ],
-            ],
-            ['code'],
-            ['name', 'color', 'sort_order', 'is_active', 'updated_at']
-        );
-
-        $orderTypeIds = DB::table('order_types')
-            ->whereIn('code', ['HHHK', 'external'])
-            ->pluck('id', 'code');
-
         DB::table('order_categories')->upsert(
             [
                 [
-                    'order_type_id' => $orderTypeIds['HHHK'],
+                    'type' => 'HHHK',
                     'code' => 'NBA',
                     'name' => 'Nội bộ A',
                     'color' => null,
@@ -56,7 +27,7 @@ class OrderTypeCategorySeeder extends Seeder
                     'updated_at' => $now,
                 ],
                 [
-                    'order_type_id' => $orderTypeIds['HHHK'],
+                    'type' => 'HHHK',
                     'code' => 'TN',
                     'name' => 'Tây Nam',
                     'color' => null,
@@ -66,7 +37,7 @@ class OrderTypeCategorySeeder extends Seeder
                     'updated_at' => $now,
                 ],
                 [
-                    'order_type_id' => $orderTypeIds['HHHK'],
+                    'type' => 'HHHK',
                     'code' => 'BN',
                     'name' => 'Bắc Nam',
                     'color' => null,
@@ -76,7 +47,7 @@ class OrderTypeCategorySeeder extends Seeder
                     'updated_at' => $now,
                 ],
                 [
-                    'order_type_id' => $orderTypeIds['HHHK'],
+                    'type' => 'HHHK',
                     'code' => 'NBO',
                     'name' => 'Nội bộ',
                     'color' => null,
@@ -86,7 +57,7 @@ class OrderTypeCategorySeeder extends Seeder
                     'updated_at' => $now,
                 ],
                 [
-                    'order_type_id' => $orderTypeIds['external'],
+                    'type' => 'external',
                     'code' => 'PROVINCE',
                     'name' => 'Đi tỉnh',
                     'color' => null,
@@ -96,7 +67,7 @@ class OrderTypeCategorySeeder extends Seeder
                     'updated_at' => $now,
                 ],
             ],
-            ['order_type_id', 'code'],
+            ['type', 'code'],
             ['name', 'color', 'sort_order', 'is_active', 'updated_at']
         );
     }

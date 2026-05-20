@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\OrderCategories\Schemas;
 
+use App\Enums\OrderType;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -14,9 +15,9 @@ class OrderCategoryForm
     {
         return $schema
             ->components([
-                Select::make('order_type_id')
+                Select::make('type')
                     ->label('Loại đơn')
-                    ->relationship('orderType', 'name')
+                    ->options(OrderType::class)
                     ->prefixIcon(Heroicon::OutlinedTag)
                     ->required(),
                 TextInput::make('code')

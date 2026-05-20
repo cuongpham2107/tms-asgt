@@ -13,6 +13,7 @@ use App\Filament\Resources\Orders\Widgets\TotalOrdersWidget;
 use App\Filament\Resources\Orders\Widgets\TransportingOrdersWidget;
 use App\Models\Order;
 use App\Models\OrderCategory;
+use Carbon\Carbon;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -32,6 +33,10 @@ class ListOrders extends ListRecords
     public ?string $orderSearch = null;
 
     public bool $showMineOnly = false;
+
+    public ?string $startDate = null;
+
+    public ?string $endDate = null;
 
     /**
      * @var array<string, string>
@@ -176,15 +181,22 @@ class ListOrders extends ListRecords
         $this->resetPage();
     }
 
+    public function updatedStartDate(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedEndDate(): void
+    {
+        $this->resetPage();
+    }
+
     public function getOrderTypeCount(string $type): int
     {
         return $this->baseCountQuery()
             ->when(
                 $type !== 'all',
-                fn (Builder $query): Builder => $query->whereHas(
-                    'orderType',
-                    fn (Builder $orderTypeQuery): Builder => $orderTypeQuery->where('code', $type),
-                ),
+                fn (Builder $query): Builder => $query->where('type', $type),
             )
             ->count();
     }
@@ -220,7 +232,6 @@ class ListOrders extends ListRecords
                 'deliveryPoints.location',
                 'driver',
                 'orderCategory',
-                'orderType',
                 'pickupLocation',
                 'vehicle',
             ])
@@ -228,10 +239,7 @@ class ListOrders extends ListRecords
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(
                 $this->activeOrderTypeFilter !== 'all',
-                fn (Builder $query): Builder => $query->whereHas(
-                    'orderType',
-                    fn (Builder $orderTypeQuery): Builder => $orderTypeQuery->where('code', $this->activeOrderTypeFilter),
-                ),
+                fn (Builder $query): Builder => $query->where('type', $this->activeOrderTypeFilter),
             )
             ->when(
                 $this->activeStatusFilter !== 'all',
@@ -256,6 +264,26 @@ class ListOrders extends ListRecords
                         ->orWhereHas('vehicle', fn (Builder $vehicleQuery): Builder => $vehicleQuery->where('plate_number', 'like', "%{$search}%"))
                         ->orWhereHas('driver', fn (Builder $driverQuery): Builder => $driverQuery->where('name', 'like', "%{$search}%"));
                 });
+            })
+
+            // Date range filter (by created_at). Supports start, end or both.
+            ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
+                if (filled($this->startDate) && filled($this->endDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $end = Carbon::parse($this->endDate)->endOfDay();
+
+                    return $query->whereBetween('created_at', [$start, $end]);
+                }
+
+                if (filled($this->startDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+
+                    return $query->where('created_at', '>=', $start);
+                }
+
+                $end = Carbon::parse($this->endDate)->endOfDay();
+
+                return $query->where('created_at', '<=', $end);
             });
     }
 

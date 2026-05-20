@@ -9,7 +9,6 @@ use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Location;
 use App\Models\OrderCategory;
-use App\Models\OrderType;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -37,16 +36,6 @@ class OrderForm extends CreatesOrderTransportCards
                             ->icon('heroicon-o-information-circle')
                             ->columns(2)
                             ->schema([
-                                // Select::make('order_type_id')
-                                //     ->label('Loại đơn')
-                                //     ->options(fn (): array => OrderType::query()
-                                //         ->orderBy('sort_order')
-                                //         ->pluck('name', 'id')
-                                //         ->all())
-                                //     ->live()
-                                //     ->native(false)
-                                //     ->required()
-                                //     ->columnSpanFull(),
                                 Hidden::make('order_category_id'),
                                 Select::make('customer_id')
                                     ->label('Khách hàng')
@@ -162,28 +151,34 @@ class OrderForm extends CreatesOrderTransportCards
                                                 Select::make('location_id')
                                                     ->label('Điểm giao hàng')
                                                     ->relationship('location', 'name')
+                                                    ->prefixIcon(Heroicon::OutlinedMapPin)
                                                     ->native(false)
                                                     ->required()
                                                     ->columnSpan(4),
                                                 TextInput::make('address')
                                                     ->label('Số nhà, tên đường giao')
+                                                    ->prefixIcon(Heroicon::OutlinedMap)
                                                     ->placeholder('Ví dụ: 34 Lê Lợi')
                                                     ->columnSpan(8),
                                                 TextInput::make('contact_person')
                                                     ->label('Người nhận')
+                                                    ->prefixIcon(Heroicon::OutlinedUser)
                                                     ->placeholder('Ví dụ: Nguyễn Văn A')
                                                     ->columnSpan(4),
                                                 TextInput::make('contact_phone')
                                                     ->label('Số điện thoại nhận')
+                                                    ->prefixIcon(Heroicon::OutlinedPhone)
                                                     ->placeholder('Ví dụ: 0901234567')
                                                     ->tel()
                                                     ->columnSpan(3),
                                                 TextInput::make('total_packages')
                                                     ->label('Số kiện')
+                                                    ->prefixIcon(Heroicon::OutlinedSquares2x2)
                                                     ->numeric()
                                                     ->columnSpan(2),
                                                 TextInput::make('total_weight')
                                                     ->label('Trọng lượng (tấn)')
+                                                    ->prefixIcon(Heroicon::OutlinedScale)
                                                     ->numeric()
                                                     ->columnSpan(3),
                                             ]),
@@ -240,14 +235,6 @@ class OrderForm extends CreatesOrderTransportCards
 
     private static function getSelectedOrderTypeCode(Get $get): ?string
     {
-        $orderTypeId = $get('order_type_id') ?? $get('../../order_type_id');
-
-        if (blank($orderTypeId)) {
-            return null;
-        }
-
-        return OrderType::query()
-            ->whereKey($orderTypeId)
-            ->value('code');
+        return $get('type') ?? $get('../../type');
     }
 }

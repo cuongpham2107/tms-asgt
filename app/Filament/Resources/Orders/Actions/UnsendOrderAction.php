@@ -34,8 +34,8 @@ class UnsendOrderAction
                         return;
                     }
 
-                    $record->update([
-                        'status' => OrderStatus::Assigned,
+                    Order::query()->whereKey($record->id)->update([
+                        'status' => OrderStatus::Assigned->value,
                         'sent_at' => null,
                     ]);
 

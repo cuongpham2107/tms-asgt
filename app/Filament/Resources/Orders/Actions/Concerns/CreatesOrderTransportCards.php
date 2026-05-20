@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Vehicle;
+use Throwable;
 
 abstract class CreatesOrderTransportCards
 {
@@ -117,10 +118,10 @@ abstract class CreatesOrderTransportCards
                 $mileage = $vehicle->current_mileage ? number_format((float) $vehicle->current_mileage, 0, ',', '.').' km' : 'N/A';
 
                 $fuelLabels = [
-                    'diesel' => 'Diesel',
-                    'gasoline' => 'Xăng',
-                    'electric' => 'Điện',
-                    'hybrid' => 'Hybrid',
+                    'Diesel' => 'Diesel',
+                    'Gasoline' => 'Xăng',
+                    'Electric' => 'Điện',
+                    'Hybrid' => 'Hybrid',
                 ];
                 $fuelLabel = $fuelLabels[$vehicle->fuel_type] ?? 'Chưa rõ';
 
@@ -220,6 +221,34 @@ abstract class CreatesOrderTransportCards
         }
 
         return is_numeric($value) ? (int) $value : null;
+    }
+
+    protected static function generateOrderCode(?string $date = null): string
+    {
+        $date ??= now()->format('Ymd');
+        $prefix = 'ORD-'.$date.'-';
+
+        $latestOrderCode = Order::query()
+            ->where('order_code', 'like', $prefix.'%')
+            ->orderByDesc('order_code')
+            ->value('order_code');
+
+        $nextSequence = 1;
+
+        if (is_string($latestOrderCode) && str_starts_with($latestOrderCode, $prefix)) {
+            $suffix = substr($latestOrderCode, strlen($prefix));
+
+            if (ctype_digit($suffix)) {
+                $nextSequence = ((int) $suffix) + 1;
+            }
+        }
+
+        return sprintf('%s%03d', $prefix, $nextSequence);
+    }
+
+    protected static function isOrderCodeDuplicate(Throwable $throwable): bool
+    {
+        return str_contains($throwable->getMessage(), 'UNIQUE constraint failed: orders.order_code');
     }
 
     protected static function getStatusBadgeClasses(string $color): string

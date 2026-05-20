@@ -2,22 +2,24 @@
 
 namespace App\Models;
 
+use App\Enums\OrderType;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OrderCategory extends Model
 {
     protected $fillable = [
-        'order_type_id',
+        'type',
         'code',
         'name',
         'description',
     ];
 
-    public function orderType(): BelongsTo
+    protected function casts(): array
     {
-        return $this->belongsTo(OrderType::class);
+        return [
+            'type' => OrderType::class,
+        ];
     }
 
     public function orders(): HasMany

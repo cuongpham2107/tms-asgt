@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Hash;
  * Seeds all operational tables with realistic demo data.
  *
  * Targets: users 10 | customers 10 | locations 10 | vehicles 10
- *          order_types 2 (domain) | order_categories 10 | order_templates 10
+ *          order_categories 10 | order_templates 10
  *          orders 25 | order_delivery_points ~50 | driver_shifts 12+
  *          driver_swaps 6 | trip_checkpoints ~60 | trip_photos 5
  *          vehicle_documents 10 | vehicle_maintenance_schedules 10
@@ -25,8 +25,6 @@ class DemoOperationsSeeder extends Seeder
     private array $locationIds = [];
 
     private array $vehicleIds = [];
-
-    private array $orderTypeIds = [];
 
     private array $orderCategoryIds = [];
 
@@ -162,28 +160,25 @@ class DemoOperationsSeeder extends Seeder
         // ═══════════════════════════════════════════════════════════════
         // 5. ORDER CATEGORIES — ensure 10 (5 from OrderTypeCategorySeeder + 5 more)
         // ═══════════════════════════════════════════════════════════════
-        $this->orderTypeIds = DB::table('order_types')->whereIn('code', ['HHHK', 'external'])->pluck('id', 'code')->toArray();
-
         $extraCategories = [
-            ['order_type_id' => $this->orderTypeIds['HHHK'],     'code' => 'BN',   'name' => 'Bắc Nam',          'description' => 'Tuyến Bắc Nam'],
-            ['order_type_id' => $this->orderTypeIds['external'], 'code' => 'EXC',  'name' => 'Hàng xuất khẩu',   'description' => 'Hàng xuất cảng'],
-            ['order_type_id' => $this->orderTypeIds['external'], 'code' => 'IMC',  'name' => 'Hàng nhập khẩu',   'description' => 'Hàng nhập từ cảng'],
-            ['order_type_id' => $this->orderTypeIds['HHHK'],     'code' => 'DONGNAI', 'name' => 'Đồng Nai',      'description' => 'Tuyến Đồng Nai'],
-            ['order_type_id' => $this->orderTypeIds['external'], 'code' => 'LGST', 'name' => 'Logistics nội địa', 'description' => 'Vận chuyển nội địa tổng hợp'],
+            ['type' => 'HHHK',     'code' => 'BN',   'name' => 'Bắc Nam',          'description' => 'Tuyến Bắc Nam'],
+            ['type' => 'external', 'code' => 'EXC',  'name' => 'Hàng xuất khẩu',   'description' => 'Hàng xuất cảng'],
+            ['type' => 'external', 'code' => 'IMC',  'name' => 'Hàng nhập khẩu',   'description' => 'Hàng nhập từ cảng'],
+            ['type' => 'HHHK',     'code' => 'DONGNAI', 'name' => 'Đồng Nai',      'description' => 'Tuyến Đồng Nai'],
+            ['type' => 'external', 'code' => 'LGST', 'name' => 'Logistics nội địa', 'description' => 'Vận chuyển nội địa tổng hợp'],
         ];
 
         foreach ($extraCategories as $cat) {
             DB::table('order_categories')->updateOrInsert(
-                ['order_type_id' => $cat['order_type_id'], 'code' => $cat['code']],
+                ['type' => $cat['type'], 'code' => $cat['code']],
                 ['name' => $cat['name'], 'is_active' => true, 'created_at' => $now, 'updated_at' => $now]
             );
         }
 
-        $catRows = DB::table('order_categories')->get(['id', 'code', 'order_type_id']);
+        $catRows = DB::table('order_categories')->get(['id', 'code', 'type']);
         $this->orderCategoryIds = [];
         foreach ($catRows as $r) {
-            $typeCode = DB::table('order_types')->where('id', $r->order_type_id)->value('code');
-            $this->orderCategoryIds[$typeCode.'|'.$r->code] = $r->id;
+            $this->orderCategoryIds[$r->type.'|'.$r->code] = $r->id;
         }
 
         // Shorthand closures for ID resolution
@@ -268,7 +263,7 @@ class DemoOperationsSeeder extends Seeder
             DB::table('orders')->updateOrInsert(
                 ['order_code' => $d[0]],
                 [
-                    'order_type_id' => $this->orderTypeIds[explode('|', $d[1])[0]],
+                    'type' => explode('|', $d[1])[0],
                     'order_category_id' => $oid($d[1]),
                     'customer_id' => $cid($d[2]),
                     'cargo_name' => $d[7],
@@ -619,7 +614,7 @@ class DemoOperationsSeeder extends Seeder
 
     private function printSummary(): void
     {
-        $tables = ['users', 'customers', 'locations', 'vehicles', 'order_types', 'order_categories', 'order_templates', 'orders', 'order_delivery_points', 'driver_shifts', 'driver_swaps', 'trip_checkpoints', 'trip_photos', 'vehicle_documents', 'vehicle_maintenance_schedules', 'vehicle_maintenance_jobs'];
+        $tables = ['users', 'customers', 'locations', 'vehicles', 'order_categories', 'order_templates', 'orders', 'order_delivery_points', 'driver_shifts', 'driver_swaps', 'trip_checkpoints', 'trip_photos', 'vehicle_documents', 'vehicle_maintenance_schedules', 'vehicle_maintenance_jobs'];
         $this->command->info('DemoOperationsSeeder done.');
         foreach ($tables as $t) {
             $c = DB::table($t)->count();

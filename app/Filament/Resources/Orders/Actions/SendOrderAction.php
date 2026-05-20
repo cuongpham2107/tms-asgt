@@ -34,8 +34,8 @@ class SendOrderAction
                         return;
                     }
 
-                    $record->update([
-                        'status' => OrderStatus::Sent,
+                    Order::query()->whereKey($record->id)->update([
+                        'status' => OrderStatus::Sent->value,
                         'sent_at' => now(),
                     ]);
 

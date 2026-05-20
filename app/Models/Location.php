@@ -12,6 +12,8 @@ class Location extends Model
         'code',
         'name',
         'address',
+        'lat',
+        'lng',
         'loc_type',
         'is_active',
     ];
@@ -20,6 +22,8 @@ class Location extends Model
     {
         return [
             'is_active' => 'boolean',
+            'lat' => 'decimal:7',
+            'lng' => 'decimal:7',
             'loc_type' => LocationType::class,
         ];
     }

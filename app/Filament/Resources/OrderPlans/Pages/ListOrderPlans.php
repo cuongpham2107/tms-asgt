@@ -90,10 +90,7 @@ class ListOrderPlans extends ListRecords
         return $this->baseCountQuery()
             ->when(
                 $type !== 'all',
-                fn (Builder $query): Builder => $query->whereHas(
-                    'orderType',
-                    fn (Builder $orderTypeQuery): Builder => $orderTypeQuery->where('code', $type),
-                ),
+                fn (Builder $query): Builder => $query->where('type', $type),
             )
             ->count();
     }
@@ -119,17 +116,13 @@ class ListOrderPlans extends ListRecords
                 'deliveryPoints.location',
                 'driver',
                 'orderCategory',
-                'orderType',
                 'pickupLocation',
                 'vehicle',
             ])
             ->where('status', 'draft')
             ->when(
                 $this->activeOrderTypeFilter !== 'all',
-                fn (Builder $query): Builder => $query->whereHas(
-                    'orderType',
-                    fn (Builder $orderTypeQuery): Builder => $orderTypeQuery->where('code', $this->activeOrderTypeFilter),
-                ),
+                fn (Builder $query): Builder => $query->where('type', $this->activeOrderTypeFilter),
             )
             ->when(
                 $this->activePlaceFilter !== 'all',

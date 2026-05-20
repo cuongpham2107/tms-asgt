@@ -38,7 +38,7 @@ class CreateReturnTripAction
 
                     $returnOrder = Order::create([
                         'order_code' => $record->order_code.'-RT',
-                        'order_type_id' => $record->order_type_id,
+                        'type' => $record->type,
                         'order_category_id' => $record->order_category_id,
                         'customer_id' => $record->customer_id,
                         'cargo_name' => 'Quay đầu: '.($record->cargo_name ?? ''),
@@ -51,7 +51,7 @@ class CreateReturnTripAction
                         'pickup_phone' => $firstDelivery?->contact_phone,
                         'vehicle_id' => $record->vehicle_id,
                         'driver_id' => $record->driver_id,
-                        'status' => OrderStatus::Draft,
+                        'status' => OrderStatus::Draft->value,
                         'is_return_trip' => true,
                         'parent_order_id' => $record->id,
                         'created_by' => auth()->id(),

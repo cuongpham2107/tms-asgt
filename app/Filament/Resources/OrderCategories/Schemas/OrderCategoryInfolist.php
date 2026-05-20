@@ -15,8 +15,11 @@ class OrderCategoryInfolist
                 Section::make('Thông tin phân loại đơn')
                     ->columnSpanFull()
                     ->schema([
-                        TextEntry::make('orderType.name')
-                            ->label('Loại đơn'),
+                        TextEntry::make('type')
+                            ->label('Loại đơn')
+                            ->badge()
+                            ->formatStateUsing(fn ($state) => $state?->getLabel() ?? '-')
+                            ->color(fn ($state) => $state?->getColor() ?? 'gray'),
                         TextEntry::make('code')
                             ->label('Mã')
                             ->badge()

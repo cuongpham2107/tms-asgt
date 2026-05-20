@@ -45,10 +45,11 @@ class TripInfolist
                                             ->icon(Heroicon::OutlinedBuildingOffice)
                                             ->weight('bold'),
 
-                                        TextEntry::make('orderType.name')
+                                        TextEntry::make('type')
                                             ->label('Loại đơn')
                                             ->badge()
-                                            ->color('info'),
+                                            ->formatStateUsing(fn ($state) => $state?->getLabel() ?? '—')
+                                            ->color(fn ($state) => $state?->getColor() ?? 'info'),
 
                                         TextEntry::make('orderCategory.name')
                                             ->label('Tuyến')
@@ -104,7 +105,7 @@ class TripInfolist
                             ->icon(Heroicon::OutlinedPhoto)
                             ->schema([
                                 RepeatableEntry::make('tripPhotos')
-                                    ->label('TripPhoto')
+                                    ->label('Ảnh chuyến đi')
                                     ->state(fn (Order $record) => $record->tripPhotos()
                                         ->with('tripCheckpoint')
                                         ->latest('trip_photos.created_at')

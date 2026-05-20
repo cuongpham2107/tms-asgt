@@ -20,6 +20,7 @@ class BulkCreateOrderAction
             ->modalHeading('Tạo nhanh nhiều đơn')
             ->modalDescription('Sao chép đơn hiện tại thành nhiều bản.')
             ->modalWidth('sm')
+
             ->form([
                 TextInput::make('bulk_count')
                     ->label('Số lượng')

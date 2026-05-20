@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CargoType;
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\Priority;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,7 +18,7 @@ class Order extends Model
 
     protected $fillable = [
         'order_code',
-        'order_type_id',
+        'type',
         'order_category_id',
         'customer_id',
         'cargo_name',
@@ -62,13 +63,9 @@ class Order extends Model
             'is_return_trip' => 'boolean',
             'cargo_type' => CargoType::class,
             'status' => OrderStatus::class,
+            'type' => OrderType::class,
             'priority' => Priority::class,
         ];
-    }
-
-    public function orderType(): BelongsTo
-    {
-        return $this->belongsTo(OrderType::class);
     }
 
     public function orderCategory(): BelongsTo

@@ -2,8 +2,8 @@
 
 namespace App\Filament\Resources\Orders\Schemas;
 
+use App\Enums\OrderType;
 use Filament\Infolists\Components\RepeatableEntry;
-use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Schema;
@@ -27,10 +27,11 @@ class OrderInfolist
                             ->size('lg')
                             ->copyable()
                             ->icon('heroicon-o-hashtag'),
-                        TextEntry::make('orderType.name')
+                        TextEntry::make('type')
                             ->label('Loại đơn')
                             ->badge()
-                            ->color('primary')
+                            ->formatStateUsing(fn ($state) => $state?->getLabel() ?? '—')
+                            ->color(fn ($state) => $state?->getColor() ?? 'gray')
                             ->icon('heroicon-o-bookmark'),
                         TextEntry::make('orderCategory.code')
                             ->label('Phân tách khu vực')
@@ -53,7 +54,7 @@ class OrderInfolist
                             ->weight('bold')
                             ->icon('heroicon-o-user'),
                         TextEntry::make('cargo_name')
-                            ->label('Tên hàng')
+                            ->label('Tên hàng hoá')
                             ->placeholder('—')
                             ->icon('heroicon-o-cube'),
                         TextEntry::make('cargo_type')
@@ -64,14 +65,13 @@ class OrderInfolist
                             ->icon(fn ($state) => (is_object($state) && method_exists($state, 'getIcon')) ? $state->getIcon() : 'heroicon-o-cube')
                             ->placeholder('—'),
                         TextEntry::make('total_packages')
-                            ->label('Số kiện')
+                            ->label('Tổng kiện')
                             ->numeric()
                             ->placeholder('—')
                             ->icon('heroicon-o-squares-2x2'),
                         TextEntry::make('total_weight')
-                            ->label('Trọng lượng')
+                            ->label('Trọng lượng (kg)')
                             ->numeric()
-                            ->suffix(' kg')
                             ->placeholder('—')
                             ->icon('heroicon-o-scale'),
                         TextEntry::make('planned_loading_at')
@@ -95,53 +95,62 @@ class OrderInfolist
                     ])
                     ->schema([
                         TextEntry::make('pickupLocation.name')
-                            ->label('Điểm đi')
+                            ->label('Điểm nhận hàng')
                             ->placeholder('—')
                             ->icon('heroicon-o-map-pin'),
                         TextEntry::make('pickup_address')
                             ->label('Địa chỉ nhận hàng')
                             ->placeholder('—')
-                            ->icon('heroicon-o-map'),
+                            ->icon('heroicon-o-map')
+                            ->visible(fn ($record) => $record->type !== OrderType::Hhhk),
                         TextEntry::make('pickup_contact')
                             ->label('Người liên hệ nhận hàng')
                             ->placeholder('—')
-                            ->icon('heroicon-o-user-group'),
+                            ->icon('heroicon-o-user-group')
+                            ->visible(fn ($record) => $record->type !== OrderType::Hhhk),
                         TextEntry::make('pickup_phone')
                             ->label('Số điện thoại nhận hàng')
                             ->copyable()
                             ->placeholder('—')
-                            ->icon('heroicon-o-phone'),
+                            ->icon('heroicon-o-phone')
+                            ->visible(fn ($record) => $record->type !== OrderType::Hhhk),
                         RepeatableEntry::make('deliveryPoints')
-                            ->label('Điểm đến')
-                            ->table([
-                                TableColumn::make('Địa điểm'),
-                                TableColumn::make('Địa chỉ'),
-                                TableColumn::make('Số kiện')
-                                    ->alignCenter(),
-                                TableColumn::make('Trọng lượng'),
-                                TableColumn::make('Người liên hệ'),
-                                TableColumn::make('Số điện thoại'),
-                                TableColumn::make('Trạng thái'),
-                            ])
+                            ->label('Điểm giao hàng')
                             ->schema([
                                 TextEntry::make('location.name')
+                                    ->label('Điểm giao hàng')
+                                    ->icon('heroicon-o-map-pin')
                                     ->placeholder('—'),
                                 TextEntry::make('address')
-                                    ->placeholder('—'),
+                                    ->label('Địa chỉ giao chi tiết')
+                                    ->icon('heroicon-o-map')
+                                    ->placeholder('—')
+                                    ->columnSpan(2),
                                 TextEntry::make('total_packages')
+                                    ->label('Tổng kiện')
+                                    ->icon('heroicon-o-squares-2x2')
                                     ->numeric()
                                     ->placeholder('—'),
                                 TextEntry::make('total_weight')
+                                    ->label('Trọng lượng')
+                                    ->icon('heroicon-o-scale')
                                     ->numeric()
                                     ->placeholder('—'),
                                 TextEntry::make('contact_person')
+                                    ->label('Người nhận')
+                                    ->icon('heroicon-o-user')
                                     ->placeholder('—'),
                                 TextEntry::make('contact_phone')
+                                    ->label('Số điện thoại')
+                                    ->icon('heroicon-o-phone')
                                     ->copyable()
                                     ->placeholder('—'),
                                 TextEntry::make('status')
+                                    ->label('Trạng thái')
+                                    ->icon('heroicon-o-ellipsis-horizontal-circle')
                                     ->badge(),
                             ])
+                            ->columns(3)
                             ->columnSpanFull(),
                     ])
                     ->columnSpanFull(),

@@ -29,7 +29,6 @@ class OrdersTable extends BaseTable
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
                 'deliveryPoints.location',
                 'orderCategory',
-                'orderType',
                 'pickupLocation',
             ]))
             ->columns([
@@ -39,7 +38,7 @@ class OrdersTable extends BaseTable
                     ->weight('bold')
                     ->formatStateUsing(function (Order $record): HtmlString {
                         $orderCode = e($record->order_code);
-                        $orderTypeName = e($record->orderType?->code ? $record->orderType?->code == 'external' ? 'Hàng ngoài' : $record->orderType?->code : 'Chưa xác định');
+                        $orderTypeLabel = e($record->type?->getLabel() ?? 'Chưa xác định');
                         $priorityColor = $record->priority?->getColor() ?? 'gray';
                         $priorityBadgeClasses = self::getStatusBadgeClasses($priorityColor);
                         $priorityLabel = e($record->priority?->getLabel() ?? 'Chưa xác định');
@@ -48,7 +47,7 @@ class OrdersTable extends BaseTable
                             <div class="inline-flex flex-col gap-1">
                                 <span class="font-bold leading-5 text-[#008fd5] dark:text-blue-100">{$orderCode}</span>
                                 <div class="inline-flex items-center gap-2">
-                                    <span class="rounded-full border border-primary-100 bg-primary-100 px-1.5 py-0.5 text-xs font-semibold text-primary-800 dark:border-primary-800/50 dark:bg-primary-950/40 dark:text-primary-100">{$orderTypeName}</span>
+                                    <span class="rounded-full border border-primary-100 bg-primary-100 px-1.5 py-0.5 text-xs font-semibold text-primary-800 dark:border-primary-800/50 dark:bg-primary-950/40 dark:text-primary-100">{$orderTypeLabel}</span>
                                     <span class="rounded-full {$priorityBadgeClasses} px-1.5 py-0.5 text-xs font-semibold">{$priorityLabel}</span>
                                 </div>
                             </div>
@@ -122,7 +121,7 @@ class OrdersTable extends BaseTable
                 ActionGroup::make([
                     ViewAction::make(),
                     EditAction::make()
-                        ->modalDescription(fn (Order $record): string => 'Loại đơn hàng: '.($record->orderType?->name ?? 'Chưa xác định')),
+                        ->modalDescription(fn (Order $record): string => 'Loại đơn hàng: '.($record->type?->getLabel() ?? 'Chưa xác định')),
                     AssignTransportAction::make(),
                     SendOrderAction::make(),
                     UnsendOrderAction::make(),

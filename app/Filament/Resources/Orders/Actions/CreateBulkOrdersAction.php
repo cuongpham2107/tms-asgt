@@ -9,7 +9,6 @@ use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderCategory;
-use App\Models\OrderType;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
@@ -42,6 +41,9 @@ class CreateBulkOrdersAction
             ->modalWidth('5xl')
             ->modalHeading('Tạo/Phân tách nhiều đơn hàng cùng tuyến')
             ->modalDescription('Khai báo thông tin lộ trình chung, sau đó phân chia hàng hóa cho từng xe vận chuyển tương ứng.')
+            ->extraAttributes([
+                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-gray-500 cursor-pointer hover:bg-gray-600 transition-colors',
+            ])
             ->stickyModalFooter()
             ->schema([
                 Grid::make(12)
@@ -260,19 +262,6 @@ class CreateBulkOrdersAction
                 }
 
                 $orderTypeCode = $data['order_type_code'] ?? 'HHHK';
-                $orderTypeId = OrderType::query()
-                    ->where('code', $orderTypeCode)
-                    ->value('id');
-
-                if ($orderTypeId === null) {
-                    Notification::make()
-                        ->title('Lỗi hệ thống')
-                        ->body("Không tìm thấy loại đơn hàng: {$orderTypeCode}")
-                        ->danger()
-                        ->send();
-
-                    return;
-                }
 
                 // Compile pickup address parts if HN order
                 $pickupAddress = null;
@@ -301,7 +290,6 @@ class CreateBulkOrdersAction
                     DB::transaction(function () use (
                         $recordsCount,
                         $createdBy,
-                        $orderTypeId,
                         $orderTypeCode,
                         $data,
                         $pickupAddress,
@@ -317,7 +305,7 @@ class CreateBulkOrdersAction
 
                             $order = Order::query()->create([
                                 'order_code' => $orderCode,
-                                'order_type_id' => $orderTypeId,
+                                'type' => $orderTypeCode,
                                 'order_category_id' => $data['order_category_id'],
                                 'customer_id' => $data['customer_id'],
                                 'pickup_location_id' => $orderTypeCode === 'HHHK' ? ($data['pickup_location_id'] ?? null) : null,
