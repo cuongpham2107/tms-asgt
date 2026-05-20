@@ -20,6 +20,7 @@ class OrderResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'type' => $this->type,
             'order_code' => $this->order_code,
             'status' => $this->status,
             'priority' => $this->priority,
@@ -30,6 +31,15 @@ class OrderResource extends JsonResource
             /** @var string|null ISO 8601 */
             'planned_loading_at' => $this->planned_loading_at?->toIso8601String(),
             // Pickup
+            'pickup_location_id' => $this->pickup_location_id,
+            /** @var array{id: int, name: string|null, address: string|null, lat: float|null, lng: float|null}|null */
+            'pickup_location' => $this->whenLoaded('pickupLocation', fn () => [
+                'id' => $this->pickupLocation->id,
+                'name' => $this->pickupLocation->name,
+                'address' => $this->pickupLocation->address,
+                'lat' => $this->pickupLocation->lat,
+                'lng' => $this->pickupLocation->lng,
+            ]),
             'pickup_address' => $this->pickup_address,
             'pickup_contact' => $this->pickup_contact,
             'pickup_phone' => $this->pickup_phone,

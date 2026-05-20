@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             OrderTypeCategorySeeder::class,
             DemoOperationsSeeder::class,
+            DriverShiftBackfillSeeder::class,
         ]);
     }
 }

@@ -36,6 +36,8 @@ class DriverShiftResource extends JsonResource
             /** @var float|null GPS longitude of shift end */
             'end_gps_lng' => $this->end_gps_lng,
             'total_km' => $this->total_km,
+            'total_km_loaded' => $this->total_km_loaded,
+            'total_km_empty' => $this->total_km_empty,
             /** @var string ISO 8601 */
             'created_at' => $this->created_at?->toIso8601String(),
         ];
