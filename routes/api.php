@@ -25,6 +25,7 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     // Orders (danh sách đơn hàng được gán)
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
+    Route::get('/orders/{order}/delivery-points', [OrderController::class, 'deliveryPoints']);
 
     // Shifts
     Route::post('/shifts/start', [DriverShiftController::class, 'start']);

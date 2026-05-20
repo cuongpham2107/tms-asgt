@@ -40,6 +40,228 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
 {
     public static function make(bool $forceAssignedWhenTransportProvided = true): Action
     {
+        $tabs = [
+            Tab::make('Thông tin đơn hàng')
+                ->icon('heroicon-o-information-circle')
+                ->columns(2)
+                ->schema([
+                    RadioCard::make('order_category_id')
+                        ->label('Phân tách khu vực')
+                        ->required()
+                        ->options(function () {
+                            return OrderCategory::query()
+                                // ->whereHas('orderType', fn ($query) => $query->where('code', 'external'))
+                                ->orderBy('sort_order', 'asc')
+                                ->pluck('code', 'id')
+                                ->toArray();
+                        })
+                        ->live(onBlur: true)
+                        ->color('primary')
+                        ->columns(5)
+                        ->columnSpanFull(),
+                    Select::make('customer_id')
+                        ->label('Khách hàng')
+                        ->relationship('customer', 'name')
+                        ->native(false)
+                        ->required()
+                        ->columnSpanFull(),
+                    Select::make('priority')
+                        ->label('Mức ưu tiên')
+                        ->options(Priority::class)
+                        ->default(Priority::Medium->value)
+                        ->native(false)
+                        ->required()
+                        ->columnSpanFull(),
+                    // Thông tin hàng hoá
+                    FusedGroup::make([
+                        TextInput::make('cargo_name')
+                            ->placeholder('Tên hàng hoá')
+                            ->columnSpan(2),
+                        TextInput::make('total_packages')
+                            ->placeholder('Tổng kiện')
+                            ->numeric()
+                            ->columnSpan(1),
+                        TextInput::make('total_weight')
+                            ->placeholder('Trọng lượng (kg)')
+                            ->numeric()
+                            ->columnSpan(1),
+                    ])
+                        ->label('Thông tin hàng hoá')
+                        ->columns(4)
+                        ->columnSpanFull(),
+                    ToggleButtons::make('cargo_type')
+                        ->label('Loại hàng')
+                        ->default('GCR')
+                        ->options([
+                            'GCR' => 'Hàng thường (GCR)',
+                            'DGR' => 'Hàng nguy hiểm (DGR)',
+                        ])
+                        ->colors([
+                            'GCR' => 'success',
+                            'DGR' => 'danger',
+                        ])
+                        ->icons([
+                            'GCR' => Heroicon::OutlinedCheckCircle,
+                            'DGR' => Heroicon::OutlinedExclamationTriangle,
+                        ])
+                        ->inline()
+                        ->columnSpanFull(),
+                    FusedGroup::make([
+                        TextInput::make('pickup_address_detail')
+                            ->label('Số nhà, tên đường')
+                            ->placeholder('Ví dụ: 12 Nguyễn Huệ'),
+                        Select::make('pickup_province_code')
+                            ->label('Tỉnh / Thành phố')
+                            ->placeholder('Chọn tỉnh / thành phố')
+                            ->options(fn (): array => self::getProvinceOptions())
+                            ->searchable()
+                            ->native(false)
+                            ->live()
+                            ->preload()
+                            ->afterStateUpdated(function (Set $set): void {
+                                $set('pickup_ward_code', null);
+                            })
+                            ->required(),
+                        Select::make('pickup_ward_code')
+                            ->label('Phường / Xã')
+                            ->placeholder('Chọn phường / xã')
+                            ->options(fn (Get $get): array => self::getWardOptions($get('pickup_province_code')))
+                            ->searchable()
+                            ->native(false)
+                            ->preload()
+                            ->live()
+                            ->disabled(fn (Get $get): bool => blank($get('pickup_province_code')))
+                            ->required(),
+
+                    ])
+                        ->label('Điểm nhận hàng')
+                        ->columns(3)
+                        ->columnSpanFull(),
+                    TextInput::make('pickup_contact')
+                        ->hiddenLabel()
+                        ->placeholder('Người liên hệ nhận hàng')
+                        ->columnSpan(1),
+                    TextInput::make('pickup_phone')
+                        ->hiddenLabel()
+                        ->placeholder('Số điện thoại nhận hàng')
+                        ->tel()
+                        ->columnSpan(1),
+                    // Select::make('pickup_location_id')
+                    //     ->live(onBlur: true)
+                    //     ->label('Điểm đi')
+                    //     ->relationship('pickupLocation', 'name')
+                    //     ->native(false)
+                    //     ->required()
+                    //     ->columnSpanFull(),
+                    Repeater::make('deliveryPoints')
+                        ->label('Điểm giao hàng')
+                        ->helperText(function (Get $get): string {
+                            $orderCategory = OrderCategory::query()->find($get('order_category_id'));
+
+                            if ($orderCategory !== null) {
+                                return 'Chưa có điểm đến phụ. Mặc định đến: '.$orderCategory->code;
+                            }
+
+                            return 'Thêm một hoặc nhiều điểm đến cho đơn hàng';
+                        })
+                        ->collapsible()
+                        ->itemLabel(function (array $state): ?string {
+                            $parts = [];
+
+                            if (isset($state['location_id']) && $location = Location::query()->find($state['location_id'])) {
+                                $parts[] = $location->name;
+                            }
+
+                            if (! empty($state['address'])) {
+                                $parts[] = $state['address'];
+                            }
+
+                            if (! empty($state['total_packages'])) {
+                                $parts[] = $state['total_packages'].' kiện';
+                            }
+
+                            if (! empty($state['total_weight'])) {
+                                $parts[] = $state['total_weight'].' tấn';
+                            }
+
+                            return count($parts) > 0 ? implode(' - ', $parts) : 'Điểm giao hàng mới';
+                        })
+                        ->reorderableWithDragAndDrop()
+                        ->defaultItems(0)
+                        ->schema([
+                            Grid::make(12)
+                                ->schema([
+                                    Select::make('location_id')
+                                        ->label('Điểm giao hàng')
+                                        ->options(fn (): array => Location::query()->pluck('name', 'id')->toArray())
+                                        ->searchable()
+                                        ->preload()
+                                        ->native(false)
+                                        ->required()
+                                        ->columnSpan(4),
+                                    TextInput::make('address')
+                                        ->label('Số nhà, tên đường giao')
+                                        ->placeholder('Ví dụ: 34 Lê Lợi')
+                                        ->columnSpan(8),
+                                    TextInput::make('contact_person')
+                                        ->label('Người nhận')
+                                        ->placeholder('Ví dụ: Nguyễn Văn A')
+                                        ->columnSpan(4),
+                                    TextInput::make('contact_phone')
+                                        ->label('Số điện thoại nhận')
+                                        ->placeholder('Ví dụ: 0901234567')
+                                        ->tel()
+                                        ->columnSpan(3),
+                                    TextInput::make('total_packages')
+                                        ->label('Số kiện')
+                                        ->numeric()
+                                        ->columnSpan(2),
+                                    TextInput::make('total_weight')
+                                        ->label('Trọng lượng (tấn)')
+                                        ->numeric()
+                                        ->columnSpan(3),
+                                ]),
+                        ])
+                        ->columnSpanFull(),
+                    DateTimePicker::make('planned_loading_at')
+                        ->label('Thời gian dự kiến đóng hàng')
+                        ->seconds(false)
+                        ->native(false)
+                        ->required()
+                        ->columnSpanFull(),
+
+                    TextInput::make('total_packages')
+                        ->label('Số kiện')
+                        ->numeric(),
+                    TextInput::make('total_weight')
+                        ->label('Trọng lượng (tấn)')
+                        ->live(onBlur: true)
+                        ->numeric(),
+                    Textarea::make('notes')
+                        ->label('Ghi chú')
+                        ->columnSpanFull(),
+                ]),
+        ];
+        if ($forceAssignedWhenTransportProvided) {
+            $tabs[] = Tab::make('Phân xe và lái xe')
+                ->icon('heroicon-o-truck')
+                ->schema([
+                    VehiclePicker::make('vehicle_id')
+                        ->label('Phương tiện')
+                        ->cards(fn (Get $get): array => self::resolveVehicleCards(
+                            self::normalizeDecimal($get('total_weight')),
+                            self::normalizeInteger($get('pickup_location_id')),
+                        ))
+                        ->searchPlaceholder('Tìm biển số, loại xe...')
+                        ->required(),
+                    DriverPicker::make('driver_id')
+                        ->label('Lái xe')
+                        ->cards(fn (): array => self::resolveDriverCards())
+                        ->searchPlaceholder('Tìm tên, email...')
+                        ->required(),
+                ]);
+        }
+
         return Action::make('create_order_hang_ngoai_action')
             ->label('Tạo đơn hàng ngoài')
             ->size('lg')
@@ -54,225 +276,8 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
             ->stickyModalFooter()
             ->schema([
                 Tabs::make('Tabs')
-                    ->tabs([
-                        Tab::make('Thông tin đơn hàng')
-                            ->icon('heroicon-o-information-circle')
-                            ->columns(2)
-                            ->schema([
-                                RadioCard::make('order_category_id')
-                                    ->label('Phân tách khu vực')
-                                    ->required()
-                                    ->options(function () {
-                                        return OrderCategory::query()
-                                            // ->whereHas('orderType', fn ($query) => $query->where('code', 'external'))
-                                            ->orderBy('sort_order', 'asc')
-                                            ->pluck('code', 'id')
-                                            ->toArray();
-                                    })
-                                    ->live(onBlur: true)
-                                    ->color('primary')
-                                    ->columns(5)
-                                    ->columnSpanFull(),
-                                Select::make('customer_id')
-                                    ->label('Khách hàng')
-                                    ->relationship('customer', 'name')
-                                    ->native(false)
-                                    ->required()
-                                    ->columnSpanFull(),
-                                Select::make('priority')
-                                    ->label('Mức ưu tiên')
-                                    ->options(Priority::class)
-                                    ->default(Priority::Medium->value)
-                                    ->native(false)
-                                    ->required()
-                                    ->columnSpanFull(),
-                                // Thông tin hàng hoá
-                                FusedGroup::make([
-                                    TextInput::make('cargo_name')
-                                        ->placeholder('Tên hàng hoá')
-                                        ->columnSpan(2),
-                                    TextInput::make('total_packages')
-                                        ->placeholder('Tổng kiện')
-                                        ->numeric()
-                                        ->columnSpan(1),
-                                    TextInput::make('total_weight')
-                                        ->placeholder('Trọng lượng (kg)')
-                                        ->numeric()
-                                        ->columnSpan(1),
-                                ])
-                                    ->label('Thông tin hàng hoá')
-                                    ->columns(4)
-                                    ->columnSpanFull(),
-                                ToggleButtons::make('cargo_type')
-                                    ->label('Loại hàng')
-                                    ->default('GCR')
-                                    ->options([
-                                        'GCR' => 'Hàng thường (GCR)',
-                                        'DGR' => 'Hàng nguy hiểm (DGR)',
-                                    ])
-                                    ->colors([
-                                        'GCR' => 'success',
-                                        'DGR' => 'danger',
-                                    ])
-                                    ->icons([
-                                        'GCR' => Heroicon::OutlinedCheckCircle,
-                                        'DGR' => Heroicon::OutlinedExclamationTriangle,
-                                    ])
-                                    ->inline()
-                                    ->columnSpanFull(),
-                                FusedGroup::make([
-                                    TextInput::make('pickup_address_detail')
-                                        ->label('Số nhà, tên đường')
-                                        ->placeholder('Ví dụ: 12 Nguyễn Huệ'),
-                                    Select::make('pickup_province_code')
-                                        ->label('Tỉnh / Thành phố')
-                                        ->placeholder('Chọn tỉnh / thành phố')
-                                        ->options(fn (): array => self::getProvinceOptions())
-                                        ->searchable()
-                                        ->native(false)
-                                        ->live()
-                                        ->preload()
-                                        ->afterStateUpdated(function (Set $set): void {
-                                            $set('pickup_ward_code', null);
-                                        })
-                                        ->required(),
-                                    Select::make('pickup_ward_code')
-                                        ->label('Phường / Xã')
-                                        ->placeholder('Chọn phường / xã')
-                                        ->options(fn (Get $get): array => self::getWardOptions($get('pickup_province_code')))
-                                        ->searchable()
-                                        ->native(false)
-                                        ->preload()
-                                        ->live()
-                                        ->disabled(fn (Get $get): bool => blank($get('pickup_province_code')))
-                                        ->required(),
+                    ->tabs($tabs),
 
-                                ])
-                                    ->label('Điểm nhận hàng')
-                                    ->columns(3)
-                                    ->columnSpanFull(),
-                                TextInput::make('pickup_contact')
-                                    ->hiddenLabel()
-                                    ->placeholder('Người liên hệ nhận hàng')
-                                    ->columnSpan(1),
-                                TextInput::make('pickup_phone')
-                                    ->hiddenLabel()
-                                    ->placeholder('Số điện thoại nhận hàng')
-                                    ->tel()
-                                    ->columnSpan(1),
-                                // Select::make('pickup_location_id')
-                                //     ->live(onBlur: true)
-                                //     ->label('Điểm đi')
-                                //     ->relationship('pickupLocation', 'name')
-                                //     ->native(false)
-                                //     ->required()
-                                //     ->columnSpanFull(),
-                                Repeater::make('deliveryPoints')
-                                    ->label('Điểm giao hàng')
-                                    ->helperText(function (Get $get): string {
-                                        $orderCategory = OrderCategory::query()->find($get('order_category_id'));
-
-                                        if ($orderCategory !== null) {
-                                            return 'Chưa có điểm đến phụ. Mặc định đến: '.$orderCategory->code;
-                                        }
-
-                                        return 'Thêm một hoặc nhiều điểm đến cho đơn hàng';
-                                    })
-                                    ->collapsible()
-                                    ->itemLabel(function (array $state): ?string {
-                                        $parts = [];
-
-                                        if (isset($state['location_id']) && $location = Location::query()->find($state['location_id'])) {
-                                            $parts[] = $location->name;
-                                        }
-
-                                        if (! empty($state['address'])) {
-                                            $parts[] = $state['address'];
-                                        }
-
-                                        if (! empty($state['total_packages'])) {
-                                            $parts[] = $state['total_packages'].' kiện';
-                                        }
-
-                                        if (! empty($state['total_weight'])) {
-                                            $parts[] = $state['total_weight'].' tấn';
-                                        }
-
-                                        return count($parts) > 0 ? implode(' - ', $parts) : 'Điểm giao hàng mới';
-                                    })
-                                    ->reorderableWithDragAndDrop()
-                                    ->defaultItems(0)
-                                    ->schema([
-                                        Grid::make(12)
-                                            ->schema([
-                                                Select::make('location_id')
-                                                    ->label('Điểm giao hàng')
-                                                    ->options(fn (): array => Location::query()->pluck('name', 'id')->toArray())
-                                                    ->searchable()
-                                                    ->preload()
-                                                    ->native(false)
-                                                    ->required()
-                                                    ->columnSpan(4),
-                                                TextInput::make('address')
-                                                    ->label('Số nhà, tên đường giao')
-                                                    ->placeholder('Ví dụ: 34 Lê Lợi')
-                                                    ->columnSpan(8),
-                                                TextInput::make('contact_person')
-                                                    ->label('Người nhận')
-                                                    ->placeholder('Ví dụ: Nguyễn Văn A')
-                                                    ->columnSpan(4),
-                                                TextInput::make('contact_phone')
-                                                    ->label('Số điện thoại nhận')
-                                                    ->placeholder('Ví dụ: 0901234567')
-                                                    ->tel()
-                                                    ->columnSpan(3),
-                                                TextInput::make('total_packages')
-                                                    ->label('Số kiện')
-                                                    ->numeric()
-                                                    ->columnSpan(2),
-                                                TextInput::make('total_weight')
-                                                    ->label('Trọng lượng (tấn)')
-                                                    ->numeric()
-                                                    ->columnSpan(3),
-                                            ]),
-                                    ])
-                                    ->columnSpanFull(),
-                                DateTimePicker::make('planned_loading_at')
-                                    ->label('Thời gian dự kiến đóng hàng')
-                                    ->seconds(false)
-                                    ->native(false)
-                                    ->required()
-                                    ->columnSpanFull(),
-
-                                TextInput::make('total_packages')
-                                    ->label('Số kiện')
-                                    ->numeric(),
-                                TextInput::make('total_weight')
-                                    ->label('Trọng lượng (tấn)')
-                                    ->live(onBlur: true)
-                                    ->numeric(),
-                                Textarea::make('notes')
-                                    ->label('Ghi chú')
-                                    ->columnSpanFull(),
-                            ]),
-                        Tab::make('Phân xe và lái xe')
-                            ->icon('heroicon-o-truck')
-                            ->schema([
-                                VehiclePicker::make('vehicle_id')
-                                    ->label('Phương tiện')
-                                    ->cards(fn (Get $get): array => self::resolveVehicleCards(
-                                        self::normalizeDecimal($get('total_weight')),
-                                        null,
-                                    ))
-                                    ->searchPlaceholder('Tìm biển số, loại xe...')
-                                    ->required(),
-                                DriverPicker::make('driver_id')
-                                    ->label('Lái xe')
-                                    ->cards(fn (): array => self::resolveDriverCards())
-                                    ->searchPlaceholder('Tìm tên, email...')
-                                    ->required(),
-                            ]),
-                    ]),
             ])
             ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
                 try {

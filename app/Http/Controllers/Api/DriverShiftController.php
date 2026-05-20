@@ -8,6 +8,7 @@ use App\Http\Requests\StartShiftRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
 use App\Models\Vehicle;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -18,6 +19,12 @@ class DriverShiftController extends Controller
      *
      * @response array{shift: DriverShiftResource}
      */
+    #[BodyParameter('vehicle_id', type: 'integer', description: 'ID xe được chọn để bắt đầu ca.', required: true, example: 10)]
+    #[BodyParameter('shift_type', type: 'string', description: 'Loại ca làm việc.', required: true, example: 'morning_half')]
+    #[BodyParameter('start_time', type: 'string', format: 'date-time', description: 'Thời điểm bắt đầu ca.', example: '2026-05-20T07:15:22Z')]
+    #[BodyParameter('start_km', type: 'number', description: 'Km đồng hồ lúc bắt đầu ca.', example: 10000)]
+    #[BodyParameter('start_gps_lat', type: 'number', description: 'Vĩ độ GPS lúc bắt đầu ca.', example: 10.823099)]
+    #[BodyParameter('start_gps_lng', type: 'number', description: 'Kinh độ GPS lúc bắt đầu ca.', example: 106.629662)]
     public function start(StartShiftRequest $request): JsonResponse
     {
         $user = $request->user();
@@ -66,6 +73,10 @@ class DriverShiftController extends Controller
      *
      * @response array{shift: DriverShiftResource}
      */
+    #[BodyParameter('end_time', type: 'string', format: 'date-time', description: 'Thời điểm kết thúc ca.', example: '2026-05-20T17:30:00Z')]
+    #[BodyParameter('end_km', type: 'number', description: 'Km đồng hồ lúc kết thúc ca.', example: 10245.5)]
+    #[BodyParameter('end_gps_lat', type: 'number', description: 'Vĩ độ GPS lúc kết thúc ca.', example: 10.842001)]
+    #[BodyParameter('end_gps_lng', type: 'number', description: 'Kinh độ GPS lúc kết thúc ca.', example: 106.701234)]
     public function end(EndShiftRequest $request): JsonResponse
     {
         $user = $request->user();

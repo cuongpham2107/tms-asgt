@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,6 +17,8 @@ class AuthController extends Controller
      *
      * @response array{user: UserResource, token: string}
      */
+    #[BodyParameter('email', type: 'string', example: 'driver.phuc@example.com')]
+    #[BodyParameter('password', type: 'string', example: '66668888')]
     public function login(Request $request): JsonResponse
     {
         $data = $request->validate([

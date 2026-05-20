@@ -78,7 +78,12 @@ class AppPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->plugins([
-                FilamentShieldPlugin::make(),
+                FilamentShieldPlugin::make()
+                    ->navigationLabel('Phân quyền')
+                    ->navigationIcon('heroicon-o-shield-check')
+                    ->activeNavigationIcon('heroicon-s-shield-check')
+                    ->navigationGroup('Quản lý')
+                    ->navigationSort(3),
                 FilamentFullCalendarPlugin::make()
                     ->selectable()
                     ->editable(),

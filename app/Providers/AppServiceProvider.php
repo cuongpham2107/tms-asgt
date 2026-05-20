@@ -7,6 +7,7 @@ use App\Observers\OrderObserver;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -24,6 +25,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (str_starts_with(config('app.url', ''), 'https')) {
+            URL::forceScheme('https');
+        }
+
         Order::observe(OrderObserver::class);
 
         Scramble::configure()

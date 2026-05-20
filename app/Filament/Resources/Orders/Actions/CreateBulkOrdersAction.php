@@ -39,7 +39,7 @@ class CreateBulkOrdersAction
             ->icon('heroicon-o-squares-plus')
             ->color('success')
             ->modal()
-            ->modalWidth('7xl')
+            ->modalWidth('5xl')
             ->modalHeading('Tạo/Phân tách nhiều đơn hàng cùng tuyến')
             ->modalDescription('Khai báo thông tin lộ trình chung, sau đó phân chia hàng hóa cho từng xe vận chuyển tương ứng.')
             ->stickyModalFooter()
@@ -49,7 +49,7 @@ class CreateBulkOrdersAction
                         // Phân vùng 1: Thông tin Tuyến đường & Hành trình chung (Chiếm 7 cột)
                         Section::make('Thông tin Tuyến đường & Hành trình chung')
                             ->description('Khai báo khách hàng, hành trình và các điểm đến của chuyến đi.')
-                            ->columnSpan(7)
+                            ->columnSpanFull()
                             ->schema([
                                 Grid::make(2)
                                     ->schema([
@@ -219,33 +219,18 @@ class CreateBulkOrdersAction
                                     ->columnSpanFull(),
                             ]),
 
-                        // Phân vùng 2: Phân chia Đơn hàng (Chiếm 5 cột)
-                        Section::make('Phân chia Đơn hàng (Đơn tách)')
-                            ->description('Khai báo số lượng kiện, trọng lượng và ghi chú cho mỗi đơn hàng tách.')
-                            ->columnSpan(5)
+                        // Phân vùng 2: Số lượng bản ghi cần tạo (Chiếm 5 cột)
+                        Section::make('Số lượng bản ghi cần tạo')
+                            ->description('Nhập số đơn hàng muốn tạo với cùng thông tin chung ở phía trên.')
+                            ->columnSpanFull()
                             ->schema([
-                                Repeater::make('split_orders')
-                                    ->label('Danh sách Đơn tách')
-                                    ->minItems(1)
-                                    ->defaultItems(1)
-                                    ->reorderableWithDragAndDrop()
-                                    ->schema([
-                                        Grid::make(2)
-                                            ->schema([
-                                                TextInput::make('total_packages')
-                                                    ->label('Số kiện đơn này')
-                                                    ->numeric()
-                                                    ->required(),
-                                                TextInput::make('total_weight')
-                                                    ->label('Trọng lượng (tấn)')
-                                                    ->numeric()
-                                                    ->required(),
-                                            ]),
-                                        TextInput::make('notes')
-                                            ->label('Ghi chú')
-                                            ->placeholder('Nhập ghi chú riêng cho đơn này'),
-                                    ])
-                                    ->columnSpanFull(),
+                                TextInput::make('records_count')
+                                    ->label('Số bản ghi cần tạo')
+                                    ->helperText('Ví dụ: nhập 5 để tạo 5 đơn hàng giống nhau về thông tin chung.')
+                                    ->numeric()
+                                    ->default(1)
+                                    ->minValue(1)
+                                    ->required(),
                             ]),
                     ]),
             ])
@@ -262,12 +247,12 @@ class CreateBulkOrdersAction
                     return;
                 }
 
-                $splitOrders = $data['split_orders'] ?? [];
+                $recordsCount = (int) ($data['records_count'] ?? 1);
 
-                if (count($splitOrders) === 0) {
+                if ($recordsCount < 1) {
                     Notification::make()
                         ->title('Cảnh báo')
-                        ->body('Vui lòng thêm ít nhất một xe/đơn tách ở Phân chia Đơn hàng.')
+                        ->body('Vui lòng nhập số bản ghi cần tạo lớn hơn hoặc bằng 1.')
                         ->warning()
                         ->send();
 
@@ -314,7 +299,7 @@ class CreateBulkOrdersAction
 
                 try {
                     DB::transaction(function () use (
-                        $splitOrders,
+                        $recordsCount,
                         $createdBy,
                         $orderTypeId,
                         $orderTypeCode,
@@ -325,7 +310,7 @@ class CreateBulkOrdersAction
                     ): void {
                         $baseCount = Order::query()->whereDate('created_at', '=', now()->toDateString(), 'and')->count();
 
-                        foreach ($splitOrders as $index => $item) {
+                        for ($index = 0; $index < $recordsCount; $index++) {
                             // Generate sequential order code securely
                             $todayOrderCount = $baseCount + $index + 1;
                             $orderCode = sprintf('ORD-%s-%03d', now()->format('Ymd'), $todayOrderCount);
@@ -339,13 +324,13 @@ class CreateBulkOrdersAction
                                 'pickup_address' => $pickupAddress,
                                 'cargo_name' => $data['cargo_name'] ?? null,
                                 'cargo_type' => $data['cargo_type'] ?? 'GCR',
-                                'total_packages' => $item['total_packages'] ?? null,
-                                'total_weight' => $item['total_weight'] ?? null,
+                                'total_packages' => null,
+                                'total_weight' => null,
                                 'planned_loading_at' => $data['planned_loading_at'] ?? null,
                                 'status' => OrderStatus::Draft->value,
                                 'priority' => Priority::Medium->value,
                                 'created_by' => $createdBy,
-                                'notes' => $item['notes'] ?? null,
+                                'notes' => null,
                             ]);
 
                             // Clone and associate delivery points route
@@ -371,7 +356,7 @@ class CreateBulkOrdersAction
 
                     Notification::make()
                         ->title('Thành công')
-                        ->body('Đã tạo thành công '.count($splitOrders).' đơn hàng và sao chép tuyến hành trình tương ứng.')
+                        ->body('Đã tạo thành công '.$recordsCount.' đơn hàng và sao chép tuyến hành trình tương ứng.')
                         ->success()
                         ->send();
 

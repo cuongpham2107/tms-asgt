@@ -65,4 +65,28 @@ class OrderController extends Controller
             'data' => OrderResource::make($order),
         ]);
     }
+
+    /**
+     * Lấy danh sách điểm giao của một đơn hàng để mobile chọn `delivery_point_id`.
+     *
+     * @response array{data: array<int, array{id: int, sequence: int|null, address: string|null}>}
+     */
+    public function deliveryPoints(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($order->driver_id !== $user->id) {
+            /** @status 403 */
+            return response()->json(['message' => 'This order is not assigned to you'], 403);
+        }
+
+        $points = $order->deliveryPoints()
+            ->select(['id', 'sequence', 'address'])
+            ->orderBy('sequence')
+            ->get();
+
+        return response()->json([
+            'data' => $points,
+        ]);
+    }
 }

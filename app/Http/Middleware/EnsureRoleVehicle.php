@@ -11,7 +11,7 @@ class EnsureRoleVehicle
     {
         $user = $request->user();
 
-        if (! $user || ! method_exists($user, 'hasRole') || ! $user->hasRole('vehicle')) {
+        if (! $user || ! method_exists($user, 'hasRole') || ! $user->hasRole('driver')) {
             return response()->json(['message' => 'Forbidden. Driver role required.'], 403);
         }
 

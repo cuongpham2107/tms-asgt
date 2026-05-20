@@ -7,6 +7,7 @@ use App\Http\Requests\CheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
 use App\Models\TripCheckpoint;
 use App\Models\TripPhoto;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,16 @@ class TripCheckpointController extends Controller
      *
      * @response array{checkpoint: TripCheckpointResource}
      */
+    #[BodyParameter('order_id', type: 'integer', description: 'ID đơn hàng.', required: true, example: 1001)]
+    #[BodyParameter('shift_id', type: 'integer', description: 'ID ca trực tương ứng (nếu có).', example: 88)]
+    #[BodyParameter('delivery_point_id', type: 'integer', description: 'ID điểm giao cụ thể (nếu đơn có nhiều điểm).', example: 501)]
+    #[BodyParameter('checkpoint_type', type: 'string', description: 'Loại mốc hành trình: started, arrived_pickup, left_pickup, arrived_delivery, completed, driver_swap.', required: true, example: 'arrived_pickup')]
+    #[BodyParameter('occurred_at', type: 'string', format: 'date-time', description: 'Thời điểm thực tế phát sinh mốc.', example: '2026-05-20T07:15:22Z')]
+    #[BodyParameter('km_reading', type: 'number', description: 'Số km đồng hồ tại thời điểm ghi nhận.', example: 12540.5)]
+    #[BodyParameter('gps_lat', type: 'number', description: 'Vĩ độ GPS tại thời điểm ghi nhận.', example: 10.823099)]
+    #[BodyParameter('gps_lng', type: 'number', description: 'Kinh độ GPS tại thời điểm ghi nhận.', example: 106.629662)]
+    #[BodyParameter('voice_note', type: 'string', description: 'Ghi chú giọng nói đã chuyển thành văn bản.', example: 'Đã đến điểm lấy hàng, chờ bốc xếp.')]
+    #[BodyParameter('photos', type: 'array', description: 'Danh sách ảnh đính kèm checkpoint.')]
     public function checkpoint(CheckpointRequest $request): JsonResponse
     {
         $user = $request->user();
