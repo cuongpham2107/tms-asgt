@@ -11,7 +11,6 @@ use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderCategory;
-use App\Models\OrderType;
 use App\Models\Vehicle;
 use CodeWithDennis\FilamentAdvancedChoice\Filament\Forms\Components\RadioCard;
 use Filament\Actions\Action;
@@ -43,7 +42,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->required()
                         ->options(function () {
                             return OrderCategory::query()
-                                // ->whereHas('orderType', fn ($query) => $query->where('code', 'HHHK'))
+                                ->whereHas('type', fn ($query) => $query->where('code', 'HHHK'))
                                 ->orderBy('sort_order', 'asc')
                                 ->pluck('code', 'id')
                                 ->toArray();
