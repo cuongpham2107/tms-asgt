@@ -21,6 +21,18 @@ class OrderResource extends JsonResource
         return [
             /** ID của đơn hàng. */
             'id' => $this->id,
+
+            /** ID khách hàng. */
+            'customer_id' => $this->customer_id,
+            /** Thông tin khách hàng (nếu được load). */
+            'customer' => $this->whenLoaded('customer', fn () => [
+                'id' => $this->customer->id,
+                'name' => $this->customer->name,
+                'phone' => $this->customer->phone,
+                'email' => $this->customer->email,
+                'address' => $this->customer->address,
+            ]),
+            
             /** Loại đơn hàng (HHHK, external). */
             'type' => $this->type,
             /** Nhãn tiếng Việt của loại đơn hàng. */

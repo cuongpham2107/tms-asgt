@@ -24,7 +24,7 @@ class OrderController extends Controller
         $user = $request->user();
 
         $orders = Order::query()
-            ->with(['vehicle', 'pickupLocation', 'deliveryPoints', 'tripCheckpoints'])
+            ->with(['customer', 'vehicle', 'pickupLocation', 'deliveryPoints', 'tripCheckpoints'])
             ->where('driver_id', $user->id)
             ->whereIn('status', [
                 OrderStatus::Sent,
@@ -61,7 +61,7 @@ class OrderController extends Controller
             return response()->json(['message' => 'This order is not assigned to you'], 403);
         }
 
-        $order->load(['vehicle', 'pickupLocation', 'deliveryPoints', 'tripCheckpoints']);
+        $order->load(['customer', 'vehicle', 'pickupLocation', 'deliveryPoints', 'tripCheckpoints']);
 
         return response()->json([
             'data' => OrderResource::make($order),
