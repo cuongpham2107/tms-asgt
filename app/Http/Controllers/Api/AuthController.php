@@ -17,7 +17,7 @@ class AuthController extends Controller
      *
      * @response array{user: UserResource, token: string}
      */
-    #[BodyParameter('email', type: 'string', example: 'driver.phuc@example.com')]
+    #[BodyParameter('email', type: 'string', example: 'driver.toan@example.com')]
     #[BodyParameter('password', type: 'string', example: '66668888')]
     public function login(Request $request): JsonResponse
     {

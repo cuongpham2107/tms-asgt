@@ -402,20 +402,6 @@ class DemoOperationsSeeder extends Seeder
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // 10. DRIVER SCHEDULE — 1
-        // ═══════════════════════════════════════════════════════════════
-        DB::table('driver_schedules')->updateOrInsert(
-            ['driver_id' => $uid('driver.an@example.com'), 'date' => $now->copy()->addDay()->startOfDay()],
-            [
-                'vehicle_id' => $vid('51C-12345'),
-                'shift_type' => 'full',
-                'status' => 'planned',
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-        );
-
-        // ═══════════════════════════════════════════════════════════════
         // 11. VEHICLE DOCUMENTS — 10
         // ═══════════════════════════════════════════════════════════════
         $plateNumbers = array_keys($this->vehicleIds);
@@ -529,7 +515,7 @@ class DemoOperationsSeeder extends Seeder
 
     private function printSummary(): void
     {
-        $tables = ['users', 'customers', 'locations', 'vehicles', 'order_categories', 'order_templates', 'orders', 'order_delivery_points', 'driver_shifts', 'driver_schedules', 'vehicle_documents', 'vehicle_maintenance_schedules', 'vehicle_maintenance_jobs'];
+        $tables = ['users', 'customers', 'locations', 'vehicles', 'order_categories', 'order_templates', 'orders', 'order_delivery_points', 'driver_shifts', 'vehicle_documents', 'vehicle_maintenance_schedules', 'vehicle_maintenance_jobs'];
         $this->command->info('DemoOperationsSeeder done.');
         foreach ($tables as $t) {
             $c = DB::table($t)->count();

@@ -47,6 +47,8 @@ class OrderController extends Controller
      *
      * Bao gồm: điểm giao nhận (delivery points), lịch sử checkpoint, thông tin xe.
      *
+     * @pathParam order integer ID đơn hàng. Example: 1001
+     *
      * @response array{data: OrderResource}
      */
     public function show(Request $request, Order $order): JsonResponse
@@ -68,6 +70,8 @@ class OrderController extends Controller
 
     /**
      * Lấy danh sách điểm giao của một đơn hàng để mobile chọn `delivery_point_id`.
+     *
+     * @pathParam order integer ID đơn hàng. Example: 1001
      *
      * @response array{data: array<int, array{id: int, sequence: int|null, address: string|null}>}
      */

@@ -38,7 +38,7 @@ class GoogleMapTracking extends Page
 
     public function getApiKey(): string
     {
-        return config('filament-google-maps.key', '');
+        return config('filament-google-maps.key') ?? '';
     }
 
     /** @return array<int, array<string, mixed>> */

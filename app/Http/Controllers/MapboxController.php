@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\MapboxService;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,6 +13,12 @@ class MapboxController extends Controller
         protected readonly MapboxService $mapbox
     ) {}
 
+    /**
+     * Khớp đường đi / tối ưu lộ trình tọa độ qua Mapbox.
+     *
+     * @response array{geometry: array{type: string, coordinates: array<int, array{0: float, 1: float}>}, matched: bool, method: string}
+     */
+    #[BodyParameter('coordinates', type: 'array', description: 'Danh sách tọa độ [lng, lat] cần khớp đường.', required: true, example: [[106.629662, 10.823099], [106.6580, 10.8188]])]
     public function match(Request $request): JsonResponse
     {
         $coords = $request->input('coordinates');
