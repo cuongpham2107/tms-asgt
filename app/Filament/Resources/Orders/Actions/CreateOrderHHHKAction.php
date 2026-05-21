@@ -42,7 +42,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->required()
                         ->options(function () {
                             return OrderCategory::query()
-                                ->whereHas('type', 'HHHK')
+                                ->where('type', 'HHHK')
                                 ->orderBy('sort_order', 'asc')
                                 ->pluck('code', 'id')
                                 ->toArray();
