@@ -48,7 +48,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->required()
                         ->options(function () {
                             return OrderCategory::query()
-                                ->whereHas('type', fn ($query) => $query->where('code', 'external'))
+                                ->whereHas('type', 'external')
                                 ->orderBy('sort_order', 'asc')
                                 ->pluck('code', 'id')
                                 ->toArray();
