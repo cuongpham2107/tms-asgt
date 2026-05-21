@@ -196,10 +196,7 @@ class ListOrders extends ListRecords
         return $this->baseCountQuery()
             ->when(
                 $type !== 'all',
-                fn (Builder $query): Builder => $query->whereHas(
-                    'orderType',
-                    fn (Builder $orderTypeQuery): Builder => $orderTypeQuery->where('code', $type),
-                ),
+                fn (Builder $query): Builder => $query->where('type', $type),
             )
             ->count();
     }
@@ -235,7 +232,6 @@ class ListOrders extends ListRecords
                 'deliveryPoints.location',
                 'driver',
                 'orderCategory',
-                'orderType',
                 'pickupLocation',
                 'vehicle',
             ])
@@ -243,10 +239,7 @@ class ListOrders extends ListRecords
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(
                 $this->activeOrderTypeFilter !== 'all',
-                fn (Builder $query): Builder => $query->whereHas(
-                    'orderType',
-                    fn (Builder $orderTypeQuery): Builder => $orderTypeQuery->where('code', $this->activeOrderTypeFilter),
-                ),
+                fn (Builder $query): Builder => $query->where('type', $this->activeOrderTypeFilter),
             )
             ->when(
                 $this->activeStatusFilter !== 'all',

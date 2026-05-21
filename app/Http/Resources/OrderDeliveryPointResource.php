@@ -31,6 +31,8 @@ class OrderDeliveryPointResource extends JsonResource
             'arrived_at' => $this->arrived_at?->toIso8601String(),
             /** @var string|null ISO 8601 */
             'delivered_at' => $this->delivered_at?->toIso8601String(),
+            'lat' => $this->location?->lat,
+            'lng' => $this->location?->lng,
         ];
     }
 }

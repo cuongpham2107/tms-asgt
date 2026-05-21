@@ -55,8 +55,8 @@ class OrderObserver
                 'order_id' => $order->id,
                 'user_id' => $user->id,
                 'field' => $field,
-                'old_value' => $oldValue !== null ? (string) $oldValue : null,
-                'new_value' => $newValue !== null ? (string) $newValue : null,
+                'old_value' => $oldValue instanceof \BackedEnum ? $oldValue->value : ($oldValue !== null ? (string) $oldValue : null),
+                'new_value' => $newValue instanceof \BackedEnum ? $newValue->value : ($newValue !== null ? (string) $newValue : null),
             ]);
         }
     }
