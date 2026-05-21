@@ -71,6 +71,30 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->relationship('pickupLocation', 'name')
                         ->native(false)
                         ->required()
+                        ->createOptionForm([
+                            TextInput::make('code')
+                                ->label('Mã địa điểm')
+                                ->required()
+                                ->unique('locations', 'code')
+                                ->maxLength(30),
+                            TextInput::make('name')
+                                ->label('Tên đầy đủ')
+                                ->required()
+                                ->maxLength(255),
+                            Textarea::make('address')
+                                ->label('Địa chỉ cụ thể')
+                                ->columnSpanFull(),
+                            Select::make('loc_type')
+                                ->label('Loại địa điểm')
+                                ->options([
+                                    'pickup' => 'Nhận hàng',
+                                    'delivery' => 'Giao hàng',
+                                    'warehouse' => 'Kho',
+                                    'other' => 'Khác',
+                                ])
+                                ->default('pickup')
+                                ->required(),
+                        ])
                         ->columnSpanFull(),
                     Repeater::make('deliveryPoints')
                         ->label('Điểm giao hàng')

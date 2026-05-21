@@ -22,27 +22,7 @@ return new class extends Migration
             $table->string('off_reason')->nullable()->after('status')->comment('Lý do OFF: BDSC / Đăng kiểm / Bất thường');
         });
 
-        // ── Orders: thêm sender/receiver (cho Hàng ngoài) ──────────
-        Schema::table('orders', function (Blueprint $table) {
-            // Hàng ngoài — người gửi
-            $table->string('sender_name')->nullable()->after('cargo_type');
-            $table->string('sender_contact')->nullable()->after('sender_name');
-            $table->string('sender_phone', 20)->nullable()->after('sender_contact');
 
-            // Hàng ngoài — người nhận
-            $table->string('receiver_name')->nullable()->after('sender_phone');
-            $table->string('receiver_contact')->nullable()->after('receiver_name');
-            $table->string('receiver_phone', 20)->nullable()->after('receiver_contact');
-
-            // Đội số liệu bổ sung
-            $table->unsignedInteger('data_cargo_units')->nullable()->after('receiver_phone')->comment('Kiện (đội SL nhập)');
-            $table->decimal('data_cargo_weight', 10, 2)->nullable()->after('data_cargo_units')->comment('Cân kg (đội SL nhập)');
-
-            // Tính cước
-            $table->decimal('freight_rate', 12, 2)->nullable()->after('data_cargo_weight')->comment('Đơn giá cước');
-            $table->decimal('surcharges', 12, 2)->nullable()->after('freight_rate')->comment('Phụ phí');
-            $table->decimal('total_cost', 12, 2)->nullable()->after('surcharges')->comment('Tổng chi phí');
-        });
     }
 
     public function down(): void
@@ -55,13 +35,6 @@ return new class extends Migration
             $table->dropColumn(['registration_number', 'door_count', 'off_reason']);
         });
 
-        Schema::table('orders', function (Blueprint $table) {
-            $table->dropColumn([
-                'sender_name', 'sender_contact', 'sender_phone',
-                'receiver_name', 'receiver_contact', 'receiver_phone',
-                'data_cargo_units', 'data_cargo_weight',
-                'freight_rate', 'surcharges', 'total_cost',
-            ]);
-        });
+
     }
 };

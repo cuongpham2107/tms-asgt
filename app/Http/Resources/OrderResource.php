@@ -76,33 +76,6 @@ class OrderResource extends JsonResource
             'pickup_contact' => $this->pickup_contact,
             /** Điện thoại liên hệ lấy hàng. */
             'pickup_phone' => $this->pickup_phone,
-            // Sender/Receiver
-            /** Tên người gửi hàng. */
-            'sender_name' => $this->sender_name,
-            /** Người liên hệ bên gửi. */
-            'sender_contact' => $this->sender_contact,
-            /** Điện thoại người gửi. */
-            'sender_phone' => $this->sender_phone,
-            /** Tên người nhận hàng. */
-            'receiver_name' => $this->receiver_name,
-            /** Người liên hệ bên nhận. */
-            'receiver_contact' => $this->receiver_contact,
-            /** Điện thoại người nhận. */
-            'receiver_phone' => $this->receiver_phone,
-            // Vehicle (compact)
-            /** Thông tin xe vận chuyển (nếu được load). */
-            'vehicle' => $this->whenLoaded('vehicle', fn () => [
-                'id' => $this->vehicle->id,
-                'plate_number' => $this->vehicle->plate_number,
-                'load_capacity' => $this->vehicle->load_capacity,
-            ]),
-            // Freight
-            /** Cước vận chuyển cơ bản. */
-            'freight_rate' => $this->freight_rate,
-            /** Các khoản phụ phí phát sinh. */
-            'surcharges' => $this->surcharges,
-            /** Tổng chi phí vận chuyển. */
-            'total_cost' => $this->total_cost,
             /** Ghi chú cho đơn hàng. */
             'notes' => $this->notes,
             // Delivery points (only when loaded)
