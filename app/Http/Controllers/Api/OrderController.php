@@ -93,4 +93,69 @@ class OrderController extends Controller
             'data' => $points,
         ]);
     }
+
+    /**
+     * Lịch sử các chuyến đã hoàn thành của lái xe.
+     *
+     * Trả về danh sách đơn hàng có trạng thái Completed, kèm deliveryPoints,
+     * tripCheckpoints và ảnh trong từng checkpoint. Có phân trang.
+     *
+     * @queryParam per_page int Số bản ghi mỗi trang (mặc định 15). Example: 10
+     *
+     * @response array{data: OrderResource[], meta: array{current_page: int, last_page: int, per_page: int, total: int}}
+     */
+    public function history(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $orders = Order::query()
+            ->with([
+                'customer',
+                'vehicle',
+                'pickupLocation',
+                'deliveryPoints',
+                'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+            ])
+            ->where('driver_id', $user->id)
+            ->where('status', OrderStatus::Completed)
+            ->orderBy('updated_at', 'desc')
+            ->paginate($request->integer('per_page', 15));
+
+        return response()->json([
+            'data' => OrderResource::collection($orders),
+            'meta' => [
+                'current_page' => $orders->currentPage(),
+                'last_page' => $orders->lastPage(),
+                'per_page' => $orders->perPage(),
+                'total' => $orders->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * Thống kê số lượng đơn hàng theo nhóm trạng thái của lái xe.
+     *
+     * @response array{data: array{assigned: int, in_progress: int, completed: int}}
+     */
+    public function stats(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $counts = Order::query()
+            ->where('driver_id', $user->id)
+            ->selectRaw("
+                SUM(CASE WHEN status IN ('assigned', 'sent') THEN 1 ELSE 0 END) as assigned,
+                SUM(CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered', 'driver_swap') THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+            ")
+            ->first();
+
+        return response()->json([
+            'data' => [
+                'assigned' => (int) ($counts->assigned ?? 0),
+                'in_progress' => (int) ($counts->in_progress ?? 0),
+                'completed' => (int) ($counts->completed ?? 0),
+            ],
+        ]);
+    }
 }

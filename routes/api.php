@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DriverShiftController;
+use App\Http\Controllers\Api\EmptyKilometerController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ShiftStatusController;
 use App\Http\Controllers\Api\TripCheckpointController;
@@ -23,6 +24,8 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::get('/vehicles/available', [VehicleSearchController::class, 'available']);
 
     // Orders (danh sách đơn hàng được gán)
+    Route::get('/orders/stats', [OrderController::class, 'stats']);
+    Route::get('/orders/history', [OrderController::class, 'history']);
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::get('/orders/{order}/delivery-points', [OrderController::class, 'deliveryPoints']);
@@ -33,4 +36,7 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
 
     // Trip checkpoints (single endpoint for different types)
     Route::post('/checkpoints', [TripCheckpointController::class, 'checkpoint']);
+
+    // Empty kilometers (ghi nhận km không hàng)
+    Route::post('/empty-kilometers', [EmptyKilometerController::class, 'store']);
 });

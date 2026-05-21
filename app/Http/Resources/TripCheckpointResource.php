@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\TripCheckpoint;
+use App\Models\TripPhoto;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -33,6 +34,13 @@ class TripCheckpointResource extends JsonResource
             /** @var float|null GPS longitude */
             'gps_lng' => $this->gps_lng,
             'voice_note' => $this->voice_note,
+            /** Danh sách ảnh chụp tại checkpoint này (nếu được load). */
+            'photos' => $this->whenLoaded('photos', fn () => $this->photos->map(fn (TripPhoto $photo): array => [
+                'id' => $photo->id,
+                'photo_path' => $photo->photo_path,
+                'photo_url' => $photo->photo_url,
+                'created_at' => $photo->created_at?->toIso8601String(),
+            ])),
             /** @var string ISO 8601 */
             'created_at' => $this->created_at?->toIso8601String(),
         ];

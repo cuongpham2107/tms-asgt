@@ -32,7 +32,7 @@ class OrderResource extends JsonResource
                 'email' => $this->customer->email,
                 'address' => $this->customer->address,
             ]),
-            
+
             /** Loại đơn hàng (HHHK, external). */
             'type' => $this->type,
             /** Nhãn tiếng Việt của loại đơn hàng. */
@@ -81,6 +81,9 @@ class OrderResource extends JsonResource
             // Delivery points (only when loaded)
             /** Danh sách các điểm giao hàng (nếu được load). */
             'delivery_points' => OrderDeliveryPointResource::collection($this->whenLoaded('deliveryPoints')),
+            // Trip checkpoints (only when loaded)
+            /** Danh sách checkpoint hành trình (nếu được load). */
+            'trip_checkpoints' => TripCheckpointResource::collection($this->whenLoaded('tripCheckpoints')),
             // Latest checkpoint time (progress indicator)
             /** Thời điểm ghi nhận checkpoint mới nhất (ISO 8601, nếu được load). */
             'last_checkpoint_at' => $this->when(
