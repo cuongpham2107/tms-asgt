@@ -127,4 +127,17 @@ class Order extends Model
     {
         return $this->hasMany(DriverSwap::class);
     }
+
+    /**
+     * Tọa độ pickup cho MapColumn hiển thị bản đồ nhỏ trong bảng.
+     *
+     * @return array{lat: float, lng: float}
+     */
+    public function getMapCoordsAttribute(): array
+    {
+        $lat = $this->pickupLocation?->lat ?? 10.8231;
+        $lng = $this->pickupLocation?->lng ?? 106.6297;
+
+        return ['lat' => (float) $lat, 'lng' => (float) $lng];
+    }
 }

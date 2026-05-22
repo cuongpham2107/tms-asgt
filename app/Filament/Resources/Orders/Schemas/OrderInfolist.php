@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\OrderType;
+use EduardoRibeiroDev\FilamentLeaflet\Infolists\MapEntry;
+use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Fieldset;
@@ -94,6 +96,13 @@ class OrderInfolist
                         'xl' => 3,
                     ])
                     ->schema([
+                        MapEntry::make('map_coords')
+                            ->label('Bản đồ vị trí')
+                            ->height(284)
+                            ->zoom(12)
+                            ->pickMarker(fn (Marker $marker) => $marker->icon(asset('images/truck.png'), [30, 30]))
+                            ->static()
+                            ->columnSpanFull(),
                         TextEntry::make('pickupLocation.name')
                             ->label('Điểm nhận hàng')
                             ->placeholder('—')

@@ -74,7 +74,7 @@
                      class="flex gap-x-3">
                     {{-- Icon + line --}}
                     <div class="relative flex flex-col items-center @if (!$loop->last) after:absolute after:top-10 after:bottom-0 after:w-px after:bg-gray-200 dark:after:bg-gray-700 @endif">
-                        <div class="relative z-10 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white ring-1 {{ $ring }} dark:bg-gray-900">
+                        <div class="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white ring-1 {{ $ring }} dark:bg-gray-900">
                             <x-filament::icon icon="{{ $meta['icon'] }}" class="h-4 w-4 {{ $iconCls }}" />
                         </div>
                     </div>
@@ -88,7 +88,7 @@
                                     <span class="font-normal text-gray-400 dark:text-gray-500">— {{ $cp->driver->name }}</span>
                                 @endif
                             </p>
-                            <span class="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500">
+                            <span class="shrink-0 text-xs text-gray-400 dark:text-gray-500">
                                 {{ $cp->occurred_at?->format('H:i d/m/Y') ?? '—' }}
                             </span>
                         </div>

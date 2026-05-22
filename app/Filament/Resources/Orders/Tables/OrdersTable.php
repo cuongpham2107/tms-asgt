@@ -11,6 +11,10 @@ use App\Filament\Resources\Orders\Actions\DriverSwapAction;
 use App\Filament\Resources\Orders\Actions\SendOrderAction;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Models\Order;
+use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
+use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
+use EduardoRibeiroDev\FilamentLeaflet\Tables\MapColumn;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -19,6 +23,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
 
 class OrdersTable extends BaseTable
@@ -55,6 +60,54 @@ class OrdersTable extends BaseTable
                     })
                     ->html(),
 
+                MapColumn::make('map_coords')
+                    ->label('Bản đồ')
+                    ->height(72)
+                    ->zoom(12)
+                    ->pickMarker(fn (Marker $marker) => $marker->icon(asset('images/truck.png'), [14, 25]))
+                    ->circular()
+                    ->static()
+                    ->action(
+                        Action::make('select')
+                            ->modal()
+                            ->modalWidth('4xl')
+                            ->modalHeading(fn (Order $record): string => 'Bản đồ — '.$record->order_code)
+                            ->modalSubmitAction(false)
+                            ->modalCancelActionLabel('Đóng')
+                            ->modalContent(fn (Order $record): HtmlString => new HtmlString(Blade::render(<<<'BLADE'
+                                <div class="space-y-4">
+                                    <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-800">
+                                        <div>
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">Mã đơn</span>
+                                            <span class="ml-2 text-sm font-bold text-gray-900 dark:text-white">{{ $order->order_code }}</span>
+                                        </div>
+
+                                        <div>
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">Khách hàng</span>
+                                            <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $order->customer?->name ?? '—' }}</span>
+                                        </div>
+
+                                        <div>
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">Điểm lấy</span>
+                                            <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                {{ $order->pickupLocation?->name ?? $order->pickup_address ?? '—' }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                                        <x-filament-leaflet::map :config="$mapConfig" widget />
+                                    </div>
+
+                                    <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+                                        Bản đồ đang dùng tọa độ lấy hàng của đơn hàng và marker xe tải mặc định.
+                                    </div>
+                                </div>
+                            BLADE, [
+                                'order' => $record,
+                                'mapConfig' => self::buildOrderMapConfig($record),
+                            ]))),
+                    ),
                 TextColumn::make('customer.name')
                     ->label('Khách hàng')
                     ->weight('bold')
@@ -208,6 +261,44 @@ class OrdersTable extends BaseTable
                 </div>
             </div>
         HTML);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function buildOrderMapConfig(Order $record): array
+    {
+        $coords = $record->map_coords;
+
+        $marker = Marker::make((float) $coords['lat'], (float) $coords['lng'])
+            ->id('order-'.$record->getKey())
+            ->icon(asset('images/truck.png'), [38, 38]);
+
+        return [
+            'mapId' => 'order-map-'.$record->getKey(),
+            'mapHeight' => 284,
+            'defaultCoord' => [(float) $coords['lat'], (float) $coords['lng']],
+            'autoCenter' => false,
+            'fitBounds' => false,
+            'defaultZoom' => 12,
+            'geoJsonColors' => [],
+            'geoJsonData' => [],
+            'infoText' => '',
+            'tileLayersUrl' => [[
+                TileLayer::OpenStreetMap->getLabel(),
+                TileLayer::OpenStreetMap->getUrl(),
+                TileLayer::OpenStreetMap->getAttribution(),
+            ]],
+            'layerGroupsData' => [],
+            'layersData' => [$marker->toArray()],
+            'zoomConfig' => ['max' => 19, 'min' => 0],
+            'mapConfig' => [],
+            'mapControls' => [],
+            'geoSearchConfig' => [],
+            'geoJsonUrl' => null,
+            'customStyles' => '',
+            'customScripts' => '',
+        ];
     }
 
     private static function getStatusBadgeClasses(string $color): string
