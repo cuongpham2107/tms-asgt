@@ -113,8 +113,25 @@ class GoogleMapTracking extends Page
         $this->refreshMap();
     }
 
+    // Lightweight update invoked frequently from autoplay to avoid heavy map recompute
+    private bool $playbackLightUpdate = false;
+
+    public function setPlaybackTimestampLight(int $ts): void
+    {
+        // mark as light update so updatedPlaybackTimestamp won't refresh map
+        $this->playbackLightUpdate = true;
+        $this->playbackTimestamp = $ts;
+        // do not clear cachedVehicles or refreshMap here
+    }
+
     public function updatedPlaybackTimestamp(): void
     {
+        // If this change came from a light autoplay update, skip expensive refresh
+        if ($this->playbackLightUpdate) {
+            $this->playbackLightUpdate = false;
+            return;
+        }
+
         $this->cachedVehicles = null;
         $this->refreshMap();
     }
