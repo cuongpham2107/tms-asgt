@@ -197,9 +197,8 @@ class GoogleMapTracking extends Page
         $vehicles = $this->getRawVehicles();
         $activeStatuses = $this->activeOrderStatuses();
 
-        return $vehicles
-            ->filter(fn (Vehicle $v) => in_array($v->id, $this->selectedVehicleIds, true))
-            ->map(function (Vehicle $vehicle) use ($activeStatuses): Marker {
+        // Build markers for all vehicles, but keep selected vehicles separate so they are not clustered.
+        $allMarkers = $vehicles->map(function (Vehicle $vehicle) use ($activeStatuses): Marker {
                 $allOrders = $vehicle->orders ?? collect();
                 $activeOrders = $allOrders->filter(
                     fn (Order $o) => in_array($o->status->value, $activeStatuses, true)
@@ -218,7 +217,7 @@ class GoogleMapTracking extends Page
                 if ($hasActiveTrip && $routePoints->count() >= 2) {
                     $origin = $routePoints->first();
                     $destination = $routePoints->last();
-                    $waypoints = $routePoints->slice(1, $routePoints->count() - 2)->map(fn($p) => ['lat' => $p['lat'], 'lng' => $p['lng']])->values()->all();
+                    $waypoints = $routePoints->slice(1, $routePoints->count() - 2)->map(fn ($p) => ['lat' => $p['lat'], 'lng' => $p['lng']])->values()->all();
 
                     $osrmInfo = app(OsrmService::class)->getRoute(
                         $origin['lat'],
@@ -228,7 +227,7 @@ class GoogleMapTracking extends Page
                         $waypoints,
                     );
 
-                    if (!empty($osrmInfo['success']) && !empty($osrmInfo['data'])) {
+                    if (! empty($osrmInfo['success']) && ! empty($osrmInfo['data'])) {
                         $duration = $osrmInfo['data']['duration'] ?? null; // seconds
                         $distance = $osrmInfo['data']['distance'] ?? null; // meters
                         if ($duration !== null) {
@@ -299,7 +298,7 @@ class GoogleMapTracking extends Page
                     .'</div>',
                     e($vehicle->plate_number),
                     ($etaText ? ('ETA: '.e($etaText).' • ') : ''),
-                    (!empty($distanceKm) ? e($distanceKm).' km' : ''),
+                    (! empty($distanceKm) ? e($distanceKm).' km' : ''),
                     $statusColor,
                     e($vehicle->getStatusLabel()),
                     e($trackingDriver),
@@ -314,6 +313,26 @@ class GoogleMapTracking extends Page
                     ->color($statusColor)
                     ->popupContent($popupContent)
                     ->popupOptions(['maxWidth' => 380]);
+            });
+
+            $selectedMarkers = $allMarkers->filter(fn (Marker $m) => in_array((int) str_replace('vehicle-', '', $m->getId()), $this->selectedVehicleIds, true))->values()->all();
+            $otherMarkers = $allMarkers->filter(fn (Marker $m) => ! in_array((int) str_replace('vehicle-', '', $m->getId()), $this->selectedVehicleIds, true))->values()->all();
+
+            $totalVehicles = $allMarkers->count();
+
+            // If many vehicles, return a MarkerCluster for non-selected ones, keeping selected markers separate.
+            if ($totalVehicles > 50) {
+                $cluster = \EduardoRibeiroDev\FilamentLeaflet\LayerGroups\MarkerCluster::make($otherMarkers)
+                    ->maxClusterRadius(80)
+                    ->spiderfyOnMaxZoom(true)
+                    ->removeOutsideVisibleBounds(true)
+                    ->zoomToBoundsOnClick(true);
+
+                return array_merge([$cluster], $selectedMarkers);
+            }
+
+            // Fallback: return all markers (no clustering)
+            return $allMarkers->all();
             })->all();
     }
 
