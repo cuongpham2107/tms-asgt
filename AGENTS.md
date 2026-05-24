@@ -192,3 +192,31 @@ Use codegraph for **structural** questions — what calls what, what would break
 
 The MCP server returns "not initialized." Ask the user: *"I notice this project doesn't have CodeGraph initialized. Want me to run `codegraph init -i` to build the index?"*
 <!-- CODEGRAPH_END -->
+
+<!-- FILAMENT_LEAFLET_START -->
+## Filament Leaflet
+
+This project uses `eduardoribeirodev/filament-leaflet` for interactive maps. A domain skill is available at `.agents/skills/filament-leaflet/SKILL.md` — activate it when working with maps and geospatial features.
+
+### Quick Reference
+
+| Component | Namespace | Use Case |
+|---|---|---|
+| `MapWidget` | `EduardoRibeiroDev\FilamentLeaflet\Widgets\MapWidget` | Dashboard map widget |
+| `MapPicker` | `EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker` | Form field for coord picking |
+| `GeoSearchInput` | `EduardoRibeiroDev\FilamentLeaflet\Fields\GeoSearchInput` | Geocoding search in forms |
+| `MapColumn` | `EduardoRibeiroDev\FilamentLeaflet\Tables\MapColumn` | Map display in tables |
+| `MapEntry` | `EduardoRibeiroDev\FilamentLeaflet\Infolists\MapEntry` | Read-only map in infolists |
+| `Marker` | `EduardoRibeiroDev\FilamentLeaflet\Layers\Marker` | Map markers |
+| `Circle` | `EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Circle` | Circle shapes |
+| `MarkerCluster` | `EduardoRibeiroDev\FilamentLeaflet\LayerGroups\MarkerCluster` | Clustered markers |
+
+### Key Rules
+
+- **Coordinate DTO**: Model coordinates column must cast to `EduardoRibeiroDev\FilamentLeaflet\ValueObjects\Coordinate`
+- **Static maps**: Use `->static()` to disable all interactions (dragging + zooming)
+- **CRUD integration**: Set `$markerModel` and optional `$markerResource` on MapWidget for create/edit/delete
+- **Performance**: Use `MarkerCluster::fromModel()` for datasets > 50 markers
+- **Tile layers**: Can switch between OpenStreetMap, GoogleSatellite, Mapbox, and custom URLs
+- **Publish assets**: Run `php artisan vendor:publish --tag=filament-leaflet` after install
+<!-- FILAMENT_LEAFLET_END -->

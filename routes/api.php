@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DriverShiftController;
 use App\Http\Controllers\Api\EmptyKilometerController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\ShiftStatusController;
 use App\Http\Controllers\Api\TripCheckpointController;
 use App\Http\Controllers\Api\VehicleSearchController;
@@ -11,6 +12,9 @@ use App\Http\Middleware\EnsureRoleVehicle;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/driver/login', [AuthController::class, 'login']);
+
+// OSRM routing – dùng chung cho admin backend (Filament map) và mobile app
+Route::post('/route', [RouteController::class, 'route']);
 
 Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);

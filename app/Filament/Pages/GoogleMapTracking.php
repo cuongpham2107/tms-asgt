@@ -7,7 +7,9 @@ use App\Enums\VehicleStatus;
 use App\Models\Order;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
+use App\Services\OsrmService;
 use BackedEnum;
+use Carbon\Carbon;
 use EduardoRibeiroDev\FilamentLeaflet\Concerns\HasMapConfig;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
@@ -17,8 +19,6 @@ use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use UnitEnum;
 
 /**
@@ -30,7 +30,7 @@ class GoogleMapTracking extends Page
 {
     use HasMapConfig;
 
-    private const HCMC_CENTER = [10.8231, 106.6297];
+    private const MAP_CENTER = [21.0285, 105.8542];
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGlobeAlt;
 
@@ -44,14 +44,9 @@ class GoogleMapTracking extends Page
 
     protected string $view = 'filament.pages.google-map-tracking';
 
-    public function mount(): void
-    {
-        $this->refreshMap();
-    }
-
     protected function getMapCenter(): array
     {
-        return self::HCMC_CENTER;
+        return self::MAP_CENTER;
     }
 
     // ── Map config overrides (HasMapConfig) ────────────────────────────
@@ -59,12 +54,84 @@ class GoogleMapTracking extends Page
 
     protected function getDefaultZoom(): int
     {
-        return 11;
+        return 13;
     }
 
     protected function getMapHeight(): int
     {
-        return 550;
+        return 620;
+    }
+
+    public ?Carbon $lastUpdated = null;
+
+    public array $selectedVehicleIds = [];
+
+    public string $vehicleSearch = '';
+
+    public function getLastUpdated(): ?Carbon
+    {
+        return $this->lastUpdated;
+    }
+
+    public function refreshData(): void
+    {
+        $this->cachedVehicles = null;
+        $this->lastUpdated = now();
+        $this->refreshMap();
+    }
+
+    public function mount(): void
+    {
+        $this->lastUpdated = now();
+        $this->selectedVehicleIds = [];
+        $this->refreshMap();
+    }
+
+    public function toggleVehicle(int $id): void
+    {
+        $this->selectedVehicleIds = in_array($id, $this->selectedVehicleIds, true)
+            ? array_values(array_filter($this->selectedVehicleIds, fn (int $v) => $v !== $id))
+            : [...$this->selectedVehicleIds, $id];
+
+        $this->cachedVehicles = null;
+        $this->refreshMap();
+    }
+
+    public function selectAllVehicles(): void
+    {
+        $this->selectedVehicleIds = $this->getRawVehicles()->pluck('id')->values()->all();
+        $this->cachedVehicles = null;
+        $this->refreshMap();
+    }
+
+    public function deselectAllVehicles(): void
+    {
+        $this->selectedVehicleIds = [];
+        $this->cachedVehicles = null;
+        $this->refreshMap();
+    }
+
+    /** @return array<int, array{id:int,plate:string,driver:string,status_label:string,status_color:string,selected:bool}> */
+    public function getSidebarVehicles(): array
+    {
+        return $this->getRawVehicles()->map(function (Vehicle $vehicle): array {
+            $color = match ($vehicle->status) {
+                VehicleStatus::Running => 'amber',
+                VehicleStatus::On => 'emerald',
+                VehicleStatus::Bdsc => 'red',
+                VehicleStatus::Off => 'gray',
+                default => 'gray',
+            };
+
+            return [
+                'id' => $vehicle->id,
+                'plate' => $vehicle->plate_number,
+                'driver' => $vehicle->driver?->name ?? '—',
+                'status_label' => $vehicle->getStatusLabel(),
+                'status_color' => $color,
+                'selected' => in_array($vehicle->id, $this->selectedVehicleIds, true),
+            ];
+        })->all();
     }
 
     protected function getFitBounds(): bool
@@ -130,83 +197,90 @@ class GoogleMapTracking extends Page
         $vehicles = $this->getRawVehicles();
         $activeStatuses = $this->activeOrderStatuses();
 
-        return $vehicles->map(function (Vehicle $vehicle) use ($activeStatuses): Marker {
-            $allOrders = $vehicle->orders ?? collect();
-            $activeOrders = $allOrders->filter(
-                fn (Order $o) => in_array($o->status->value, $activeStatuses, true)
-            );
-            $trackingOrder = $activeOrders->first() ?? $allOrders->first();
-            $latestShift = $vehicle->driverShifts->first();
-
-            $routePoints = $this->routePointsForOrder($trackingOrder, $vehicle->id);
-            $latestPoint = $routePoints->last();
-
-            $hasShiftGps = $latestShift?->start_gps_lat !== null;
-            $lat = $latestPoint['lat']
-                ?? $latestShift?->start_gps_lat
-                ?? (self::HCMC_CENTER[0] + ($vehicle->id % 7 - 3) * 0.005);
-            $lng = $latestPoint['lng']
-                ?? $latestShift?->start_gps_lng
-                ?? (self::HCMC_CENTER[1] + ($vehicle->id % 7 - 3) * 0.005);
-
-            $trackingDriver = $trackingOrder?->driver?->name
-                ?? $latestShift?->driver?->name
-                ?? $vehicle->driver?->name
-                ?? 'Không lái';
-
-            $statusColor = match ($vehicle->status) {
-                VehicleStatus::Running => '#f59e0b',
-                VehicleStatus::On => '#10b981',
-                VehicleStatus::Bdsc => '#ef4444',
-                VehicleStatus::Off => '#6b7280',
-                default => '#6b7280',
-            };
-
-            // Build orders info for popup
-            $ordersHtml = $allOrders->take(3)->map(function (Order $o) {
-                $delivery = $o->deliveryPoints?->sortBy('sequence')->first()?->address;
-
-                return sprintf(
-                    '<div style="margin-bottom:4px;padding:4px 6px;background:#f9fafb;border-radius:4px;border-left:3px solid #3b82f6">'
-                    .'<div style="font-weight:700;font-size:12px">#%s</div>'
-                    .'<div style="font-size:11px;color:#6b7280">%s &bull; %s%s</div>'
-                    .'<div style="font-size:10px;color:#9ca3af">%s → %s</div>'
-                    .'</div>',
-                    e($o->order_code),
-                    e($o->customer?->name ?? '—'),
-                    e($o->status->getLabel()),
-                    $o->total_packages ? ' &bull; '.$o->total_packages.' kiện' : '',
-                    e($o->pickup_address ?? $o->pickupLocation?->name ?? '—'),
-                    e($delivery ?? '—'),
+        return $vehicles
+            ->filter(fn (Vehicle $v) => in_array($v->id, $this->selectedVehicleIds, true))
+            ->map(function (Vehicle $vehicle) use ($activeStatuses): Marker {
+                $allOrders = $vehicle->orders ?? collect();
+                $activeOrders = $allOrders->filter(
+                    fn (Order $o) => in_array($o->status->value, $activeStatuses, true)
                 );
-            })->implode('');
+                $trackingOrder = $activeOrders->first();
+                $latestShift = $vehicle->driverShifts->first();
+                $hasActiveTrip = $trackingOrder !== null && $vehicle->status === VehicleStatus::Running;
 
-            $popupContent = sprintf(
-                '<div style="font-family:Inter,system-ui,sans-serif;min-width:260px;max-width:360px">'
-                .'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
-                .'<span style="font-weight:800;font-size:15px">%s</span>'
-                .'<span style="background:%s;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">%s</span>'
-                .'</div>'
-                .'<div style="font-size:12px;color:#4b5563;margin-bottom:4px">%s %s &bull; %s</div>'
-                .'%s'
-                .'</div>',
-                e($vehicle->plate_number),
-                $statusColor,
-                e($vehicle->getStatusLabel()),
-                '🧑',
-                e($trackingDriver),
-                e($vehicle->vehicle_type?->getLabel() ?? 'Xe thường'),
-                $ordersHtml ?: '<div style="font-size:11px;color:#9ca3af">Không có đơn hàng</div>',
-            );
+                $routePoints = $hasActiveTrip
+                    ? $this->routePointsForOrder($trackingOrder, $vehicle->id)
+                    : collect();
+                $latestPoint = $routePoints->last();
 
-            return Marker::make((float) $lat, (float) $lng)
-                ->id('vehicle-'.$vehicle->id)
-                ->title($vehicle->plate_number)
-                ->icon(asset('images/truck.png'), [38, 38])
-                ->color($statusColor)
-                ->popupContent($popupContent)
-                ->popupOptions(['maxWidth' => 380]);
-        })->all();
+                $lat = $latestPoint['lat']
+                    ?? $latestShift?->start_gps_lat
+                    ?? (self::MAP_CENTER[0] + ($vehicle->id % 7 - 3) * 0.005);
+                $lng = $latestPoint['lng']
+                    ?? $latestShift?->start_gps_lng
+                    ?? (self::MAP_CENTER[1] + ($vehicle->id % 7 - 3) * 0.005);
+
+                $trackingDriver = $trackingOrder?->driver?->name
+                    ?? $latestShift?->driver?->name
+                    ?? $vehicle->driver?->name
+                    ?? 'Không lái';
+
+                $statusColor = match ($vehicle->status) {
+                    VehicleStatus::Running => '#f59e0b',
+                    VehicleStatus::On => '#10b981',
+                    VehicleStatus::Bdsc => '#ef4444',
+                    VehicleStatus::Off => '#6b7280',
+                    default => '#6b7280',
+                };
+
+                $ordersHtml = $hasActiveTrip ? $activeOrders->take(3)->map(function (Order $o) {
+                    $delivery = $o->deliveryPoints?->sortBy('sequence')->first()?->address;
+
+                    return sprintf(
+                        '<div style="margin-bottom:5px;padding:6px 8px;background:#f8fafc;border-radius:6px;border-left:3px solid #3b82f6;box-shadow:0 1px 2px rgba(0,0,0,0.04)">'
+                        .'<div style="font-weight:700;font-size:12px;color:#1e293b">#%s</div>'
+                        .'<div style="font-size:11px;color:#64748b">%s &bull; %s%s</div>'
+                        .'<div style="font-size:10px;color:#94a3b8;margin-top:1px">%s → %s</div>'
+                        .'</div>',
+                        e($o->order_code),
+                        e($o->customer?->name ?? '—'),
+                        e($o->status->getLabel()),
+                        $o->total_packages ? ' &bull; '.$o->total_packages.' kiện' : '',
+                        e($o->pickup_address ?? $o->pickupLocation?->name ?? '—'),
+                        e($delivery ?? '—'),
+                    );
+                })->implode('') : '';
+
+                $popupContent = sprintf(
+                    '<div style="font-family:Inter,system-ui,sans-serif;min-width:270px;max-width:360px;line-height:1.5">'
+                    .'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #e2e8f0">'
+                    .'<span style="font-weight:800;font-size:16px;color:#0f172a">%s</span>'
+                    .'<span style="background:%s;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;letter-spacing:0.02em">%s</span>'
+                    .'</div>'
+                    .'<div style="font-size:12px;color:#475569;margin-bottom:8px">'
+                    .'<span style="display:inline-flex;align-items:center;gap:3px">🚛 %s</span>'
+                    .'<span style="margin:0 6px;color:#cbd5e1">|</span>'
+                    .'<span>%s</span>'
+                    .'</div>'
+                    .'<div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.03em">Đơn hàng</div>'
+                    .'%s'
+                    .'</div>',
+                    e($vehicle->plate_number),
+                    $statusColor,
+                    e($vehicle->getStatusLabel()),
+                    e($trackingDriver),
+                    e($vehicle->vehicle_type?->getLabel() ?? 'Xe thường'),
+                    $ordersHtml ?: '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px 0">Không có đơn hàng</div>',
+                );
+
+                return Marker::make((float) $lat, (float) $lng)
+                    ->id('vehicle-'.$vehicle->id)
+                    ->title($vehicle->plate_number)
+                    ->icon(asset('images/truck.png'), [38, 38])
+                    ->color($statusColor)
+                    ->popupContent($popupContent)
+                    ->popupOptions(['maxWidth' => 380]);
+            })->all();
     }
 
     /**
@@ -227,12 +301,18 @@ class GoogleMapTracking extends Page
         ];
 
         return $vehicles
+            ->filter(fn (Vehicle $v) => in_array($v->id, $this->selectedVehicleIds, true))
             ->flatMap(function (Vehicle $vehicle) use ($activeStatuses, $segmentColors): array {
                 $allOrders = $vehicle->orders ?? collect();
                 $activeOrders = $allOrders->filter(
                     fn (Order $o) => in_array($o->status->value, $activeStatuses, true)
                 );
-                $trackingOrder = $activeOrders->first() ?? $allOrders->first();
+                $trackingOrder = $activeOrders->first();
+
+                // Chỉ vẽ route khi xe đang chạy và có đơn hàng active
+                if ($trackingOrder === null || $vehicle->status !== VehicleStatus::Running) {
+                    return [];
+                }
 
                 $routePoints = $this->routePointsForOrder($trackingOrder, $vehicle->id);
 
@@ -311,58 +391,14 @@ class GoogleMapTracking extends Page
     }
 
     /**
-     * Gọi OSRM API để lấy route bám đường thực tế.
+     * Gọi OSRM service để lấy route bám đường thực tế.
      *
      * @param  array<int, array{float, float}>  $points  Mảng các điểm [lat, lng]
      * @return array<int, array{float, float}> Mảng các điểm [lat, lng] chi tiết từ OSRM
      */
     private function fetchOsrmRoute(array $points): array
     {
-        if (count($points) < 2) {
-            return [];
-        }
-
-        // Cache key từ hash của tọa độ (cache 30 phút)
-        $cacheKey = 'osrm_route_'.md5(json_encode($points));
-
-        return Cache::remember($cacheKey, now()->addMinutes(30), function () use ($points): array {
-            // OSRM format: lng,lat;lng,lat;...
-            $coordStrings = array_map(
-                fn (array $p) => $p[1].','.$p[0], // [lat, lng] → "lng,lat"
-                $points
-            );
-            $coords = implode(';', $coordStrings);
-
-            $url = "https://router.project-osrm.org/route/v1/driving/{$coords}";
-
-            try {
-                $response = Http::timeout(5)->get($url, [
-                    'overview' => 'full',
-                    'geometries' => 'geojson',
-                    'steps' => 'false',
-                ]);
-
-                if (! $response->successful()) {
-                    return [];
-                }
-
-                $data = $response->json();
-
-                $coordinates = $data['routes'][0]['geometry']['coordinates'] ?? [];
-
-                if (empty($coordinates)) {
-                    return [];
-                }
-
-                // Chuyển [lng, lat] → [lat, lng]
-                return array_map(
-                    fn (array $c) => [(float) $c[1], (float) $c[0]],
-                    $coordinates
-                );
-            } catch (\Throwable) {
-                return [];
-            }
-        });
+        return app(OsrmService::class)->getRouteFromPoints($points);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────
