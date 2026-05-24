@@ -114,8 +114,19 @@
                             <select wire:model="filterVehicleType" class="w-full rounded-md border-gray-200 px-2 py-1 text-sm">
                                 <option value="all">Tất cả loại xe</option>
                                 @foreach(collect($this->getRawVehicles())->pluck('vehicle_type')->filter()->unique()->values() as $vt)
-                                    @php $val = $vt['value'] ?? $vt['name'] ?? (string)$vt; @endphp
-                                    <option value="{{ $val }}">{{ $vt['label'] ?? $vt['name'] ?? $val }}</option>
+                                    @php
+                                        if (is_object($vt)) {
+                                            $val = $vt->value ?? $vt->name ?? (string) $vt;
+                                            $label = method_exists($vt, 'getLabel') ? $vt->getLabel() : ($vt->name ?? $val);
+                                        } elseif (is_array($vt)) {
+                                            $val = $vt['value'] ?? $vt['name'] ?? (string) $vt;
+                                            $label = $vt['label'] ?? $vt['name'] ?? $val;
+                                        } else {
+                                            $val = (string) $vt;
+                                            $label = $val;
+                                        }
+                                    @endphp
+                                    <option value="{{ $val }}">{{ $label }}</option>
                                 @endforeach
                             </select>
 
