@@ -364,25 +364,54 @@ class GoogleMapTracking extends Page
                     $color = $segmentColors[$i % count($segmentColors)];
                     $label = ($labels[$i] ?? '?').' → '.($labels[$i + 1] ?? '?');
 
+                    $isLastSegment = $i === (count($points) - 2);
+
                     if (count($osrmSegment) >= 2) {
+                        // Main route line (thicker, high opacity)
                         $shapes[] = Polyline::make($osrmSegment)
                             ->id("route-seg{$i}-{$vehicle->id}")
                             ->color($color)
-                            ->weight(5)
-                            ->opacity(0.9)
+                            ->weight($isLastSegment ? 8 : 6)
+                            ->opacity($isLastSegment ? 0.95 : 0.9)
                             ->fill(false)
                             ->tooltipContent($label);
+
+                        // If this is the last segment (near destination), add a subtle highlight layer
+                        if ($isLastSegment) {
+                            $shapes[] = Polyline::make($osrmSegment)
+                                ->id("route-seg{$i}-{$vehicle->id}-highlight")
+                                ->color($color)
+                                ->weight(12)
+                                ->opacity(0.18)
+                                ->fill(false);
+                        }
                     } else {
-                        // Fallback: đường thẳng giữa 2 checkpoint
+                        // Fallback: đường thẳng giữa 2 checkpoint (dashed)
                         $shapes[] = Polyline::make($segment)
                             ->id("route-seg{$i}-{$vehicle->id}")
                             ->color($color)
-                            ->weight(3)
-                            ->opacity(0.7)
+                            ->weight($isLastSegment ? 6 : 4)
+                            ->opacity(0.75)
                             ->dashArray(8, 4)
                             ->fill(false)
                             ->tooltipContent($label.' (ước lượng)');
                     }
+
+                    // Add a small, non-intrusive midpoint label for the segment
+                    $midIdx = (int) floor(count($segment) / 2);
+                    [$aLat, $aLng] = $segment[0];
+                    [$bLat, $bLng] = $segment[1];
+                    $midLat = ($aLat + $bLat) / 2;
+                    $midLng = ($aLng + $bLng) / 2;
+
+                    $shapes[] = CircleMarker::make($midLat, $midLng)
+                        ->id("route-seg-label-{$i}-{$vehicle->id}")
+                        ->radius(0.5)
+                        ->color($color)
+                        ->fillColor($color)
+                        ->fillOpacity(0)
+                        ->tooltipContent($label)
+                        ->tooltipOptions(['permanent' => true, 'direction' => 'center']);
                 }
 
                 return $shapes;
