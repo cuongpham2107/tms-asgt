@@ -391,7 +391,6 @@ class GoogleMapTracking extends Page
             // Fallback: return all markers (no clustering)
             return $allMarkers->all();
         }
-    }
 
     /**
      * @return Polyline[]
