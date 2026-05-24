@@ -19,6 +19,11 @@
             'gray' => ['dot' => 'bg-gray-400', 'badge' => 'bg-gray-100 text-gray-600', 'border' => 'border-l-gray-300'],
         ];
     @endphp
+    @php
+        [$playMin, $playMax] = $this->getPlaybackBounds();
+        $playMinFmt = $playMin ? (now()->setTimestamp($playMin)->format('Y-m-d H:i')) : null;
+        $playMaxFmt = $playMax ? (now()->setTimestamp($playMax)->format('Y-m-d H:i')) : null;
+    @endphp
 
     <div class="space-y-6">
         {{-- Stats bar --}}
@@ -182,6 +187,23 @@
                 </span>
             </div>
             <div class="flex items-center gap-3 text-xs text-gray-400">
+                @if($playMin && $playMax)
+                    <div class="flex items-center gap-2">
+                        <button
+                            wire:click="togglePlayback"
+                            type="button"
+                            class="flex items-center gap-2 rounded-lg px-2 py-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
+                        >
+                            <x-filament::icon :icon="$this->playbackPlaying ? 'heroicon-o-pause' : 'heroicon-o-play'" class="h-3.5 w-3.5" />
+                            <span class="text-xs">{{ $this->playbackPlaying ? 'Tạm dừng' : 'Phát' }}</span>
+                        </button>
+
+                        <div class="flex items-center gap-2 px-2">
+                            <input type="range" min="{{ $playMin }}" max="{{ $playMax }}" step="60" wire:model="playbackTimestamp" />
+                            <div class="text-xs text-gray-500">{{ $this->playbackTimestamp ? now()->setTimestamp($this->playbackTimestamp)->format('Y-m-d H:i') : $playMaxFmt }}</div>
+                        </div>
+                    </div>
+                @endif
                 <button
                     wire:click="refreshData"
                     type="button"

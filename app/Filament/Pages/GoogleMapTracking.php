@@ -68,6 +68,11 @@ class GoogleMapTracking extends Page
 
     public string $vehicleSearch = '';
 
+    // Playback / replay controls (D)
+    public ?int $playbackTimestamp = null; // unix timestamp (seconds)
+    public bool $playbackPlaying = false;
+    public int $playbackSpeed = 1000; // ms between steps when autoplay (frontend uses this)
+
     public function getLastUpdated(): ?Carbon
     {
         return $this->lastUpdated;
@@ -84,6 +89,27 @@ class GoogleMapTracking extends Page
     {
         $this->lastUpdated = now();
         $this->selectedVehicleIds = [];
+        // Initialize playback range to latest available by default
+        [$min, $max] = $this->getPlaybackBounds();
+        $this->playbackTimestamp = $max ?? now()->timestamp;
+        $this->refreshMap();
+    }
+
+    public function togglePlayback(): void
+    {
+        $this->playbackPlaying = ! $this->playbackPlaying;
+    }
+
+    public function setPlaybackTimestamp(int $ts): void
+    {
+        $this->playbackTimestamp = $ts;
+        $this->cachedVehicles = null;
+        $this->refreshMap();
+    }
+
+    public function updatedPlaybackTimestamp(): void
+    {
+        $this->cachedVehicles = null;
         $this->refreshMap();
     }
 
@@ -208,7 +234,7 @@ class GoogleMapTracking extends Page
                 $hasActiveTrip = $trackingOrder !== null && $vehicle->status === VehicleStatus::Running;
 
                 $routePoints = $hasActiveTrip
-                    ? $this->routePointsForOrder($trackingOrder, $vehicle->id)
+                    ? $this->routePointsForOrder($trackingOrder, $vehicle->id, $this->playbackTimestamp)
                     : collect();
                 $latestPoint = $routePoints->last();
 
@@ -367,7 +393,7 @@ class GoogleMapTracking extends Page
                     return [];
                 }
 
-                $routePoints = $this->routePointsForOrder($trackingOrder, $vehicle->id);
+                $routePoints = $this->routePointsForOrder($trackingOrder, $vehicle->id, $this->playbackTimestamp);
 
                 if ($routePoints->count() < 2) {
                     return [];
@@ -529,20 +555,55 @@ class GoogleMapTracking extends Page
     /**
      * @return Collection<int, array{lat: float, lng: float, label: string}>
      */
-    private function routePointsForOrder(?Order $order, int $vehicleId): Collection
+    /**
+     * @param Order|null $order
+     * @param int $vehicleId
+     * @param int|null $asOfTimestamp Return only points with occurred_at <= this timestamp (unix seconds)
+     */
+    private function routePointsForOrder(?Order $order, int $vehicleId, ?int $asOfTimestamp = null): Collection
     {
         if ($order === null) {
             return collect();
         }
-
-        return ($order->tripCheckpoints ?? collect())
+        $points = ($order->tripCheckpoints ?? collect())
             ->filter(fn (TripCheckpoint $c) => $c->gps_lat !== null && $c->gps_lng !== null)
             ->sortBy('occurred_at')
-            ->values()
-            ->map(fn (TripCheckpoint $c) => [
-                'lat' => (float) $c->gps_lat,
-                'lng' => (float) $c->gps_lng,
-                'label' => $c->checkpoint_type?->getLabel() ?? 'Checkpoint',
-            ]);
+            ->values();
+
+        if ($asOfTimestamp !== null) {
+            $asOf = Carbon::createFromTimestamp($asOfTimestamp);
+            $points = $points->filter(fn (TripCheckpoint $c) => $c->occurred_at <= $asOf)->values();
+        }
+
+        return $points->map(fn (TripCheckpoint $c) => [
+            'lat' => (float) $c->gps_lat,
+            'lng' => (float) $c->gps_lng,
+            'label' => $c->checkpoint_type?->getLabel() ?? 'Checkpoint',
+        ]);
+    }
+
+    /**
+     * Get playback bounds (min,max) as unix timestamps based on available trip checkpoints.
+     * @return array{0:int|null,1:int|null}
+     */
+    public function getPlaybackBounds(): array
+    {
+        $min = null;
+        $max = null;
+
+        $vehicles = $this->getRawVehicles();
+        $vehicles->each(function (Vehicle $v) use (&$min, &$max) {
+            $v->orders->each(function (Order $o) use (&$min, &$max) {
+                ($o->tripCheckpoints ?? collect())->each(function (TripCheckpoint $c) use (&$min, &$max) {
+                    if ($c->occurred_at) {
+                        $ts = Carbon::parse($c->occurred_at)->timestamp;
+                        $min = $min === null ? $ts : min($min, $ts);
+                        $max = $max === null ? $ts : max($max, $ts);
+                    }
+                });
+            });
+        });
+
+        return [$min, $max];
     }
 }
