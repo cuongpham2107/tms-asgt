@@ -213,6 +213,35 @@ class GoogleMapTracking extends Page
                     : collect();
                 $latestPoint = $routePoints->last();
 
+                // Compute ETA/duration/distance using OSRM for the full route (one call)
+                $etaText = null;
+                if ($hasActiveTrip && $routePoints->count() >= 2) {
+                    $origin = $routePoints->first();
+                    $destination = $routePoints->last();
+                    $waypoints = $routePoints->slice(1, $routePoints->count() - 2)->map(fn($p) => ['lat' => $p['lat'], 'lng' => $p['lng']])->values()->all();
+
+                    $osrmInfo = app(OsrmService::class)->getRoute(
+                        $origin['lat'],
+                        $origin['lng'],
+                        $destination['lat'],
+                        $destination['lng'],
+                        $waypoints,
+                    );
+
+                    if (!empty($osrmInfo['success']) && !empty($osrmInfo['data'])) {
+                        $duration = $osrmInfo['data']['duration'] ?? null; // seconds
+                        $distance = $osrmInfo['data']['distance'] ?? null; // meters
+                        if ($duration !== null) {
+                            $eta = now()->addSeconds($duration);
+                            $etaText = $eta->format('H:i');
+                        }
+
+                        if ($distance !== null) {
+                            $distanceKm = round($distance / 1000, 1);
+                        }
+                    }
+                }
+
                 $lat = $latestPoint['lat']
                     ?? $latestShift?->start_gps_lat
                     ?? (self::MAP_CENTER[0] + ($vehicle->id % 7 - 3) * 0.005);
@@ -254,7 +283,10 @@ class GoogleMapTracking extends Page
                 $popupContent = sprintf(
                     '<div style="font-family:Inter,system-ui,sans-serif;min-width:270px;max-width:360px;line-height:1.5">'
                     .'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #e2e8f0">'
-                    .'<span style="font-weight:800;font-size:16px;color:#0f172a">%s</span>'
+                    .'<div>'
+                        .'<div style="font-weight:800;font-size:16px;color:#0f172a">%s</div>'
+                        .'<div style="font-size:12px;color:#64748b;margin-top:3px">%s%s</div>'
+                    .'</div>'
                     .'<span style="background:%s;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;letter-spacing:0.02em">%s</span>'
                     .'</div>'
                     .'<div style="font-size:12px;color:#475569;margin-bottom:8px">'
@@ -266,6 +298,8 @@ class GoogleMapTracking extends Page
                     .'%s'
                     .'</div>',
                     e($vehicle->plate_number),
+                    ($etaText ? ('ETA: '.e($etaText).' • ') : ''),
+                    (!empty($distanceKm) ? e($distanceKm).' km' : ''),
                     $statusColor,
                     e($vehicle->getStatusLabel()),
                     e($trackingDriver),
