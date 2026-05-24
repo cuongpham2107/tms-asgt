@@ -100,6 +100,32 @@
                         </x-filament::input.wrapper>
                     </div>
 
+                    <div class="border-b border-gray-100 px-5 py-3 space-y-2 dark:border-gray-700">
+                        <div class="text-xs font-medium text-gray-500">Lọc</div>
+                        <div class="flex flex-col gap-2">
+                            <select wire:model="filterStatus" class="w-full rounded-md border-gray-200 px-2 py-1 text-sm">
+                                <option value="all">Tất cả trạng thái</option>
+                                <option value="Running">Đang chạy</option>
+                                <option value="On">Sẵn sàng</option>
+                                <option value="Bdsc">Bảo dưỡng</option>
+                                <option value="Off">Tắt máy</option>
+                            </select>
+
+                            <select wire:model="filterVehicleType" class="w-full rounded-md border-gray-200 px-2 py-1 text-sm">
+                                <option value="all">Tất cả loại xe</option>
+                                @foreach(collect($this->getRawVehicles())->pluck('vehicle_type')->filter()->unique()->values() as $vt)
+                                    @php $val = $vt['value'] ?? $vt['name'] ?? (string)$vt; @endphp
+                                    <option value="{{ $val }}">{{ $vt['label'] ?? $vt['name'] ?? $val }}</option>
+                                @endforeach
+                            </select>
+
+                            <div class="flex gap-2">
+                                <input wire:model="filterDateFrom" type="datetime-local" class="w-1/2 rounded-md border-gray-200 px-2 py-1 text-sm" />
+                                <input wire:model="filterDateTo" type="datetime-local" class="w-1/2 rounded-md border-gray-200 px-2 py-1 text-sm" />
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex gap-2 border-b border-gray-100 px-5 py-3 dark:border-gray-700">
                         <x-filament::button size="xs" wire:click="selectAllVehicles" color="primary" wire:loading.attr="disabled" wire:target="selectAllVehicles">
                             <span wire:loading.remove wire:target="selectAllVehicles">Chọn tất cả</span>

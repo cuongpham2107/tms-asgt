@@ -73,6 +73,12 @@ class GoogleMapTracking extends Page
     public bool $playbackPlaying = false;
     public int $playbackSpeed = 1000; // ms between steps when autoplay (frontend uses this)
 
+    // Filters (D3)
+    public string $filterStatus = 'all'; // 'all' or VehicleStatus enum value
+    public string $filterVehicleType = 'all';
+    public ?string $filterDateFrom = null; // ISO string from datetime-local
+    public ?string $filterDateTo = null;
+
     public function getLastUpdated(): ?Carbon
     {
         return $this->lastUpdated;
@@ -113,6 +119,31 @@ class GoogleMapTracking extends Page
         $this->refreshMap();
     }
 
+    // When filters change -> refresh map
+    public function updatedFilterStatus(): void
+    {
+        $this->cachedVehicles = null;
+        $this->refreshMap();
+    }
+
+    public function updatedFilterVehicleType(): void
+    {
+        $this->cachedVehicles = null;
+        $this->refreshMap();
+    }
+
+    public function updatedFilterDateFrom(): void
+    {
+        $this->cachedVehicles = null;
+        $this->refreshMap();
+    }
+
+    public function updatedFilterDateTo(): void
+    {
+        $this->cachedVehicles = null;
+        $this->refreshMap();
+    }
+
     public function toggleVehicle(int $id): void
     {
         $this->selectedVehicleIds = in_array($id, $this->selectedVehicleIds, true)
@@ -140,7 +171,7 @@ class GoogleMapTracking extends Page
     /** @return array<int, array{id:int,plate:string,driver:string,status_label:string,status_color:string,selected:bool}> */
     public function getSidebarVehicles(): array
     {
-        return $this->getRawVehicles()->map(function (Vehicle $vehicle): array {
+        return $this->getFilteredVehicles()->map(function (Vehicle $vehicle): array {
             $color = match ($vehicle->status) {
                 VehicleStatus::Running => 'amber',
                 VehicleStatus::On => 'emerald',
@@ -197,7 +228,7 @@ class GoogleMapTracking extends Page
     /** @return array<string, int> */
     public function getStats(): array
     {
-        $vehicles = $this->getRawVehicles();
+        $vehicles = $this->getFilteredVehicles();
         $activeStatuses = $this->activeOrderStatuses();
 
         return [
@@ -220,7 +251,7 @@ class GoogleMapTracking extends Page
      */
     protected function getMarkers(): array
     {
-        $vehicles = $this->getRawVehicles();
+        $vehicles = $this->getFilteredVehicles();
         $activeStatuses = $this->activeOrderStatuses();
 
         // Build markers for all vehicles, but keep selected vehicles separate so they are not clustered.
@@ -367,7 +398,7 @@ class GoogleMapTracking extends Page
      */
     protected function getShapes(): array
     {
-        $vehicles = $this->getRawVehicles();
+        $vehicles = $this->getFilteredVehicles();
         $activeStatuses = $this->activeOrderStatuses();
 
         // Bảng màu cho từng segment (từ checkpoint đầu → cuối)
@@ -553,6 +584,60 @@ class GoogleMapTracking extends Page
     }
 
     /**
+     * Apply UI filters to raw vehicles collection.
+     */
+    private function getFilteredVehicles(): Collection
+    {
+        $vehicles = $this->getRawVehicles();
+
+        if ($this->filterStatus !== 'all') {
+            // allow either enum name or value
+            $vehicles = $vehicles->filter(fn (Vehicle $v) => ($v->status->value ?? null) === $this->filterStatus || ($v->status->name ?? null) === $this->filterStatus)->values();
+        }
+
+        if ($this->filterVehicleType !== 'all') {
+            $vehicles = $vehicles->filter(fn (Vehicle $v) => (string) ($v->vehicle_type?->value ?? $v->vehicle_type?->name ?? '') === $this->filterVehicleType)->values();
+        }
+
+        if ($this->filterDateFrom || $this->filterDateTo) {
+            $from = $this->filterDateFrom ? Carbon::parse($this->filterDateFrom) : null;
+            $to = $this->filterDateTo ? Carbon::parse($this->filterDateTo) : null;
+
+            $vehicles = $vehicles->filter(function (Vehicle $v) use ($from, $to) {
+                // look at planned_loading_at on orders or trip checkpoint occurred_at
+                foreach ($v->orders as $o) {
+                    if ($from && $to) {
+                        $pl = $o->planned_loading_at ? Carbon::parse($o->planned_loading_at) : null;
+                        if ($pl && $pl->between($from, $to)) {
+                            return true;
+                        }
+                        // checkpoints
+                        foreach ($o->tripCheckpoints ?? [] as $c) {
+                            $occ = $c->occurred_at ? Carbon::parse($c->occurred_at) : null;
+                            if ($occ && $occ->between($from, $to)) {
+                                return true;
+                            }
+                        }
+                    } else {
+                        $pl = $o->planned_loading_at ? Carbon::parse($o->planned_loading_at) : null;
+                        if ($from && $pl && $pl >= $from) return true;
+                        if ($to && $pl && $pl <= $to) return true;
+                        foreach ($o->tripCheckpoints ?? [] as $c) {
+                            $occ = $c->occurred_at ? Carbon::parse($c->occurred_at) : null;
+                            if ($from && $occ && $occ >= $from) return true;
+                            if ($to && $occ && $occ <= $to) return true;
+                        }
+                    }
+                }
+
+                return false;
+            })->values();
+        }
+
+        return $vehicles;
+    }
+
+    /**
      * @return Collection<int, array{lat: float, lng: float, label: string}>
      */
     /**
@@ -591,7 +676,7 @@ class GoogleMapTracking extends Page
         $min = null;
         $max = null;
 
-        $vehicles = $this->getRawVehicles();
+        $vehicles = $this->getFilteredVehicles();
         $vehicles->each(function (Vehicle $v) use (&$min, &$max) {
             $v->orders->each(function (Order $o) use (&$min, &$max) {
                 ($o->tripCheckpoints ?? collect())->each(function (TripCheckpoint $c) use (&$min, &$max) {
