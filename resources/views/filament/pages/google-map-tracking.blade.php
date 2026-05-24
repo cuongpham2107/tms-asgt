@@ -193,7 +193,7 @@
                     />
                 </div>
 
-                <div wire:loading.class.remove="opacity-0 pointer-events-none" wire:target="toggleVehicle,selectAllVehicles,deselectAllVehicles,refreshData" class="opacity-0 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-xl" style="background: rgba(255,255,255,0.15); backdrop-filter: blur(4px);">
+                <div wire:loading.delay.class.remove="opacity-0 pointer-events-none" class="opacity-0 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-xl" style="background: rgba(255,255,255,0.15); backdrop-filter: blur(4px);">
                     <div class="flex flex-col items-center gap-3 rounded-xl bg-gray-200 px-8 py-6 shadow-lg ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
                         <x-filament::loading-indicator class="h-10 w-10 text-primary-500" />
                         <span class="text-sm font-semibold text-gray-600 dark:text-gray-300">Đang tải route...</span>
@@ -226,25 +226,33 @@
             <div class="flex items-center gap-3 text-xs text-gray-400">
                 @if($playMin && $playMax)
                     <div x-data="{
-                        playbackTimestamp: @entangle('playbackTimestamp'),
+                        // local playback state to avoid continuous Livewire churn
+                        playbackTimestamp: {{ json_encode($this->playbackTimestamp ?? $playMax) }},
                         playbackPlaying: @entangle('playbackPlaying'),
                         playbackSpeed: @entangle('playbackSpeed'),
                         playMin: {{ $playMin }},
                         playMax: {{ $playMax }},
                         step: 60,
                         timer: null,
+                        sendCounter: 0,
+                        sendStep: 2,
                         start() {
-                            if (this.timer) clearInterval(this.timer);
+                            this.stop();
                             this.timer = setInterval(() => {
                                 if (this.playbackTimestamp === null) this.playbackTimestamp = this.playMax;
                                 this.playbackTimestamp = Math.min(this.playMax, this.playbackTimestamp + this.step);
+                                this.sendCounter++;
+                                // only send updates to Livewire every `sendStep` ticks to reduce requests
+                                if (this.sendCounter % this.sendStep === 0) {
+                                    this.$wire.call('setPlaybackTimestamp', this.playbackTimestamp);
+                                }
                                 if (this.playbackTimestamp >= this.playMax) {
                                     this.playbackPlaying = false;
-                                    clearInterval(this.timer);
+                                    this.stop();
                                 }
                             }, this.playbackSpeed || 1000);
                         },
-                        stop() { if (this.timer) { clearInterval(this.timer); this.timer = null; } }
+                        stop() { if (this.timer) { clearInterval(this.timer); this.timer = null; this.sendCounter = 0; } },
                     }"
                     x-init="$watch('playbackPlaying', val => { if (val) start(); else stop(); })"
                     class="flex items-center gap-2"
@@ -264,7 +272,7 @@
                         </button>
 
                         <div class="flex items-center gap-2 px-2">
-                            <input type="range" :min="playMin" :max="playMax" step="60" x-model.number="playbackTimestamp" />
+                            <input type="range" :min="playMin" :max="playMax" step="60" x-model.number="playbackTimestamp" @change="$wire.call('setPlaybackTimestamp', playbackTimestamp)" />
                             <div class="text-xs text-gray-500" x-text="playbackTimestamp ? (new Date(playbackTimestamp * 1000).toISOString().slice(0,16).replace('T',' ')) : ''"></div>
                         </div>
 
