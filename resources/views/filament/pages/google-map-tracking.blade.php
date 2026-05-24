@@ -214,19 +214,55 @@
             </div>
             <div class="flex items-center gap-3 text-xs text-gray-400">
                 @if($playMin && $playMax)
-                    <div class="flex items-center gap-2">
+                    <div x-data="{
+                        playbackTimestamp: @entangle('playbackTimestamp'),
+                        playbackPlaying: @entangle('playbackPlaying'),
+                        playbackSpeed: @entangle('playbackSpeed'),
+                        playMin: {{ $playMin }},
+                        playMax: {{ $playMax }},
+                        step: 60,
+                        timer: null,
+                        start() {
+                            if (this.timer) clearInterval(this.timer);
+                            this.timer = setInterval(() => {
+                                if (this.playbackTimestamp === null) this.playbackTimestamp = this.playMax;
+                                this.playbackTimestamp = Math.min(this.playMax, this.playbackTimestamp + this.step);
+                                if (this.playbackTimestamp >= this.playMax) {
+                                    this.playbackPlaying = false;
+                                    clearInterval(this.timer);
+                                }
+                            }, this.playbackSpeed || 1000);
+                        },
+                        stop() { if (this.timer) { clearInterval(this.timer); this.timer = null; } }
+                    }"
+                    x-init="$watch('playbackPlaying', val => { if (val) start(); else stop(); })"
+                    class="flex items-center gap-2"
+                    >
                         <button
-                            wire:click="togglePlayback"
+                            @click="playbackPlaying = !playbackPlaying"
                             type="button"
                             class="flex items-center gap-2 rounded-lg px-2 py-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
                         >
-                            <x-filament::icon :icon="$this->playbackPlaying ? 'heroicon-o-pause' : 'heroicon-o-play'" class="h-3.5 w-3.5" />
-                            <span class="text-xs">{{ $this->playbackPlaying ? 'Tạm dừng' : 'Phát' }}</span>
+                            <template x-if="!playbackPlaying">
+                                <x-filament::icon icon="heroicon-o-play" class="h-3.5 w-3.5" />
+                            </template>
+                            <template x-if="playbackPlaying">
+                                <x-filament::icon icon="heroicon-o-pause" class="h-3.5 w-3.5" />
+                            </template>
+                            <span class="text-xs" x-text="playbackPlaying ? 'Tạm dừng' : 'Phát'"></span>
                         </button>
 
                         <div class="flex items-center gap-2 px-2">
-                            <input type="range" min="{{ $playMin }}" max="{{ $playMax }}" step="60" wire:model="playbackTimestamp" />
-                            <div class="text-xs text-gray-500">{{ $this->playbackTimestamp ? now()->setTimestamp($this->playbackTimestamp)->format('Y-m-d H:i') : $playMaxFmt }}</div>
+                            <input type="range" :min="playMin" :max="playMax" step="60" x-model.number="playbackTimestamp" />
+                            <div class="text-xs text-gray-500" x-text="playbackTimestamp ? (new Date(playbackTimestamp * 1000).toISOString().slice(0,16).replace('T',' ')) : ''"></div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <select x-model.number="playbackSpeed" class="rounded-md border-gray-200 px-2 py-1 text-sm">
+                                <option :value="2000">0.5x</option>
+                                <option :value="1000">1x</option>
+                                <option :value="500">2x</option>
+                            </select>
                         </div>
                     </div>
                 @endif
