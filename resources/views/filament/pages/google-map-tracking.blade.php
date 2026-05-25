@@ -27,8 +27,8 @@
 
     <div class="space-y-6">
         {{-- Stats bar --}}
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            <div class="relative overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-4 dark:border-gray-700 dark:bg-gray-900">
+        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
+            <div class="col-span-2 sm:col-span-3 md:col-span-5 relative overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-4 dark:border-gray-700 dark:bg-gray-900">
                 <div class="flex items-center gap-3">
                     <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
                         <x-filament::icon icon="heroicon-o-truck" class="h-5 w-5 text-gray-500 dark:text-gray-400" />
@@ -103,36 +103,36 @@
                     <div class="border-b border-gray-100 px-5 py-3 space-y-2 dark:border-gray-700">
                         <div class="text-xs font-medium text-gray-500">Lọc</div>
                         <div class="flex flex-col gap-2">
-                            <select wire:model="filterStatus" class="w-full rounded-md border-gray-200 px-2 py-1 text-sm">
-                                <option value="all">Tất cả trạng thái</option>
-                                <option value="Running">Đang chạy</option>
-                                <option value="On">Sẵn sàng</option>
-                                <option value="Bdsc">Bảo dưỡng</option>
-                                <option value="Off">Tắt máy</option>
-                            </select>
-
-                            <select wire:model="filterVehicleType" class="w-full rounded-md border-gray-200 px-2 py-1 text-sm">
-                                <option value="all">Tất cả loại xe</option>
-                                @foreach(collect($this->getRawVehicles())->pluck('vehicle_type')->filter()->unique()->values() as $vt)
-                                    @php
-                                        if (is_object($vt)) {
-                                            $val = $vt->value ?? $vt->name ?? (string) $vt;
-                                            $label = method_exists($vt, 'getLabel') ? $vt->getLabel() : ($vt->name ?? $val);
-                                        } elseif (is_array($vt)) {
-                                            $val = $vt['value'] ?? $vt['name'] ?? (string) $vt;
-                                            $label = $vt['label'] ?? $vt['name'] ?? $val;
-                                        } else {
-                                            $val = (string) $vt;
-                                            $label = $val;
-                                        }
-                                    @endphp
+                            <x-filament::input.select
+                                wire:model="filterStatus"
+                                wire:change="applyFilterStatusLight"
+                                placeholder="Chọn trạng thái"
+                            >
+                                @foreach([
+                                    'all' => 'Tất cả trạng thái',
+                                    'Running' => 'Đang chạy',
+                                    'On' => 'Sẵn sàng',
+                                    'Bdsc' => 'Bảo dưỡng',
+                                    'Off' => 'Tắt máy',
+                                ] as $val => $label)
                                     <option value="{{ $val }}">{{ $label }}</option>
                                 @endforeach
-                            </select>
+                            </x-filament::input.select>
+
+                            <x-filament::input.select
+                                wire:model="filterVehicleType"
+                                wire:change="applyFilterVehicleTypeLight"
+                                searchable
+                                placeholder="Tất cả loại xe"
+                            >
+                                @foreach($this->getVehicleTypeOptions() as $val => $label)
+                                    <option value="{{ $val }}">{{ $label }}</option>
+                                @endforeach
+                            </x-filament::input.select>
 
                             <div class="flex gap-2">
-                                <input wire:model="filterDateFrom" type="datetime-local" class="w-1/2 rounded-md border-gray-200 px-2 py-1 text-sm" />
-                                <input wire:model="filterDateTo" type="datetime-local" class="w-1/2 rounded-md border-gray-200 px-2 py-1 text-sm" />
+                                <input wire:model="filterDateFrom" wire:change="applyFilterDateLight" type="datetime-local" class="w-1/2 rounded-md border-gray-200 px-2 py-1 text-sm" />
+                                <input wire:model="filterDateTo" wire:change="applyFilterDateLight" type="datetime-local" class="w-1/2 rounded-md border-gray-200 px-2 py-1 text-sm" />
                             </div>
                         </div>
                     </div>
@@ -175,6 +175,11 @@
                                         <div class="truncate text-xs text-gray-500 dark:text-gray-400">{{ $v['driver'] }}</div>
                                     </div>
                                     <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium leading-tight {{ $sc[$v['status_color']]['badge'] }}">{{ $v['status_label'] }}</span>
+
+                                    {{-- per-item loading indicator for toggleVehicle (shows while server processes) --}}
+                                    <span class="ml-2 shrink-0" wire:loading wire:target="toggleVehicle">
+                                        <x-filament::loading-indicator class="h-4 w-4 text-gray-400" />
+                                    </span>
                                 </div>
                             </div>
                         @empty
@@ -186,14 +191,14 @@
 
             {{-- Map --}}
             <div class="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-gray-200 shadow-sm dark:border-gray-700" style="height: 620px">
-                <div wire:loading.class="opacity-30" wire:target="toggleVehicle,selectAllVehicles,deselectAllVehicles,refreshData" class="h-full transition-opacity duration-300">
+                <div wire:loading.delay.class="opacity-30" wire:target="selectAllVehicles,deselectAllVehicles,refreshData,setPlaybackTimestamp" class="h-full transition-opacity duration-300">
                     <x-filament-leaflet::map
                         :config="$this->getMapData()"
                         widget
                     />
                 </div>
 
-                <div wire:loading.delay.class.remove="opacity-0 pointer-events-none" wire:target="toggleVehicle,selectAllVehicles,deselectAllVehicles,refreshData,setPlaybackTimestamp" class="opacity-0 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-xl" style="background: rgba(255,255,255,0.15); backdrop-filter: blur(4px);">
+                <div wire:loading wire:target="selectAllVehicles,deselectAllVehicles,refreshData,setPlaybackTimestamp" class="absolute inset-0 z-50 flex items-center justify-center rounded-xl" style="background: rgba(255,255,255,0.15); backdrop-filter: blur(4px);">
                     <div class="flex flex-col items-center gap-3 rounded-xl bg-gray-200 px-8 py-6 shadow-lg ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
                         <x-filament::loading-indicator class="h-10 w-10 text-primary-500" />
                         <span class="text-sm font-semibold text-gray-600 dark:text-gray-300">Đang tải route...</span>

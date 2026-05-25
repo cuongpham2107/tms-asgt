@@ -12,6 +12,7 @@ use BackedEnum;
 use Carbon\Carbon;
 use EduardoRibeiroDev\FilamentLeaflet\Concerns\HasMapConfig;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
+use EduardoRibeiroDev\FilamentLeaflet\LayerGroups\MarkerCluster;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
@@ -70,13 +71,18 @@ class GoogleMapTracking extends Page
 
     // Playback / replay controls (D)
     public ?int $playbackTimestamp = null; // unix timestamp (seconds)
+
     public bool $playbackPlaying = false;
+
     public int $playbackSpeed = 1000; // ms between steps when autoplay (frontend uses this)
 
     // Filters (D3)
     public string $filterStatus = 'all'; // 'all' or VehicleStatus enum value
+
     public string $filterVehicleType = 'all';
+
     public ?string $filterDateFrom = null; // ISO string from datetime-local
+
     public ?string $filterDateTo = null;
 
     public function getLastUpdated(): ?Carbon
@@ -129,6 +135,7 @@ class GoogleMapTracking extends Page
         // If this change came from a light autoplay update, skip expensive refresh
         if ($this->playbackLightUpdate) {
             $this->playbackLightUpdate = false;
+
             return;
         }
 
@@ -136,27 +143,80 @@ class GoogleMapTracking extends Page
         $this->refreshMap();
     }
 
-    // When filters change -> refresh map
+    // Lightweight filter updates (apply immediately from UI without triggering
+    // expensive OSRM/route recomputes). Use these from Blade with
+    // `wire:change="applyFilterStatusLight"` etc.
+    private bool $filterLightUpdate = false;
+
+    public function applyFilterStatusLight(): void
+    {
+        // Mark next updatedFilterStatus as a light update and return.
+        $this->filterLightUpdate = true;
+        // property `filterStatus` has already been updated by Livewire's wire:model
+        // so we intentionally avoid clearing cache or calling refreshMap here.
+    }
+
     public function updatedFilterStatus(): void
     {
+        // If this change was flagged as a light UI update, skip expensive refresh.
+        if ($this->filterLightUpdate) {
+            $this->filterLightUpdate = false;
+
+            return;
+        }
+
         $this->cachedVehicles = null;
         $this->refreshMap();
+    }
+
+    // Vehicle type light update
+    private bool $filterVehicleTypeLightUpdate = false;
+
+    public function applyFilterVehicleTypeLight(): void
+    {
+        $this->filterVehicleTypeLightUpdate = true;
     }
 
     public function updatedFilterVehicleType(): void
     {
+        if ($this->filterVehicleTypeLightUpdate) {
+            $this->filterVehicleTypeLightUpdate = false;
+
+            return;
+        }
+
         $this->cachedVehicles = null;
         $this->refreshMap();
     }
 
+    // Date filters light update (applies to both from/to)
+    private bool $filterDateLightUpdate = false;
+
+    public function applyFilterDateLight(): void
+    {
+        $this->filterDateLightUpdate = true;
+    }
+
     public function updatedFilterDateFrom(): void
     {
+        if ($this->filterDateLightUpdate) {
+            $this->filterDateLightUpdate = false;
+
+            return;
+        }
+
         $this->cachedVehicles = null;
         $this->refreshMap();
     }
 
     public function updatedFilterDateTo(): void
     {
+        if ($this->filterDateLightUpdate) {
+            $this->filterDateLightUpdate = false;
+
+            return;
+        }
+
         $this->cachedVehicles = null;
         $this->refreshMap();
     }
@@ -273,141 +333,141 @@ class GoogleMapTracking extends Page
 
         // Build markers for all vehicles, but keep selected vehicles separate so they are not clustered.
         $allMarkers = $vehicles->map(function (Vehicle $vehicle) use ($activeStatuses): Marker {
-                $allOrders = $vehicle->orders ?? collect();
-                $activeOrders = $allOrders->filter(
-                    fn (Order $o) => in_array($o->status->value, $activeStatuses, true)
+            $allOrders = $vehicle->orders ?? collect();
+            $activeOrders = $allOrders->filter(
+                fn (Order $o) => in_array($o->status->value, $activeStatuses, true)
+            );
+            $trackingOrder = $activeOrders->first();
+            $latestShift = $vehicle->driverShifts->first();
+            $hasActiveTrip = $trackingOrder !== null && $vehicle->status === VehicleStatus::Running;
+
+            $routePoints = $hasActiveTrip
+                ? $this->routePointsForOrder($trackingOrder, $vehicle->id, $this->playbackTimestamp)
+                : collect();
+            $latestPoint = $routePoints->last();
+
+            // Compute ETA/duration/distance using OSRM for the full route (one call)
+            $etaText = null;
+            if ($hasActiveTrip && $routePoints->count() >= 2) {
+                $origin = $routePoints->first();
+                $destination = $routePoints->last();
+                $waypoints = $routePoints->slice(1, $routePoints->count() - 2)->map(fn ($p) => ['lat' => $p['lat'], 'lng' => $p['lng']])->values()->all();
+
+                $osrmInfo = app(OsrmService::class)->getRoute(
+                    $origin['lat'],
+                    $origin['lng'],
+                    $destination['lat'],
+                    $destination['lng'],
+                    $waypoints,
                 );
-                $trackingOrder = $activeOrders->first();
-                $latestShift = $vehicle->driverShifts->first();
-                $hasActiveTrip = $trackingOrder !== null && $vehicle->status === VehicleStatus::Running;
 
-                $routePoints = $hasActiveTrip
-                    ? $this->routePointsForOrder($trackingOrder, $vehicle->id, $this->playbackTimestamp)
-                    : collect();
-                $latestPoint = $routePoints->last();
+                if (! empty($osrmInfo['success']) && ! empty($osrmInfo['data'])) {
+                    $duration = $osrmInfo['data']['duration'] ?? null; // seconds
+                    $distance = $osrmInfo['data']['distance'] ?? null; // meters
+                    if ($duration !== null) {
+                        $eta = now()->addSeconds($duration);
+                        $etaText = $eta->format('H:i');
+                    }
 
-                // Compute ETA/duration/distance using OSRM for the full route (one call)
-                $etaText = null;
-                if ($hasActiveTrip && $routePoints->count() >= 2) {
-                    $origin = $routePoints->first();
-                    $destination = $routePoints->last();
-                    $waypoints = $routePoints->slice(1, $routePoints->count() - 2)->map(fn ($p) => ['lat' => $p['lat'], 'lng' => $p['lng']])->values()->all();
-
-                    $osrmInfo = app(OsrmService::class)->getRoute(
-                        $origin['lat'],
-                        $origin['lng'],
-                        $destination['lat'],
-                        $destination['lng'],
-                        $waypoints,
-                    );
-
-                    if (! empty($osrmInfo['success']) && ! empty($osrmInfo['data'])) {
-                        $duration = $osrmInfo['data']['duration'] ?? null; // seconds
-                        $distance = $osrmInfo['data']['distance'] ?? null; // meters
-                        if ($duration !== null) {
-                            $eta = now()->addSeconds($duration);
-                            $etaText = $eta->format('H:i');
-                        }
-
-                        if ($distance !== null) {
-                            $distanceKm = round($distance / 1000, 1);
-                        }
+                    if ($distance !== null) {
+                        $distanceKm = round($distance / 1000, 1);
                     }
                 }
-
-                $lat = $latestPoint['lat']
-                    ?? $latestShift?->start_gps_lat
-                    ?? (self::MAP_CENTER[0] + ($vehicle->id % 7 - 3) * 0.005);
-                $lng = $latestPoint['lng']
-                    ?? $latestShift?->start_gps_lng
-                    ?? (self::MAP_CENTER[1] + ($vehicle->id % 7 - 3) * 0.005);
-
-                $trackingDriver = $trackingOrder?->driver?->name
-                    ?? $latestShift?->driver?->name
-                    ?? $vehicle->driver?->name
-                    ?? 'Không lái';
-
-                $statusColor = match ($vehicle->status) {
-                    VehicleStatus::Running => '#f59e0b',
-                    VehicleStatus::On => '#10b981',
-                    VehicleStatus::Bdsc => '#ef4444',
-                    VehicleStatus::Off => '#6b7280',
-                    default => '#6b7280',
-                };
-
-                $ordersHtml = $hasActiveTrip ? $activeOrders->take(3)->map(function (Order $o) {
-                    $delivery = $o->deliveryPoints?->sortBy('sequence')->first()?->address;
-
-                    return sprintf(
-                        '<div style="margin-bottom:5px;padding:6px 8px;background:#f8fafc;border-radius:6px;border-left:3px solid #3b82f6;box-shadow:0 1px 2px rgba(0,0,0,0.04)">'
-                        .'<div style="font-weight:700;font-size:12px;color:#1e293b">#%s</div>'
-                        .'<div style="font-size:11px;color:#64748b">%s &bull; %s%s</div>'
-                        .'<div style="font-size:10px;color:#94a3b8;margin-top:1px">%s → %s</div>'
-                        .'</div>',
-                        e($o->order_code),
-                        e($o->customer?->name ?? '—'),
-                        e($o->status->getLabel()),
-                        $o->total_packages ? ' &bull; '.$o->total_packages.' kiện' : '',
-                        e($o->pickup_address ?? $o->pickupLocation?->name ?? '—'),
-                        e($delivery ?? '—'),
-                    );
-                })->implode('') : '';
-
-                $popupContent = sprintf(
-                    '<div style="font-family:Inter,system-ui,sans-serif;min-width:270px;max-width:360px;line-height:1.5">'
-                    .'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #e2e8f0">'
-                    .'<div>'
-                        .'<div style="font-weight:800;font-size:16px;color:#0f172a">%s</div>'
-                        .'<div style="font-size:12px;color:#64748b;margin-top:3px">%s%s</div>'
-                    .'</div>'
-                    .'<span style="background:%s;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;letter-spacing:0.02em">%s</span>'
-                    .'</div>'
-                    .'<div style="font-size:12px;color:#475569;margin-bottom:8px">'
-                    .'<span style="display:inline-flex;align-items:center;gap:3px">🚛 %s</span>'
-                    .'<span style="margin:0 6px;color:#cbd5e1">|</span>'
-                    .'<span>%s</span>'
-                    .'</div>'
-                    .'<div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.03em">Đơn hàng</div>'
-                    .'%s'
-                    .'</div>',
-                    e($vehicle->plate_number),
-                    ($etaText ? ('ETA: '.e($etaText).' • ') : ''),
-                    (! empty($distanceKm) ? e($distanceKm).' km' : ''),
-                    $statusColor,
-                    e($vehicle->getStatusLabel()),
-                    e($trackingDriver),
-                    e($vehicle->vehicle_type?->getLabel() ?? 'Xe thường'),
-                    $ordersHtml ?: '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px 0">Không có đơn hàng</div>',
-                );
-
-                return Marker::make((float) $lat, (float) $lng)
-                    ->id('vehicle-'.$vehicle->id)
-                    ->title($vehicle->plate_number)
-                    ->icon(asset('images/truck.png'), [38, 38])
-                    ->color($statusColor)
-                    ->popupContent($popupContent)
-                    ->popupOptions(['maxWidth' => 380]);
-            });
-
-            $selectedMarkers = $allMarkers->filter(fn (Marker $m) => in_array((int) str_replace('vehicle-', '', $m->getId()), $this->selectedVehicleIds, true))->values()->all();
-            $otherMarkers = $allMarkers->filter(fn (Marker $m) => ! in_array((int) str_replace('vehicle-', '', $m->getId()), $this->selectedVehicleIds, true))->values()->all();
-
-            $totalVehicles = $allMarkers->count();
-
-            // If many vehicles, return a MarkerCluster for non-selected ones, keeping selected markers separate.
-            if ($totalVehicles > 50) {
-                $cluster = \EduardoRibeiroDev\FilamentLeaflet\LayerGroups\MarkerCluster::make($otherMarkers)
-                    ->maxClusterRadius(80)
-                    ->spiderfyOnMaxZoom(true)
-                    ->removeOutsideVisibleBounds(true)
-                    ->zoomToBoundsOnClick(true);
-
-                return array_merge([$cluster], $selectedMarkers);
             }
 
-            // Fallback: return all markers (no clustering)
-            return $allMarkers->all();
+            $lat = $latestPoint['lat']
+                ?? $latestShift?->start_gps_lat
+                ?? (self::MAP_CENTER[0] + ($vehicle->id % 7 - 3) * 0.005);
+            $lng = $latestPoint['lng']
+                ?? $latestShift?->start_gps_lng
+                ?? (self::MAP_CENTER[1] + ($vehicle->id % 7 - 3) * 0.005);
+
+            $trackingDriver = $trackingOrder?->driver?->name
+                ?? $latestShift?->driver?->name
+                ?? $vehicle->driver?->name
+                ?? 'Không lái';
+
+            $statusColor = match ($vehicle->status) {
+                VehicleStatus::Running => '#f59e0b',
+                VehicleStatus::On => '#10b981',
+                VehicleStatus::Bdsc => '#ef4444',
+                VehicleStatus::Off => '#6b7280',
+                default => '#6b7280',
+            };
+
+            $ordersHtml = $hasActiveTrip ? $activeOrders->take(3)->map(function (Order $o) {
+                $delivery = $o->deliveryPoints?->sortBy('sequence')->first()?->address;
+
+                return sprintf(
+                    '<div style="margin-bottom:5px;padding:6px 8px;background:#f8fafc;border-radius:6px;border-left:3px solid #3b82f6;box-shadow:0 1px 2px rgba(0,0,0,0.04)">'
+                    .'<div style="font-weight:700;font-size:12px;color:#1e293b">#%s</div>'
+                    .'<div style="font-size:11px;color:#64748b">%s &bull; %s%s</div>'
+                    .'<div style="font-size:10px;color:#94a3b8;margin-top:1px">%s → %s</div>'
+                    .'</div>',
+                    e($o->order_code),
+                    e($o->customer?->name ?? '—'),
+                    e($o->status->getLabel()),
+                    $o->total_packages ? ' &bull; '.$o->total_packages.' kiện' : '',
+                    e($o->pickup_address ?? $o->pickupLocation?->name ?? '—'),
+                    e($delivery ?? '—'),
+                );
+            })->implode('') : '';
+
+            $popupContent = sprintf(
+                '<div style="font-family:Inter,system-ui,sans-serif;min-width:270px;max-width:360px;line-height:1.5">'
+                .'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #e2e8f0">'
+                .'<div>'
+                    .'<div style="font-weight:800;font-size:16px;color:#0f172a">%s</div>'
+                    .'<div style="font-size:12px;color:#64748b;margin-top:3px">%s%s</div>'
+                .'</div>'
+                .'<span style="background:%s;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;letter-spacing:0.02em">%s</span>'
+                .'</div>'
+                .'<div style="font-size:12px;color:#475569;margin-bottom:8px">'
+                .'<span style="display:inline-flex;align-items:center;gap:3px">🚛 %s</span>'
+                .'<span style="margin:0 6px;color:#cbd5e1">|</span>'
+                .'<span>%s</span>'
+                .'</div>'
+                .'<div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.03em">Đơn hàng</div>'
+                .'%s'
+                .'</div>',
+                e($vehicle->plate_number),
+                ($etaText ? ('ETA: '.e($etaText).' • ') : ''),
+                (! empty($distanceKm) ? e($distanceKm).' km' : ''),
+                $statusColor,
+                e($vehicle->getStatusLabel()),
+                e($trackingDriver),
+                e($vehicle->vehicle_type?->getLabel() ?? 'Xe thường'),
+                $ordersHtml ?: '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px 0">Không có đơn hàng</div>',
+            );
+
+            return Marker::make((float) $lat, (float) $lng)
+                ->id('vehicle-'.$vehicle->id)
+                ->title($vehicle->plate_number)
+                ->icon(asset('images/truck.png'), [38, 38])
+                ->color($statusColor)
+                ->popupContent($popupContent)
+                ->popupOptions(['maxWidth' => 380]);
+        });
+
+        $selectedMarkers = $allMarkers->filter(fn (Marker $m) => in_array((int) str_replace('vehicle-', '', $m->getId()), $this->selectedVehicleIds, true))->values()->all();
+        $otherMarkers = $allMarkers->filter(fn (Marker $m) => ! in_array((int) str_replace('vehicle-', '', $m->getId()), $this->selectedVehicleIds, true))->values()->all();
+
+        $totalVehicles = $allMarkers->count();
+
+        // If many vehicles, return a MarkerCluster for non-selected ones, keeping selected markers separate.
+        if ($totalVehicles > 50) {
+            $cluster = MarkerCluster::make($otherMarkers)
+                ->maxClusterRadius(80)
+                ->spiderfyOnMaxZoom(true)
+                ->removeOutsideVisibleBounds(true)
+                ->zoomToBoundsOnClick(true);
+
+            return array_merge([$cluster], $selectedMarkers);
         }
+
+        // Fallback: return all markers (no clustering)
+        return $allMarkers->all();
+    }
 
     /**
      * @return Polyline[]
@@ -600,6 +660,31 @@ class GoogleMapTracking extends Page
     }
 
     /**
+     * Return options for vehicle type select as [value => label].
+     */
+    public function getVehicleTypeOptions(): array
+    {
+        return collect($this->getRawVehicles())
+            ->pluck('vehicle_type')
+            ->filter()
+            ->unique()
+            ->mapWithKeys(function ($vt) {
+                if (is_object($vt)) {
+                    $val = $vt->value ?? $vt->name ?? (string) $vt;
+                    $label = method_exists($vt, 'getLabel') ? $vt->getLabel() : ($vt->name ?? $val);
+                } elseif (is_array($vt)) {
+                    $val = $vt['value'] ?? $vt['name'] ?? (string) $vt;
+                    $label = $vt['label'] ?? $vt['name'] ?? $val;
+                } else {
+                    $val = (string) $vt;
+                    $label = $val;
+                }
+
+                return [$val => $label];
+            })->toArray();
+    }
+
+    /**
      * Apply UI filters to raw vehicles collection.
      */
     private function getFilteredVehicles(): Collection
@@ -636,12 +721,20 @@ class GoogleMapTracking extends Page
                         }
                     } else {
                         $pl = $o->planned_loading_at ? Carbon::parse($o->planned_loading_at) : null;
-                        if ($from && $pl && $pl >= $from) return true;
-                        if ($to && $pl && $pl <= $to) return true;
+                        if ($from && $pl && $pl >= $from) {
+                            return true;
+                        }
+                        if ($to && $pl && $pl <= $to) {
+                            return true;
+                        }
                         foreach ($o->tripCheckpoints ?? [] as $c) {
                             $occ = $c->occurred_at ? Carbon::parse($c->occurred_at) : null;
-                            if ($from && $occ && $occ >= $from) return true;
-                            if ($to && $occ && $occ <= $to) return true;
+                            if ($from && $occ && $occ >= $from) {
+                                return true;
+                            }
+                            if ($to && $occ && $occ <= $to) {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -657,9 +750,7 @@ class GoogleMapTracking extends Page
      * @return Collection<int, array{lat: float, lng: float, label: string}>
      */
     /**
-     * @param Order|null $order
-     * @param int $vehicleId
-     * @param int|null $asOfTimestamp Return only points with occurred_at <= this timestamp (unix seconds)
+     * @param  int|null  $asOfTimestamp  Return only points with occurred_at <= this timestamp (unix seconds)
      */
     private function routePointsForOrder(?Order $order, int $vehicleId, ?int $asOfTimestamp = null): Collection
     {
@@ -685,6 +776,7 @@ class GoogleMapTracking extends Page
 
     /**
      * Get playback bounds (min,max) as unix timestamps based on available trip checkpoints.
+     *
      * @return array{0:int|null,1:int|null}
      */
     public function getPlaybackBounds(): array

@@ -8,8 +8,10 @@ use App\Http\Requests\StartShiftRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
 use App\Models\Vehicle;
+use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DriverShiftController extends Controller
@@ -30,6 +32,23 @@ class DriverShiftController extends Controller
         $user = $request->user();
 
         $payload = $request->validated();
+
+        // normalize start_time and ensure it's today
+        $startTime = isset($payload['start_time']) ? Carbon::parse($payload['start_time']) : Carbon::now();
+        if (! $startTime->isToday()) {
+            return response()->json(['message' => 'Thời gian bắt đầu phải là ngày hôm nay'], 422);
+        }
+
+        // prevent creating two shifts of the same type on the same day
+        $sameDaySameType = DriverShift::query()
+            ->where('driver_id', $user->id)
+            ->whereDate('start_time', $startTime->toDateString())
+            ->where('shift_type', $payload['shift_type'])
+            ->exists();
+
+        if ($sameDaySameType) {
+            return response()->json(['message' => 'Đã có ca cùng loại vào hôm nay'], 409);
+        }
 
         // Ensure driver does not have an open shift on same vehicle
         $existing = DriverShift::query()
@@ -123,5 +142,30 @@ class DriverShiftController extends Controller
             /** @status 500 */
             return response()->json(['message' => 'Unable to end shift', 'error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Lấy ca làm việc hiện tại của user (nếu có).
+     *
+     * @response array{shift: DriverShiftResource|null}
+     */
+    public function current(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $shift = DriverShift::query()
+            ->where('driver_id', $user->id)
+            ->whereNull('end_time')
+            ->first();
+
+        // only return the active shift if it started today
+        if ($shift) {
+            $start = $shift->start_time ? Carbon::parse($shift->start_time) : null;
+            if (! $start || ! $start->isToday()) {
+                return response()->json(['shift' => null]);
+            }
+        }
+
+        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift) : null]);
     }
 }
