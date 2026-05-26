@@ -22,14 +22,14 @@ return new class extends Migration
                 ->nullOnDelete()
                 ->comment('Điểm đến trong danh mục');
             $table->string('address')->nullable()->comment('Địa chỉ giao hàng (manual)');
-            $table->string('contact_person')->nullable();
-            $table->string('contact_phone', 20)->nullable();
+            $table->string('contact_person')->nullable()->comment('Người liên hệ');
+            $table->string('contact_phone', 20)->nullable()->comment('Số điện thoại liên hệ');
             $table->integer('total_packages')->nullable()->comment('Số kiện giao tại điểm này');
             $table->decimal('total_weight', 10, 2)->nullable()->comment('Trọng lượng giao tại điểm này (kg)');
             $table->unsignedTinyInteger('sequence')->default(1)->comment('Thứ tự giao hàng');
-            $table->enum('status', ['pending', 'arrived', 'delivered'])->default('pending');
-            $table->datetime('arrived_at')->nullable();
-            $table->datetime('delivered_at')->nullable();
+            $table->enum('status', ['pending', 'arrived', 'delivered'])->default('pending'); // chờ giao, đã đến, đã giao
+            $table->datetime('arrived_at')->nullable()->comment('Thời điểm tài xế đến điểm giao');
+            $table->datetime('delivered_at')->nullable()->comment('Thời điểm giao hàng thành công');
             $table->timestamps();
             $table->index(['order_id', 'sequence']);
             $table->index('status');

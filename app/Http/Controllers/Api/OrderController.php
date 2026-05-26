@@ -24,7 +24,13 @@ class OrderController extends Controller
         $user = $request->user();
 
         $orders = Order::query()
-            ->with(['customer', 'vehicle', 'pickupLocation', 'deliveryPoints', 'tripCheckpoints'])
+            ->with([
+                'customer',
+                'vehicle',
+                'pickupLocation',
+                'deliveryPoints',
+                'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
+            ])
             ->where('driver_id', $user->id)
             ->whereIn('status', [
                 OrderStatus::Sent,
@@ -61,7 +67,13 @@ class OrderController extends Controller
             return response()->json(['message' => 'This order is not assigned to you'], 403);
         }
 
-        $order->load(['customer', 'vehicle', 'pickupLocation', 'deliveryPoints', 'tripCheckpoints']);
+        $order->load([
+            'customer',
+            'vehicle',
+            'pickupLocation',
+            'deliveryPoints',
+            'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
+        ]);
 
         return response()->json([
             'data' => OrderResource::make($order),

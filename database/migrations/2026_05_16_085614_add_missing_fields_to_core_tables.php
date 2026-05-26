@@ -22,7 +22,6 @@ return new class extends Migration
             $table->string('off_reason')->nullable()->after('status')->comment('Lý do OFF: BDSC / Đăng kiểm / Bất thường');
         });
 
-
     }
 
     public function down(): void
@@ -34,7 +33,6 @@ return new class extends Migration
         Schema::table('vehicles', function (Blueprint $table) {
             $table->dropColumn(['registration_number', 'door_count', 'off_reason']);
         });
-
 
     }
 };

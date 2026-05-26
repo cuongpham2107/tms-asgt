@@ -19,7 +19,7 @@ class CheckpointRequest extends FormRequest
      * - `checkpoint_type`: loại mốc hành trình.
      * - `occurred_at`, `km_reading`, `gps_lat`, `gps_lng`: thông tin thời gian và vị trí.
      * - `voice_note`: ghi chú chuyển từ voice sang text.
-     * - `photos.*`: ảnh đính kèm cho mốc.
+     * - `photos`: ảnh đính kèm cho mốc (1 file).
      */
     public function rules(): array
     {
@@ -42,10 +42,8 @@ class CheckpointRequest extends FormRequest
             'gps_lng' => 'nullable|numeric',
             // Ghi chú (voice to text).
             'voice_note' => 'nullable|string',
-            // Danh sách ảnh đính kèm.
-            'photos' => 'nullable|array',
-            // Từng ảnh trong danh sách photos.
-            'photos.*' => 'nullable|image|max:10240',
+            // Ảnh đính kèm (1 file).
+            'photos' => 'nullable|image|max:10240',
         ];
     }
 }

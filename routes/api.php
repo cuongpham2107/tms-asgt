@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DriverShiftController;
+use App\Http\Controllers\Api\DriverSwapController;
 use App\Http\Controllers\Api\EmptyKilometerController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\RouteController;
@@ -41,6 +42,9 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
 
     // Trip checkpoints (single endpoint for different types)
     Route::post('/checkpoints', [TripCheckpointController::class, 'checkpoint']);
+
+    // Driver swap (đảo lái)
+    Route::post('/driver-swap', [DriverSwapController::class, 'store']);
 
     // Empty kilometers (ghi nhận km không hàng)
     Route::post('/empty-kilometers', [EmptyKilometerController::class, 'store']);

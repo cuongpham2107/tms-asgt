@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TripCheckpoint extends Model
 {
+    public $timestamps = false;
+
     protected $fillable = [
         'order_id',
         'driver_id',
@@ -25,6 +27,7 @@ class TripCheckpoint extends Model
     protected function casts(): array
     {
         return [
+            'created_at' => 'datetime',
             'occurred_at' => 'datetime',
             'km_reading' => 'decimal:1',
             'gps_lat' => 'decimal:7',
