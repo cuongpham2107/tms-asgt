@@ -78,7 +78,7 @@ class DriverShiftController extends Controller
 
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift)]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -135,7 +135,7 @@ class DriverShiftController extends Controller
 
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift)]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -166,6 +166,6 @@ class DriverShiftController extends Controller
             }
         }
 
-        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift) : null]);
+        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'vehicle'])) : null]);
     }
 }

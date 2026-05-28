@@ -35,6 +35,7 @@ class OrdersTable extends BaseTable
                 'deliveryPoints.location',
                 'orderCategory',
                 'pickupLocation',
+                'tripCheckpoints' => fn ($q) => $q->orderByDesc('occurred_at'),
             ]))
             ->columns([
                 TextColumn::make('order_code')

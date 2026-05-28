@@ -21,7 +21,15 @@ class DriverShiftResource extends JsonResource
         return [
             'id' => $this->id,
             'driver_id' => $this->driver_id,
+            'driver' => $this->whenLoaded('driver', fn () => UserResource::make($this->driver)),
             'vehicle_id' => $this->vehicle_id,
+            'vehicle' => $this->whenLoaded('vehicle', fn () => [
+                'id' => $this->vehicle->id,
+                'plate_number' => $this->vehicle->plate_number,
+                'vehicle_type' => $this->vehicle->vehicle_type,
+                'load_capacity' => $this->vehicle->load_capacity,
+                'current_mileage' => $this->vehicle->current_mileage,
+            ]),
             'shift_type' => $this->shift_type,
             'start_time' => $this->start_time?->toDateTimeString(),
             'start_km' => $this->start_km,

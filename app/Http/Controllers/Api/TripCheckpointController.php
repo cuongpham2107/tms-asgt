@@ -52,7 +52,7 @@ class TripCheckpointController extends Controller
                 'order_id' => $payload['order_id'],
                 'driver_id' => $user->id,
                 'shift_id' => $payload['shift_id'] ?? null,
-                'delivery_point_id' => $payload['delivery_point_id'] ?? null,
+                'delivery_point_id' => $payload['delivery_point_id'] ?? null, // chưa cần start
                 'checkpoint_type' => $payload['checkpoint_type'],
                 'occurred_at' => $payload['occurred_at'] ?? now(),
                 'km_reading' => $payload['km_reading'] ?? null,
@@ -155,7 +155,15 @@ class TripCheckpointController extends Controller
         }
 
         $point = OrderDeliveryPoint::find($deliveryPointId);
-        if ($point === null || $point->status !== OrderDeliveryPointStatus::Pending) {
+        if ($point === null) {
+            return;
+        }
+
+        if ($status === OrderDeliveryPointStatus::Arrived && $point->status !== OrderDeliveryPointStatus::Pending) {
+            return;
+        }
+
+        if ($status === OrderDeliveryPointStatus::Delivered && $point->status === OrderDeliveryPointStatus::Delivered && $point->delivered_at !== null) {
             return;
         }
 

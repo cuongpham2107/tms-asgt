@@ -1,4 +1,5 @@
 <x-filament-panels::page>
+    @vite('resources/css/app.css')
     @php
         $stats = $this->getStats();
         $sidebarVehicles = $this->getSidebarVehicles();
@@ -74,7 +75,7 @@
             {{-- Sidebar --}}
             <div class="w-72 shrink-0 lg:w-80">
                 <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-                    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-gray-700">
+                    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-3 dark:border-gray-700">
                         <span class="text-sm font-semibold text-gray-900 dark:text-white">Danh sách xe</span>
                         <div class="flex items-center gap-2">
                             <span class="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">{{ $selectedCount }}/{{ count($sidebarVehicles) }}</span>
@@ -101,39 +102,40 @@
                     </div>
 
                     <div class="border-b border-gray-100 px-5 py-3 space-y-2 dark:border-gray-700">
-                        <div class="text-xs font-medium text-gray-500">Lọc</div>
+                        <div class="text-xs font-medium text-gray-500 pb-2">
+                            <span>Bộ lọc:</span>
+                        </div>
                         <div class="flex flex-col gap-2">
-                            <x-filament::input.select
-                                wire:model="filterStatus"
-                                wire:change="applyFilterStatusLight"
-                                placeholder="Chọn trạng thái"
-                            >
-                                @foreach([
-                                    'all' => 'Tất cả trạng thái',
-                                    'Running' => 'Đang chạy',
-                                    'On' => 'Sẵn sàng',
-                                    'Bdsc' => 'Bảo dưỡng',
-                                    'Off' => 'Tắt máy',
-                                ] as $val => $label)
-                                    <option value="{{ $val }}">{{ $label }}</option>
-                                @endforeach
-                            </x-filament::input.select>
-
-                            <x-filament::input.select
-                                wire:model="filterVehicleType"
-                                wire:change="applyFilterVehicleTypeLight"
-                                searchable
-                                placeholder="Tất cả loại xe"
-                            >
-                                @foreach($this->getVehicleTypeOptions() as $val => $label)
-                                    <option value="{{ $val }}">{{ $label }}</option>
-                                @endforeach
-                            </x-filament::input.select>
-
-                            <div class="flex gap-2">
-                                <input wire:model="filterDateFrom" wire:change="applyFilterDateLight" type="datetime-local" class="w-1/2 rounded-md border-gray-200 px-2 py-1 text-sm" />
-                                <input wire:model="filterDateTo" wire:change="applyFilterDateLight" type="datetime-local" class="w-1/2 rounded-md border-gray-200 px-2 py-1 text-sm" />
-                            </div>
+                            <x-filament::input.wrapper>
+                                <x-filament::input.select
+                                    wire:model="filterStatus"
+                                    wire:change="applyFilterStatusLight"
+                                    placeholder="Chọn trạng thái"
+                                >
+                                    @foreach([
+                                        'all' => 'Tất cả trạng thái',
+                                        'Running' => 'Đang chạy',
+                                        'On' => 'Sẵn sàng',
+                                        'Bdsc' => 'Bảo dưỡng',
+                                        'Off' => 'Tắt máy',
+                                    ] as $val => $label)
+                                        <option value="{{ $val }}">{{ $label }}</option>
+                                    @endforeach
+                                </x-filament::input.select>
+                            </x-filament::input.wrapper>
+                            <x-filament::input.wrapper>
+                                <x-filament::input.select
+                                    wire:model="filterVehicleType"
+                                    wire:change="applyFilterVehicleTypeLight"
+                                    searchable
+                                    placeholder="Tất cả loại xe"
+                                >
+                                    @foreach($this->getVehicleTypeOptions() as $val => $label)
+                                        <option value="{{ $val }}">{{ $label }}</option>
+                                    @endforeach
+                                </x-filament::input.select>
+                            </x-filament::input.wrapper>
+                           
                         </div>
                     </div>
 

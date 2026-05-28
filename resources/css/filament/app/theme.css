@@ -2,7 +2,7 @@
 
 @source '../../../../app/Filament/**/*';
 @source '../../../../resources/views/filament/resources/*/**';
-@source '../../../../vendor/codewithdennis/filament-advanced-choice/resources/**/*.blade.php';
+@source '../../../../resources/views/filament/pages/*/**';
 @source '../../../../resources/views/filament/forms/*/**';
 @source '../../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
 

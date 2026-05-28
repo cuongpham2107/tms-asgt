@@ -129,12 +129,24 @@ class Order extends Model
     }
 
     /**
-     * Tọa độ pickup cho MapColumn hiển thị bản đồ nhỏ trong bảng.
+     * Tọa độ hiển thị trên bản đồ: ưu tiên checkpoint mới nhất có GPS,
+     * fallback về tọa độ điểm nhận hàng, cuối cùng là mặc định HCM.
      *
      * @return array{lat: float, lng: float}
      */
     public function getMapCoordsAttribute(): array
     {
+        $latestCheckpoint = $this->tripCheckpoints
+            ->sortByDesc('occurred_at')
+            ->first(fn ($c) => $c->gps_lat !== null && $c->gps_lng !== null);
+
+        if ($latestCheckpoint !== null) {
+            return [
+                'lat' => (float) $latestCheckpoint->gps_lat,
+                'lng' => (float) $latestCheckpoint->gps_lng,
+            ];
+        }
+
         $lat = $this->pickupLocation?->lat ?? 10.8231;
         $lng = $this->pickupLocation?->lng ?? 106.6297;
 

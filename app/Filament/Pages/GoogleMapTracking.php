@@ -35,7 +35,7 @@ class GoogleMapTracking extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGlobeAlt;
 
-    protected static ?string $navigationLabel = 'Google Maps Tracking';
+    protected static ?string $navigationLabel = 'Theo dõi thực tế';
 
     protected static string|UnitEnum|null $navigationGroup = 'Tổng quan';
 
@@ -337,7 +337,11 @@ class GoogleMapTracking extends Page
             $activeOrders = $allOrders->filter(
                 fn (Order $o) => in_array($o->status->value, $activeStatuses, true)
             );
-            $trackingOrder = $activeOrders->first();
+            $trackingOrder = $activeOrders
+                ->sortByDesc(fn (Order $o) => $o->tripCheckpoints
+                    ?->filter(fn ($c) => $c->gps_lat !== null && $c->gps_lng !== null)
+                    ->count() ?? 0)
+                ->first();
             $latestShift = $vehicle->driverShifts->first();
             $hasActiveTrip = $trackingOrder !== null && $vehicle->status === VehicleStatus::Running;
 
@@ -345,6 +349,22 @@ class GoogleMapTracking extends Page
                 ? $this->routePointsForOrder($trackingOrder, $vehicle->id, $this->playbackTimestamp)
                 : collect();
             $latestPoint = $routePoints->last();
+
+            if ($latestPoint === null) {
+                $latestCheckpoint = $allOrders
+                    ->flatMap(fn (Order $o) => $o->tripCheckpoints ?? collect())
+                    ->filter(fn ($c) => $c->gps_lat !== null && $c->gps_lng !== null)
+                    ->sortByDesc('occurred_at')
+                    ->first();
+
+                if ($latestCheckpoint !== null) {
+                    $latestPoint = [
+                        'lat' => (float) $latestCheckpoint->gps_lat,
+                        'lng' => (float) $latestCheckpoint->gps_lng,
+                        'label' => $latestCheckpoint->checkpoint_type?->getLabel() ?? 'Checkpoint',
+                    ];
+                }
+            }
 
             // Compute ETA/duration/distance using OSRM for the full route (one call)
             $etaText = null;
@@ -493,7 +513,11 @@ class GoogleMapTracking extends Page
                 $activeOrders = $allOrders->filter(
                     fn (Order $o) => in_array($o->status->value, $activeStatuses, true)
                 );
-                $trackingOrder = $activeOrders->first();
+                $trackingOrder = $activeOrders
+                    ->sortByDesc(fn (Order $o) => $o->tripCheckpoints
+                        ?->filter(fn ($c) => $c->gps_lat !== null && $c->gps_lng !== null)
+                        ->count() ?? 0)
+                    ->first();
 
                 // Chỉ vẽ route khi xe đang chạy và có đơn hàng active
                 if ($trackingOrder === null || $vehicle->status !== VehicleStatus::Running) {

@@ -13,7 +13,10 @@ class ListOrderCategories extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()
+                ->label('Thêm loại đơn hàng')
+                ->modalHeading('Tạo loại đơn hàng mới')
+                ->modalButton('Tạo'),
         ];
     }
 }

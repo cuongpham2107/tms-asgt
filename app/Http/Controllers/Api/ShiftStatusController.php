@@ -38,7 +38,7 @@ class ShiftStatusController extends Controller
             ->value('end_km');
 
         return response()->json([
-            'active_shift' => $activeShift ? DriverShiftResource::make($activeShift) : null,
+            'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'vehicle'])) : null,
             'last_km' => $lastKm,
         ]);
     }
