@@ -3,8 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Models\DriverShift;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class EndShiftRequest extends FormRequest
 {
@@ -26,7 +27,7 @@ class EndShiftRequest extends FormRequest
     public function after(): array
     {
         return [
-            function (Validator $validator) {
+            function (\Illuminate\Validation\Validator $validator) {
                 if ($this->input('end_km') === null) {
                     return;
                 }
@@ -48,5 +49,13 @@ class EndShiftRequest extends FormRequest
                 }
             },
         ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        throw new HttpResponseException(response()->json([
+            'message' => 'Validation failed',
+            'errors' => $validator->errors(),
+        ], 422));
     }
 }

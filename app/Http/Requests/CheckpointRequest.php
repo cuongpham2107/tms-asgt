@@ -3,8 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Models\Order;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class CheckpointRequest extends FormRequest
 {
@@ -32,7 +33,7 @@ class CheckpointRequest extends FormRequest
     public function after(): array
     {
         return [
-            function (Validator $validator) {
+            function (\Illuminate\Validation\Validator $validator) {
                 if ($this->input('km_reading') === null) {
                     return;
                 }
@@ -51,5 +52,13 @@ class CheckpointRequest extends FormRequest
                 }
             },
         ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        throw new HttpResponseException(response()->json([
+            'message' => 'Validation failed',
+            'errors' => $validator->errors(),
+        ], 422));
     }
 }

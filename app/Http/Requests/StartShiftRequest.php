@@ -3,8 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Models\Vehicle;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class StartShiftRequest extends FormRequest
 {
@@ -28,7 +29,7 @@ class StartShiftRequest extends FormRequest
     public function after(): array
     {
         return [
-            function (Validator $validator) {
+            function (\Illuminate\Validation\Validator $validator) {
                 if ($this->input('start_km') === null) {
                     return;
                 }
@@ -46,5 +47,13 @@ class StartShiftRequest extends FormRequest
                 }
             },
         ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        throw new HttpResponseException(response()->json([
+            'message' => 'Validation failed',
+            'errors' => $validator->errors(),
+        ], 422));
     }
 }
