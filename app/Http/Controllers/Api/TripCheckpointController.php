@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\TripCheckpoint;
 use App\Models\TripPhoto;
+use App\Models\Vehicle;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
@@ -21,11 +22,6 @@ use Illuminate\Support\Facades\Storage;
 
 class TripCheckpointController extends Controller
 {
-    /**
-     * Ghi nhận checkpoint chuyến đi (kèm ảnh nếu có).
-     *
-     * @response array{checkpoint: TripCheckpointResource}
-     */
     #[BodyParameter('order_id', type: 'integer', description: 'ID đơn hàng.', required: true, example: 1001)]
     #[BodyParameter('shift_id', type: 'integer', description: 'ID ca trực tương ứng (nếu có).', example: 88)]
     #[BodyParameter('delivery_point_id', type: 'integer', description: 'ID điểm giao cụ thể (nếu đơn có nhiều điểm).', example: 501)]
@@ -52,7 +48,7 @@ class TripCheckpointController extends Controller
                 'order_id' => $payload['order_id'],
                 'driver_id' => $user->id,
                 'shift_id' => $payload['shift_id'] ?? null,
-                'delivery_point_id' => $payload['delivery_point_id'] ?? null, // chưa cần start
+                'delivery_point_id' => $payload['delivery_point_id'] ?? null,
                 'checkpoint_type' => $payload['checkpoint_type'],
                 'occurred_at' => $payload['occurred_at'] ?? now(),
                 'km_reading' => $payload['km_reading'] ?? null,
@@ -61,7 +57,8 @@ class TripCheckpointController extends Controller
                 'voice_note' => $payload['voice_note'] ?? null,
             ]);
 
-            // handle photos upload
+            $this->updateVehicleFromCheckpoint($order, $payload);
+
             if ($request->hasFile('photos')) {
                 $files = Arr::wrap($request->file('photos'));
                 foreach ($files as $file) {
@@ -97,8 +94,40 @@ class TripCheckpointController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            /** @status 500 */
             return response()->json(['message' => 'Unable to record checkpoint', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    private function updateVehicleFromCheckpoint(Order $order, array $payload): void
+    {
+        if ($order->vehicle_id === null) {
+            return;
+        }
+
+        $vehicle = Vehicle::find($order->vehicle_id);
+        if ($vehicle === null) {
+            return;
+        }
+
+        $dirty = false;
+
+        if (isset($payload['km_reading'])) {
+            $vehicle->current_mileage = $payload['km_reading'];
+            $dirty = true;
+        }
+
+        if (isset($payload['gps_lat'])) {
+            $vehicle->gps_lat = $payload['gps_lat'];
+            $dirty = true;
+        }
+
+        if (isset($payload['gps_lng'])) {
+            $vehicle->gps_lng = $payload['gps_lng'];
+            $dirty = true;
+        }
+
+        if ($dirty) {
+            $vehicle->save();
         }
     }
 
@@ -109,6 +138,10 @@ class TripCheckpointController extends Controller
             $order->sent_at = now();
         }
         $order->save();
+
+        if ($order->vehicle_id !== null) {
+            Vehicle::where('id', $order->vehicle_id)->update(['current_driver_id' => $order->driver_id]);
+        }
     }
 
     private function handleArrivedPickup(Order $order, array $payload): void
@@ -144,6 +177,10 @@ class TripCheckpointController extends Controller
         if (! $hasPendingDeliveryPoint) {
             $order->status = OrderStatus::Completed;
             $order->save();
+
+            if ($order->vehicle_id !== null) {
+                Vehicle::where('id', $order->vehicle_id)->update(['current_driver_id' => null]);
+            }
         }
     }
 

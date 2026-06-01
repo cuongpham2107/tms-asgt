@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Order;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class CheckpointRequest extends FormRequest
 {
@@ -11,39 +13,43 @@ class CheckpointRequest extends FormRequest
         return $this->user() !== null;
     }
 
-    /**
-     * Xác thực dữ liệu khi tạo một mốc hành trình.
-     *
-     * - `order_id`: đơn hàng bắt buộc và phải tồn tại.
-     * - `shift_id`, `delivery_point_id`: tuỳ chọn, dùng khi có ca trực hoặc điểm giao cụ thể.
-     * - `checkpoint_type`: loại mốc hành trình.
-     * - `occurred_at`, `km_reading`, `gps_lat`, `gps_lng`: thông tin thời gian và vị trí.
-     * - `voice_note`: ghi chú chuyển từ voice sang text.
-     * - `photos`: ảnh đính kèm cho mốc (1 file).
-     */
     public function rules(): array
     {
         return [
-            // ID đơn hàng cần ghi nhận checkpoint.
             'order_id' => 'required|exists:orders,id',
-            // ID ca trực hiện tại của lái xe (nếu có).
             'shift_id' => 'nullable|exists:driver_shifts,id',
-            // ID điểm giao trong đơn hàng nhiều điểm (nếu có).
             'delivery_point_id' => 'nullable|exists:order_delivery_points,id',
-            // Loại mốc hành trình.
             'checkpoint_type' => 'required|string',
-            // Thời điểm phát sinh mốc.
             'occurred_at' => 'nullable|date',
-            // Chỉ số km đồng hồ.
             'km_reading' => 'nullable|numeric',
-            // Tọa độ vĩ độ.
             'gps_lat' => 'nullable|numeric',
-            // Tọa độ kinh độ.
             'gps_lng' => 'nullable|numeric',
-            // Ghi chú (voice to text).
             'voice_note' => 'nullable|string',
-            // Ảnh đính kèm (1 file).
             'photos' => 'nullable|image|max:10240',
+        ];
+    }
+
+    public function after(): array
+    {
+        return [
+            function (Validator $validator) {
+                if ($this->input('km_reading') === null) {
+                    return;
+                }
+
+                $order = Order::find($this->input('order_id'));
+                if ($order === null || $order->vehicle_id === null) {
+                    return;
+                }
+
+                $vehicle = $order->vehicle;
+                if ($vehicle !== null && (float) $this->input('km_reading') <= (float) $vehicle->current_mileage) {
+                    $validator->errors()->add(
+                        'km_reading',
+                        'Số km đồng hồ phải lớn hơn số km hiện tại của xe ('.number_format((float) $vehicle->current_mileage, 1).' km)',
+                    );
+                }
+            },
         ];
     }
 }

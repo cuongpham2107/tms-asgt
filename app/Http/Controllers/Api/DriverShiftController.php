@@ -73,8 +73,18 @@ class DriverShiftController extends Controller
                 'start_gps_lng' => $payload['start_gps_lng'] ?? null,
             ]);
 
-            // mark vehicle current driver
-            Vehicle::query()->where('id', $payload['vehicle_id'])->update(['current_driver_id' => $user->id]);
+            // update vehicle info
+            $vehicleUpdate = ['current_driver_id' => $user->id];
+            if (isset($payload['start_km'])) {
+                $vehicleUpdate['current_mileage'] = $payload['start_km'];
+            }
+            if (isset($payload['start_gps_lat'])) {
+                $vehicleUpdate['gps_lat'] = $payload['start_gps_lat'];
+            }
+            if (isset($payload['start_gps_lng'])) {
+                $vehicleUpdate['gps_lng'] = $payload['start_gps_lng'];
+            }
+            Vehicle::query()->where('id', $payload['vehicle_id'])->update($vehicleUpdate);
 
             DB::commit();
 
@@ -125,11 +135,21 @@ class DriverShiftController extends Controller
 
             $shift->save();
 
-            // remove vehicle current driver if matches
-            // use direct lookup to avoid calling relation on a non-model (stdClass) in some flows
+            // update vehicle info
             $vehicle = Vehicle::find($shift->vehicle_id);
-            if ($vehicle && $vehicle->current_driver_id === $user->id) {
-                $vehicle->current_driver_id = null;
+            if ($vehicle) {
+                if ($vehicle->current_driver_id === $user->id) {
+                    $vehicle->current_driver_id = null;
+                }
+                if (isset($payload['end_km'])) {
+                    $vehicle->current_mileage = $payload['end_km'];
+                }
+                if (isset($payload['end_gps_lat'])) {
+                    $vehicle->gps_lat = $payload['end_gps_lat'];
+                }
+                if (isset($payload['end_gps_lng'])) {
+                    $vehicle->gps_lng = $payload['end_gps_lng'];
+                }
                 $vehicle->save();
             }
 

@@ -396,9 +396,11 @@ class GoogleMapTracking extends Page
             }
 
             $lat = $latestPoint['lat']
+                ?? $vehicle->gps_lat
                 ?? $latestShift?->start_gps_lat
                 ?? (self::MAP_CENTER[0] + ($vehicle->id % 7 - 3) * 0.005);
             $lng = $latestPoint['lng']
+                ?? $vehicle->gps_lng
                 ?? $latestShift?->start_gps_lng
                 ?? (self::MAP_CENTER[1] + ($vehicle->id % 7 - 3) * 0.005);
 
