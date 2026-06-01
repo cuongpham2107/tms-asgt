@@ -54,8 +54,7 @@ class EndShiftRequest extends FormRequest
     protected function failedValidation(Validator $validator): void
     {
         throw new HttpResponseException(response()->json([
-            'message' => 'Validation failed',
-            'errors' => $validator->errors(),
+            'message' => $validator->errors(),
         ], 422));
     }
 }
