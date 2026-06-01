@@ -42,10 +42,8 @@ class EndShiftRequest extends FormRequest
                 }
 
                 if ((float) $this->input('end_km') <= (float) $shift->start_km) {
-                    $validator->errors()->add(
-                        'end_km',
-                        'Số km kết thúc ca phải lớn hơn số km bắt đầu ca ('.number_format((float) $shift->start_km, 1).' km)',
-                    );
+                    $message = 'Số km kết thúc ca phải lớn hơn số km bắt đầu ca ('.number_format((float) $shift->start_km, 1).' km)';
+                    throw new HttpResponseException(response()->json(['message' => $message], 422));
                 }
             },
         ];

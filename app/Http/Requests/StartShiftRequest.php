@@ -40,10 +40,8 @@ class StartShiftRequest extends FormRequest
                 }
 
                 if ((float) $this->input('start_km') < (float) $vehicle->current_mileage) {
-                    $validator->errors()->add(
-                        'start_km',
-                        'Số km bắt đầu ca phải lớn hơn hoặc bằng số km hiện tại của xe ('.number_format((float) $vehicle->current_mileage, 1).' km)',
-                    );
+                    $message = 'Số km bắt đầu ca phải lớn hơn hoặc bằng số km hiện tại của xe ('.number_format((float) $vehicle->current_mileage, 1).' km)';
+                    throw new HttpResponseException(response()->json(['message' => $message], 422));
                 }
             },
         ];

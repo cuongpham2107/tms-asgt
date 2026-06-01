@@ -45,10 +45,8 @@ class CheckpointRequest extends FormRequest
 
                 $vehicle = $order->vehicle;
                 if ($vehicle !== null && (float) $this->input('km_reading') <= (float) $vehicle->current_mileage) {
-                    $validator->errors()->add(
-                        'km_reading',
-                        'Số km đồng hồ phải lớn hơn số km hiện tại của xe ('.number_format((float) $vehicle->current_mileage, 1).' km)',
-                    );
+                    $message = 'Số km đồng hồ phải lớn hơn số km hiện tại của xe ('.number_format((float) $vehicle->current_mileage, 1).' km)';
+                    throw new HttpResponseException(response()->json(['message' => $message], 422));
                 }
             },
         ];
