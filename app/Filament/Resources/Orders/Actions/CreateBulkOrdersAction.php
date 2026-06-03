@@ -88,6 +88,7 @@ class CreateBulkOrdersAction
                                             ->label('Thời gian dự kiến đóng hàng')
                                             ->seconds(false)
                                             ->native(false)
+                                            ->default(now())
                                             ->required(),
                                     ]),
 

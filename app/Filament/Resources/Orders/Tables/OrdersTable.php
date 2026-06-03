@@ -22,6 +22,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Blade;
@@ -37,7 +38,20 @@ class OrdersTable extends BaseTable
                 'orderCategory',
                 'pickupLocation',
                 'tripCheckpoints' => fn ($q) => $q->orderByDesc('occurred_at'),
-            ]))
+            ])->orderByRaw("CASE
+                WHEN status = 'draft' THEN 1
+                WHEN status = 'assigned' THEN 2
+                WHEN status = 'sent' THEN 3
+                WHEN status = 'started' THEN 4
+                WHEN status = 'arrived_pickup' THEN 5
+                WHEN status = 'delivering' THEN 6
+                WHEN status = 'arrived_delivery' THEN 7
+                WHEN status = 'delivered' THEN 8
+                WHEN status = 'completed' THEN 9
+                WHEN status = 'driver_swap' THEN 10
+                WHEN status = 'cancelled' THEN 11
+                WHEN status = 'trashed' THEN 12
+            END")->orderBy('planned_loading_at'))
             ->columns([
                 TextColumn::make('order_code')
                     ->label('Đơn hàng')
@@ -71,11 +85,12 @@ class OrdersTable extends BaseTable
                     ->static()
                     ->action(
                         Action::make('select')
-                            ->modal()
+                            ->slideOver()
                             ->modalWidth('4xl')
                             ->modalHeading(fn (Order $record): string => 'Bản đồ — '.$record->order_code)
                             ->modalSubmitAction(false)
                             ->modalCancelActionLabel('Đóng')
+                            ->stickyModalFooter()
                             ->modalContent(fn (Order $record): HtmlString => new HtmlString(Blade::render(<<<'BLADE'
                                 <div class="space-y-4">
                                     <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-800">
@@ -172,12 +187,23 @@ class OrdersTable extends BaseTable
             ])
             ->stackedOnMobile()
             ->searchable(false)
+            ->filters([
+                // Filter::make('my_orders')
+                //     ->label('Chỉ đơn của tôi')
+                //     ->default(true)
+                //     ->query(fn (Builder $query): Builder => $query->where('created_by', auth()->id())),
+            ])
             ->recordActions([
+                AssignTransportAction::make(),
                 ActionGroup::make([
-                    ViewAction::make(),
+                    ViewAction::make()
+                        ->slideOver()
+                        ->stickyModalFooter(),
                     EditAction::make()
+                        ->slideOver()
+                        ->stickyModalFooter()
                         ->modalDescription(fn (Order $record): string => 'Loại đơn hàng: '.($record->type?->getLabel() ?? 'Chưa xác định')),
-                    AssignTransportAction::make(),
+
                     SendOrderAction::make(),
                     UnsendOrderAction::make(),
                     DriverSwapAction::make(),
@@ -185,12 +211,14 @@ class OrdersTable extends BaseTable
                     CreateReturnTripAction::make(),
                     CancelOrderAction::make(),
                     DeleteAction::make()
+                        ->slideOver()
                         ->hidden(fn (Order $record): bool => ! $record->status->canDelete())
                         ->requiresConfirmation()
                         ->modalHeading('Xác nhận xóa đơn')
                         ->modalDescription('Bạn chắc chắn muốn xóa đơn hàng này? Chỉ đơn ở trạng thái Nháp hoặc Đã hủy mới có thể xóa.')
                         ->modalSubmitActionLabel('Xóa')
-                        ->modalCancelActionLabel('Hủy'),
+                        ->modalCancelActionLabel('Hủy')
+                        ->stickyModalFooter(),
                     CopyTransportInfoAction::make(),
                 ]),
             ], position: RecordActionsPosition::BeforeColumns);
