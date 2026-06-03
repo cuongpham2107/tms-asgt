@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\DriverShift;
 use App\Models\Vehicle;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -39,8 +40,18 @@ class StartShiftRequest extends FormRequest
                     return;
                 }
 
-                if ((float) $this->input('start_km') < (float) $vehicle->current_mileage) {
-                    $message = 'Số km bắt đầu ca phải lớn hơn hoặc bằng số km hiện tại của xe ('.number_format((float) $vehicle->current_mileage, 1).' km)';
+                $lastShiftKm = DriverShift::where('vehicle_id', $this->input('vehicle_id'))
+                    ->whereNotNull('end_km')
+                    ->orderByDesc('end_time')
+                    ->value('end_km');
+
+                $referenceKm = $lastShiftKm ?? $vehicle->current_mileage;
+
+                if ((float) $this->input('start_km') < (float) $referenceKm) {
+                    $message = sprintf(
+                        'Số km bắt đầu ca phải lớn hơn hoặc bằng km gần nhất của xe (%.1f km)',
+                        $referenceKm
+                    );
                     throw new HttpResponseException(response()->json(['message' => $message], 422));
                 }
             },
