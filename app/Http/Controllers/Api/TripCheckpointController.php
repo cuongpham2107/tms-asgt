@@ -8,6 +8,7 @@ use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
+use App\Models\DriverShift;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\TripCheckpoint;
@@ -147,6 +148,19 @@ class TripCheckpointController extends Controller
     private function handleArrivedPickup(Order $order, array $payload): void
     {
         $order->status = OrderStatus::ArrivedPickup;
+
+        if ($order->shift_id === null) {
+            $shift = DriverShift::where('driver_id', $order->driver_id)
+                ->where('vehicle_id', $order->vehicle_id)
+                ->whereNotNull('start_time')
+                ->whereNull('end_time')
+                ->first();
+
+            if ($shift !== null) {
+                $order->shift_id = $shift->id;
+            }
+        }
+
         $order->save();
 
         $this->updateDeliveryPoint($payload, OrderDeliveryPointStatus::Arrived);

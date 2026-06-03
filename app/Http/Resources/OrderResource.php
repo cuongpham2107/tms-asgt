@@ -24,6 +24,8 @@ class OrderResource extends JsonResource
 
             /** ID khách hàng. */
             'customer_id' => $this->customer_id,
+            /** ID ca làm việc. */
+            'shift_id' => $this->shift_id,
             /** Thông tin khách hàng (nếu được load). */
             'customer' => $this->whenLoaded('customer', fn () => [
                 'id' => $this->customer->id,
