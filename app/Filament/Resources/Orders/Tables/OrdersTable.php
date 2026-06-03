@@ -8,6 +8,7 @@ use App\Filament\Resources\Orders\Actions\CancelOrderAction;
 use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
 use App\Filament\Resources\Orders\Actions\DriverSwapAction;
+use App\Filament\Resources\Orders\Actions\ReassignDriverAction;
 use App\Filament\Resources\Orders\Actions\SendOrderAction;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Models\Order;
@@ -180,6 +181,7 @@ class OrdersTable extends BaseTable
                     SendOrderAction::make(),
                     UnsendOrderAction::make(),
                     DriverSwapAction::make(),
+                    ReassignDriverAction::make(),
                     CreateReturnTripAction::make(),
                     CancelOrderAction::make(),
                     DeleteAction::make()
