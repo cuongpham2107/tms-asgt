@@ -21,8 +21,10 @@ class ReassignDriverAction
             ->icon('heroicon-o-arrow-path')
             ->color('warning')
             ->visible(fn (Order $record): bool => $record->status === OrderStatus::DriverSwap)
+            ->slideOver()
             ->modalHeading('Gán lại tài xế mới')
             ->modalDescription('Đơn hàng đang yêu cầu đảo tài xế. Chọn tài xế mới để tiếp tục xử lý.')
+            ->stickyModalFooter()
             ->form([
                 Select::make('new_driver_id')
                     ->label('Tài xế mới')

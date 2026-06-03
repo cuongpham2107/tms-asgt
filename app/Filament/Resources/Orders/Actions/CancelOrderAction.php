@@ -19,10 +19,12 @@ class CancelOrderAction
             ->color('danger')
             ->hidden(fn (Order $record): bool => ! $record->status->canCancel())
             ->requiresConfirmation()
+            ->slideOver()
             ->modalHeading('Xác nhận huỷ chuyến')
             ->modalDescription('Bạn chắc chắn muốn huỷ chuyến hàng này không?')
             ->modalSubmitActionLabel('Huỷ chuyến')
             ->modalCancelActionLabel('Hủy')
+            ->stickyModalFooter()
             ->form([
                 Textarea::make('cancel_reason')
                     ->label('Lý do huỷ')

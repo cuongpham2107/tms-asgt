@@ -18,10 +18,12 @@ class UnsendOrderAction
             ->color('warning')
             ->hidden(fn (Order $record): bool => ! $record->status->canRecall())
             ->requiresConfirmation()
+            ->slideOver()
             ->modalHeading('Xác nhận thu hồi lệnh')
             ->modalDescription('Bạn chắc chắn muốn thu hồi lệnh cho đơn hàng này không?')
             ->modalSubmitActionLabel('Thu hồi')
             ->modalCancelActionLabel('Hủy')
+            ->stickyModalFooter()
             ->action(function (Order $record): void {
                 try {
                     if (! $record->status->canRecall()) {

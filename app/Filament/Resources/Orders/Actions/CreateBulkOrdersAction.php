@@ -37,6 +37,7 @@ class CreateBulkOrdersAction
             ->size('lg')
             ->icon('heroicon-o-squares-plus')
             ->color('success')
+            ->slideOver()
             ->modal()
             ->modalWidth('5xl')
             ->modalHeading('Tạo/Phân tách nhiều đơn hàng cùng tuyến')

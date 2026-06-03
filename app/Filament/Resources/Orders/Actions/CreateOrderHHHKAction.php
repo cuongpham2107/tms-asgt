@@ -213,6 +213,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->extraAttributes([
                 'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors',
             ])
+            ->slideOver()
             ->modal()
             ->modalWidth('5xl')
             ->modalHeading('Tạo đơn hàng không')

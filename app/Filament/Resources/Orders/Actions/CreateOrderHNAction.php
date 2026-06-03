@@ -268,6 +268,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
             ->extraAttributes([
                 'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#4CAF50] cursor-pointer hover:bg-[#45a049] transition-colors',
             ])
+            ->slideOver()
             ->modal()
             ->modalWidth('5xl')
             ->modalHeading('Tạo đơn hàng ngoài')
