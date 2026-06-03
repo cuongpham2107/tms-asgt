@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\DriverSwapRequest;
 use App\Http\Resources\DriverSwapResource;
 use App\Http\Resources\TripCheckpointResource;
+use App\Models\DriverShift;
 use App\Models\DriverSwap;
 use App\Models\Order;
 use App\Models\TripCheckpoint;
@@ -55,11 +56,33 @@ class DriverSwapController extends Controller
                 ], 422);
             }
 
+            // End the old driver's active shift so they stop accumulating KM
+            $oldShift = DriverShift::where('driver_id', $order->driver_id)
+                ->where('vehicle_id', $order->vehicle_id)
+                ->whereNull('end_time')
+                ->first();
+
+            $fromShiftId = $oldShift?->id;
+
+            if ($oldShift) {
+                $oldShift->end_time = now();
+                $oldShift->save();
+            }
+
+            // Check if the new driver already has an active shift on this vehicle
+            $newShift = DriverShift::where('driver_id', $user->id)
+                ->where('vehicle_id', $order->vehicle_id)
+                ->whereNull('end_time')
+                ->first();
+
+            $toShiftId = $newShift?->id;
+
             $driverSwap = DriverSwap::create([
                 'order_id' => $order->id,
                 'from_driver_id' => $order->driver_id,
                 'to_driver_id' => $user->id,
-                'from_shift_id' => $payload['from_shift_id'] ?? null,
+                'from_shift_id' => $fromShiftId ?? $payload['from_shift_id'] ?? null,
+                'to_shift_id' => $toShiftId,
                 'handover_km' => $payload['handover_km'] ?? null,
                 'reason' => $payload['reason'],
                 'note' => $payload['note'] ?? null,
@@ -69,7 +92,7 @@ class DriverSwapController extends Controller
             $checkpoint = TripCheckpoint::create([
                 'order_id' => $order->id,
                 'driver_id' => $user->id,
-                'shift_id' => $payload['from_shift_id'] ?? null,
+                'shift_id' => $fromShiftId ?? $payload['from_shift_id'] ?? null,
                 'checkpoint_type' => CheckpointType::DriverSwap,
                 'occurred_at' => now(),
                 'km_reading' => $payload['handover_km'] ?? null,
@@ -97,6 +120,7 @@ class DriverSwapController extends Controller
 
             $order->driver_id = $user->id;
             $order->status = OrderStatus::DriverSwap;
+            $order->shift_id = $toShiftId ?? $order->shift_id;
             $order->save();
 
             DB::commit();
