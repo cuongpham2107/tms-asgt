@@ -9,6 +9,7 @@ use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
 use App\Models\Vehicle;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Hidden;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
@@ -48,8 +49,30 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     ->searchPlaceholder('Tìm biển số, loại xe...')
                     ->required(),
                 Hidden::make('driver_id'),
+
+                Checkbox::make('override_shift_check')
+                    ->label('Bỏ qua kiểm tra ca')
+                    ->helperText('Cho phép gán xe dù xe không có ca đang hoạt động')
+                    ->live()
+                    ->visible(fn (Get $get): bool => filled($get('vehicle_id'))),
             ])
             ->action(function (Order $record, array $data): void {
+                $vehicle = Vehicle::find($data['vehicle_id'] ?? null);
+
+                if ($vehicle !== null && ! ($data['override_shift_check'] ?? false)) {
+                    $hasActiveShift = $vehicle->driverShifts()->whereNull('end_time')->exists();
+
+                    if (! $hasActiveShift) {
+                        Notification::make()
+                            ->warning()
+                            ->title('Xe chưa có ca làm việc')
+                            ->body('Xe này hiện không có ca nào đang hoạt động. Đánh dấu "Bỏ qua kiểm tra ca" nếu vẫn muốn gán xe.')
+                            ->send();
+
+                        return;
+                    }
+                }
+
                 try {
                     Order::query()->whereKey($record->id)->update([
                         'vehicle_id' => $data['vehicle_id'] ?? null,
