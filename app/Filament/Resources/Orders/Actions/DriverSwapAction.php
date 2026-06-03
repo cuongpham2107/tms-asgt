@@ -76,7 +76,7 @@ class DriverSwapAction
                     'order_id' => $record->id,
                     'from_driver_id' => $fromDriverId,
                     'to_driver_id' => $toDriverId,
-                    'from_shift_id' => $record->driverShifts()->first()?->id,
+                    'from_shift_id' => $record->shift_id,
                     'handover_km' => $data['handover_km'],
                     'reason' => $data['reason'],
                     'note' => $data['note'] ?? null,
