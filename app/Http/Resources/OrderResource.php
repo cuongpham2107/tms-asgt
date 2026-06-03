@@ -97,6 +97,19 @@ class OrderResource extends JsonResource
             'sent_at' => $this->sent_at?->toIso8601String(),
             /** Thời điểm tạo đơn hàng (ISO 8601). */
             'created_at' => $this->created_at?->toIso8601String(),
+
+            /** Lái xe đã có đơn đang hoạt động hay chưa. */
+            'has_active_order' => Order::where('driver_id', $this->driver_id)
+                ->whereIn('status', [
+                    OrderStatus::Sent,
+                    OrderStatus::Started,
+                    OrderStatus::ArrivedPickup,
+                    OrderStatus::Delivering,
+                    OrderStatus::ArrivedDelivery,
+                    OrderStatus::DriverSwap,
+                ])
+                ->where('id', '!=', $this->id)
+                ->exists(),
         ];
     }
 }
