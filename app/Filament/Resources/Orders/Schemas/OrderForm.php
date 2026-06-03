@@ -4,11 +4,11 @@ namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\CargoType;
 use App\Enums\Priority;
-use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Location;
 use App\Models\OrderCategory;
+use App\Models\Vehicle;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -21,6 +21,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 
@@ -202,21 +203,27 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->columnSpanFull(),
                             ]),
 
-                        Tab::make('Phân xe và lái xe')
+                        Tab::make('Phân xe')
                             ->icon('heroicon-o-truck')
                             ->schema([
                                 VehiclePicker::make('vehicle_id')
                                     ->label('Phương tiện')
+                                    ->live()
+                                    ->afterStateUpdated(function (Set $set, $state): void {
+                                        if ($state) {
+                                            $vehicle = Vehicle::find($state);
+                                            $set('driver_id', $vehicle?->current_driver_id ?? null);
+                                        } else {
+                                            $set('driver_id', null);
+                                        }
+                                    })
                                     ->cards(fn (Get $get): array => self::resolveVehicleCards(
                                         self::normalizeDecimal($get('total_weight')),
                                         self::isHhhkOrder($get) ? self::normalizeInteger($get('pickup_location_id')) : null,
                                         self::normalizeInteger($get('vehicle_id')),
                                     ))
                                     ->searchPlaceholder('Tìm biển số, loại xe...'),
-                                DriverPicker::make('driver_id')
-                                    ->label('Lái xe')
-                                    ->cards(fn (): array => self::resolveDriverCards())
-                                    ->searchPlaceholder('Tìm tên, email...'),
+                                Hidden::make('driver_id'),
                             ]),
                     ])
                     ->columnSpanFull(),

@@ -32,6 +32,7 @@ class Order extends Model
         'planned_loading_at',
         'vehicle_id',
         'driver_id',
+        'shift_id',
         'status',
         'priority',
         'is_return_trip',
@@ -121,6 +122,11 @@ class Order extends Model
     public function returnTrips(): HasMany
     {
         return $this->hasMany(Order::class, 'parent_order_id');
+    }
+
+    public function shift(): BelongsTo
+    {
+        return $this->belongsTo(DriverShift::class);
     }
 
     public function driverSwaps(): HasMany

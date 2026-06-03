@@ -4,14 +4,15 @@ namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
 use App\Enums\VehicleStatus;
-use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
 use App\Models\Vehicle;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Hidden;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Throwable;
 
 class AssignTransportAction extends CreatesOrderTransportCards
@@ -19,29 +20,34 @@ class AssignTransportAction extends CreatesOrderTransportCards
     public static function make(): Action
     {
         return Action::make('assign_transport')
-            ->label('Gán lái, xe')
+            ->label('Gán xe')
             ->icon('heroicon-o-truck')
             ->color('primary')
             ->hidden(fn (Order $record): bool => ! $record->status->canAssign())
             ->modal()
-            ->modalHeading('Gán phương tiện và lái xe')
-            ->modalDescription('Chọn phương tiện và lái xe cho đơn hàng này.')
+            ->modalHeading('Gán phương tiện')
+            ->modalDescription('Chọn phương tiện cho đơn hàng này. Lái xe sẽ tự động gán theo xe.')
             ->modalWidth('5xl')
             ->stickyModalFooter()
             ->schema([
                 VehiclePicker::make('vehicle_id')
                     ->label('Phương tiện')
+                    ->live()
+                    ->afterStateUpdated(function (Set $set, $state): void {
+                        if ($state) {
+                            $vehicle = Vehicle::find($state);
+                            $set('driver_id', $vehicle?->current_driver_id ?? null);
+                        } else {
+                            $set('driver_id', null);
+                        }
+                    })
                     ->cards(fn (Get $get): array => self::resolveVehicleCards(
                         self::normalizeDecimal($get('total_weight') ?? 0),
                         null,
                     ))
                     ->searchPlaceholder('Tìm biển số, loại xe...')
                     ->required(),
-                DriverPicker::make('driver_id')
-                    ->label('Lái xe')
-                    ->cards(fn (): array => self::resolveDriverCards())
-                    ->searchPlaceholder('Tìm tên, email...')
-                    ->required(),
+                Hidden::make('driver_id'),
             ])
             ->action(function (Order $record, array $data): void {
                 try {

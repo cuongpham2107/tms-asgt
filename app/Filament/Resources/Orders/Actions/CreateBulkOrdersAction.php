@@ -100,7 +100,7 @@ class CreateBulkOrdersAction
                                             ->options(fn (): array => Location::query()->pluck('name', 'id')->toArray())->searchable()->preload()
                                             ->native(false)
                                             ->visible(fn (Get $get): bool => $get('order_type_code') === 'HHHK')
-                                            ->required(fn (Get $get): bool => $get('order_type_code') === 'HHHK'),
+                                            ->required(false),
 
                                         // Pickup address for HN
                                         FusedGroup::make([
@@ -154,8 +154,8 @@ class CreateBulkOrdersAction
                                 // Delivery points repeater (Route)
                                 Repeater::make('deliveryPoints')
                                     ->label('Điểm giao hàng (Hành trình chuyến đi)')
-                                    ->minItems(1)
-                                    ->defaultItems(1)
+                                    ->minItems(fn (Get $get): int => $get('order_type_code') === 'external' ? 1 : 0)
+                                    ->defaultItems(fn (Get $get): int => $get('order_type_code') === 'external' ? 1 : 0)
                                     ->collapsible()
                                     ->itemLabel(function (array $state): ?string {
                                         $parts = [];

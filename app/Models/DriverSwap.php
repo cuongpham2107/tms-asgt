@@ -13,6 +13,7 @@ class DriverSwap extends Model
         'from_driver_id',
         'to_driver_id',
         'from_shift_id',
+        'to_shift_id',
         'handover_km',
         'reason',
         'note',
@@ -48,6 +49,11 @@ class DriverSwap extends Model
     public function fromShift(): BelongsTo
     {
         return $this->belongsTo(DriverShift::class, 'from_shift_id');
+    }
+
+    public function toShift(): BelongsTo
+    {
+        return $this->belongsTo(DriverShift::class, 'to_shift_id');
     }
 
     public function createdBy(): BelongsTo
