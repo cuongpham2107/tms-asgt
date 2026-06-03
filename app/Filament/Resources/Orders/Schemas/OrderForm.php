@@ -16,6 +16,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\FusedGroup;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
@@ -211,8 +212,16 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->live()
                                     ->afterStateUpdated(function (Set $set, $state): void {
                                         if ($state) {
-                                            $vehicle = Vehicle::find($state);
+                                            $vehicle = Vehicle::withCount(['driverShifts as active_shift_count' => fn ($q) => $q->whereNull('end_time')])->find($state);
                                             $set('driver_id', $vehicle?->current_driver_id ?? null);
+
+                                            if ($vehicle && $vehicle->active_shift_count === 0) {
+                                                Notification::make()
+                                                    ->warning()
+                                                    ->title('Xe chưa có ca làm việc')
+                                                    ->body('Xe này hiện không có ca nào đang hoạt động. Tài xế sẽ không thể bắt đầu ca mới.')
+                                                    ->send();
+                                            }
                                         } else {
                                             $set('driver_id', null);
                                         }
