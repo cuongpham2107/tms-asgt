@@ -81,7 +81,11 @@ abstract class CreatesOrderTransportCards
         return Vehicle::query()
             ->where(function ($query) use ($selectedVehicleId): void {
                 $query->where('status', 'on')
-                    ->when($selectedVehicleId, fn ($query): mixed => $query->orWhere('id', $selectedVehicleId));
+                    ->whereHas('driverShifts', fn ($q) => $q->whereNull('end_time'));
+
+                if ($selectedVehicleId) {
+                    $query->orWhere('id', $selectedVehicleId);
+                }
             })
             ->with('driver')
             ->withCount([
