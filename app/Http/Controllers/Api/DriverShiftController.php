@@ -8,6 +8,7 @@ use App\Http\Requests\StartShiftRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
 use App\Models\Vehicle;
+use App\Services\ShiftKmCalculatorService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
@@ -129,11 +130,9 @@ class DriverShiftController extends Controller
             $shift->end_gps_lat = $payload['end_gps_lat'] ?? null;
             $shift->end_gps_lng = $payload['end_gps_lng'] ?? null;
 
-            if ($shift->start_km !== null && $shift->end_km !== null) {
-                $shift->total_km = $shift->end_km - $shift->start_km;
-            }
-
             $shift->save();
+
+            app(ShiftKmCalculatorService::class)->calculate($shift);
 
             // update vehicle info
             $vehicle = Vehicle::find($shift->vehicle_id);
