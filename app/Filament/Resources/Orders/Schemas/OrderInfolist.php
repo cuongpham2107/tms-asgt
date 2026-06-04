@@ -161,6 +161,32 @@ class OrderInfolist
                             ])
                             ->columns(3)
                             ->columnSpanFull(),
+                        RepeatableEntry::make('tripCheckpoints')
+                            ->label('Checkpoint hành trình')
+                            ->schema([
+                                TextEntry::make('checkpoint_type')
+                                    ->label('Loại')
+                                    ->badge()
+                                    ->icon('heroicon-o-stop'),
+                                TextEntry::make('occurred_at')
+                                    ->label('Thời điểm')
+                                    ->dateTime('H:i d/m/Y')
+                                    ->placeholder('—'),
+                                TextEntry::make('km_reading')
+                                    ->label('Số km')
+                                    ->numeric()
+                                    ->placeholder('—'),
+                                TextEntry::make('gps_lat')
+                                    ->label('GPS')
+                                    ->formatStateUsing(fn ($state, $record) => $state && $record->gps_lng ? "{$state}, {$record->gps_lng}" : '—')
+                                    ->placeholder('—'),
+                                TextEntry::make('voice_note')
+                                    ->label('Ghi chú')
+                                    ->placeholder('—')
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(3)
+                            ->columnSpanFull(),
                     ])
                     ->columnSpanFull(),
 

@@ -18,12 +18,10 @@ class SendOrderAction
             ->color('success')
             ->hidden(fn (Order $record): bool => ! $record->status->canSend())
             ->requiresConfirmation()
-            ->slideOver()
             ->modalHeading('Xác nhận gửi lệnh')
             ->modalDescription('Bạn chắc chắn muốn gửi lệnh cho đơn hàng này không?')
             ->modalSubmitActionLabel('Gửi')
             ->modalCancelActionLabel('Hủy')
-            ->stickyModalFooter()
             ->action(function (Order $record): void {
                 try {
                     if (! $record->status->canSend()) {

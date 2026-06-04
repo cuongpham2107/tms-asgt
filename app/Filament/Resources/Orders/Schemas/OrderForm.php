@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\CargoType;
+use App\Enums\CheckpointType;
 use App\Enums\Priority;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
@@ -201,6 +202,52 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->numeric(),
                                 Textarea::make('notes')
                                     ->label('Ghi chú')
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Tab::make('Hành trình')
+                            ->icon('heroicon-o-map')
+                            ->schema([
+                                Repeater::make('tripCheckpoints')
+                                    ->label('Checkpoint hành trình')
+                                    ->relationship()
+                                    ->addable(false)
+                                    ->deletable(false)
+                                    ->reorderable(false)
+                                    ->schema([
+                                        Grid::make(12)
+                                            ->schema([
+                                                Select::make('checkpoint_type')
+                                                    ->label('Loại')
+                                                    ->options(CheckpointType::class)
+                                                    ->disabled()
+                                                    ->native(false)
+                                                    ->columnSpan(3),
+                                                DateTimePicker::make('occurred_at')
+                                                    ->label('Thời điểm')
+                                                    ->disabled()
+                                                    ->seconds(false)
+                                                    ->native(false)
+                                                    ->columnSpan(3),
+                                                TextInput::make('km_reading')
+                                                    ->label('Số km')
+                                                    ->disabled()
+                                                    ->numeric()
+                                                    ->columnSpan(2),
+                                                TextInput::make('gps_lat')
+                                                    ->label('Vĩ độ')
+                                                    ->disabled()
+                                                    ->columnSpan(2),
+                                                TextInput::make('gps_lng')
+                                                    ->label('Kinh độ')
+                                                    ->disabled()
+                                                    ->columnSpan(2),
+                                                Textarea::make('voice_note')
+                                                    ->label('Ghi chú')
+                                                    ->disabled()
+                                                    ->columnSpanFull(),
+                                            ]),
+                                    ])
                                     ->columnSpanFull(),
                             ]),
 

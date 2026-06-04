@@ -16,12 +16,10 @@ class BulkCreateOrderAction
             ->label('Tạo nhanh nhiều đơn')
             ->icon('heroicon-o-document-duplicate')
             ->color('gray')
-            ->slideOver()
             ->modal()
             ->modalHeading('Tạo nhanh nhiều đơn')
             ->modalDescription('Sao chép đơn hiện tại thành nhiều bản.')
             ->modalWidth('sm')
-            ->stickyModalFooter()
 
             ->form([
                 TextInput::make('bulk_count')

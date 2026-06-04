@@ -25,7 +25,6 @@ class AssignTransportAction extends CreatesOrderTransportCards
             ->icon('heroicon-o-truck')
             ->color('primary')
             ->hidden(fn (Order $record): bool => ! $record->status->canAssign())
-            ->slideOver()
             ->modal()
             ->modalHeading('Gán phương tiện')
             ->modalDescription('Chọn phương tiện cho đơn hàng này. Lái xe sẽ tự động gán theo xe.')

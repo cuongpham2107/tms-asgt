@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasColumn('orders', 'order_type_id')) {
+            return;
+        }
+
         Schema::table('orders', function (Blueprint $table) {
             $table->dropIndex(['order_type_id', 'order_category_id']);
             $table->dropForeign(['order_type_id']);

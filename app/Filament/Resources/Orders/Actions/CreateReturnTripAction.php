@@ -18,12 +18,10 @@ class CreateReturnTripAction
             ->color('purple')
             ->hidden(fn (Order $record): bool => ! $record->status->canCreateReturn())
             ->requiresConfirmation()
-            ->slideOver()
             ->modalHeading('Xác nhận tạo chuyến quay đầu')
             ->modalDescription('Tạo đơn mới với điểm đi/đến đảo ngược, đánh dấu là chuyến quay đầu.')
             ->modalSubmitActionLabel('Tạo')
             ->modalCancelActionLabel('Hủy')
-            ->stickyModalFooter()
             ->action(function (Order $record): void {
                 try {
                     if (! $record->status->canCreateReturn()) {

@@ -106,7 +106,7 @@ class Order extends Model
 
     public function tripCheckpoints(): HasMany
     {
-        return $this->hasMany(TripCheckpoint::class);
+        return $this->hasMany(TripCheckpoint::class)->orderBy('id');
     }
 
     public function tripPhotos(): HasManyThrough

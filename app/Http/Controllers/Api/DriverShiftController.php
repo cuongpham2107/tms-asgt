@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EndShiftRequest;
 use App\Http\Requests\StartShiftRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
+use App\Models\Order;
 use App\Models\Vehicle;
 use App\Services\ShiftKmCalculatorService;
 use Carbon\Carbon;
@@ -131,6 +133,22 @@ class DriverShiftController extends Controller
             $shift->end_gps_lng = $payload['end_gps_lng'] ?? null;
 
             $shift->save();
+
+            // Auto driver_swap: chuyển đơn đang active sang driver_swap
+            $activeOrders = Order::query()
+                ->where('driver_id', $user->id)
+                ->whereIn('status', [
+                    OrderStatus::Started,
+                    OrderStatus::ArrivedPickup,
+                    OrderStatus::Delivering,
+                    OrderStatus::ArrivedDelivery,
+                ])
+                ->get();
+
+            foreach ($activeOrders as $activeOrder) {
+                $activeOrder->status = OrderStatus::DriverSwap;
+                $activeOrder->save();
+            }
 
             app(ShiftKmCalculatorService::class)->calculate($shift);
 

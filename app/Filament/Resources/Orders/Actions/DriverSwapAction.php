@@ -23,10 +23,8 @@ class DriverSwapAction
             ->icon('heroicon-o-arrow-path')
             ->color('primary')
             ->hidden(fn (Order $record): bool => ! $record->status->canSwapDriver())
-            ->slideOver()
             ->modalHeading('Đảo lái xe')
             ->modalDescription('Chuyển giao đơn hàng cho tài xế mới')
-            ->stickyModalFooter()
             ->form([
                 Select::make('to_driver_id')
                     ->label('Tài xế mới')

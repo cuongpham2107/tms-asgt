@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             OrderTypeCategorySeeder::class,
             DemoOperationsSeeder::class,
             DriverShiftBackfillSeeder::class,
+            FullOrderLifecycleSeeder::class,
         ]);
     }
 }
