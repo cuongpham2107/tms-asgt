@@ -39,8 +39,7 @@ class ReassignDriverAction
                 $oldDriver = $record->driver;
 
                 $oldShift = DriverShift::where('driver_id', $record->driver_id)
-                    ->where('vehicle_id', $record->vehicle_id)
-                    ->latest('start_time')
+                    ->whereNull('end_time')
                     ->first();
 
                 if (! $oldShift) {
@@ -59,7 +58,6 @@ class ReassignDriverAction
                 }
 
                 $newShift = DriverShift::where('driver_id', $data['new_driver_id'])
-                    ->where('vehicle_id', $record->vehicle_id)
                     ->whereNull('end_time')
                     ->first();
 
