@@ -89,9 +89,18 @@ class DriverShiftController extends Controller
             }
             Vehicle::query()->where('id', $payload['vehicle_id'])->update($vehicleUpdate);
 
+            // Create first shift vehicle segment
+            $shift->shiftVehicles()->create([
+                'vehicle_id' => $payload['vehicle_id'],
+                'start_time' => $shift->start_time,
+                'start_km' => $payload['start_km'] ?? null,
+                'start_gps_lat' => $payload['start_gps_lat'] ?? null,
+                'start_gps_lng' => $payload['start_gps_lng'] ?? null,
+            ]);
+
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle']))]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle', 'shiftVehicles.vehicle']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
