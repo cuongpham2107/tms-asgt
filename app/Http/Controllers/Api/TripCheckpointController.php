@@ -143,6 +143,24 @@ class TripCheckpointController extends Controller
         if ($order->vehicle_id !== null) {
             Vehicle::where('id', $order->vehicle_id)->update(['current_driver_id' => $order->driver_id]);
         }
+
+        $shift = DriverShift::where('driver_id', $order->driver_id)
+            ->whereNull('end_time')
+            ->first();
+
+        if ($shift && $order->vehicle_id !== null) {
+            $currentSegment = $shift->currentShiftVehicle();
+            if (! $currentSegment || (int) $currentSegment->vehicle_id !== (int) $order->vehicle_id) {
+                $shift->shiftVehicles()->create([
+                    'vehicle_id' => $order->vehicle_id,
+                    'order_id' => $order->id,
+                    'start_time' => now(),
+                    'start_km' => $currentSegment?->end_km,
+                    'start_gps_lat' => $currentSegment?->end_gps_lat,
+                    'start_gps_lng' => $currentSegment?->end_gps_lng,
+                ]);
+            }
+        }
     }
 
     private function handleArrivedPickup(Order $order, array $payload): void
@@ -151,7 +169,6 @@ class TripCheckpointController extends Controller
 
         if ($order->shift_id === null) {
             $shift = DriverShift::where('driver_id', $order->driver_id)
-                ->where('vehicle_id', $order->vehicle_id)
                 ->whereNotNull('start_time')
                 ->whereNull('end_time')
                 ->first();

@@ -76,6 +76,20 @@ class ReassignDriverAction
                     'shift_id' => $newShift?->id,
                 ]);
 
+                if ($newShift && $record->vehicle_id) {
+                    $currentSegment = $newShift->currentShiftVehicle();
+                    if (! $currentSegment || (int) $currentSegment->vehicle_id !== (int) $record->vehicle_id) {
+                        $newShift->shiftVehicles()->create([
+                            'vehicle_id' => $record->vehicle_id,
+                            'order_id' => $record->id,
+                            'start_time' => now(),
+                            'start_km' => $currentSegment?->end_km,
+                            'start_gps_lat' => $currentSegment?->end_gps_lat,
+                            'start_gps_lng' => $currentSegment?->end_gps_lng,
+                        ]);
+                    }
+                }
+
                 Notification::make()
                     ->success()
                     ->title('Đã gán lại tài xế')
