@@ -42,12 +42,15 @@ class ShiftKmCalculatorService
                     ->exists();
 
                 if ($hasPriorLeftPickup) {
-                    $totalLoadedKm += $completed->km_reading - $shift->start_km;
+                    $totalLoadedKm += $completed->km_reading - ($shift->shiftVehicles()->first()?->start_km ?? $shift->start_km);
                 }
             }
         }
 
-        $shift->total_km = $shift->end_km - $shift->start_km;
+        $totalKm = $shift->shiftVehicles->sum(
+            fn ($sv) => ($sv->end_km ?? 0) - $sv->start_km
+        );
+        $shift->total_km = $totalKm;
         $shift->total_km_loaded = $totalLoadedKm;
         $shift->total_km_empty = $shift->total_km - $totalLoadedKm;
         $shift->save();
