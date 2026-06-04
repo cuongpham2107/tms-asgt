@@ -38,6 +38,7 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::post('/shifts/start', [DriverShiftController::class, 'start']);
     Route::post('/shifts/end', [DriverShiftController::class, 'end']);
     Route::get('/shifts/current', [DriverShiftController::class, 'current']);
+    Route::post('/shifts/switch-vehicle', [DriverShiftController::class, 'switchVehicle']);
 
     // Trip checkpoints (single endpoint for different types)
     Route::post('/checkpoints', [TripCheckpointController::class, 'checkpoint']);

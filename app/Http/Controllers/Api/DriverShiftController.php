@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EndShiftRequest;
 use App\Http\Requests\StartShiftRequest;
+use App\Http\Requests\SwitchVehicleRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
 use App\Models\Order;
@@ -224,5 +225,78 @@ class DriverShiftController extends Controller
         }
 
         return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'vehicle'])) : null]);
+    }
+
+    /**
+     * Chuyển xe giữa ca.
+     *
+     * @response array{shift: DriverShiftResource}
+     */
+    #[BodyParameter('new_vehicle_id', type: 'integer', description: 'ID xe mới.', required: true)]
+    #[BodyParameter('order_id', type: 'integer', description: 'ID đơn hàng tương ứng với xe mới.', required: false)]
+    #[BodyParameter('handover_km', type: 'number', description: 'Km đồng hồ tại thời điểm chuyển xe.', required: true)]
+    public function switchVehicle(SwitchVehicleRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $payload = $request->validated();
+
+        $shift = DriverShift::query()
+            ->where('driver_id', $user->id)
+            ->whereNull('end_time')
+            ->first();
+
+        if (! $shift) {
+            return response()->json(['message' => 'No active shift found'], 404);
+        }
+
+        $currentSegment = $shift->currentShiftVehicle();
+        if (! $currentSegment) {
+            return response()->json(['message' => 'No active vehicle segment found'], 404);
+        }
+
+        if ((int) $currentSegment->vehicle_id === (int) $payload['new_vehicle_id']) {
+            return response()->json(['message' => 'Xe mới phải khác xe hiện tại'], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            // End current segment
+            $currentSegment->end_time = now();
+            $currentSegment->end_km = $payload['handover_km'];
+            $currentSegment->end_gps_lat = $payload['handover_gps_lat'] ?? null;
+            $currentSegment->end_gps_lng = $payload['handover_gps_lng'] ?? null;
+            $currentSegment->save();
+
+            // Create new segment
+            $shift->shiftVehicles()->create([
+                'vehicle_id' => $payload['new_vehicle_id'],
+                'order_id' => $payload['order_id'] ?? null,
+                'start_time' => now(),
+                'start_km' => $payload['handover_km'],
+                'start_gps_lat' => $payload['handover_gps_lat'] ?? null,
+                'start_gps_lng' => $payload['handover_gps_lng'] ?? null,
+            ]);
+
+            // Update old vehicle: remove driver
+            Vehicle::where('id', $currentSegment->vehicle_id)
+                ->where('current_driver_id', $user->id)
+                ->update(['current_driver_id' => null]);
+
+            // Update new vehicle: assign driver + mileage
+            Vehicle::where('id', $payload['new_vehicle_id'])->update([
+                'current_driver_id' => $user->id,
+                'current_mileage' => $payload['handover_km'],
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle', 'shiftVehicles.vehicle'])),
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json(['message' => 'Unable to switch vehicle', 'error' => $e->getMessage()], 500);
+        }
     }
 }
