@@ -7,7 +7,6 @@ use App\Models\TripCheckpoint;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Validation\Rule;
 
 class CheckpointRequest extends FormRequest
 {
@@ -27,7 +26,6 @@ class CheckpointRequest extends FormRequest
             'km_reading' => [
                 'nullable',
                 'numeric',
-                Rule::requiredIf(fn () => $this->input('checkpoint_type') === 'left_pickup'),
             ],
             'gps_lat' => 'nullable|numeric',
             'gps_lng' => 'nullable|numeric',

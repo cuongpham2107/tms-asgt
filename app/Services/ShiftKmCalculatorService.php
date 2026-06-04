@@ -24,12 +24,15 @@ class ShiftKmCalculatorService
         foreach ($orders as $orderId => $points) {
             $completed = $points->firstWhere('checkpoint_type', 'completed');
             $leftPickup = $points->firstWhere('checkpoint_type', 'left_pickup');
+            $arrivedPickup = $points->firstWhere('checkpoint_type', 'arrived_pickup');
 
-            if ($leftPickup?->km_reading !== null) {
+            $loadedStartKm = $leftPickup?->km_reading ?? $arrivedPickup?->km_reading;
+
+            if ($loadedStartKm !== null) {
                 if ($completed?->km_reading !== null) {
-                    $totalLoadedKm += $completed->km_reading - $leftPickup->km_reading;
+                    $totalLoadedKm += $completed->km_reading - $loadedStartKm;
                 } else {
-                    $totalLoadedKm += $shift->end_km - $leftPickup->km_reading;
+                    $totalLoadedKm += $shift->end_km - $loadedStartKm;
                 }
             } elseif ($completed?->km_reading !== null) {
                 $hasPriorLeftPickup = TripCheckpoint::where('order_id', $orderId)
