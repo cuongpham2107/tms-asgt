@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
+use App\Enums\DriverSwapReason;
 use App\Enums\OrderStatus;
 use App\Models\DriverShift;
 use App\Models\Order;
@@ -29,16 +30,30 @@ class ReassignDriverAction
                         ->toArray())
                     ->searchable()
                     ->required(),
+                Select::make('reason')
+                    ->label('Lý do')
+                    ->options(DriverSwapReason::class)
+                    ->required(),
             ])
             ->action(function (Order $record, array $data): void {
                 $oldDriver = $record->driver;
 
                 $oldShift = DriverShift::where('driver_id', $record->driver_id)
                     ->where('vehicle_id', $record->vehicle_id)
-                    ->whereNull('end_time')
+                    ->latest('start_time')
                     ->first();
 
-                if ($oldShift) {
+                if (! $oldShift) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Không thể gán lại tài xế')
+                        ->body('Tài xế cũ chưa có ca trực trên xe này. Vui lòng kiểm tra lại.')
+                        ->send();
+
+                    return;
+                }
+
+                if (! $oldShift->end_time) {
                     $oldShift->end_time = now();
                     $oldShift->save();
                 }
@@ -51,8 +66,9 @@ class ReassignDriverAction
                 $record->driverSwaps()->create([
                     'from_driver_id' => $record->driver_id,
                     'to_driver_id' => $data['new_driver_id'],
-                    'from_shift_id' => $oldShift?->id,
+                    'from_shift_id' => $oldShift->id,
                     'to_shift_id' => $newShift?->id,
+                    'reason' => $data['reason'],
                     'created_by' => auth()->id(),
                 ]);
 
