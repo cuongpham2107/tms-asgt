@@ -37,12 +37,23 @@ class EndShiftRequest extends FormRequest
                     ->whereNull('end_time')
                     ->first();
 
-                if ($shift === null || $shift->start_km === null) {
+                if ($shift === null) {
                     return;
                 }
 
-                if ((float) $this->input('end_km') <= (float) $shift->start_km) {
-                    $message = 'Số km kết thúc ca phải lớn hơn số km bắt đầu ca ('.number_format((float) $shift->start_km, 1).' km)';
+                $currentSegment = $shift->shiftVehicles()
+                    ->whereNull('end_time')
+                    ->latest('start_time')
+                    ->first();
+
+                $referenceKm = $currentSegment?->start_km ?? $shift->start_km;
+
+                if ($referenceKm === null) {
+                    return;
+                }
+
+                if ((float) $this->input('end_km') <= (float) $referenceKm) {
+                    $message = 'Số km kết thúc ca phải lớn hơn số km bắt đầu ca ('.number_format((float) $referenceKm, 1).' km)';
                     throw new HttpResponseException(response()->json(['message' => $message], 422));
                 }
             },

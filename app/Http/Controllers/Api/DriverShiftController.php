@@ -143,6 +143,16 @@ class DriverShiftController extends Controller
 
             $shift->save();
 
+            // End current shift vehicle segment
+            $currentSegment = $shift->currentShiftVehicle();
+            if ($currentSegment) {
+                $currentSegment->end_time = $shift->end_time;
+                $currentSegment->end_km = $payload['end_km'] ?? $shift->end_km;
+                $currentSegment->end_gps_lat = $payload['end_gps_lat'] ?? null;
+                $currentSegment->end_gps_lng = $payload['end_gps_lng'] ?? null;
+                $currentSegment->save();
+            }
+
             // Auto driver_swap: chuyển đơn đang active sang driver_swap
             $activeOrders = Order::query()
                 ->where('driver_id', $user->id)
@@ -161,8 +171,9 @@ class DriverShiftController extends Controller
 
             app(ShiftKmCalculatorService::class)->calculate($shift);
 
-            // update vehicle info
-            $vehicle = Vehicle::find($shift->vehicle_id);
+            // update vehicle info - use last vehicle from segments
+            $lastSegment = $shift->shiftVehicles()->latest('start_time')->first();
+            $vehicle = $lastSegment ? Vehicle::find($lastSegment->vehicle_id) : Vehicle::find($shift->vehicle_id);
             if ($vehicle) {
                 if ($vehicle->current_driver_id === $user->id) {
                     $vehicle->current_driver_id = null;
@@ -181,7 +192,7 @@ class DriverShiftController extends Controller
 
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle']))]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle', 'shiftVehicles.vehicle']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
