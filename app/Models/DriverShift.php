@@ -6,6 +6,7 @@ use App\Enums\ShiftType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\ShiftVehicle;
 
 class DriverShift extends Model
 {
@@ -62,5 +63,15 @@ class DriverShift extends Model
     public function driverSwaps(): HasMany
     {
         return $this->hasMany(DriverSwap::class, 'from_shift_id');
+    }
+
+    public function shiftVehicles(): HasMany
+    {
+        return $this->hasMany(ShiftVehicle::class, 'shift_id');
+    }
+
+    public function currentShiftVehicle(): ?ShiftVehicle
+    {
+        return $this->shiftVehicles()->whereNull('end_time')->latest('start_time')->first();
     }
 }
