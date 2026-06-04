@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DriverShifts\Schemas;
 
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -54,6 +55,37 @@ class DriverShiftInfolist
                             ->formatStateUsing(fn ($record) => $record->end_gps_lat ? "{$record->end_gps_lat}, {$record->end_gps_lng}" : '-'),
                     ])
                     ->columns(2),
+                Section::make('Các xe đã sử dụng trong ca')
+                    ->columnSpanFull()
+                    ->schema([
+                        RepeatableEntry::make('shiftVehicles')
+                            ->label('')
+                            ->schema([
+                                TextEntry::make('vehicle.plate_number')
+                                    ->label('Xe')
+                                    ->icon(Heroicon::OutlinedTruck),
+                                TextEntry::make('order_id')
+                                    ->label('Đơn hàng'),
+                                TextEntry::make('start_time')
+                                    ->label('Bắt đầu')
+                                    ->dateTime(),
+                                TextEntry::make('end_time')
+                                    ->label('Kết thúc')
+                                    ->dateTime(),
+                                TextEntry::make('start_km')
+                                    ->label('Km đầu')
+                                    ->numeric(),
+                                TextEntry::make('end_km')
+                                    ->label('Km cuối')
+                                    ->numeric(),
+                                TextEntry::make('calculated_km')
+                                    ->label('Km')
+                                    ->state(fn ($record) => $record->end_km && $record->start_km
+                                        ? number_format($record->end_km - $record->start_km, 1)
+                                        : '-'),
+                            ])
+                            ->columns(4),
+                    ]),
             ]);
     }
 }

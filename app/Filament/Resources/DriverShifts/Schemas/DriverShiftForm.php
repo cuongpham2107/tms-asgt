@@ -4,6 +4,8 @@ namespace App\Filament\Resources\DriverShifts\Schemas;
 
 use App\Enums\ShiftType;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -69,6 +71,14 @@ class DriverShiftForm
                 TextInput::make('total_km_empty')
                     ->label('Km rỗng')
                     ->numeric(),
+                Section::make('Các xe đã sử dụng')
+                    ->schema([
+                        Placeholder::make('shift_vehicles_info')
+                            ->label('')
+                            ->content(fn ($record) => $record?->shiftVehicles->count()
+                                ? 'Xe '.$record->shiftVehicles->pluck('vehicle.plate_number')->implode(' → ')
+                                : 'Chưa có dữ liệu'),
+                    ]),
             ]);
     }
 }
