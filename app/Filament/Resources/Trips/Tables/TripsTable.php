@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Trips\Tables;
 
 use App\Filament\BaseTable;
 use App\Models\Order;
-use App\Models\TripCheckpoint;
 use Filament\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -24,6 +23,8 @@ class TripsTable extends BaseTable
                     'orderCategory',
                     'pickupLocation',
                     'tripCheckpoints.deliveryPoint.location',
+                    'driverSwaps.fromDriver',
+                    'driverSwaps.toDriver',
                     'vehicle',
                 ])
                 ->where('status', '!=', 'draft')
@@ -103,9 +104,10 @@ class TripsTable extends BaseTable
                     ->label('KM over')
                     ->state(fn (Order $record): string => self::getKmOver($record)),
 
-                // 14. Tên lái xe
-                TextColumn::make('driver.name')
-                    ->label('Tên lái xe')
+                // 14. Lái xe
+                TextColumn::make('drivers')
+                    ->label('Lái xe')
+                    ->state(fn (Order $record): string => self::getDrivers($record))
                     ->searchable(),
 
                 // 15. Trực
@@ -268,8 +270,39 @@ class TripsTable extends BaseTable
 
         return Order::query()
             ->where('vehicle_id', $record->vehicle_id)
-            ->whereDate('planned_loading_at', today())
+            ->whereDate('created_at', today())
             ->count();
+    }
+
+    private static function getDrivers(Order $record): string
+    {
+        $mainDriver = $record->driver;
+
+        $swaps = $record->driverSwaps->sortBy('created_at');
+
+        if ($swaps->isEmpty()) {
+            return $mainDriver?->name ?? '—';
+        }
+
+        $names = [];
+
+        $firstSwap = $swaps->first();
+        $fromDriver = $firstSwap->fromDriver;
+        if ($fromDriver) {
+            $names[] = $fromDriver->name;
+        }
+
+        foreach ($swaps as $swap) {
+            if ($swap->toDriver) {
+                $names[] = $swap->toDriver->name;
+            }
+        }
+
+        if (empty($names)) {
+            return $mainDriver?->name ?? '—';
+        }
+
+        return implode(' → ', array_unique($names));
     }
 
     private static function getShiftLabel(Order $record): string
@@ -322,30 +355,25 @@ class TripsTable extends BaseTable
 
     private static function getKmOver(Order $record): string
     {
-        $vehicle = $record->vehicle;
+        $checkpoints = $record->tripCheckpoints;
 
-        if ($vehicle === null || $vehicle->type !== 'rent') {
+        if ($checkpoints->isEmpty()) {
             return '—';
         }
 
-        // Tổng km của xe thuê trong tháng này
-        $monthlyKm = TripCheckpoint::query()
-            ->whereHas('order', fn ($q) => $q->where('vehicle_id', $vehicle->id))
-            ->whereMonth('occurred_at', now()->month)
-            ->whereYear('occurred_at', now()->year)
-            ->max('km_reading');
+        $firstKm = $checkpoints->first()->km_reading;
+        $lastKm = $checkpoints->last()->km_reading;
 
-        if ($monthlyKm === null) {
+        if ($firstKm === null || $lastKm === null) {
             return '—';
         }
 
-        $limit = 3000;
-        $over = (float) $monthlyKm - $limit;
+        $totalKm = (float) $lastKm - (float) $firstKm;
 
-        if ($over <= 0) {
+        if ($totalKm <= 0) {
             return '—';
         }
 
-        return '+'.number_format($over, 0, ',', '.').' km';
+        return number_format($totalKm, 1, ',', '.').' km';
     }
 }
