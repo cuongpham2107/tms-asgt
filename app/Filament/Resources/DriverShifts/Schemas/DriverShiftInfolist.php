@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\DriverShifts\Schemas;
 
+use App\Models\DriverShift;
 use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\RepeatableEntry\TableColumn as RepeatableTableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -20,9 +22,10 @@ class DriverShiftInfolist
                         TextEntry::make('driver.name')
                             ->label('Lái xe')
                             ->icon(Heroicon::OutlinedUser),
-                        TextEntry::make('vehicle.plate_number')
+                        TextEntry::make('plate_number')
                             ->label('Biển số xe')
-                            ->icon(Heroicon::OutlinedTruck),
+                            ->icon(Heroicon::OutlinedTruck)
+                            ->getStateUsing(fn (DriverShift $record) => $record->firstVehicle()?->plate_number ?? '-'),
                         TextEntry::make('shift_type')
                             ->label('Loại ca')
                             ->icon(Heroicon::OutlinedClock)
@@ -37,29 +40,33 @@ class DriverShiftInfolist
                             ->label('Giờ kế thúc ca')
                             ->icon(Heroicon::OutlinedArrowRightEndOnRectangle)
                             ->dateTime(),
-                        TextEntry::make('start_km')
-                            ->label('Km vào ca')
-                            ->icon(Heroicon::OutlinedSparkles)
-                            ->numeric(),
-                        TextEntry::make('end_km')
-                            ->label('Km kế thúc ca')
+                        TextEntry::make('total_km')
+                            ->label('Tổng km')
                             ->icon(Heroicon::OutlinedSparkles)
                             ->numeric(),
                         TextEntry::make('start_gps_lat')
                             ->label('GPS vào ca')
                             ->icon(Heroicon::OutlinedMapPin)
-                            ->formatStateUsing(fn ($record) => $record->start_gps_lat ? "{$record->start_gps_lat}, {$record->start_gps_lng}" : '-'),
+                            ->formatStateUsing(fn (DriverShift $record) => $record->start_gps_lat ? "{$record->start_gps_lat}, {$record->start_gps_lng}" : '-'),
                         TextEntry::make('end_gps_lat')
                             ->label('GPS kế thúc ca')
                             ->icon(Heroicon::OutlinedMapPin)
-                            ->formatStateUsing(fn ($record) => $record->end_gps_lat ? "{$record->end_gps_lat}, {$record->end_gps_lng}" : '-'),
+                            ->formatStateUsing(fn (DriverShift $record) => $record->end_gps_lat ? "{$record->end_gps_lat}, {$record->end_gps_lng}" : '-'),
                     ])
                     ->columns(2),
                 Section::make('Các xe đã sử dụng trong ca')
                     ->columnSpanFull()
                     ->schema([
                         RepeatableEntry::make('shiftVehicles')
-                            ->label('')
+                            ->label('Danh sách công việc')
+                            ->table([
+                                RepeatableTableColumn::make('Xe'),
+                                RepeatableTableColumn::make('Đơn hàng'),
+                                RepeatableTableColumn::make('Bắt đầu'),
+                                RepeatableTableColumn::make('Kết thúc'),
+                                RepeatableTableColumn::make('Km đầu'),
+                                RepeatableTableColumn::make('Km cuối'),
+                            ])
                             ->schema([
                                 TextEntry::make('vehicle.plate_number')
                                     ->label('Xe')
@@ -78,13 +85,7 @@ class DriverShiftInfolist
                                 TextEntry::make('end_km')
                                     ->label('Km cuối')
                                     ->numeric(),
-                                TextEntry::make('calculated_km')
-                                    ->label('Km')
-                                    ->state(fn ($record) => $record->end_km && $record->start_km
-                                        ? number_format($record->end_km - $record->start_km, 1)
-                                        : '-'),
-                            ])
-                            ->columns(4),
+                            ]),
                     ]),
             ]);
     }

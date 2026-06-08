@@ -29,8 +29,8 @@ class VehicleMapWidget extends Widget
                     ->latest('start_time')
                     ->first();
 
-                $lat = $latestShift?->start_gps_lat ?? self::DEFAULT_MAP_CENTER['lat'];
-                $lng = $latestShift?->start_gps_lng ?? self::DEFAULT_MAP_CENTER['lng'];
+                $lat = $latestShift?->effective_start_gps_lat ?? self::DEFAULT_MAP_CENTER['lat'];
+                $lng = $latestShift?->effective_start_gps_lng ?? self::DEFAULT_MAP_CENTER['lng'];
                 $coordinate = $this->normalizeDemoCoordinate((float) $lat, (float) $lng, $v->id);
 
                 return [

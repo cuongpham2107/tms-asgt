@@ -9,47 +9,50 @@ class ShiftKmCalculatorService
 {
     public function calculate(DriverShift $shift): void
     {
-        if ($shift->start_km === null || $shift->end_km === null) {
-            return;
-        }
+        $shift->refresh();
 
-        $orders = TripCheckpoint::where('shift_id', $shift->id)
-            ->whereIn('checkpoint_type', ['arrived_pickup', 'left_pickup', 'completed'])
-            ->orderBy('occurred_at')
-            ->get()
-            ->groupBy('order_id');
+        $orderIds = TripCheckpoint::where('shift_id', $shift->id)
+            ->whereIn('checkpoint_type', ['started', 'completed'])
+            ->pluck('order_id')
+            ->unique();
 
         $totalLoadedKm = 0;
 
-        foreach ($orders as $orderId => $points) {
-            $completed = $points->firstWhere('checkpoint_type', 'completed');
-            $leftPickup = $points->firstWhere('checkpoint_type', 'left_pickup');
-            $arrivedPickup = $points->firstWhere('checkpoint_type', 'arrived_pickup');
+        foreach ($orderIds as $orderId) {
+            $shiftStartedKm = TripCheckpoint::where('shift_id', $shift->id)
+                ->where('order_id', $orderId)
+                ->where('checkpoint_type', 'started')
+                ->where('km_reading', '!=', null)
+                ->value('km_reading');
 
-            $loadedStartKm = $leftPickup?->km_reading ?? $arrivedPickup?->km_reading;
+            $shiftCompletedKm = TripCheckpoint::where('shift_id', $shift->id)
+                ->where('order_id', $orderId)
+                ->where('checkpoint_type', 'completed')
+                ->where('km_reading', '!=', null)
+                ->value('km_reading');
 
-            if ($loadedStartKm !== null) {
-                if ($completed?->km_reading !== null) {
-                    $totalLoadedKm += $completed->km_reading - $loadedStartKm;
-                } else {
-                    $totalLoadedKm += $shift->end_km - $loadedStartKm;
+            if ($shiftStartedKm !== null && $shiftCompletedKm !== null) {
+                if ($shiftCompletedKm > $shiftStartedKm) {
+                    $totalLoadedKm += $shiftCompletedKm - $shiftStartedKm;
                 }
-            } elseif ($completed?->km_reading !== null) {
-                $hasPriorLeftPickup = TripCheckpoint::where('order_id', $orderId)
-                    ->where('checkpoint_type', 'left_pickup')
-                    ->where('km_reading', '!=', null)
-                    ->where('shift_id', '!=', $shift->id)
-                    ->exists();
-
-                if ($hasPriorLeftPickup) {
-                    $totalLoadedKm += $completed->km_reading - ($shift->shiftVehicles()->first()?->start_km ?? $shift->start_km);
+            } elseif ($shiftStartedKm !== null) {
+                $endKm = $shift->lastSegment()?->end_km;
+                if ($endKm !== null && $endKm > $shiftStartedKm) {
+                    $totalLoadedKm += $endKm - $shiftStartedKm;
+                }
+            } elseif ($shiftCompletedKm !== null) {
+                $startKm = $shift->firstSegment()?->start_km;
+                if ($startKm !== null && $shiftCompletedKm > $startKm) {
+                    $totalLoadedKm += $shiftCompletedKm - $startKm;
                 }
             }
         }
 
-        $totalKm = $shift->shiftVehicles->sum(
-            fn ($sv) => ($sv->end_km ?? 0) - $sv->start_km
-        );
+        $totalKm = $shift->shiftVehicles()
+            ->whereNotNull('end_km')
+            ->get()
+            ->sum(fn ($sv) => (float) $sv->end_km - (float) $sv->start_km);
+
         $shift->total_km = $totalKm;
         $shift->total_km_loaded = $totalLoadedKm;
         $shift->total_km_empty = $shift->total_km - $totalLoadedKm;

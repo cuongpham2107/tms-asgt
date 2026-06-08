@@ -52,10 +52,10 @@ class VehicleSuggestionService
                         ->latest('start_time')
                         ->first();
 
-                    if ($shift && $shift->start_gps_lat && $shift->start_gps_lng) {
+                    if ($shift && $shift->effective_start_gps_lat && $shift->effective_start_gps_lng) {
                         $distance = $this->haversineDistance(
                             (float) $pickupLat, (float) $pickupLng,
-                            (float) $shift->start_gps_lat, (float) $shift->start_gps_lng
+                            (float) $shift->effective_start_gps_lat, (float) $shift->effective_start_gps_lng
                         );
                         // Gần hơn → score thấp hơn (xếp trước)
                         $score += min($distance / 10, 100);

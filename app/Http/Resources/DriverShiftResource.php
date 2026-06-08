@@ -22,31 +22,40 @@ class DriverShiftResource extends JsonResource
             'id' => $this->id,
             'driver_id' => $this->driver_id,
             'driver' => $this->whenLoaded('driver', fn () => UserResource::make($this->driver)),
-            'vehicle_id' => $this->vehicle_id,
-            'vehicle' => $this->whenLoaded('vehicle', fn () => [
-                'id' => $this->vehicle->id,
-                'plate_number' => $this->vehicle->plate_number,
-                'vehicle_type' => $this->vehicle->vehicle_type,
-                'load_capacity' => $this->vehicle->load_capacity,
-                'current_mileage' => $this->vehicle->current_mileage,
-            ]),
+            'vehicle_id' => $this->firstVehicle()?->id,
+            'vehicle' => $this->firstVehicle() ? [
+                'id' => $this->firstVehicle()->id,
+                'plate_number' => $this->firstVehicle()->plate_number,
+                'vehicle_type' => $this->firstVehicle()->vehicle_type,
+                'load_capacity' => $this->firstVehicle()->load_capacity,
+                'current_mileage' => $this->firstVehicle()->current_mileage,
+            ] : null,
             'shift_type' => $this->shift_type,
             'start_time' => $this->start_time?->toDateTimeString(),
-            'start_km' => $this->start_km,
-            /** @var float|null GPS latitude of shift start */
-            'start_gps_lat' => $this->start_gps_lat,
-            /** @var float|null GPS longitude of shift start */
-            'start_gps_lng' => $this->start_gps_lng,
+            'start_km' => $this->effective_start_km,
+            'start_gps_lat' => $this->effective_start_gps_lat,
+            'start_gps_lng' => $this->effective_start_gps_lng,
             'end_time' => $this->end_time?->toDateTimeString(),
-            'end_km' => $this->end_km,
-            /** @var float|null GPS latitude of shift end */
-            'end_gps_lat' => $this->end_gps_lat,
-            /** @var float|null GPS longitude of shift end */
-            'end_gps_lng' => $this->end_gps_lng,
+            'end_km' => $this->effective_end_km,
+            'end_gps_lat' => $this->effective_end_gps_lat,
+            'end_gps_lng' => $this->effective_end_gps_lng,
             'total_km' => $this->total_km,
             'total_km_loaded' => $this->total_km_loaded,
             'total_km_empty' => $this->total_km_empty,
-            /** @var string ISO 8601 */
+            'shift_vehicles' => $this->whenLoaded('shiftVehicles', fn () => $this->shiftVehicles->map(fn ($sv) => [
+                'id' => $sv->id,
+                'vehicle_id' => $sv->vehicle_id,
+                'vehicle' => $sv->vehicle ? [
+                    'id' => $sv->vehicle->id,
+                    'plate_number' => $sv->vehicle->plate_number,
+                ] : null,
+                'order_id' => $sv->order_id,
+                'start_time' => $sv->start_time?->toDateTimeString(),
+                'end_time' => $sv->end_time?->toDateTimeString(),
+                'start_km' => $sv->start_km,
+                'end_km' => $sv->end_km,
+                'calculated_km' => $sv->end_km && $sv->start_km ? $sv->end_km - $sv->start_km : null,
+            ])),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

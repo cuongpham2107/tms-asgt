@@ -3,10 +3,14 @@
 namespace App\Filament\Resources\DriverShifts\Tables;
 
 use App\Filament\BaseTable;
+use App\Filament\Resources\DriverShifts\Actions\EndShiftAction;
+use App\Models\DriverShift;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,13 +20,14 @@ class DriverShiftsTable extends BaseTable
     public static function configure(Table $table): Table
     {
         return parent::applyDefaults($table)
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['driver', 'vehicle']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['driver', 'shiftVehicles.vehicle']))
             ->columns([
                 TextColumn::make('driver.name')
                     ->label('Tài xế')
                     ->searchable(),
-                TextColumn::make('vehicle.id')
+                TextColumn::make('vehicle_id')
                     ->label('Xe')
+                    ->formatStateUsing(fn (DriverShift $record) => $record->firstVehicle()?->plate_number ?? '-')
                     ->searchable(),
                 TextColumn::make('shift_type')
                     ->label('Loại ca')
@@ -32,33 +37,9 @@ class DriverShiftsTable extends BaseTable
                     ->label('Giờ vào ca')
                     ->dateTime()
                     ->sortable(),
-                TextColumn::make('start_km')
-                    ->label('Km vào ca')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('start_gps_lat')
-                    ->label('GPS vào ca (lat)')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('start_gps_lng')
-                    ->label('GPS vào ca (lng)')
-                    ->numeric()
-                    ->sortable(),
                 TextColumn::make('end_time')
                     ->label('Giờ kết thúc ca')
                     ->dateTime()
-                    ->sortable(),
-                TextColumn::make('end_km')
-                    ->label('Km kết thúc ca')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('end_gps_lat')
-                    ->label('GPS kết thúc (lat)')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('end_gps_lng')
-                    ->label('GPS kết thúc (lng)')
-                    ->numeric()
                     ->sortable(),
                 TextColumn::make('total_km')
                     ->label('Tổng km')
@@ -84,8 +65,14 @@ class DriverShiftsTable extends BaseTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
+                ActionGroup::make([
+                    ViewAction::make()
+                        ->slideOver(),
+                    EditAction::make()
+                        ->slideOver(),
+                    EndShiftAction::make(),
+                    DeleteAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

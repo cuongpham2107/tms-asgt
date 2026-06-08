@@ -5,8 +5,7 @@ namespace App\Filament\Resources\Users\Pages;
 use App\Filament\Resources\Users\UserResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\Relation;
+use Filament\Tables\Table;
 
 class ListUsers extends ListRecords
 {
@@ -19,8 +18,9 @@ class ListUsers extends ListRecords
         ];
     }
 
-    protected function getTableQuery(): Builder|Relation|null
+    public function table(Table $table): Table
     {
-        return parent::getTableQuery()?->whereDoesntHave('roles', fn ($q) => $q->where('name', 'driver')) ?? null;
+        return $table
+            ->modifyQueryUsing(fn ($query) => $query->whereHas('roles', fn ($q) => $q->where('name', 'driver')));
     }
 }

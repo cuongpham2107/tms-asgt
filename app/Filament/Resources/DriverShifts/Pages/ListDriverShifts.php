@@ -19,7 +19,8 @@ class ListDriverShifts extends ListRecords
                 ->color('gray')
                 ->icon('heroicon-o-calendar-days')
                 ->url(DriverShiftResource::getUrl('index')),
-            CreateAction::make(),
+            CreateAction::make()
+                ->slideOver(),
         ];
     }
 }

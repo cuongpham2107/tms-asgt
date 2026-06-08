@@ -4,10 +4,10 @@ namespace App\Filament\Resources\DriverShifts\Schemas;
 
 use App\Enums\ShiftType;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Infolists\Components\RepeatableEntry;
-use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -40,37 +40,10 @@ class DriverShiftForm
                             ->label('Kết thúc ca')
                             ->prefixIcon(Heroicon::OutlinedCalendarDays),
                     ]),
-                Section::make('Thông tin xe và km')
-                    ->columns(2)
+                Section::make('Thông tin km')
+                    ->columns(3)
                     ->columnSpanFull()
                     ->schema([
-                        Select::make('vehicle_id')
-                            ->label('Xe')
-                            ->prefixIcon(Heroicon::OutlinedTruck)
-                            ->relationship('vehicle', 'plate_number')
-                            ->required()
-                            ->columnSpanFull(),
-                        TextInput::make('start_km')
-                            ->label('Km bắt đầu')
-                            ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
-                            ->numeric(),
-                        TextInput::make('end_km')
-                            ->label('Km kết thúc')
-                            ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
-                            ->numeric(),
-                        TextInput::make('start_gps_lat')
-                            ->label('GPS bắt đầu')
-                            ->prefixIcon(Heroicon::OutlinedMapPin)
-                            ->numeric(),
-                        TextInput::make('start_gps_lng')
-                            ->label('')
-                            ->numeric(),
-                        TextInput::make('end_gps_lat')
-                            ->label('GPS kết thúc')
-                            ->numeric(),
-                        TextInput::make('end_gps_lng')
-                            ->label('')
-                            ->numeric(),
                         TextInput::make('total_km')
                             ->label('Tổng km')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
@@ -85,33 +58,41 @@ class DriverShiftForm
                 Section::make('Các xe đã sử dụng trong ca')
                     ->columnSpanFull()
                     ->schema([
-                        RepeatableEntry::make('shiftVehicles')
-                            ->label('')
+                        Repeater::make('shiftVehicles')
+                            ->relationship('shiftVehicles')
+                            ->label('Danh sách công việc')
+                            ->table([
+                                TableColumn::make('Xe'),
+                                TableColumn::make('Đơn hàng'),
+                                TableColumn::make('Bắt đầu'),
+                                TableColumn::make('Kết thúc'),
+                                TableColumn::make('Km đầu'),
+                                TableColumn::make('Km cuối'),
+                            ])
                             ->schema([
-                                TextEntry::make('vehicle.plate_number')
+                                Select::make('vehicle_id')
                                     ->label('Xe')
-                                    ->icon(Heroicon::OutlinedTruck),
-                                TextEntry::make('order_id')
-                                    ->label('Đơn hàng'),
-                                TextEntry::make('start_time')
+                                    ->relationship('vehicle', 'plate_number')
+                                    ->required(),
+                                Select::make('order_id')
+                                    ->label('Đơn hàng')
+                                    ->relationship('order', 'order_code')
+                                    ->searchable(),
+                                DateTimePicker::make('start_time')
                                     ->label('Bắt đầu')
-                                    ->dateTime(),
-                                TextEntry::make('end_time')
+                                    ->native(false),
+                                DateTimePicker::make('end_time')
                                     ->label('Kết thúc')
-                                    ->dateTime(),
-                                TextEntry::make('start_km')
+                                    ->native(false),
+                                TextInput::make('start_km')
                                     ->label('Km đầu')
                                     ->numeric(),
-                                TextEntry::make('end_km')
+                                TextInput::make('end_km')
                                     ->label('Km cuối')
                                     ->numeric(),
-                                TextEntry::make('calculated_km')
-                                    ->label('Km')
-                                    ->state(fn ($record) => $record->end_km && $record->start_km
-                                        ? number_format($record->end_km - $record->start_km, 1)
-                                        : '-'),
                             ])
-                            ->columns(4),
+                            ->columns(2)
+                            ->addActionLabel('Thêm xe'),
                     ]),
             ]);
     }
