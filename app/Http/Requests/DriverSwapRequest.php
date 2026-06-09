@@ -3,11 +3,14 @@
 namespace App\Http\Requests;
 
 use App\Enums\DriverSwapReason;
+use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Enum;
 
 class DriverSwapRequest extends FormRequest
 {
+    use NormalizesDecimalInput;
+
     public function authorize(): bool
     {
         return $this->user() !== null;
@@ -25,5 +28,14 @@ class DriverSwapRequest extends FormRequest
             'gps_lng' => 'nullable|numeric',
             'photos' => 'nullable|image|max:10240',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'handover_km' => $this->normalizeDecimal($this->input('handover_km')),
+            'gps_lat' => $this->normalizeDecimal($this->input('gps_lat')),
+            'gps_lng' => $this->normalizeDecimal($this->input('gps_lng')),
+        ]);
     }
 }

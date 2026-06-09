@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\Order;
 use App\Models\TripCheckpoint;
 use Illuminate\Contracts\Validation\Validator;
@@ -10,6 +11,8 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 
 class CheckpointRequest extends FormRequest
 {
+    use NormalizesDecimalInput;
+
     public function authorize(): bool
     {
         return $this->user() !== null;
@@ -32,6 +35,15 @@ class CheckpointRequest extends FormRequest
             'voice_note' => 'nullable|string',
             'photos' => 'nullable|image|max:10240',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'km_reading' => $this->normalizeDecimal($this->input('km_reading')),
+            'gps_lat' => $this->normalizeDecimal($this->input('gps_lat')),
+            'gps_lng' => $this->normalizeDecimal($this->input('gps_lng')),
+        ]);
     }
 
     public function after(): array

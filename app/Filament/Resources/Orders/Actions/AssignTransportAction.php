@@ -60,7 +60,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
                 $vehicle = Vehicle::find($data['vehicle_id'] ?? null);
 
                 if ($vehicle !== null && ! ($data['override_shift_check'] ?? false)) {
-                    $hasActiveShift = $vehicle->driverShifts()->whereNull('end_time')->exists();
+                    $hasActiveShift = $vehicle->driverShifts()->whereNull('driver_shifts.end_time')->exists();
 
                     if (! $hasActiveShift) {
                         Notification::make()

@@ -22,13 +22,13 @@ class DriverShiftCalendarWidget extends FullCalendarWidget
     public function fetchEvents(array $info): array
     {
         return DriverShift::query()
-            ->with(['driver', 'vehicle'])
+            ->with(['driver', 'shiftVehicles.vehicle'])
             ->where('start_time', '>=', $info['start'])
             ->where('start_time', '<=', $info['end'])
             ->get()
             ->map(function (DriverShift $shift) {
                 $driverName = $shift->driver?->name ?? 'Không rõ';
-                $vehiclePlate = $shift->vehicle?->plate_number ?? '';
+                $vehiclePlate = $shift->firstVehicle()?->plate_number ?? '';
                 $shiftLabel = $shift->shift_type?->getLabel() ?? '';
                 $isActive = $shift->end_time === null;
 
@@ -65,9 +65,6 @@ class DriverShiftCalendarWidget extends FullCalendarWidget
                 ->label('Lái xe')
                 ->relationship('driver', 'name')
                 ->required(),
-            Select::make('vehicle_id')
-                ->label('Xe')
-                ->relationship('vehicle', 'plate_number'),
             Select::make('shift_type')
                 ->label('Loại ca')
                 ->options(ShiftType::class)

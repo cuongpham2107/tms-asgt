@@ -33,12 +33,13 @@ class ShiftStatusController extends Controller
         $lastKm = DriverShift::query()
             ->where('driver_id', $user->id)
             ->whereNotNull('end_time')
-            ->whereNotNull('end_km')
-            ->orderByDesc('end_time')
-            ->value('end_km');
+            ->join('shift_vehicles', 'driver_shifts.id', '=', 'shift_vehicles.shift_id')
+            ->whereNotNull('shift_vehicles.end_km')
+            ->orderByDesc('shift_vehicles.end_time')
+            ->value('shift_vehicles.end_km');
 
         return response()->json([
-            'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'vehicle', 'shiftVehicles.vehicle'])) : null,
+            'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'shiftVehicles.vehicle'])) : null,
             'last_km' => $lastKm,
         ]);
     }

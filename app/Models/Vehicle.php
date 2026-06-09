@@ -7,6 +7,7 @@ use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -20,6 +21,11 @@ class Vehicle extends Model
         'make',
         'model_year',
         'load_capacity',
+        'total_weight',
+        'cargo_volume',
+        'box_length',
+        'box_width',
+        'box_height',
         'door_count',
         'fuel_type',
         'current_mileage',
@@ -38,6 +44,11 @@ class Vehicle extends Model
         return [
             'model_year' => 'integer',
             'load_capacity' => 'decimal:2',
+            'total_weight' => 'decimal:2',
+            'cargo_volume' => 'decimal:2',
+            'box_length' => 'integer',
+            'box_width' => 'integer',
+            'box_height' => 'integer',
             'current_mileage' => 'decimal:2',
             'gps_lat' => 'decimal:7',
             'gps_lng' => 'decimal:7',
@@ -58,9 +69,9 @@ class Vehicle extends Model
         return $this->hasMany(Order::class);
     }
 
-    public function driverShifts(): HasMany
+    public function driverShifts(): BelongsToMany
     {
-        return $this->hasMany(DriverShift::class);
+        return $this->belongsToMany(DriverShift::class, 'shift_vehicles', 'vehicle_id', 'shift_id');
     }
 
     public function documents(): HasMany

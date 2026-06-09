@@ -36,11 +36,6 @@ class DriverShift extends Model
         return $this->belongsTo(User::class, 'driver_id');
     }
 
-    public function vehicle(): BelongsTo
-    {
-        return $this->belongsTo(Vehicle::class);
-    }
-
     public function tripCheckpoints(): HasMany
     {
         return $this->hasMany(TripCheckpoint::class, 'shift_id');
@@ -111,38 +106,38 @@ class DriverShift extends Model
         return $this->lastSegment()?->end_gps_lng;
     }
 
-    public function getVehicleIdAttribute($value): ?int
+    public function getVehicleIdAttribute(): ?int
     {
-        return $this->firstVehicle()?->id ?? $value;
+        return $this->firstVehicle()?->id;
     }
 
-    public function getStartKmAttribute($value): ?float
+    public function getStartKmAttribute(): ?float
     {
-        return $this->firstSegment()?->start_km ?? $value;
+        return $this->firstSegment()?->start_km;
     }
 
-    public function getEndKmAttribute($value): ?float
+    public function getEndKmAttribute(): ?float
     {
-        return $this->lastSegment()?->end_km ?? $value;
+        return $this->lastSegment()?->end_km;
     }
 
-    public function getStartGpsLatAttribute($value): ?float
+    public function getStartGpsLatAttribute(): ?float
     {
-        return $this->firstSegment()?->start_gps_lat ?? $value;
+        return $this->firstSegment()?->start_gps_lat;
     }
 
-    public function getStartGpsLngAttribute($value): ?float
+    public function getStartGpsLngAttribute(): ?float
     {
-        return $this->firstSegment()?->start_gps_lng ?? $value;
+        return $this->firstSegment()?->start_gps_lng;
     }
 
-    public function getEndGpsLatAttribute($value): ?float
+    public function getEndGpsLatAttribute(): ?float
     {
-        return $this->lastSegment()?->end_gps_lat ?? $value;
+        return $this->lastSegment()?->end_gps_lat;
     }
 
-    public function getEndGpsLngAttribute($value): ?float
+    public function getEndGpsLngAttribute(): ?float
     {
-        return $this->lastSegment()?->end_gps_lng ?? $value;
+        return $this->lastSegment()?->end_gps_lng;
     }
 }

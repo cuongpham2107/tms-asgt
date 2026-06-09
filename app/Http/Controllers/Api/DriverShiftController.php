@@ -25,10 +25,8 @@ class DriverShiftController extends Controller
      *
      * @response array{shift: DriverShiftResource}
      */
-    #[BodyParameter('vehicle_id', type: 'integer', description: 'ID xe được chọn để bắt đầu ca.', required: true, example: 10)]
     #[BodyParameter('shift_type', type: 'string', description: 'Loại ca làm việc.', required: true, example: 'morning_half')]
     #[BodyParameter('start_time', type: 'string', format: 'date-time', description: 'Thời điểm bắt đầu ca.', example: '2026-05-20T07:15:22Z')]
-    #[BodyParameter('start_km', type: 'number', description: 'Km đồng hồ lúc bắt đầu ca.', example: 10000)]
     #[BodyParameter('start_gps_lat', type: 'string', description: 'Vĩ độ GPS lúc bắt đầu ca.', example: '10,823099')]
     #[BodyParameter('start_gps_lng', type: 'string', description: 'Kinh độ GPS lúc bắt đầu ca.', example: '106,629662')]
     public function start(StartShiftRequest $request): JsonResponse
@@ -54,7 +52,7 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Đã có ca cùng loại vào hôm nay'], 409);
         }
 
-        // Ensure driver does not have an open shift on same vehicle
+        // Ensure driver does not have an open shift
         $existing = DriverShift::query()
             ->where('driver_id', $user->id)
             ->whereNull('end_time')
@@ -71,28 +69,6 @@ class DriverShiftController extends Controller
                 'driver_id' => $user->id,
                 'shift_type' => $payload['shift_type'],
                 'start_time' => $payload['start_time'] ?? now(),
-            ]);
-
-            // update vehicle info
-            $vehicleUpdate = ['current_driver_id' => $user->id];
-            if (isset($payload['start_km'])) {
-                $vehicleUpdate['current_mileage'] = $payload['start_km'];
-            }
-            if (isset($payload['start_gps_lat'])) {
-                $vehicleUpdate['gps_lat'] = $payload['start_gps_lat'];
-            }
-            if (isset($payload['start_gps_lng'])) {
-                $vehicleUpdate['gps_lng'] = $payload['start_gps_lng'];
-            }
-            Vehicle::query()->where('id', $payload['vehicle_id'])->update($vehicleUpdate);
-
-            // Create first shift vehicle segment
-            $shift->shiftVehicles()->create([
-                'vehicle_id' => $payload['vehicle_id'],
-                'start_time' => $shift->start_time,
-                'start_km' => $payload['start_km'] ?? null,
-                'start_gps_lat' => $payload['start_gps_lat'] ?? null,
-                'start_gps_lng' => $payload['start_gps_lng'] ?? null,
             ]);
 
             DB::commit();

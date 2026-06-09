@@ -81,7 +81,7 @@ abstract class CreatesOrderTransportCards
         return Vehicle::query()
             ->where(function ($query) use ($selectedVehicleId): void {
                 $query->where('status', 'on')
-                    ->whereHas('driverShifts', fn ($q) => $q->whereNull('end_time'));
+                    ->whereHas('driverShifts', fn ($q) => $q->whereNull('driver_shifts.end_time'));
 
                 if ($selectedVehicleId) {
                     $query->orWhere('id', $selectedVehicleId);
@@ -227,10 +227,9 @@ abstract class CreatesOrderTransportCards
         return is_numeric($value) ? (int) $value : null;
     }
 
-    protected static function generateOrderCode(?string $date = null): string
+    protected static function generateOrderCode(): string
     {
-        $date ??= now()->format('Ymd');
-        $prefix = 'ORD-'.$date.'-';
+        $prefix = 'ASG-';
 
         $latestOrderCode = Order::query()
             ->where('order_code', 'like', $prefix.'%')
@@ -247,7 +246,7 @@ abstract class CreatesOrderTransportCards
             }
         }
 
-        return sprintf('%s%03d', $prefix, $nextSequence);
+        return sprintf('%s%02d', $prefix, $nextSequence);
     }
 
     protected static function isOrderCodeDuplicate(Throwable $throwable): bool

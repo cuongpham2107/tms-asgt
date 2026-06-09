@@ -22,6 +22,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
+use WatheqAlshowaiter\FilamentStickyTableHeader\StickyTableHeaderPlugin;
 
 class AppPanelProvider extends PanelProvider
 {
@@ -87,6 +88,8 @@ class AppPanelProvider extends PanelProvider
                 FilamentFullCalendarPlugin::make()
                     ->selectable()
                     ->editable(),
+                StickyTableHeaderPlugin::make()
+                    ->shouldScrollToTopOnPageChanged(enabled: true, behavior: 'smooth'),
             ])
             ->authMiddleware([
                 Authenticate::class,
