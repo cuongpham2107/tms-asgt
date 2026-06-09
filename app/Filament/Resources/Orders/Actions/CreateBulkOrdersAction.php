@@ -210,14 +210,14 @@ class CreateBulkOrdersAction
                                                     ->tel()
                                                     ->visible(fn (Get $get): bool => $get('../../order_type_code') === 'external')
                                                     ->columnSpan(3),
-                                                TextInput::make('total_packages')
-                                                    ->label('Số kiện')
-                                                    ->numeric()
-                                                    ->columnSpan(fn (Get $get): int => $get('../../order_type_code') === 'HHHK' ? 3 : 2),
-                                                TextInput::make('total_weight')
-                                                    ->label('Trọng lượng (tấn)')
-                                                    ->numeric()
-                                                    ->columnSpan(fn (Get $get): int => $get('../../order_type_code') === 'HHHK' ? 3 : 3),
+                                                // TextInput::make('total_packages')
+                                                //     ->label('Số kiện')
+                                                //     ->numeric()
+                                                //     ->columnSpan(fn (Get $get): int => $get('../../order_type_code') === 'HHHK' ? 3 : 2),
+                                                // TextInput::make('total_weight')
+                                                //     ->label('Trọng lượng (tấn)')
+                                                //     ->numeric()
+                                                //     ->columnSpan(fn (Get $get): int => $get('../../order_type_code') === 'HHHK' ? 3 : 3),
                                             ]),
                                     ])
                                     ->columnSpanFull(),

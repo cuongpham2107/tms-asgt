@@ -154,14 +154,14 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                                         ->placeholder('Ví dụ: 0901234567')
                                         ->tel()
                                         ->columnSpan(3),
-                                    TextInput::make('total_packages')
-                                        ->label('Số kiện')
-                                        ->numeric()
-                                        ->columnSpan(2),
-                                    TextInput::make('total_weight')
-                                        ->label('Trọng lượng (tấn)')
-                                        ->numeric()
-                                        ->columnSpan(3),
+                                    // TextInput::make('total_packages')
+                                    //     ->label('Số kiện')
+                                    //     ->numeric()
+                                    //     ->columnSpan(2),
+                                    // TextInput::make('total_weight')
+                                    //     ->label('Trọng lượng (tấn)')
+                                    //     ->numeric()
+                                    //     ->columnSpan(3),
                                 ]),
                         ])
                         ->columnSpanFull(),
