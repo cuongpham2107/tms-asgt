@@ -67,7 +67,7 @@ class LocationForm
                     ->afterStateUpdatedJs('
                         const coords = $state;
                         if (coords?.lat) {
-                            const mapEl = $el.querySelector(".leaflet-container");
+                            const mapEl = $el.querySelector(".leaflet-container");  
                             if (mapEl) {
                                 const el = mapEl.closest("[x-data]");
                                 const data = el ? Alpine.$data(el) : null;
