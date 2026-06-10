@@ -25,7 +25,7 @@ class ReassignDriverAction
             ->form([
                 Select::make('new_driver_id')
                     ->label('Tài xế mới')
-                    ->options(fn (): array => User::where('is_active', true)
+                    ->options(fn (): array => User::query()->where('is_active', true)
                         ->pluck('name', 'id')
                         ->toArray())
                     ->searchable()
@@ -38,7 +38,7 @@ class ReassignDriverAction
             ->action(function (Order $record, array $data): void {
                 $oldDriver = $record->driver;
 
-                $oldShift = DriverShift::where('driver_id', $record->driver_id)
+                $oldShift = DriverShift::query()->where('driver_id', $record->driver_id)
                     ->whereNull('end_time')
                     ->first();
 
@@ -57,7 +57,7 @@ class ReassignDriverAction
                     $oldShift->save();
                 }
 
-                $newShift = DriverShift::where('driver_id', $data['new_driver_id'])
+                $newShift = DriverShift::query()->where('driver_id', $data['new_driver_id'])
                     ->whereNull('end_time')
                     ->first();
 

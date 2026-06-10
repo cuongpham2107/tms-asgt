@@ -20,6 +20,8 @@ class ListDriverShifts extends ListRecords
                 ->icon('heroicon-o-calendar-days')
                 ->url(DriverShiftResource::getUrl('index')),
             CreateAction::make()
+                ->label('Tạo ca lái mới')
+                ->icon('heroicon-o-plus')
                 ->slideOver(),
         ];
     }

@@ -25,6 +25,7 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -215,10 +216,10 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ])
             ->slideOver()
             ->modal()
-            ->modalWidth('5xl')
+            ->modalWidth(Width::SevenExtraLarge)
             ->modalHeading('Tạo đơn hàng không')
             ->modalDescription('Tạo đơn hàng không cho khách hàng HHHK')
-            ->stickyModalFooter()
+            ->stickyModalFooter() 
             ->schema([
                 Tabs::make('Tabs')
                     ->tabs($tabs),

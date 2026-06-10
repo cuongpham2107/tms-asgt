@@ -70,7 +70,6 @@ class DriverShiftController extends Controller
                 'shift_type' => $payload['shift_type'],
                 'start_time' => $payload['start_time'] ?? now(),
             ]);
-
             DB::commit();
 
             return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'shiftVehicles.vehicle']))]);

@@ -13,8 +13,8 @@ enum OrderType: string implements HasColor, HasLabel
     public function getLabel(): string
     {
         return match ($this) {
-            self::Hhhk => 'Hàng hóa hàng không (HHHK)',
-            self::External => 'Hàng ngoài (HN)',
+            self::Hhhk => 'HHHK',
+            self::External => 'Hàng ngoài',
         };
     }
 

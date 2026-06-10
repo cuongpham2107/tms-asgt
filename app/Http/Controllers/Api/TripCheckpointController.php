@@ -79,7 +79,7 @@ class TripCheckpointController extends Controller
             }
 
             match ($checkpoint->checkpoint_type) {
-                CheckpointType::Started => $this->handleStarted($order),
+                CheckpointType::Started => $this->handleStarted($order, $payload),
                 CheckpointType::ArrivedPickup => $this->handleArrivedPickup($order, $payload),
                 CheckpointType::LeftPickup => $this->handleLeftPickup($order),
                 CheckpointType::ArrivedDelivery => $this->handleArrivedDelivery($order, $payload),
@@ -132,7 +132,7 @@ class TripCheckpointController extends Controller
         }
     }
 
-    private function handleStarted(Order $order): void
+    private function handleStarted(Order $order, array $payload): void
     {
         $order->status = OrderStatus::Started;
         if ($order->sent_at === null) {
@@ -154,10 +154,10 @@ class TripCheckpointController extends Controller
                 $shift->shiftVehicles()->create([
                     'vehicle_id' => $order->vehicle_id,
                     'order_id' => $order->id,
-                    'start_time' => now(),
-                    'start_km' => $currentSegment?->end_km,
-                    'start_gps_lat' => $currentSegment?->end_gps_lat,
-                    'start_gps_lng' => $currentSegment?->end_gps_lng,
+                    'start_time' => $payload['occurred_at'] ?? now(),
+                    'start_km' => $currentSegment?->end_km ?? $payload['km_reading'] ?? null,
+                    'start_gps_lat' => $payload['gps_lat'] ?? $currentSegment?->end_gps_lat,
+                    'start_gps_lng' => $payload['gps_lng'] ?? $currentSegment?->end_gps_lng,
                 ]);
             }
         }

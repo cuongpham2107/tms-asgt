@@ -232,6 +232,7 @@ abstract class CreatesOrderTransportCards
         $prefix = 'ASG-';
 
         $latestOrderCode = Order::query()
+            ->withTrashed()
             ->where('order_code', 'like', $prefix.'%')
             ->orderByDesc('order_code')
             ->value('order_code');
