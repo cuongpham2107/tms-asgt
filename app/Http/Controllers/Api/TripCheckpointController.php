@@ -140,8 +140,10 @@ class TripCheckpointController extends Controller
         }
         $order->save();
 
+        $vehicleKm = null;
         if ($order->vehicle_id !== null) {
             Vehicle::where('id', $order->vehicle_id)->update(['current_driver_id' => $order->driver_id]);
+            $vehicleKm = Vehicle::where('id', $order->vehicle_id)->value('current_mileage');
         }
 
         $shift = DriverShift::where('driver_id', $order->driver_id)
@@ -155,7 +157,7 @@ class TripCheckpointController extends Controller
                     'vehicle_id' => $order->vehicle_id,
                     'order_id' => $order->id,
                     'start_time' => $payload['occurred_at'] ?? now(),
-                    'start_km' => $currentSegment?->end_km ?? $payload['km_reading'] ?? null,
+                    'start_km' => $vehicleKm ?? $currentSegment?->end_km ?? $payload['km_reading'] ?? null,
                     'start_gps_lat' => $payload['gps_lat'] ?? $currentSegment?->end_gps_lat,
                     'start_gps_lng' => $payload['gps_lng'] ?? $currentSegment?->end_gps_lng,
                 ]);

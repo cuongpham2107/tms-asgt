@@ -53,7 +53,6 @@ test('marks a delivery point delivered and fills delivered_at when completing a 
 
     $shift = DriverShift::create([
         'driver_id' => $driver->id,
-        'vehicle_id' => $vehicle->id,
         'shift_type' => ShiftType::Full,
         'start_time' => now()->subHour(),
     ]);
@@ -103,7 +102,7 @@ test('includes driver information when starting a shift', function () {
     ]);
     $driver->assignRole($driverRole);
 
-    $vehicle = Vehicle::create([
+    Vehicle::create([
         'plate_number' => '51C-543.21',
         'vehicle_type' => VehicleType::Normal,
         'owner' => 'ASGT',
@@ -115,12 +114,9 @@ test('includes driver information when starting a shift', function () {
     Sanctum::actingAs($driver);
 
     $this->postJson('/api/driver/shifts/start', [
-        'vehicle_id' => $vehicle->id,
         'shift_type' => ShiftType::Full->value,
         'start_time' => now()->toIso8601String(),
     ])->assertSuccessful()
         ->assertJsonPath('shift.driver.id', $driver->id)
-        ->assertJsonPath('shift.driver.name', 'Nguyen Van A')
-        ->assertJsonPath('shift.vehicle.id', $vehicle->id)
-        ->assertJsonPath('shift.vehicle.plate_number', '51C-543.21');
+        ->assertJsonPath('shift.driver.name', 'Nguyen Van A');
 });

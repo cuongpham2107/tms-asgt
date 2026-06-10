@@ -155,9 +155,7 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     Sanctum::actingAs($this->driver);
 
     $shiftResponse = $this->postJson('/api/driver/shifts/start', [
-        'vehicle_id' => $this->vehicle->id,
         'shift_type' => ShiftType::Full->value,
-        'start_km' => 15000,
         'start_time' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -169,12 +167,12 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     // ============================================
     // 4. TẠO TRIP CHECKPOINTS CHO TUYẾN A -> B
     // ============================================
-    // 4a. Bắt đầu chuyến (tại kho A, km = start_km của shift_vehicles)
+    // 4a. Bắt đầu chuyến (km tự lấy từ vehicle.current_mileage)
+    $this->vehicle->update(['current_mileage' => 15000]);
     $this->postJson('/api/driver/checkpoints', [
         'order_id' => $order->id,
         'shift_id' => $shift->id,
         'checkpoint_type' => CheckpointType::Started->value,
-        'km_reading' => 15000,
         'gps_lat' => 10.818889,
         'gps_lng' => 106.651944,
         'occurred_at' => now()->toIso8601String(),
@@ -247,11 +245,11 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     // total_km = end_km - start_km = 15100 - 15000 = 100
     expect((float) $shift->total_km)->toBe(100.0);
 
-    // loaded = completed.km (15060) - started.km (15000) = 60
-    expect((float) $shift->total_km_loaded)->toBe(60.0);
+    // loaded = completed.km (15060) - arrived_pickup.km (15005) = 55
+    expect((float) $shift->total_km_loaded)->toBe(55.0);
 
-    // empty = total - loaded = 100 - 60 = 40
-    expect((float) $shift->total_km_empty)->toBe(40.0);
+    // empty = total - loaded = 100 - 55 = 45
+    expect((float) $shift->total_km_empty)->toBe(45.0);
 
     // Kiểm tra driver không còn gắn với xe sau khi hết ca
     expect($this->vehicle->fresh()->current_driver_id)->toBeNull();

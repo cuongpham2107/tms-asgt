@@ -55,9 +55,13 @@ beforeEach(function () {
  *         (tạo)   (gán xe)   (gửi)   (bắt đầu)   (đến lấy)    (rời lấy)    (đến giao)       (hoàn tất)
  *
  * KM kỳ vọng:
- *   total_km       = end_km - start_km          = 10100 - 10000 = 100
- *   total_km_loaded = completed.km - started.km = 10090 - 10000 = 90
- *   total_km_empty  = total_km - total_km_loaded  = 100 - 90 = 10
+ *   total_km       = end_km - start_km                  = 10100 - 10000 = 100
+ *   total_km_loaded = completed.km - arrived_pickup.km  = 10090 - 10010 = 80
+ *   total_km_empty  = total_km - total_km_loaded        = 100 - 80 = 20
+ *
+ * Ghi chú:
+ *   - started.km tự động lấy từ vehicle.current_mileage (ko nhập)
+ *   - Tài xế chỉ nhập km tại arrived_pickup và completed
  */
 test('full HHHK order lifecycle without swap calculates KM correctly', function () {
     $driver = User::factory()->create();
@@ -83,22 +87,22 @@ test('full HHHK order lifecycle without swap calculates KM correctly', function 
 
     Sanctum::actingAs($driver);
 
-    // 1. Start shift
+    // 1. Start shift (ko cần vehicle_id, ko cần start_km)
     $shiftResponse = $this->postJson('/api/driver/shifts/start', [
-        'vehicle_id' => $this->vehicle->id,
         'shift_type' => ShiftType::Full->value,
-        'start_km' => 10000,
         'start_time' => now()->toIso8601String(),
     ])->assertSuccessful();
 
     $shift = DriverShift::find($shiftResponse->json('shift.id'));
 
-    // 2. Started checkpoint
+    // Set vehicle mileage trước — started checkpoint sẽ tự lấy từ xe
+    $this->vehicle->update(['current_mileage' => 10000]);
+
+    // 2. Started checkpoint (ko nhập km, tự lấy từ vehicle.current_mileage)
     $this->postJson('/api/driver/checkpoints', [
         'order_id' => $order->id,
         'shift_id' => $shift->id,
         'checkpoint_type' => CheckpointType::Started->value,
-        'km_reading' => 10000,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
     expect($order->fresh()->status)->toBe(OrderStatus::Started);
@@ -159,30 +163,35 @@ test('full HHHK order lifecycle without swap calculates KM correctly', function 
     // total_km = end_km - start_km = 10100 - 10000 = 100
     expect((float) $shift->total_km)->toBe(100.0);
 
-    // loaded = completed.km (10090) - started.km (10000) = 90
-    expect((float) $shift->total_km_loaded)->toBe(90.0);
+    // loaded = completed.km (10090) - arrived_pickup.km (10010) = 80
+    expect((float) $shift->total_km_loaded)->toBe(80.0);
 
-    // empty = total - loaded = 100 - 90 = 10
-    expect((float) $shift->total_km_empty)->toBe(10.0);
+    // empty = total - loaded = 100 - 80 = 20
+    expect((float) $shift->total_km_empty)->toBe(20.0);
 });
 
 /*
  * Flow: Driver A đi được 1 nửa → kết thúc ca → auto driver_swap → Operator gán Driver B → hoàn tất
  *
  * KM kỳ vọng cho Driver A (in-progress):
- *   total_km_a       = end_km_a - start_km_a      = 10060 - 10000 = 60
- *   loaded_a         = end_km_a - started.km       = 10060 - 10000 = 60
- *   empty_a          = total_km_a - loaded_a       = 60 - 60 = 0
+ *   total_km_a       = end_km_a - start_km_a          = 10060 - 10000 = 60
+ *   loaded_a         = end_km_a - arrived_pickup.km   = 10060 - 10010 = 50
+ *   empty_a          = total_km_a - loaded_a           = 60 - 50 = 10
  *
  * KM kỳ vọng cho Driver B (hoàn tất):
- *   total_km_b       = end_km_b - start_km_b      = 10100 - 10060 = 40
- *   loaded_b         = completed.km - start_km_b   = 10090 - 10060 = 30
- *   empty_b          = total_km_b - loaded_b       = 40 - 30 = 10
+ *   total_km_b       = end_km_b - start_km_b          = 10100 - 10060 = 40
+ *   loaded_b         = completed.km - segment.start_km = 10090 - 10060 = 30
+ *   empty_b          = total_km_b - loaded_b           = 40 - 30 = 10
  *
  * Kiểm tra tổng:
  *   total_trip       = 10100 - 10000 = 100
- *   loaded_total     = 60 + 30 = 90 = completed.km - started.km = 10090 - 10000 ✓
- *   empty_total      = 0 + 10 = 10                 = total_trip - loaded_total ✓
+ *   loaded_total     = 50 + 30 = 80
+ *   empty_total      = 10 + 10 = 20 = total_trip - loaded_total ✓
+ *
+ * Ghi chú:
+ *   - started.km tự động lấy từ vehicle.current_mileage (ko nhập)
+ *   - Driver A có arrived_pickup nhưng ko completed → loaded = segment.end_km - arrived_pickup
+ *   - Driver B có completed nhưng ko arrived_pickup → loaded = completed - segment.start_km
  */
 test('driver swap mid-delivery correctly splits KM between two drivers', function () {
     $driverA = User::factory()->create();
@@ -215,18 +224,18 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
     Sanctum::actingAs($driverA);
 
     $shiftAResponse = $this->postJson('/api/driver/shifts/start', [
-        'vehicle_id' => $this->vehicle->id,
         'shift_type' => ShiftType::Full->value,
-        'start_km' => 10000,
         'start_time' => now()->toIso8601String(),
     ])->assertSuccessful();
     $shiftA = DriverShift::find($shiftAResponse->json('shift.id'));
+
+    // Set vehicle mileage — started checkpoint sẽ tự lấy
+    $this->vehicle->update(['current_mileage' => 10000]);
 
     $this->postJson('/api/driver/checkpoints', [
         'order_id' => $order->id,
         'shift_id' => $shiftA->id,
         'checkpoint_type' => CheckpointType::Started->value,
-        'km_reading' => 10000,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -259,10 +268,10 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
     expect($order->fresh()->status)->toBe(OrderStatus::DriverSwap);
     expect($this->vehicle->fresh()->current_driver_id)->toBeNull();
 
-    // Driver A's KM: total=60, loaded=60 (end_km - started.km), empty=0
+    // Driver A's KM: total=60, loaded=50 (end_km - arrived_pickup.km = 10060-10010), empty=10
     expect((float) $shiftA->total_km)->toBe(60.0);
-    expect((float) $shiftA->total_km_loaded)->toBe(60.0);
-    expect((float) $shiftA->total_km_empty)->toBe(0.0);
+    expect((float) $shiftA->total_km_loaded)->toBe(50.0);
+    expect((float) $shiftA->total_km_empty)->toBe(10.0);
 
     // ============================================
     // PHASE 2: Operator reassigns Driver B
@@ -287,15 +296,14 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
     // ============================================
     Sanctum::actingAs($driverB);
 
+    // Vehicle mileage đã là 10060 từ Driver A's end — started sẽ tự lấy
     $shiftBResponse = $this->postJson('/api/driver/shifts/start', [
-        'vehicle_id' => $this->vehicle->id,
         'shift_type' => ShiftType::Full->value,
-        'start_km' => 10060,
         'start_time' => now()->toIso8601String(),
     ])->assertSuccessful();
     $shiftB = DriverShift::find($shiftBResponse->json('shift.id'));
 
-    // Driver B starts, then goes to delivery point and completes
+    // Driver B starts (ko nhập km, tự lấy từ vehicle = 10060)
     $this->postJson('/api/driver/checkpoints', [
         'order_id' => $order->id,
         'shift_id' => $shiftB->id,
@@ -331,15 +339,15 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
 
     $shiftB->refresh();
 
-    // Driver B's KM: total=40, loaded=30 (cargo on board: completed.km - start_km_b), empty=10
+    // Driver B's KM: total=40, loaded=30 (completed.km - segment.start_km = 10090-10060), empty=10
     expect((float) $shiftB->total_km)->toBe(40.0);
     expect((float) $shiftB->total_km_loaded)->toBe(30.0);
     expect((float) $shiftB->total_km_empty)->toBe(10.0);
 
-    // Cumulative: A(60+0) + B(30+10) = 90+10 = 100 = full trip
+    // Cumulative: A(50+10) + B(30+10) = 80+20 = 100 = full trip
     $totalLoadedKm = (float) $shiftA->total_km_loaded + (float) $shiftB->total_km_loaded;
     $totalEmptyKm = (float) $shiftA->total_km_empty + (float) $shiftB->total_km_empty;
 
-    expect($totalLoadedKm)->toEqual(90.0);
-    expect($totalEmptyKm)->toEqual(10.0);
+    expect($totalLoadedKm)->toEqual(80.0);
+    expect($totalEmptyKm)->toEqual(20.0);
 });

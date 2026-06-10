@@ -19,37 +19,42 @@ class ShiftKmCalculatorService
         $totalLoadedKm = 0;
 
         foreach ($orderIds as $orderId) {
-            $shiftStartedKm = TripCheckpoint::where('shift_id', $shift->id)
+            $arrivedKm = TripCheckpoint::where('shift_id', $shift->id)
                 ->where('order_id', $orderId)
-                ->where('checkpoint_type', 'started')
-                ->where('km_reading', '!=', null)
+                ->where('checkpoint_type', 'arrived_pickup')
+                ->whereNotNull('km_reading')
                 ->value('km_reading');
 
-            $shiftCompletedKm = TripCheckpoint::where('shift_id', $shift->id)
+            $completedKm = TripCheckpoint::where('shift_id', $shift->id)
                 ->where('order_id', $orderId)
                 ->where('checkpoint_type', 'completed')
-                ->where('km_reading', '!=', null)
+                ->whereNotNull('km_reading')
                 ->value('km_reading');
 
-            if ($shiftStartedKm !== null && $shiftCompletedKm !== null) {
-                if ($shiftCompletedKm > $shiftStartedKm) {
-                    $totalLoadedKm += $shiftCompletedKm - $shiftStartedKm;
+            if ($arrivedKm !== null && $completedKm !== null) {
+                if ($completedKm > $arrivedKm) {
+                    $totalLoadedKm += $completedKm - $arrivedKm;
                 }
-            } elseif ($shiftStartedKm !== null) {
-                $endKm = $shift->lastSegment()?->end_km;
-                if ($endKm !== null && $endKm > $shiftStartedKm) {
-                    $totalLoadedKm += $endKm - $shiftStartedKm;
+            } elseif ($arrivedKm !== null) {
+                $endKm = $shift->shiftVehicles()
+                    ->where('order_id', $orderId)
+                    ->value('end_km') ?? $shift->lastSegment()?->end_km;
+                if ($endKm !== null && $endKm > $arrivedKm) {
+                    $totalLoadedKm += $endKm - $arrivedKm;
                 }
-            } elseif ($shiftCompletedKm !== null) {
-                $startKm = $shift->firstSegment()?->start_km;
-                if ($startKm !== null && $shiftCompletedKm > $startKm) {
-                    $totalLoadedKm += $shiftCompletedKm - $startKm;
+            } elseif ($completedKm !== null) {
+                $startKm = $shift->shiftVehicles()
+                    ->where('order_id', $orderId)
+                    ->value('start_km') ?? $shift->firstSegment()?->start_km;
+                if ($startKm !== null && $completedKm > $startKm) {
+                    $totalLoadedKm += $completedKm - $startKm;
                 }
             }
         }
 
         $totalKm = $shift->shiftVehicles()
             ->whereNotNull('end_km')
+            ->whereNotNull('start_km')
             ->get()
             ->sum(fn ($sv) => (float) $sv->end_km - (float) $sv->start_km);
 
