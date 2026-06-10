@@ -81,7 +81,10 @@ abstract class CreatesOrderTransportCards
         return Vehicle::query()
             ->where(function ($query) use ($selectedVehicleId): void {
                 $query->where('status', 'on')
-                    ->whereHas('driverShifts', fn ($q) => $q->whereNull('driver_shifts.end_time'));
+                    ->where(function ($q): void {
+                        $q->whereHas('driverShifts', fn ($sub) => $sub->whereNull('driver_shifts.end_time'))
+                            ->orWhereHas('driver.driverShifts', fn ($sub) => $sub->whereNull('driver_shifts.end_time'));
+                    });
 
                 if ($selectedVehicleId) {
                     $query->orWhere('id', $selectedVehicleId);
