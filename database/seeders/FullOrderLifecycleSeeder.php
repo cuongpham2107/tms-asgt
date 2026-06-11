@@ -123,9 +123,8 @@ class FullOrderLifecycleSeeder extends Seeder
 
         // ── 6. Order Category ─────────────────────────────────────────
         DB::table('order_categories')->updateOrInsert(
-            ['order_type_id' => 1, 'code' => 'DEMO'],
+            ['type' => 'HHHK', 'code' => 'DEMO'],
             [
-                'type' => 'HHHK',
                 'name' => 'Demo Route',
                 'sort_order' => 99,
                 'is_active' => true,
@@ -134,7 +133,7 @@ class FullOrderLifecycleSeeder extends Seeder
             ]
         );
         $categoryId = DB::table('order_categories')
-            ->where('order_type_id', 1)
+            ->where('type', 'HHHK')
             ->where('code', 'DEMO')
             ->value('id');
 

@@ -11,6 +11,7 @@ use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Models\Customer;
 use App\Models\DriverShift;
+use App\Models\DriverSwap;
 use App\Models\Order;
 use App\Models\OrderCategory;
 use App\Models\OrderDeliveryPoint;
@@ -350,4 +351,263 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
 
     expect($totalLoadedKm)->toEqual(80.0);
     expect($totalEmptyKm)->toEqual(20.0);
+});
+
+/*
+ * Flow: Driver A làm 2 đơn — hoàn tất đơn 1 → hết giờ, kết thúc ca → auto driver_swap đơn 2
+ *       → Điều hành dùng DriverSwapAction gán Driver B (đang có ca) → Driver B hoàn tất đơn 2
+ *
+ * KM kỳ vọng:
+ *   Driver A (hoàn tất đơn 1 + đơn 2 dở dang):
+ *     total_km_a       = 10060 - 10000 = 60
+ *     loaded_a         = (10030-10010) + (10060-10040) = 20 + 20 = 40
+ *     empty_a          = 60 - 40 = 20
+ *
+ *   Driver B (hoàn tất đơn 2):
+ *     total_km_b       = 10100 - 10060 = 40
+ *     loaded_b         = 10090 - 10060 = 30 (completed - segment.start_km)
+ *     empty_b          = 40 - 30 = 10
+ *
+ *   Cumulative: loaded=70, empty=30, total=100
+ */
+test('driver with 2 orders runs out of shift time triggers swap via DriverSwapAction', function () {
+    $adminUser = User::factory()->create();
+    $adminUser->assignRole('driver');
+
+    $driverA = User::factory()->create();
+    $driverA->assignRole($this->driverRole);
+
+    $driverB = User::factory()->create();
+    $driverB->assignRole($this->driverRole);
+
+    // ── Order 1 (hoàn tất bởi Driver A) ──────────────────────────────
+    $order1 = Order::create([
+        'order_code' => 'ORD-A1-001',
+        'type' => OrderType::Hhhk,
+        'order_category_id' => $this->orderCategory->id,
+        'customer_id' => $this->customer->id,
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $driverA->id,
+        'status' => OrderStatus::Sent,
+        'is_return_trip' => false,
+        'created_by' => $driverA->id,
+    ]);
+
+    $dp1 = OrderDeliveryPoint::create([
+        'order_id' => $order1->id,
+        'sequence' => 1,
+        'status' => OrderDeliveryPointStatus::Pending,
+    ]);
+
+    // ── Order 2 (bắt đầu bởi Driver A, swap → Driver B hoàn tất) ─────
+    $order2 = Order::create([
+        'order_code' => 'ORD-A2-002',
+        'type' => OrderType::Hhhk,
+        'order_category_id' => $this->orderCategory->id,
+        'customer_id' => $this->customer->id,
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $driverA->id,
+        'status' => OrderStatus::Sent,
+        'is_return_trip' => false,
+        'created_by' => $driverA->id,
+    ]);
+
+    $dp2 = OrderDeliveryPoint::create([
+        'order_id' => $order2->id,
+        'sequence' => 1,
+        'status' => OrderDeliveryPointStatus::Pending,
+    ]);
+
+    // ============================================
+    // PHASE 1: Driver A hoàn tất Order 1
+    // ============================================
+    Sanctum::actingAs($driverA);
+
+    $shiftAResponse = $this->postJson('/api/driver/shifts/start', [
+        'shift_type' => ShiftType::Full->value,
+        'start_time' => now()->toIso8601String(),
+    ])->assertSuccessful();
+    $shiftA = DriverShift::find($shiftAResponse->json('shift.id'));
+
+    $this->vehicle->update(['current_mileage' => 10000]);
+
+    // Order 1: started
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order1->id,
+        'shift_id' => $shiftA->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // Order 1: arrived_pickup (km=10010)
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order1->id,
+        'shift_id' => $shiftA->id,
+        'delivery_point_id' => $dp1->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup->value,
+        'km_reading' => 10010,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+    expect($order1->fresh()->status)->toBe(OrderStatus::ArrivedPickup);
+
+    // Order 1: left_pickup
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order1->id,
+        'shift_id' => $shiftA->id,
+        'checkpoint_type' => CheckpointType::LeftPickup->value,
+        'km_reading' => 10015,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // Order 1: arrived_delivery
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order1->id,
+        'shift_id' => $shiftA->id,
+        'delivery_point_id' => $dp1->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery->value,
+        'km_reading' => 10025,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // Order 1: completed (km=10030)
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order1->id,
+        'shift_id' => $shiftA->id,
+        'delivery_point_id' => $dp1->id,
+        'checkpoint_type' => CheckpointType::Completed->value,
+        'km_reading' => 10030,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+    expect($order1->fresh()->status)->toBe(OrderStatus::Completed);
+
+    // ============================================
+    // PHASE 2: Driver A bắt đầu Order 2, hết ca
+    // ============================================
+
+    // Order 2: started (vehicle mileage = 10030 sau order 1)
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order2->id,
+        'shift_id' => $shiftA->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // Order 2: arrived_pickup (km=10040)
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order2->id,
+        'shift_id' => $shiftA->id,
+        'delivery_point_id' => $dp2->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup->value,
+        'km_reading' => 10040,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // Order 2: left_pickup
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order2->id,
+        'shift_id' => $shiftA->id,
+        'checkpoint_type' => CheckpointType::LeftPickup->value,
+        'km_reading' => 10045,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+    expect($order2->fresh()->status)->toBe(OrderStatus::Delivering);
+
+    // Driver A hết ca → end shift → auto DriverSwap on Order 2
+    $this->postJson('/api/driver/shifts/end', [
+        'end_km' => 10060,
+        'end_time' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    $shiftA->refresh();
+    expect($order2->fresh()->status)->toBe(OrderStatus::DriverSwap);
+    expect($order1->fresh()->status)->toBe(OrderStatus::Completed);
+
+    // Driver A's KM: total=60, loaded=40, empty=20
+    expect((float) $shiftA->total_km)->toBe(60.0);
+    expect((float) $shiftA->total_km_loaded)->toBe(40.0);
+    expect((float) $shiftA->total_km_empty)->toBe(20.0);
+
+    // ============================================
+    // PHASE 3: Driver B vào ca → Điều hành swap
+    // ============================================
+    Sanctum::actingAs($driverB);
+
+    $shiftBResponse = $this->postJson('/api/driver/shifts/start', [
+        'shift_type' => ShiftType::Full->value,
+        'start_time' => now()->toIso8601String(),
+    ])->assertSuccessful();
+    $shiftB = DriverShift::find($shiftBResponse->json('shift.id'));
+
+    // Simulate DriverSwapAction::make() do điều hành thực hiện
+    DriverSwap::create([
+        'order_id' => $order2->id,
+        'from_driver_id' => $driverA->id,
+        'to_driver_id' => $driverB->id,
+        'from_shift_id' => $shiftA->id,
+        'to_shift_id' => $shiftB->id,
+        'handover_km' => 10060,
+        'reason' => DriverSwapReason::ShiftHandover,
+        'note' => 'Hết ca, bàn giao cho tài xế B',
+        'created_by' => $adminUser->id,
+    ]);
+
+    $order2->update([
+        'driver_id' => $driverB->id,
+        'status' => OrderStatus::DriverSwap,
+    ]);
+
+    // Driver B được gán shift_id cho order
+    $order2->update(['shift_id' => $shiftB->id]);
+
+    // ============================================
+    // PHASE 4: Driver B hoàn tất Order 2
+    // ============================================
+
+    // Vehicle mileage = 10060 từ khi Driver A kết thúc
+    // Order 2: started (ko nhập km, tự lấy từ xe = 10060)
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order2->id,
+        'shift_id' => $shiftB->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // Order 2: arrived_delivery
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order2->id,
+        'shift_id' => $shiftB->id,
+        'delivery_point_id' => $dp2->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery->value,
+        'km_reading' => 10080,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+    expect($order2->fresh()->status)->toBe(OrderStatus::ArrivedDelivery);
+
+    // Order 2: completed
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order2->id,
+        'shift_id' => $shiftB->id,
+        'delivery_point_id' => $dp2->id,
+        'checkpoint_type' => CheckpointType::Completed->value,
+        'km_reading' => 10090,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+    expect($order2->fresh()->status)->toBe(OrderStatus::Completed);
+
+    // Driver B kết thúc ca
+    $this->postJson('/api/driver/shifts/end', [
+        'end_km' => 10100,
+        'end_time' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    $shiftB->refresh();
+
+    // Driver B's KM: total=40, loaded=30, empty=10
+    expect((float) $shiftB->total_km)->toBe(40.0);
+    expect((float) $shiftB->total_km_loaded)->toBe(30.0);
+    expect((float) $shiftB->total_km_empty)->toBe(10.0);
+
+    // Cumulative
+    expect((float) $shiftA->total_km_loaded + (float) $shiftB->total_km_loaded)->toEqual(70.0);
+    expect((float) $shiftA->total_km_empty + (float) $shiftB->total_km_empty)->toEqual(30.0);
 });

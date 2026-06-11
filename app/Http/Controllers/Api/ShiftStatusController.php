@@ -32,7 +32,7 @@ class ShiftStatusController extends Controller
         // Get last completed shift's end_km (for pre-filling start km)
         $lastKm = DriverShift::query()
             ->where('driver_id', $user->id)
-            ->whereNotNull('end_time')
+            ->whereNotNull('driver_shifts.end_time')
             ->join('shift_vehicles', 'driver_shifts.id', '=', 'shift_vehicles.shift_id')
             ->whereNotNull('shift_vehicles.end_km')
             ->orderByDesc('shift_vehicles.end_time')
