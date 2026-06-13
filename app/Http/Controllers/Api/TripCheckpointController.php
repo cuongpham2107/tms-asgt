@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
 use App\Models\DriverShift;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\TripCheckpoint;
@@ -41,6 +42,15 @@ class TripCheckpointController extends Controller
         try {
             $order = Order::findOrFail($payload['order_id']);
 
+            if ($payload['checkpoint_type'] === CheckpointType::ArrivedDelivery->value
+                && $order->deliveryPoints()->count() === 0
+                && empty($payload['delivery_point_id'])
+                && empty($payload['new_delivery_location_id'])) {
+                return response()->json([
+                    'message' => 'Đơn hàng chưa có điểm đến. Vui lòng chọn điểm giao hàng.',
+                ], 422);
+            }
+
             if ($order->driver_id !== $user->id) {
                 return response()->json(['message' => 'Bạn không phải tài xế được gán cho đơn hàng này'], 403);
             }
@@ -57,6 +67,22 @@ class TripCheckpointController extends Controller
                 'gps_lng' => $payload['gps_lng'] ?? null,
                 'voice_note' => $payload['voice_note'] ?? null,
             ]);
+
+            if ($checkpoint->checkpoint_type === CheckpointType::ArrivedDelivery
+                && $order->deliveryPoints()->count() === 0
+                && empty($payload['delivery_point_id'])
+                && ! empty($payload['new_delivery_location_id'])) {
+
+                $deliveryPoint = $order->deliveryPoints()->create([
+                    'location_id' => $payload['new_delivery_location_id'],
+                    'sequence' => 1,
+                    'address' => Location::find($payload['new_delivery_location_id'])?->address,
+                    'status' => OrderDeliveryPointStatus::Pending,
+                ]);
+
+                $checkpoint->update(['delivery_point_id' => $deliveryPoint->id]);
+                $payload['delivery_point_id'] = $deliveryPoint->id;
+            }
 
             $this->updateVehicleFromCheckpoint($order, $payload);
 
