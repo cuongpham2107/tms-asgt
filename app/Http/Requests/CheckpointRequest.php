@@ -24,6 +24,7 @@ class CheckpointRequest extends FormRequest
             'order_id' => 'required|exists:orders,id',
             'shift_id' => 'nullable|exists:driver_shifts,id',
             'delivery_point_id' => 'nullable|exists:order_delivery_points,id',
+            'new_delivery_location_id' => 'nullable|exists:locations,id',
             'checkpoint_type' => 'required|string',
             'occurred_at' => 'nullable|date',
             'km_reading' => [
