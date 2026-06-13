@@ -125,12 +125,7 @@
         </div>
 
         {{-- Cards Grid --}}
-        <div class="grid max-h-[420px] gap-2.5 overflow-y-auto pr-0.5 custom-scrollbar"
-            :class="{
-                'sm:grid-cols-3': activeTab !== 'suggested',
-                'sm:grid-cols-1 w-full': activeTab === 'suggested' && visibleCards().length === 1,
-                'sm:grid-cols-2': activeTab === 'suggested' && visibleCards().length >= 2
-            }">
+        <div class="grid max-h-[420px] gap-2.5 overflow-y-auto p-2 custom-scrollbar sm:grid-cols-3">
             <template x-for="card in visibleCards()" :key="card.value">
                 <div x-show="matches(card)" x-cloak class="h-full">
                     <button type="button" x-on:click="select(card.value)"

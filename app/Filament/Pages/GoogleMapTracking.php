@@ -471,23 +471,25 @@ class GoogleMapTracking extends Page
                 ->popupOptions(['maxWidth' => 380]);
         });
 
-        $selectedMarkers = $allMarkers->filter(fn (Marker $m) => in_array((int) str_replace('vehicle-', '', $m->getId()), $this->selectedVehicleIds, true))->values()->all();
-        $otherMarkers = $allMarkers->filter(fn (Marker $m) => ! in_array((int) str_replace('vehicle-', '', $m->getId()), $this->selectedVehicleIds, true))->values()->all();
+        // If user selected specific vehicles, only show those (no clusters, no others)
+        if (! empty($this->selectedVehicleIds)) {
+            return $allMarkers->filter(fn (Marker $m) => in_array(
+                (int) str_replace('vehicle-', '', $m->getId()),
+                $this->selectedVehicleIds,
+                true,
+            ))->values()->all();
+        }
 
-        $totalVehicles = $allMarkers->count();
-
-        // If many vehicles, return a MarkerCluster for non-selected ones, keeping selected markers separate.
-        if ($totalVehicles > 50) {
-            $cluster = MarkerCluster::make($otherMarkers)
+        // No selection: cluster if many vehicles
+        if ($allMarkers->count() > 50) {
+            return [MarkerCluster::make($allMarkers->all())
                 ->maxClusterRadius(80)
                 ->spiderfyOnMaxZoom(true)
                 ->removeOutsideVisibleBounds(true)
-                ->zoomToBoundsOnClick(true);
-
-            return array_merge([$cluster], $selectedMarkers);
+                ->zoomToBoundsOnClick(true),
+            ];
         }
 
-        // Fallback: return all markers (no clustering)
         return $allMarkers->all();
     }
 
@@ -667,7 +669,7 @@ class GoogleMapTracking extends Page
         return $this->cachedVehicles = Vehicle::query()
             ->with([
                 'driver',
-                'driverShifts' => fn ($q) => $q->whereNull('end_time')->latest('start_time'),
+                'driverShifts' => fn ($q) => $q->whereNull('driver_shifts.end_time')->latest('driver_shifts.start_time'),
                 'orders' => fn ($q) => $q
                     ->with([
                         'customer',

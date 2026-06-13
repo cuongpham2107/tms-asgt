@@ -259,7 +259,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->live()
                                     ->afterStateUpdated(function (Set $set, $state): void {
                                         if ($state) {
-                                            $vehicle = Vehicle::withCount(['driverShifts as active_shift_count' => fn ($q) => $q->whereNull('end_time')])->find($state);
+                                            $vehicle = Vehicle::withCount(['driverShifts as active_shift_count' => fn ($q) => $q->whereNull('driver_shifts.end_time')])->find($state);
                                             $set('driver_id', $vehicle?->current_driver_id ?? null);
 
                                             if ($vehicle && $vehicle->active_shift_count === 0) {

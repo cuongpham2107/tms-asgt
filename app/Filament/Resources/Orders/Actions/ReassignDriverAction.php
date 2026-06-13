@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\DriverSwapReason;
 use App\Enums\OrderStatus;
+use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\DriverShift;
 use App\Models\Order;
 use App\Models\User;
@@ -25,9 +26,47 @@ class ReassignDriverAction
             ->form([
                 Select::make('new_driver_id')
                     ->label('Tài xế mới')
-                    ->options(fn (): array => User::query()->where('is_active', true)
-                        ->pluck('name', 'id')
-                        ->toArray())
+                    ->options(fn (): array => User::query()
+                        ->where('is_active', true)
+                        ->whereHas('driverShifts', fn ($q) => $q->whereNull('end_time'))
+                        ->with(['vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng')])
+                        ->withCount(['orders as active_orders_count' => fn ($q) => $q->whereIn('status', [
+                            OrderStatus::Assigned->value,
+                            OrderStatus::Sent->value,
+                            OrderStatus::Started->value,
+                            OrderStatus::ArrivedPickup->value,
+                            OrderStatus::Delivering->value,
+                            OrderStatus::ArrivedDelivery->value,
+                        ])])
+                        ->get()
+                        ->mapWithKeys(function (User $driver): array {
+                            $parts = [$driver->name];
+
+                            $assignedVehicle = $driver->vehiclesAsDriver->first();
+                            if ($assignedVehicle) {
+                                $parts[] = $assignedVehicle->plate_number;
+                            }
+
+                            $activeOrders = (int) $driver->active_orders_count;
+                            if ($activeOrders > 0) {
+                                $parts[] = $activeOrders.' đơn';
+                            } else {
+                                $parts[] = 'Đang rảnh';
+                            }
+
+                            if ($assignedVehicle?->gps_lat && $assignedVehicle?->gps_lng) {
+                                $location = CreatesOrderTransportCards::findNearestLocation(
+                                    (float) $assignedVehicle->gps_lat,
+                                    (float) $assignedVehicle->gps_lng,
+                                );
+                                if ($location['name']) {
+                                    $parts[] = $location['name'];
+                                }
+                            }
+
+                            return [$driver->id => implode(' · ', $parts)];
+                        })
+                        ->all())
                     ->searchable()
                     ->required(),
                 Select::make('reason')
@@ -61,11 +100,21 @@ class ReassignDriverAction
                     ->whereNull('end_time')
                     ->first();
 
+                if (! $newShift) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Tài xế mới chưa có ca trực')
+                        ->body('Tài xế này hiện không có ca đang hoạt động. Vui lòng chọn tài xế khác.')
+                        ->send();
+
+                    return;
+                }
+
                 $record->driverSwaps()->create([
                     'from_driver_id' => $record->driver_id,
                     'to_driver_id' => $data['new_driver_id'],
                     'from_shift_id' => $oldShift->id,
-                    'to_shift_id' => $newShift?->id,
+                    'to_shift_id' => $newShift->id,
                     'reason' => $data['reason'],
                     'created_by' => auth()->id(),
                 ]);
@@ -73,10 +122,10 @@ class ReassignDriverAction
                 $record->update([
                     'driver_id' => $data['new_driver_id'],
                     'status' => OrderStatus::Assigned->value,
-                    'shift_id' => $newShift?->id,
+                    'shift_id' => $newShift->id,
                 ]);
 
-                if ($newShift && $record->vehicle_id) {
+                if ($record->vehicle_id) {
                     $currentSegment = $newShift->currentShiftVehicle();
                     if (! $currentSegment || (int) $currentSegment->vehicle_id !== (int) $record->vehicle_id) {
                         $newShift->shiftVehicles()->create([

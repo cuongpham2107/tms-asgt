@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Orders\Actions\Concerns;
 
 use App\Enums\OrderStatus;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Vehicle;
+use Illuminate\Database\Eloquent\Collection;
 use Throwable;
 
 abstract class CreatesOrderTransportCards
@@ -33,7 +35,7 @@ abstract class CreatesOrderTransportCards
             ])
             ->with([
                 'driverShifts' => fn ($query) => $query->latest('start_time')->limit(1),
-                'vehiclesAsDriver' => fn ($query) => $query->limit(1),
+                'vehiclesAsDriver' => fn ($query) => $query->select('id', 'plate_number', 'gps_lat', 'gps_lng'),
             ])
             ->orderBy('name')
             ->get()
@@ -43,6 +45,14 @@ abstract class CreatesOrderTransportCards
                 $assignedVehicle = $driver->vehiclesAsDriver->first();
                 $activeOrders = (int) $driver->active_orders_count;
                 $isAvailable = $activeOrders === 0;
+
+                $driverLocation = null;
+                if ($assignedVehicle?->gps_lat && $assignedVehicle?->gps_lng) {
+                    $driverLocation = self::findNearestLocation(
+                        (float) $assignedVehicle->gps_lat,
+                        (float) $assignedVehicle->gps_lng,
+                    );
+                }
 
                 return [
                     'value' => $driver->id,
@@ -54,12 +64,13 @@ abstract class CreatesOrderTransportCards
                         ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
                         : 'border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200',
                     'statusDot' => $isAvailable ? 'success' : 'warning',
-                    'details' => array_filter([
+                    'details' => array_values(array_filter([
                         ['icon' => 'heroicon-m-identification', 'label' => 'GPLX', 'value' => $driver->license_class ? ($driver->license_class.($driver->license_number ? ' · '.$driver->license_number : '')) : 'Chưa cập nhật'],
                         ['icon' => 'heroicon-m-truck', 'label' => 'Xe gán', 'value' => $assignedVehicle?->plate_number ?? 'Chưa gán xe'],
                         ['icon' => 'heroicon-m-clock', 'label' => 'Ca trực', 'value' => $hasActiveShift ? ('Đang '.$latestShift->shift_type?->getLabel()) : ($latestShift?->shift_type?->getLabel() ?? 'Chưa có ca')],
+                        ['icon' => 'heroicon-m-map-pin', 'label' => 'Vị trí', 'value' => $driverLocation['name'] ?? 'Chưa xác định'],
                         ['icon' => 'heroicon-m-document-text', 'label' => 'Tổng chuyến', 'value' => number_format((int) $driver->orders_count, 0, ',', '.')],
-                    ]),
+                    ])),
                     'meta' => [
                         $driver->license_class ?? '',
                         $assignedVehicle?->plate_number ?? '',
@@ -90,7 +101,12 @@ abstract class CreatesOrderTransportCards
                     $query->orWhere('id', $selectedVehicleId);
                 }
             })
-            ->with('driver')
+            ->with(['driver' => fn ($q) => $q
+                ->with(['driverShifts' => fn ($q) => $q
+                    ->whereNull('end_time')
+                    ->withCount(['shiftVehicles as orders_in_shift' => fn ($q) => $q->whereNotNull('order_id')]),
+                ]),
+            ])
             ->withCount([
                 'orders as active_orders_count' => fn ($q) => $q->whereIn('status', [
                     OrderStatus::Assigned->value,
@@ -123,6 +139,7 @@ abstract class CreatesOrderTransportCards
                 $statusClasses = self::getStatusBadgeClasses($statusColor);
                 $activeOrders = (int) $vehicle->active_orders_count;
                 $mileage = $vehicle->current_mileage ? number_format((float) $vehicle->current_mileage, 0, ',', '.').' km' : 'N/A';
+                $ordersInShift = (int) ($vehicle->driver?->driverShifts->first()?->orders_in_shift ?? 0);
 
                 $fuelLabels = [
                     'Diesel' => 'Diesel',
@@ -140,13 +157,14 @@ abstract class CreatesOrderTransportCards
                     'badge' => $statusLabel,
                     'badgeClasses' => $statusClasses,
                     'statusDot' => $statusColor,
-                    'details' => array_filter([
+                    'details' => array_values(array_filter([
                         ['icon' => 'heroicon-m-scale', 'label' => 'Tải trọng', 'value' => $loadCapacity.' tấn'.($requiredWeight > 0 ? ($isCapacityMatch ? ' ✓' : ' ✗') : '')],
                         ['icon' => 'heroicon-m-user', 'label' => 'Lái xe', 'value' => $vehicle->driver?->name ?? 'Chưa phân lái'],
                         ['icon' => 'heroicon-m-map-pin', 'label' => 'Vị trí', 'value' => $currentLocation['name'] ?? 'Chưa xác định'],
                         ['icon' => 'heroicon-m-cog-6-tooth', 'label' => 'ODO', 'value' => $mileage],
                         $activeOrders > 0 ? ['icon' => 'heroicon-m-document-text', 'label' => 'Đơn đang chạy', 'value' => (string) $activeOrders] : null,
-                    ]),
+                        ['icon' => 'heroicon-m-document-text', 'label' => 'Đơn trong ca', 'value' => (string) $ordersInShift],
+                    ])),
                     'meta' => [
                         $vehicle->driver?->name ?? '',
                         $vehicle->getVehicleTypeLabel(),
@@ -185,27 +203,87 @@ abstract class CreatesOrderTransportCards
             ->latest('created_at')
             ->first();
 
-        if (! $activeOrder) {
+        if ($activeOrder) {
+            $latestCheckpoint = $activeOrder->tripCheckpoints()
+                ->with('deliveryPoint.location')
+                ->latest('occurred_at')
+                ->first();
+
+            $deliveryLocation = $latestCheckpoint?->deliveryPoint?->location;
+
+            if ($deliveryLocation) {
+                return ['id' => (int) $deliveryLocation->id, 'name' => $deliveryLocation->name];
+            }
+
+            $pickupLocation = $activeOrder->pickupLocation;
+
+            return [
+                'id' => $pickupLocation?->id ? (int) $pickupLocation->id : null,
+                'name' => $pickupLocation?->name,
+            ];
+        }
+
+        return self::resolveVehicleGpsLocation($vehicle);
+    }
+
+    /**
+     * @return array{id: ?int, name: ?string}
+     */
+    protected static function resolveVehicleGpsLocation(Vehicle $vehicle): array
+    {
+        if (! $vehicle->gps_lat || ! $vehicle->gps_lng) {
             return ['id' => null, 'name' => null];
         }
 
-        $latestCheckpoint = $activeOrder->tripCheckpoints()
-            ->with('deliveryPoint.location')
-            ->latest('occurred_at')
-            ->first();
+        return self::findNearestLocation(
+            (float) $vehicle->gps_lat,
+            (float) $vehicle->gps_lng,
+        );
+    }
 
-        $deliveryLocation = $latestCheckpoint?->deliveryPoint?->location;
+    /**
+     * @return array{id: ?int, name: ?string}
+     */
+    public static function findNearestLocation(float $lat, float $lng): array
+    {
+        /** @var Collection<int, Location> $locations */
+        $locations = Location::query()
+            ->whereNotNull('lat')
+            ->whereNotNull('lng')
+            ->where('is_active', true)
+            ->get(['id', 'name', 'code', 'lat', 'lng']);
 
-        if ($deliveryLocation) {
-            return ['id' => (int) $deliveryLocation->id, 'name' => $deliveryLocation->name];
+        $nearest = null;
+        $minDistance = PHP_FLOAT_MAX;
+
+        foreach ($locations as $loc) {
+            $dist = self::haversineDistance($lat, $lng, (float) $loc->lat, (float) $loc->lng);
+            if ($dist < $minDistance) {
+                $minDistance = $dist;
+                $nearest = $loc;
+            }
         }
 
-        $pickupLocation = $activeOrder->pickupLocation;
+        if ($nearest && $minDistance <= 50) {
+            return [
+                'id' => (int) $nearest->id,
+                'name' => $nearest->name.' ('.$nearest->code.')',
+            ];
+        }
 
-        return [
-            'id' => $pickupLocation?->id ? (int) $pickupLocation->id : null,
-            'name' => $pickupLocation?->name,
-        ];
+        return ['id' => null, 'name' => null];
+    }
+
+    protected static function haversineDistance(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadius = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) * sin($dLat / 2)
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2))
+            * sin($dLng / 2) * sin($dLng / 2);
+
+        return $earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
     protected static function normalizeDecimal(mixed $value): ?float
