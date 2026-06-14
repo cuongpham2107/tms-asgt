@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
+use App\Enums\CheckpointType;
 use App\Enums\DriverSwapReason;
 use App\Enums\OrderStatus;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\DriverShift;
 use App\Models\Order;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -76,11 +78,9 @@ class ReassignDriverAction
             ])
             ->action(function (Order $record, array $data): void {
                 $oldDriver = $record->driver;
-
-                $oldShift = DriverShift::query()->where('driver_id', $record->driver_id)
-                    ->whereNull('end_time')
+                $oldShift = DriverShift::query()->where('driver_id', $oldDriver->id)
+                    ->latest('start_time')
                     ->first();
-
                 if (! $oldShift) {
                     Notification::make()
                         ->danger()
@@ -119,22 +119,52 @@ class ReassignDriverAction
                     'created_by' => auth()->id(),
                 ]);
 
+                $lastCheckpoint = TripCheckpoint::query()
+                    ->where('order_id', $record->id)
+                    ->where('checkpoint_type', '!=', CheckpointType::DriverSwap)
+                    ->latest('occurred_at')
+                    ->first();
+
+                $status = match ($lastCheckpoint?->checkpoint_type) {
+                    CheckpointType::Started => OrderStatus::Started,
+                    CheckpointType::ArrivedPickup => OrderStatus::ArrivedPickup,
+                    CheckpointType::LeftPickup => OrderStatus::Delivering,
+                    CheckpointType::ArrivedDelivery => OrderStatus::ArrivedDelivery,
+                    CheckpointType::Completed => OrderStatus::Delivered,
+                    default => OrderStatus::Assigned,
+                };
+
                 $record->update([
                     'driver_id' => $data['new_driver_id'],
-                    'status' => OrderStatus::Assigned->value,
-                    'shift_id' => $newShift->id,
+                    'status' => $status->value,
+                    'shift_id' => $newShift?->id,
                 ]);
 
-                if ($record->vehicle_id) {
+                if ($newShift && $record->vehicle_id) {
+                    $oldSegment = $oldShift->currentShiftVehicle();
+                    if ($oldSegment && ! $oldSegment->end_time) {
+                        $oldSegment->update([
+                            'end_time' => now(),
+                            'end_km' => $lastCheckpoint?->km_reading ?? $record->vehicle?->current_mileage,
+                            'end_gps_lat' => $lastCheckpoint?->gps_lat,
+                            'end_gps_lng' => $lastCheckpoint?->gps_lng,
+                        ]);
+                    }
+
+                    $vehicle = $record->vehicle;
+                    if ($vehicle && $oldSegment?->end_km) {
+                        $vehicle->update(['current_mileage' => $oldSegment->end_km]);
+                    }
+
                     $currentSegment = $newShift->currentShiftVehicle();
                     if (! $currentSegment || (int) $currentSegment->vehicle_id !== (int) $record->vehicle_id) {
                         $newShift->shiftVehicles()->create([
                             'vehicle_id' => $record->vehicle_id,
                             'order_id' => $record->id,
                             'start_time' => now(),
-                            'start_km' => $currentSegment?->end_km,
-                            'start_gps_lat' => $currentSegment?->end_gps_lat,
-                            'start_gps_lng' => $currentSegment?->end_gps_lng,
+                            'start_km' => $oldSegment?->end_km,
+                            'start_gps_lat' => $oldSegment?->end_gps_lat,
+                            'start_gps_lng' => $oldSegment?->end_gps_lng,
                         ]);
                     }
                 }

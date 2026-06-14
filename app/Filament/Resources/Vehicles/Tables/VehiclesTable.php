@@ -22,7 +22,6 @@ class VehiclesTable extends BaseTable
                 Stack::make([
                     ViewColumn::make('vehicle_card')
                         ->view('filament.resources.vehicles.columns.vehicle-card'),
-
                     // Hidden searchable columns
                     TextColumn::make('plate_number')
                         ->searchable()
@@ -33,15 +32,18 @@ class VehiclesTable extends BaseTable
                     TextColumn::make('owner')
                         ->searchable()
                         ->hidden(),
-                ])->extraAttributes([
-                    'class' => '[&_.fi-ta-col]:block',
+                    TextColumn::make('driver.name')
+                        ->searchable()
+                        ->hidden(),
+                    TextColumn::make('status')
+                        ->searchable()
+                        ->hidden(),
                 ]),
             ])
             ->contentGrid([
                 'md' => 3,
                 'xl' => 4,
             ])
-
             ->recordActions([
                 ViewAction::make('view')
                     ->label('Chi tiết xe')

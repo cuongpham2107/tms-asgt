@@ -16,16 +16,13 @@ class DriverShiftInfolist
     {
         return $schema
             ->components([
-                Section::make('Thông tin ca trực')
+                Section::make('Thông tin ca')
+                    ->columns(2)
                     ->columnSpanFull()
                     ->schema([
                         TextEntry::make('driver.name')
                             ->label('Lái xe')
                             ->icon(Heroicon::OutlinedUser),
-                        TextEntry::make('plate_number')
-                            ->label('Biển số xe')
-                            ->icon(Heroicon::OutlinedTruck)
-                            ->getStateUsing(fn (DriverShift $record) => $record->firstVehicle()?->plate_number ?? '-'),
                         TextEntry::make('shift_type')
                             ->label('Loại ca')
                             ->icon(Heroicon::OutlinedClock)
@@ -40,20 +37,34 @@ class DriverShiftInfolist
                             ->label('Giờ kế thúc ca')
                             ->icon(Heroicon::OutlinedArrowRightEndOnRectangle)
                             ->dateTime(),
-                        TextEntry::make('total_km')
-                            ->label('Tổng km')
-                            ->icon(Heroicon::OutlinedSparkles)
-                            ->numeric(),
-                        TextEntry::make('start_gps_lat')
+                        TextEntry::make('start_gps')
                             ->label('GPS vào ca')
                             ->icon(Heroicon::OutlinedMapPin)
-                            ->formatStateUsing(fn (DriverShift $record) => $record->start_gps_lat ? "{$record->start_gps_lat}, {$record->start_gps_lng}" : '-'),
-                        TextEntry::make('end_gps_lat')
+                            ->formatStateUsing(fn (DriverShift $record) => $record->start_gps_lat && $record->start_gps_lng
+                                ? "{$record->start_gps_lat}, {$record->start_gps_lng}"
+                                : '-'),
+                        TextEntry::make('end_gps')
                             ->label('GPS kế thúc ca')
                             ->icon(Heroicon::OutlinedMapPin)
-                            ->formatStateUsing(fn (DriverShift $record) => $record->end_gps_lat ? "{$record->end_gps_lat}, {$record->end_gps_lng}" : '-'),
-                    ])
-                    ->columns(2),
+                            ->formatStateUsing(fn (DriverShift $record) => $record->end_gps_lat && $record->end_gps_lng
+                                ? "{$record->end_gps_lat}, {$record->end_gps_lng}"
+                                : '-'),
+                    ]),
+                Section::make('Thông tin km')
+                    ->columns(3)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextEntry::make('total_km')
+                            ->label('Tổng km')
+                            ->icon(Heroicon::OutlinedAdjustmentsVertical)
+                            ->numeric(),
+                        TextEntry::make('total_km_loaded')
+                            ->label('Km có tải')
+                            ->numeric(),
+                        TextEntry::make('total_km_empty')
+                            ->label('Km rỗng')
+                            ->numeric(),
+                    ]),
                 Section::make('Các xe đã sử dụng trong ca')
                     ->columnSpanFull()
                     ->schema([

@@ -62,12 +62,12 @@ class DriverShiftForm
                             ->relationship('shiftVehicles')
                             ->label('Danh sách công việc')
                             ->table([
-                                TableColumn::make('Xe'),
+                                TableColumn::make('Xe')->width('150px'),
                                 TableColumn::make('Đơn hàng'),
-                                TableColumn::make('Bắt đầu'),
-                                TableColumn::make('Kết thúc'),
-                                TableColumn::make('Km đầu'),
-                                TableColumn::make('Km cuối'),
+                                TableColumn::make('Bắt đầu')->width('200px'),
+                                TableColumn::make('Kết thúc')->width('200px'),
+                                TableColumn::make('Km đầu')->width('100px'),
+                                TableColumn::make('Km cuối')->width('100px'),
                             ])
                             ->schema([
                                 Select::make('vehicle_id')
@@ -80,10 +80,14 @@ class DriverShiftForm
                                     ->searchable(),
                                 DateTimePicker::make('start_time')
                                     ->label('Bắt đầu')
-                                    ->native(false),
+                                    ->format('d/m/Y H:i')
+                                    ->seconds(false)
+                                    ->native(true),
                                 DateTimePicker::make('end_time')
                                     ->label('Kết thúc')
-                                    ->native(false),
+                                    ->format('d/m/Y H:i')
+                                    ->seconds(false)
+                                    ->native(true),
                                 TextInput::make('start_km')
                                     ->label('Km đầu')
                                     ->numeric(),

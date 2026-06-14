@@ -12,7 +12,9 @@ class OrderCategory extends Model
         'type',
         'code',
         'name',
-        'description',
+        'color',
+        'sort_order',
+        'is_active',
     ];
 
     protected function casts(): array

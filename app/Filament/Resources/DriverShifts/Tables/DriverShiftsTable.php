@@ -11,6 +11,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -67,8 +68,12 @@ class DriverShiftsTable extends BaseTable
             ->recordActions([
                 ActionGroup::make([
                     ViewAction::make()
+                        ->label('Xem chi tiết')
+                        ->modalWidth(Width::SevenExtraLarge)
                         ->slideOver(),
                     EditAction::make()
+                        ->label('Sửa ca lái')
+                        ->modalWidth(Width::SevenExtraLarge)
                         ->slideOver(),
                     EndShiftAction::make(),
                     DeleteAction::make(),

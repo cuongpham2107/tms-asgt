@@ -2,12 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\CheckpointType;
 use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\Order;
 use App\Models\TripCheckpoint;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class CheckpointRequest extends FormRequest
 {
@@ -24,8 +26,7 @@ class CheckpointRequest extends FormRequest
             'order_id' => 'required|exists:orders,id',
             'shift_id' => 'nullable|exists:driver_shifts,id',
             'delivery_point_id' => 'nullable|exists:order_delivery_points,id',
-            'new_delivery_location_id' => 'nullable|exists:locations,id',
-            'checkpoint_type' => 'required|string',
+            'checkpoint_type' => ['required', 'string', Rule::in(array_map(fn ($case) => $case->value, CheckpointType::cases()))],
             'occurred_at' => 'nullable|date',
             'km_reading' => [
                 'nullable',
@@ -50,6 +51,25 @@ class CheckpointRequest extends FormRequest
     public function after(): array
     {
         return [
+            function (\Illuminate\Validation\Validator $validator) {
+                $type = $this->input('checkpoint_type');
+
+                if (in_array($type, [CheckpointType::ArrivedPickup->value, CheckpointType::Completed->value], true)) {
+                    if ($this->input('km_reading') === null) {
+                        $label = $type === CheckpointType::ArrivedPickup->value ? 'Đến lấy hàng' : 'Hoàn thành';
+                        throw new HttpResponseException(response()->json([
+                            'message' => "Số km đồng hồ là bắt buộc tại mốc {$label}.",
+                        ], 422));
+                    }
+                }
+
+                if ($type === CheckpointType::Started->value && $this->input('km_reading') !== null) {
+                    throw new HttpResponseException(response()->json([
+                        'message' => 'Không được nhập km tại mốc Bắt đầu chuyến. Km sẽ tự động lấy từ đồng hồ xe.',
+                    ], 422));
+                }
+            },
+
             function (\Illuminate\Validation\Validator $validator) {
                 if ($this->input('km_reading') === null) {
                     return;

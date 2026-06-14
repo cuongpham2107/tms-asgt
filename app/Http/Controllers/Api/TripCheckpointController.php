@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\CheckpointType;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
+use App\Enums\VehicleStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
@@ -238,7 +239,37 @@ class TripCheckpointController extends Controller
             $order->save();
 
             if ($order->vehicle_id !== null) {
-                Vehicle::where('id', $order->vehicle_id)->update(['current_driver_id' => null]);
+                $hasMoreActiveOrders = Order::where('vehicle_id', $order->vehicle_id)
+                    ->where('id', '!=', $order->id)
+                    ->whereIn('status', [
+                        OrderStatus::Assigned,
+                        OrderStatus::Sent,
+                        OrderStatus::Started,
+                        OrderStatus::ArrivedPickup,
+                        OrderStatus::Delivering,
+                        OrderStatus::ArrivedDelivery,
+                    ])
+                    ->exists();
+
+                if (! $hasMoreActiveOrders) {
+                    Vehicle::where('id', $order->vehicle_id)->update(['status' => VehicleStatus::On]);
+                }
+            }
+
+            if ($order->shift_id !== null) {
+                $shift = DriverShift::find($order->shift_id);
+
+                if ($shift !== null) {
+                    $segment = $shift->currentShiftVehicle();
+
+                    if ($segment !== null && (int) $segment->order_id === (int) $order->id) {
+                        $segment->end_time = $payload['occurred_at'] ?? now();
+                        $segment->end_km = $payload['km_reading'] ?? $segment->end_km;
+                        $segment->end_gps_lat = $payload['gps_lat'] ?? $segment->end_gps_lat;
+                        $segment->end_gps_lng = $payload['gps_lng'] ?? $segment->end_gps_lng;
+                        $segment->save();
+                    }
+                }
             }
         }
     }

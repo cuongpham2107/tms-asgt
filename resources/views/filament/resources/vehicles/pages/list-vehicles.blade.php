@@ -59,7 +59,7 @@
             @endforeach
         </div>
     </div>
-    <!-- Search Section -->
+    <!-- Search & Toggle Section -->
     <div class="flex items-center gap-3 mb-4">
         <div class="relative max-w-75 flex-1">
             <x-filament::icon icon="heroicon-o-magnifying-glass"
@@ -68,7 +68,6 @@
                 class="w-full h-9 bg-white border border-gray-200 rounded-lg pl-9 pr-3 text-[12.5px] text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-[#008fd5] transition-all dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 dark:placeholder:text-gray-500 dark:focus:border-[#008fd5]"
                 type="text" value="">
         </div>
-        
     </div>
     {{ $this->table }}
 </x-filament-panels::page>

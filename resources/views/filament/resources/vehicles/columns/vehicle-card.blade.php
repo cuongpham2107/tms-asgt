@@ -71,11 +71,17 @@
         </div>
         <div>
             <p class="text-[11px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-semibold mb-1">Điểm hiện tại</p>
-            <p class="text-sm font-bold text-gray-900 dark:text-white">NBA</p>
+            <p class="text-sm font-bold text-gray-900 dark:text-white">
+                @if($record->gps_lat && $record->gps_lng)
+                    {{ number_format($record->gps_lat, 4) }}, {{ number_format($record->gps_lng, 4) }}
+                @else
+                    Đang cập nhật
+                @endif
+            </p>
         </div>
         <div>
             <p class="text-[11px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-semibold mb-1">Số km</p>
-            <p class="text-sm font-bold text-gray-900 dark:text-white">48.500 km</p>
+            <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $record->current_mileage ? number_format($record->current_mileage, 0, ',', '.') : '—' }} km</p>
         </div>
     </div>
 

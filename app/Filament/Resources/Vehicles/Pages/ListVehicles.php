@@ -6,6 +6,10 @@ use App\Filament\Resources\Vehicles\VehicleResource;
 use App\Models\OrderCategory;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Tables\Columns\Layout\Stack;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ViewColumn;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListVehicles extends ListRecords
@@ -13,6 +17,8 @@ class ListVehicles extends ListRecords
     protected static string $resource = VehicleResource::class;
 
     protected string $view = 'filament.resources.vehicles.pages.list-vehicles';
+
+    public string $viewMode = 'grid';
 
     public array $placeVehicleCurrent = [];
 
@@ -118,6 +124,71 @@ class ListVehicles extends ListRecords
         $this->activePlaceFilter = $place;
 
         $this->resetPage();
+    }
+
+    public function toggleViewMode(): void
+    {
+        $this->viewMode = $this->viewMode === 'grid' ? 'table' : 'grid';
+    }
+
+    public function getTable(): Table
+    {
+        $table = parent::getTable();
+
+        if ($this->viewMode === 'table') {
+            $table
+                ->contentGrid(null)
+                ->columns([
+                    TextColumn::make('plate_number')
+                        ->label('Biển số')
+                        ->searchable()
+                        ->sortable(),
+                    TextColumn::make('driver.name')
+                        ->label('Tài xế')
+                        ->searchable(),
+                    TextColumn::make('status')
+                        ->label('Trạng thái')
+                        ->badge()
+                        ->sortable(),
+                    TextColumn::make('type')
+                        ->label('Loại xe')
+                        ->sortable(),
+                    TextColumn::make('owner')
+                        ->label('Chủ xe')
+                        ->searchable(),
+                    TextColumn::make('vehicle_type')
+                        ->label('Kiểu xe')
+                        ->searchable(),
+                ]);
+        } else {
+            $table
+                ->contentGrid(['md' => 3, 'xl' => 4])
+                ->columns([
+                    Stack::make([
+                        ViewColumn::make('vehicle_card')
+                            ->view('filament.resources.vehicles.columns.vehicle-card'),
+                        TextColumn::make('plate_number')
+                            ->searchable()
+                            ->hidden(),
+                        TextColumn::make('vehicle_type')
+                            ->searchable()
+                            ->hidden(),
+                        TextColumn::make('owner')
+                            ->searchable()
+                            ->hidden(),
+                        TextColumn::make('driver.name')
+                            ->searchable()
+                            ->hidden(),
+                        TextColumn::make('status')
+                            ->searchable()
+                            ->hidden(),
+                    ])->extraAttributes([
+                        'class' => '[&_.fi-ta-col]:block',
+                    ]),
+                ]);
+        }
+
+        return $table;
     }
 
     protected function getTableQuery(): Builder

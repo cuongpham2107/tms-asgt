@@ -68,7 +68,7 @@ class DriverShift extends Model
 
     public function firstVehicle(): ?Vehicle
     {
-        return $this->shiftVehicles()->first()?->vehicle;
+        return $this->shiftVehicles()->latest('start_time')->first()?->vehicle;
     }
 
     public function lastVehicle(): ?Vehicle

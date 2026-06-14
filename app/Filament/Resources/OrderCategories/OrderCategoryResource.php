@@ -58,8 +58,8 @@ class OrderCategoryResource extends BaseResource
     {
         return [
             'index' => ListOrderCategories::route('/'),
-            // 'create' => CreateOrderCategory::route('/create'),
-            // 'edit' => EditOrderCategory::route('/{record}/edit'),
+            'create' => CreateOrderCategory::route('/create'),
+            'edit' => EditOrderCategory::route('/{record}/edit'),
         ];
     }
 }

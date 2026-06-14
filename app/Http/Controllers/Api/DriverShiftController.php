@@ -143,9 +143,6 @@ class DriverShiftController extends Controller
             $lastSegment = $shift->lastSegment();
             $vehicle = $lastSegment ? Vehicle::find($lastSegment->vehicle_id) : null;
             if ($vehicle) {
-                if ($vehicle->current_driver_id === $user->id) {
-                    $vehicle->current_driver_id = null;
-                }
                 if (isset($payload['end_km'])) {
                     $vehicle->current_mileage = $payload['end_km'];
                 }
@@ -181,6 +178,7 @@ class DriverShiftController extends Controller
         $shift = DriverShift::query()
             ->where('driver_id', $user->id)
             ->whereNull('end_time')
+            ->latest('start_time')
             ->first();
 
         // only return the active shift if it started today
