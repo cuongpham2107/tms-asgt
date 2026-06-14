@@ -11,7 +11,8 @@ class GoogleMapStatsOverview extends BaseWidget
 {
     protected static ?string $maxHeight = '140px';
 
-    protected int | array | null $columns = 5;
+    protected int|array|null $columns = 5;
+
     protected function getStats(): array
     {
         $vehicles = Vehicle::where('is_active', true)->get();

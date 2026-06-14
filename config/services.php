@@ -40,4 +40,12 @@ return [
         'server_token' => env('MAPBOX_TOKEN'), // Optional: token riêng cho server (nếu có)
     ],
 
+    'eup' => [
+        'base_url' => env('EUP_API_BASE_URL', 'http://api.eup.net.vn:8000'),
+        'endpoint' => env('EUP_API_ENDPOINT', '/ctyasg/realtimeAll'),
+        'account' => env('EUP_API_ACCOUNT'),
+        'password' => env('EUP_API_PASSWORD'),
+        'api_key' => env('EUP_API_KEY'),
+    ],
+
 ];

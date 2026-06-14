@@ -90,7 +90,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - Execute PHP in app context for debugging and testing code. Do not create models without user approval, prefer tests with factories instead. Prefer existing Artisan commands over custom tinker code.
 - Always use single quotes to prevent shell expansion: `php artisan tinker --execute 'Your::code();'`
-  - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
+    - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
 
 === php rules ===
 
@@ -165,6 +165,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 </laravel-boost-guidelines>
 
 <!-- CODEGRAPH_START -->
+
 ## CodeGraph
 
 This project has a CodeGraph MCP server (`codegraph_*` tools) configured. CodeGraph is a tree-sitter-parsed knowledge graph of every symbol, edge, and file. Reads are sub-millisecond and return structural information grep cannot.
@@ -173,17 +174,17 @@ This project has a CodeGraph MCP server (`codegraph_*` tools) configured. CodeGr
 
 Use codegraph for **structural** questions — what calls what, what would break, where is X defined, what is X's signature. Use native grep/read only for **literal text** queries (string contents, comments, log messages) or after you already have a specific file open.
 
-| Question | Tool |
-|---|---|
-| "Where is X defined?" / "Find symbol named X" | `codegraph_search` |
-| "What calls function Y?" | `codegraph_callers` |
-| "What does Y call?" | `codegraph_callees` |
-| "What would break if I changed Z?" | `codegraph_impact` |
-| "Show me Y's signature / source / docstring" | `codegraph_node` |
-| "Give me focused context for a task/area" | `codegraph_context` |
+| Question                                      | Tool                |
+| --------------------------------------------- | ------------------- |
+| "Where is X defined?" / "Find symbol named X" | `codegraph_search`  |
+| "What calls function Y?"                      | `codegraph_callers` |
+| "What does Y call?"                           | `codegraph_callees` |
+| "What would break if I changed Z?"            | `codegraph_impact`  |
+| "Show me Y's signature / source / docstring"  | `codegraph_node`    |
+| "Give me focused context for a task/area"     | `codegraph_context` |
 | "See several related symbols' source at once" | `codegraph_explore` |
-| "What files exist under path/" | `codegraph_files` |
-| "Is the index healthy?" | `codegraph_status` |
+| "What files exist under path/"                | `codegraph_files`   |
+| "Is the index healthy?"                       | `codegraph_status`  |
 
 ### Rules of thumb
 
@@ -196,26 +197,28 @@ Use codegraph for **structural** questions — what calls what, what would break
 
 ### If `.codegraph/` doesn't exist
 
-The MCP server returns "not initialized." Ask the user: *"I notice this project doesn't have CodeGraph initialized. Want me to run `codegraph init -i` to build the index?"*
+The MCP server returns "not initialized." Ask the user: _"I notice this project doesn't have CodeGraph initialized. Want me to run `codegraph init -i` to build the index?"_
+
 <!-- CODEGRAPH_END -->
 
 <!-- FILAMENT_LEAFLET_START -->
+
 ## Filament Leaflet
 
 This project uses `eduardoribeirodev/filament-leaflet` for interactive maps. A domain skill is available at `.agents/skills/filament-leaflet/SKILL.md` — activate it when working with maps and geospatial features.
 
 ### Quick Reference
 
-| Component | Namespace | Use Case |
-|---|---|---|
-| `MapWidget` | `EduardoRibeiroDev\FilamentLeaflet\Widgets\MapWidget` | Dashboard map widget |
-| `MapPicker` | `EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker` | Form field for coord picking |
-| `GeoSearchInput` | `EduardoRibeiroDev\FilamentLeaflet\Fields\GeoSearchInput` | Geocoding search in forms |
-| `MapColumn` | `EduardoRibeiroDev\FilamentLeaflet\Tables\MapColumn` | Map display in tables |
-| `MapEntry` | `EduardoRibeiroDev\FilamentLeaflet\Infolists\MapEntry` | Read-only map in infolists |
-| `Marker` | `EduardoRibeiroDev\FilamentLeaflet\Layers\Marker` | Map markers |
-| `Circle` | `EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Circle` | Circle shapes |
-| `MarkerCluster` | `EduardoRibeiroDev\FilamentLeaflet\LayerGroups\MarkerCluster` | Clustered markers |
+| Component        | Namespace                                                     | Use Case                     |
+| ---------------- | ------------------------------------------------------------- | ---------------------------- |
+| `MapWidget`      | `EduardoRibeiroDev\FilamentLeaflet\Widgets\MapWidget`         | Dashboard map widget         |
+| `MapPicker`      | `EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker`          | Form field for coord picking |
+| `GeoSearchInput` | `EduardoRibeiroDev\FilamentLeaflet\Fields\GeoSearchInput`     | Geocoding search in forms    |
+| `MapColumn`      | `EduardoRibeiroDev\FilamentLeaflet\Tables\MapColumn`          | Map display in tables        |
+| `MapEntry`       | `EduardoRibeiroDev\FilamentLeaflet\Infolists\MapEntry`        | Read-only map in infolists   |
+| `Marker`         | `EduardoRibeiroDev\FilamentLeaflet\Layers\Marker`             | Map markers                  |
+| `Circle`         | `EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Circle`      | Circle shapes                |
+| `MarkerCluster`  | `EduardoRibeiroDev\FilamentLeaflet\LayerGroups\MarkerCluster` | Clustered markers            |
 
 ### Key Rules
 
@@ -225,4 +228,66 @@ This project uses `eduardoribeirodev/filament-leaflet` for interactive maps. A d
 - **Performance**: Use `MarkerCluster::fromModel()` for datasets > 50 markers
 - **Tile layers**: Can switch between OpenStreetMap, GoogleSatellite, Mapbox, and custom URLs
 - **Publish assets**: Run `php artisan vendor:publish --tag=filament-leaflet` after install
-<!-- FILAMENT_LEAFLET_END -->
+    <!-- FILAMENT_LEAFLET_END -->
+
+<!-- AGENT_SKILLS_START -->
+
+## OpenCode Integration — Agent Skills
+
+This project uses [agent-skills](https://github.com/addyosmani/agent-skills) for structured engineering workflows.
+
+### Core Rules
+
+- If a task matches a skill, you MUST invoke it using the `skill` tool
+- Skills are located in `.agents/skills/<skill-name>/SKILL.md` (project-specific) or `skills/<skill-name>/SKILL.md` (global)
+- Never implement directly if a skill applies
+- Always follow the skill instructions exactly
+
+### Intent → Skill Mapping
+
+| Intent                              | Skill                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------ |
+| Feature / new functionality         | `spec-driven-development` → `incremental-implementation` + `test-driven-development` |
+| Planning / breakdown                | `planning-and-task-breakdown`                                                        |
+| Bug / failure / unexpected behavior | `debugging-and-error-recovery`                                                       |
+| Code review                         | `code-review-and-quality`                                                            |
+| Refactoring / simplification        | `code-simplification`                                                                |
+| API or interface design             | `api-and-interface-design`                                                           |
+| UI work                             | `frontend-ui-engineering`                                                            |
+| Security                            | `security-and-hardening`                                                             |
+| Performance                         | `performance-optimization`                                                           |
+| Shipping                            | `shipping-and-launch`                                                                |
+| Documentation / ADRs                | `documentation-and-adrs`                                                             |
+| CI/CD                               | `ci-cd-and-automation`                                                               |
+
+### Lifecycle Mapping
+
+- DEFINE → `spec-driven-development`
+- PLAN → `planning-and-task-breakdown`
+- BUILD → `incremental-implementation` + `test-driven-development`
+- VERIFY → `debugging-and-error-recovery`
+- REVIEW → `code-review-and-quality`
+- SHIP → `shipping-and-launch`
+
+### Execution Model
+
+For every request:
+
+1. Determine if any skill applies (even 1% chance)
+2. Invoke the appropriate skill using the `skill` tool
+3. Follow the skill workflow strictly
+4. Only proceed to implementation after required steps (spec, plan, etc.) are complete
+
+### Anti-Rationalization
+
+The following thoughts are incorrect:
+
+- "This is too small for a skill"
+- "I can just quickly implement this"
+- "I'll gather context first"
+
+Correct behavior: always check for and use skills first.
+
+**Note**: Project-specific skills (filament-leaflet, laravel-best-practices, pest-testing, tailwindcss-development) take priority over generic agent-skills.
+
+<!-- AGENT_SKILLS_END -->

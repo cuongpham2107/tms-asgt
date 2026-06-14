@@ -101,6 +101,10 @@ class AppPanelProvider extends PanelProvider
             ->renderHook(
                 'panels::body.end',
                 fn (): string => '<script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>'
+            )
+            ->renderHook(
+                'panels::global-search.end',
+                fn (): string => view('filament.components.gps-sync-button')->render()
             );
     }
 }
