@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Enums\OrderStatus;
 use App\Enums\VehicleStatus;
+use App\Filament\Widgets\GoogleMapStatsOverview;
 use App\Models\Order;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
@@ -30,6 +31,28 @@ use UnitEnum;
 class GoogleMapTracking extends Page
 {
     use HasMapConfig;
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            GoogleMapStatsOverview::class,
+        ];
+    }
+
+    public function getListeners(): array
+    {
+        return [
+            'vehicleSelectionChanged' => 'updateSelectedVehicles',
+            'refreshMapData' => 'refreshData',
+        ];
+    }
+
+    public function updateSelectedVehicles(array $selectedIds): void
+    {
+        $this->selectedVehicleIds = $selectedIds;
+        $this->cachedVehicles = null;
+        $this->refreshMap();
+    }
 
     private const MAP_CENTER = [21.0285, 105.8542];
 
@@ -60,14 +83,12 @@ class GoogleMapTracking extends Page
 
     protected function getMapHeight(): int
     {
-        return 620;
+        return 720;
     }
 
     public ?Carbon $lastUpdated = null;
 
     public array $selectedVehicleIds = [];
-
-    public string $vehicleSearch = '';
 
     // Playback / replay controls (D)
     public ?int $playbackTimestamp = null; // unix timestamp (seconds)
@@ -76,11 +97,7 @@ class GoogleMapTracking extends Page
 
     public int $playbackSpeed = 1000; // ms between steps when autoplay (frontend uses this)
 
-    // Filters (D3)
-    public string $filterStatus = 'all'; // 'all' or VehicleStatus enum value
-
-    public string $filterVehicleType = 'all';
-
+    // Date range filters for historical tracking
     public ?string $filterDateFrom = null; // ISO string from datetime-local
 
     public ?string $filterDateTo = null;
@@ -143,52 +160,6 @@ class GoogleMapTracking extends Page
         $this->refreshMap();
     }
 
-    // Lightweight filter updates (apply immediately from UI without triggering
-    // expensive OSRM/route recomputes). Use these from Blade with
-    // `wire:change="applyFilterStatusLight"` etc.
-    private bool $filterLightUpdate = false;
-
-    public function applyFilterStatusLight(): void
-    {
-        // Mark next updatedFilterStatus as a light update and return.
-        $this->filterLightUpdate = true;
-        // property `filterStatus` has already been updated by Livewire's wire:model
-        // so we intentionally avoid clearing cache or calling refreshMap here.
-    }
-
-    public function updatedFilterStatus(): void
-    {
-        // If this change was flagged as a light UI update, skip expensive refresh.
-        if ($this->filterLightUpdate) {
-            $this->filterLightUpdate = false;
-
-            return;
-        }
-
-        $this->cachedVehicles = null;
-        $this->refreshMap();
-    }
-
-    // Vehicle type light update
-    private bool $filterVehicleTypeLightUpdate = false;
-
-    public function applyFilterVehicleTypeLight(): void
-    {
-        $this->filterVehicleTypeLightUpdate = true;
-    }
-
-    public function updatedFilterVehicleType(): void
-    {
-        if ($this->filterVehicleTypeLightUpdate) {
-            $this->filterVehicleTypeLightUpdate = false;
-
-            return;
-        }
-
-        $this->cachedVehicles = null;
-        $this->refreshMap();
-    }
-
     // Date filters light update (applies to both from/to)
     private bool $filterDateLightUpdate = false;
 
@@ -219,53 +190,6 @@ class GoogleMapTracking extends Page
 
         $this->cachedVehicles = null;
         $this->refreshMap();
-    }
-
-    public function toggleVehicle(int $id): void
-    {
-        $this->selectedVehicleIds = in_array($id, $this->selectedVehicleIds, true)
-            ? array_values(array_filter($this->selectedVehicleIds, fn (int $v) => $v !== $id))
-            : [...$this->selectedVehicleIds, $id];
-
-        $this->cachedVehicles = null;
-        $this->refreshMap();
-    }
-
-    public function selectAllVehicles(): void
-    {
-        $this->selectedVehicleIds = $this->getRawVehicles()->pluck('id')->values()->all();
-        $this->cachedVehicles = null;
-        $this->refreshMap();
-    }
-
-    public function deselectAllVehicles(): void
-    {
-        $this->selectedVehicleIds = [];
-        $this->cachedVehicles = null;
-        $this->refreshMap();
-    }
-
-    /** @return array<int, array{id:int,plate:string,driver:string,status_label:string,status_color:string,selected:bool}> */
-    public function getSidebarVehicles(): array
-    {
-        return $this->getFilteredVehicles()->map(function (Vehicle $vehicle): array {
-            $color = match ($vehicle->status) {
-                VehicleStatus::Running => 'amber',
-                VehicleStatus::On => 'emerald',
-                VehicleStatus::Bdsc => 'red',
-                VehicleStatus::Off => 'gray',
-                default => 'gray',
-            };
-
-            return [
-                'id' => $vehicle->id,
-                'plate' => $vehicle->plate_number,
-                'driver' => $vehicle->driver?->name ?? '—',
-                'status_label' => $vehicle->getStatusLabel(),
-                'status_color' => $color,
-                'selected' => in_array($vehicle->id, $this->selectedVehicleIds, true),
-            ];
-        })->all();
     }
 
     protected function getFitBounds(): bool
@@ -299,27 +223,6 @@ class GoogleMapTracking extends Page
     // ── Cache ──────────────────────────────────────────────────────────
 
     private ?Collection $cachedVehicles = null;
-
-    // ── Public data for the Blade stats bar ────────────────────────────
-
-    /** @return array<string, int> */
-    public function getStats(): array
-    {
-        $vehicles = $this->getFilteredVehicles();
-        $activeStatuses = $this->activeOrderStatuses();
-
-        return [
-            'total' => $vehicles->count(),
-            'running' => $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::Running
-                || $v->orders->whereIn('status', $activeStatuses)->isNotEmpty()
-            )->count(),
-            'on' => $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::On
-                && $v->orders->whereIn('status', $activeStatuses)->isEmpty()
-            )->count(),
-            'bdsc' => $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::Bdsc)->count(),
-            'off' => $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::Off)->count(),
-        ];
-    }
 
     // ── Map layers (HasMapConfig) ──────────────────────────────────────
 
@@ -688,45 +591,11 @@ class GoogleMapTracking extends Page
     }
 
     /**
-     * Return options for vehicle type select as [value => label].
-     */
-    public function getVehicleTypeOptions(): array
-    {
-        return collect($this->getRawVehicles())
-            ->pluck('vehicle_type')
-            ->filter()
-            ->unique()
-            ->mapWithKeys(function ($vt) {
-                if (is_object($vt)) {
-                    $val = $vt->value ?? $vt->name ?? (string) $vt;
-                    $label = method_exists($vt, 'getLabel') ? $vt->getLabel() : ($vt->name ?? $val);
-                } elseif (is_array($vt)) {
-                    $val = $vt['value'] ?? $vt['name'] ?? (string) $vt;
-                    $label = $vt['label'] ?? $vt['name'] ?? $val;
-                } else {
-                    $val = (string) $vt;
-                    $label = $val;
-                }
-
-                return [$val => $label];
-            })->toArray();
-    }
-
-    /**
-     * Apply UI filters to raw vehicles collection.
+     * Apply date filters to raw vehicles collection.
      */
     private function getFilteredVehicles(): Collection
     {
         $vehicles = $this->getRawVehicles();
-
-        if ($this->filterStatus !== 'all') {
-            // allow either enum name or value
-            $vehicles = $vehicles->filter(fn (Vehicle $v) => ($v->status->value ?? null) === $this->filterStatus || ($v->status->name ?? null) === $this->filterStatus)->values();
-        }
-
-        if ($this->filterVehicleType !== 'all') {
-            $vehicles = $vehicles->filter(fn (Vehicle $v) => (string) ($v->vehicle_type?->value ?? $v->vehicle_type?->name ?? '') === $this->filterVehicleType)->values();
-        }
 
         if ($this->filterDateFrom || $this->filterDateTo) {
             $from = $this->filterDateFrom ? Carbon::parse($this->filterDateFrom) : null;

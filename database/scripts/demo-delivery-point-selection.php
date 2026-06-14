@@ -161,10 +161,10 @@ DB::table(\"orders\")->insert([
     \"pickup_phone\" => \"0909999998\",
     \"planned_loading_at\" => \"{$now}\",
     \"vehicle_id\" => {$vehicleId},
-    \"driver_id\" => {$ids["driver_id"]},
+    \"driver_id\" => {$ids['driver_id']},
     \"status\" => \"sent\",
     \"is_return_trip\" => false,
-    \"created_by\" => {$ids["driver_id"]},
+    \"created_by\" => {$ids['driver_id']},
     \"created_at\" => \"{$now}\",
     \"updated_at\" => \"{$now}\",
 ]);
@@ -194,7 +194,7 @@ step(3, '🧹 Dọn dẹp ca cũ & 🟢 Vào ca');
 
 // Xoá tất cả ca cũ & reset xe (disable FK checks to handle all references)
 $cleanup = shell_exec("php artisan tinker --execute '
-\$driverId = {$ids["driver_id"]};
+\$driverId = {$ids['driver_id']};
 \$vehicleId = {$vehicleId};
 \$count = DB::table(\"driver_shifts\")->where(\"driver_id\",\$driverId)->count();
 \$shiftIds = DB::table(\"driver_shifts\")->where(\"driver_id\",\$driverId)->pluck(\"id\");
