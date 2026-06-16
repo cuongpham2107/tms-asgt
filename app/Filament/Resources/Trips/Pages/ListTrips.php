@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources\Trips\Pages;
 
-use App\Enums\OrderStatus;
 use App\Filament\Resources\Orders\Actions\CreateOrderHHHKAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHNAction;
 use App\Filament\Resources\Trips\TripResource;
+use App\Filament\Resources\Trips\Widgets\TripStatsOverviewWidget;
 use Carbon\Carbon;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,29 +38,16 @@ class ListTrips extends ListRecords
         ];
     }
 
-    public function getTripStats(): array
+    protected function getHeaderWidgets(): array
     {
-        $baseQuery = TripResource::getEloquentQuery();
-
         return [
-            'total' => (clone $baseQuery)->count(),
-            'running' => (clone $baseQuery)->whereIn('status', [
-                OrderStatus::Started->value,
-                OrderStatus::ArrivedPickup->value,
-                OrderStatus::Delivering->value,
-                OrderStatus::ArrivedDelivery->value,
-            ])->count(),
-            'planned' => (clone $baseQuery)->where('status', OrderStatus::Draft->value)->count(),
-            'completed' => (clone $baseQuery)->where('status', OrderStatus::Completed->value)->count(),
-            'delayed' => (clone $baseQuery)
-                ->whereIn('status', [
-                    OrderStatus::Started->value,
-                    OrderStatus::ArrivedPickup->value,
-                    OrderStatus::Delivering->value,
-                ])
-                ->where('planned_loading_at', '<', now())
-                ->count(),
+            TripStatsOverviewWidget::class,
         ];
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 5;
     }
 
     public function exportExcel(): void

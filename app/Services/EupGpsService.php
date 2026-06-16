@@ -43,7 +43,7 @@ class EupGpsService
                 $body['password'] = $this->password;
             }
 
-            $request = Http::timeout(15);
+            $request = Http::timeout(15)->asForm();
 
             if ($this->apiKey !== null) {
                 $request->withHeader('X-Eupfin-Api-Key', $this->apiKey);

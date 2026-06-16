@@ -1,31 +1,5 @@
 <x-filament-panels::page>
     <div class="space-y-4">
-        {{-- Stats Section --}}
-        <div>
-            <p class="mb-3 text-sm font-semibold text-gray-500 dark:text-gray-400">Kiểm soát tổng thể</p>
-            <div class="grid grid-cols-5 gap-4">
-                <div class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
-                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Tổng chuyến</p>
-                    <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{{ $this->getTripStats()['total'] }}</p>
-                </div>
-                <div class="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-950/30">
-                    <p class="text-xs font-medium text-blue-600 dark:text-blue-400">Đang chạy</p>
-                    <p class="mt-1 text-2xl font-bold text-blue-700 dark:text-blue-300">{{ $this->getTripStats()['running'] }}</p>
-                </div>
-                <div class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
-                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Kế hoạch</p>
-                    <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{{ $this->getTripStats()['planned'] }}</p>
-                </div>
-                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800/50 dark:bg-emerald-950/30">
-                    <p class="text-xs font-medium text-emerald-600 dark:text-emerald-400">Hoàn thành</p>
-                    <p class="mt-1 text-2xl font-bold text-emerald-700 dark:text-emerald-300">{{ $this->getTripStats()['completed'] }}</p>
-                </div>
-                <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-950/30">
-                    <p class="text-xs font-medium text-red-600 dark:text-red-400">Trễ giờ</p>
-                    <p class="mt-1 text-2xl font-bold text-red-700 dark:text-red-300">{{ $this->getTripStats()['delayed'] }}</p>
-                </div>
-            </div>
-        </div>
         {{-- Filters Bar --}}
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-3">

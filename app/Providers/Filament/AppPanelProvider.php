@@ -88,8 +88,7 @@ class AppPanelProvider extends PanelProvider
                 FilamentFullCalendarPlugin::make()
                     ->selectable()
                     ->editable(),
-                StickyTableHeaderPlugin::make()
-                    ->shouldScrollToTopOnPageChanged(enabled: true, behavior: 'smooth'),
+                StickyTableHeaderPlugin::make(),
             ])
             ->authMiddleware([
                 Authenticate::class,
