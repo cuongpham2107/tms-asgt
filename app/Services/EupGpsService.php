@@ -35,11 +35,11 @@ class EupGpsService
         try {
             $body = [];
 
-            if ($this->account !== null) {
+            if (! empty($this->account)) {
                 $body['account'] = $this->account;
             }
 
-            if ($this->password !== null) {
+            if (! empty($this->password)) {
                 $body['password'] = $this->password;
             }
 
