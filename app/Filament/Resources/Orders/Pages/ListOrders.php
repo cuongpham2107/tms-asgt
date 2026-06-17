@@ -123,6 +123,8 @@ class ListOrders extends ListRecords
     {
         parent::mount();
 
+        $this->startDate = today()->toDateString();
+
         $this->orderPlaceFilters = OrderCategory::query()
             ->orderBy('sort_order', 'asc')
             ->pluck('code', 'code')
