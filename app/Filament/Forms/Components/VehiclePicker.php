@@ -4,7 +4,7 @@ namespace App\Filament\Forms\Components;
 
 class VehiclePicker extends CardPicker
 {
-    protected string $view = 'filament.forms.components.card-picker';
+    protected string $view = 'filament.forms.components.vehicle-picker';
 
     protected function setUp(): void
     {

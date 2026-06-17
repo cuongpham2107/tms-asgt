@@ -41,6 +41,22 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Thời gian bắt đầu phải là ngày hôm nay'], 422);
         }
 
+        // Check vehicle requirements
+        $vehicleId = $payload['vehicle_id'] ?? null;
+        $currentVehicle = $user->vehiclesAsDriver()->first();
+
+        if ($currentVehicle === null && $vehicleId === null) {
+            return response()->json(['message' => 'Vui lòng chọn phương tiện để bắt đầu ca.'], 422);
+        }
+
+        $activeVehicle = $currentVehicle;
+        if ($vehicleId !== null) {
+            $activeVehicle = Vehicle::find($vehicleId);
+            if ($activeVehicle === null) {
+                return response()->json(['message' => 'Phương tiện không hợp lệ.'], 422);
+            }
+        }
+
         // prevent creating two shifts of the same type on the same day
         $sameDaySameType = DriverShift::query()
             ->where('driver_id', $user->id)
@@ -65,11 +81,32 @@ class DriverShiftController extends Controller
 
         DB::beginTransaction();
         try {
+            if ($vehicleId !== null) {
+                // Release driver from any other vehicle they currently have
+                Vehicle::where('current_driver_id', $user->id)
+                    ->where('id', '!=', $vehicleId)
+                    ->update(['current_driver_id' => null]);
+
+                // Assign driver to the selected vehicle
+                $activeVehicle->current_driver_id = $user->id;
+                $activeVehicle->save();
+            }
+
             $shift = DriverShift::create([
                 'driver_id' => $user->id,
                 'shift_type' => $payload['shift_type'],
                 'start_time' => $payload['start_time'] ?? now(),
             ]);
+
+            // Create initial shift vehicle segment
+            $shift->shiftVehicles()->create([
+                'vehicle_id' => $activeVehicle->id,
+                'start_time' => $payload['start_time'] ?? now(),
+                'start_km' => $activeVehicle->current_mileage ?? 0,
+                'start_gps_lat' => $payload['start_gps_lat'] ?? null,
+                'start_gps_lng' => $payload['start_gps_lng'] ?? null,
+            ]);
+
             DB::commit();
 
             return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'shiftVehicles.vehicle']))]);

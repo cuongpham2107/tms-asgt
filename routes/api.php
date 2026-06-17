@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DriverShiftController;
 use App\Http\Controllers\Api\EmptyKilometerController;
+use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\ShiftStatusController;
@@ -26,6 +27,8 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::get('/vehicles/search', [VehicleSearchController::class, 'search']);
     // Danh sách xe đang rảnh (chưa có lái)
     Route::get('/vehicles/available', [VehicleSearchController::class, 'available']);
+    // Chi tiết thông tin 1 xe
+    Route::get('/vehicles/{vehicle}', [VehicleSearchController::class, 'show']);
 
     // Orders (danh sách đơn hàng được gán)
     Route::get('/orders/stats', [OrderController::class, 'stats']);
@@ -45,4 +48,7 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
 
     // Empty kilometers (ghi nhận km không hàng)
     Route::post('/empty-kilometers', [EmptyKilometerController::class, 'store']);
+
+    // Locations (danh sách địa điểm có search và limit)
+    Route::get('/locations', [LocationController::class, 'index']);
 });

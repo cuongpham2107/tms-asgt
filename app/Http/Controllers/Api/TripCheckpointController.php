@@ -43,8 +43,7 @@ class TripCheckpointController extends Controller
         try {
             $order = Order::findOrFail($payload['order_id']);
 
-            if ($payload['checkpoint_type'] === CheckpointType::ArrivedDelivery->value
-                && $order->deliveryPoints()->count() === 0
+            if ($order->deliveryPoints()->count() === 0
                 && empty($payload['delivery_point_id'])
                 && empty($payload['new_delivery_location_id'])) {
                 return response()->json([
@@ -69,8 +68,7 @@ class TripCheckpointController extends Controller
                 'voice_note' => $payload['voice_note'] ?? null,
             ]);
 
-            if ($checkpoint->checkpoint_type === CheckpointType::ArrivedDelivery
-                && $order->deliveryPoints()->count() === 0
+            if ($order->deliveryPoints()->count() === 0
                 && empty($payload['delivery_point_id'])
                 && ! empty($payload['new_delivery_location_id'])) {
 

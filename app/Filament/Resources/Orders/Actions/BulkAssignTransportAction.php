@@ -10,27 +10,27 @@ use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Vehicle;
-use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Forms\Components\Checkbox;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Throwable;
 
-class AssignTransportAction extends CreatesOrderTransportCards
+class BulkAssignTransportAction extends CreatesOrderTransportCards
 {
-    public static function make(): Action
+    public static function make(): BulkAction
     {
-        return Action::make('assign_transport')
-            ->label('Gán xe')
+        return BulkAction::make('bulk_assign_transport')
+            ->label('Gán nhiều đơn hàng cho xe')
             ->icon('heroicon-o-truck')
             ->color('primary')
-            ->hidden(fn (Order $record): bool => ! $record->status->canAssign())
             ->modal()
-            ->modalHeading('Gán phương tiện')
-            ->modalDescription('Chọn phương tiện cho đơn hàng này. Lái xe sẽ tự động gán theo xe.')
+            ->modalHeading('Gán nhiều đơn hàng cho xe')
+            ->modalDescription('Chọn phương tiện cho các đơn hàng được chọn. Lái xe sẽ tự động gán theo xe.')
             ->modalWidth(Width::ScreenTwoExtraLarge)
             ->stickyModalFooter()
             ->schema([
@@ -47,11 +47,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
                                     $set('driver_id', null);
                                 }
                             })
-                            ->cards(fn (Order $record): array => self::resolveVehicleCards(
-                                self::normalizeDecimal($record->total_weight ?? 0),
-                                null,
-                                $record->vehicle_id,
-                            ))
+                            ->cards(fn (): array => self::resolveVehicleCards(null, null, null))
                             ->searchPlaceholder('Tìm biển số, loại xe...')
                             ->required(),
 
@@ -70,7 +66,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     ->live()
                     ->visible(fn (Get $get): bool => filled($get('vehicle_id'))),
             ])
-            ->action(function (Order $record, array $data): void {
+            ->action(function (EloquentCollection $records, array $data): void {
                 $vehicle = Vehicle::find($data['vehicle_id'] ?? null);
 
                 if ($vehicle !== null && ! ($data['override_shift_check'] ?? false)) {
@@ -91,13 +87,25 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     }
                 }
 
+                $draftOrders = $records->filter(fn (Order $order): bool => $order->status === OrderStatus::Draft);
+
+                if ($draftOrders->isEmpty()) {
+                    Notification::make()
+                        ->title('Không có đơn hàng nào hợp lệ')
+                        ->body('Chỉ các đơn hàng ở trạng thái Nháp mới có thể gán phương tiện.')
+                        ->warning()
+                        ->send();
+
+                    return;
+                }
+
                 try {
-                    Order::query()->whereKey($record->id)->update([
+                    Order::query()->whereIn('id', $draftOrders->pluck('id'))->update([
                         'vehicle_id' => $data['vehicle_id'] ?? null,
                         'driver_id' => $data['driver_id'] ?? null,
                         'status' => (filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null))
                             ? OrderStatus::Assigned->value
-                            : $record->status->value,
+                            : OrderStatus::Draft->value,
                     ]);
 
                     if (filled($data['vehicle_id'] ?? null)) {
@@ -115,17 +123,18 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     }
 
                     Notification::make()
-                        ->title('Gán phương tiện thành công')
-                        ->body('Đơn hàng đã được gán phương tiện và lái xe.')
+                        ->title('Gán phương tiện hàng loạt thành công')
+                        ->body('Đã gán phương tiện và lái xe cho '.$draftOrders->count().' đơn hàng.')
                         ->success()
                         ->send();
                 } catch (Throwable $e) {
                     Notification::make()
                         ->title('Lỗi')
-                        ->body('Không thể gán phương tiện: '.$e->getMessage())
+                        ->body('Không thể gán phương tiện hàng loạt: '.$e->getMessage())
                         ->danger()
                         ->send();
                 }
-            });
+            })
+            ->deselectRecordsAfterCompletion();
     }
 }

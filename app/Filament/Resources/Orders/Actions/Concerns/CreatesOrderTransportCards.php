@@ -18,10 +18,7 @@ abstract class CreatesOrderTransportCards
     protected static function resolveDriverCards(): array
     {
         return User::query()
-            ->where(function ($query): void {
-                $query->whereHas('driverShifts')
-                    ->orWhereHas('vehiclesAsDriver');
-            })
+            ->role('driver')
             ->withCount([
                 'orders',
                 'orders as active_orders_count' => fn ($q) => $q->whereIn('status', [
@@ -91,11 +88,7 @@ abstract class CreatesOrderTransportCards
     {
         return Vehicle::query()
             ->where(function ($query) use ($selectedVehicleId): void {
-                $query->where('status', 'on')
-                    ->where(function ($q): void {
-                        $q->whereHas('driverShifts', fn ($sub) => $sub->whereNull('driver_shifts.end_time'))
-                            ->orWhereHas('driver.driverShifts', fn ($sub) => $sub->whereNull('driver_shifts.end_time'));
-                    });
+                $query->where('status', 'on');
 
                 if ($selectedVehicleId) {
                     $query->orWhere('id', $selectedVehicleId);

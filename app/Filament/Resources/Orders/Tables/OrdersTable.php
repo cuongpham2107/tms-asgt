@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Tables;
 
 use App\Filament\BaseTable;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
+use App\Filament\Resources\Orders\Actions\BulkAssignTransportAction;
 use App\Filament\Resources\Orders\Actions\CancelOrderAction;
 use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
@@ -20,8 +21,12 @@ use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -235,7 +240,16 @@ class OrdersTable extends BaseTable
                         ->modalCancelActionLabel('Hủy'),
                     CopyTransportInfoAction::make(),
                 ]),
-            ], position: RecordActionsPosition::BeforeColumns);
+            ], position: RecordActionsPosition::BeforeColumns)
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                ]),
+
+                BulkAssignTransportAction::make(),
+            ]);
     }
 
     private static function renderRouteTimeline(Order $record): HtmlString

@@ -23,6 +23,7 @@ class StartShiftRequest extends FormRequest
             'start_time' => 'nullable|date',
             'start_gps_lat' => 'nullable|numeric',
             'start_gps_lng' => 'nullable|numeric',
+            'vehicle_id' => 'nullable|exists:vehicles,id',
         ];
     }
 

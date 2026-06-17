@@ -56,4 +56,32 @@ class VehicleSearchController extends Controller
             'data' => $vehicles,
         ]);
     }
+
+    /**
+     * Chi tiết thông tin 1 xe.
+     *
+     * @response array{id: int, plate_number: string, vehicle_type: string, owner: string, make: ?string, model_year: ?int, load_capacity: ?float, current_mileage: ?float, current_driver_id: ?int, status: string, type: string, notes: ?string}
+     */
+    public function show(Vehicle $vehicle): JsonResponse
+    {
+        return response()->json([
+            'data' => [
+                'id' => $vehicle->id,
+                'plate_number' => $vehicle->plate_number,
+                'vehicle_type' => $vehicle->vehicle_type?->value,
+                'vehicle_type_label' => $vehicle->getVehicleTypeLabel(),
+                'owner' => $vehicle->owner,
+                'make' => $vehicle->make,
+                'model_year' => $vehicle->model_year,
+                'load_capacity' => $vehicle->load_capacity !== null ? (float) $vehicle->load_capacity : null,
+                'current_mileage' => $vehicle->current_mileage !== null ? (float) $vehicle->current_mileage : null,
+                'current_driver_id' => $vehicle->current_driver_id,
+                'status' => $vehicle->status?->value,
+                'status_label' => $vehicle->getStatusLabel(),
+                'type' => $vehicle->type?->value,
+                'type_label' => $vehicle->getTypeLabel(),
+                'notes' => $vehicle->notes,
+            ],
+        ]);
+    }
 }

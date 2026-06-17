@@ -10,6 +10,7 @@ use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Models\Customer;
 use App\Models\DriverShift;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderCategory;
 use App\Models\OrderDeliveryPoint;
@@ -83,6 +84,7 @@ test('marks a delivery point delivered and fills delivered_at when completing a 
         'shift_id' => $shift->id,
         'delivery_point_id' => $deliveryPoint->id,
         'checkpoint_type' => CheckpointType::Completed->value,
+        'km_reading' => 10.0,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -109,6 +111,7 @@ test('includes driver information when starting a shift', function () {
         'is_active' => true,
         'status' => VehicleStatus::On,
         'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
     ]);
 
     Sanctum::actingAs($driver);
@@ -119,4 +122,72 @@ test('includes driver information when starting a shift', function () {
     ])->assertSuccessful()
         ->assertJsonPath('shift.driver.id', $driver->id)
         ->assertJsonPath('shift.driver.name', 'Nguyen Van A');
+});
+
+test('returns 422 when checkpoint is posted for order without delivery points and missing new_delivery_location_id', function () {
+    $driverRole = Role::create([
+        'name' => 'driver',
+        'guard_name' => 'web',
+    ]);
+
+    $driver = User::factory()->create();
+    $driver->assignRole($driverRole);
+
+    $orderCategory = OrderCategory::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'NORTH',
+        'name' => 'North',
+    ]);
+
+    $customer = Customer::create([
+        'code' => 'CUST-001',
+        'name' => 'Customer 001',
+        'is_active' => true,
+    ]);
+
+    $shift = DriverShift::create([
+        'driver_id' => $driver->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now()->subHour(),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-NODEST',
+        'type' => OrderType::Hhhk,
+        'order_category_id' => $orderCategory->id,
+        'customer_id' => $customer->id,
+        'driver_id' => $driver->id,
+        'status' => OrderStatus::Started,
+        'created_by' => $driver->id,
+    ]);
+
+    Sanctum::actingAs($driver);
+
+    // Gửi checkpoint without new_delivery_location_id
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order->id,
+        'shift_id' => $shift->id,
+        'checkpoint_type' => CheckpointType::LeftPickup->value,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Đơn hàng chưa có điểm đến. Vui lòng chọn điểm giao hàng.');
+
+    // Gửi checkpoint WITH new_delivery_location_id -> success
+    $location = Location::create([
+        'code' => 'LOC-XYZ',
+        'name' => 'Saigon Port',
+        'address' => 'Nguyen Hue St',
+        'is_active' => true,
+    ]);
+
+    $this->postJson('/api/driver/checkpoints', [
+        'order_id' => $order->id,
+        'shift_id' => $shift->id,
+        'checkpoint_type' => CheckpointType::LeftPickup->value,
+        'new_delivery_location_id' => $location->id,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    expect($order->deliveryPoints()->count())->toBe(1);
+    expect($order->deliveryPoints()->first()->location_id)->toBe($location->id);
 });
