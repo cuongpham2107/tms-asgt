@@ -11,8 +11,10 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -64,6 +66,16 @@ class DriverShiftsTable extends BaseTable
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                Filter::make('start_date')
+                    ->label('Ngày')
+                    ->schema([
+                        DatePicker::make('date')
+                            ->default(now()),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query
+                        ->when($data['date'], fn (Builder $query, $date): Builder => $query->whereDate('start_time', $date))),
             ])
             ->recordActions([
                 ActionGroup::make([

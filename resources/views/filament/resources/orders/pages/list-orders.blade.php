@@ -99,7 +99,7 @@
     </div>
 
     {{-- Search + Date + Mine --}}
-    <div class="mt-4 flex flex-wrap items-center gap-3">
+    <div class="mt-2 flex flex-wrap items-center gap-3">
         <div class="relative flex-1 min-w-0 sm:max-w-md">
             <x-filament::icon
                 icon="heroicon-o-magnifying-glass"
@@ -114,7 +114,7 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <x-filament::input.wrapper class="w-36">
+            <x-filament::input.wrapper class="w-48">
                 <x-slot name="prefix">
                     <x-filament::icon icon="heroicon-o-calendar" class="h-3.5 w-3.5" />
                 </x-slot>
@@ -127,7 +127,7 @@
 
             <span class="text-xs text-gray-400 dark:text-gray-500">→</span>
 
-            <x-filament::input.wrapper class="w-36">
+            <x-filament::input.wrapper class="w-48">
                 <x-slot name="prefix">
                     <x-filament::icon icon="heroicon-o-calendar" class="h-3.5 w-3.5" />
                 </x-slot>
@@ -160,7 +160,7 @@
 
     {{-- Active filters summary --}}
     @if ($activeOrderTypeFilter !== 'all' || $activeStatusFilter !== 'all' || $activePlaceFilter !== 'all')
-        <div class="mt-3 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+        <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <span>Đang lọc:</span>
             @if ($activeOrderTypeFilter !== 'all')
                 <span class="inline-flex items-center gap-1 rounded-full bg-[#008fd5]/10 px-2 py-0.5 font-medium text-[#008fd5]">
@@ -183,7 +183,7 @@
         </div>
     @endif
 
-    <div class="mt-4">
+    <div>
         {{ $this->table }}
     </div>
 </x-filament-panels::page>

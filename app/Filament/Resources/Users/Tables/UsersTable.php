@@ -20,13 +20,13 @@ class UsersTable
                 TextColumn::make('name')
                     ->label('Họ và tên')
                     ->searchable(),
-                TextColumn::make('email')
-                    ->label('Email')
-                    ->searchable(),
-                TextColumn::make('email_verified_at')
-                    ->label('Xác thực email lúc')
-                    ->dateTime()
-                    ->sortable(),
+                // TextColumn::make('email')
+                //     ->label('Email')
+                //     ->searchable(),
+                // TextColumn::make('email_verified_at')
+                //     ->label('Xác thực email lúc')
+                //     ->dateTime()
+                //     ->sortable(),
                 TextColumn::make('date_of_birth')
                     ->label('Ngày sinh')
                     ->date()
@@ -34,24 +34,24 @@ class UsersTable
                 TextColumn::make('license_class')
                     ->label('Hạng bằng lái')
                     ->searchable(),
-                TextColumn::make('license_number')
-                    ->label('Số bằng lái')
-                    ->searchable(),
-                TextColumn::make('license_expiry_date')
-                    ->label('Ngày hết hạn bằng lái')
-                    ->date()
-                    ->sortable(),
-                ImageColumn::make('license_image')
-                    ->label('Ảnh bằng lái'),
+                // TextColumn::make('license_number')
+                //     ->label('Số bằng lái')
+                //     ->searchable(),
+                // TextColumn::make('license_expiry_date')
+                //     ->label('Ngày hết hạn bằng lái')
+                //     ->date()
+                //     ->sortable(),
+                // ImageColumn::make('license_image')
+                //     ->label('Ảnh bằng lái'),
                 TextColumn::make('phone')
                     ->label('Số điện thoại')
                     ->searchable(),
-                TextColumn::make('address')
-                    ->label('Địa chỉ')
-                    ->searchable(),
-                TextColumn::make('avatar')
-                    ->label('Ảnh đại diện')
-                    ->searchable(),
+                // TextColumn::make('address')
+                //     ->label('Địa chỉ')
+                //     ->searchable(),
+                // TextColumn::make('avatar')
+                //     ->label('Ảnh đại diện')
+                //     ->searchable(),
                 IconColumn::make('is_active')
                     ->label('Đang hoạt động')
                     ->boolean(),
@@ -68,10 +68,10 @@ class UsersTable
                 TextColumn::make('cccd')
                     ->label('Số CCCD')
                     ->searchable(),
-                TextColumn::make('cccd_issue_date')
-                    ->label('Ngày cấp CCCD')
-                    ->date()
-                    ->sortable(),
+                // TextColumn::make('cccd_issue_date')
+                //     ->label('Ngày cấp CCCD')
+                //     ->date()
+                //     ->sortable(),
             ])
             ->filters([
                 //
