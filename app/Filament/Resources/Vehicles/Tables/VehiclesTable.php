@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\Vehicles\Tables;
 
 use App\Filament\BaseTable;
+use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Vehicle;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
-use EduardoRibeiroDev\FilamentLeaflet\Tables\MapColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -21,7 +21,7 @@ class VehiclesTable extends BaseTable
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
-                MapColumn::make('location')
+                UniqueMapColumn::make('location')
                     ->label('Vị trí')
                     ->height(100)
                     ->width(150)

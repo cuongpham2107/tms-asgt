@@ -80,14 +80,14 @@ class DriverShiftForm
                                     ->searchable(),
                                 DateTimePicker::make('start_time')
                                     ->label('Bắt đầu')
-                                    ->format('d/m/Y H:i')
+                                    ->displayFormat('d/m/Y H:i')
                                     ->seconds(false)
-                                    ->native(true),
+                                    ->native(false),
                                 DateTimePicker::make('end_time')
                                     ->label('Kết thúc')
-                                    ->format('d/m/Y H:i')
+                                    ->displayFormat('d/m/Y H:i')
                                     ->seconds(false)
-                                    ->native(true),
+                                    ->native(false),
                                 TextInput::make('start_km')
                                     ->label('Km đầu')
                                     ->numeric(),

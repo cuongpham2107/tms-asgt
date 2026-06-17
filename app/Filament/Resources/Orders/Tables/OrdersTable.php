@@ -11,10 +11,13 @@ use App\Filament\Resources\Orders\Actions\DriverSwapAction;
 use App\Filament\Resources\Orders\Actions\ReassignDriverAction;
 use App\Filament\Resources\Orders\Actions\SendOrderAction;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
+use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Order;
+use App\Services\OsrmService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
-use EduardoRibeiroDev\FilamentLeaflet\Tables\MapColumn;
+use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
+use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -62,12 +65,10 @@ class OrdersTable extends BaseTable
                     })
                     ->html(),
 
-                MapColumn::make('map_coords')
+                UniqueMapColumn::make('map_coords')
                     ->label('Bản đồ')
                     ->height(72)
                     ->zoom(12)
-                    ->pickMarker(fn (Marker $marker) => $marker->icon(asset('images/truck.png'), [14, 25]))
-                    ->circular()
                     ->static()
                     ->action(
                         Action::make('select')
@@ -89,12 +90,35 @@ class OrdersTable extends BaseTable
                                             <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $order->customer?->name ?? '—' }}</span>
                                         </div>
 
+                                        @if ($order->vehicle)
+                                            <div>
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">Xe</span>
+                                                <span class="ml-2 text-sm font-bold text-amber-700 dark:text-amber-300">{{ $order->vehicle->plate_number }}</span>
+                                            </div>
+                                        @endif
+
+                                        @if ($order->driver)
+                                            <div>
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">Lái xe</span>
+                                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $order->driver->name }}</span>
+                                            </div>
+                                        @endif
+
                                         <div>
                                             <span class="text-xs text-gray-500 dark:text-gray-400">Điểm lấy</span>
-                                            <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            <span class="ml-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
                                                 {{ $order->pickupLocation?->name ?? $order->pickup_address ?? '—' }}
                                             </span>
                                         </div>
+
+                                        @foreach ($order->deliveryPoints->sortBy('sequence') as $dp)
+                                            <div>
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">Điểm giao {{ $dp->sequence }}</span>
+                                                <span class="ml-2 text-sm font-medium text-red-700 dark:text-red-300">
+                                                    {{ $dp->address ?? $dp->location?->name ?? '—' }}
+                                                </span>
+                                            </div>
+                                        @endforeach
                                     </div>
 
                                     <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
@@ -102,7 +126,21 @@ class OrdersTable extends BaseTable
                                     </div>
 
                                     <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
-                                        Bản đồ đang dùng tọa độ lấy hàng của đơn hàng và marker xe tải mặc định.
+                                        <span class="inline-flex items-center gap-1.5">
+                                            <span class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span> Điểm lấy hàng
+                                        </span>
+                                        <span class="mx-2">·</span>
+                                        <span class="inline-flex items-center gap-1.5">
+                                            <span class="inline-block h-2.5 w-2.5 rounded-full bg-red-500"></span> Điểm giao hàng
+                                        </span>
+                                        @if ($order->deliveryPoints->filter(fn ($dp) => $dp->location?->lat !== null)->isNotEmpty())
+                                            <span class="mx-2">·</span>
+                                            <span class="text-blue-500">━━</span> Tuyến đường
+                                        @endif
+                                        @if ($order->vehicle)
+                                            <span class="mx-2">·</span>
+                                            <span class="inline-flex items-center gap-1.5">🚛 Vị trí xe</span>
+                                        @endif
                                     </div>
                                 </div>
                             BLADE, [
@@ -275,19 +313,156 @@ class OrdersTable extends BaseTable
      */
     private static function buildOrderMapConfig(Order $record): array
     {
-        $coords = $record->map_coords;
+        $pickupLat = (float) ($record->pickupLocation?->lat ?? 10.8231);
+        $pickupLng = (float) ($record->pickupLocation?->lng ?? 106.6297);
 
-        $marker = Marker::make((float) $coords['lat'], (float) $coords['lng'])
-            ->id('order-'.$record->getKey())
-            ->icon(asset('images/truck.png'), [38, 38]);
+        $layers = [];
+        $routePoints = [[$pickupLat, $pickupLng]];
+        $routeLabels = [$record->pickupLocation?->name ?? $record->pickup_address ?? 'Điểm lấy hàng'];
+
+        // Pickup marker (green)
+        $pickupMarker = Marker::make($pickupLat, $pickupLng)
+            ->id('pickup-'.$record->getKey())
+            ->green()
+            ->title($routeLabels[0])
+            ->popupContent($record->pickup_address ?? '');
+        $layers[] = $pickupMarker->toArray();
+
+        // Truck marker — only when vehicle is assigned
+        if ($record->vehicle_id !== null) {
+            $truckCoords = $record->map_coords;
+            $layers[] = Marker::make((float) $truckCoords['lat'], (float) $truckCoords['lng'])
+                ->id('truck-'.$record->getKey())
+                ->icon(asset('images/truck.png'), [38, 38])
+                ->title($record->vehicle?->plate_number ?? 'Xe')
+                ->popupContent(($record->vehicle?->plate_number ?? '').' — '.($record->driver?->name ?? 'Chưa phân lái xe'))
+                ->toArray();
+        }
+
+        // Delivery point markers (red) + collect route coordinates
+        $deliveryPoints = $record->deliveryPoints->sortBy('sequence');
+
+        foreach ($deliveryPoints as $dp) {
+            $location = $dp->location;
+
+            if ($location === null || $location->lat === null || $location->lng === null) {
+                continue;
+            }
+
+            $dpLat = (float) $location->lat;
+            $dpLng = (float) $location->lng;
+            $routePoints[] = [$dpLat, $dpLng];
+
+            $dpName = $dp->address ?? $location->name ?? 'Điểm giao '.$dp->sequence;
+            $routeLabels[] = $dpName;
+
+            $dpMarker = Marker::make($dpLat, $dpLng)
+                ->id('delivery-'.$dp->getKey())
+                ->red()
+                ->title($dpName)
+                ->popupContent($dpName);
+            $layers[] = $dpMarker->toArray();
+        }
+
+        // Draw route segments between consecutive points (same style as GoogleMapTracking)
+        if (count($routePoints) >= 2) {
+            $segmentColors = [
+                '#22c55e', // xanh lá — bắt đầu → điểm giao đầu
+                '#3b82f6', // xanh dương
+                '#8b5cf6', // tím
+                '#f59e0b', // cam
+                '#ef4444', // đỏ — đoạn cuối
+            ];
+
+            $osrm = app(OsrmService::class);
+
+            // GPS breadcrumbs (đường chim bay nét đứt, tổng quan)
+            $layers[] = Polyline::make($routePoints)
+                ->id('route-gps-'.$record->getKey())
+                ->color('#9ca3af')
+                ->weight(2)
+                ->opacity(0.35)
+                ->dashArray(4, 6)
+                ->fill(false)
+                ->toArray();
+
+            // Điểm bắt đầu (CircleMarker xanh lá)
+            $layers[] = CircleMarker::make($routePoints[0][0], $routePoints[0][1])
+                ->id('start-'.$record->getKey())
+                ->radius(8)
+                ->color('#16a34a')
+                ->fillColor('#22c55e')
+                ->fillOpacity(0.8)
+                ->weight(3)
+                ->tooltipContent('Lấy hàng: '.$routeLabels[0])
+                ->toArray();
+
+            // Điểm kết thúc (CircleMarker đỏ)
+            $lastIdx = count($routePoints) - 1;
+            $layers[] = CircleMarker::make($routePoints[$lastIdx][0], $routePoints[$lastIdx][1])
+                ->id('end-'.$record->getKey())
+                ->radius(8)
+                ->color('#dc2626')
+                ->fillColor('#ef4444')
+                ->fillOpacity(0.8)
+                ->weight(3)
+                ->tooltipContent('Giao hàng: '.$routeLabels[$lastIdx])
+                ->toArray();
+
+            // Vẽ từng segment giữa các điểm liên tiếp với OSRM
+            for ($i = 0; $i < count($routePoints) - 1; $i++) {
+                $segment = [$routePoints[$i], $routePoints[$i + 1]];
+                $osrmSegment = $osrm->getRouteFromPoints($segment);
+                $color = $segmentColors[$i % count($segmentColors)];
+                $label = ($routeLabels[$i] ?? '?').' → '.($routeLabels[$i + 1] ?? '?');
+                $isLastSegment = $i === (count($routePoints) - 2);
+
+                if (count($osrmSegment) >= 2) {
+                    // Main route line (thick, real road)
+                    $layers[] = Polyline::make($osrmSegment)
+                        ->id('route-seg'.$i.'-'.$record->getKey())
+                        ->color($color)
+                        ->weight($isLastSegment ? 8 : 6)
+                        ->opacity($isLastSegment ? 0.95 : 0.9)
+                        ->fill(false)
+                        ->tooltipContent($label)
+                        ->toArray();
+
+                    // Highlight glow on last segment
+                    if ($isLastSegment) {
+                        $layers[] = Polyline::make($osrmSegment)
+                            ->id('route-seg'.$i.'-'.$record->getKey().'-highlight')
+                            ->color($color)
+                            ->weight(12)
+                            ->opacity(0.18)
+                            ->fill(false)
+                            ->toArray();
+                    }
+                } else {
+                    // Fallback: đường thẳng giữa 2 điểm (dashed)
+                    $layers[] = Polyline::make($segment)
+                        ->id('route-seg'.$i.'-'.$record->getKey())
+                        ->color($color)
+                        ->weight($isLastSegment ? 6 : 4)
+                        ->opacity(0.75)
+                        ->dashArray(8, 4)
+                        ->fill(false)
+                        ->tooltipContent($label.' (ước lượng)')
+                        ->toArray();
+                }
+            }
+        }
+
+        // Determine fitBounds: auto-zoom to encompass all points
+        $hasFitBounds = count($routePoints) >= 2;
 
         return [
             'mapId' => 'order-map-'.$record->getKey(),
-            'mapHeight' => 284,
-            'defaultCoord' => [(float) $coords['lat'], (float) $coords['lng']],
+            'mapHeight' => 340,
+            'defaultCoord' => [$pickupLat, $pickupLng],
             'autoCenter' => false,
-            'fitBounds' => false,
-            'defaultZoom' => 12,
+            'fitBounds' => $hasFitBounds,
+            'defaultZoom' => $hasFitBounds ? 10 : 12,
             'geoJsonColors' => [],
             'geoJsonData' => [],
             'infoText' => '',
@@ -297,8 +472,8 @@ class OrdersTable extends BaseTable
                 TileLayer::OpenStreetMap->getAttribution(),
             ]],
             'layerGroupsData' => [],
-            'layersData' => [$marker->toArray()],
-            'zoomConfig' => ['max' => 19, 'min' => 0],
+            'layersData' => $layers,
+            'zoomConfig' => ['max' => 10, 'min' => 0],
             'mapConfig' => [],
             'mapControls' => [],
             'geoSearchConfig' => [],
