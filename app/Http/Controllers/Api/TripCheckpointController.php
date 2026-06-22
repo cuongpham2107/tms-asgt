@@ -5,19 +5,18 @@ namespace App\Http\Controllers\Api;
 use App\Enums\CheckpointType;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\CheckpointRequest;
+use App\Http\Requests\TripCheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
 use App\Models\DriverShift;
-use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripPhoto;
 use App\Models\Vehicle;
-use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
@@ -26,68 +25,42 @@ use Illuminate\Support\Facades\Storage;
 
 class TripCheckpointController extends Controller
 {
-    #[BodyParameter('order_id', type: 'integer', description: 'ID đơn hàng.', required: true, example: 1001)]
-    #[BodyParameter('shift_id', type: 'integer', description: 'ID ca trực tương ứng (nếu có).', example: 88)]
-    #[BodyParameter('delivery_point_id', type: 'integer', description: 'ID điểm giao cụ thể (nếu đơn có nhiều điểm).', example: 501)]
-    #[BodyParameter('checkpoint_type', type: 'string', description: 'Loại mốc hành trình. Giá trị hỗ trợ: started (Bắt đầu chuyến), arrived_pickup (Đến lấy hàng), left_pickup (Rời lấy hàng), arrived_delivery (Đến giao hàng), completed (Hoàn thành), driver_swap (Đảo lái).', required: true, example: 'arrived_pickup')]
-    #[BodyParameter('occurred_at', type: 'string', format: 'date-time', description: 'Thời điểm thực tế phát sinh mốc.', example: '2026-05-20T07:15:22Z')]
-    #[BodyParameter('km_reading', type: 'number', description: 'Số km đồng hồ tại thời điểm ghi nhận.', example: 12540.5)]
-    #[BodyParameter('gps_lat', type: 'string', description: 'Vĩ độ GPS tại thời điểm ghi nhận.', example: '10,823099')]
-    #[BodyParameter('gps_lng', type: 'string', description: 'Kinh độ GPS tại thời điểm ghi nhận.', example: '106,629662')]
-    #[BodyParameter('voice_note', type: 'string', description: 'Ghi chú giọng nói đã chuyển thành văn bản.', example: 'Đã đến điểm lấy hàng, chờ bốc xếp.')]
-    #[BodyParameter('photos', type: 'array', description: 'Danh sách ảnh đính kèm checkpoint.')]
-    public function checkpoint(CheckpointRequest $request): JsonResponse
+    public function checkpoint(TripCheckpointRequest $request, Trip $trip): JsonResponse
     {
         $user = $request->user();
 
+        if ($trip->driver_id !== $user->id) {
+            return response()->json(['message' => 'Bạn không phải tài xế được gán cho chuyến này'], 403);
+        }
+
         $payload = $request->validated();
+
+        $checkpointType = CheckpointType::from($payload['checkpoint_type']);
+
+        if (in_array($checkpointType, [CheckpointType::ArrivedDelivery, CheckpointType::Completed], true)) {
+            $order = Order::findOrFail($payload['order_id']);
+
+            if ($order->trip_id !== $trip->id) {
+                return response()->json(['message' => 'Order không thuộc chuyến này'], 422);
+            }
+        }
+
         DB::beginTransaction();
         try {
-            $order = Order::findOrFail($payload['order_id']);
-            if ($payload['checkpoint_type'] === 'completed'
-                && $order->deliveryPoints()->count() === 0
-                && empty($payload['delivery_point_id'])
-                && empty($payload['new_delivery_location_id'])) {
-                return response()->json([
-                    'message' => 'Đơn hàng chưa có điểm đến. Vui lòng chọn điểm giao hàng.'.$payload['checkpoint_type'],
+            if ($trip->shift_id === null) {
+                $activeShift = DriverShift::where('driver_id', $user->id)
+                    ->whereNull('end_time')
+                    ->first();
 
-                ], 422);
+                if ($activeShift !== null) {
+                    $trip->shift_id = $activeShift->id;
+                    $trip->save();
+                }
             }
 
-            if ($order->driver_id !== $user->id) {
-                return response()->json(['message' => 'Bạn không phải tài xế được gán cho đơn hàng này'], 403);
-            }
+            $checkpoint = $this->createCheckpoint($trip, $user, $payload, $checkpointType);
 
-            $checkpoint = TripCheckpoint::create([
-                'order_id' => $payload['order_id'],
-                'trip_id' => $order->trip_id,
-                'driver_id' => $user->id,
-                'shift_id' => $payload['shift_id'] ?? null,
-                'delivery_point_id' => $payload['delivery_point_id'] ?? null,
-                'checkpoint_type' => $payload['checkpoint_type'],
-                'occurred_at' => $payload['occurred_at'] ?? now(),
-                'km_reading' => $payload['km_reading'] ?? null,
-                'gps_lat' => $payload['gps_lat'] ?? null,
-                'gps_lng' => $payload['gps_lng'] ?? null,
-                'voice_note' => $payload['voice_note'] ?? null,
-            ]);
-
-            if ($order->deliveryPoints()->count() === 0
-                && empty($payload['delivery_point_id'])
-                && ! empty($payload['new_delivery_location_id'])) {
-
-                $deliveryPoint = $order->deliveryPoints()->create([
-                    'location_id' => $payload['new_delivery_location_id'],
-                    'sequence' => 1,
-                    'address' => Location::find($payload['new_delivery_location_id'])?->address,
-                    'status' => OrderDeliveryPointStatus::Pending,
-                ]);
-
-                $checkpoint->update(['delivery_point_id' => $deliveryPoint->id]);
-                $payload['delivery_point_id'] = $deliveryPoint->id;
-            }
-
-            $this->updateVehicleFromCheckpoint($order, $payload);
+            $this->updateVehicleFromCheckpoint($trip, $payload);
 
             if ($request->hasFile('photos')) {
                 $files = Arr::wrap($request->file('photos'));
@@ -107,12 +80,12 @@ class TripCheckpointController extends Controller
                 }
             }
 
-            match ($checkpoint->checkpoint_type) {
-                CheckpointType::Started => $this->handleStarted($order, $payload),
-                CheckpointType::ArrivedPickup => $this->handleArrivedPickup($order, $payload),
-                CheckpointType::LeftPickup => $this->handleLeftPickup($order),
-                CheckpointType::ArrivedDelivery => $this->handleArrivedDelivery($order, $payload),
-                CheckpointType::Completed => $this->handleCompleted($order, $payload),
+            match ($checkpointType) {
+                CheckpointType::Started => $this->handleStarted($trip, $payload),
+                CheckpointType::ArrivedPickup => $this->handleArrivedPickup($trip),
+                CheckpointType::LeftPickup => $this->handleLeftPickup($trip),
+                CheckpointType::ArrivedDelivery => $this->handleArrivedDelivery($trip, $payload),
+                CheckpointType::Completed => $this->handleCompleted($trip, $payload),
                 CheckpointType::DriverSwap => null,
             };
 
@@ -128,281 +101,147 @@ class TripCheckpointController extends Controller
         }
     }
 
-    private function updateVehicleFromCheckpoint(Order $order, array $payload): void
+    private function createCheckpoint(Trip $trip, $user, array $payload, CheckpointType $type): TripCheckpoint
     {
-        if ($order->vehicle_id === null) {
-            return;
+        $shiftId = $trip->shift_id;
+        $occurredAt = $payload['occurred_at'] ?? now();
+
+        if ($type === CheckpointType::Started) {
+            $checkpoint = null;
+            $orders = $trip->orders;
+            foreach ($orders as $order) {
+                $checkpoint = TripCheckpoint::create([
+                    'trip_id' => $trip->id,
+                    'order_id' => $order->id,
+                    'driver_id' => $trip->driver_id,
+                    'shift_id' => $shiftId,
+                    'checkpoint_type' => $type->value,
+                    'occurred_at' => $occurredAt,
+                    'km_reading' => $payload['km_reading'] ?? null,
+                    'gps_lat' => $payload['gps_lat'] ?? null,
+                    'gps_lng' => $payload['gps_lng'] ?? null,
+                    'voice_note' => $payload['voice_note'] ?? null,
+                ]);
+            }
+
+            return $checkpoint;
         }
 
-        $vehicle = Vehicle::find($order->vehicle_id);
+        return TripCheckpoint::create([
+            'trip_id' => $trip->id,
+            'order_id' => $payload['order_id'] ?? null,
+            'delivery_point_id' => $payload['delivery_point_id'] ?? null,
+            'driver_id' => $trip->driver_id,
+            'shift_id' => $shiftId,
+            'checkpoint_type' => $type->value,
+            'occurred_at' => $occurredAt,
+            'km_reading' => $payload['km_reading'] ?? null,
+            'gps_lat' => $payload['gps_lat'] ?? null,
+            'gps_lng' => $payload['gps_lng'] ?? null,
+            'voice_note' => $payload['voice_note'] ?? null,
+        ]);
+    }
+
+    private function handleStarted(Trip $trip, array $payload): void
+    {
+        if ($trip->isPending()) {
+            $vehicle = $trip->vehicle;
+            $trip->status = TripStatus::Started;
+            $trip->started_at = $payload['occurred_at'] ?? now();
+            $trip->start_km = $vehicle?->current_mileage ?? $trip->start_km;
+            $trip->save();
+        }
+
+        $occurredAt = $payload['occurred_at'] ?? now();
+        $trip->orders()
+            ->where('status', OrderStatus::Sent)
+            ->whereNull('sent_at')
+            ->update(['sent_at' => $occurredAt]);
+    }
+
+    private function handleArrivedPickup(Trip $trip): void
+    {
+        $trip->status = TripStatus::ArrivedPickup;
+        $trip->save();
+    }
+
+    private function handleLeftPickup(Trip $trip): void
+    {
+        $trip->status = TripStatus::Delivering;
+        $trip->save();
+    }
+
+    private function handleArrivedDelivery(Trip $trip, array $payload): void
+    {
+        $trip->status = TripStatus::ArrivedDelivery;
+        $trip->save();
+
+        $this->updateDeliveryPoint($payload, OrderDeliveryPointStatus::Arrived);
+    }
+
+    private function handleCompleted(Trip $trip, array $payload): void
+    {
+        $this->updateDeliveryPoint($payload, OrderDeliveryPointStatus::Delivered);
+
+        $order = Order::findOrFail($payload['order_id']);
+        $order->status = OrderStatus::Completed;
+        $order->save();
+
+        $hasMoreActiveInTrip = $trip->orders()
+            ->where('id', '!=', $order->id)
+            ->whereIn('status', [OrderStatus::Assigned, OrderStatus::Sent])
+            ->exists();
+
+        if (! $hasMoreActiveInTrip) {
+            $trip->complete(
+                endKm: $payload['km_reading'] ?? null,
+                completedAt: $payload['occurred_at'] ?? now(),
+            );
+
+            TripCheckpoint::create([
+                'trip_id' => $trip->id,
+                'driver_id' => $trip->driver_id,
+                'shift_id' => $trip->shift_id,
+                'checkpoint_type' => CheckpointType::Completed->value,
+                'occurred_at' => $payload['occurred_at'] ?? now(),
+                'km_reading' => $payload['km_reading'] ?? null,
+                'gps_lat' => $payload['gps_lat'] ?? null,
+                'gps_lng' => $payload['gps_lng'] ?? null,
+            ]);
+        }
+
+        $hasMoreActiveOnVehicle = Order::whereHas('trip', fn ($q) => $q->where('vehicle_id', $trip->vehicle_id))
+            ->where('id', '!=', $order->id)
+            ->whereIn('status', [OrderStatus::Assigned, OrderStatus::Sent])
+            ->exists();
+
+        if (! $hasMoreActiveOnVehicle) {
+            Vehicle::where('id', $trip->vehicle_id)->update(['status' => VehicleStatus::On]);
+        }
+    }
+
+    private function updateVehicleFromCheckpoint(Trip $trip, array $payload): void
+    {
+        $vehicle = $trip->vehicle;
         if ($vehicle === null) {
             return;
         }
 
         $dirty = false;
-
         if (isset($payload['km_reading'])) {
             $vehicle->current_mileage = $payload['km_reading'];
             $dirty = true;
         }
-
         if (isset($payload['gps_lat'])) {
             $vehicle->gps_lat = $payload['gps_lat'];
             $dirty = true;
         }
-
         if (isset($payload['gps_lng'])) {
             $vehicle->gps_lng = $payload['gps_lng'];
             $dirty = true;
         }
-
         if ($dirty) {
             $vehicle->save();
-        }
-    }
-
-    private function handleStarted(Order $order, array $payload): void
-    {
-        // ---- 1. Trip management: xác định trip + sibling orders ----
-        if ($order->vehicle_id !== null) {
-            $vehicle = Vehicle::find($order->vehicle_id);
-            $snapshotPlate = $vehicle?->plate_number;
-            $snapshotType = $vehicle?->vehicle_type?->value;
-            $startKm = $payload['km_reading'] ?? Vehicle::where('id', $order->vehicle_id)->value('current_mileage');
-
-            if ($order->trip_id !== null) {
-                // Đã có trip (do SendOrderAction tạo) → chuyển pending → in_progress
-                $trip = Trip::find($order->trip_id);
-                if ($trip !== null && $trip->isPending()) {
-                    $trip->start(occurredAt: $payload['occurred_at'] ?? null, startKm: $startKm);
-                }
-            } else {
-                // Chưa có trip — tìm trip pending/in_progress trên cùng xe
-                $existingTrip = Trip::where('vehicle_id', $order->vehicle_id)
-                    ->whereIn('status', ['pending', 'in_progress'])
-                    ->first();
-
-                if ($existingTrip !== null) {
-                    $trip = $existingTrip;
-                    $order->trip_id = $trip->id;
-
-                    if ($trip->isPending()) {
-                        $trip->start(occurredAt: $payload['occurred_at'] ?? null, startKm: $startKm);
-                    }
-
-                    $order->vehicle_plate_number = $snapshotPlate;
-                    $order->vehicle_type = $snapshotType;
-
-                    $siblingOrders = Order::where('vehicle_id', $order->vehicle_id)
-                        ->where('id', '!=', $order->id)
-                        ->where('status', OrderStatus::Sent)
-                        ->whereNull('trip_id')
-                        ->get();
-
-                    foreach ($siblingOrders as $sibling) {
-                        $sibling->trip_id = $trip->id;
-                        $sibling->status = OrderStatus::Started;
-                        $sibling->sent_at = $sibling->sent_at ?? now();
-                        $sibling->vehicle_plate_number = $snapshotPlate;
-                        $sibling->vehicle_type = $snapshotType;
-                        $sibling->save();
-
-                        TripCheckpoint::create([
-                            'trip_id' => $trip->id,
-                            'order_id' => $sibling->id,
-                            'driver_id' => $order->driver_id,
-                            'shift_id' => $order->shift_id,
-                            'checkpoint_type' => CheckpointType::Started,
-                            'occurred_at' => $payload['occurred_at'] ?? now(),
-                            'km_reading' => $payload['km_reading'] ?? null,
-                            'gps_lat' => $payload['gps_lat'] ?? null,
-                            'gps_lng' => $payload['gps_lng'] ?? null,
-                        ]);
-                    }
-                } else {
-                    $siblingOrders = Order::where('vehicle_id', $order->vehicle_id)
-                        ->where('id', '!=', $order->id)
-                        ->whereIn('status', [OrderStatus::Sent])
-                        ->get();
-
-                    $trip = Trip::create([
-                        'vehicle_id' => $order->vehicle_id,
-                        'status' => 'in_progress',
-                        'started_at' => $payload['occurred_at'] ?? now(),
-                        'start_km' => $startKm,
-                    ]);
-
-                    $order->trip_id = $trip->id;
-                    $order->vehicle_plate_number = $snapshotPlate;
-                    $order->vehicle_type = $snapshotType;
-
-                    foreach ($siblingOrders as $sibling) {
-                        $sibling->trip_id = $trip->id;
-                        $sibling->status = OrderStatus::Started;
-                        $sibling->sent_at = $sibling->sent_at ?? now();
-                        $sibling->vehicle_plate_number = $snapshotPlate;
-                        $sibling->vehicle_type = $snapshotType;
-                        $sibling->save();
-
-                        TripCheckpoint::create([
-                            'trip_id' => $trip->id,
-                            'order_id' => $sibling->id,
-                            'driver_id' => $order->driver_id,
-                            'shift_id' => $order->shift_id,
-                            'checkpoint_type' => CheckpointType::Started,
-                            'occurred_at' => $payload['occurred_at'] ?? now(),
-                            'km_reading' => $payload['km_reading'] ?? null,
-                            'gps_lat' => $payload['gps_lat'] ?? null,
-                            'gps_lng' => $payload['gps_lng'] ?? null,
-                        ]);
-                    }
-
-                    TripCheckpoint::where('order_id', $order->id)
-                        ->where('checkpoint_type', CheckpointType::Started)
-                        ->latest('id')
-                        ->update(['trip_id' => $trip->id]);
-                }
-            }
-
-            $order->vehicle_plate_number ??= $snapshotPlate;
-            $order->vehicle_type ??= $snapshotType;
-        }
-
-        // ---- 2. Status & sent_at (save 1 lần duy nhất) ----
-        $order->status = OrderStatus::Started;
-        if ($order->sent_at === null) {
-            $order->sent_at = now();
-        }
-        $order->save();
-
-        // ---- 3. Shift vehicle segment ----
-        $vehicleKm = null;
-        if ($order->vehicle_id !== null) {
-            $vehicleKm = Vehicle::where('id', $order->vehicle_id)->value('current_mileage');
-        }
-
-        $shift = DriverShift::where('driver_id', $order->driver_id)
-            ->whereNull('end_time')
-            ->first();
-
-        if ($shift && $order->vehicle_id !== null) {
-            $currentSegment = $shift->currentShiftVehicle();
-            if (! $currentSegment || (int) $currentSegment->vehicle_id !== (int) $order->vehicle_id) {
-                if ($currentSegment) {
-                    $currentSegment->end_time = $payload['occurred_at'] ?? now();
-                    $currentSegment->end_km = $vehicleKm ?? $currentSegment->end_km;
-                    $currentSegment->end_gps_lat = $payload['gps_lat'] ?? $currentSegment->end_gps_lat;
-                    $currentSegment->end_gps_lng = $payload['gps_lng'] ?? $currentSegment->end_gps_lng;
-                    $currentSegment->save();
-                }
-
-                $shift->shiftVehicles()->create([
-                    'vehicle_id' => $order->vehicle_id,
-                    'start_time' => $payload['occurred_at'] ?? now(),
-                    'start_km' => $vehicleKm ?? $currentSegment?->end_km ?? $payload['km_reading'] ?? null,
-                    'start_gps_lat' => $payload['gps_lat'] ?? $currentSegment?->end_gps_lat,
-                    'start_gps_lng' => $payload['gps_lng'] ?? $currentSegment?->end_gps_lng,
-                ]);
-            }
-        }
-    }
-
-    private function handleArrivedPickup(Order $order, array $payload): void
-    {
-        $order->status = OrderStatus::ArrivedPickup;
-
-        if ($order->shift_id === null) {
-            $shift = DriverShift::where('driver_id', $order->driver_id)
-                ->whereNotNull('start_time')
-                ->whereNull('end_time')
-                ->first();
-
-            if ($shift !== null) {
-                $order->shift_id = $shift->id;
-            }
-        }
-
-        $order->save();
-
-        $this->updateDeliveryPoint($payload, OrderDeliveryPointStatus::Arrived);
-    }
-
-    private function handleLeftPickup(Order $order): void
-    {
-        $order->status = OrderStatus::Delivering;
-        $order->save();
-    }
-
-    private function handleArrivedDelivery(Order $order, array $payload): void
-    {
-        $order->status = OrderStatus::ArrivedDelivery;
-        $order->save();
-
-        $this->updateDeliveryPoint($payload, OrderDeliveryPointStatus::Arrived);
-    }
-
-    private function handleCompleted(Order $order, array $payload): void
-    {
-        $this->updateDeliveryPoint($payload, OrderDeliveryPointStatus::Delivered);
-
-        $hasPendingDeliveryPoint = $order->deliveryPoints()
-            ->where('status', '!=', OrderDeliveryPointStatus::Delivered)
-            ->exists();
-
-        if (! $hasPendingDeliveryPoint) {
-            $order->status = OrderStatus::Completed;
-            $order->save();
-
-            // ---- Trip completion: nếu order này thuộc trip, kiểm tra tất cả đã complete chưa ----
-            if ($order->trip_id !== null) {
-                $trip = Trip::find($order->trip_id);
-                $hasMoreActiveOrdersInTrip = $trip->orders()
-                    ->where('id', '!=', $order->id)
-                    ->whereIn('status', [
-                        OrderStatus::Started,
-                        OrderStatus::ArrivedPickup,
-                        OrderStatus::Delivering,
-                        OrderStatus::ArrivedDelivery,
-                    ])
-                    ->exists();
-
-                if (! $hasMoreActiveOrdersInTrip) {
-                    $trip->complete(
-                        endKm: $payload['km_reading'] ?? null,
-                        completedAt: $payload['occurred_at'] ?? now(),
-                    );
-
-                    TripCheckpoint::create([
-                        'trip_id' => $trip->id,
-                        'driver_id' => $order->driver_id,
-                        'shift_id' => $order->shift_id,
-                        'checkpoint_type' => CheckpointType::Completed,
-                        'occurred_at' => $payload['occurred_at'] ?? now(),
-                        'km_reading' => $payload['km_reading'] ?? null,
-                        'gps_lat' => $payload['gps_lat'] ?? null,
-                        'gps_lng' => $payload['gps_lng'] ?? null,
-                    ]);
-                }
-            }
-
-            // ---- Vehicle status: chỉ reset về On khi không còn active order nào trên xe ----
-            if ($order->vehicle_id !== null) {
-                $hasMoreActiveOrders = Order::where('vehicle_id', $order->vehicle_id)
-                    ->where('id', '!=', $order->id)
-                    ->whereIn('status', [
-                        OrderStatus::Assigned,
-                        OrderStatus::Sent,
-                        OrderStatus::Started,
-                        OrderStatus::ArrivedPickup,
-                        OrderStatus::Delivering,
-                        OrderStatus::ArrivedDelivery,
-                    ])
-                    ->exists();
-
-                if (! $hasMoreActiveOrders) {
-                    Vehicle::where('id', $order->vehicle_id)->update(['status' => VehicleStatus::On]);
-                }
-            }
         }
     }
 
@@ -421,7 +260,6 @@ class TripCheckpointController extends Controller
         if ($status === OrderDeliveryPointStatus::Arrived && $point->status !== OrderDeliveryPointStatus::Pending) {
             return;
         }
-
         if ($status === OrderDeliveryPointStatus::Delivered && $point->status === OrderDeliveryPointStatus::Delivered && $point->delivered_at !== null) {
             return;
         }
