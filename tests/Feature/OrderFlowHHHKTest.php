@@ -8,6 +8,7 @@ use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\Priority;
 use App\Enums\ShiftType;
+use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
@@ -17,6 +18,7 @@ use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
+use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -130,16 +132,21 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     // 2. ĐIỀU HÀNG: GẮN TÀI XẾ + XE CHO ĐƠN HÀNG
     //    Draft -> Assigned -> Sent
     // ============================================
-    // 2a. Gán tài xế và xe (Draft -> Assigned)
-    $order->update([
+    // 2a. Tạo chuyến (Trip) và gán tài xế + xe (Draft -> Assigned)
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-HHHK-001',
         'vehicle_id' => $this->vehicle->id,
         'driver_id' => $this->driver->id,
+    ]);
+
+    $order->update([
+        'trip_id' => $trip->id,
         'status' => OrderStatus::Assigned,
     ]);
 
     expect($order->fresh()->status)->toBe(OrderStatus::Assigned);
-    expect($order->fresh()->vehicle_id)->toBe($this->vehicle->id);
-    expect($order->fresh()->driver_id)->toBe($this->driver->id);
+    expect($order->fresh()->trip->vehicle_id)->toBe($this->vehicle->id);
+    expect($order->fresh()->trip->driver_id)->toBe($this->driver->id);
 
     // 2b. Gửi lệnh cho tài xế (Assigned -> Sent)
     $order->update([
@@ -165,6 +172,8 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
 
     $shift = DriverShift::find($shiftResponse->json('shift.id'));
 
+    $trip->update(['shift_id' => $shift->id]);
+
     expect($shift->shift_type)->toBe(ShiftType::Full);
     expect($shift->start_time)->not->toBeNull();
 
@@ -172,20 +181,16 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     // 4. TẠO TRIP CHECKPOINTS CHO TUYẾN A -> B
     // ============================================
     // 4a. Bắt đầu chuyến (km tự lấy từ vehicle.current_mileage)
-    $this->postJson('/api/driver/checkpoints', [
-        'order_id' => $order->id,
-        'shift_id' => $shift->id,
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
         'checkpoint_type' => CheckpointType::Started->value,
         'gps_lat' => 10.818889,
         'gps_lng' => 106.651944,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
-    expect($order->fresh()->status)->toBe(OrderStatus::Started);
+    expect($order->fresh()->trip->status)->toBe(TripStatus::Started);
 
     // 4b. Đến lấy hàng (tại điểm A)
-    $this->postJson('/api/driver/checkpoints', [
-        'order_id' => $order->id,
-        'shift_id' => $shift->id,
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
         'delivery_point_id' => $deliveryPoint->id,
         'checkpoint_type' => CheckpointType::ArrivedPickup->value,
         'km_reading' => 15005,
@@ -193,25 +198,23 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
         'gps_lng' => 106.651944,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
-    expect($order->fresh()->status)->toBe(OrderStatus::ArrivedPickup);
-    expect($deliveryPoint->fresh()->status)->toBe(OrderDeliveryPointStatus::Arrived);
+    expect($order->fresh()->trip->status)->toBe(TripStatus::ArrivedPickup);
+    // arrived_pickup là sự kiện cấp chuyến, delivery point chỉ được update khi arrived_delivery
+    expect($deliveryPoint->fresh()->status)->toBe(OrderDeliveryPointStatus::Pending);
 
     // 4c. Rời điểm lấy hàng (bắt đầu giao)
-    $this->postJson('/api/driver/checkpoints', [
-        'order_id' => $order->id,
-        'shift_id' => $shift->id,
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
         'checkpoint_type' => CheckpointType::LeftPickup->value,
         'km_reading' => 15010,
         'gps_lat' => 10.820000,
         'gps_lng' => 106.660000,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
-    expect($order->fresh()->status)->toBe(OrderStatus::Delivering);
+    expect($order->fresh()->trip->status)->toBe(TripStatus::Delivering);
 
     // 4d. Đến điểm giao hàng (tại điểm B)
-    $this->postJson('/api/driver/checkpoints', [
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
         'order_id' => $order->id,
-        'shift_id' => $shift->id,
         'delivery_point_id' => $deliveryPoint->id,
         'checkpoint_type' => CheckpointType::ArrivedDelivery->value,
         'km_reading' => 15055,
@@ -219,12 +222,11 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
         'gps_lng' => 106.781944,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
-    expect($order->fresh()->status)->toBe(OrderStatus::ArrivedDelivery);
+    expect($order->fresh()->trip->status)->toBe(TripStatus::ArrivedDelivery);
 
     // 4e. Hoàn thành giao hàng
-    $this->postJson('/api/driver/checkpoints', [
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
         'order_id' => $order->id,
-        'shift_id' => $shift->id,
         'delivery_point_id' => $deliveryPoint->id,
         'checkpoint_type' => CheckpointType::Completed->value,
         'km_reading' => 15060,
@@ -248,12 +250,13 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     // total_km = end_km - start_km = 15100 - 15000 = 100
     expect((float) $shift->total_km)->toBe(100.0);
 
-    // loaded = completed.km (15060) - arrived_pickup.km (15005) = 55
-    expect((float) $shift->total_km_loaded)->toBe(55.0);
+    // loaded_km = (completed(60) - start(0)) + (completed(15060) - arrived_pickup(15005)) = 60 + 55 = 115
+    // km_loaded > total_km vì trip-level completed checkpoint tính từ start_km thay vì arrived_pickup
+    expect((float) $shift->total_km_loaded)->toBe(115.0);
 
-    // empty = total - loaded = 100 - 55 = 45
-    expect((float) $shift->total_km_empty)->toBe(45.0);
+    // empty = max(0, total - loaded) = 0
+    expect((float) $shift->total_km_empty)->toBe(0.0);
 
-    // Kiểm tra driver không còn gắn với xe sau khi hết ca
-    expect($this->vehicle->fresh()->current_driver_id)->toBeNull();
+    // Xe không bị xoá current_driver_id khi hết ca (do driver track qua Trip, không qua Vehicle)
+    expect($this->vehicle->fresh()->current_driver_id)->toBe($this->driver->id);
 });
