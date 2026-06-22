@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
 use App\Models\Trip;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class TripController extends Controller
 {
@@ -23,16 +25,13 @@ class TripController extends Controller
     {
         $user = $request->user();
 
-        $trip = Trip::whereHas('orders', function ($q) use ($user) {
-            $q->where('driver_id', $user->id)
-                ->whereIn('status', [
+        $trip = Trip::where('driver_id', $user->id)
+            ->whereHas('orders', function ($q) {
+                $q->whereIn('status', [
+                    OrderStatus::Assigned,
                     OrderStatus::Sent,
-                    OrderStatus::Started,
-                    OrderStatus::ArrivedPickup,
-                    OrderStatus::Delivering,
-                    OrderStatus::ArrivedDelivery,
                 ]);
-        })
+            })
             ->whereIn('status', ['pending', 'in_progress'])
             ->with([
                 'vehicle',
@@ -66,9 +65,7 @@ class TripController extends Controller
     {
         $user = $request->user();
 
-        $belongsToDriver = $trip->orders()
-            ->where('driver_id', $user->id)
-            ->exists();
+        $belongsToDriver = $trip->driver_id === $user->id;
 
         if (! $belongsToDriver) {
             return response()->json(['message' => 'This trip is not assigned to you'], 403);
@@ -87,6 +84,68 @@ class TripController extends Controller
 
         return response()->json([
             'data' => TripResource::make($trip),
+        ]);
+    }
+
+    /**
+     * Lịch sử các chuyến đã kết thúc của lái xe.
+     *
+     * Trả về danh sách trip có trạng thái Completed/DriverSwap,
+     * kèm orders, checkpoints, driverSwaps. Có phân trang và filter.
+     *
+     * @queryParam per_page int Số bản ghi mỗi trang (mặc định 15). Example: 10
+     * @queryParam from_date string Lọc từ ngày (started_at >=, ISO date). Example: 2026-06-01
+     * @queryParam to_date string Lọc đến ngày (started_at <=, ISO date). Example: 2026-06-23
+     * @queryParam status string Lọc theo trạng thái trip (Completed, DriverSwap). Example: Completed
+     * @queryParam vehicle_id int Lọc theo ID phương tiện. Example: 1
+     *
+     * @response array{data: TripResource[], meta: array{current_page: int, last_page: int, per_page: int, total: int}}
+     */
+    public function history(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validStatuses = [TripStatus::Completed, TripStatus::DriverSwap];
+
+        $request->validate([
+            'status' => ['nullable', 'string', Rule::in(array_map(fn ($s) => $s->value, $validStatuses))],
+            'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
+            'from_date' => ['nullable', 'date'],
+            'to_date' => ['nullable', 'date'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $trips = Trip::query()
+            ->with([
+                'vehicle',
+                'shift',
+                'driver',
+                'driverSwaps.toDriver',
+                'orders' => fn ($q) => $q->with([
+                    'customer',
+                    'pickupLocation',
+                    'deliveryPoints.location',
+                    'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                ]),
+                'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+            ])
+            ->where('driver_id', $user->id)
+            ->whereIn('status', $validStatuses)
+            ->when($request->filled('from_date'), fn ($q) => $q->whereDate('started_at', '>=', $request->from_date))
+            ->when($request->filled('to_date'), fn ($q) => $q->whereDate('started_at', '<=', $request->to_date))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->when($request->filled('vehicle_id'), fn ($q) => $q->where('vehicle_id', $request->vehicle_id))
+            ->orderBy('started_at', 'desc')
+            ->paginate($request->integer('per_page', 15));
+
+        return response()->json([
+            'data' => TripResource::collection($trips),
+            'meta' => [
+                'current_page' => $trips->currentPage(),
+                'last_page' => $trips->lastPage(),
+                'per_page' => $trips->perPage(),
+                'total' => $trips->total(),
+            ],
         ]);
     }
 }

@@ -5,14 +5,19 @@ namespace App\Models;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use Database\Factories\VehicleFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/** @use HasFactory<VehicleFactory> */
 class Vehicle extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'plate_number',
         'registration_number',
@@ -71,9 +76,9 @@ class Vehicle extends Model
         return $this->belongsTo(User::class, 'current_driver_id');
     }
 
-    public function orders(): HasMany
+    public function trips(): HasMany
     {
-        return $this->hasMany(Order::class);
+        return $this->hasMany(Trip::class, 'vehicle_id');
     }
 
     public function driverShifts(): BelongsToMany

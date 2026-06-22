@@ -15,6 +15,7 @@ class TripResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'trip_code' => $this->trip_code,
             'vehicle_id' => $this->vehicle_id,
             'status' => $this->status,
             'started_at' => $this->started_at?->toIso8601String(),
