@@ -50,22 +50,6 @@ class OrderResource extends BaseResource
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('status', '!=', OrderStatus::Draft->value));
     }
 
-    /**
-     * Auto-badge showing model count in sidebar.
-     */
-    public static function getNavigationBadge(): ?string
-    {
-        return (string) static::getModel()::count();
-    }
-
-    /**
-     * Badge color: warning if > 10, primary otherwise.
-     */
-    public static function getNavigationBadgeColor(): ?string
-    {
-        return static::getModel()::count() > 10 ? 'warning' : 'primary';
-    }
-
     public static function getPages(): array
     {
         return [

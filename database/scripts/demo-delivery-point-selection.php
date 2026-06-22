@@ -214,6 +214,7 @@ echo \"Deleted \$count shifts\";
 info(trim($cleanup ?? 'no output'));
 
 $shiftResult = request('POST', "$baseUrl/api/driver/shifts/start", $token, [
+    'vehicle_id' => $vehicleId,
     'shift_type' => 'full',
     'start_time' => date('c'),
     'start_gps_lat' => '10.8554',

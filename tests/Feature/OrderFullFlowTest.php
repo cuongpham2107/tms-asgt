@@ -9,11 +9,11 @@ use App\Enums\ShiftType;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
 use App\Models\DriverSwap;
 use App\Models\Order;
-use App\Models\OrderCategory;
 use App\Models\OrderDeliveryPoint;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -29,7 +29,7 @@ beforeEach(function () {
         'guard_name' => 'web',
     ]);
 
-    $this->orderCategory = OrderCategory::create([
+    $this->area = Area::create([
         'type' => OrderType::Hhhk,
         'code' => 'NORTH',
         'name' => 'North',
@@ -71,7 +71,7 @@ test('full HHHK order lifecycle without swap calculates KM correctly', function 
     $order = Order::create([
         'order_code' => 'ORD-FULL-001',
         'type' => OrderType::Hhhk,
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'vehicle_id' => $this->vehicle->id,
         'driver_id' => $driver->id,
@@ -88,16 +88,17 @@ test('full HHHK order lifecycle without swap calculates KM correctly', function 
 
     Sanctum::actingAs($driver);
 
-    // 1. Start shift (ko cần vehicle_id, ko cần start_km)
+    // Set vehicle mileage trước khi bắt đầu ca
+    $this->vehicle->update(['current_mileage' => 10000]);
+
+    // 1. Start shift
     $shiftResponse = $this->postJson('/api/driver/shifts/start', [
         'shift_type' => ShiftType::Full->value,
         'start_time' => now()->toIso8601String(),
+        'vehicle_id' => $this->vehicle->id,
     ])->assertSuccessful();
 
     $shift = DriverShift::find($shiftResponse->json('shift.id'));
-
-    // Set vehicle mileage trước — started checkpoint sẽ tự lấy từ xe
-    $this->vehicle->update(['current_mileage' => 10000]);
 
     // 2. Started checkpoint (ko nhập km, tự lấy từ vehicle.current_mileage)
     $this->postJson('/api/driver/checkpoints', [
@@ -204,7 +205,7 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
     $order = Order::create([
         'order_code' => 'ORD-SWAP-001',
         'type' => OrderType::Hhhk,
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'vehicle_id' => $this->vehicle->id,
         'driver_id' => $driverA->id,
@@ -224,14 +225,15 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
     // ============================================
     Sanctum::actingAs($driverA);
 
+    // Set vehicle mileage — started checkpoint sẽ tự lấy
+    $this->vehicle->update(['current_mileage' => 10000]);
+
     $shiftAResponse = $this->postJson('/api/driver/shifts/start', [
         'shift_type' => ShiftType::Full->value,
         'start_time' => now()->toIso8601String(),
+        'vehicle_id' => $this->vehicle->id,
     ])->assertSuccessful();
     $shiftA = DriverShift::find($shiftAResponse->json('shift.id'));
-
-    // Set vehicle mileage — started checkpoint sẽ tự lấy
-    $this->vehicle->update(['current_mileage' => 10000]);
 
     $this->postJson('/api/driver/checkpoints', [
         'order_id' => $order->id,
@@ -301,6 +303,7 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
     $shiftBResponse = $this->postJson('/api/driver/shifts/start', [
         'shift_type' => ShiftType::Full->value,
         'start_time' => now()->toIso8601String(),
+        'vehicle_id' => $this->vehicle->id,
     ])->assertSuccessful();
     $shiftB = DriverShift::find($shiftBResponse->json('shift.id'));
 
@@ -384,7 +387,7 @@ test('driver with 2 orders runs out of shift time triggers swap via DriverSwapAc
     $order1 = Order::create([
         'order_code' => 'ORD-A1-001',
         'type' => OrderType::Hhhk,
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'vehicle_id' => $this->vehicle->id,
         'driver_id' => $driverA->id,
@@ -403,7 +406,7 @@ test('driver with 2 orders runs out of shift time triggers swap via DriverSwapAc
     $order2 = Order::create([
         'order_code' => 'ORD-A2-002',
         'type' => OrderType::Hhhk,
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'vehicle_id' => $this->vehicle->id,
         'driver_id' => $driverA->id,
@@ -423,13 +426,14 @@ test('driver with 2 orders runs out of shift time triggers swap via DriverSwapAc
     // ============================================
     Sanctum::actingAs($driverA);
 
+    $this->vehicle->update(['current_mileage' => 10000]);
+
     $shiftAResponse = $this->postJson('/api/driver/shifts/start', [
         'shift_type' => ShiftType::Full->value,
         'start_time' => now()->toIso8601String(),
+        'vehicle_id' => $this->vehicle->id,
     ])->assertSuccessful();
     $shiftA = DriverShift::find($shiftAResponse->json('shift.id'));
-
-    $this->vehicle->update(['current_mileage' => 10000]);
 
     // Order 1: started
     $this->postJson('/api/driver/checkpoints', [
@@ -535,6 +539,7 @@ test('driver with 2 orders runs out of shift time triggers swap via DriverSwapAc
     $shiftBResponse = $this->postJson('/api/driver/shifts/start', [
         'shift_type' => ShiftType::Full->value,
         'start_time' => now()->toIso8601String(),
+        'vehicle_id' => $this->vehicle->id,
     ])->assertSuccessful();
     $shiftB = DriverShift::find($shiftBResponse->json('shift.id'));
 

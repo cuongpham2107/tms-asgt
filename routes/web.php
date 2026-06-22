@@ -9,7 +9,5 @@ Route::post('/mapbox/match', [MapboxController::class, 'match']);
 
 // Đồng bộ GPS từ API EUP
 Route::get('/gps-sync', function (EupGpsService $service) {
-    $result = $service->sync();
-
-    return response()->json($result);
+    return response()->json($service->sync());
 })->name('gps.sync');

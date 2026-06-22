@@ -13,3 +13,21 @@
 @import "./partials/_page.css";
 @import "./partials/_table.css";
 @import "./partials/_forms.css";
+
+[style] {
+    --cols-default: repeat(1, minmax(0, 1fr));
+}
+
+@layer components {
+    .fi-grid:not(.fi-grid-direction-col) {
+        grid-template-columns: var(--cols-default);
+        display: grid;
+    }
+    .fi-sc.fi-sc-has-gap {
+        gap: calc(var(--spacing) * 4);
+    }
+    .fi-sc {
+        font-size: var(--text-sm);
+        line-height: var(--tw-leading, var(--text-sm--line-height));
+    }
+}

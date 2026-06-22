@@ -23,6 +23,14 @@ class DriverShiftInfolist
                         TextEntry::make('driver.name')
                             ->label('Lái xe')
                             ->icon(Heroicon::OutlinedUser),
+                        TextEntry::make('vehicle_plate')
+                            ->label('Phương tiện')
+                            ->icon(Heroicon::OutlinedTruck)
+                            ->formatStateUsing(fn (DriverShift $record) => $record->orders
+                                ->pluck('vehicle.plate_number')
+                                ->unique()
+                                ->filter()
+                                ->implode(', ') ?: '-'),
                         TextEntry::make('shift_type')
                             ->label('Loại ca')
                             ->icon(Heroicon::OutlinedClock)
@@ -65,37 +73,74 @@ class DriverShiftInfolist
                             ->label('Km rỗng')
                             ->numeric(),
                     ]),
-                Section::make('Các xe đã sử dụng trong ca')
+                Section::make('Chi tiết km chạy theo từng đơn hàng')
                     ->columnSpanFull()
                     ->schema([
-                        RepeatableEntry::make('shiftVehicles')
-                            ->label('Danh sách công việc')
+                        RepeatableEntry::make('orders_with_km_details')
+                            ->label('Danh sách đơn hàng trong ca')
                             ->table([
-                                RepeatableTableColumn::make('Xe'),
-                                RepeatableTableColumn::make('Đơn hàng'),
-                                RepeatableTableColumn::make('Bắt đầu'),
-                                RepeatableTableColumn::make('Kết thúc'),
-                                RepeatableTableColumn::make('Km đầu'),
-                                RepeatableTableColumn::make('Km cuối'),
+                                RepeatableTableColumn::make('Mã đơn hàng'),
+                                RepeatableTableColumn::make('Phương tiện'),
+                                RepeatableTableColumn::make('Km nhận hàng (Pickup)'),
+                                RepeatableTableColumn::make('Km giao xong (Completed)'),
+                                RepeatableTableColumn::make('Km chạy có tải'),
+                                RepeatableTableColumn::make('Giờ nhận hàng'),
+                                RepeatableTableColumn::make('Giờ hoàn thành'),
+                                RepeatableTableColumn::make('Trạng thái'),
                             ])
                             ->schema([
-                                TextEntry::make('vehicle.plate_number')
-                                    ->label('Xe')
+                                TextEntry::make('order_code')
+                                    ->label('Mã đơn hàng'),
+                                TextEntry::make('vehicle_plate')
+                                    ->label('Phương tiện')
                                     ->icon(Heroicon::OutlinedTruck),
-                                TextEntry::make('order_id')
-                                    ->label('Đơn hàng'),
-                                TextEntry::make('start_time')
-                                    ->label('Bắt đầu')
-                                    ->dateTime(),
-                                TextEntry::make('end_time')
-                                    ->label('Kết thúc')
-                                    ->dateTime(),
                                 TextEntry::make('start_km')
-                                    ->label('Km đầu')
-                                    ->numeric(),
+                                    ->label('Km nhận hàng (Pickup)'),
                                 TextEntry::make('end_km')
-                                    ->label('Km cuối')
-                                    ->numeric(),
+                                    ->label('Km giao xong (Completed)'),
+                                TextEntry::make('loaded_km')
+                                    ->label('Km chạy có tải')
+                                    ->badge()
+                                    ->color('success'),
+                                TextEntry::make('pickup_time')
+                                    ->label('Giờ nhận hàng'),
+                                TextEntry::make('completed_time')
+                                    ->label('Giờ hoàn thành'),
+                                TextEntry::make('status')
+                                    ->label('Trạng thái')
+                                    ->badge()
+                                    ->color(fn ($state) => match ($state) {
+                                        'Completed', 'Hoàn thành' => 'success',
+                                        'Cancelled', 'Đã hủy' => 'danger',
+                                        default => 'warning',
+                                    }),
+                            ]),
+                    ]),
+                Section::make('Nhật ký dòng hoạt động của ca trực (Timeline)')
+                    ->columnSpanFull()
+                    ->schema([
+                        RepeatableEntry::make('activity_timeline')
+                            ->label('Dòng thời gian hoạt động')
+                            ->table([
+                                RepeatableTableColumn::make('Thời gian'),
+                                RepeatableTableColumn::make('Hoạt động'),
+                                RepeatableTableColumn::make('Phương tiện'),
+                                RepeatableTableColumn::make('Tọa độ GPS'),
+                            ])
+                            ->schema([
+                                TextEntry::make('time')
+                                    ->label('Thời gian')
+                                    ->dateTime('d/m/Y H:i'),
+                                TextEntry::make('details')
+                                    ->label('Hoạt động')
+                                    ->html(),
+                                TextEntry::make('vehicle')
+                                    ->label('Phương tiện')
+                                    ->formatStateUsing(fn ($state) => $state ?? '-'),
+                                TextEntry::make('gps')
+                                    ->label('Tọa độ GPS')
+                                    ->icon(Heroicon::OutlinedMapPin)
+                                    ->formatStateUsing(fn ($state) => $state ?? '-'),
                             ]),
                     ]),
             ]);

@@ -3,10 +3,14 @@
 namespace App\Filament\Resources\DriverShifts\Widgets;
 
 use App\Enums\ShiftType;
+use App\Filament\Resources\DriverShifts\Schemas\DriverShiftInfolist;
 use App\Models\DriverShift;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
+use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Model;
+use Saade\FilamentFullCalendar\Actions\ViewAction;
 use Saade\FilamentFullCalendar\Data\EventData;
 use Saade\FilamentFullCalendar\Widgets\FullCalendarWidget;
 
@@ -75,5 +79,11 @@ class DriverShiftCalendarWidget extends FullCalendarWidget
             DateTimePicker::make('end_time')
                 ->label('Giờ kết thúc'),
         ];
+    }
+
+    protected function viewAction(): Action
+    {
+        return ViewAction::make()
+            ->infolist(fn (Schema $infolist) => DriverShiftInfolist::configure($infolist));
     }
 }

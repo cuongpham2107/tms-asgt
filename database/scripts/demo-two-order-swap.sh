@@ -107,7 +107,7 @@ AUTH_A="Authorization: Bearer $TOKEN_A"
 # ── 2. Vào ca A ────────────────────────────────────────────────────
 step 2 "🟢 Vào ca (Driver A)"
 
-SFT_A_R=$(curl -s -X POST "$BASE/api/driver/shifts/start" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"shift_type":"full","start_time":"'$DT_FMT'"}')
+SFT_A_R=$(curl -s -X POST "$BASE/api/driver/shifts/start" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"vehicle_id":'$V_ID',"shift_type":"full","start_time":"'$DT_FMT'"}')
 SFT_A_ID=$(echo "$SFT_A_R" | php -r 'echo json_decode(file_get_contents("php://stdin"))->shift->id ?? "FAIL";')
 [ "$SFT_A_ID" = "FAIL" ] && fail "Vào ca A thất bại: $(echo "$SFT_A_R" | php -r 'echo json_decode(file_get_contents("php://stdin"))->message ?? "unknown";')"
 ok "Shift ID: $SFT_A_ID"
@@ -195,7 +195,7 @@ AUTH_B="Authorization: Bearer $TOKEN_B"
 
 # ── 14. Vào ca B ──────────────────────────────────────────────────
 step 14 "🟢 Vào ca (Driver B)"
-SFT_B_R=$(curl -s -X POST "$BASE/api/driver/shifts/start" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"shift_type":"full","start_time":"'$DT_FMT'"}')
+SFT_B_R=$(curl -s -X POST "$BASE/api/driver/shifts/start" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"vehicle_id":'$V_ID',"shift_type":"full","start_time":"'$DT_FMT'"}')
 SFT_B_ID=$(echo "$SFT_B_R" | php -r 'echo json_decode(file_get_contents("php://stdin"))->shift->id ?? "FAIL";')
 [ "$SFT_B_ID" = "FAIL" ] && fail "Vào ca B thất bại"
 ok "Shift ID: $SFT_B_ID"

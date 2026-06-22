@@ -11,11 +11,11 @@ use App\Enums\ShiftType;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
-use App\Models\OrderCategory;
 use App\Models\OrderDeliveryPoint;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -31,7 +31,7 @@ beforeEach(function () {
         'guard_name' => 'web',
     ]);
 
-    $this->orderCategory = OrderCategory::create([
+    $this->area = Area::create([
         'type' => OrderType::Hhhk,
         'code' => 'NORTH',
         'name' => 'North',
@@ -90,7 +90,7 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     $order = Order::create([
         'order_code' => 'ORD-HHHK-001',
         'type' => OrderType::Hhhk,
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'cargo_name' => 'Hàng điện tử',
         'cargo_type' => CargoType::Gcr,
@@ -154,9 +154,13 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     // ============================================
     Sanctum::actingAs($this->driver);
 
+    // Set vehicle mileage trước khi vào ca
+    $this->vehicle->update(['current_mileage' => 15000]);
+
     $shiftResponse = $this->postJson('/api/driver/shifts/start', [
         'shift_type' => ShiftType::Full->value,
         'start_time' => now()->toIso8601String(),
+        'vehicle_id' => $this->vehicle->id,
     ])->assertSuccessful();
 
     $shift = DriverShift::find($shiftResponse->json('shift.id'));
@@ -168,7 +172,6 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     // 4. TẠO TRIP CHECKPOINTS CHO TUYẾN A -> B
     // ============================================
     // 4a. Bắt đầu chuyến (km tự lấy từ vehicle.current_mileage)
-    $this->vehicle->update(['current_mileage' => 15000]);
     $this->postJson('/api/driver/checkpoints', [
         'order_id' => $order->id,
         'shift_id' => $shift->id,

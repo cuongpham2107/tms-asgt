@@ -3,11 +3,27 @@
 namespace App\Filament\Resources\Orders\Actions\Concerns;
 
 use App\Enums\OrderStatus;
+use App\Enums\Priority;
+use App\Enums\VehicleStatus;
+use App\Filament\Resources\Customers\Schemas\CustomerForm;
+use App\Models\Area;
+use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Vehicle;
+use Closure;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Throwable;
 
 abstract class CreatesOrderTransportCards
@@ -32,7 +48,7 @@ abstract class CreatesOrderTransportCards
             ])
             ->with([
                 'driverShifts' => fn ($query) => $query->latest('start_time')->limit(1),
-                'vehiclesAsDriver' => fn ($query) => $query->select('id', 'plate_number', 'gps_lat', 'gps_lng'),
+                'vehiclesAsDriver' => fn ($query) => $query->select('id', 'current_driver_id', 'plate_number', 'gps_lat', 'gps_lng'),
             ])
             ->orderBy('name')
             ->get()
@@ -88,17 +104,19 @@ abstract class CreatesOrderTransportCards
     {
         return Vehicle::query()
             ->where(function ($query) use ($selectedVehicleId): void {
-                $query->where('status', 'on');
+                $query->whereIn('status', ['on', 'running']);
 
                 if ($selectedVehicleId) {
                     $query->orWhere('id', $selectedVehicleId);
                 }
             })
-            ->with(['driver' => fn ($q) => $q
-                ->with(['driverShifts' => fn ($q) => $q
-                    ->whereNull('end_time')
-                    ->withCount(['shiftVehicles as orders_in_shift' => fn ($q) => $q->whereNotNull('order_id')]),
-                ]),
+            ->with([
+                'driverShifts' => fn ($q) => $q->whereNull('shift_vehicles.end_time'),
+                'driver' => fn ($q) => $q
+                    ->with(['driverShifts' => fn ($q) => $q
+                        ->whereNull('end_time')
+                        ->withCount(['shiftVehicles as orders_in_shift' => fn ($q) => $q->whereNotNull('order_id')]),
+                    ]),
             ])
             ->withCount([
                 'orders as active_orders_count' => fn ($q) => $q->whereIn('status', [
@@ -121,7 +139,12 @@ abstract class CreatesOrderTransportCards
 
                 $currentLocation = self::resolveCurrentVehicleLocation($vehicle);
                 $isLocationMatch = ! $pickupLocationId || (($currentLocation['id'] ?? null) === $pickupLocationId);
-                $isSuggested = $isCapacityMatch && $isLocationMatch;
+
+                $hasActiveShift = $vehicle->driverShifts->isNotEmpty();
+                $hasDriver = $vehicle->current_driver_id !== null;
+                $isAvailable = (int) $vehicle->active_orders_count === 0;
+
+                $isSuggested = $isCapacityMatch && $isLocationMatch && $hasActiveShift && $hasDriver && $isAvailable;
                 $capacityDelta = max(0, (float) $vehicle->load_capacity - $requiredWeight);
                 $suggestionScore = $isSuggested
                     ? (1000 - min(999, (int) round($capacityDelta * 10)))
@@ -169,6 +192,7 @@ abstract class CreatesOrderTransportCards
                     'isSuggested' => $isSuggested,
                     'suggestionScore' => $suggestionScore,
                     'capacityMatch' => $isCapacityMatch,
+                    'type' => $vehicle->type?->value,
                 ];
             })
             ->all();
@@ -301,7 +325,7 @@ abstract class CreatesOrderTransportCards
         return is_numeric($value) ? (int) $value : null;
     }
 
-    protected static function generateOrderCode(): string
+    public static function generateOrderCode(): string
     {
         $prefix = 'ASG-';
 
@@ -339,5 +363,308 @@ abstract class CreatesOrderTransportCards
             'primary' => 'border border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800/40 dark:bg-primary-900/30 dark:text-primary-200',
             default => 'border border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-200',
         };
+    }
+
+    /**
+     * @return array<int|string, string>
+     */
+    public static function getProvinceOptions(): array
+    {
+        return Cache::remember('open-api-v1-provinces', now()->addDay(), function (): array {
+            try {
+                $response = Http::acceptJson()
+                    ->timeout(10)
+                    ->get('https://provinces.open-api.vn/api/v1/p');
+
+                if (! $response->successful()) {
+                    return [];
+                }
+
+                return collect($response->json())
+                    ->filter(fn ($item): bool => isset($item['code'], $item['name']))
+                    ->mapWithKeys(fn ($item): array => [(string) $item['code'] => $item['name']])
+                    ->all();
+            } catch (Throwable) {
+                return [];
+            }
+        });
+    }
+
+    /**
+     * @return array<int|string, string>
+     */
+    public static function getWardOptions(int|string|null $provinceCode): array
+    {
+        if (blank($provinceCode)) {
+            return [];
+        }
+
+        return Cache::remember("open-api-v2-wards-{$provinceCode}", now()->addDay(), function () use ($provinceCode): array {
+            try {
+                $response = Http::acceptJson()
+                    ->timeout(10)
+                    ->get("https://provinces.open-api.vn/api/v2/w/?province={$provinceCode}");
+
+                if (! $response->successful()) {
+                    return [];
+                }
+
+                return collect($response->json())
+                    ->filter(fn ($item): bool => isset($item['code'], $item['name']))
+                    ->mapWithKeys(fn ($item): array => [(string) $item['code'] => $item['name']])
+                    ->all();
+            } catch (Throwable) {
+                return [];
+            }
+        });
+    }
+
+    public static function resolveProvinceName(int|string|null $provinceCode): ?string
+    {
+        if (blank($provinceCode)) {
+            return null;
+        }
+
+        return self::getProvinceOptions()[(string) $provinceCode] ?? null;
+    }
+
+    public static function resolveWardName(int|string|null $provinceCode, int|string|null $wardCode): ?string
+    {
+        if (blank($provinceCode) || blank($wardCode)) {
+            return null;
+        }
+
+        return self::getWardOptions($provinceCode)[(string) $wardCode] ?? null;
+    }
+
+    public static function getCustomerIdFormField(bool $setAreaId = false): Select
+    {
+        return Select::make('customer_id')
+            ->label('Khách hàng')
+            ->options(fn (Get $get): array => Customer::query()
+                ->get(['id', 'code', 'name'])
+                ->mapWithKeys(fn (Customer $customer): array => [
+                    $customer->id => "{$customer->code} - {$customer->name}",
+                ])
+                ->toArray()
+            )
+            ->native(false)
+            ->required()
+            ->searchable()
+            ->columnSpanFull()
+            ->live()
+            ->afterStateUpdated(function ($state, Set $set) use ($setAreaId): void {
+                if (blank($state)) {
+                    return;
+                }
+
+                $customer = Customer::query()->find($state);
+                if ($customer !== null) {
+                    $firstLocation = $customer->locations()->first();
+                    if ($firstLocation !== null) {
+                        $set('pickup_location_id', $firstLocation->id);
+                        if ($setAreaId && $firstLocation->area_id !== null) {
+                            $set('area_id', $firstLocation->area_id);
+                        }
+                    }
+                }
+            })
+            ->createOptionForm(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents());
+    }
+
+    public static function getDeliveryPointsRepeaterField(string|Closure $orderType = 'normal'): Repeater
+    {
+        return Repeater::make('deliveryPoints')
+            ->label('Điểm giao hàng')
+            ->helperText(function (Get $get): string {
+                $area = Area::query()->find($get('area_id'));
+
+                if ($area !== null) {
+                    return 'Chưa có điểm đến phụ. Mặc định đến: '.$area->code;
+                }
+
+                return 'Thêm một hoặc nhiều điểm đến cho đơn hàng';
+            })
+            ->minItems(function (Get $get) use ($orderType): int {
+                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
+
+                return $type === 'external' ? 1 : 0;
+            })
+            ->defaultItems(function (Get $get) use ($orderType): int {
+                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
+
+                return $type === 'external' ? 1 : 0;
+            })
+            ->collapsible()
+            ->itemLabel(function (array $state): ?string {
+                $parts = [];
+
+                if (isset($state['location_id']) && $location = Location::query()->find($state['location_id'])) {
+                    $parts[] = $location->name;
+                }
+                if (! empty($state['contact_person'])) {
+                    $parts[] = $state['contact_person'];
+                }
+
+                if (! empty($state['contact_phone'])) {
+                    $parts[] = $state['contact_phone'];
+                }
+
+                return count($parts) > 0 ? implode(' - ', $parts) : 'Điểm giao hàng mới';
+            })
+            ->reorderableWithDragAndDrop()
+            ->schema([
+                Grid::make(4)
+                    ->schema([
+                        Select::make('location_id')
+                            ->label('Điểm giao hàng')
+                            ->options(fn (Get $get): array => Location::query()
+                                ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                ->pluck('name', 'id')
+                                ->toArray()
+                            )
+                            ->searchable()
+                            ->preload()
+                            ->native(false)
+                            ->required()
+                            ->live(onBlur: true)
+                            ->columnSpan(function (Get $get) use ($orderType): string|int {
+                                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
+
+                                return $type === 'HHHK' ? 'full' : 2;
+                            }),
+                        TextInput::make('contact_person')
+                            ->label('Người nhận')
+                            ->placeholder('Họ tên')
+                            ->live(onBlur: true)
+                            ->visible(function (Get $get) use ($orderType): bool {
+                                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
+
+                                return $type !== 'HHHK';
+                            }),
+                        TextInput::make('contact_phone')
+                            ->label('SĐT nhận')
+                            ->placeholder('Số điện thoại')
+                            ->tel()
+                            ->live(onBlur: true)
+                            ->visible(function (Get $get) use ($orderType): bool {
+                                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
+
+                                return $type !== 'HHHK';
+                            }),
+                    ]),
+            ])
+            ->columnSpanFull();
+    }
+
+    public static function createSingleOrder(
+        array $data,
+        Schema $schema,
+        string $orderTypeCode,
+        bool $forceAssignedWhenTransportProvided = true,
+        ?int $createdBy = null
+    ): Order {
+        if ($createdBy === null) {
+            $createdBy = auth()->id();
+        }
+
+        $order = null;
+
+        DB::transaction(function () use (
+            $data,
+            $schema,
+            $orderTypeCode,
+            $forceAssignedWhenTransportProvided,
+            $createdBy,
+            &$order
+        ): void {
+            $pickupAddress = null;
+            if (filled($data['pickup_location_id'] ?? null)) {
+                $pickupAddress = Location::query()->find($data['pickup_location_id'])?->address;
+            }
+
+            for ($attempt = 0; $attempt < 5; $attempt++) {
+                $orderCode = self::generateOrderCode();
+
+                try {
+                    $order = Order::query()->create([
+                        'order_code' => $orderCode,
+                        'type' => $orderTypeCode,
+                        'area_id' => $data['area_id'] ?? null,
+                        'customer_id' => $data['customer_id'] ?? null,
+                        'cargo_name' => $data['cargo_name'] ?? null,
+                        'cargo_type' => $data['cargo_type'] ?? 'GCR',
+                        'total_packages' => $data['total_packages'] ?? null,
+                        'total_weight' => $data['total_weight'] ?? null,
+                        'pickup_location_id' => $data['pickup_location_id'] ?? null,
+                        'pickup_address' => $pickupAddress,
+                        'pickup_contact' => $data['pickup_contact'] ?? null,
+                        'pickup_phone' => $data['pickup_phone'] ?? null,
+                        'planned_loading_at' => $data['planned_loading_at'] ?? null,
+                        'driver_id' => $data['driver_id'] ?? null,
+                        'vehicle_id' => $data['vehicle_id'] ?? null,
+                        'status' => filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null)
+                            ? OrderStatus::Assigned->value
+                            : OrderStatus::Draft->value,
+                        'priority' => $data['priority'] ?? Priority::Medium->value,
+                        'created_by' => $createdBy,
+                        'notes' => $data['notes'] ?? null,
+                    ]);
+
+                    break;
+                } catch (Throwable $e) {
+                    if (! self::isOrderCodeDuplicate($e) || $attempt === 4) {
+                        throw $e;
+                    }
+                }
+            }
+
+            if ($order === null) {
+                throw new \RuntimeException('Không thể tạo mã đơn hàng sau nhiều lần thử.');
+            }
+
+            $deliveryPoints = collect($schema->getRawState()['deliveryPoints'] ?? [])
+                ->values()
+                ->map(function (array $deliveryPoint, int $index): array {
+                    $address = null;
+                    if (filled($deliveryPoint['location_id'] ?? null)) {
+                        $address = Location::query()->find($deliveryPoint['location_id'])?->address;
+                    }
+
+                    return [
+                        'address' => $address,
+                        'location_id' => $deliveryPoint['location_id'] ?? null,
+                        'contact_person' => $deliveryPoint['contact_person'] ?? null,
+                        'contact_phone' => $deliveryPoint['contact_phone'] ?? null,
+                        'total_packages' => $deliveryPoint['total_packages'] ?? null,
+                        'total_weight' => $deliveryPoint['total_weight'] ?? null,
+                        'sequence' => $index + 1,
+                    ];
+                })
+                ->all();
+
+            if ($deliveryPoints !== []) {
+                $order->deliveryPoints()->createMany($deliveryPoints);
+            }
+
+            if (filled($data['vehicle_id'] ?? null)) {
+                $vehicle = Vehicle::query()->find($data['vehicle_id']);
+
+                if ($vehicle !== null) {
+                    $vehicle->status = VehicleStatus::Running;
+
+                    // Vehicle.current_driver_id is a static/default field — not modified here.
+
+                    $vehicle->save();
+                }
+            }
+
+            if ($forceAssignedWhenTransportProvided && (filled($data['vehicle_id'] ?? null) || filled($data['driver_id'] ?? null))) {
+                $order->status = OrderStatus::Assigned->value;
+                $order->save();
+            }
+        });
+
+        return $order;
     }
 }

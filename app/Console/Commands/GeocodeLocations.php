@@ -44,12 +44,13 @@ class GeocodeLocations extends Command
         $failed = 0;
 
         foreach ($locations as $location) {
-            $coords = $this->geocodeWithCache($location->address);
+            $coords = null;
+            $candidates = $this->getGeocodeCandidates($location->address);
 
-            if ($coords === null) {
-                $simplified = $this->simplifyAddress($location->address);
-                if ($simplified !== null) {
-                    $coords = $this->geocodeWithCache($simplified);
+            foreach ($candidates as $candidate) {
+                $coords = $this->geocodeWithCache($candidate);
+                if ($coords !== null) {
+                    break;
                 }
             }
 
@@ -130,34 +131,72 @@ class GeocodeLocations extends Command
         ];
     }
 
-    private function simplifyAddress(?string $address): ?string
+    private function getGeocodeCandidates(?string $address): array
     {
         if (empty($address)) {
-            return null;
+            return [];
         }
 
+        $candidates = [$address];
+
+        // 1. Nếu có tên KCN/VSIP/Cụm CN, thêm phương án chỉ tìm theo tên KCN đó (không kèm tỉnh để tránh sai tỉnh trong data)
         $parkName = '';
         if (preg_match('/(?:KCN|Khu công nghiệp|Cụm CN|Cụm công nghiệp)\s+([^,]+)/ui', $address, $m)) {
             $parkName = trim($m[0]);
         }
-
         if (empty($parkName) && preg_match('/VSIP\s+([^,]+)/ui', $address, $m)) {
             $parkName = 'Khu công nghiệp '.trim($m[0]);
         }
+        if (! empty($parkName)) {
+            $parkNameClean = preg_replace('/\s+mở\s+rộng/i', '', $parkName);
+            $candidates[] = $parkNameClean;
+        }
 
-        $province = $this->extractProvince($address);
+        // 2. Làm sạch địa chỉ bằng cách loại bỏ chi tiết nhỏ (số nhà, ngõ, tổ...)
+        $clean = $address;
+        $clean = preg_replace('/^(?:số|no\.?|ki\s*ốt|kốt|cửa\s*hàng|quầy|phòng|tầng|nhà|lô|kho|xưởng|nhà\s*xưởng)\s+\w+(?:\/\w+)*\s*,?\s*/ui', '', $clean);
+        $clean = preg_replace('/\b(?:ngõ|ngách|hẻm|kiệt)\s+\w+(?:\/\w+)*\s*,?\s*/ui', '', $clean);
+        $clean = preg_replace('/\b(?:tổ|xóm|ấp|thôn|tổ\s*dân\s*phố)\s+\w+\s*,?\s*/ui', '', $clean);
+        $clean = preg_replace('/\b(?:xã|phường|thị\s*trấn)\s+/ui', '', $clean); // Bỏ từ "Xã", "Phường" để dễ khớp
+        $clean = trim($clean);
 
-        if (! empty($parkName) && ! empty($province)) {
-            $parkName = preg_replace('/\s+mở\s+rộng/i', '', $parkName);
+        if ($clean !== $address && ! empty($clean)) {
+            $candidates[] = $clean;
+        }
 
-            $result = $parkName.', '.$province;
+        // 3. Rút gọn bằng cách loại bỏ dần phần đầu trước dấu phẩy
+        $parts = array_map('trim', explode(',', $address));
+        while (count($parts) > 1) {
+            array_shift($parts);
+            $candidates[] = implode(', ', $parts);
+        }
 
-            if ($result !== $address) {
-                return $result;
+        // 4. Thử tương tự với địa chỉ đã làm sạch (bỏ dần phần đầu trước dấu phẩy)
+        if ($clean !== $address && ! empty($clean)) {
+            $cleanParts = array_map('trim', explode(',', $clean));
+            while (count($cleanParts) > 1) {
+                array_shift($cleanParts);
+                $candidates[] = implode(', ', $cleanParts);
             }
         }
 
-        return null;
+        // 5. Thêm các thành phần riêng lẻ có chứa tên đường/phố/xã/huyện/tỉnh
+        $allParts = array_map('trim', explode(',', $address));
+        foreach ($allParts as $part) {
+            if (preg_match('/^(?:đường|phố|xã|phường|thị\s*trấn|quận|huyện|thị\s*xã)\s+/ui', $part)) {
+                $candidates[] = $part;
+                $candidates[] = preg_replace('/^(?:đường|phố|xã|phường|thị\s*trấn|quận|huyện|thị\s*xã)\s+/ui', '', $part);
+            }
+        }
+
+        // Thêm fallback tỉnh/thành phố cuối cùng
+        $province = $this->extractProvince($address);
+        if ($province) {
+            $candidates[] = $province;
+        }
+
+        // Loại bỏ trùng lặp và giá trị trống
+        return array_values(array_unique(array_filter($candidates)));
     }
 
     private function extractProvince(string $address): ?string

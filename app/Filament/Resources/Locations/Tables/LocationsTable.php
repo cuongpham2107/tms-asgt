@@ -17,6 +17,9 @@ class LocationsTable extends BaseTable
     {
         return parent::applyDefaults($table)
             ->columns([
+                TextColumn::make('area.code')
+                    ->label('Khu vực')
+                    ->searchable(),
                 TextColumn::make('code')
                     ->label('Mã')
                     ->searchable()
@@ -50,14 +53,15 @@ class LocationsTable extends BaseTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->groups([
-                Group::make('loc_type')
-                    ->label('Loại địa điểm')
+                Group::make('area.code')
+                    ->label('Khu vực')
                     ->collapsible(),
             ])
-            ->defaultGroup('loc_type')
+            ->defaultGroup('area.code')
             ->groupingSettingsHidden()
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->iconButton(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

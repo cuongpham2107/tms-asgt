@@ -140,4 +140,68 @@
             </div>
         </div>
     </div>
+
+    @push('scripts')
+        <script>
+            document.addEventListener('livewire:navigated', function initMapZoomStyling() {
+                let attempts = 0;
+                const maxAttempts = 30;
+
+                function tryInit() {
+                    const mapContainer = document.querySelector('[id^="map-"]');
+                    if (!mapContainer) {
+                        if (++attempts < maxAttempts) setTimeout(tryInit, 200);
+                        return;
+                    }
+
+                    const component = Alpine.$data(mapContainer);
+                    if (!component?.mapCore?.map) {
+                        if (++attempts < maxAttempts) setTimeout(tryInit, 200);
+                        return;
+                    }
+
+                    const mapCore = component.mapCore;
+                    const map = mapCore.map;
+                    const REF_ZOOM = 14;
+
+                    function storeBaseValues() {
+                        mapCore.layers.forEach(({ layer, data }) => {
+                            if (layer instanceof L.Polyline && layer._baseWeight === undefined) {
+                                layer._baseWeight = layer.options.weight || data?.options?.weight || 3;
+                            } else if (layer instanceof L.CircleMarker && layer._baseRadius === undefined) {
+                                layer._baseRadius = layer.options.radius || data?.options?.radius || 6;
+                            }
+                        });
+                    }
+
+                    function applyZoomStyles() {
+                        const zoom = map.getZoom();
+                        const scale = Math.max(0.3, Math.min(2.5, Math.pow(1.5, zoom - REF_ZOOM)));
+
+                        mapCore.layers.forEach(({ layer }) => {
+                            if (layer instanceof L.Polyline && layer._baseWeight) {
+                                layer.setStyle({ weight: layer._baseWeight * scale });
+                            } else if (layer instanceof L.CircleMarker && layer._baseRadius) {
+                                layer.setRadius(layer._baseRadius * scale);
+                            }
+                        });
+                    }
+
+                    storeBaseValues();
+
+                    const origUpdate = mapCore.updateMapData.bind(mapCore);
+                    mapCore.updateMapData = function(newConfig) {
+                        origUpdate(newConfig);
+                        storeBaseValues();
+                        applyZoomStyles();
+                    };
+
+                    map.on('zoomend', applyZoomStyles);
+                    setTimeout(applyZoomStyles, 150);
+                }
+
+                tryInit();
+            });
+        </script>
+    @endpush
 </x-filament-panels::page>

@@ -18,7 +18,6 @@ class SwitchVehicleRequest extends FormRequest
     {
         return [
             'new_vehicle_id' => 'required|exists:vehicles,id',
-            'order_id' => 'nullable|exists:orders,id',
             'handover_km' => 'required|numeric',
             'handover_gps_lat' => 'nullable|numeric',
             'handover_gps_lng' => 'nullable|numeric',

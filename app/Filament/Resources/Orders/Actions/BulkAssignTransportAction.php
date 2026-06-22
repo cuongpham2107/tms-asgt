@@ -6,7 +6,9 @@ use App\Enums\OrderStatus;
 use App\Enums\VehicleStatus;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
+use App\Filament\Resources\OrderPlans\Pages\ListOrderPlans;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
+use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -31,8 +33,21 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
             ->modal()
             ->modalHeading('Gán nhiều đơn hàng cho xe')
             ->modalDescription('Chọn phương tiện cho các đơn hàng được chọn. Lái xe sẽ tự động gán theo xe.')
-            ->modalWidth(Width::ScreenTwoExtraLarge)
+            ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
+            ->visible(function (BulkAction $action): bool {
+                $livewire = $action->getLivewire();
+
+                if ($livewire instanceof ListOrderPlans) {
+                    return true;
+                }
+
+                if ($livewire instanceof ListOrders) {
+                    return $livewire->activeStatusFilter === 'planned';
+                }
+
+                return true;
+            })
             ->schema([
                 Grid::make(2)
                     ->schema([
@@ -100,8 +115,20 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                 }
 
                 try {
+                    $snapshotPlateNumber = null;
+                    $snapshotType = null;
+                    if (filled($data['vehicle_id'] ?? null)) {
+                        $vehicle = Vehicle::query()->find($data['vehicle_id']);
+                        if ($vehicle !== null) {
+                            $snapshotPlateNumber = $vehicle->plate_number;
+                            $snapshotType = $vehicle->vehicle_type?->value;
+                        }
+                    }
+
                     Order::query()->whereIn('id', $draftOrders->pluck('id'))->update([
                         'vehicle_id' => $data['vehicle_id'] ?? null,
+                        'vehicle_plate_number' => $snapshotPlateNumber,
+                        'vehicle_type' => $snapshotType,
                         'driver_id' => $data['driver_id'] ?? null,
                         'status' => (filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null))
                             ? OrderStatus::Assigned->value
@@ -113,10 +140,6 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
 
                         if ($vehicle !== null) {
                             $vehicle->status = VehicleStatus::Running;
-
-                            if (filled($data['driver_id'] ?? null)) {
-                                $vehicle->current_driver_id = (int) $data['driver_id'];
-                            }
 
                             $vehicle->save();
                         }

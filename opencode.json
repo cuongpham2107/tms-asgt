@@ -15,7 +15,9 @@
           "command": [
             "codegraph",
             "serve",
-            "--mcp"
+            "--mcp",
+            "--path",
+            "/var/www/tms-asgt"
           ],
           "enabled": true
         }

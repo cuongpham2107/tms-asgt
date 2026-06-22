@@ -40,6 +40,9 @@
         hasSuggestionTab() {
             return this.cards.some(card => card.isSuggested === true);
         },
+        hasVehicleTypeFilters() {
+            return this.cards.some(card => card.type === 'company' || card.type === 'rent');
+        },
         setTab(tab) {
             this.activeTab = tab;
             this.search = '';
@@ -66,6 +69,10 @@
             let list = [];
             if (this.hasSuggestionTab() && this.activeTab === 'suggested') {
                 list = this.suggestedCards();
+            } else if (this.activeTab === 'company') {
+                list = this.cards.filter(card => card.type === 'company');
+            } else if (this.activeTab === 'rent') {
+                list = this.cards.filter(card => card.type === 'rent');
             } else {
                 list = this.cards;
             }
@@ -127,9 +134,9 @@
     }" class="space-y-3">
         {{-- Tabs + Search --}}
         <div class="flex items-center justify-between gap-3">
-            <div x-show="hasSuggestionTab()" x-cloak
+            <div x-show="hasSuggestionTab() || hasVehicleTypeFilters()" x-cloak
                 class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
-                <button type="button" x-on:click="setTab('suggested')"
+                <button type="button" x-show="hasSuggestionTab()" x-cloak x-on:click="setTab('suggested')"
                     class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
                     :class="activeTab === 'suggested'
                         ?
@@ -152,6 +159,26 @@
                         class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
                         x-text="cards.length"></span>
                 </button>
+                <button type="button" x-show="hasVehicleTypeFilters()" x-cloak x-on:click="setTab('company')"
+                    class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                    :class="activeTab === 'company'
+                        ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400'
+                        : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'">
+                    Xe công ty
+                    <span
+                        class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                        x-text="cards.filter(card => card.type === 'company').length"></span>
+                </button>
+                <button type="button" x-show="hasVehicleTypeFilters()" x-cloak x-on:click="setTab('rent')"
+                    class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                    :class="activeTab === 'rent'
+                        ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400'
+                        : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'">
+                    Xe ngoài
+                    <span
+                        class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                        x-text="cards.filter(card => card.type === 'rent').length"></span>
+                </button>
             </div>
 
             <div class="relative ml-auto w-full max-w-xs">
@@ -164,7 +191,7 @@
         </div>
 
         {{-- Cards Grid --}}
-        <div class="grid max-h-[420px] gap-2.5 overflow-y-auto p-2 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+        <div class="grid max-h-162.5 gap-2.5 overflow-y-auto p-2 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
             <template x-for="card in visibleCards()" :key="card.value">
                 <div x-show="matches(card)" x-cloak class="h-full">
                     <button type="button" x-on:click="select(card.value)"

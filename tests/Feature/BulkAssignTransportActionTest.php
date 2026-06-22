@@ -5,9 +5,9 @@ use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Filament\Resources\OrderPlans\Pages\ListOrderPlans;
+use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Order;
-use App\Models\OrderCategory;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,7 +25,7 @@ beforeEach(function () {
         'guard_name' => 'web',
     ]);
 
-    $this->orderCategory = OrderCategory::create([
+    $this->area = Area::create([
         'type' => 'HHHK',
         'code' => 'NORTH',
         'name' => 'North',
@@ -54,7 +54,7 @@ test('can bulk assign vehicle and driver to draft orders', function () {
     $order1 = Order::create([
         'order_code' => 'ORD-001',
         'type' => 'HHHK',
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'status' => OrderStatus::Draft,
         'created_by' => User::factory()->create()->id,
@@ -63,7 +63,7 @@ test('can bulk assign vehicle and driver to draft orders', function () {
     $order2 = Order::create([
         'order_code' => 'ORD-002',
         'type' => 'HHHK',
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'status' => OrderStatus::Draft,
         'created_by' => User::factory()->create()->id,
@@ -72,7 +72,7 @@ test('can bulk assign vehicle and driver to draft orders', function () {
     $order3 = Order::create([
         'order_code' => 'ORD-003',
         'type' => 'HHHK',
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'status' => OrderStatus::Assigned,
         'created_by' => User::factory()->create()->id,

@@ -2,13 +2,19 @@
 
 namespace App\Filament\Resources\OrderPlans\Pages;
 
+use App\Filament\Forms\Components\OrderDateRangePicker;
+use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\OrderPlans\OrderPlanResource;
 use App\Filament\Resources\Orders\Actions\CreateBulkOrdersAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHHHKAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHNAction;
-use App\Models\OrderCategory;
+use App\Models\Area;
+use Carbon\Carbon;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Url;
 
 class ListOrderPlans extends ListRecords
 {
@@ -16,10 +22,21 @@ class ListOrderPlans extends ListRecords
 
     protected string $view = 'filament.resources.order-plans.pages.list-order-plans';
 
+    #[Url(keep: true)]
+    public ?string $startDate = null;
+
+    #[Url(keep: true)]
+    public ?string $endDate = null;
+
+    public ?array $dateRange = null;
+
+    #[Url]
     public ?string $activeOrderTypeFilter = 'all';
 
+    #[Url]
     public ?string $activePlaceFilter = 'all';
 
+    #[Url]
     public ?string $orderSearch = null;
 
     /**
@@ -47,9 +64,18 @@ class ListOrderPlans extends ListRecords
 
     public function mount(): void
     {
+        if (blank($this->startDate)) {
+            $this->startDate = today()->toDateString();
+        }
+
+        $this->dateRange = [
+            'start' => $this->startDate,
+            'end' => $this->endDate,
+        ];
+
         parent::mount();
 
-        $this->orderPlaceFilters = OrderCategory::query()
+        $this->orderPlaceFilters = Area::query()
             ->orderBy('sort_order', 'asc')
             ->pluck('code', 'code')
             ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
@@ -66,9 +92,69 @@ class ListOrderPlans extends ListRecords
         ];
     }
 
+    protected function getForms(): array
+    {
+        return [
+            'searchForm',
+            'dateRangeForm',
+            'filtersForm',
+        ];
+    }
+
+    public function searchForm(Schema $form): Schema
+    {
+        return $form
+            ->components([
+                TextInput::make('orderSearch')
+                    ->hiddenLabel()
+                    ->placeholder('Tìm theo mã đơn, khách hàng, hàng hóa, biển số, lái xe...')
+                    ->prefixIcon('heroicon-m-magnifying-glass')
+                    ->extraInputAttributes(['type' => 'search'])
+                    ->live(debounce: 400),
+            ]);
+    }
+
+    public function dateRangeForm(Schema $form): Schema
+    {
+        return $form
+            ->components([
+                OrderDateRangePicker::make()
+                    ->syncWithProperties('startDate', 'endDate'),
+            ]);
+    }
+
+    public function filtersForm(Schema $form): Schema
+    {
+        return $form
+            ->components([
+                PillFilter::make('activeOrderTypeFilter')
+                    // ->labelPrefix('Loại đơn')
+                    ->options($this->orderTypeFilters)
+                    ->countCallback(fn ($key) => $this->getOrderTypeCount($key))
+                    ->activeValue(fn ($livewire) => $livewire->activeOrderTypeFilter)
+                    ->clickAction('filterOrderType'),
+
+                PillFilter::make('activePlaceFilter')
+                    // ->labelPrefix('Khu vực')
+                    ->options(fn (): array => ['all' => 'Tất cả điểm'] + Area::query()
+                        ->when(
+                            $this->activeOrderTypeFilter !== 'all',
+                            fn ($query) => $query->where('type', $this->activeOrderTypeFilter)
+                        )
+                        ->orderBy('sort_order', 'asc')
+                        ->pluck('code', 'code')
+                        ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
+                        ->toArray())
+                    ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
+                    ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
+                    ->clickAction('filterPlace'),
+            ]);
+    }
+
     public function filterOrderType(string $type): void
     {
         $this->activeOrderTypeFilter = $type;
+        $this->activePlaceFilter = 'all';
 
         $this->resetPage();
     }
@@ -81,6 +167,16 @@ class ListOrderPlans extends ListRecords
     }
 
     public function updatedOrderSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedStartDate(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedEndDate(): void
     {
         $this->resetPage();
     }
@@ -101,7 +197,7 @@ class ListOrderPlans extends ListRecords
             ->when(
                 $place !== 'all',
                 fn (Builder $query): Builder => $query->whereHas(
-                    'orderCategory',
+                    'area',
                     fn (Builder $categoryQuery): Builder => $categoryQuery->where('code', $place),
                 ),
             )
@@ -115,7 +211,7 @@ class ListOrderPlans extends ListRecords
                 'customer',
                 'deliveryPoints.location',
                 'driver',
-                'orderCategory',
+                'area',
                 'pickupLocation',
                 'vehicle',
             ])
@@ -127,7 +223,7 @@ class ListOrderPlans extends ListRecords
             ->when(
                 $this->activePlaceFilter !== 'all',
                 fn (Builder $query): Builder => $query->whereHas(
-                    'orderCategory',
+                    'area',
                     fn (Builder $categoryQuery): Builder => $categoryQuery->where('code', $this->activePlaceFilter),
                 ),
             )
@@ -143,12 +239,48 @@ class ListOrderPlans extends ListRecords
                         ->orWhereHas('vehicle', fn (Builder $vehicleQuery): Builder => $vehicleQuery->where('plate_number', 'like', "%{$search}%"))
                         ->orWhereHas('driver', fn (Builder $driverQuery): Builder => $driverQuery->where('name', 'like', "%{$search}%"));
                 });
+            })
+            ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
+                if (filled($this->startDate) && filled($this->endDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $end = Carbon::parse($this->endDate)->endOfDay();
+
+                    return $query->whereBetween('created_at', [$start, $end]);
+                }
+
+                if (filled($this->startDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+
+                    return $query->where('created_at', '>=', $start);
+                }
+
+                $end = Carbon::parse($this->endDate)->endOfDay();
+
+                return $query->where('created_at', '<=', $end);
             });
     }
 
     private function baseCountQuery(): Builder
     {
         return OrderPlanResource::getEloquentQuery()
-            ->where('status', 'draft');
+            ->where('status', 'draft')
+            ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
+                if (filled($this->startDate) && filled($this->endDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $end = Carbon::parse($this->endDate)->endOfDay();
+
+                    return $query->whereBetween('created_at', [$start, $end]);
+                }
+
+                if (filled($this->startDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+
+                    return $query->where('created_at', '>=', $start);
+                }
+
+                $end = Carbon::parse($this->endDate)->endOfDay();
+
+                return $query->where('created_at', '<=', $end);
+            });
     }
 }

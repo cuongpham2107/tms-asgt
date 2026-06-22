@@ -40,6 +40,9 @@
         hasSuggestionTab() {
             return this.cards.some(card => card.isSuggested === true);
         },
+        hasVehicleTypeFilters() {
+            return this.cards.some(card => card.type === 'company' || card.type === 'rent');
+        },
         setTab(tab) {
             this.activeTab = tab;
             this.search = '';
@@ -65,6 +68,12 @@
         scopedCards() {
             if (this.hasSuggestionTab() && this.activeTab === 'suggested') {
                 return this.suggestedCards();
+            }
+            if (this.activeTab === 'company') {
+                return this.cards.filter(card => card.type === 'company');
+            }
+            if (this.activeTab === 'rent') {
+                return this.cards.filter(card => card.type === 'rent');
             }
     
             return this.cards;
@@ -107,12 +116,12 @@
             };
             return colors[dot] ?? 'bg-gray-400';
         },
-    }" class="space-y-3">
+    }" x-effect="cards = @js($cards)" class="space-y-3">
         {{-- Tabs + Search --}}
         <div class="flex items-center justify-between gap-3">
-            <div x-show="hasSuggestionTab()" x-cloak
+            <div x-show="hasSuggestionTab() || hasVehicleTypeFilters()" x-cloak
                 class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
-                <button type="button" x-on:click="setTab('suggested')"
+                <button type="button" x-show="hasSuggestionTab()" x-cloak x-on:click="setTab('suggested')"
                     class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
                     :class="activeTab === 'suggested'
                         ?
@@ -135,19 +144,46 @@
                         class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
                         x-text="cards.length"></span>
                 </button>
+                <button type="button" x-show="hasVehicleTypeFilters()" x-cloak x-on:click="setTab('company')"
+                    class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                    :class="activeTab === 'company'
+                        ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400'
+                        : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'">
+                    Xe công ty
+                    <span
+                        class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                        x-text="cards.filter(card => card.type === 'company').length"></span>
+                </button>
+                <button type="button" x-show="hasVehicleTypeFilters()" x-cloak x-on:click="setTab('rent')"
+                    class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                    :class="activeTab === 'rent'
+                        ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400'
+                        : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'">
+                    Xe ngoài
+                    <span
+                        class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                        x-text="cards.filter(card => card.type === 'rent').length"></span>
+                </button>
             </div>
 
-            <div class="relative ml-auto w-full max-w-xs">
-                <div class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    <x-filament::icon icon="heroicon-m-magnifying-glass" class="h-4 w-4" />
+            <div class="ml-auto flex items-center gap-2">
+                @if ($getAction('createVehicle'))
+                    <div class="shrink-0 w-max">
+                        {{ $getAction('createVehicle') }}
+                    </div>
+                @endif
+                <div class="relative w-full max-w-xs">
+                    <div class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <x-filament::icon icon="heroicon-m-magnifying-glass" class="h-4 w-4" />
+                    </div>
+                    <input type="search" x-model.debounce.200ms="search" placeholder="{{ $getSearchPlaceholder() }}"
+                        class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500" />
                 </div>
-                <input type="search" x-model.debounce.200ms="search" placeholder="{{ $getSearchPlaceholder() }}"
-                    class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500" />
             </div>
         </div>
 
         {{-- Cards Grid --}}
-        <div class="grid max-h-[420px] gap-2.5 overflow-y-auto p-2 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+        <div class="grid max-h-162.5 gap-2.5 overflow-y-auto p-2 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
             <template x-for="card in visibleCards()" :key="card.value">
                 <div x-show="matches(card)" x-cloak class="h-full">
                     <button type="button" x-on:click="select(card.value)"

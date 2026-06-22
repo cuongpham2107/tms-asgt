@@ -65,7 +65,7 @@ class ListDriverShifts extends ListRecords
 
                     Notification::make()
                         ->title('Thành công')
-                        ->body('Đã tạo thành công ca trực cho ' . count($driverIds) . ' lái xe.')
+                        ->body('Đã tạo thành công ca trực cho '.count($driverIds).' lái xe.')
                         ->success()
                         ->send();
                 }),

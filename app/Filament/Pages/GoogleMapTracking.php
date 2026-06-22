@@ -118,9 +118,8 @@ class GoogleMapTracking extends Page
     {
         $this->lastUpdated = now();
         $this->selectedVehicleIds = [];
-        // Initialize playback range to latest available by default
-        [$min, $max] = $this->getPlaybackBounds();
-        $this->playbackTimestamp = $max ?? now()->timestamp;
+        // Mặc định là chế độ theo dõi thời gian thực (Real-time), playbackTimestamp là null
+        $this->playbackTimestamp = null;
         $this->refreshMap();
     }
 
@@ -251,20 +250,38 @@ class GoogleMapTracking extends Page
             $routePoints = $hasActiveTrip
                 ? $this->routePointsForOrder($trackingOrder, $vehicle->id, $this->playbackTimestamp)
                 : collect();
-            $latestPoint = $routePoints->last();
+            // Lấy checkpoint thực tế mới nhất có GPS thực tế
+            $latestRealCheckpoint = null;
+            if ($trackingOrder !== null) {
+                $realCheckpoints = ($trackingOrder->tripCheckpoints ?? collect())
+                    ->filter(fn (TripCheckpoint $c) => $c->gps_lat !== null && $c->gps_lng !== null)
+                    ->sortBy('occurred_at');
 
-            if ($latestPoint === null) {
-                $latestCheckpoint = $allOrders
+                if ($this->playbackTimestamp !== null) {
+                    $asOf = Carbon::createFromTimestamp($this->playbackTimestamp);
+                    $realCheckpoints = $realCheckpoints->filter(fn (TripCheckpoint $c) => $c->occurred_at <= $asOf);
+                }
+
+                $latestRealCheckpoint = $realCheckpoints->last();
+            }
+
+            $latestRealPoint = null;
+            if ($latestRealCheckpoint !== null) {
+                $latestRealPoint = [
+                    'lat' => (float) $latestRealCheckpoint->gps_lat,
+                    'lng' => (float) $latestRealCheckpoint->gps_lng,
+                ];
+            } else {
+                $anyLatestCheckpoint = $allOrders
                     ->flatMap(fn (Order $o) => $o->tripCheckpoints ?? collect())
                     ->filter(fn ($c) => $c->gps_lat !== null && $c->gps_lng !== null)
                     ->sortByDesc('occurred_at')
                     ->first();
 
-                if ($latestCheckpoint !== null) {
-                    $latestPoint = [
-                        'lat' => (float) $latestCheckpoint->gps_lat,
-                        'lng' => (float) $latestCheckpoint->gps_lng,
-                        'label' => $latestCheckpoint->checkpoint_type?->getLabel() ?? 'Checkpoint',
+                if ($anyLatestCheckpoint !== null) {
+                    $latestRealPoint = [
+                        'lat' => (float) $anyLatestCheckpoint->gps_lat,
+                        'lng' => (float) $anyLatestCheckpoint->gps_lng,
                     ];
                 }
             }
@@ -298,12 +315,22 @@ class GoogleMapTracking extends Page
                 }
             }
 
-            $lat = $latestPoint['lat']
-                ?? $vehicle->gps_lat
+            $isPlaybackMode = $this->playbackTimestamp !== null;
+            $lat = null;
+            $lng = null;
+
+            if ($isPlaybackMode) {
+                $lat = ($latestRealPoint ? $latestRealPoint['lat'] : null) ?? $vehicle->gps_lat;
+                $lng = ($latestRealPoint ? $latestRealPoint['lng'] : null) ?? $vehicle->gps_lng;
+            } else {
+                $lat = $vehicle->gps_lat ?? ($latestRealPoint ? $latestRealPoint['lat'] : null);
+                $lng = $vehicle->gps_lng ?? ($latestRealPoint ? $latestRealPoint['lng'] : null);
+            }
+
+            $lat = $lat
                 ?? $latestShift?->effective_start_gps_lat
                 ?? (self::MAP_CENTER[0] + ($vehicle->id % 7 - 3) * 0.005);
-            $lng = $latestPoint['lng']
-                ?? $vehicle->gps_lng
+            $lng = $lng
                 ?? $latestShift?->effective_start_gps_lng
                 ?? (self::MAP_CENTER[1] + ($vehicle->id % 7 - 3) * 0.005);
 
@@ -446,7 +473,7 @@ class GoogleMapTracking extends Page
                 $shapes[] = Polyline::make($points)
                     ->id('route-gps-'.$vehicle->id)
                     ->color('#9ca3af')
-                    ->weight(2)
+                    ->weight(1.5)
                     ->opacity(0.35)
                     ->dashArray(4, 6)
                     ->fill(false);
@@ -455,11 +482,11 @@ class GoogleMapTracking extends Page
                 $firstPoint = $points[0];
                 $shapes[] = CircleMarker::make($firstPoint[0], $firstPoint[1])
                     ->id('start-'.$vehicle->id)
-                    ->radius(8)
+                    ->radius(6)
                     ->color('#16a34a')
                     ->fillColor('#22c55e')
                     ->fillOpacity(0.8)
-                    ->weight(3)
+                    ->weight(2)
                     ->tooltipContent('Bắt đầu: '.($labels[0] ?? '?'));
 
                 // Điểm kết thúc (đỏ)
@@ -467,11 +494,11 @@ class GoogleMapTracking extends Page
                 $lastPoint = $points[$lastIdx];
                 $shapes[] = CircleMarker::make($lastPoint[0], $lastPoint[1])
                     ->id('end-'.$vehicle->id)
-                    ->radius(8)
+                    ->radius(6)
                     ->color('#dc2626')
                     ->fillColor('#ef4444')
                     ->fillOpacity(0.8)
-                    ->weight(3)
+                    ->weight(2)
                     ->tooltipContent('Kết thúc: '.($labels[$lastIdx] ?? '?'));
 
                 // Vẽ từng segment giữa các checkpoint liên tiếp với OSRM
@@ -488,7 +515,7 @@ class GoogleMapTracking extends Page
                         $shapes[] = Polyline::make($osrmSegment)
                             ->id("route-seg{$i}-{$vehicle->id}")
                             ->color($color)
-                            ->weight($isLastSegment ? 8 : 6)
+                            ->weight($isLastSegment ? 5 : 3.5)
                             ->opacity($isLastSegment ? 0.95 : 0.9)
                             ->fill(false)
                             ->tooltipContent($label);
@@ -498,7 +525,7 @@ class GoogleMapTracking extends Page
                             $shapes[] = Polyline::make($osrmSegment)
                                 ->id("route-seg{$i}-{$vehicle->id}-highlight")
                                 ->color($color)
-                                ->weight(12)
+                                ->weight(8)
                                 ->opacity(0.18)
                                 ->fill(false);
                         }
@@ -507,7 +534,7 @@ class GoogleMapTracking extends Page
                         $shapes[] = Polyline::make($segment)
                             ->id("route-seg{$i}-{$vehicle->id}")
                             ->color($color)
-                            ->weight($isLastSegment ? 6 : 4)
+                            ->weight($isLastSegment ? 4 : 2.5)
                             ->opacity(0.75)
                             ->dashArray(8, 4)
                             ->fill(false)
@@ -553,6 +580,7 @@ class GoogleMapTracking extends Page
     private function activeOrderStatuses(): array
     {
         return [
+            OrderStatus::Sent->value,
             OrderStatus::Started->value,
             OrderStatus::ArrivedPickup->value,
             OrderStatus::Delivering->value,
@@ -662,6 +690,33 @@ class GoogleMapTracking extends Page
         if ($asOfTimestamp !== null) {
             $asOf = Carbon::createFromTimestamp($asOfTimestamp);
             $points = $points->filter(fn (TripCheckpoint $c) => $c->occurred_at <= $asOf)->values();
+        }
+
+        if ($points->count() < 2) {
+            $fallbackPoints = collect();
+
+            if ($order->pickupLocation && $order->pickupLocation->lat !== null && $order->pickupLocation->lng !== null) {
+                $fallbackPoints->push([
+                    'lat' => (float) $order->pickupLocation->lat,
+                    'lng' => (float) $order->pickupLocation->lng,
+                    'label' => $order->pickupLocation->name ?? 'Điểm lấy hàng',
+                ]);
+            }
+
+            $deliveryPoints = $order->deliveryPoints ?? collect();
+            foreach ($deliveryPoints->sortBy('sequence') as $dp) {
+                if ($dp->location && $dp->location->lat !== null && $dp->location->lng !== null) {
+                    $fallbackPoints->push([
+                        'lat' => (float) $dp->location->lat,
+                        'lng' => (float) $dp->location->lng,
+                        'label' => $dp->address ?? ($dp->location->name ?? 'Điểm giao'),
+                    ]);
+                }
+            }
+
+            if ($fallbackPoints->count() >= 2) {
+                return $fallbackPoints;
+            }
         }
 
         return $points->map(fn (TripCheckpoint $c) => [

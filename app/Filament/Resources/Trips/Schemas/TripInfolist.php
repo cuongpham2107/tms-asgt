@@ -2,7 +2,8 @@
 
 namespace App\Filament\Resources\Trips\Schemas;
 
-use App\Models\Order;
+use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\TripPhoto;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -27,77 +28,85 @@ class TripInfolist
                                 Section::make('Thông tin chuyến đi')
                                     ->icon(Heroicon::OutlinedClipboardDocumentList)
                                     ->schema([
-                                        TextEntry::make('order_code')
-                                            ->label('Mã chuyến')
+                                        TextEntry::make('vehicle.plate_number')
+                                            ->label('BSX')
                                             ->weight('bold')
                                             ->size('lg')
-                                            ->copyable()
-                                            ->columnSpan(2),
+                                            ->copyable(),
 
                                         TextEntry::make('status')
                                             ->label('Trạng thái')
                                             ->badge()
-                                            ->color(fn ($state) => $state?->getColor() ?? 'gray')
-                                            ->formatStateUsing(fn ($state) => $state?->getLabel() ?? $state),
+                                            ->color(fn (Trip $record): string => $record->getStatusColor())
+                                            ->state(fn (Trip $record): string => $record->getStatusLabel()),
 
-                                        TextEntry::make('customer.name')
-                                            ->label('Khách hàng')
-                                            ->icon(Heroicon::OutlinedBuildingOffice)
-                                            ->weight('bold'),
+                                        TextEntry::make('orders')
+                                            ->label('Lái xe')
+                                            ->icon(Heroicon::OutlinedUser)
+                                            ->weight('bold')
+                                            ->state(fn (Trip $record): string => self::getDrivers($record)),
 
-                                        TextEntry::make('type')
-                                            ->label('Loại đơn')
-                                            ->badge()
-                                            ->formatStateUsing(fn ($state) => $state?->getLabel() ?? '—')
-                                            ->color(fn ($state) => $state?->getColor() ?? 'info'),
+                                        TextEntry::make('started_at')
+                                            ->label('Bắt đầu')
+                                            ->dateTime('H:i d/m/Y')
+                                            ->icon(Heroicon::OutlinedClock)
+                                            ->placeholder('—'),
 
-                                        TextEntry::make('orderCategory.name')
-                                            ->label('Tuyến')
-                                            ->badge()
-                                            ->color('warning'),
+                                        TextEntry::make('completed_at')
+                                            ->label('Kết thúc')
+                                            ->dateTime('H:i d/m/Y')
+                                            ->icon(Heroicon::OutlinedClock)
+                                            ->placeholder('Đang chạy...'),
 
-                                        TextEntry::make('cargo_name')
-                                            ->label('Tên hàng')
-                                            ->columnSpan(2),
-
-                                        TextEntry::make('cargo_type')
-                                            ->label('Loại hàng')
-                                            ->badge(),
-
-                                        TextEntry::make('total_packages')
-                                            ->label('Số kiện')
+                                        TextEntry::make('start_km')
+                                            ->label('Km bắt đầu')
                                             ->numeric()
-                                            ->suffix(' kiện'),
+                                            ->suffix(' km')
+                                            ->placeholder('—'),
 
-                                        TextEntry::make('total_weight')
-                                            ->label('Tổng KL')
+                                        TextEntry::make('end_km')
+                                            ->label('Km kết thúc')
                                             ->numeric()
-                                            ->suffix(' kg'),
+                                            ->suffix(' km')
+                                            ->placeholder('—'),
 
-                                        TextEntry::make('created_at')
-                                            ->label('Tạo lúc')
-                                            ->dateTime('H:i d/m/Y')
-                                            ->icon(Heroicon::OutlinedClock),
-
-                                        TextEntry::make('planned_loading_at')
-                                            ->label('KH bốc hàng')
-                                            ->dateTime('H:i d/m/Y')
-                                            ->icon(Heroicon::OutlinedCalendarDays),
-
-                                        TextEntry::make('sent_at')
-                                            ->label('Gửi lệnh')
-                                            ->dateTime('H:i d/m/Y')
-                                            ->icon(Heroicon::OutlinedPaperAirplane),
+                                        TextEntry::make('total_km')
+                                            ->label('Quãng đường')
+                                            ->state(fn (Trip $record): string => self::getKmOver($record)),
                                     ])
-                                    ->columns(3),
+                                    ->columns(4),
 
-                                Section::make('Ghi chú')
-                                    ->icon(Heroicon::OutlinedPencilSquare)
+                                Section::make('Danh sách đơn hàng')
+                                    ->icon(Heroicon::OutlinedDocumentText)
                                     ->schema([
-                                        TextEntry::make('notes')
-                                            ->label('Nội dung')
-                                            ->columnSpanFull()
-                                            ->placeholder('Không có ghi chú'),
+                                        RepeatableEntry::make('orders')
+                                            ->label('Các đơn hàng trong chuyến này')
+                                            ->schema([
+                                                TextEntry::make('order_code')
+                                                    ->label('Mã đơn')
+                                                    ->weight('bold')
+                                                    ->copyable(),
+                                                TextEntry::make('customer.name')
+                                                    ->label('Khách hàng'),
+                                                TextEntry::make('status')
+                                                    ->label('Trạng thái')
+                                                    ->badge()
+                                                    ->color(fn ($state) => $state?->getColor() ?? 'gray')
+                                                    ->formatStateUsing(fn ($state) => $state?->getLabel() ?? $state),
+                                                TextEntry::make('total_packages')
+                                                    ->label('Số kiện')
+                                                    ->numeric()
+                                                    ->suffix(' kiện'),
+                                                TextEntry::make('total_weight')
+                                                    ->label('Trọng lượng')
+                                                    ->numeric()
+                                                    ->suffix(' kg'),
+                                            ])
+                                            ->columns(5)
+                                            ->grid([
+                                                'default' => 1,
+                                            ])
+                                            ->placeholder('Không có đơn hàng nào trong chuyến'),
                                     ]),
                             ]),
 
@@ -105,11 +114,12 @@ class TripInfolist
                             ->icon(Heroicon::OutlinedPhoto)
                             ->schema([
                                 RepeatableEntry::make('tripPhotos')
-                                    ->label('Ảnh chuyến đi')
-                                    ->state(fn (Order $record) => $record->tripPhotos()
-                                        ->with('tripCheckpoint')
-                                        ->latest('trip_photos.created_at')
-                                        ->get())
+                                    ->label('Ảnh chụp từ các mốc hành trình')
+                                    ->state(fn (Trip $record) => $record->checkpoints()
+                                        ->with('photos')
+                                        ->get()
+                                        ->flatMap(fn (TripCheckpoint $cp) => $cp->photos)
+                                        ->sortByDesc('created_at'))
                                     ->schema([
                                         ImageEntry::make('photo')
                                             ->label('Ảnh')
@@ -117,7 +127,7 @@ class TripInfolist
                                             ->disk('public')
                                             ->visibility('public')
                                             ->imageHeight(160)
-                                            ->checkFileExistence(false)
+                                            ->checkFileExists(false)
                                             ->extraImgAttributes([
                                                 'class' => 'rounded-lg object-cover',
                                                 'loading' => 'lazy',
@@ -154,5 +164,50 @@ class TripInfolist
                     ->persistTab()
                     ->id('trip-infolist-tabs'),
             ]);
+    }
+
+    private static function getDrivers(Trip $record): string
+    {
+        $orders = $record->orders;
+
+        if ($orders->isEmpty()) {
+            return '—';
+        }
+
+        $names = [];
+        foreach ($orders as $order) {
+            if ($order->driver) {
+                $names[] = $order->driver->name;
+            }
+            foreach ($order->driverSwaps->sortBy('created_at') as $swap) {
+                if ($swap->toDriver) {
+                    $names[] = $swap->toDriver->name;
+                }
+            }
+        }
+
+        $names = array_unique(array_filter($names));
+
+        return ! empty($names) ? implode(' → ', $names) : '—';
+    }
+
+    private static function getKmOver(Trip $record): string
+    {
+        if ($record->end_km !== null && $record->start_km !== null) {
+            $totalKm = (float) $record->end_km - (float) $record->start_km;
+
+            return $totalKm > 0 ? number_format($totalKm, 1, ',', '.').' km' : '—';
+        }
+
+        if ($record->start_km !== null) {
+            $currentKm = $record->vehicle?->current_mileage;
+            if ($currentKm !== null) {
+                $diff = (float) $currentKm - (float) $record->start_km;
+
+                return $diff > 0 ? number_format($diff, 1, ',', '.').' km (đang chạy)' : '—';
+            }
+        }
+
+        return '—';
     }
 }

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
 use App\Models\Order;
+use App\Models\Trip;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Throwable;
@@ -38,6 +39,18 @@ class SendOrderAction
                         'status' => OrderStatus::Sent->value,
                         'sent_at' => now(),
                     ]);
+
+                    $record->refresh();
+                    if ($record->vehicle_id !== null && $record->trip_id === null) {
+                        $trip = Trip::firstOrCreate(
+                            ['vehicle_id' => $record->vehicle_id, 'status' => 'pending'],
+                            ['status' => 'pending'],
+                        );
+
+                        Order::whereKey($record->id)
+                            ->whereNull('trip_id')
+                            ->update(['trip_id' => $trip->id]);
+                    }
 
                     Notification::make()
                         ->title('Gửi lệnh thành công')

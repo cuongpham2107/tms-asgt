@@ -1,9 +1,9 @@
 @php
-    use App\Models\Order;
+    use App\Models\Trip;
     use Illuminate\Support\Facades\Storage;
 
-    /** @var Order $order */
-    $checkpoints = $order->tripCheckpoints()
+    /** @var Trip $trip */
+    $checkpoints = $trip->checkpoints()
         ->with(['driver', 'deliveryPoint.location', 'photos'])
         ->orderBy('occurred_at', 'desc')
         ->get();
@@ -34,22 +34,24 @@
         'purple'  => 'text-purple-600 dark:text-purple-400',
         'emerald' => 'text-emerald-600 dark:text-emerald-400',
     ];
+
+    $orderCodes = $trip->orders->pluck('order_code')->implode(', ');
 @endphp
 
 <div class="space-y-4">
     {{-- Header --}}
     <div class="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-800">
         <div>
-            <span class="text-xs text-gray-500 dark:text-gray-400">Mã chuyến</span>
-            <span class="ml-2 text-sm font-bold text-gray-900 dark:text-white">{{ $order->order_code }}</span>
+            <span class="text-xs text-gray-500 dark:text-gray-400">Đơn hàng</span>
+            <span class="ml-2 text-sm font-bold text-gray-900 dark:text-white">{{ $orderCodes ?: '—' }}</span>
         </div>
         <div>
             <span class="text-xs text-gray-500 dark:text-gray-400">Xe</span>
-            <span class="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">{{ $order->vehicle?->plate_number ?? '—' }}</span>
+            <span class="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">{{ $trip->vehicle?->plate_number ?? '—' }}</span>
         </div>
         <div>
             <span class="text-xs text-gray-500 dark:text-gray-400">Lái xe</span>
-            <span class="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">{{ $order->driver?->name ?? '—' }}</span>
+            <span class="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">{{ $trip->orders->first()?->driver?->name ?? '—' }}</span>
         </div>
     </div>
 

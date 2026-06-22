@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\LocationType;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 
 class CustomerLocationSeeder extends Seeder
@@ -42,6 +43,7 @@ class CustomerLocationSeeder extends Seeder
                     ? array_search('Tên công ty chi tiết', $header)
                     : array_search('Công ty', $header),
                 'address' => array_search('Địa chỉ', $header),
+                'areaCode' => array_search('Khu vực', $header),
             ];
 
             while (($row = fgetcsv($handle)) !== false) {
@@ -49,6 +51,7 @@ class CustomerLocationSeeder extends Seeder
                 $locationCode = trim($row[$colIdx['locationCode']] ?? '');
                 $companyName = trim($row[$colIdx['companyName']] ?? '');
                 $address = trim($row[$colIdx['address']] ?? '');
+                $areaCode = trim($row[$colIdx['areaCode']] ?? '');
 
                 if (empty($customerCode) && empty($locationCode)) {
                     continue;
@@ -70,6 +73,7 @@ class CustomerLocationSeeder extends Seeder
                         'address' => $address,
                         'loc_type' => LocationType::Pickup->value,
                         'is_active' => true,
+                        'area_code' => $areaCode,
                     ];
                 }
 
@@ -97,10 +101,41 @@ class CustomerLocationSeeder extends Seeder
                 ['name', 'address', 'is_active']
             );
 
+            $areaMap = DB::table('areas')->pluck('id', 'code')->toArray();
+            $locationsToInsert = [];
+
+            foreach ($locations as $loc) {
+                $areaCode = $loc['area_code'] ?? null;
+                $areaId = null;
+                if (! empty($areaCode)) {
+                    $mappedCode = $areaCode;
+                    if ($areaCode === 'Tỉnh lẻ') {
+                        $mappedCode = 'PROVINCE';
+                    }
+                    if (isset($areaMap[$mappedCode])) {
+                        $areaId = $areaMap[$mappedCode];
+                    } else {
+                        $areaId = DB::table('areas')->insertGetId([
+                            'type' => 'external',
+                            'code' => $mappedCode,
+                            'name' => $areaCode,
+                            'sort_order' => 0,
+                            'is_active' => true,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                        $areaMap[$mappedCode] = $areaId;
+                    }
+                }
+                unset($loc['area_code']);
+                $loc['area_id'] = $areaId;
+                $locationsToInsert[] = $loc;
+            }
+
             DB::table('locations')->upsert(
-                array_values($locations),
+                $locationsToInsert,
                 'code',
-                ['name', 'address', 'loc_type', 'is_active']
+                ['name', 'address', 'loc_type', 'is_active', 'area_id', 'lat', 'lng']
             );
 
             $customerMap = DB::table('customers')->pluck('id', 'code');
@@ -137,5 +172,12 @@ class CustomerLocationSeeder extends Seeder
             count($locations),
             count($pivotRows)
         ));
+
+        if ($this->command) {
+            $this->command->info('Running locations:geocode command...');
+            Artisan::call('locations:geocode', [], $this->command->getOutput());
+        } else {
+            Artisan::call('locations:geocode');
+        }
     }
 }

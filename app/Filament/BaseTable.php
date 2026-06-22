@@ -7,7 +7,6 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
-use Filament\Actions\ViewAction;
 use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 
@@ -40,9 +39,9 @@ abstract class BaseTable
     protected static function getDefaultRecordActions(): array
     {
         return [
-            ViewAction::make(),
             EditAction::make()
                 ->label('Sửa')
+                ->iconButton()
                 ->icon('heroicon-o-pencil-square'),
         ];
     }
@@ -81,6 +80,9 @@ abstract class BaseTable
         return $table
             ->filters(static::getDefaultFilters())
             ->recordActions(static::getDefaultRecordActions(), position: static::getDefaultRecordActionsPosition())
-            ->toolbarActions(static::getDefaultToolbarActions());
+            ->toolbarActions(static::getDefaultToolbarActions())
+            ->emptyStateIcon('heroicon-o-bookmark')
+            ->emptyStateHeading('Chưa có dữ liệu')
+            ->emptyStateDescription('Dữ liệu sẽ xuất hiện ở đây sau khi bạn thêm mới.');
     }
 }

@@ -12,6 +12,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Hash;
 
 class UserForm
 {
@@ -32,7 +33,9 @@ class UserForm
                         TextInput::make('password')
                             ->label('Mật khẩu')
                             ->password()
-                            ->required(),
+                            ->dehydrateStateUsing(fn (string $state): string => Hash::make($state))
+                            ->saved(fn (?string $state): bool => filled($state))
+                            ->required(fn (string $operation): bool => $operation === 'create'),
                         DateTimePicker::make('email_verified_at')
                             ->label('Xác thực email lúc'),
                         Toggle::make('is_active')
@@ -44,18 +47,32 @@ class UserForm
                 Section::make('Thông tin cá nhân')
                     ->columns(2)
                     ->schema([
-                        DatePicker::make('date_of_birth')
-                            ->label('Ngày sinh'),
-                        TextInput::make('phone')
-                            ->label('Số điện thoại')
-                            ->tel(),
+                        Grid::make()
+                            ->schema([
+                                DatePicker::make('date_of_birth')
+                                    ->label('Ngày sinh')
+                                    ->columnSpanFull(),
+                                TextInput::make('phone')
+                                    ->label('Số điện thoại')
+                                    ->tel()
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(2),
+                        FileUpload::make('avatar')
+                            ->label('Ảnh đại diện')
+                            ->image()
+                            ->avatar()
+                            ->imageEditor()
+                            ->circleCropper()
+                            ->disk('public')
+                            ->directory('avatars'),
                         TextInput::make('address')
                             ->label('Địa chỉ')
                             ->columnSpanFull(),
                     ]),
 
                 Section::make('Giấy tờ & Bằng lái')
-                    ->columns(3)
+                    ->columns(2)
                     ->schema([
                         TextInput::make('cccd')
                             ->label('Số CCCD'),
@@ -69,15 +86,18 @@ class UserForm
                             ->label('Ngày hết hạn'),
                         FileUpload::make('license_image')
                             ->label('Ảnh bằng lái')
-                            ->image(),
+                            ->image()
+                            ->imageEditor()
+                            ->directory('licenses')
+                            ->openable()
+                            ->downloadable()
+                            ->disk('public')
+                            ->previewable(),
                     ]),
 
                 Grid::make()
                     ->columns(2)
                     ->schema([
-                        TextInput::make('avatar')
-                            ->label('Ảnh đại diện (URL)')
-                            ->columnSpanFull(),
                         Textarea::make('certificates')
                             ->label('Chứng chỉ')
                             ->placeholder('Nhập thông tin chứng chỉ (nếu có)')

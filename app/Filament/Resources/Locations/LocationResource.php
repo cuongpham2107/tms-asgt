@@ -7,7 +7,6 @@ use App\Filament\Resources\Locations\Pages\CreateLocation;
 use App\Filament\Resources\Locations\Pages\EditLocation;
 use App\Filament\Resources\Locations\Pages\ListLocations;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
-use App\Filament\Resources\Locations\Schemas\LocationInfolist;
 use App\Filament\Resources\Locations\Tables\LocationsTable;
 use App\Models\Location;
 use BackedEnum;
@@ -37,11 +36,6 @@ class LocationResource extends BaseResource
         return LocationForm::configure($schema);
     }
 
-    public static function infolist(Schema $schema): Schema
-    {
-        return LocationInfolist::configure($schema);
-    }
-
     public static function table(Table $table): Table
     {
         return LocationsTable::configure($table);
@@ -58,8 +52,8 @@ class LocationResource extends BaseResource
     {
         return [
             'index' => ListLocations::route('/'),
-            'create' => CreateLocation::route('/create'),
-            'edit' => EditLocation::route('/{record}/edit'),
+            // 'create' => CreateLocation::route('/create'),
+            // 'edit' => EditLocation::route('/{record}/edit'),
         ];
     }
 }

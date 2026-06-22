@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\Vehicles\Pages;
 
+use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\Vehicles\VehicleResource;
-use App\Models\OrderCategory;
+use App\Models\Area;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListVehicles extends ListRecords
@@ -88,7 +90,7 @@ class ListVehicles extends ListRecords
     {
         parent::mount();
 
-        $this->placeVehicleCurrent = OrderCategory::query()
+        $this->placeVehicleCurrent = Area::query()
             ->orderBy('sort_order')
             ->pluck('name', 'code')
             ->toArray();
@@ -120,6 +122,37 @@ class ListVehicles extends ListRecords
         $this->resetPage();
     }
 
+    protected function getForms(): array
+    {
+        return [
+            'filtersForm',
+        ];
+    }
+
+    public function filtersForm(Schema $form): Schema
+    {
+        return $form
+            ->components([
+                PillFilter::make('activeStatusFilter')
+                    ->labelPrefix('Trạng thái')
+                    ->options($this->vehicleStatusFilters)
+                    ->activeValue(fn ($livewire) => $livewire->activeStatusFilter)
+                    ->clickAction('filterStatus'),
+
+                PillFilter::make('activeTypeFilter')
+                    ->labelPrefix('Loại xe')
+                    ->options(fn () => collect($this->vehicleTypes)->except('all')->toArray())
+                    ->activeValue(fn ($livewire) => $livewire->activeTypeFilter)
+                    ->clickAction('filterType'),
+
+                PillFilter::make('activePlaceFilter')
+                    ->labelPrefix('Khu vực')
+                    ->options(fn () => ['all' => 'Tất cả điểm'] + $this->placeVehicleCurrent)
+                    ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
+                    ->clickAction('filterPlace'),
+            ]);
+    }
+
     protected function getTableQuery(): Builder
     {
         return VehicleResource::getEloquentQuery()
@@ -136,7 +169,7 @@ class ListVehicles extends ListRecords
                 fn (Builder $query): Builder => $query->whereHas(
                     'orders',
                     fn (Builder $orderQuery): Builder => $orderQuery->whereHas(
-                        'orderCategory',
+                        'area',
                         fn (Builder $categoryQuery): Builder => $categoryQuery->where('code', $this->activePlaceFilter),
                     ),
                 ),

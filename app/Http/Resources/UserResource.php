@@ -39,6 +39,7 @@ class UserResource extends JsonResource
                 'vehicle_type' => $this->vehiclesAsDriver->first()->vehicle_type?->value,
                 'owner' => $this->vehiclesAsDriver->first()->owner,
                 'status' => $this->vehiclesAsDriver->first()->status?->value,
+                'current_km' => $this->vehiclesAsDriver->first()->current_mileage,
             ] : null,
         ];
     }

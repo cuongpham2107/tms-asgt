@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
+use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
@@ -21,7 +22,7 @@ class BulkCreateOrderAction
             ->modalDescription('Sao chép đơn hiện tại thành nhiều bản.')
             ->modalWidth('sm')
 
-            ->form([
+            ->schema([
                 TextInput::make('bulk_count')
                     ->label('Số lượng')
                     ->numeric()
@@ -35,7 +36,7 @@ class BulkCreateOrderAction
 
                 for ($i = 1; $i <= $count; $i++) {
                     $newOrder = $record->replicate();
-                    $newOrder->order_code = $record->order_code.'-'.str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+                    $newOrder->order_code = CreatesOrderTransportCards::generateOrderCode();
                     $newOrder->status = OrderStatus::Draft;
                     $newOrder->vehicle_id = null;
                     $newOrder->driver_id = null;

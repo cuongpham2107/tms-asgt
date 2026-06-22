@@ -39,7 +39,7 @@ class CreateReturnTripAction
                     $returnOrder = Order::create([
                         'order_code' => $record->order_code.'-RT',
                         'type' => $record->type,
-                        'order_category_id' => $record->order_category_id,
+                        'area_id' => $record->area_id,
                         'customer_id' => $record->customer_id,
                         'cargo_name' => 'Quay đầu: '.($record->cargo_name ?? ''),
                         'cargo_type' => $record->cargo_type,

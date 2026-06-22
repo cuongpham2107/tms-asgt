@@ -68,8 +68,10 @@ class EupGpsService
 
             $updated = 0;
             $errors = [];
+            $lastItem = null;
 
             foreach ($data['result'] as $item) {
+                $lastItem = $item;
                 $plateNumber = $item['VehicleNo'] ?? null;
 
                 if (empty($plateNumber)) {
@@ -123,6 +125,7 @@ class EupGpsService
                 'message' => $message,
                 'updated' => $updated,
                 'errors' => $errors,
+                'speed' => (float) ($lastItem['Speed'] ?? 0),
             ];
         } catch (\Throwable $e) {
             Log::error('EUP API sync exception', [

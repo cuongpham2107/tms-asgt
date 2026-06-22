@@ -12,6 +12,7 @@ class TripCheckpoint extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'trip_id',
         'order_id',
         'driver_id',
         'shift_id',
@@ -34,6 +35,11 @@ class TripCheckpoint extends Model
             'gps_lng' => 'decimal:7',
             'checkpoint_type' => CheckpointType::class,
         ];
+    }
+
+    public function trip(): BelongsTo
+    {
+        return $this->belongsTo(Trip::class);
     }
 
     public function order(): BelongsTo

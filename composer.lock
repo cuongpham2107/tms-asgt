@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f771987327a453e0087e34076f7a4d8c",
+    "content-hash": "de70d2bc8ab2dfdf53d1db8980a508e0",
     "packages": [
         {
             "name": "bezhansalleh/filament-plugin-essentials",
@@ -698,6 +698,55 @@
                 }
             ],
             "time": "2026-05-08T14:27:15+00:00"
+        },
+        {
+            "name": "codewithkyrian/filament-date-range",
+            "version": "2.2.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/CodeWithKyrian/filament-date-range.git",
+                "reference": "fd4c29d2bd70aef5e36e81c2538af643d34d3440"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/CodeWithKyrian/filament-date-range/zipball/fd4c29d2bd70aef5e36e81c2538af643d34d3440",
+                "reference": "fd4c29d2bd70aef5e36e81c2538af643d34d3440",
+                "shasum": ""
+            },
+            "require": {
+                "filament/forms": "^4.0||^5.0",
+                "filament/tables": "^4.0||^5.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "CodeWithKyrian\\FilamentDateRange\\DateRangeServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "CodeWithKyrian\\FilamentDateRange\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Kyrian Obikwelu",
+                    "email": "kyrianobikwelu@gmail.com"
+                }
+            ],
+            "description": "A date range field and filter for Filament v3.",
+            "support": {
+                "issues": "https://github.com/CodeWithKyrian/filament-date-range/issues",
+                "source": "https://github.com/CodeWithKyrian/filament-date-range/tree/2.2.1"
+            },
+            "time": "2026-03-23T12:11:18+00:00"
         },
         {
             "name": "danharrin/date-format-converter",
@@ -3681,6 +3730,76 @@
             "time": "2026-05-01T00:46:07+00:00"
         },
         {
+            "name": "malzariey/filament-daterangepicker-filter",
+            "version": "5.0.6",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/malzariey/filament-daterangepicker-filter.git",
+                "reference": "82502c1bc8cd35e276084170041a6d10d8dde7f2"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/malzariey/filament-daterangepicker-filter/zipball/82502c1bc8cd35e276084170041a6d10d8dde7f2",
+                "reference": "82502c1bc8cd35e276084170041a6d10d8dde7f2",
+                "shasum": ""
+            },
+            "require": {
+                "filament/filament": "^4.0|^5.0",
+                "illuminate/contracts": "^8.0|^9.0|^10.0|^11.0|^12.0|^13.0",
+                "spatie/laravel-package-tools": "^1.16.4"
+            },
+            "require-dev": {
+                "orchestra/testbench": "^10.0",
+                "pestphp/pest": "^3.0",
+                "pestphp/pest-plugin-laravel": "^3.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "aliases": {
+                        "FilamentDaterangepickerFilter": "Malzariey\\FilamentDaterangepickerFilter\\Facades\\FilamentDaterangepickerFilter"
+                    },
+                    "providers": [
+                        "Malzariey\\FilamentDaterangepickerFilter\\FilamentDaterangepickerFilterServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Malzariey\\FilamentDaterangepickerFilter\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Majid Al-Zariey",
+                    "email": "malzariey@gmail.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "This package uses daterangepciker library to filter date by a range or predefined date ranges (Today , Yesterday ...etc)",
+            "homepage": "https://github.com/malzariey/filament-daterangepicker-filter",
+            "keywords": [
+                "Malzariey",
+                "filament-daterangepicker-filter",
+                "laravel"
+            ],
+            "support": {
+                "issues": "https://github.com/malzariey/filament-daterangepicker-filter/issues",
+                "source": "https://github.com/malzariey/filament-daterangepicker-filter/tree/5.0.6"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/Malzariey",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-06-11T09:57:10+00:00"
+        },
+        {
             "name": "monolog/monolog",
             "version": "3.10.0",
             "source": {
@@ -4324,6 +4443,65 @@
                 }
             ],
             "time": "2026-02-16T23:10:27+00:00"
+        },
+        {
+            "name": "openplain/filament-shadcn-theme",
+            "version": "v1.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/openplain/filament-shadcn-theme.git",
+                "reference": "e4918c8a34d6089326af25d21ff26ed069f0d05a"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/openplain/filament-shadcn-theme/zipball/e4918c8a34d6089326af25d21ff26ed069f0d05a",
+                "reference": "e4918c8a34d6089326af25d21ff26ed069f0d05a",
+                "shasum": ""
+            },
+            "require": {
+                "filament/filament": "^4.0|^5.0",
+                "php": "^8.2|^8.3|^8.4"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Openplain\\FilamentShadcnTheme\\FilamentShadcnThemeServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Openplain\\FilamentShadcnTheme\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Openplain",
+                    "email": "hello@openplain.dev"
+                }
+            ],
+            "description": "Shadcn UI theme for Filament - Beautiful color themes with the iconic Shadcn design system",
+            "homepage": "https://github.com/openplain/filament-shadcn-theme",
+            "keywords": [
+                "colors",
+                "dark-mode",
+                "filament",
+                "filament-theme",
+                "light-mode",
+                "shadcn",
+                "shadcn-ui",
+                "theme"
+            ],
+            "support": {
+                "issues": "https://github.com/openplain/filament-shadcn-theme/issues",
+                "source": "https://github.com/openplain/filament-shadcn-theme/tree/v1.1.0"
+            },
+            "time": "2026-01-19T14:22:59+00:00"
         },
         {
             "name": "openspout/openspout",
@@ -12485,5 +12663,5 @@
         "php": "^8.3"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.6.0"
 }

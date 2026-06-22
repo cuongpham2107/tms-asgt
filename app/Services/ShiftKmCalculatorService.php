@@ -36,31 +36,26 @@ class ShiftKmCalculatorService
                     $totalLoadedKm += $completedKm - $arrivedKm;
                 }
             } elseif ($arrivedKm !== null) {
-                $endKm = $shift->shiftVehicles()
-                    ->where('order_id', $orderId)
-                    ->value('end_km') ?? $shift->lastSegment()?->end_km;
+                $endKm = $shift->lastSegment()?->end_km;
                 if ($endKm !== null && $endKm > $arrivedKm) {
                     $totalLoadedKm += $endKm - $arrivedKm;
                 }
             } elseif ($completedKm !== null) {
-                $startKm = $shift->shiftVehicles()
-                    ->where('order_id', $orderId)
-                    ->value('start_km') ?? $shift->firstSegment()?->start_km;
+                $startKm = $shift->firstSegment()?->start_km;
                 if ($startKm !== null && $completedKm > $startKm) {
                     $totalLoadedKm += $completedKm - $startKm;
                 }
             }
         }
 
-        $totalKm = $shift->shiftVehicles()
-            ->whereNotNull('end_km')
-            ->whereNotNull('start_km')
-            ->get()
-            ->sum(fn ($sv) => (float) $sv->end_km - (float) $sv->start_km);
+        $totalKm = 0;
+        if ($shift->end_km !== null && $shift->start_km !== null) {
+            $totalKm = (float) $shift->end_km - (float) $shift->start_km;
+        }
 
         $shift->total_km = $totalKm;
         $shift->total_km_loaded = $totalLoadedKm;
-        $shift->total_km_empty = $shift->total_km - $totalLoadedKm;
+        $shift->total_km_empty = max(0, $shift->total_km - $totalLoadedKm);
         $shift->save();
     }
 }

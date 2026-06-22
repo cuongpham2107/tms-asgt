@@ -31,7 +31,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
             ->modal()
             ->modalHeading('Gán phương tiện')
             ->modalDescription('Chọn phương tiện cho đơn hàng này. Lái xe sẽ tự động gán theo xe.')
-            ->modalWidth(Width::ScreenTwoExtraLarge)
+            ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
             ->schema([
                 Grid::make(2)
@@ -106,9 +106,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
                         if ($vehicle !== null) {
                             $vehicle->status = VehicleStatus::Running;
 
-                            if (filled($data['driver_id'] ?? null)) {
-                                $vehicle->current_driver_id = (int) $data['driver_id'];
-                            }
+                            // Vehicle.current_driver_id is a static/default field — not modified here.
 
                             $vehicle->save();
                         }

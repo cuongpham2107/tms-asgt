@@ -133,7 +133,7 @@ class OrderController extends Controller
                 $q->where('driver_id', $user->id)
                     ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
             })
-            // ->where('status', OrderStatus::Completed)
+            ->where('status', OrderStatus::Completed)
             ->orderBy('updated_at', 'desc')
             ->paginate($request->integer('per_page', 15));
 

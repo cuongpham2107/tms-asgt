@@ -36,7 +36,8 @@ class CheckpointRequest extends FormRequest
             'gps_lat' => 'nullable|numeric',
             'gps_lng' => 'nullable|numeric',
             'voice_note' => 'nullable|string',
-            'photos' => 'nullable|image|max:10240',
+            'photos' => 'nullable|array',
+            'photos.*' => 'nullable|image|max:10240',
         ];
     }
 
@@ -55,6 +56,7 @@ class CheckpointRequest extends FormRequest
             function (\Illuminate\Validation\Validator $validator) {
                 $type = $this->input('checkpoint_type');
 
+                // ---- KM bắt buộc ----
                 if (in_array($type, [CheckpointType::ArrivedPickup->value, CheckpointType::Completed->value], true)) {
                     if ($this->input('km_reading') === null) {
                         $label = $type === CheckpointType::ArrivedPickup->value ? 'Đến lấy hàng' : 'Hoàn thành';
@@ -64,30 +66,59 @@ class CheckpointRequest extends FormRequest
                     }
                 }
 
+                // ---- Started không được nhập km ----
                 if ($type === CheckpointType::Started->value && $this->input('km_reading') !== null) {
                     throw new HttpResponseException(response()->json([
                         'message' => 'Không được nhập km tại mốc Bắt đầu chuyến. Km sẽ tự động lấy từ đồng hồ xe.',
                     ], 422));
                 }
+
+                // ---- Completed: kiểm tra delivery_point_id ----
+                if ($type === CheckpointType::Completed->value) {
+                    $order = Order::find($this->input('order_id'));
+                    if ($order !== null) {
+                        $hasDeliveryPoints = $order->deliveryPoints()->count() > 0;
+
+                        if ($hasDeliveryPoints && empty($this->input('delivery_point_id'))) {
+                            throw new HttpResponseException(response()->json([
+                                'message' => 'Vui lòng chọn điểm giao hàng cụ thể để hoàn thành.',
+                            ], 422));
+                        }
+
+                        if (! $hasDeliveryPoints
+                            && empty($this->input('delivery_point_id'))
+                            && empty($this->input('new_delivery_location_id'))) {
+                            throw new HttpResponseException(response()->json([
+                                'message' => 'Đơn hàng chưa có điểm đến. Vui lòng chọn điểm giao hàng.',
+                            ], 422));
+                        }
+                    }
+                }
             },
 
+            // ---- KM validation: so sánh với checkpoint GẦN NHẤT của CHÍNH order đó (per-order, không cross-order) ----
             function (\Illuminate\Validation\Validator $validator) {
                 if ($this->input('km_reading') === null) {
                     return;
                 }
 
                 $order = Order::find($this->input('order_id'));
-                if ($order === null || $order->vehicle_id === null) {
+                if ($order === null) {
                     return;
                 }
 
-                $vehicle = $order->vehicle;
-                if ($vehicle !== null && (float) $this->input('km_reading') < (float) $vehicle->current_mileage) {
-                    $message = 'Số km đồng hồ phải lớn hơn hoặc bằng số km hiện tại của xe ('.number_format((float) $vehicle->current_mileage, 1).' km)';
+                $lastOrderKm = TripCheckpoint::where('order_id', $order->id)
+                    ->whereNotNull('km_reading')
+                    ->orderBy('occurred_at', 'desc')
+                    ->value('km_reading');
+
+                if ($lastOrderKm !== null && (float) $this->input('km_reading') < (float) $lastOrderKm) {
+                    $message = 'Số km phải lớn hơn hoặc bằng km gần nhất của đơn hàng này ('.number_format((float) $lastOrderKm, 1).' km)';
                     throw new HttpResponseException(response()->json(['message' => $message], 422));
                 }
             },
 
+            // ---- Completed: km phải > km lúc rời điểm nhận của chính order đó ----
             function (\Illuminate\Validation\Validator $validator) {
                 if ($this->input('checkpoint_type') !== 'completed' || $this->input('km_reading') === null) {
                     return;

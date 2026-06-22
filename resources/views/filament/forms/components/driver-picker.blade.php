@@ -154,7 +154,7 @@
         </div>
 
         {{-- Cards Grid --}}
-        <div class="grid max-h-[420px] gap-2.5 overflow-y-auto p-2 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+        <div class="grid max-h-162.5 gap-2.5 overflow-y-auto p-2 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
             <template x-for="card in visibleCards()" :key="card.value">
                 <div x-show="matches(card)" x-cloak class="h-full">
                     <button type="button" x-on:click="select(card.value)"

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Locations\Schemas;
 use App\Enums\LocationType;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
+use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Services\GeoSearchService;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -20,6 +21,12 @@ class LocationForm
     {
         return $schema
             ->components([
+                Select::make('area_id')
+                    ->label('Khu vực')
+                    ->relationship('area', 'code')
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
                 TextInput::make('code')
                     ->label('Mã')
                     ->prefixIcon(Heroicon::OutlinedHashtag)
@@ -29,6 +36,13 @@ class LocationForm
                     ->label('Tên địa điểm')
                     ->prefixIcon(Heroicon::OutlinedMapPin)
                     ->placeholder('VD: Kho Hà Nội')
+                    ->required(),
+                Select::make('loc_type')
+                    ->label('Loại địa điểm')
+                    ->prefixIcon(Heroicon::OutlinedTag)
+                    ->options(LocationType::class)
+                    ->default(LocationType::Warehouse->value)
+                    ->native(false)
                     ->required(),
                 Textarea::make('address')
                     ->label('Địa chỉ')
@@ -47,13 +61,7 @@ class LocationForm
                             $set('coordinates', $result->coordinate->toArray());
                         }
                     }),
-                Select::make('loc_type')
-                    ->label('Loại địa điểm')
-                    ->prefixIcon(Heroicon::OutlinedTag)
-                    ->options(LocationType::class)
-                    ->default(LocationType::Warehouse->value)
-                    ->native(false)
-                    ->required(),
+
                 MapPicker::make('coordinates')
                     ->label('Chọn vị trí trên bản đồ')
                     ->height(350)
@@ -64,10 +72,42 @@ class LocationForm
                     ->geoSearchProvider('nominatim')
                     ->fullscreenControl()
                     ->columnSpanFull()
+                    ->pickMarker(fn (Marker $marker) => $marker->draggable())
+                    ->extraAttributes([
+                        'x-init' => '
+                            $nextTick(() => {
+                                const mapEl = (typeof this !== "undefined" && this.$el) ? this.$el.querySelector(".leaflet-container") : document.querySelector(".leaflet-container");
+                                if (mapEl) {
+                                    const el = mapEl.closest("[x-data]");
+                                    const data = el ? Alpine.$data(el) : null;
+                                    if (data) {
+                                        const originalUpdatePickMarker = data.updatePickMarker.bind(data);
+                                        data.updatePickMarker = function() {
+                                            originalUpdatePickMarker();
+                                            if (data.pickMarker) {
+                                                data.pickMarker.off("dragend");
+                                                data.pickMarker.on("dragend", (e) => {
+                                                    const newPos = e.target.getLatLng();
+                                                    data.setState(newPos.lat, newPos.lng);
+                                                });
+                                            }
+                                        };
+                                        if (data.pickMarker) {
+                                            data.pickMarker.off("dragend");
+                                            data.pickMarker.on("dragend", (e) => {
+                                                const newPos = e.target.getLatLng();
+                                                data.setState(newPos.lat, newPos.lng);
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        ',
+                    ])
                     ->afterStateUpdatedJs('
                         const coords = $state;
                         if (coords?.lat) {
-                            const mapEl = $el.querySelector(".leaflet-container");  
+                            const mapEl = (typeof this !== "undefined" && this.$el) ? this.$el.querySelector(".leaflet-container") : document.querySelector(".leaflet-container");
                             if (mapEl) {
                                 const el = mapEl.closest("[x-data]");
                                 const data = el ? Alpine.$data(el) : null;

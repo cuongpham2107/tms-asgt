@@ -1,11 +1,13 @@
 <div
     x-data="{
         syncing: false,
+        speed: null,
         async doSync() {
             this.syncing = true;
             try {
                 const response = await fetch('{{ route('gps.sync') }}');
                 const data = await response.json();
+                this.speed = data.speed ?? null;
                 $dispatch('filament-notification', {
                     type: data.success ? 'success' : 'danger',
                     title: data.success ? 'Đồng bộ GPS thành công' : 'Đồng bộ GPS thất bại',

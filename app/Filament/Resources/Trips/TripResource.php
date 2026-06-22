@@ -5,7 +5,7 @@ namespace App\Filament\Resources\Trips;
 use App\Filament\BaseResource;
 use App\Filament\Resources\Trips\Schemas\TripInfolist;
 use App\Filament\Resources\Trips\Tables\TripsTable;
-use App\Models\Order;
+use App\Models\Trip;
 use BackedEnum;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -14,7 +14,7 @@ use UnitEnum;
 
 class TripResource extends BaseResource
 {
-    protected static ?string $model = Order::class;
+    protected static ?string $model = Trip::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMap;
 

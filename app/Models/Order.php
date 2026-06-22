@@ -19,7 +19,7 @@ class Order extends Model
     protected $fillable = [
         'order_code',
         'type',
-        'order_category_id',
+        'area_id',
         'customer_id',
         'cargo_name',
         'cargo_type',
@@ -31,8 +31,11 @@ class Order extends Model
         'pickup_phone',
         'planned_loading_at',
         'vehicle_id',
+        'vehicle_plate_number',
+        'vehicle_type',
         'driver_id',
         'shift_id',
+        'trip_id',
         'status',
         'priority',
         'is_return_trip',
@@ -41,17 +44,6 @@ class Order extends Model
         'sent_at',
         'cancelled_at',
         'cancel_reason',
-        // 'sender_name',
-        // 'sender_contact',
-        // 'sender_phone',
-        // 'receiver_name',
-        // 'receiver_contact',
-        // 'receiver_phone',
-        // 'data_cargo_units',
-        // 'data_cargo_weight',
-        // 'freight_rate',
-        // 'surcharges',
-        // 'total_cost',
         'notes',
     ];
 
@@ -69,9 +61,9 @@ class Order extends Model
         ];
     }
 
-    public function orderCategory(): BelongsTo
+    public function area(): BelongsTo
     {
-        return $this->belongsTo(OrderCategory::class);
+        return $this->belongsTo(Area::class);
     }
 
     public function customer(): BelongsTo
@@ -127,6 +119,11 @@ class Order extends Model
     public function shift(): BelongsTo
     {
         return $this->belongsTo(DriverShift::class);
+    }
+
+    public function trip(): BelongsTo
+    {
+        return $this->belongsTo(Trip::class);
     }
 
     public function driverSwaps(): HasMany

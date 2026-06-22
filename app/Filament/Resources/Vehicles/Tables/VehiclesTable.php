@@ -7,6 +7,7 @@ use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Vehicle;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
 class VehiclesTable extends BaseTable
@@ -15,6 +16,13 @@ class VehiclesTable extends BaseTable
     {
         return parent::applyDefaults($table)
             ->modifyQueryUsing(fn ($query) => $query->with(['driver', 'documents', 'maintenanceJobs']))
+            ->groups([
+                Group::make('type')
+                    ->label('Loại')
+                    ->collapsible(),
+            ])
+            ->defaultGroup('type')
+            ->groupingSettingsHidden()
             ->columns([
                 TextColumn::make('plate_number')
                     ->label('Biển số')
@@ -37,10 +45,10 @@ class VehiclesTable extends BaseTable
                     ->badge()
                     ->sortable()
                     ->searchable(),
-                TextColumn::make('type')
-                    ->label('Loại xe')
-                    ->badge()
-                    ->sortable(),
+                // TextColumn::make('type')
+                //     ->label('Loại xe')
+                //     ->badge()
+                //     ->sortable(),
                 TextColumn::make('owner')
                     ->label('Chủ xe')
                     ->searchable()

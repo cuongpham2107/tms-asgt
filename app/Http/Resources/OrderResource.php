@@ -27,6 +27,17 @@ class OrderResource extends JsonResource
             'customer_id' => $this->customer_id,
             /** ID ca làm việc. */
             'shift_id' => $this->shift_id,
+            /** ID chuyến xe (nếu đang gom). */
+            'trip_id' => $this->trip_id,
+            /** Thông tin chuyến xe (nếu được load). */
+            'trip' => $this->whenLoaded('trip', fn () => [
+                'id' => $this->trip->id,
+                'status' => $this->trip->status,
+            ]),
+            /** Biển số xe (snapshot). */
+            'vehicle_plate_number' => $this->vehicle_plate_number,
+            /** Loại xe (snapshot). */
+            'vehicle_type' => $this->vehicle_type,
             /** Thông tin xe (nếu được load). */
             'vehicle' => $this->whenLoaded('vehicle', fn () => [
                 'id' => $this->vehicle->id,

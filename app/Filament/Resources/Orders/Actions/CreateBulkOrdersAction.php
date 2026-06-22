@@ -5,10 +5,10 @@ namespace App\Filament\Resources\Orders\Actions;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
-use App\Models\Customer;
+use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
+use App\Models\Area;
 use App\Models\Location;
 use App\Models\Order;
-use App\Models\OrderCategory;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
@@ -23,12 +23,10 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Throwable;
 
-class CreateBulkOrdersAction
+class CreateBulkOrdersAction extends CreatesOrderTransportCards
 {
     public static function make(bool $forceAssignedWhenTransportProvided = true): Action
     {
@@ -36,10 +34,10 @@ class CreateBulkOrdersAction
             ->label('Tạo nhiều đơn hàng')
             ->size('lg')
             ->icon('heroicon-o-squares-plus')
-            ->color('success')
             ->slideOver()
             ->modal()
             ->modalWidth('5xl')
+            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
             ->modalHeading('Tạo/Phân tách nhiều đơn hàng cùng tuyến')
             ->modalDescription('Khai báo thông tin lộ trình chung, sau đó phân chia hàng hóa cho từng xe vận chuyển tương ứng.')
             ->extraAttributes([
@@ -70,40 +68,43 @@ class CreateBulkOrdersAction
                                             ->inline()
                                             ->live()
                                             ->required(),
-                                        Select::make('order_category_id')
-                                            ->label('Khu vực phân loại')
-                                            ->options(fn (): array => OrderCategory::query()
+                                        ToggleButtons::make('area_id')
+                                            ->label('Khu vực')
+                                            ->options(fn (Get $get): array => Area::query()
+                                                ->where('is_active', true)
+                                                ->when(
+                                                    $get('order_type_code'),
+                                                    fn ($query, $type) => $query->where('type', $type)
+                                                )
                                                 ->orderBy('sort_order', 'asc')
                                                 ->pluck('code', 'id')
                                                 ->toArray())
-                                            ->native(false)
+                                            ->inline()
+                                            ->live()
                                             ->required(),
-                                        Select::make('customer_id')
-                                            ->label('Khách hàng')
-                                            ->options(fn (): array => Customer::query()->pluck('name', 'id')->toArray())
-                                            ->native(false)
-                                            ->searchable()
-                                            ->preload()
-                                            ->required(),
-                                        DateTimePicker::make('planned_loading_at')
-                                            ->label('Thời gian dự kiến đóng hàng')
-                                            ->seconds(false)
-                                            ->native(false)
-                                            ->default(now())
-                                            ->required(),
+                                        self::getCustomerIdFormField(true),
+
                                     ]),
 
                                 // Pickup Section
-                                Grid::make(1)
+                                Grid::make(2)
                                     ->schema([
                                         // Pickup location for HHHK
                                         Select::make('pickup_location_id')
                                             ->label('Điểm nhận hàng (HHHK)')
-                                            ->options(fn (): array => Location::query()->pluck('name', 'id')->toArray())->searchable()->preload()
+                                            ->options(fn (Get $get): array => Location::query()
+                                                ->pluck('name', 'id')
+                                                ->toArray()
+                                            )->searchable()->preload()
                                             ->native(false)
                                             ->visible(fn (Get $get): bool => $get('order_type_code') === 'HHHK')
                                             ->required(false),
-
+                                        DateTimePicker::make('planned_loading_at')
+                                            ->label('Thời gian dự kiến đóng hàng')
+                                            ->seconds(false)
+                                            ->native(true)
+                                            ->default(now())
+                                            ->required(),
                                         // Pickup address for HN
                                         FusedGroup::make([
                                             TextInput::make('pickup_address_detail')
@@ -154,73 +155,7 @@ class CreateBulkOrdersAction
                                     ]),
 
                                 // Delivery points repeater (Route)
-                                Repeater::make('deliveryPoints')
-                                    ->label('Điểm giao hàng (Hành trình chuyến đi)')
-                                    ->minItems(fn (Get $get): int => $get('order_type_code') === 'external' ? 1 : 0)
-                                    ->defaultItems(fn (Get $get): int => $get('order_type_code') === 'external' ? 1 : 0)
-                                    ->collapsible()
-                                    ->itemLabel(function (array $state): ?string {
-                                        $parts = [];
-
-                                        if (isset($state['location_id']) && $location = Location::query()->find($state['location_id'])) {
-                                            $parts[] = $location->name;
-                                        }
-
-                                        if (! empty($state['address'])) {
-                                            $parts[] = $state['address'];
-                                        }
-
-                                        if (! empty($state['total_packages'])) {
-                                            $parts[] = $state['total_packages'].' kiện';
-                                        }
-
-                                        if (! empty($state['total_weight'])) {
-                                            $parts[] = $state['total_weight'].' tấn';
-                                        }
-
-                                        return count($parts) > 0 ? implode(' - ', $parts) : 'Điểm giao hàng mới';
-                                    })
-                                    ->reorderableWithDragAndDrop()
-                                    ->compact()
-                                    ->schema([
-                                        Grid::make(12)
-                                            ->schema([
-                                                Select::make('location_id')
-                                                    ->label('Điểm giao hàng')
-                                                    ->options(fn (): array => Location::query()->pluck('name', 'id')->toArray())
-                                                    ->searchable()
-                                                    ->preload()
-                                                    ->native(false)
-                                                    ->required()
-                                                    ->columnSpan(fn (Get $get): int => $get('../../order_type_code') === 'HHHK' ? 6 : 4),
-                                                TextInput::make('address')
-                                                    ->label('Số nhà, tên đường giao')
-                                                    ->placeholder('Nhập địa chỉ giao chi tiết')
-                                                    ->visible(fn (Get $get): bool => $get('../../order_type_code') === 'external')
-                                                    ->required(fn (Get $get): bool => $get('../../order_type_code') === 'external')
-                                                    ->columnSpan(8),
-                                                TextInput::make('contact_person')
-                                                    ->label('Người nhận')
-                                                    ->placeholder('Họ tên')
-                                                    ->visible(fn (Get $get): bool => $get('../../order_type_code') === 'external')
-                                                    ->columnSpan(4),
-                                                TextInput::make('contact_phone')
-                                                    ->label('SĐT nhận')
-                                                    ->placeholder('Số điện thoại')
-                                                    ->tel()
-                                                    ->visible(fn (Get $get): bool => $get('../../order_type_code') === 'external')
-                                                    ->columnSpan(3),
-                                                // TextInput::make('total_packages')
-                                                //     ->label('Số kiện')
-                                                //     ->numeric()
-                                                //     ->columnSpan(fn (Get $get): int => $get('../../order_type_code') === 'HHHK' ? 3 : 2),
-                                                // TextInput::make('total_weight')
-                                                //     ->label('Trọng lượng (tấn)')
-                                                //     ->numeric()
-                                                //     ->columnSpan(fn (Get $get): int => $get('../../order_type_code') === 'HHHK' ? 3 : 3),
-                                            ]),
-                                    ])
-                                    ->columnSpanFull(),
+                                self::getDeliveryPointsRepeaterField(fn (Get $get): ?string => $get('order_type_code')),
                             ]),
 
                         // Phân vùng 2: Số lượng bản ghi cần tạo (Chiếm 5 cột)
@@ -302,13 +237,12 @@ class CreateBulkOrdersAction
 
                         for ($index = 0; $index < $recordsCount; $index++) {
                             // Generate sequential order code securely
-                            $todayOrderCount = $baseCount + $index + 1;
-                            $orderCode = sprintf('ORD-%s-%03d', now()->format('Ymd'), $todayOrderCount);
+                            $orderCode = CreatesOrderTransportCards::generateOrderCode();
 
                             $order = Order::query()->create([
                                 'order_code' => $orderCode,
                                 'type' => $orderTypeCode,
-                                'order_category_id' => $data['order_category_id'],
+                                'area_id' => $data['area_id'],
                                 'customer_id' => $data['customer_id'],
                                 'pickup_location_id' => $orderTypeCode === 'HHHK' ? ($data['pickup_location_id'] ?? null) : null,
                                 'pickup_address' => $pickupAddress,
@@ -326,16 +260,23 @@ class CreateBulkOrdersAction
                             // Clone and associate delivery points route
                             $deliveryPoints = collect($deliveryPointsRaw)
                                 ->values()
-                                ->map(fn (array $deliveryPoint, int $idx): array => [
-                                    'location_id' => $deliveryPoint['location_id'] ?? null,
-                                    'address' => $deliveryPoint['address'] ?? null,
-                                    'contact_person' => $deliveryPoint['contact_person'] ?? null,
-                                    'contact_phone' => $deliveryPoint['contact_phone'] ?? null,
-                                    'total_packages' => $deliveryPoint['total_packages'] ?? null,
-                                    'total_weight' => $deliveryPoint['total_weight'] ?? null,
-                                    'sequence' => $idx + 1,
-                                    'status' => OrderDeliveryPointStatus::Pending->value,
-                                ])
+                                ->map(function (array $deliveryPoint, int $idx): array {
+                                    $address = null;
+                                    if (filled($deliveryPoint['location_id'] ?? null)) {
+                                        $address = Location::query()->find($deliveryPoint['location_id'])?->address;
+                                    }
+
+                                    return [
+                                        'location_id' => $deliveryPoint['location_id'] ?? null,
+                                        'address' => $address,
+                                        'contact_person' => $deliveryPoint['contact_person'] ?? null,
+                                        'contact_phone' => $deliveryPoint['contact_phone'] ?? null,
+                                        'total_packages' => $deliveryPoint['total_packages'] ?? null,
+                                        'total_weight' => $deliveryPoint['total_weight'] ?? null,
+                                        'sequence' => $idx + 1,
+                                        'status' => OrderDeliveryPointStatus::Pending->value,
+                                    ];
+                                })
                                 ->all();
 
                             if ($deliveryPoints !== []) {
@@ -358,77 +299,5 @@ class CreateBulkOrdersAction
                         ->send();
                 }
             });
-    }
-
-    /**
-     * @return array<int|string, string>
-     */
-    private static function getProvinceOptions(): array
-    {
-        return Cache::remember('open-api-v1-provinces', now()->addDay(), function (): array {
-            try {
-                $response = Http::acceptJson()
-                    ->timeout(10)
-                    ->get('https://provinces.open-api.vn/api/v1/p');
-
-                if (! $response->successful()) {
-                    return [];
-                }
-
-                return collect($response->json())
-                    ->filter(fn ($item): bool => isset($item['code'], $item['name']))
-                    ->mapWithKeys(fn ($item): array => [(string) $item['code'] => $item['name']])
-                    ->all();
-            } catch (Throwable) {
-                return [];
-            }
-        });
-    }
-
-    /**
-     * @return array<int|string, string>
-     */
-    private static function getWardOptions(int|string|null $provinceCode): array
-    {
-        if (blank($provinceCode)) {
-            return [];
-        }
-
-        return Cache::remember("open-api-v2-wards-{$provinceCode}", now()->addDay(), function () use ($provinceCode): array {
-            try {
-                $response = Http::acceptJson()
-                    ->timeout(10)
-                    ->get("https://provinces.open-api.vn/api/v2/w/?province={$provinceCode}");
-
-                if (! $response->successful()) {
-                    return [];
-                }
-
-                return collect($response->json())
-                    ->filter(fn ($item): bool => isset($item['code'], $item['name']))
-                    ->mapWithKeys(fn ($item): array => [(string) $item['code'] => $item['name']])
-                    ->all();
-            } catch (Throwable) {
-                return [];
-            }
-        });
-    }
-
-    private static function resolveProvinceName(int|string|null $provinceCode): ?string
-    {
-        if (blank($provinceCode)) {
-            return null;
-        }
-
-        return self::getProvinceOptions()[(string) $provinceCode] ?? null;
-    }
-
-    private static function resolveWardName(int|string|null $provinceCode, int|string|null $wardCode): ?string
-    {
-        if (blank($provinceCode) || blank($wardCode)) {
-            return null;
-        }
-
-        return self::getWardOptions($provinceCode)[(string) $wardCode] ?? null;
     }
 }

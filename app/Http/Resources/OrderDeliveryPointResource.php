@@ -41,10 +41,6 @@ class OrderDeliveryPointResource extends JsonResource
             'arrived_at' => $this->arrived_at?->toIso8601String(),
             /** Thời điểm hoàn tất giao hàng tại điểm này (ISO 8601). */
             'delivered_at' => $this->delivered_at?->toIso8601String(),
-            /** Vĩ độ GPS của địa điểm giao hàng. */
-            'lat' => $this->location?->lat,
-            /** Kinh độ GPS của địa điểm giao hàng. */
-            'lng' => $this->location?->lng,
         ];
     }
 }

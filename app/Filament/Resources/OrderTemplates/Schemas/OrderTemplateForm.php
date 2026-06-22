@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources\OrderTemplates\Schemas;
 
+use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Location;
-use App\Models\OrderCategory;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -42,9 +42,9 @@ class OrderTemplateForm
                     ->columnSpanFull()
                     ->columns(2)
                     ->schema([
-                        Select::make('order_data.order_category_id')
+                        Select::make('order_data.area_id')
                             ->label('Khu vực')
-                            ->options(fn (): array => OrderCategory::query()
+                            ->options(fn (): array => Area::query()
                                 ->pluck('code', 'id')
                                 ->toArray())
                             ->searchable()

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Orders\Tables;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
 use App\Filament\Resources\Orders\Actions\BulkAssignTransportAction;
+use App\Filament\Resources\Orders\Actions\BulkSendOrderAction;
 use App\Filament\Resources\Orders\Actions\CancelOrderAction;
 use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
@@ -14,6 +15,8 @@ use App\Filament\Resources\Orders\Actions\SendOrderAction;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Order;
+use App\Models\User;
+use App\Models\Vehicle;
 use App\Services\OsrmService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
@@ -27,9 +30,11 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
-use Filament\Actions\ViewAction;
+use Filament\Notifications\Notification;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Blade;
@@ -42,7 +47,7 @@ class OrdersTable extends BaseTable
         return parent::applyDefaults($table)
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
                 'deliveryPoints.location',
-                'orderCategory',
+                'area',
                 'pickupLocation',
                 'tripCheckpoints' => fn ($q) => $q->orderByDesc('occurred_at'),
             ]))
@@ -63,7 +68,6 @@ class OrdersTable extends BaseTable
                                 <span class="font-bold leading-5 text-[#008fd5] dark:text-blue-100">{$orderCode}</span>
                                 <div class="inline-flex items-center gap-2">
                                     <span class="rounded-full border border-primary-100 bg-primary-100 px-1.5 py-0.5 text-xs font-semibold text-primary-800 dark:border-primary-800/50 dark:bg-primary-950/40 dark:text-primary-100">{$orderTypeLabel}</span>
-                                    <span class="rounded-full {$priorityBadgeClasses} px-1.5 py-0.5 text-xs font-semibold">{$priorityLabel}</span>
                                 </div>
                             </div>
                         HTML);
@@ -153,7 +157,7 @@ class OrdersTable extends BaseTable
                                 'mapConfig' => self::buildOrderMapConfig($record),
                             ]))),
                     ),
-                TextColumn::make('customer.name')
+                TextColumn::make('customer.code')
                     ->label('Khách hàng')
                     ->weight('bold')
                     ->description(fn (Order $record): string => $record->cargo_name ?? '')
@@ -213,17 +217,37 @@ class OrdersTable extends BaseTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
             ->stackedOnMobile()
             ->searchable(false)
             ->recordActions([
                 ActionGroup::make([
-                    ViewAction::make()
-                        ->slideOver()
-                        ->stickyModalFooter(),
                     EditAction::make()
                         ->slideOver()
                         ->stickyModalFooter()
-                        ->modalDescription(fn (Order $record): string => 'Loại đơn hàng: '.($record->type?->getLabel() ?? 'Chưa xác định')),
+                        ->modalWidth(Width::ScreenExtraLarge)
+                        ->modalDescription(fn (Order $record): string => 'Loại đơn hàng: '.($record->type?->getLabel() ?? 'Chưa xác định'))
+                        ->before(function (array $data, EditAction $action, Order $record): void {
+                            $vehicle = isset($data['vehicle_id']) ? Vehicle::query()->find($data['vehicle_id']) : null;
+
+                            if ($vehicle !== null && ! ($data['override_shift_check'] ?? false)) {
+                                $driverId = $data['driver_id'] ?? null;
+                                $driver = $driverId ? User::query()->find($driverId) : null;
+
+                                $hasActiveShift = $vehicle->driverShifts()->whereNull('driver_shifts.end_time')->exists()
+                                    || ($driver !== null && $driver->driverShifts()->whereNull('driver_shifts.end_time')->exists());
+
+                                if (! $hasActiveShift) {
+                                    Notification::make()
+                                        ->warning()
+                                        ->title('Xe hoặc tài xế chưa có ca làm việc')
+                                        ->body('Phương tiện hoặc tài xế được chọn hiện không có ca nào đang hoạt động. Đánh dấu "Bỏ qua kiểm tra ca" nếu vẫn muốn gán.')
+                                        ->send();
+
+                                    $action->halt();
+                                }
+                            }
+                        }),
                     AssignTransportAction::make(),
                     SendOrderAction::make(),
                     UnsendOrderAction::make(),
@@ -241,6 +265,13 @@ class OrdersTable extends BaseTable
                     CopyTransportInfoAction::make(),
                 ]),
             ], position: RecordActionsPosition::BeforeColumns)
+            ->groups([
+                Group::make('area.type')
+                    ->label('Loại khu vực')
+                    ->getTitleFromRecordUsing(fn (Order $record): string => $record->area?->code ?? 'Chưa xác định')
+                    ->collapsible(),
+            ])
+            ->defaultGroup('area.type')
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
@@ -249,23 +280,24 @@ class OrdersTable extends BaseTable
                 ]),
 
                 BulkAssignTransportAction::make(),
+                BulkSendOrderAction::make(),
             ]);
     }
 
     private static function renderRouteTimeline(Order $record): HtmlString
     {
-        $pickupLocationName = e($record->pickupLocation?->name ?? $record->pickup_address ?? 'Chưa có điểm lấy');
+        $pickupLocationName = $record->pickupLocation?->name ?: $record->pickup_address ?: 'Chưa có điểm lấy';
         $deliveryPoints = $record->deliveryPoints->sortBy('sequence');
-        $locations = collect([$pickupLocationName]);
+        $locations = collect([e($pickupLocationName)]);
 
         foreach ($deliveryPoints as $deliveryPoint) {
             $locations->push(
-                e($deliveryPoint->address ?? $deliveryPoint->location?->name ?? 'Chưa có điểm đến')
+                e($deliveryPoint->address ?: $deliveryPoint->location?->name ?: 'Chưa có điểm đến')
             );
         }
 
         if ($deliveryPoints->isEmpty()) {
-            $locations->push(e($record->orderCategory?->code ?? 'Chưa có điểm đến'));
+            $locations->push(e('Chưa có điểm đến'));
         }
 
         $arrowIcon = <<<'SVG'

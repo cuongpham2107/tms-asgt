@@ -11,7 +11,6 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
@@ -21,6 +20,7 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Openplain\FilamentShadcnTheme\Color;
 use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
 use WatheqAlshowaiter\FilamentStickyTableHeader\StickyTableHeaderPlugin;
 
@@ -37,14 +37,7 @@ class AppPanelProvider extends PanelProvider
             ->favicon(asset('favicon.ico'))
             ->login()
             ->colors([
-                'default' => Color::Blue,
-                'danger' => Color::Rose,
-                'gray' => Color::Gray,
-                'info' => Color::Blue,
-                'primary' => Color::Indigo,
-                'success' => Color::Emerald,
-                'warning' => Color::Orange,
-                'orange' => Color::Orange,
+                'primary' => Color::Default,
             ])
             ->sidebarWidth('220px')
             ->sidebarCollapsibleOnDesktop()

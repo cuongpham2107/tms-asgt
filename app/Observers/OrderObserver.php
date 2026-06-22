@@ -21,7 +21,10 @@ class OrderObserver
 
         $trackedFields = [
             'vehicle_id',
+            'vehicle_plate_number',
+            'vehicle_type',
             'driver_id',
+            'trip_id',
             'status',
             'customer_id',
             'pickup_location_id',
@@ -31,17 +34,6 @@ class OrderObserver
             'total_weight',
             'cargo_name',
             'notes',
-            'sender_name',
-            'sender_contact',
-            'sender_phone',
-            'receiver_name',
-            'receiver_contact',
-            'receiver_phone',
-            'data_cargo_units',
-            'data_cargo_weight',
-            'freight_rate',
-            'surcharges',
-            'total_cost',
         ];
 
         foreach ($order->getChanges() as $field => $newValue) {

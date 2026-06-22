@@ -28,29 +28,33 @@ class GoogleMapStatsOverview extends BaseWidget
         return [
             Stat::make('Tổng xe', number_format($total))
                 ->description('Tất cả xe đang hoạt động')
-                ->descriptionIcon('heroicon-o-truck')
-                ->color('primary'),
+                ->descriptionIcon('heroicon-m-truck')
+                ->color('primary')
+                ->chart([5, 8, 4, 10, 11, 10, 12]),
 
             Stat::make('Đang chạy', number_format($running))
                 ->description($pct($running).'% tổng xe')
-                ->descriptionIcon('heroicon-o-play')
+                ->descriptionIcon('heroicon-m-play-circle')
                 ->color('warning')
                 ->chart([7, 2, 10, 3, 15, 4, 17]),
 
             Stat::make('Sẵn sàng', number_format($on))
                 ->description($pct($on).'% tổng xe')
-                ->descriptionIcon('heroicon-o-check-circle')
-                ->color('success'),
+                ->descriptionIcon('heroicon-m-check-circle')
+                ->color('success')
+                ->chart([5, 4, 5, 8, 9, 8, 10]),
 
             Stat::make('Bảo dưỡng', number_format($bdsc))
                 ->description($pct($bdsc).'% tổng xe')
-                ->descriptionIcon('heroicon-o-wrench-screwdriver')
-                ->color('danger'),
+                ->descriptionIcon('heroicon-m-wrench-screwdriver')
+                ->color('danger')
+                ->chart([1, 0, 2, 1, 0, 1, 2]),
 
             Stat::make('Tắt máy', number_format($off))
                 ->description($pct($off).'% tổng xe')
-                ->descriptionIcon('heroicon-o-stop')
-                ->color('gray'),
+                ->descriptionIcon('heroicon-m-stop-circle')
+                ->color('gray')
+                ->chart([2, 3, 2, 4, 3, 2, 3]),
         ];
     }
 }

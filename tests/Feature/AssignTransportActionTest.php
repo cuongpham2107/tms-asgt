@@ -6,10 +6,10 @@ use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Filament\Resources\OrderPlans\Pages\ListOrderPlans;
+use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
 use App\Models\Order;
-use App\Models\OrderCategory;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,7 +27,7 @@ beforeEach(function () {
         'guard_name' => 'web',
     ]);
 
-    $this->orderCategory = OrderCategory::create([
+    $this->area = Area::create([
         'type' => 'HHHK',
         'code' => 'NORTH',
         'name' => 'North',
@@ -56,7 +56,7 @@ test('can assign vehicle and driver to order and update vehicle current driver',
     $order = Order::create([
         'order_code' => 'ORD-001',
         'type' => 'HHHK',
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'status' => OrderStatus::Draft,
         'created_by' => User::factory()->create()->id,
@@ -101,7 +101,7 @@ test('warns when vehicle or driver has no active shift and override is false', f
     $order = Order::create([
         'order_code' => 'ORD-002',
         'type' => 'HHHK',
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'status' => OrderStatus::Draft,
         'created_by' => User::factory()->create()->id,
@@ -148,7 +148,7 @@ test('assigns successfully without override when driver has active shift', funct
     $order = Order::create([
         'order_code' => 'ORD-003',
         'type' => 'HHHK',
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'status' => OrderStatus::Draft,
         'created_by' => User::factory()->create()->id,
@@ -190,7 +190,7 @@ test('selecting vehicle automatically sets driver_id in form state', function ()
     $order = Order::create([
         'order_code' => 'ORD-AUTO-001',
         'type' => 'HHHK',
-        'order_category_id' => $this->orderCategory->id,
+        'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'status' => OrderStatus::Draft,
         'created_by' => User::factory()->create()->id,

@@ -3,12 +3,18 @@
 namespace App\Filament\Resources\Trips\Tables;
 
 use App\Filament\BaseTable;
-use App\Models\Order;
+use App\Filament\Tables\Columns\UniqueMapColumn;
+use App\Models\Trip;
+use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
+use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\HtmlString;
 
 class TripsTable extends BaseTable
 {
@@ -17,128 +23,124 @@ class TripsTable extends BaseTable
         return parent::applyDefaults($table)
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with([
-                    'customer',
-                    'deliveryPoints.location',
-                    'driver.driverShifts',
-                    'orderCategory',
-                    'pickupLocation',
-                    'tripCheckpoints.deliveryPoint.location',
-                    'driverSwaps.fromDriver',
-                    'driverSwaps.toDriver',
                     'vehicle',
+                    'orders.customer',
+                    'orders.pickupLocation',
+                    'orders.deliveryPoints.location',
+                    'orders.driver',
+                    'orders.driverSwaps.toDriver',
+                    'orders.area',
+                    'orders.shift',
                 ])
-                ->where('status', '!=', 'draft')
             )
             ->columns([
-                // 1. Ngày
-                TextColumn::make('planned_loading_at')
-                    ->label('Ngày')
-                    ->dateTime('d/m/Y')
-                    ->sortable(),
-
-                // 2. Địa điểm
-                TextColumn::make('orderCategory.code')
-                    ->label('Địa điểm')
-                    ->badge()
-                    ->color('warning')
-                    ->sortable(),
-
-                // 3. BSX
-                TextColumn::make('bsx')
+                // 1. BSX
+                TextColumn::make('vehicle.plate_number')
                     ->label('BSX')
-                    ->state(fn (Order $record): string => self::renderBsx($record)),
+                    ->state(fn (Trip $record): string => self::renderBsx($record)),
 
-                // 4. STT
-                TextColumn::make('stt')
-                    ->label('STT')
-                    ->state(fn (): string => 'CH'),
-
-                // 5. Trạng thái
+                // 2. Trạng thái
                 TextColumn::make('status')
                     ->label('Trạng thái')
                     ->badge()
-                    ->color(fn ($state) => $state?->getColor() ?? 'gray')
-                    ->formatStateUsing(fn ($state) => $state?->getLabel() ?? $state),
+                    ->color(fn (Trip $record): string => $record->getStatusColor())
+                    ->state(fn (Trip $record): string => $record->getStatusLabel()),
 
-                // 6. Điểm đi
-                TextColumn::make('pickupLocation.name')
-                    ->label('Điểm đi'),
+                // 3. Điểm đi
+                TextColumn::make('pickup_locations')
+                    ->label('Điểm đi')
+                    ->state(fn (Trip $record): string => self::getPickupLocations($record)),
 
-                // 7. Điểm đến
+                // 4. Điểm đến
                 TextColumn::make('delivery_destination')
                     ->label('Điểm đến')
-                    ->state(fn (Order $record): string => self::getDeliveryDestination($record)),
+                    ->state(fn (Trip $record): string => self::getDeliveryDestination($record)),
 
-                // 8. Xe chờ
-                TextColumn::make('xe_cho')
-                    ->label('Xe chờ')
-                    ->state(fn (Order $record): string => self::getXeCho($record)),
+                // 5. Số đơn
+                TextColumn::make('order_count')
+                    ->label('Số đơn')
+                    ->state(fn (Trip $record): string => (string) $record->orders->count()),
 
-                // 9. Vị trí GPS
-                TextColumn::make('gps_location')
-                    ->label('Vị trí thực tế trên GPS')
-                    ->state(fn (Order $record): string => self::getGpsLocation($record)),
-
-                // 10. Tốc độ
-                TextColumn::make('speed')
-                    ->label('Tốc độ')
-                    ->state(fn (Order $record): string => self::getSpeed($record)),
-
-                // 11. Tình trạng
-                TextColumn::make('movement_status')
-                    ->label('Tình trạng')
-                    ->badge()
-                    ->color(fn (Order $record): string => match ($record->status?->value) {
-                        'started', 'arrived_pickup', 'delivering' => 'warning',
-                        default => 'gray',
-                    })
-                    ->state(fn (Order $record): string => self::getMovementStatus($record)),
-
-                // 12. Chuyến
-                TextColumn::make('trip_count')
-                    ->label('Chuyến')
-                    ->state(fn (Order $record): string => self::countTodayTripsForVehicle($record).' chuyến'),
-
-                // 13. KM over
-                TextColumn::make('km_over')
-                    ->label('KM over')
-                    ->state(fn (Order $record): string => self::getKmOver($record)),
-
-                // 14. Lái xe
+                // 6. Lái xe
                 TextColumn::make('drivers')
                     ->label('Lái xe')
-                    ->state(fn (Order $record): string => self::getDrivers($record))
+                    ->state(fn (Trip $record): string => self::getDrivers($record))
                     ->searchable(),
 
-                // 15. Trực
-                TextColumn::make('orderCategory.code')
-                    ->label('Trực'),
+                // 7. KM
+                TextColumn::make('km')
+                    ->label('KM')
+                    ->state(fn (Trip $record): string => self::getKmDisplay($record)),
 
-                // 16. Ca
-                TextColumn::make('ca')
+                // 8. Vị trí GPS
+                UniqueMapColumn::make('gps_position')
+                    ->label('Vị trí thực tế trên GPS')
+                    ->height(72)
+                    ->zoom(14)
+                    ->static()
+                    ->state(fn (Trip $record): array => [
+                        'lat' => (float) ($record->vehicle?->gps_lat ?? 10.8231),
+                        'lng' => (float) ($record->vehicle?->gps_lng ?? 106.6297),
+                    ])
+                    ->action(
+                        Action::make('select')
+                            ->modal()
+                            ->modalWidth('4xl')
+                            ->modalHeading(fn (Trip $record): string => 'Vị trí xe — '.$record->vehicle?->plate_number)
+                            ->modalSubmitAction(false)
+                            ->modalCancelActionLabel('Đóng')
+                            ->modalContent(fn (Trip $record): HtmlString => new HtmlString(Blade::render(<<<'BLADE'
+                                <div class="space-y-4">
+                                    <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-800">
+                                        @if ($trip->vehicle)
+                                            <div>
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">Xe</span>
+                                                <span class="ml-2 text-sm font-bold text-amber-700 dark:text-amber-300">{{ $trip->vehicle->plate_number }}</span>
+                                            </div>
+                                        @endif
+
+                                        @if ($trip->orders->isNotEmpty())
+                                            <div>
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">Đơn</span>
+                                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $trip->orders->pluck('order_code')->implode(', ') }}</span>
+                                            </div>
+                                        @endif
+
+                                        <div>
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">Cập nhật</span>
+                                            <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                {{ $trip->vehicle?->last_gps_update?->format('H:i d/m/Y') ?? '—' }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                                        <x-filament-leaflet::map :config="$mapConfig" widget />
+                                    </div>
+                                </div>
+                            BLADE, [
+                                'trip' => $record,
+                                'mapConfig' => self::buildGpsMapConfig($record),
+                            ]))),
+                    ),
+
+                // 9. Thời gian
+                TextColumn::make('created_at')
+                    ->label('Thời gian')
+                    ->dateTime('H:i d/m/Y'),
+
+                // 10. Ca
+                TextColumn::make('shift_info')
                     ->label('Ca')
                     ->badge()
-                    ->color(fn (Order $record): string => $record->driver?->driverShifts
-                        ->sortByDesc('start_time')->first()?->shift_type?->getColor() ?? 'gray')
-                    ->state(fn (Order $record): string => self::getShiftLabel($record)),
+                    ->state(fn (Trip $record): string => self::getShiftLabel($record)),
+            ])
+            ->groups([
+                Group::make('vehicle.plate_number')
+                    ->label('Phương tiện'),
             ])
             ->searchable(false)
-            ->defaultSort(function (Builder $query): Builder {
-                return $query->orderByRaw("CASE status
-                    WHEN 'started' THEN 1
-                    WHEN 'arrived_pickup' THEN 2
-                    WHEN 'delivering' THEN 3
-                    WHEN 'arrived_delivery' THEN 4
-                    WHEN 'driver_swap' THEN 5
-                    WHEN 'sent' THEN 6
-                    WHEN 'assigned' THEN 7
-                    WHEN 'delivered' THEN 8
-                    WHEN 'completed' THEN 9
-                    WHEN 'cancelled' THEN 10
-                    WHEN 'trashed' THEN 11
-                    ELSE 99 END ASC")
-                    ->orderBy('planned_loading_at', 'desc');
-            })
+            ->defaultSort('created_at', 'desc')
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(25)
             ->recordActions([
@@ -148,18 +150,16 @@ class TripsTable extends BaseTable
                     ->color('primary')
                     ->modal()
                     ->modalWidth('5xl')
-                    ->modalHeading(fn (Order $record): string => 'Hành trình — '.$record->order_code)
-                    ->modalContent(fn (Order $record) => view('filament.resources.trips.components.trip-timeline-popup', [
-                        'order' => $record,
+                    ->modalHeading(fn (Trip $record): string => 'Hành trình — '.$record->vehicle?->plate_number)
+                    ->modalContent(fn (Trip $record) => view('filament.resources.trips.components.trip-timeline-popup', [
+                        'trip' => $record,
                     ]))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Đóng'),
             ], position: RecordActionsPosition::BeforeColumns);
     }
 
-    // ─── Column Renderers ────────────────────────────────────────────
-
-    private static function renderBsx(Order $record): string
+    private static function renderBsx(Trip $record): string
     {
         $vehicle = $record->vehicle;
 
@@ -175,205 +175,143 @@ class TripsTable extends BaseTable
         return trim("{$plate} {$tonnage}");
     }
 
-    private static function getTripStatusLabel(Order $record): string
+    public static function getPickupLocations(Trip $record): string
     {
-        return match ($record->status?->value) {
-            'draft' => 'Chưa hạ',
-            'assigned' => 'Đã phân',
-            'sent' => 'Đã gửi',
-            'started' => 'Đang chạy',
-            'arrived_pickup' => 'Đến lấy',
-            'delivering' => 'Đang giao',
-            'arrived_delivery' => 'Đến nơi',
-            'delivered' => 'Xong',
-            'completed' => 'Hoàn thành',
-            'driver_swap' => 'Đảo lái',
-            'cancelled' => 'Đã hủy',
-            'trashed' => 'Đã xóa',
-            default => '—',
-        };
-    }
+        $orders = $record->orders->sortBy('planned_loading_at');
 
-    private static function getDeliveryDestination(Order $record): string
-    {
-        $firstDelivery = $record->deliveryPoints
-            ->sortBy('sequence')
-            ->first();
-
-        if ($firstDelivery === null) {
+        if ($orders->isEmpty()) {
             return '—';
         }
 
-        return $firstDelivery->address
-            ?? $firstDelivery->location?->name
-            ?? '—';
-    }
+        $pickups = [];
+        foreach ($orders as $order) {
+            $pickups[] = $order->pickupLocation?->name ?? $order->pickup_address;
+        }
 
-    private static function getGpsLocation(Order $record): string
-    {
-        $latestCheckpoint = $record->tripCheckpoints
-            ->sortByDesc('occurred_at')
-            ->first();
+        $pickups = array_filter(array_unique($pickups));
 
-        if ($latestCheckpoint === null) {
+        if (empty($pickups)) {
             return '—';
         }
 
-        $locationName = $latestCheckpoint->deliveryPoint?->location?->name;
+        return implode(' → ', $pickups);
+    }
 
-        if ($locationName !== null) {
-            return $locationName;
+    public static function getDeliveryDestination(Trip $record): string
+    {
+        $orders = $record->orders->sortBy('planned_loading_at');
+
+        if ($orders->isEmpty()) {
+            return '—';
         }
 
-        $lat = $latestCheckpoint->gps_lat;
-        $lng = $latestCheckpoint->gps_lng;
+        $destinations = [];
+        foreach ($orders as $order) {
+            foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
+                $destinations[] = $dp->address ?? $dp->location?->name;
+            }
+        }
 
-        if ($lat !== null && $lng !== null) {
-            return number_format((float) $lat, 4, ',', '.').', '.number_format((float) $lng, 4, ',', '.');
+        $destinations = array_filter(array_unique($destinations));
+
+        if (empty($destinations)) {
+            return '—';
+        }
+
+        return implode(' → ', $destinations);
+    }
+
+    private static function getDrivers(Trip $record): string
+    {
+        $orders = $record->orders;
+
+        if ($orders->isEmpty()) {
+            return '—';
+        }
+
+        $names = [];
+        foreach ($orders as $order) {
+            if ($order->driver) {
+                $names[] = $order->driver->name;
+            }
+            foreach ($order->driverSwaps->sortBy('created_at') as $swap) {
+                if ($swap->toDriver) {
+                    $names[] = $swap->toDriver->name;
+                }
+            }
+        }
+
+        $names = array_unique(array_filter($names));
+
+        return ! empty($names) ? implode(' → ', $names) : '—';
+    }
+
+    private static function getKmDisplay(Trip $record): string
+    {
+        if ($record->end_km !== null && $record->start_km !== null) {
+            $totalKm = (float) $record->end_km - (float) $record->start_km;
+
+            return $totalKm > 0 ? number_format($totalKm, 1, ',', '.').' km' : '—';
+        }
+
+        if ($record->start_km !== null) {
+            $currentKm = $record->vehicle?->current_mileage;
+            if ($currentKm !== null) {
+                $diff = (float) $currentKm - (float) $record->start_km;
+
+                return $diff > 0 ? number_format($diff, 1, ',', '.').' km' : '—';
+            }
         }
 
         return '—';
     }
 
-    private static function getSpeed(Order $record): string
+    private static function getShiftLabel(Trip $record): string
     {
-        $activeStates = ['started', 'arrived_pickup', 'delivering'];
+        $shift = $record->orders->first()?->shift;
 
-        if (in_array($record->status?->value, $activeStates, true)) {
-            $checkpoints = $record->tripCheckpoints
-                ->sortByDesc('occurred_at')
-                ->take(2);
-
-            if ($checkpoints->count() >= 2) {
-                return '56';
-            }
-
-            return '0';
-        }
-
-        return '0';
+        return $shift?->shift_type?->getLabel() ?? '—';
     }
 
-    private static function getMovementStatus(Order $record): string
-    {
-        return match ($record->status?->value) {
-            'started', 'arrived_pickup', 'delivering' => 'Đang chạy',
-            default => 'Xe dừng',
-        };
-    }
-
-    private static function countTodayTripsForVehicle(Order $record): int
-    {
-        if ($record->vehicle_id === null) {
-            return 0;
-        }
-
-        return Order::query()
-            ->where('vehicle_id', $record->vehicle_id)
-            ->whereDate('created_at', today())
-            ->count();
-    }
-
-    private static function getDrivers(Order $record): string
-    {
-        $mainDriver = $record->driver;
-
-        $swaps = $record->driverSwaps->sortBy('created_at');
-
-        if ($swaps->isEmpty()) {
-            return $mainDriver?->name ?? '—';
-        }
-
-        $names = [];
-
-        $firstSwap = $swaps->first();
-        $fromDriver = $firstSwap->fromDriver;
-        if ($fromDriver) {
-            $names[] = $fromDriver->name;
-        }
-
-        foreach ($swaps as $swap) {
-            if ($swap->toDriver) {
-                $names[] = $swap->toDriver->name;
-            }
-        }
-
-        if (empty($names)) {
-            return $mainDriver?->name ?? '—';
-        }
-
-        return implode(' → ', array_unique($names));
-    }
-
-    private static function getShiftLabel(Order $record): string
-    {
-        $driver = $record->driver;
-
-        if ($driver === null) {
-            return '—';
-        }
-
-        $latestShift = $driver->driverShifts
-            ->sortByDesc('start_time')
-            ->first();
-
-        if ($latestShift === null) {
-            return '—';
-        }
-
-        return $latestShift->shift_type?->getLabel() ?? '—';
-    }
-
-    private static function getXeCho(Order $record): string
+    private static function buildGpsMapConfig(Trip $record): array
     {
         $vehicle = $record->vehicle;
+        $lat = (float) ($vehicle?->gps_lat ?? 10.8231);
+        $lng = (float) ($vehicle?->gps_lng ?? 106.6297);
 
-        if ($vehicle === null) {
-            return '—';
-        }
+        $layers = [];
 
-        // Xe đang ON nhưng không có chuyến active nào khác → đang chờ
-        $otherActive = Order::query()
-            ->where('vehicle_id', $vehicle->id)
-            ->where('id', '!=', $record->id)
-            ->whereIn('status', ['started', 'arrived_pickup', 'delivering', 'arrived_delivery'])
-            ->exists();
+        $layers[] = Marker::make($lat, $lng)
+            ->id('gps-vehicle-'.$record->getKey())
+            ->icon(asset('images/truck.png'), [38, 38])
+            ->title($vehicle?->plate_number ?? 'Xe')
+            ->popupContent(($vehicle?->plate_number ?? '').' — '.($record->orders->first()?->driver?->name ?? 'Chưa phân lái xe'))
+            ->toArray();
 
-        if ($otherActive) {
-            return '—';
-        }
-
-        // Xe đang chờ nếu có đơn draft/assigned khác đang xếp hàng
-        $pendingCount = Order::query()
-            ->where('vehicle_id', $vehicle->id)
-            ->where('id', '!=', $record->id)
-            ->whereIn('status', ['draft', 'assigned', 'sent'])
-            ->count();
-
-        return $pendingCount > 0 ? $pendingCount.' đơn chờ' : '—';
-    }
-
-    private static function getKmOver(Order $record): string
-    {
-        $checkpoints = $record->tripCheckpoints;
-
-        if ($checkpoints->isEmpty()) {
-            return '—';
-        }
-
-        $firstKm = $checkpoints->first()->km_reading;
-        $lastKm = $checkpoints->last()->km_reading;
-
-        if ($firstKm === null || $lastKm === null) {
-            return '—';
-        }
-
-        $totalKm = (float) $lastKm - (float) $firstKm;
-
-        if ($totalKm <= 0) {
-            return '—';
-        }
-
-        return number_format($totalKm, 1, ',', '.').' km';
+        return [
+            'mapId' => 'gps-map-'.$record->getKey(),
+            'mapHeight' => 340,
+            'defaultCoord' => [$lat, $lng],
+            'autoCenter' => true,
+            'fitBounds' => false,
+            'defaultZoom' => 15,
+            'geoJsonColors' => [],
+            'geoJsonData' => [],
+            'infoText' => '',
+            'tileLayersUrl' => [[
+                TileLayer::OpenStreetMap->getLabel(),
+                TileLayer::OpenStreetMap->getUrl(),
+                TileLayer::OpenStreetMap->getAttribution(),
+            ]],
+            'layerGroupsData' => [],
+            'layersData' => $layers,
+            'zoomConfig' => ['max' => 18, 'min' => 0],
+            'mapConfig' => [],
+            'mapControls' => [],
+            'geoSearchConfig' => [],
+            'geoJsonUrl' => null,
+            'customStyles' => '',
+            'customScripts' => '',
+        ];
     }
 }

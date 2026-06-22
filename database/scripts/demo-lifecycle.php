@@ -185,6 +185,7 @@ step(3, '🟢 Vào ca');
 // Theo công thức mới: ko cần vehicle_id, ko cần start_km
 // start_km sẽ tự lấy từ vehicle.current_mileage khi tạo started checkpoint
 $shiftResult = request('POST', "$baseUrl/api/driver/shifts/start", $token, [
+    'vehicle_id' => $vehicleId,
     'shift_type' => 'full',
     'start_time' => date('c'),
     'start_gps_lat' => '10.8554',

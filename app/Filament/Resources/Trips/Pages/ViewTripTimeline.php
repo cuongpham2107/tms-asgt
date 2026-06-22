@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\Trips\Pages;
 
 use App\Filament\Resources\Trips\TripResource;
-use App\Models\Order;
+use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
@@ -25,7 +25,14 @@ class ViewTripTimeline extends Page
     {
         static::authorizeResourceAccess();
 
-        $this->record = $this->resolveRecord($record);
+        $this->record = $this->resolveRecord($record)->load([
+            'vehicle',
+            'orders.deliveryPoints.location',
+            'orders.driver',
+            'checkpoints.driver',
+            'checkpoints.deliveryPoint.location',
+            'checkpoints.photos',
+        ]);
     }
 
     public function getRecord(): Model
@@ -38,20 +45,24 @@ class ViewTripTimeline extends Page
      */
     public function getTimelineData(): array
     {
-        /** @var Order $order */
-        $order = $this->getRecord();
+        /** @var Trip $trip */
+        $trip = $this->getRecord();
+
+        $orders = $trip->orders;
+        $orderCodes = $orders->pluck('order_code')->implode(', ');
+
+        $statusLabel = $trip->getStatusLabel();
+
+        $checkpoints = $trip->checkpoints;
 
         return [
             'order' => [
-                'order_code' => $order->order_code,
-                'status_label' => $order->status?->getLabel() ?? '—',
-                'vehicle_plate' => $order->vehicle?->plate_number ?? '—',
-                'driver_name' => $order->driver?->name ?? '—',
+                'order_code' => $orderCodes ?: '—',
+                'status_label' => $statusLabel,
+                'vehicle_plate' => $trip->vehicle?->plate_number ?? '—',
+                'driver_name' => $orders->first()?->driver?->name ?? '—',
             ],
-            'checkpoints' => $order->tripCheckpoints()
-                ->with(['driver', 'deliveryPoint.location', 'photos'])
-                ->orderBy('occurred_at', 'desc')
-                ->get()
+            'checkpoints' => $checkpoints
                 ->map(fn (TripCheckpoint $cp): array => [
                     'id' => $cp->id,
                     'type_value' => $cp->checkpoint_type->value,

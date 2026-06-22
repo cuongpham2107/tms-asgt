@@ -8,11 +8,11 @@ use App\Enums\ShiftType;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
-use App\Models\OrderCategory;
 use App\Models\OrderDeliveryPoint;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -31,7 +31,7 @@ test('marks a delivery point delivered and fills delivered_at when completing a 
     $driver = User::factory()->create();
     $driver->assignRole($driverRole);
 
-    $orderCategory = OrderCategory::create([
+    $area = Area::create([
         'type' => OrderType::Hhhk,
         'code' => 'NORTH',
         'name' => 'North',
@@ -61,7 +61,7 @@ test('marks a delivery point delivered and fills delivered_at when completing a 
     $order = Order::create([
         'order_code' => 'ORD-00079',
         'type' => OrderType::Hhhk,
-        'order_category_id' => $orderCategory->id,
+        'area_id' => $area->id,
         'customer_id' => $customer->id,
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
@@ -133,7 +133,7 @@ test('returns 422 when checkpoint is posted for order without delivery points an
     $driver = User::factory()->create();
     $driver->assignRole($driverRole);
 
-    $orderCategory = OrderCategory::create([
+    $area = Area::create([
         'type' => OrderType::Hhhk,
         'code' => 'NORTH',
         'name' => 'North',
@@ -154,7 +154,7 @@ test('returns 422 when checkpoint is posted for order without delivery points an
     $order = Order::create([
         'order_code' => 'ORD-NODEST',
         'type' => OrderType::Hhhk,
-        'order_category_id' => $orderCategory->id,
+        'area_id' => $area->id,
         'customer_id' => $customer->id,
         'driver_id' => $driver->id,
         'status' => OrderStatus::Started,
@@ -167,7 +167,7 @@ test('returns 422 when checkpoint is posted for order without delivery points an
     $this->postJson('/api/driver/checkpoints', [
         'order_id' => $order->id,
         'shift_id' => $shift->id,
-        'checkpoint_type' => CheckpointType::LeftPickup->value,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery->value,
         'occurred_at' => now()->toIso8601String(),
     ])->assertStatus(422)
         ->assertJsonPath('message', 'Đơn hàng chưa có điểm đến. Vui lòng chọn điểm giao hàng.');
@@ -183,7 +183,7 @@ test('returns 422 when checkpoint is posted for order without delivery points an
     $this->postJson('/api/driver/checkpoints', [
         'order_id' => $order->id,
         'shift_id' => $shift->id,
-        'checkpoint_type' => CheckpointType::LeftPickup->value,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery->value,
         'new_delivery_location_id' => $location->id,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();

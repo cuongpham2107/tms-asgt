@@ -83,10 +83,10 @@ class DriverShiftsTable extends BaseTable
                         ->label('Xem chi tiết')
                         ->modalWidth(Width::SevenExtraLarge)
                         ->slideOver(),
-                    EditAction::make()
-                        ->label('Sửa ca lái')
-                        ->modalWidth(Width::SevenExtraLarge)
-                        ->slideOver(),
+                    // EditAction::make()
+                    //     ->label('Sửa ca lái')
+                    //     ->modalWidth(Width::SevenExtraLarge)
+                    //     ->slideOver(),
                     EndShiftAction::make(),
                     DeleteAction::make(),
                 ]),

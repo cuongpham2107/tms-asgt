@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\ShiftStatusController;
 use App\Http\Controllers\Api\TripCheckpointController;
+use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\VehicleSearchController;
 use App\Http\Middleware\EnsureRoleVehicle;
 use Illuminate\Support\Facades\Route;
@@ -45,6 +46,10 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
 
     // Trip checkpoints (single endpoint for different types)
     Route::post('/checkpoints', [TripCheckpointController::class, 'checkpoint']);
+
+    // Trips
+    Route::get('/trips/active', [TripController::class, 'active']);
+    Route::get('/trips/{trip}', [TripController::class, 'show']);
 
     // Empty kilometers (ghi nhận km không hàng)
     Route::post('/empty-kilometers', [EmptyKilometerController::class, 'store']);

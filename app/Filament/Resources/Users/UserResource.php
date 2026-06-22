@@ -54,8 +54,8 @@ class UserResource extends Resource
         return [
             'index' => ListDrivers::route('/'),
             'users' => ListUsers::route('/users'),
-            'create' => CreateUser::route('/create'),
-            'edit' => EditUser::route('/{record}/edit'),
+            // 'create' => CreateUser::route('/create'),
+            // 'edit' => EditUser::route('/{record}/edit'),
         ];
     }
 }
