@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Trips;
 
 use App\Filament\BaseResource;
+use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Resources\Trips\Schemas\TripInfolist;
 use App\Filament\Resources\Trips\Tables\TripsTable;
 use App\Models\Trip;
@@ -31,6 +32,11 @@ class TripResource extends BaseResource
     public static function table(Table $table): Table
     {
         return TripsTable::configure($table);
+    }
+
+    public static function form(Schema $schema): Schema
+    {
+        return TripForm::configure($schema);
     }
 
     public static function infolist(Schema $schema): Schema

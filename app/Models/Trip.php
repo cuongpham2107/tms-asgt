@@ -73,6 +73,11 @@ class Trip extends Model
         return $this->hasMany(DriverSwap::class);
     }
 
+    public function driverSwapCheckpoints(): HasMany
+    {
+        return $this->hasMany(TripCheckpoint::class)->where('checkpoint_type', 'driver_swap');
+    }
+
     public function getStatusLabel(): string
     {
         return $this->status?->getLabel() ?? 'Không xác định';
@@ -98,6 +103,11 @@ class Trip extends Model
         $this->status = TripStatus::Completed;
         $this->completed_at = $completedAt ?? now();
         $this->end_km = $endKm ?? $this->end_km;
+
+        $startKm = (float) ($this->start_km ?? 0);
+        $endKmValue = (float) ($this->end_km ?? 0);
+        $this->total_km = max(0, $endKmValue - $startKm);
+
         $this->save();
     }
 }

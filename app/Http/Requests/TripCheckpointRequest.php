@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\CheckpointType;
 use App\Http\Requests\Concerns\NormalizesDecimalInput;
+use App\Models\Order;
 use App\Models\TripCheckpoint;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -28,13 +29,13 @@ class TripCheckpointRequest extends FormRequest
 
         if (in_array($type, ['arrived_delivery', 'completed'], true)) {
             $orderIdRules = ['required', 'exists:orders,id'];
-            $deliveryPointIdRules = ['required', 'exists:order_delivery_points,id'];
         }
 
         return [
             'checkpoint_type' => ['required', 'string', Rule::in(array_map(fn ($case) => $case->value, CheckpointType::cases()))],
             'order_id' => $orderIdRules,
             'delivery_point_id' => $deliveryPointIdRules,
+            'new_delivery_location_id' => 'nullable|exists:locations,id',
             'occurred_at' => 'nullable|date',
             'km_reading' => [
                 'nullable',
@@ -62,6 +63,33 @@ class TripCheckpointRequest extends FormRequest
     public function after(): array
     {
         return [
+            function (\Illuminate\Validation\Validator $validator) {
+                $type = $this->input('checkpoint_type');
+
+                if (in_array($type, ['arrived_delivery', 'completed'], true)) {
+                    $order = Order::find($this->input('order_id'));
+                    if ($order === null) {
+                        return;
+                    }
+
+                    $hasDeliveryPoints = $order->deliveryPoints()->count() > 0;
+                    $hasDeliveryPointId = ! empty($this->input('delivery_point_id'));
+                    $hasNewLocationId = ! empty($this->input('new_delivery_location_id'));
+
+                    if ($hasDeliveryPoints && ! $hasDeliveryPointId) {
+                        throw new HttpResponseException(response()->json([
+                            'message' => 'Vui lòng chọn điểm giao hàng cụ thể để hoàn thành.',
+                        ], 422));
+                    }
+
+                    if (! $hasDeliveryPoints && ! $hasDeliveryPointId && ! $hasNewLocationId) {
+                        throw new HttpResponseException(response()->json([
+                            'message' => 'Đơn hàng chưa có điểm đến. Vui lòng chọn điểm giao hàng.',
+                        ], 422));
+                    }
+                }
+            },
+
             function (\Illuminate\Validation\Validator $validator) {
                 if ($this->input('km_reading') === null || $this->input('order_id') === null) {
                     return;

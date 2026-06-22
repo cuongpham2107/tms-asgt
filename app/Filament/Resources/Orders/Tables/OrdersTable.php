@@ -196,12 +196,14 @@ class OrdersTable extends BaseTable
                     ->hidden(fn (): bool => $type === 'plan')
                     ->sortable(),
 
-                TextColumn::make('vehicle')
+                TextColumn::make('transport_info')
                     ->label('Phương tiện / Lái xe')
-                    ->formatStateUsing(fn (Order $record): HtmlString => self::renderTransportColumn($record))
+                    ->state(fn (Order $record): string => $record->trip?->vehicle?->plate_number
+                        ?? $record->trip?->driver?->name
+                        ?? '')
+                    ->formatStateUsing(fn ($state, Order $record): HtmlString => self::renderTransportColumn($record))
                     ->html()
-                    ->hidden(fn (): bool => $type === 'plan')
-                    ->searchable(),
+                    ->hidden(fn (): bool => $type === 'plan'),
                 TextColumn::make('notes')
                     ->label('Ghi chú')
                     ->limit(50),

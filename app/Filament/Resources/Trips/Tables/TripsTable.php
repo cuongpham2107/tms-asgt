@@ -2,12 +2,16 @@
 
 namespace App\Filament\Resources\Trips\Tables;
 
+use App\Enums\TripStatus;
 use App\Filament\BaseTable;
+use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Actions\Action;
+use Filament\Actions\EditAction;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Grouping\Group;
@@ -26,6 +30,7 @@ class TripsTable extends BaseTable
                     'vehicle',
                     'driver',
                     'driverSwaps.toDriver',
+                    'driverSwapCheckpoints' => fn ($q) => $q->where('checkpoint_type', 'driver_swap'),
                     'shift',
                     'orders.customer',
                     'orders.pickupLocation',
@@ -61,12 +66,25 @@ class TripsTable extends BaseTable
                     ->state(fn (Trip $record): string => self::getDrivers($record))
                     ->searchable(),
 
+                TextColumn::make('driver_swap')
+                    ->label('Đảo lái')
+                    ->badge()
+                    ->color(fn (Trip $record): string => self::hasDriverSwap($record) ? 'warning' : 'gray')
+                    ->state(fn (Trip $record): string => self::hasDriverSwap($record) ? 'Có' : '—')
+                    ->icon(fn (Trip $record): ?string => self::hasDriverSwap($record) ? 'heroicon-o-arrows-right-left' : null),
+
                 TextColumn::make('km')
                     ->label('KM')
                     ->state(fn (Trip $record): string => self::getKmDisplay($record)),
 
+                TextColumn::make('gps_speed')
+                    ->label('Tốc độ')
+                    ->state(fn (Trip $record): string => $record->vehicle?->gps_speed !== null
+                        ? number_format((float) $record->vehicle->gps_speed, 1).' km/h'
+                        : '—'),
+
                 UniqueMapColumn::make('gps_position')
-                    ->label('Vị trí thực tế trên GPS')
+                    ->label('Vị trí GPS')
                     ->height(72)
                     ->zoom(14)
                     ->static()
@@ -116,8 +134,8 @@ class TripsTable extends BaseTable
                             ]))),
                     ),
 
-                TextColumn::make('created_at')
-                    ->label('Thời gian')
+                TextColumn::make('updated_at')
+                    ->label('Cập nhật')
                     ->dateTime('H:i d/m/Y'),
 
                 TextColumn::make('shift_info')
@@ -137,6 +155,7 @@ class TripsTable extends BaseTable
                 Action::make('view_timeline')
                     ->label('Hành trình')
                     ->icon('heroicon-o-map-pin')
+                    ->iconButton()
                     ->color('primary')
                     ->modal()
                     ->modalWidth('5xl')
@@ -146,6 +165,14 @@ class TripsTable extends BaseTable
                     ]))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Đóng'),
+
+                EditAction::make()
+                    ->slideOver()
+                    ->iconButton()
+                    ->stickyModalFooter()
+                    ->modalWidth('7xl')
+                    ->modalHeading(fn (Trip $record): string => 'Sửa chuyến — '.$record->trip_code)
+                    ->form(fn (Schema $schema): Schema => TripForm::configure($schema)),
             ], position: RecordActionsPosition::BeforeColumns);
     }
 
@@ -228,6 +255,23 @@ class TripsTable extends BaseTable
         $names = array_unique(array_filter($names));
 
         return ! empty($names) ? implode(' → ', $names) : '—';
+    }
+
+    private static function hasDriverSwap(Trip $record): bool
+    {
+        if ($record->driverSwaps->isNotEmpty()) {
+            return true;
+        }
+
+        if ($record->relationLoaded('driverSwapCheckpoints') && $record->driverSwapCheckpoints->isNotEmpty()) {
+            return true;
+        }
+
+        if ($record->status === TripStatus::DriverSwap) {
+            return true;
+        }
+
+        return false;
     }
 
     private static function getKmDisplay(Trip $record): string

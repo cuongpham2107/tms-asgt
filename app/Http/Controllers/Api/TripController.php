@@ -136,6 +136,7 @@ class TripController extends Controller
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             ->when($request->filled('vehicle_id'), fn ($q) => $q->where('vehicle_id', $request->vehicle_id))
             ->orderBy('started_at', 'desc')
+            ->orderBy('id', 'desc')
             ->paginate($request->integer('per_page', 15));
 
         return response()->json([

@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\TripCheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
 use App\Models\DriverShift;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
@@ -57,6 +58,8 @@ class TripCheckpointController extends Controller
                     $trip->save();
                 }
             }
+
+            $this->resolveDeliveryPoint($payload);
 
             $checkpoint = $this->createCheckpoint($trip, $user, $payload, $checkpointType);
 
@@ -141,6 +144,44 @@ class TripCheckpointController extends Controller
             'gps_lng' => $payload['gps_lng'] ?? null,
             'voice_note' => $payload['voice_note'] ?? null,
         ]);
+    }
+
+    private function resolveDeliveryPoint(array &$payload): void
+    {
+        if (! empty($payload['delivery_point_id'])) {
+            return;
+        }
+
+        $newLocationId = $payload['new_delivery_location_id'] ?? null;
+        if ($newLocationId === null) {
+            return;
+        }
+
+        $location = Location::find($newLocationId);
+        if ($location === null) {
+            return;
+        }
+
+        $orderId = $payload['order_id'] ?? null;
+        if ($orderId === null) {
+            return;
+        }
+
+        $maxSeq = OrderDeliveryPoint::where('order_id', $orderId)->max('sequence') ?? 0;
+
+        $deliveryPoint = OrderDeliveryPoint::create([
+            'order_id' => $orderId,
+            'location_id' => $location->id,
+            'sequence' => $maxSeq + 1,
+            'address' => $location->address ?? $location->name,
+            'contact_person' => $location->contact_person,
+            'contact_phone' => $location->contact_phone,
+            'total_packages' => 0,
+            'total_weight' => 0,
+            'status' => OrderDeliveryPointStatus::Pending,
+        ]);
+
+        $payload['delivery_point_id'] = $deliveryPoint->id;
     }
 
     private function handleStarted(Trip $trip, array $payload): void

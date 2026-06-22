@@ -83,10 +83,6 @@ class ListOrders extends ListRecords
             'label' => 'Tất cả trạng thái',
             'color' => 'bg-gray-900',
         ],
-        'draft' => [
-            'label' => 'Nháp',
-            'color' => 'bg-gray-500',
-        ],
         'assigned' => [
             'label' => 'Đã gán xe',
             'color' => 'bg-orange-400',

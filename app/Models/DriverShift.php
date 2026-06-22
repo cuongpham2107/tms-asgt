@@ -87,7 +87,7 @@ class DriverShift extends Model
 
         $sortedSegments->each(function ($trip, $index) use ($activities) {
             if ($trip->started_at) {
-                $label = 'Bắt đầu trip';
+                $label = 'Bắt đầu chuyến';
                 $color = 'background-color: #f0fdf4; color: #15803d;';
                 $text = sprintf('Mã chuyến: %s | Km: %s km',
                     $trip->trip_code,
@@ -106,7 +106,7 @@ class DriverShift extends Model
                 ]);
             }
             if ($trip->completed_at) {
-                $label = 'Kết thúc trip';
+                $label = 'Kết thúc chuyến';
                 $color = 'background-color: #fef2f2; color: #b91c1c;';
                 $text = sprintf('Mã chuyến: %s | Km: %s km (Tổng chạy: %s km)',
                     $trip->trip_code,
