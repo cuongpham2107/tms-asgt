@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -40,9 +41,14 @@ class User extends Authenticatable
         return $this->hasMany(Vehicle::class, 'current_driver_id');
     }
 
-    public function orders(): HasMany
+    public function trips(): HasMany
     {
-        return $this->hasMany(Order::class, 'driver_id');
+        return $this->hasMany(Trip::class, 'driver_id');
+    }
+
+    public function orders(): HasManyThrough
+    {
+        return $this->hasManyThrough(Order::class, Trip::class, 'driver_id', 'trip_id');
     }
 
     public function createdOrders(): HasMany
