@@ -36,12 +36,12 @@ class ShiftKmCalculatorService
                     $totalLoadedKm += $completedKm - $arrivedKm;
                 }
             } elseif ($arrivedKm !== null) {
-                $endKm = $shift->lastSegment()?->end_km;
+                $endKm = $shift->end_km;
                 if ($endKm !== null && $endKm > $arrivedKm) {
                     $totalLoadedKm += $endKm - $arrivedKm;
                 }
             } elseif ($completedKm !== null) {
-                $startKm = $shift->firstSegment()?->start_km;
+                $startKm = $shift->start_km;
                 if ($startKm !== null && $completedKm > $startKm) {
                     $totalLoadedKm += $completedKm - $startKm;
                 }

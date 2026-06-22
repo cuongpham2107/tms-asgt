@@ -83,53 +83,25 @@ class ListOrders extends ListRecords
             'label' => 'Tất cả trạng thái',
             'color' => 'bg-gray-900',
         ],
-        'planned' => [
-            'label' => 'Kế hoạch',
-            'color' => 'bg-blue-600',
+        'draft' => [
+            'label' => 'Nháp',
+            'color' => 'bg-gray-500',
         ],
-        'unsent' => [
-            'label' => 'Chưa gửi',
+        'assigned' => [
+            'label' => 'Đã gán xe',
             'color' => 'bg-orange-400',
         ],
         'sent' => [
             'label' => 'Đã gửi',
             'color' => 'bg-sky-500',
         ],
-        'started' => [
-            'label' => 'Bắt đầu',
-            'color' => 'bg-violet-500',
-        ],
-        'arrived_pickup' => [
-            'label' => 'Đến lấy hàng',
-            'color' => 'bg-fuchsia-500',
-        ],
-        'running' => [
-            'label' => 'Đang giao hàng',
-            'color' => 'bg-blue-500',
-        ],
-        'arrived_delivery' => [
-            'label' => 'Đến giao hàng',
-            'color' => 'bg-orange-500',
-        ],
-        'delivered' => [
-            'label' => 'Đã giao hàng',
-            'color' => 'bg-lime-500',
-        ],
         'completed' => [
             'label' => 'Hoàn thành',
             'color' => 'bg-emerald-500',
         ],
-        'driver_swap' => [
-            'label' => 'Đảo lái',
-            'color' => 'bg-purple-500',
-        ],
         'cancelled' => [
             'label' => 'Hủy',
             'color' => 'bg-red-500',
-        ],
-        'trashed' => [
-            'label' => 'Thùng rác',
-            'color' => 'bg-slate-500',
         ],
     ];
 
@@ -295,16 +267,8 @@ class ListOrders extends ListRecords
     {
         return Order::query()
             ->when(
-                $status === 'planned',
-                fn (Builder $query): Builder => $query->where('status', OrderStatus::Draft->value)->where('planned_loading_at', '>', now()),
-            )
-            ->when(
-                $status !== 'planned',
-                fn (Builder $query): Builder => $query->where('status', '!=', OrderStatus::Draft->value)
-                    ->when(
-                        $status !== 'all',
-                        fn (Builder $query): Builder => $query->whereIn('status', $this->resolveStatusValues($status)),
-                    ),
+                $status !== 'all',
+                fn (Builder $query): Builder => $query->whereIn('status', $this->resolveStatusValues($status)),
             )
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
@@ -347,27 +311,18 @@ class ListOrders extends ListRecords
             ->with([
                 'customer',
                 'deliveryPoints.location',
-                'driver',
                 'area',
                 'pickupLocation',
-                'vehicle',
+                'trip.vehicle',
+                'trip.driver',
             ])
-            ->when(
-                $this->activeStatusFilter === 'planned',
-                fn (Builder $query): Builder => $query->where('status', OrderStatus::Draft->value),
-                fn (Builder $query): Builder => $query->where('status', '!=', OrderStatus::Draft->value),
-            )
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(
                 $this->activeOrderTypeFilter !== 'all',
                 fn (Builder $query): Builder => $query->where('type', $this->activeOrderTypeFilter),
             )
             ->when(
-                $this->activeStatusFilter === 'planned',
-                fn (Builder $query): Builder => $query->where('planned_loading_at', '>', now()),
-            )
-            ->when(
-                $this->activeStatusFilter !== 'all' && $this->activeStatusFilter !== 'planned',
+                $this->activeStatusFilter !== 'all',
                 fn (Builder $query): Builder => $query->whereIn('status', $this->resolveStatusValues($this->activeStatusFilter)),
             )
             ->when(
@@ -386,8 +341,8 @@ class ListOrders extends ListRecords
                         ->orWhere('cargo_name', 'like', "%{$search}%")
                         ->orWhere('pickup_address', 'like', "%{$search}%")
                         ->orWhereHas('customer', fn (Builder $customerQuery): Builder => $customerQuery->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('vehicle', fn (Builder $vehicleQuery): Builder => $vehicleQuery->where('plate_number', 'like', "%{$search}%"))
-                        ->orWhereHas('driver', fn (Builder $driverQuery): Builder => $driverQuery->where('name', 'like', "%{$search}%"));
+                        ->orWhereHas('trip.vehicle', fn (Builder $vehicleQuery): Builder => $vehicleQuery->where('plate_number', 'like', "%{$search}%"))
+                        ->orWhereHas('trip.driver', fn (Builder $driverQuery): Builder => $driverQuery->where('name', 'like', "%{$search}%"));
                 });
             })
 
@@ -419,22 +374,10 @@ class ListOrders extends ListRecords
     {
         return match ($status) {
             'draft' => [OrderStatus::Draft->value],
-            'unsent' => [OrderStatus::Assigned->value],
+            'assigned' => [OrderStatus::Assigned->value],
             'sent' => [OrderStatus::Sent->value],
-            'started' => [OrderStatus::Started->value],
-            'arrived_pickup' => [OrderStatus::ArrivedPickup->value],
-            'running' => [
-                OrderStatus::Delivering->value,
-                OrderStatus::ArrivedDelivery->value,
-                OrderStatus::Delivered->value,
-                OrderStatus::DriverSwap->value,
-            ],
-            'arrived_delivery' => [OrderStatus::ArrivedDelivery->value],
-            'delivered' => [OrderStatus::Delivered->value],
             'completed' => [OrderStatus::Completed->value],
-            'driver_swap' => [OrderStatus::DriverSwap->value],
             'cancelled' => [OrderStatus::Cancelled->value],
-            'trashed' => [OrderStatus::Trashed->value],
             default => [],
         };
     }
@@ -442,11 +385,6 @@ class ListOrders extends ListRecords
     private function baseCountQuery(): Builder
     {
         return Order::query()
-            ->when(
-                $this->activeStatusFilter === 'planned',
-                fn (Builder $query): Builder => $query->where('status', OrderStatus::Draft->value),
-                fn (Builder $query): Builder => $query->where('status', '!=', OrderStatus::Draft->value),
-            )
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {

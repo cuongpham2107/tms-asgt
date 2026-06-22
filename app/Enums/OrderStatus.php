@@ -10,15 +10,8 @@ enum OrderStatus: string implements HasColor, HasLabel
     case Draft = 'draft';
     case Assigned = 'assigned';
     case Sent = 'sent';
-    case Started = 'started';
-    case ArrivedPickup = 'arrived_pickup';
-    case Delivering = 'delivering';
-    case ArrivedDelivery = 'arrived_delivery';
-    case Delivered = 'delivered';
     case Completed = 'completed';
-    case DriverSwap = 'driver_swap';
     case Cancelled = 'cancelled';
-    case Trashed = 'trashed';
 
     public function getLabel(): string
     {
@@ -26,15 +19,8 @@ enum OrderStatus: string implements HasColor, HasLabel
             self::Draft => 'Nháp',
             self::Assigned => 'Đã gán xe',
             self::Sent => 'Đã gửi',
-            self::Started => 'Bắt đầu',
-            self::ArrivedPickup => 'Đến lấy hàng',
-            self::Delivering => 'Đang giao hàng',
-            self::ArrivedDelivery => 'Đến giao hàng',
-            self::Delivered => 'Đã giao hàng',
             self::Completed => 'Hoàn thành',
-            self::DriverSwap => 'Đảo lái',
             self::Cancelled => 'Hủy',
-            self::Trashed => 'Thùng rác',
         };
     }
 
@@ -44,75 +30,48 @@ enum OrderStatus: string implements HasColor, HasLabel
             self::Draft => 'gray',
             self::Assigned => 'info',
             self::Sent => 'info',
-            self::Started => 'info',
-            self::ArrivedPickup => 'warning',
-            self::Delivering => 'warning',
-            self::ArrivedDelivery => 'warning',
-            self::Delivered => 'success',
             self::Completed => 'success',
-            self::DriverSwap => 'primary',
             self::Cancelled => 'danger',
-            self::Trashed => 'gray',
         };
     }
 
-    /** Có thể gán xe/lái: chỉ khi đang ở trạng thái Nháp */
     public function canAssign(): bool
     {
         return $this === self::Draft;
     }
 
-    /** Có thể gửi lệnh cho lái xe */
     public function canSend(): bool
     {
         return $this === self::Assigned;
     }
 
-    /** Có thể thu hồi lệnh đã gửi */
     public function canRecall(): bool
     {
-        return in_array($this, [self::Sent, self::Started, self::ArrivedPickup]);
+        return $this === self::Sent;
     }
 
-    /** Có thể hủy đơn */
     public function canCancel(): bool
     {
-        return ! in_array($this, [self::ArrivedDelivery, self::Delivered, self::Completed, self::Cancelled, self::Trashed]);
+        return ! in_array($this, [self::Completed, self::Cancelled]);
     }
 
-    /** Có thể sửa đơn */
     public function canEdit(): bool
     {
         return in_array($this, [self::Draft, self::Assigned]);
     }
 
-    /** Có thể xóa (soft delete): trước khi lái xe đến điểm giao hàng */
     public function canDelete(): bool
     {
-        return ! in_array($this, [self::ArrivedDelivery, self::Delivered, self::Completed, self::Trashed]);
+        return ! in_array($this, [self::Completed, self::Cancelled]);
     }
 
-    /** Có thể tạo chuyến quay đầu: chỉ khi đơn đang chạy thực tế */
-    public function canCreateReturn(): bool
-    {
-        return in_array($this, [self::Started, self::ArrivedPickup, self::Delivering]);
-    }
-
-    /** Có thể đảo lái */
-    public function canSwapDriver(): bool
-    {
-        return in_array($this, [self::Started, self::ArrivedPickup, self::Delivering, self::ArrivedDelivery]);
-    }
-
-    /** Đơn đang hoạt động (đang chạy) */
-    public function isActive(): bool
-    {
-        return in_array($this, [self::Started, self::ArrivedPickup, self::Delivering, self::ArrivedDelivery]);
-    }
-
-    /** Đơn đã kết thúc (thành công hoặc hủy) */
     public function isClosed(): bool
     {
-        return in_array($this, [self::Completed, self::Cancelled, self::Trashed]);
+        return in_array($this, [self::Completed, self::Cancelled]);
+    }
+
+    public function canCreateReturn(): bool
+    {
+        return $this === self::Completed;
     }
 }

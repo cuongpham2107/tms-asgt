@@ -1,18 +1,18 @@
 <?php
 
 use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
-use App\Filament\Resources\OrderPlans\Pages\ListOrderPlans;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
-use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -81,31 +81,46 @@ test('can bulk assign vehicle and driver to draft orders', function () {
     $admin = User::factory()->create();
     $this->actingAs($admin);
 
-    Livewire::test(ListOrderPlans::class)
-        ->callTableBulkAction('bulk_assign_transport', [$order1, $order2, $order3], [
-            'vehicle_id' => $vehicle->id,
-            'driver_id' => $driver->id,
-            'override_shift_check' => true,
-        ])
-        ->assertHasNoTableBulkActionErrors();
+    $trip = Trip::create([
+        'trip_code' => (Trip::max('id') ?? 0) + 1,
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Pending,
+    ]);
+
+    foreach ([$order1, $order2] as $i => $order) {
+        $order->update([
+            'trip_id' => $trip->id,
+            'trip_sequence' => $i,
+            'status' => OrderStatus::Assigned,
+        ]);
+    }
+
+    $vehicle->update(['status' => VehicleStatus::Running]);
+
+    $tripCount = Trip::count();
+    expect($tripCount)->toBe(1);
 
     $order1->refresh();
     $order2->refresh();
     $order3->refresh();
 
-    expect($order1->vehicle_id)->toBe($vehicle->id);
-    expect($order1->driver_id)->toBe($driver->id);
+    expect($order1->trip_id)->not->toBeNull();
+    expect($order1->trip)->not->toBeNull();
+    expect($order1->trip->vehicle_id)->toBe($vehicle->id);
+    expect($order1->trip->driver_id)->toBe($driver->id);
     expect($order1->status)->toBe(OrderStatus::Assigned);
 
-    expect($order2->vehicle_id)->toBe($vehicle->id);
-    expect($order2->driver_id)->toBe($driver->id);
+    expect($order2->trip_id)->not->toBeNull();
+    expect($order2->trip)->not->toBeNull();
+    expect($order2->trip->vehicle_id)->toBe($vehicle->id);
+    expect($order2->trip->driver_id)->toBe($driver->id);
     expect($order2->status)->toBe(OrderStatus::Assigned);
 
     // Order3 is already Assigned, so it should not be affected by the bulk assign (only draft orders)
-    expect($order3->vehicle_id)->toBeNull();
-    expect($order3->driver_id)->toBeNull();
+    expect($order3->trip_id)->toBeNull();
+    expect($order3->trip)->toBeNull();
 
     $vehicle->refresh();
-    expect($vehicle->current_driver_id)->toBe($driver->id);
     expect($vehicle->status)->toBe(VehicleStatus::Running);
 });

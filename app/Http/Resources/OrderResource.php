@@ -2,8 +2,9 @@
 
 namespace App\Http\Resources;
 
-use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Models\Order;
+use App\Models\Trip;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,8 +26,8 @@ class OrderResource extends JsonResource
 
             /** ID khách hàng. */
             'customer_id' => $this->customer_id,
-            /** ID ca làm việc. */
-            'shift_id' => $this->shift_id,
+            /** ID ca làm việc (từ chuyến xe, nếu có). */
+            'shift_id' => $this->trip?->shift_id,
             /** ID chuyến xe (nếu đang gom). */
             'trip_id' => $this->trip_id,
             /** Thông tin chuyến xe (nếu được load). */
@@ -34,15 +35,18 @@ class OrderResource extends JsonResource
                 'id' => $this->trip->id,
                 'status' => $this->trip->status,
             ]),
-            /** Biển số xe (snapshot). */
-            'vehicle_plate_number' => $this->vehicle_plate_number,
-            /** Loại xe (snapshot). */
-            'vehicle_type' => $this->vehicle_type,
-            /** Thông tin xe (nếu được load). */
-            'vehicle' => $this->whenLoaded('vehicle', fn () => [
-                'id' => $this->vehicle->id,
-                'plate_number' => $this->vehicle->plate_number,
-            ]),
+            /** Biển số xe (từ chuyến xe, nếu có). */
+            'vehicle_plate_number' => $this->trip?->vehicle?->plate_number,
+            /** Loại xe (từ chuyến xe, nếu có). */
+            'vehicle_type' => $this->trip?->vehicle?->vehicle_type,
+            /** Thông tin xe (từ chuyến xe, nếu được load). */
+            'vehicle' => $this->when(
+                $this->relationLoaded('trip') && $this->trip?->relationLoaded('vehicle'),
+                fn () => [
+                    'id' => $this->trip->vehicle->id,
+                    'plate_number' => $this->trip->vehicle->plate_number,
+                ]
+            ),
             /** Thông tin khách hàng (nếu được load). */
             'customer' => $this->whenLoaded('customer', fn () => [
                 'id' => $this->customer->id,
@@ -58,7 +62,7 @@ class OrderResource extends JsonResource
             'type_label' => $this->type?->getLabel(),
             /** Mã đơn hàng độc nhất. */
             'order_code' => $this->order_code,
-            /** Trạng thái đơn hàng (draft, assigned, sent, started, arrived_pickup, delivering, arrived_delivery, delivered, completed, cancelled, driver_swap). */
+            /** Trạng thái đơn hàng (draft, assigned, sent, completed, cancelled). */
             'status' => $this->status,
             /** Nhãn tiếng Việt của trạng thái đơn hàng. */
             'status_label' => $this->status?->getLabel(),
@@ -110,26 +114,29 @@ class OrderResource extends JsonResource
                 fn () => $this->tripCheckpoints->max('occurred_at')?->toIso8601String()
             ),
             // Driver swaps (only when loaded)
-            /** Danh sách các lần đổi lái (nếu được load). */
-            'driver_swaps' => DriverSwapResource::collection($this->whenLoaded('driverSwaps')),
+            /** Danh sách các lần đổi lái (từ chuyến xe, nếu được load). */
+            'driver_swaps' => DriverSwapResource::collection(
+                $this->whenLoaded('trip.driverSwaps', fn () => $this->trip->driverSwaps)
+            ),
             // Timestamps
             /** Thời điểm gửi lệnh điều hành (ISO 8601). */
             'sent_at' => $this->sent_at?->toIso8601String(),
             /** Thời điểm tạo đơn hàng (ISO 8601). */
             'created_at' => $this->created_at?->toIso8601String(),
 
-            /** Lái xe đã có đơn đang hoạt động hay chưa. */
-            'has_active_order' => Order::where('driver_id', $this->driver_id)
-                ->whereIn('status', [
-                    OrderStatus::Sent,
-                    OrderStatus::Started,
-                    OrderStatus::ArrivedPickup,
-                    OrderStatus::Delivering,
-                    OrderStatus::ArrivedDelivery,
-                    OrderStatus::DriverSwap,
-                ])
-                ->where('id', '!=', $this->id)
-                ->exists(),
+            /** Lái xe đã có chuyến đang hoạt động hay chưa. */
+            'has_active_order' => $this->whenLoaded('trip', function () {
+                return Trip::where('driver_id', $this->trip->driver_id)
+                    ->whereIn('status', [
+                        TripStatus::Started,
+                        TripStatus::ArrivedPickup,
+                        TripStatus::Delivering,
+                        TripStatus::ArrivedDelivery,
+                        TripStatus::DriverSwap,
+                    ])
+                    ->where('id', '!=', $this->trip->id)
+                    ->exists();
+            }),
         ];
     }
 }

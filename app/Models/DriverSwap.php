@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class DriverSwap extends Model
 {
     protected $fillable = [
-        'order_id',
+        'trip_id',
         'from_driver_id',
         'to_driver_id',
         'from_shift_id',
@@ -31,9 +31,9 @@ class DriverSwap extends Model
         ];
     }
 
-    public function order(): BelongsTo
+    public function trip(): BelongsTo
     {
-        return $this->belongsTo(Order::class);
+        return $this->belongsTo(Trip::class);
     }
 
     public function fromDriver(): BelongsTo

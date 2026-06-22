@@ -15,6 +15,7 @@ class LocationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $search = $request->query('search');
+        $area_code = $request->query('area_code');
         $limit = min((int) $request->query('limit', $request->query('per_page', 15)), 100);
         if ($limit <= 0) {
             $limit = 15;
@@ -28,9 +29,12 @@ class LocationController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('code', 'like', "%{$search}%")
                     ->orWhere('address', 'like', "%{$search}%");
+
             });
         }
-
+        if (filled($area_code)) {
+            $query->whereRelation('area', 'code', $area_code);
+        }
         $locations = $query->paginate($limit);
 
         return response()->json($locations);

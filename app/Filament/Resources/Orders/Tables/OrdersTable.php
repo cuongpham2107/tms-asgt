@@ -42,13 +42,15 @@ use Illuminate\Support\HtmlString;
 
 class OrdersTable extends BaseTable
 {
-    public static function configure(Table $table): Table
+    public static function configure(Table $table, string $type = 'default'): Table
     {
         return parent::applyDefaults($table)
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
                 'deliveryPoints.location',
                 'area',
                 'pickupLocation',
+                'trip.vehicle',
+                'trip.driver',
                 'tripCheckpoints' => fn ($q) => $q->orderByDesc('occurred_at'),
             ]))
             ->columns([
@@ -99,17 +101,17 @@ class OrdersTable extends BaseTable
                                             <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $order->customer?->name ?? '—' }}</span>
                                         </div>
 
-                                        @if ($order->vehicle)
+                                        @if ($order->trip?->vehicle)
                                             <div>
                                                 <span class="text-xs text-gray-500 dark:text-gray-400">Xe</span>
-                                                <span class="ml-2 text-sm font-bold text-amber-700 dark:text-amber-300">{{ $order->vehicle->plate_number }}</span>
+                                                <span class="ml-2 text-sm font-bold text-amber-700 dark:text-amber-300">{{ $order->trip->vehicle->plate_number }}</span>
                                             </div>
                                         @endif
 
-                                        @if ($order->driver)
+                                        @if ($order->trip?->driver)
                                             <div>
                                                 <span class="text-xs text-gray-500 dark:text-gray-400">Lái xe</span>
-                                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $order->driver->name }}</span>
+                                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $order->trip->driver->name }}</span>
                                             </div>
                                         @endif
 
@@ -146,7 +148,7 @@ class OrdersTable extends BaseTable
                                             <span class="mx-2">·</span>
                                             <span class="text-blue-500">━━</span> Tuyến đường
                                         @endif
-                                        @if ($order->vehicle)
+                                        @if ($order->trip?->vehicle)
                                             <span class="mx-2">·</span>
                                             <span class="inline-flex items-center gap-1.5">🚛 Vị trí xe</span>
                                         @endif
@@ -191,12 +193,14 @@ class OrdersTable extends BaseTable
                                 </div>
                             HTML);
                     })
+                    ->hidden(fn (): bool => $type === 'plan')
                     ->sortable(),
 
-                TextColumn::make('vehicle.plate_number')
+                TextColumn::make('vehicle')
                     ->label('Phương tiện / Lái xe')
                     ->formatStateUsing(fn (Order $record): HtmlString => self::renderTransportColumn($record))
                     ->html()
+                    ->hidden(fn (): bool => $type === 'plan')
                     ->searchable(),
                 TextColumn::make('notes')
                     ->label('Ghi chú')
@@ -234,8 +238,7 @@ class OrdersTable extends BaseTable
                                 $driverId = $data['driver_id'] ?? null;
                                 $driver = $driverId ? User::query()->find($driverId) : null;
 
-                                $hasActiveShift = $vehicle->driverShifts()->whereNull('driver_shifts.end_time')->exists()
-                                    || ($driver !== null && $driver->driverShifts()->whereNull('driver_shifts.end_time')->exists());
+                                $hasActiveShift = $driver !== null && $driver->driverShifts()->whereNull('driver_shifts.end_time')->exists();
 
                                 if (! $hasActiveShift) {
                                     Notification::make()
@@ -339,8 +342,9 @@ class OrdersTable extends BaseTable
 
     private static function renderTransportColumn(Order $record): HtmlString
     {
-        $vehiclePlate = e($record->vehicle?->plate_number ?? 'Chưa phân phương tiện');
-        $driverName = e($record->driver?->name ?? 'Chưa phân lái xe');
+        $trip = $record->trip;
+        $vehiclePlate = e($trip?->vehicle?->plate_number ?? 'Chưa phân phương tiện');
+        $driverName = e($trip?->driver?->name ?? 'Chưa phân lái xe');
 
         return new HtmlString(<<<HTML
             <div class="flex flex-col items-center gap-1.5 leading-tight text-center">
@@ -366,7 +370,6 @@ class OrdersTable extends BaseTable
         $routePoints = [[$pickupLat, $pickupLng]];
         $routeLabels = [$record->pickupLocation?->name ?? $record->pickup_address ?? 'Điểm lấy hàng'];
 
-        // Pickup marker (green)
         $pickupMarker = Marker::make($pickupLat, $pickupLng)
             ->id('pickup-'.$record->getKey())
             ->green()
@@ -374,18 +377,18 @@ class OrdersTable extends BaseTable
             ->popupContent($record->pickup_address ?? '');
         $layers[] = $pickupMarker->toArray();
 
-        // Truck marker — only when vehicle is assigned
-        if ($record->vehicle_id !== null) {
+        $trip = $record->trip;
+
+        if ($trip?->vehicle_id !== null) {
             $truckCoords = $record->map_coords;
             $layers[] = Marker::make((float) $truckCoords['lat'], (float) $truckCoords['lng'])
                 ->id('truck-'.$record->getKey())
                 ->icon(asset('images/truck.png'), [38, 38])
-                ->title($record->vehicle?->plate_number ?? 'Xe')
-                ->popupContent(($record->vehicle?->plate_number ?? '').' — '.($record->driver?->name ?? 'Chưa phân lái xe'))
+                ->title($trip->vehicle?->plate_number ?? 'Xe')
+                ->popupContent(($trip->vehicle?->plate_number ?? '').' — '.($trip->driver?->name ?? 'Chưa phân lái xe'))
                 ->toArray();
         }
 
-        // Delivery point markers (red) + collect route coordinates
         $deliveryPoints = $record->deliveryPoints->sortBy('sequence');
 
         foreach ($deliveryPoints as $dp) {
@@ -410,19 +413,17 @@ class OrdersTable extends BaseTable
             $layers[] = $dpMarker->toArray();
         }
 
-        // Draw route segments between consecutive points (same style as GoogleMapTracking)
         if (count($routePoints) >= 2) {
             $segmentColors = [
-                '#22c55e', // xanh lá — bắt đầu → điểm giao đầu
-                '#3b82f6', // xanh dương
-                '#8b5cf6', // tím
-                '#f59e0b', // cam
-                '#ef4444', // đỏ — đoạn cuối
+                '#22c55e',
+                '#3b82f6',
+                '#8b5cf6',
+                '#f59e0b',
+                '#ef4444',
             ];
 
             $osrm = app(OsrmService::class);
 
-            // GPS breadcrumbs (đường chim bay nét đứt, tổng quan)
             $layers[] = Polyline::make($routePoints)
                 ->id('route-gps-'.$record->getKey())
                 ->color('#9ca3af')
@@ -432,7 +433,6 @@ class OrdersTable extends BaseTable
                 ->fill(false)
                 ->toArray();
 
-            // Điểm bắt đầu (CircleMarker xanh lá)
             $layers[] = CircleMarker::make($routePoints[0][0], $routePoints[0][1])
                 ->id('start-'.$record->getKey())
                 ->radius(8)
@@ -443,7 +443,6 @@ class OrdersTable extends BaseTable
                 ->tooltipContent('Lấy hàng: '.$routeLabels[0])
                 ->toArray();
 
-            // Điểm kết thúc (CircleMarker đỏ)
             $lastIdx = count($routePoints) - 1;
             $layers[] = CircleMarker::make($routePoints[$lastIdx][0], $routePoints[$lastIdx][1])
                 ->id('end-'.$record->getKey())
@@ -455,7 +454,6 @@ class OrdersTable extends BaseTable
                 ->tooltipContent('Giao hàng: '.$routeLabels[$lastIdx])
                 ->toArray();
 
-            // Vẽ từng segment giữa các điểm liên tiếp với OSRM
             for ($i = 0; $i < count($routePoints) - 1; $i++) {
                 $segment = [$routePoints[$i], $routePoints[$i + 1]];
                 $osrmSegment = $osrm->getRouteFromPoints($segment);
@@ -464,7 +462,6 @@ class OrdersTable extends BaseTable
                 $isLastSegment = $i === (count($routePoints) - 2);
 
                 if (count($osrmSegment) >= 2) {
-                    // Main route line (thick, real road)
                     $layers[] = Polyline::make($osrmSegment)
                         ->id('route-seg'.$i.'-'.$record->getKey())
                         ->color($color)
@@ -474,7 +471,6 @@ class OrdersTable extends BaseTable
                         ->tooltipContent($label)
                         ->toArray();
 
-                    // Highlight glow on last segment
                     if ($isLastSegment) {
                         $layers[] = Polyline::make($osrmSegment)
                             ->id('route-seg'.$i.'-'.$record->getKey().'-highlight')
@@ -485,7 +481,6 @@ class OrdersTable extends BaseTable
                             ->toArray();
                     }
                 } else {
-                    // Fallback: đường thẳng giữa 2 điểm (dashed)
                     $layers[] = Polyline::make($segment)
                         ->id('route-seg'.$i.'-'.$record->getKey())
                         ->color($color)
@@ -499,7 +494,6 @@ class OrdersTable extends BaseTable
             }
         }
 
-        // Determine fitBounds: auto-zoom to encompass all points
         $hasFitBounds = count($routePoints) >= 2;
 
         return [

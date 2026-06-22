@@ -142,11 +142,8 @@ class GoogleMapSidebar extends Widget
     private function activeOrderStatuses(): array
     {
         return [
-            OrderStatus::Started->value,
-            OrderStatus::ArrivedPickup->value,
-            OrderStatus::Delivering->value,
-            OrderStatus::ArrivedDelivery->value,
-            OrderStatus::DriverSwap->value,
+            OrderStatus::Assigned->value,
+            OrderStatus::Sent->value,
         ];
     }
 }

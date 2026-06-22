@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
 use App\Models\Order;
-use App\Models\Trip;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -57,25 +56,6 @@ class BulkSendOrderAction
                         'status' => OrderStatus::Sent->value,
                         'sent_at' => now(),
                     ]);
-
-                    $sentOrders = Order::whereIn('id', $assignOrders->pluck('id'))->get();
-
-                    $groups = $sentOrders->groupBy('vehicle_id')->filter(fn ($group) => $group->count() >= 1);
-
-                    foreach ($groups as $vehicleId => $orders) {
-                        if ($vehicleId === null) {
-                            continue;
-                        }
-
-                        $trip = Trip::firstOrCreate(
-                            ['vehicle_id' => $vehicleId, 'status' => 'pending'],
-                            ['status' => 'pending'],
-                        );
-
-                        Order::whereIn('id', $orders->pluck('id'))
-                            ->whereNull('trip_id')
-                            ->update(['trip_id' => $trip->id]);
-                    }
 
                     Notification::make()
                         ->title('Gửi lệnh hàng loạt thành công')

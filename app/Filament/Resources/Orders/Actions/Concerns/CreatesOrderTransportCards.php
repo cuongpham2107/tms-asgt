@@ -4,12 +4,14 @@ namespace App\Filament\Resources\Orders\Actions\Concerns;
 
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
+use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Order;
+use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use Closure;
@@ -35,17 +37,17 @@ abstract class CreatesOrderTransportCards
     {
         return User::query()
             ->role('driver')
-            ->withCount([
-                'orders',
-                'orders as active_orders_count' => fn ($q) => $q->whereIn('status', [
-                    OrderStatus::Assigned->value,
-                    OrderStatus::Sent->value,
-                    OrderStatus::Started->value,
-                    OrderStatus::ArrivedPickup->value,
-                    OrderStatus::Delivering->value,
-                    OrderStatus::ArrivedDelivery->value,
-                ], 'and', false),
-            ])
+            ->select('users.*')
+            ->selectSub(
+                Order::selectRaw('COUNT(*)')
+                    ->whereIn('trip_id', Trip::select('id')->whereColumn('trips.driver_id', 'users.id'))
+                    ->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Sent->value]),
+                'active_orders_count'
+            )
+            ->selectSub(
+                Trip::selectRaw('COUNT(*)')->whereColumn('trips.driver_id', 'users.id'),
+                'orders_count'
+            )
             ->with([
                 'driverShifts' => fn ($query) => $query->latest('start_time')->limit(1),
                 'vehiclesAsDriver' => fn ($query) => $query->select('id', 'current_driver_id', 'plate_number', 'gps_lat', 'gps_lng'),
@@ -103,6 +105,7 @@ abstract class CreatesOrderTransportCards
     protected static function resolveVehicleCards(?float $requiredWeight, ?int $pickupLocationId, ?int $selectedVehicleId = null): array
     {
         return Vehicle::query()
+            ->select('vehicles.*')
             ->where(function ($query) use ($selectedVehicleId): void {
                 $query->whereIn('status', ['on', 'running']);
 
@@ -110,23 +113,17 @@ abstract class CreatesOrderTransportCards
                     $query->orWhere('id', $selectedVehicleId);
                 }
             })
+            ->selectSub(
+                Order::selectRaw('COUNT(*)')
+                    ->whereIn('trip_id', Trip::select('id')->whereColumn('trips.vehicle_id', 'vehicles.id'))
+                    ->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Sent->value]),
+                'active_orders_count'
+            )
             ->with([
-                'driverShifts' => fn ($q) => $q->whereNull('shift_vehicles.end_time'),
                 'driver' => fn ($q) => $q
                     ->with(['driverShifts' => fn ($q) => $q
-                        ->whereNull('end_time')
-                        ->withCount(['shiftVehicles as orders_in_shift' => fn ($q) => $q->whereNotNull('order_id')]),
+                        ->whereNull('end_time'),
                     ]),
-            ])
-            ->withCount([
-                'orders as active_orders_count' => fn ($q) => $q->whereIn('status', [
-                    OrderStatus::Assigned->value,
-                    OrderStatus::Sent->value,
-                    OrderStatus::Started->value,
-                    OrderStatus::ArrivedPickup->value,
-                    OrderStatus::Delivering->value,
-                    OrderStatus::ArrivedDelivery->value,
-                ], 'and', false),
             ])
             ->orderBy('plate_number')
             ->get()
@@ -140,7 +137,7 @@ abstract class CreatesOrderTransportCards
                 $currentLocation = self::resolveCurrentVehicleLocation($vehicle);
                 $isLocationMatch = ! $pickupLocationId || (($currentLocation['id'] ?? null) === $pickupLocationId);
 
-                $hasActiveShift = $vehicle->driverShifts->isNotEmpty();
+                $hasActiveShift = $vehicle->driver?->driverShifts->isNotEmpty() ?? false;
                 $hasDriver = $vehicle->current_driver_id !== null;
                 $isAvailable = (int) $vehicle->active_orders_count === 0;
 
@@ -205,17 +202,11 @@ abstract class CreatesOrderTransportCards
     {
         /** @var Order|null $activeOrder */
         $activeOrder = Order::query()
-            ->where('vehicle_id', $vehicle->id)
+            ->whereHas('trip', fn ($q) => $q->where('vehicle_id', $vehicle->id))
             ->whereIn('status', [
                 OrderStatus::Assigned->value,
                 OrderStatus::Sent->value,
-                OrderStatus::Started->value,
-                OrderStatus::ArrivedPickup->value,
-                OrderStatus::Delivering->value,
-                OrderStatus::ArrivedDelivery->value,
-                OrderStatus::Delivered->value,
-                OrderStatus::DriverSwap->value,
-            ], 'and', false)
+            ])
             ->with('pickupLocation')
             ->latest('created_at')
             ->first();
@@ -519,7 +510,13 @@ abstract class CreatesOrderTransportCards
                         Select::make('location_id')
                             ->label('Điểm giao hàng')
                             ->options(fn (Get $get): array => Location::query()
-                                ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                ->when($get('../../area_id'), function ($q, $areaId) {
+                                    $area = Area::find($areaId);
+
+                                    return $area !== null
+                                        ? $q->whereRelation('area', 'code', $area->code)
+                                        : $q;
+                                })
                                 ->pluck('name', 'id')
                                 ->toArray()
                             )
@@ -601,8 +598,6 @@ abstract class CreatesOrderTransportCards
                         'pickup_contact' => $data['pickup_contact'] ?? null,
                         'pickup_phone' => $data['pickup_phone'] ?? null,
                         'planned_loading_at' => $data['planned_loading_at'] ?? null,
-                        'driver_id' => $data['driver_id'] ?? null,
-                        'vehicle_id' => $data['vehicle_id'] ?? null,
                         'status' => filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null)
                             ? OrderStatus::Assigned->value
                             : OrderStatus::Draft->value,
@@ -647,21 +642,24 @@ abstract class CreatesOrderTransportCards
                 $order->deliveryPoints()->createMany($deliveryPoints);
             }
 
-            if (filled($data['vehicle_id'] ?? null)) {
+            if ($forceAssignedWhenTransportProvided && filled($data['vehicle_id'] ?? null) && filled($data['driver_id'] ?? null)) {
+                $trip = Trip::create([
+                    'trip_code' => (string) (Trip::max('id') + 1),
+                    'vehicle_id' => $data['vehicle_id'],
+                    'driver_id' => $data['driver_id'],
+                    'status' => TripStatus::Pending,
+                ]);
+
+                $order->update([
+                    'trip_id' => $trip->id,
+                    'status' => OrderStatus::Assigned->value,
+                ]);
+
                 $vehicle = Vehicle::query()->find($data['vehicle_id']);
 
                 if ($vehicle !== null) {
-                    $vehicle->status = VehicleStatus::Running;
-
-                    // Vehicle.current_driver_id is a static/default field — not modified here.
-
-                    $vehicle->save();
+                    $vehicle->update(['status' => VehicleStatus::Running]);
                 }
-            }
-
-            if ($forceAssignedWhenTransportProvided && (filled($data['vehicle_id'] ?? null) || filled($data['driver_id'] ?? null))) {
-                $order->status = OrderStatus::Assigned->value;
-                $order->save();
             }
         });
 

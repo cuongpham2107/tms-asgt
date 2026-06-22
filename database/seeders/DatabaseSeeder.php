@@ -25,10 +25,10 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call([
-            OrderTypeCategorySeeder::class,
-            DemoOperationsSeeder::class,
-            DriverShiftBackfillSeeder::class,
-            FullOrderLifecycleSeeder::class,
+            AreaSeeder::class,
+            VehicleImportSeeder::class,
+            DriverImportSeeder::class,
+            CustomerLocationSeeder::class,
         ]);
     }
 }

@@ -14,7 +14,7 @@ class OrderController extends Controller
     /**
      * Danh sách đơn hàng được gán cho lái xe.
      *
-     * Chỉ trả về đơn đã được điều hành gửi lệnh (trạng thái: Sent → DriverSwap).
+     * Chỉ trả về đơn đang hoạt động (trạng thái: Assigned, Sent).
      * Sắp xếp theo planned_loading_at tăng dần (đơn cần đóng hàng sớm nhất lên trước).
      *
      * @response array{data: OrderResource[]}
@@ -26,19 +26,15 @@ class OrderController extends Controller
         $orders = Order::query()
             ->with([
                 'customer',
-                'vehicle',
                 'pickupLocation',
                 'deliveryPoints',
+                'trip.vehicle',
                 'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
             ])
-            ->where('driver_id', $user->id)
+            ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
             ->whereIn('status', [
+                OrderStatus::Assigned,
                 OrderStatus::Sent,
-                OrderStatus::Started,
-                OrderStatus::ArrivedPickup,
-                OrderStatus::Delivering,
-                OrderStatus::ArrivedDelivery,
-                OrderStatus::DriverSwap,
             ])
             ->orderBy('planned_loading_at')
             ->get();
@@ -62,16 +58,17 @@ class OrderController extends Controller
         $user = $request->user();
 
         // Only allow driver to view their own orders
-        if ($order->driver_id !== $user->id) {
+        $order->load('trip');
+        if ($order->trip?->driver_id !== $user->id) {
             /** @status 403 */
             return response()->json(['message' => 'This order is not assigned to you'], 403);
         }
 
         $order->load([
             'customer',
-            'vehicle',
             'pickupLocation',
             'deliveryPoints',
+            'trip.vehicle',
             'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
         ]);
 
@@ -91,7 +88,8 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        if ($order->driver_id !== $user->id) {
+        $order->load('trip');
+        if ($order->trip?->driver_id !== $user->id) {
             /** @status 403 */
             return response()->json(['message' => 'This order is not assigned to you'], 403);
         }
@@ -123,13 +121,13 @@ class OrderController extends Controller
         $orders = Order::query()
             ->with([
                 'customer',
-                'vehicle',
                 'pickupLocation',
                 'deliveryPoints',
+                'trip.vehicle',
+                'trip.driverSwaps',
                 'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
-                'driverSwaps' => fn ($q) => $q->with('fromShift.driver', 'toShift.driver')->orderBy('created_at'),
             ])
-            ->where(function ($q) use ($user) {
+            ->whereHas('trip', function ($q) use ($user) {
                 $q->where('driver_id', $user->id)
                     ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
             })
@@ -158,10 +156,10 @@ class OrderController extends Controller
         $user = $request->user();
 
         $counts = Order::query()
-            ->where('driver_id', $user->id)
+            ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
             ->selectRaw("
-                SUM(CASE WHEN status IN ('assigned', 'sent') THEN 1 ELSE 0 END) as assigned,
-                SUM(CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered', 'driver_swap') THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status IN ('assigned') THEN 1 ELSE 0 END) as assigned,
+                SUM(CASE WHEN status IN ('sent') THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
             ")
             ->first();

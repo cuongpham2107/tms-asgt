@@ -24,55 +24,47 @@ class TripsTable extends BaseTable
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with([
                     'vehicle',
+                    'driver',
+                    'driverSwaps.toDriver',
+                    'shift',
                     'orders.customer',
                     'orders.pickupLocation',
                     'orders.deliveryPoints.location',
-                    'orders.driver',
-                    'orders.driverSwaps.toDriver',
                     'orders.area',
-                    'orders.shift',
                 ])
             )
             ->columns([
-                // 1. BSX
                 TextColumn::make('vehicle.plate_number')
                     ->label('BSX')
                     ->state(fn (Trip $record): string => self::renderBsx($record)),
 
-                // 2. Trạng thái
                 TextColumn::make('status')
                     ->label('Trạng thái')
                     ->badge()
                     ->color(fn (Trip $record): string => $record->getStatusColor())
                     ->state(fn (Trip $record): string => $record->getStatusLabel()),
 
-                // 3. Điểm đi
                 TextColumn::make('pickup_locations')
                     ->label('Điểm đi')
                     ->state(fn (Trip $record): string => self::getPickupLocations($record)),
 
-                // 4. Điểm đến
                 TextColumn::make('delivery_destination')
                     ->label('Điểm đến')
                     ->state(fn (Trip $record): string => self::getDeliveryDestination($record)),
 
-                // 5. Số đơn
                 TextColumn::make('order_count')
                     ->label('Số đơn')
                     ->state(fn (Trip $record): string => (string) $record->orders->count()),
 
-                // 6. Lái xe
                 TextColumn::make('drivers')
                     ->label('Lái xe')
                     ->state(fn (Trip $record): string => self::getDrivers($record))
                     ->searchable(),
 
-                // 7. KM
                 TextColumn::make('km')
                     ->label('KM')
                     ->state(fn (Trip $record): string => self::getKmDisplay($record)),
 
-                // 8. Vị trí GPS
                 UniqueMapColumn::make('gps_position')
                     ->label('Vị trí thực tế trên GPS')
                     ->height(72)
@@ -124,12 +116,10 @@ class TripsTable extends BaseTable
                             ]))),
                     ),
 
-                // 9. Thời gian
                 TextColumn::make('created_at')
                     ->label('Thời gian')
                     ->dateTime('H:i d/m/Y'),
 
-                // 10. Ca
                 TextColumn::make('shift_info')
                     ->label('Ca')
                     ->badge()
@@ -223,21 +213,15 @@ class TripsTable extends BaseTable
 
     private static function getDrivers(Trip $record): string
     {
-        $orders = $record->orders;
+        $names = [];
 
-        if ($orders->isEmpty()) {
-            return '—';
+        if ($record->driver) {
+            $names[] = $record->driver->name;
         }
 
-        $names = [];
-        foreach ($orders as $order) {
-            if ($order->driver) {
-                $names[] = $order->driver->name;
-            }
-            foreach ($order->driverSwaps->sortBy('created_at') as $swap) {
-                if ($swap->toDriver) {
-                    $names[] = $swap->toDriver->name;
-                }
+        foreach ($record->driverSwaps->sortBy('created_at') as $swap) {
+            if ($swap->toDriver) {
+                $names[] = $swap->toDriver->name;
             }
         }
 
@@ -268,9 +252,7 @@ class TripsTable extends BaseTable
 
     private static function getShiftLabel(Trip $record): string
     {
-        $shift = $record->orders->first()?->shift;
-
-        return $shift?->shift_type?->getLabel() ?? '—';
+        return $record->shift?->shift_type?->getLabel() ?? '—';
     }
 
     private static function buildGpsMapConfig(Trip $record): array
@@ -285,7 +267,7 @@ class TripsTable extends BaseTable
             ->id('gps-vehicle-'.$record->getKey())
             ->icon(asset('images/truck.png'), [38, 38])
             ->title($vehicle?->plate_number ?? 'Xe')
-            ->popupContent(($vehicle?->plate_number ?? '').' — '.($record->orders->first()?->driver?->name ?? 'Chưa phân lái xe'))
+            ->popupContent(($vehicle?->plate_number ?? '').' — '.($record->driver?->name ?? 'Chưa phân lái xe'))
             ->toArray();
 
         return [

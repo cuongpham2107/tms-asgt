@@ -30,12 +30,8 @@ class Order extends Model
         'pickup_contact',
         'pickup_phone',
         'planned_loading_at',
-        'vehicle_id',
-        'vehicle_plate_number',
-        'vehicle_type',
-        'driver_id',
-        'shift_id',
         'trip_id',
+        'trip_sequence',
         'status',
         'priority',
         'is_return_trip',
@@ -76,14 +72,9 @@ class Order extends Model
         return $this->belongsTo(Location::class, 'pickup_location_id');
     }
 
-    public function vehicle(): BelongsTo
+    public function trip(): BelongsTo
     {
-        return $this->belongsTo(Vehicle::class);
-    }
-
-    public function driver(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'driver_id');
+        return $this->belongsTo(Trip::class);
     }
 
     public function createdBy(): BelongsTo
@@ -103,7 +94,7 @@ class Order extends Model
 
     public function tripPhotos(): HasManyThrough
     {
-        return $this->hasManyThrough(TripPhoto::class, TripCheckpoint::class, 'order_id', 'trip_checkpoint_id');
+        return $this->hasManyThrough(TripPhoto::class, TripCheckpoint::class, null, 'trip_checkpoint_id');
     }
 
     public function parentOrder(): BelongsTo
@@ -116,27 +107,6 @@ class Order extends Model
         return $this->hasMany(Order::class, 'parent_order_id');
     }
 
-    public function shift(): BelongsTo
-    {
-        return $this->belongsTo(DriverShift::class);
-    }
-
-    public function trip(): BelongsTo
-    {
-        return $this->belongsTo(Trip::class);
-    }
-
-    public function driverSwaps(): HasMany
-    {
-        return $this->hasMany(DriverSwap::class);
-    }
-
-    /**
-     * Tọa độ hiển thị trên bản đồ: ưu tiên checkpoint mới nhất có GPS,
-     * fallback về tọa độ điểm nhận hàng, cuối cùng là mặc định HCM.
-     *
-     * @return array{lat: float, lng: float}
-     */
     public function getMapCoordsAttribute(): array
     {
         $latestCheckpoint = $this->tripCheckpoints

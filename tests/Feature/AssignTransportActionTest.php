@@ -76,12 +76,13 @@ test('can assign vehicle and driver to order and update vehicle current driver',
         ->assertHasNoTableActionErrors();
 
     $order->refresh();
-    expect($order->vehicle_id)->toBe($vehicle->id);
-    expect($order->driver_id)->toBe($driver->id);
+    expect($order->trip)->not->toBeNull();
+    expect($order->trip->vehicle_id)->toBe($vehicle->id);
+    expect($order->trip->driver_id)->toBe($driver->id);
     expect($order->status)->toBe(OrderStatus::Assigned);
 
     $vehicle->refresh();
-    expect($vehicle->current_driver_id)->toBe($driver->id);
+    expect($vehicle->current_driver_id)->not->toBe($driver->id);
     expect($vehicle->status)->toBe(VehicleStatus::Running);
 });
 
@@ -121,8 +122,7 @@ test('warns when vehicle or driver has no active shift and override is false', f
         ->assertHasNoTableActionErrors();
 
     $order->refresh();
-    expect($order->vehicle_id)->toBeNull();
-    expect($order->driver_id)->toBeNull();
+    expect($order->trip)->toBeNull();
     expect($order->status)->toBe(OrderStatus::Draft);
 });
 
@@ -168,8 +168,9 @@ test('assigns successfully without override when driver has active shift', funct
         ->assertHasNoTableActionErrors();
 
     $order->refresh();
-    expect($order->vehicle_id)->toBe($vehicle->id);
-    expect($order->driver_id)->toBe($driver->id);
+    expect($order->trip)->not->toBeNull();
+    expect($order->trip->vehicle_id)->toBe($vehicle->id);
+    expect($order->trip->driver_id)->toBe($driver->id);
     expect($order->status)->toBe(OrderStatus::Assigned);
 });
 

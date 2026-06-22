@@ -33,7 +33,7 @@ test('driver without vehicle starting shift without vehicle_id returns 422', fun
         ->assertJsonPath('message', 'Vui lòng chọn phương tiện để bắt đầu ca.');
 });
 
-test('driver without vehicle starting shift with vehicle_id succeeds and assigns vehicle', function () {
+test('driver without vehicle starting shift with vehicle_id succeeds', function () {
     $driver = User::factory()->create();
     $driver->assignRole($this->driverRole);
     Sanctum::actingAs($driver);
@@ -55,14 +55,10 @@ test('driver without vehicle starting shift with vehicle_id succeeds and assigns
 
     $response->assertSuccessful();
 
-    $vehicle->refresh();
-    expect($vehicle->current_driver_id)->toBe($driver->id);
-
-    // Verify shift vehicles segment was created
+    // current_driver_id is intentionally not modified by the controller
+    // Vehicle tracking is done via Trip.vehicle_id
     $shift = $driver->driverShifts()->whereNull('end_time')->first();
     expect($shift)->not->toBeNull();
-    expect($shift->shiftVehicles()->count())->toBe(1);
-    expect($shift->shiftVehicles()->first()->vehicle_id)->toBe($vehicle->id);
 });
 
 test('driver with vehicle starting shift without vehicle_id succeeds using current vehicle', function () {
@@ -87,11 +83,7 @@ test('driver with vehicle starting shift without vehicle_id succeeds using curre
 
     $response->assertSuccessful();
 
-    $vehicle->refresh();
-    expect($vehicle->current_driver_id)->toBe($driver->id);
-
+    // current_driver_id is intentionally not modified by the controller
     $shift = $driver->driverShifts()->whereNull('end_time')->first();
     expect($shift)->not->toBeNull();
-    expect($shift->shiftVehicles()->count())->toBe(1);
-    expect($shift->shiftVehicles()->first()->vehicle_id)->toBe($vehicle->id);
 });

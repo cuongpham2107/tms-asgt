@@ -18,17 +18,19 @@ class DriverShiftResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $firstTrip = $this->trips()->first();
+
         return [
             'id' => $this->id,
             'driver_id' => $this->driver_id,
             'driver' => $this->whenLoaded('driver', fn () => UserResource::make($this->driver)),
-            'vehicle_id' => $this->firstVehicle()?->id,
-            'vehicle' => $this->firstVehicle() ? [
-                'id' => $this->firstVehicle()->id,
-                'plate_number' => $this->firstVehicle()->plate_number,
-                'vehicle_type' => $this->firstVehicle()->vehicle_type,
-                'load_capacity' => $this->firstVehicle()->load_capacity,
-                'current_mileage' => $this->firstVehicle()->current_mileage,
+            'vehicle_id' => $firstTrip?->vehicle_id,
+            'vehicle' => $firstTrip?->vehicle ? [
+                'id' => $firstTrip->vehicle->id,
+                'plate_number' => $firstTrip->vehicle->plate_number,
+                'vehicle_type' => $firstTrip->vehicle->vehicle_type,
+                'load_capacity' => $firstTrip->vehicle->load_capacity,
+                'current_mileage' => $firstTrip->vehicle->current_mileage,
             ] : null,
             'shift_type' => $this->shift_type,
             'start_time' => $this->start_time?->toDateTimeString(),
@@ -42,18 +44,18 @@ class DriverShiftResource extends JsonResource
             'total_km' => $this->total_km,
             'total_km_loaded' => $this->total_km_loaded,
             'total_km_empty' => $this->total_km_empty,
-            'shift_vehicles' => $this->whenLoaded('shiftVehicles', fn () => $this->shiftVehicles->map(fn ($sv) => [
-                'id' => $sv->id,
-                'vehicle_id' => $sv->vehicle_id,
-                'vehicle' => $sv->vehicle ? [
-                    'id' => $sv->vehicle->id,
-                    'plate_number' => $sv->vehicle->plate_number,
+            'trips' => $this->whenLoaded('trips', fn () => $this->trips->map(fn ($trip) => [
+                'id' => $trip->id,
+                'trip_code' => $trip->trip_code,
+                'vehicle_id' => $trip->vehicle_id,
+                'vehicle' => $trip->vehicle ? [
+                    'id' => $trip->vehicle->id,
+                    'plate_number' => $trip->vehicle->plate_number,
                 ] : null,
-                'start_time' => $sv->start_time?->toDateTimeString(),
-                'end_time' => $sv->end_time?->toDateTimeString(),
-                'start_km' => $sv->start_km,
-                'end_km' => $sv->end_km,
-                'calculated_km' => $sv->end_km && $sv->start_km ? $sv->end_km - $sv->start_km : null,
+                'started_at' => $trip->started_at?->toDateTimeString(),
+                'completed_at' => $trip->completed_at?->toDateTimeString(),
+                'start_km' => $trip->start_km,
+                'end_km' => $trip->end_km,
             ])),
             'created_at' => $this->created_at?->toIso8601String(),
         ];

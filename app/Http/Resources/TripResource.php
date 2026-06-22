@@ -28,6 +28,8 @@ class TripResource extends JsonResource
                 'plate_number' => $this->vehicle->plate_number,
             ]),
 
+            'shift' => $this->whenLoaded('shift', fn () => DriverShiftResource::make($this->shift)),
+
             'orders' => OrderResource::collection($this->whenLoaded('orders')),
 
             'checkpoints' => TripCheckpointResource::collection($this->whenLoaded('checkpoints')),

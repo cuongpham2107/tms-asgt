@@ -181,9 +181,10 @@ class DriverShiftController extends Controller
 
             app(ShiftKmCalculatorService::class)->calculate($shift);
 
-            // update vehicle info - use latest trip's vehicle
-            $latestTrip = $shift->trips()->latest('started_at')->first();
-            $vehicle = $latestTrip?->vehicle;
+            // update vehicle info — use the vehicle from incomplete trips (before shift_id was cleared)
+            $vehicle = $incompleteTrips->first()?->vehicle
+                ?? $user->vehiclesAsDriver()->first()
+                ?? $shift->trips()->latest('started_at')->first()?->vehicle;
             if ($vehicle) {
                 if (isset($payload['end_km'])) {
                     $vehicle->current_mileage = $payload['end_km'];

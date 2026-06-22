@@ -106,13 +106,14 @@ class TripCheckpointController extends Controller
         $shiftId = $trip->shift_id;
         $occurredAt = $payload['occurred_at'] ?? now();
 
-        if ($type === CheckpointType::Started) {
+        if (in_array($type, [CheckpointType::Started, CheckpointType::ArrivedPickup, CheckpointType::LeftPickup], true)) {
             $checkpoint = null;
             $orders = $trip->orders;
             foreach ($orders as $order) {
                 $checkpoint = TripCheckpoint::create([
                     'trip_id' => $trip->id,
                     'order_id' => $order->id,
+                    'delivery_point_id' => $payload['delivery_point_id'] ?? null,
                     'driver_id' => $trip->driver_id,
                     'shift_id' => $shiftId,
                     'checkpoint_type' => $type->value,
@@ -197,17 +198,6 @@ class TripCheckpointController extends Controller
                 endKm: $payload['km_reading'] ?? null,
                 completedAt: $payload['occurred_at'] ?? now(),
             );
-
-            TripCheckpoint::create([
-                'trip_id' => $trip->id,
-                'driver_id' => $trip->driver_id,
-                'shift_id' => $trip->shift_id,
-                'checkpoint_type' => CheckpointType::Completed->value,
-                'occurred_at' => $payload['occurred_at'] ?? now(),
-                'km_reading' => $payload['km_reading'] ?? null,
-                'gps_lat' => $payload['gps_lat'] ?? null,
-                'gps_lng' => $payload['gps_lng'] ?? null,
-            ]);
         }
 
         $hasMoreActiveOnVehicle = Order::whereHas('trip', fn ($q) => $q->where('vehicle_id', $trip->vehicle_id))

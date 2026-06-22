@@ -6,12 +6,9 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('order_categories', function (Blueprint $table) {
+        Schema::create('areas', function (Blueprint $table) {
             $table->id();
             $table->enum('type', ['HHHK', 'external'])->default('HHHK')
                 ->comment('Loại đơn: HHHK hoặc Hàng ngoài');
@@ -22,17 +19,13 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            // code phải unique trong cùng 1 type
             $table->unique(['type', 'code']);
             $table->index('type');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('order_categories');
+        Schema::dropIfExists('areas');
     }
 };

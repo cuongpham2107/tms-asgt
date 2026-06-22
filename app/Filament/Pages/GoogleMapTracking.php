@@ -18,6 +18,7 @@ use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
 use Filament\Pages\Page;
+use Filament\Support\Concerns\EvaluatesClosures;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -30,7 +31,7 @@ use UnitEnum;
  */
 class GoogleMapTracking extends Page
 {
-    use HasMapConfig;
+    use EvaluatesClosures, HasMapConfig;
 
     protected function getHeaderWidgets(): array
     {
@@ -244,7 +245,7 @@ class GoogleMapTracking extends Page
                     ?->filter(fn ($c) => $c->gps_lat !== null && $c->gps_lng !== null)
                     ->count() ?? 0)
                 ->first();
-            $latestShift = $vehicle->driverShifts->first();
+            $latestShift = $vehicle->driver?->driverShifts?->first();
             $hasActiveTrip = $trackingOrder !== null && $vehicle->status === VehicleStatus::Running;
 
             $routePoints = $hasActiveTrip
@@ -334,7 +335,7 @@ class GoogleMapTracking extends Page
                 ?? $latestShift?->effective_start_gps_lng
                 ?? (self::MAP_CENTER[1] + ($vehicle->id % 7 - 3) * 0.005);
 
-            $trackingDriver = $trackingOrder?->driver?->name
+            $trackingDriver = $trackingOrder?->trip?->driver?->name
                 ?? $latestShift?->driver?->name
                 ?? $vehicle->driver?->name
                 ?? 'Không lái';
@@ -580,12 +581,8 @@ class GoogleMapTracking extends Page
     private function activeOrderStatuses(): array
     {
         return [
+            OrderStatus::Assigned->value,
             OrderStatus::Sent->value,
-            OrderStatus::Started->value,
-            OrderStatus::ArrivedPickup->value,
-            OrderStatus::Delivering->value,
-            OrderStatus::ArrivedDelivery->value,
-            OrderStatus::DriverSwap->value,
         ];
     }
 

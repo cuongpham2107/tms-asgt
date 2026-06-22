@@ -63,17 +63,17 @@ class VehicleForm
                             ->native(false)
                             ->required()
                             ->options([
-                                'Hyundai' => 'Hyundai',
-                                'Isuzu' => 'Isuzu',
-                                'Hino' => 'Hino',
-                                'Kia' => 'Kia',
-                                'Thaco' => 'Thaco',
-                                'Fuso' => 'Fuso',
-                                'Dongfeng' => 'Dongfeng',
-                                'Ford' => 'Ford',
-                                'Toyota' => 'Toyota',
-                                'Mitsubishi' => 'Mitsubishi',
-                                'Other' => 'Khác',
+                                'HYUNDAI' => 'HYUNDAI',
+                                'ISUZU' => 'ISUZU',
+                                'HINO' => 'HINO',
+                                'KIA' => 'KIA',
+                                'THACO' => 'THACO',
+                                'FUSO' => 'FUSO',
+                                'DONGFENG' => 'DONGFENG',
+                                'FORD' => 'FORD',
+                                'TOYOTA' => 'TOYOTA',
+                                'MITSUBISHI' => 'MITSUBISHI',
+                                'OTHER' => 'KHÁC',
                             ]),
                         TextInput::make('model_year')
                             ->label('Năm sản xuất')

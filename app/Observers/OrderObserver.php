@@ -20,11 +20,8 @@ class OrderObserver
         }
 
         $trackedFields = [
-            'vehicle_id',
-            'vehicle_plate_number',
-            'vehicle_type',
-            'driver_id',
             'trip_id',
+            'trip_sequence',
             'status',
             'customer_id',
             'pickup_location_id',

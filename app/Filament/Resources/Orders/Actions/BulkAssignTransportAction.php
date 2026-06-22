@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
@@ -10,6 +11,7 @@ use App\Filament\Resources\OrderPlans\Pages\ListOrderPlans;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Models\Order;
+use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use Filament\Actions\BulkAction;
@@ -88,8 +90,7 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                     $driverId = $data['driver_id'] ?? null;
                     $driver = $driverId ? User::find($driverId) : null;
 
-                    $hasActiveShift = $vehicle->driverShifts()->whereNull('driver_shifts.end_time')->exists()
-                        || ($driver !== null && $driver->driverShifts()->whereNull('driver_shifts.end_time')->exists());
+                    $hasActiveShift = $driver !== null && $driver->driverShifts()->whereNull('driver_shifts.end_time')->exists();
 
                     if (! $hasActiveShift) {
                         Notification::make()
@@ -115,39 +116,35 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                 }
 
                 try {
-                    $snapshotPlateNumber = null;
-                    $snapshotType = null;
-                    if (filled($data['vehicle_id'] ?? null)) {
-                        $vehicle = Vehicle::query()->find($data['vehicle_id']);
-                        if ($vehicle !== null) {
-                            $snapshotPlateNumber = $vehicle->plate_number;
-                            $snapshotType = $vehicle->vehicle_type?->value;
-                        }
-                    }
-
-                    Order::query()->whereIn('id', $draftOrders->pluck('id'))->update([
-                        'vehicle_id' => $data['vehicle_id'] ?? null,
-                        'vehicle_plate_number' => $snapshotPlateNumber,
-                        'vehicle_type' => $snapshotType,
-                        'driver_id' => $data['driver_id'] ?? null,
-                        'status' => (filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null))
-                            ? OrderStatus::Assigned->value
-                            : OrderStatus::Draft->value,
+                    $trip = Trip::create([
+                        'trip_code' => Trip::max('id') + 1,
+                        'vehicle_id' => $data['vehicle_id'],
+                        'driver_id' => $data['driver_id'],
+                        'status' => TripStatus::Pending,
                     ]);
+
+                    $orderIds = $draftOrders->pluck('id');
+                    $sequence = 0;
+                    foreach ($draftOrders as $order) {
+                        $order->update([
+                            'trip_id' => $trip->id,
+                            'trip_sequence' => $sequence++,
+                            'status' => OrderStatus::Assigned,
+                        ]);
+                    }
 
                     if (filled($data['vehicle_id'] ?? null)) {
                         $vehicle = Vehicle::query()->find($data['vehicle_id']);
 
                         if ($vehicle !== null) {
                             $vehicle->status = VehicleStatus::Running;
-
                             $vehicle->save();
                         }
                     }
 
                     Notification::make()
                         ->title('Gán phương tiện hàng loạt thành công')
-                        ->body('Đã gán phương tiện và lái xe cho '.$draftOrders->count().' đơn hàng.')
+                        ->body('Đã tạo chuyến và gán '.$draftOrders->count().' đơn hàng.')
                         ->success()
                         ->send();
                 } catch (Throwable $e) {

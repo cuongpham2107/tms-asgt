@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
@@ -18,11 +15,15 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->date('date_of_birth')->nullable();
-            // hạng bằng lái xe
             $table->enum('license_class', ['B', 'B1', 'C1', 'C', 'FC', 'D', 'E'])->nullable();
             $table->string('license_number')->nullable();
             $table->date('license_expiry_date')->nullable();
             $table->string('license_image')->nullable();
+            $table->string('cccd', 20)->nullable()->comment('Số CCCD');
+            $table->date('cccd_issue_date')->nullable()->comment('Ngày cấp CCCD');
+            $table->json('certificates')->nullable()->comment('Chứng chỉ đi kèm');
+            $table->string('station')->nullable()->comment('Điểm trực');
+            $table->date('license_issue_date')->nullable()->comment('Năm cấp bằng');
             $table->string('phone', 20)->nullable();
             $table->string('address')->nullable();
             $table->string('avatar')->nullable();
@@ -47,9 +48,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('users');

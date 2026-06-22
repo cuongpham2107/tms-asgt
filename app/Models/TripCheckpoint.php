@@ -14,8 +14,6 @@ class TripCheckpoint extends Model
     protected $fillable = [
         'trip_id',
         'order_id',
-        'driver_id',
-        'shift_id',
         'delivery_point_id',
         'checkpoint_type',
         'occurred_at',
@@ -23,6 +21,8 @@ class TripCheckpoint extends Model
         'gps_lat',
         'gps_lng',
         'voice_note',
+        'driver_id',
+        'shift_id',
     ];
 
     protected function casts(): array
@@ -47,16 +47,6 @@ class TripCheckpoint extends Model
         return $this->belongsTo(Order::class);
     }
 
-    public function driver(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'driver_id');
-    }
-
-    public function shift(): BelongsTo
-    {
-        return $this->belongsTo(DriverShift::class, 'shift_id');
-    }
-
     public function deliveryPoint(): BelongsTo
     {
         return $this->belongsTo(OrderDeliveryPoint::class, 'delivery_point_id');
@@ -65,5 +55,15 @@ class TripCheckpoint extends Model
     public function photos(): HasMany
     {
         return $this->hasMany(TripPhoto::class);
+    }
+
+    public function driver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'driver_id');
+    }
+
+    public function shift(): BelongsTo
+    {
+        return $this->belongsTo(DriverShift::class, 'shift_id');
     }
 }

@@ -26,13 +26,13 @@ class DriverShiftCalendarWidget extends FullCalendarWidget
     public function fetchEvents(array $info): array
     {
         return DriverShift::query()
-            ->with(['driver', 'shiftVehicles.vehicle'])
+            ->with(['driver', 'trips.vehicle'])
             ->where('start_time', '>=', $info['start'])
             ->where('start_time', '<=', $info['end'])
             ->get()
             ->map(function (DriverShift $shift) {
                 $driverName = $shift->driver?->name ?? 'Không rõ';
-                $vehiclePlate = $shift->firstVehicle()?->plate_number ?? '';
+                $vehiclePlate = $shift->trips()->first()?->vehicle?->plate_number ?? '';
                 $shiftLabel = $shift->shift_type?->getLabel() ?? '';
                 $isActive = $shift->end_time === null;
 
@@ -53,8 +53,8 @@ class DriverShiftCalendarWidget extends FullCalendarWidget
                     ->borderColor($isActive ? '#eab308' : '#22c55e')
                     ->extendedProps([
                         'status' => $isActive ? 'active' : 'completed',
-                        'start_km' => $shift->effective_start_km,
-                        'end_km' => $shift->effective_end_km,
+                        'start_km' => $shift->start_km,
+                        'end_km' => $shift->end_km,
                         'total_km' => $shift->total_km,
                     ])
                     ->toArray();

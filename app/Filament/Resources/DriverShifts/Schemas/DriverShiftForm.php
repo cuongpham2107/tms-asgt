@@ -4,8 +4,6 @@ namespace App\Filament\Resources\DriverShifts\Schemas;
 
 use App\Enums\ShiftType;
 use App\Models\DriverShift;
-use App\Models\Order;
-use App\Models\ShiftVehicle;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -60,49 +58,33 @@ class DriverShiftForm
                             ->label('Km rỗng')
                             ->numeric(),
                     ]),
-                Section::make('Các xe đã sử dụng trong ca')
+                Section::make('Các chuyến đi trong ca')
                     ->columnSpanFull()
                     ->schema([
-                        Repeater::make('shiftVehicles')
-                            ->relationship('shiftVehicles')
-                            ->label('Danh sách công việc')
+                        Repeater::make('trips')
+                            ->relationship('trips')
+                            ->label('Danh sách chuyến đi')
                             ->table([
                                 TableColumn::make('Xe')->width('150px'),
-                                TableColumn::make('Đơn hàng')->width('200px'),
+                                TableColumn::make('Mã chuyến')->width('150px'),
                                 TableColumn::make('Bắt đầu')->width('200px'),
                                 TableColumn::make('Kết thúc')->width('200px'),
                                 TableColumn::make('Km đầu')->width('100px'),
                                 TableColumn::make('Km cuối')->width('100px'),
                             ])
                             ->schema([
-                                Select::make('vehicle_id')
+                                Placeholder::make('vehicle_info')
                                     ->label('Xe')
-                                    ->relationship('vehicle', 'plate_number')
-                                    ->required(),
-                                Placeholder::make('orders_run')
-                                    ->label('Đơn hàng')
-                                    ->content(function (?ShiftVehicle $record) {
-                                        if ($record === null) {
-                                            return '-';
-                                        }
-
-                                        $orders = Order::where('shift_id', $record->shift_id)
-                                            ->where('vehicle_id', $record->vehicle_id)
-                                            ->pluck('order_code')
-                                            ->toArray();
-
-                                        if (empty($orders)) {
-                                            return 'Không có đơn';
-                                        }
-
-                                        return implode(', ', $orders);
-                                    }),
-                                DateTimePicker::make('start_time')
+                                    ->content(fn ($record) => $record?->vehicle?->plate_number ?? '-'),
+                                Placeholder::make('trip_code')
+                                    ->label('Mã chuyến')
+                                    ->content(fn ($record) => $record?->trip_code ?? '-'),
+                                DateTimePicker::make('started_at')
                                     ->label('Bắt đầu')
                                     ->displayFormat('d/m/Y H:i')
                                     ->seconds(false)
                                     ->native(false),
-                                DateTimePicker::make('end_time')
+                                DateTimePicker::make('completed_at')
                                     ->label('Kết thúc')
                                     ->displayFormat('d/m/Y H:i')
                                     ->seconds(false)
@@ -114,8 +96,8 @@ class DriverShiftForm
                                     ->label('Km cuối')
                                     ->numeric(),
                             ])
-                            ->columns(2)
-                            ->addActionLabel('Thêm xe'),
+                            ->columns(3)
+                            ->addActionLabel('Thêm chuyến'),
                     ]),
                 Section::make('Chi tiết km chạy theo từng đơn hàng')
                     ->columnSpanFull()

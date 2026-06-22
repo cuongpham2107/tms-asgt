@@ -40,11 +40,11 @@ class TripInfolist
                                             ->color(fn (Trip $record): string => $record->getStatusColor())
                                             ->state(fn (Trip $record): string => $record->getStatusLabel()),
 
-                                        TextEntry::make('orders')
+                                        TextEntry::make('driver.name')
                                             ->label('Lái xe')
                                             ->icon(Heroicon::OutlinedUser)
                                             ->weight('bold')
-                                            ->state(fn (Trip $record): string => self::getDrivers($record)),
+                                            ->placeholder('—'),
 
                                         TextEntry::make('started_at')
                                             ->label('Bắt đầu')
@@ -164,31 +164,6 @@ class TripInfolist
                     ->persistTab()
                     ->id('trip-infolist-tabs'),
             ]);
-    }
-
-    private static function getDrivers(Trip $record): string
-    {
-        $orders = $record->orders;
-
-        if ($orders->isEmpty()) {
-            return '—';
-        }
-
-        $names = [];
-        foreach ($orders as $order) {
-            if ($order->driver) {
-                $names[] = $order->driver->name;
-            }
-            foreach ($order->driverSwaps->sortBy('created_at') as $swap) {
-                if ($swap->toDriver) {
-                    $names[] = $swap->toDriver->name;
-                }
-            }
-        }
-
-        $names = array_unique(array_filter($names));
-
-        return ! empty($names) ? implode(' → ', $names) : '—';
     }
 
     private static function getKmOver(Trip $record): string

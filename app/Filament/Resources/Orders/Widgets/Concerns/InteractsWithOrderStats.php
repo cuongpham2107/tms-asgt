@@ -30,10 +30,6 @@ trait InteractsWithOrderStats
         return Order::query()
             ->whereIn('status', [
                 OrderStatus::Sent->value,
-                OrderStatus::Started->value,
-                OrderStatus::ArrivedPickup->value,
-                OrderStatus::Delivering->value,
-                OrderStatus::ArrivedDelivery->value,
             ])
             ->count();
     }
@@ -43,7 +39,6 @@ trait InteractsWithOrderStats
         return Order::query()
             ->whereIn('status', [
                 OrderStatus::Completed->value,
-                OrderStatus::Delivered->value,
             ])
             ->count();
     }

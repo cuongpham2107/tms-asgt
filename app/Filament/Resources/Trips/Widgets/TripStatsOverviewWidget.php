@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\Trips\Widgets;
 
-use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Filament\Traits\InteractsWithPageTable;
 use Filament\Widgets\StatsOverviewWidget;
@@ -41,9 +41,9 @@ class TripStatsOverviewWidget extends StatsOverviewWidget
             ->where('status', 'in_progress')
             ->whereHas('orders', fn ($q) => $q
                 ->whereIn('status', [
-                    OrderStatus::Started->value,
-                    OrderStatus::ArrivedPickup->value,
-                    OrderStatus::Delivering->value,
+                    TripStatus::Started->value,
+                    TripStatus::ArrivedPickup->value,
+                    TripStatus::Delivering->value,
                 ])
                 ->where('planned_loading_at', '<', now())
             )->count();

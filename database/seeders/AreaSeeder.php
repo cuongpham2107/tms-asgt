@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-class OrderTypeCategorySeeder extends Seeder
+class AreaSeeder extends Seeder
 {
     /**
      * Run the database seeds.
@@ -14,12 +14,13 @@ class OrderTypeCategorySeeder extends Seeder
     {
         $now = now();
 
-        DB::table('order_categories')->upsert(
+        DB::table('areas')->upsert(
             [
+                // Hàng Hóa Hàng Không (HHHK)
                 [
                     'type' => 'HHHK',
                     'code' => 'NBA',
-                    'name' => 'Nội bộ A',
+                    'name' => 'Hàng đến NBA',
                     'color' => null,
                     'sort_order' => 1,
                     'is_active' => true,
@@ -29,7 +30,7 @@ class OrderTypeCategorySeeder extends Seeder
                 [
                     'type' => 'HHHK',
                     'code' => 'TN',
-                    'name' => 'Tây Nam',
+                    'name' => 'Hàng đến TN',
                     'color' => null,
                     'sort_order' => 2,
                     'is_active' => true,
@@ -39,7 +40,7 @@ class OrderTypeCategorySeeder extends Seeder
                 [
                     'type' => 'HHHK',
                     'code' => 'BN',
-                    'name' => 'Bắc Nam',
+                    'name' => 'Hàng đến BN',
                     'color' => null,
                     'sort_order' => 3,
                     'is_active' => true,
@@ -49,19 +50,50 @@ class OrderTypeCategorySeeder extends Seeder
                 [
                     'type' => 'HHHK',
                     'code' => 'NBO',
-                    'name' => 'Nội bộ',
+                    'name' => 'Nội bộ TN',
                     'color' => null,
                     'sort_order' => 4,
                     'is_active' => true,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ],
+                // Hàng ngoài
                 [
                     'type' => 'external',
                     'code' => 'PROVINCE',
-                    'name' => 'Đi tỉnh',
+                    'name' => 'Hàng đi điểm khác 3 điểm chính',
                     'color' => null,
                     'sort_order' => 5,
+                    'is_active' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+                [
+                    'type' => 'external',
+                    'code' => 'NBA',
+                    'name' => 'Hàng đến NBA',
+                    'color' => null,
+                    'sort_order' => 0,
+                    'is_active' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+                [
+                    'type' => 'external',
+                    'code' => 'BN',
+                    'name' => 'Hàng đến BN',
+                    'color' => null,
+                    'sort_order' => 0,
+                    'is_active' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+                [
+                    'type' => 'external',
+                    'code' => 'TN',
+                    'name' => 'Hàng đến TN',
+                    'color' => null,
+                    'sort_order' => 0,
                     'is_active' => true,
                     'created_at' => $now,
                     'updated_at' => $now,

@@ -27,12 +27,6 @@ class EndShiftAction
                     $record->end_time = now();
                     $record->save();
 
-                    $segment = $record->currentShiftVehicle();
-                    if ($segment) {
-                        $segment->end_time = $record->end_time;
-                        $segment->save();
-                    }
-
                     app(ShiftKmCalculatorService::class)->calculate($record);
 
                     DB::commit();

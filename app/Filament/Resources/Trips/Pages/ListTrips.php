@@ -109,14 +109,12 @@ class ListTrips extends ListRecords
         return TripResource::getEloquentQuery()
             ->with([
                 'vehicle',
+                'driver',
                 'orders.customer',
                 'orders.area',
                 'orders.pickupLocation',
                 'orders.deliveryPoints.location',
-                'orders.driver',
                 'orders.tripCheckpoints.deliveryPoint.location',
-                'orders.driverSwaps.toDriver',
-                'orders.shift',
             ])
             ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->whereDate('created_at', '>=', $this->dateFrom))
             ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->whereDate('created_at', '<=', $this->dateTo))
@@ -129,7 +127,7 @@ class ListTrips extends ListRecords
                         ->orWhereHas('orders', fn (Builder $q) => $q
                             ->where('order_code', 'like', "%{$search}%")
                             ->orWhere('cargo_name', 'like', "%{$search}%")
-                            ->orWhereHas('driver', fn (Builder $qd) => $qd->where('name', 'like', "%{$search}%"))
+                            ->orWhereHas('trip.driver', fn (Builder $qd) => $qd->where('name', 'like', "%{$search}%"))
                             ->orWhereHas('area', fn (Builder $qa) => $qa->where('code', 'like', "%{$search}%"))
                             ->orWhereHas('customer', fn (Builder $qc) => $qc->where('name', 'like', "%{$search}%"))
                         );

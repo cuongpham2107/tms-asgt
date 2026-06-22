@@ -3,11 +3,13 @@
 namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
+use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use Filament\Actions\Action;
@@ -50,7 +52,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             ->cards(fn (Order $record): array => self::resolveVehicleCards(
                                 self::normalizeDecimal($record->total_weight ?? 0),
                                 null,
-                                $record->vehicle_id,
+                                null,
                             ))
                             ->searchPlaceholder('Tìm biển số, loại xe...')
                             ->required(),
@@ -77,8 +79,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     $driverId = $data['driver_id'] ?? null;
                     $driver = $driverId ? User::find($driverId) : null;
 
-                    $hasActiveShift = $vehicle->driverShifts()->whereNull('driver_shifts.end_time')->exists()
-                        || ($driver !== null && $driver->driverShifts()->whereNull('driver_shifts.end_time')->exists());
+                    $hasActiveShift = $driver !== null && $driver->driverShifts()->whereNull('driver_shifts.end_time')->exists();
 
                     if (! $hasActiveShift) {
                         Notification::make()
@@ -92,12 +93,16 @@ class AssignTransportAction extends CreatesOrderTransportCards
                 }
 
                 try {
-                    Order::query()->whereKey($record->id)->update([
-                        'vehicle_id' => $data['vehicle_id'] ?? null,
-                        'driver_id' => $data['driver_id'] ?? null,
-                        'status' => (filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null))
-                            ? OrderStatus::Assigned->value
-                            : $record->status->value,
+                    $trip = Trip::create([
+                        'trip_code' => Trip::max('id') + 1,
+                        'vehicle_id' => $data['vehicle_id'],
+                        'driver_id' => $data['driver_id'],
+                        'status' => TripStatus::Pending,
+                    ]);
+
+                    $record->update([
+                        'trip_id' => $trip->id,
+                        'status' => OrderStatus::Assigned,
                     ]);
 
                     if (filled($data['vehicle_id'] ?? null)) {
@@ -105,16 +110,13 @@ class AssignTransportAction extends CreatesOrderTransportCards
 
                         if ($vehicle !== null) {
                             $vehicle->status = VehicleStatus::Running;
-
-                            // Vehicle.current_driver_id is a static/default field — not modified here.
-
                             $vehicle->save();
                         }
                     }
 
                     Notification::make()
                         ->title('Gán phương tiện thành công')
-                        ->body('Đơn hàng đã được gán phương tiện và lái xe.')
+                        ->body('Đã tạo chuyến và gán đơn hàng.')
                         ->success()
                         ->send();
                 } catch (Throwable $e) {

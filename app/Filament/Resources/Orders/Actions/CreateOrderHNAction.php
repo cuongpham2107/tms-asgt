@@ -45,7 +45,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                                 ->pluck('code', 'id')
                                 ->toArray();
                         })
-                        ->live(onBlur: true)
+                        ->live()
                         ->inline()
                         ->columnSpanFull(),
                     self::getCustomerIdFormField(false),

@@ -6,24 +6,21 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('locations', function (Blueprint $table) {
-            $table->decimal('lat', 10, 7)->nullable()->comment('Vĩ độ (latitude)');
-            $table->decimal('lng', 10, 7)->nullable()->comment('Kinh độ (longitude)');
+            $table->foreignId('area_id')
+                ->nullable()
+                ->constrained('areas')
+                ->nullOnDelete();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('locations', function (Blueprint $table) {
-            $table->dropColumn(['lat', 'lng']);
+            $table->dropForeign(['area_id']);
+            $table->dropColumn('area_id');
         });
     }
 };

@@ -210,10 +210,10 @@ class ListOrderPlans extends ListRecords
             ->with([
                 'customer',
                 'deliveryPoints.location',
-                'driver',
                 'area',
                 'pickupLocation',
-                'vehicle',
+                'trip.vehicle',
+                'trip.driver',
             ])
             ->where('status', 'draft')
             ->when(
@@ -236,8 +236,8 @@ class ListOrderPlans extends ListRecords
                         ->orWhere('cargo_name', 'like', "%{$search}%")
                         ->orWhere('pickup_address', 'like', "%{$search}%")
                         ->orWhereHas('customer', fn (Builder $customerQuery): Builder => $customerQuery->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('vehicle', fn (Builder $vehicleQuery): Builder => $vehicleQuery->where('plate_number', 'like', "%{$search}%"))
-                        ->orWhereHas('driver', fn (Builder $driverQuery): Builder => $driverQuery->where('name', 'like', "%{$search}%"));
+                        ->orWhereHas('trip.vehicle', fn (Builder $vehicleQuery): Builder => $vehicleQuery->where('plate_number', 'like', "%{$search}%"))
+                        ->orWhereHas('trip.driver', fn (Builder $driverQuery): Builder => $driverQuery->where('name', 'like', "%{$search}%"));
                 });
             })
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {

@@ -27,9 +27,8 @@ class ViewTripTimeline extends Page
 
         $this->record = $this->resolveRecord($record)->load([
             'vehicle',
+            'driver',
             'orders.deliveryPoints.location',
-            'orders.driver',
-            'checkpoints.driver',
             'checkpoints.deliveryPoint.location',
             'checkpoints.photos',
         ]);
@@ -60,7 +59,7 @@ class ViewTripTimeline extends Page
                 'order_code' => $orderCodes ?: '—',
                 'status_label' => $statusLabel,
                 'vehicle_plate' => $trip->vehicle?->plate_number ?? '—',
-                'driver_name' => $orders->first()?->driver?->name ?? '—',
+                'driver_name' => $trip->driver?->name ?? '—',
             ],
             'checkpoints' => $checkpoints
                 ->map(fn (TripCheckpoint $cp): array => [
@@ -73,7 +72,7 @@ class ViewTripTimeline extends Page
                     'address' => $cp->deliveryPoint?->address
                         ?? $cp->deliveryPoint?->location?->name
                         ?? '—',
-                    'driver_name' => $cp->driver?->name,
+                    'driver_name' => $trip->driver?->name,
                     'km_reading' => $cp->km_reading !== null
                         ? number_format((float) $cp->km_reading, 1, ',', '.').' km'
                         : null,

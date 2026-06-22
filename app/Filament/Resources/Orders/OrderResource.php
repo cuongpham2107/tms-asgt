@@ -46,7 +46,7 @@ class OrderResource extends BaseResource
 
     public static function table(Table $table): Table
     {
-        return OrdersTable::configure($table)
+        return OrdersTable::configure($table, 'order')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('status', '!=', OrderStatus::Draft->value));
     }
 

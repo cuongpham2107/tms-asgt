@@ -6,22 +6,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('trip_checkpoints', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('trip_id')
+                ->constrained('trips')
+                ->cascadeOnDelete()
+                ->comment('Chuyến xe');
             $table->foreignId('order_id')
+                ->nullable()
                 ->constrained('orders')
-                ->cascadeOnDelete();
-            $table->foreignId('driver_id')
-                ->constrained('users')
-                ->comment('Lái xe thực hiện mốc này');
-            $table->foreignId('shift_id')
-                ->constrained('driver_shifts')
-                ->comment('Ca trực tương ứng');
+                ->nullOnDelete()
+                ->comment('Đơn hàng liên quan (nếu có)');
             $table->foreignId('delivery_point_id')
                 ->nullable()
                 ->constrained('order_delivery_points')
@@ -29,12 +26,12 @@ return new class extends Migration
                 ->comment('Điểm giao hàng cụ thể (nếu có nhiều điểm)');
 
             $table->enum('checkpoint_type', [
-                'started',           // Bắt đầu chuyến
-                'arrived_pickup',    // Đến điểm nhận hàng + nhập Km đến
-                'left_pickup',       // Đóng hàng xong, bắt đầu đi giao
-                'arrived_delivery',  // Đến điểm giao hàng
-                'completed',         // Giao hàng xong + nhập Km kết thúc
-                'driver_swap',       // Đảo lái
+                'started',
+                'arrived_pickup',
+                'left_pickup',
+                'arrived_delivery',
+                'completed',
+                'driver_swap',
             ])->comment('Loại mốc');
 
             $table->datetime('occurred_at')->comment('Thời điểm thực tế (từ app)');
@@ -45,15 +42,12 @@ return new class extends Migration
 
             $table->timestamp('created_at')->useCurrent();
 
+            $table->index(['trip_id', 'checkpoint_type']);
             $table->index(['order_id', 'checkpoint_type']);
-            $table->index(['driver_id', 'occurred_at']);
             $table->index('occurred_at');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('trip_checkpoints');

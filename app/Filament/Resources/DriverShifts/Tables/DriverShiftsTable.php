@@ -23,14 +23,14 @@ class DriverShiftsTable extends BaseTable
     public static function configure(Table $table): Table
     {
         return parent::applyDefaults($table)
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['driver', 'shiftVehicles.vehicle']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['driver', 'trips.vehicle']))
             ->columns([
                 TextColumn::make('driver.name')
                     ->label('Tài xế')
                     ->searchable(),
                 TextColumn::make('vehicle_id')
                     ->label('Xe')
-                    ->formatStateUsing(fn (DriverShift $record) => $record->firstVehicle()?->plate_number ?? '-')
+                    ->formatStateUsing(fn (DriverShift $record) => $record->trips()->first()?->vehicle?->plate_number ?? '-')
                     ->searchable(),
                 TextColumn::make('shift_type')
                     ->label('Loại ca')

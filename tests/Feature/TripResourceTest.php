@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
@@ -16,11 +17,25 @@ use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
+    $role = Role::create(['name' => 'admin', 'guard_name' => 'web']);
+    foreach ([
+        'ViewAny:Trip', 'View:Trip', 'Create:Trip', 'Update:Trip', 'Delete:Trip',
+        'DeleteAny:Trip', 'Restore:Trip', 'RestoreAny:Trip', 'ForceDelete:Trip', 'ForceDeleteAny:Trip',
+        'Replicate:Trip', 'Reorder:Trip',
+        'Widget:TripStatsOverview',
+    ] as $permission) {
+        Permission::create(['name' => $permission, 'guard_name' => 'web']);
+        $role->givePermissionTo($permission);
+    }
+
     $admin = User::factory()->create();
+    $admin->assignRole($role);
     $this->actingAs($admin);
 });
 
@@ -35,8 +50,9 @@ test('trips list page renders successfully', function () {
     ]);
 
     Trip::create([
+        'trip_code' => 'TRIP-TEST-1',
         'vehicle_id' => $vehicle->id,
-        'status' => 'in_progress',
+        'status' => TripStatus::Started,
         'started_at' => now(),
         'start_km' => 100,
     ]);
@@ -57,8 +73,9 @@ test('trip view timeline page renders successfully', function () {
     ]);
 
     $trip = Trip::create([
+        'trip_code' => 'TRIP-TEST-2',
         'vehicle_id' => $vehicle->id,
-        'status' => 'in_progress',
+        'status' => TripStatus::Started,
         'started_at' => now(),
         'start_km' => 100,
     ]);
@@ -89,8 +106,9 @@ test('trip resolves orders and lists pickups/deliveries correctly', function () 
     $driver = User::factory()->create();
 
     $trip = Trip::create([
+        'trip_code' => 'TRIP-TEST-3',
         'vehicle_id' => $vehicle->id,
-        'status' => 'in_progress',
+        'status' => TripStatus::Started,
         'started_at' => now(),
         'start_km' => 100,
     ]);
@@ -107,8 +125,6 @@ test('trip resolves orders and lists pickups/deliveries correctly', function () 
 
     $order1 = Order::create([
         'order_code' => 'ORD-1',
-        'vehicle_id' => $vehicle->id,
-        'driver_id' => $driver->id,
         'trip_id' => $trip->id,
         'area_id' => $area->id,
         'customer_id' => $customer->id,
@@ -124,8 +140,6 @@ test('trip resolves orders and lists pickups/deliveries correctly', function () 
 
     $order2 = Order::create([
         'order_code' => 'ORD-2',
-        'vehicle_id' => $vehicle->id,
-        'driver_id' => $driver->id,
         'trip_id' => $trip->id,
         'area_id' => $area->id,
         'customer_id' => $customer->id,
@@ -141,8 +155,6 @@ test('trip resolves orders and lists pickups/deliveries correctly', function () 
 
     $order3 = Order::create([
         'order_code' => 'ORD-3',
-        'vehicle_id' => $vehicle->id,
-        'driver_id' => $driver->id,
         'trip_id' => $trip->id,
         'area_id' => $area->id,
         'customer_id' => $customer->id,

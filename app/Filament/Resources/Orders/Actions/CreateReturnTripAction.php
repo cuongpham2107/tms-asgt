@@ -49,8 +49,6 @@ class CreateReturnTripAction
                         'pickup_address' => $firstDelivery?->address,
                         'pickup_contact' => $firstDelivery?->contact_person,
                         'pickup_phone' => $firstDelivery?->contact_phone,
-                        'vehicle_id' => $record->vehicle_id,
-                        'driver_id' => $record->driver_id,
                         'status' => OrderStatus::Draft->value,
                         'is_return_trip' => true,
                         'parent_order_id' => $record->id,

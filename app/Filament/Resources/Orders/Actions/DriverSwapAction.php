@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\DriverSwapReason;
-use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Models\DriverSwap;
 use App\Models\Order;
 use App\Models\User;
@@ -22,14 +22,14 @@ class DriverSwapAction
             ->label('Đảo lái')
             ->icon('heroicon-o-arrow-path')
             ->color('primary')
-            ->hidden(fn (Order $record): bool => ! $record->status->canSwapDriver())
+            ->hidden(fn (Order $record): bool => ! $record->trip || ! $record->trip->status->canSwapDriver())
             ->modalHeading('Đảo lái xe')
-            ->modalDescription('Chuyển giao đơn hàng cho tài xế mới')
+            ->modalDescription('Chuyển giao chuyến đi cho tài xế mới')
             ->form([
                 Select::make('to_driver_id')
                     ->label('Tài xế mới')
                     ->options(fn (Order $record): array => User::where('is_active', true)
-                        ->where('id', '!=', $record->driver_id)
+                        ->where('id', '!=', $record->trip?->driver_id)
                         ->pluck('name', 'id')
                         ->toArray())
                     ->required()
@@ -49,48 +49,50 @@ class DriverSwapAction
                     ->rows(2),
             ])
             ->action(function (Order $record, array $data): void {
-                if (! $record->status->canSwapDriver()) {
+                $trip = $record->trip;
+
+                if (! $trip || ! $trip->status->canSwapDriver()) {
                     Notification::make()
                         ->title('Không thể đảo lái')
-                        ->body('Đơn hàng không ở trạng thái cho phép đảo lái.')
+                        ->body('Chuyến đi không ở trạng thái cho phép đảo lái.')
                         ->warning()
                         ->send();
 
                     return;
                 }
 
-                if (! $record->driver_id) {
+                if (! $trip->driver_id) {
                     Notification::make()
                         ->title('Không thể đảo lái')
-                        ->body('Đơn hàng chưa có tài xế được gán.')
+                        ->body('Chuyến đi chưa có tài xế được gán.')
                         ->warning()
                         ->send();
 
                     return;
                 }
 
-                $fromDriverId = $record->driver_id;
                 $toDriverId = $data['to_driver_id'];
 
-                $driverSwap = DriverSwap::create([
-                    'order_id' => $record->id,
-                    'from_driver_id' => $fromDriverId,
+                DriverSwap::create([
+                    'trip_id' => $trip->id,
+                    'from_driver_id' => $trip->driver_id,
                     'to_driver_id' => $toDriverId,
-                    'from_shift_id' => $record->shift_id,
+                    'from_shift_id' => $trip->shift_id,
                     'handover_km' => $data['handover_km'],
                     'reason' => $data['reason'],
                     'note' => $data['note'] ?? null,
                     'created_by' => Auth::id(),
                 ]);
 
-                Order::query()->whereKey($record->id)->update([
+                $trip->update([
                     'driver_id' => $toDriverId,
-                    'status' => OrderStatus::DriverSwap->value,
+                    'shift_id' => null,
+                    'status' => TripStatus::DriverSwap,
                 ]);
 
                 Notification::make()
                     ->title('Đảo lái thành công')
-                    ->body("Đơn hàng đã được chuyển cho tài xế mới. Km chuyển giao: {$data['handover_km']}")
+                    ->body("Chuyến #{$trip->trip_code} đã được chuyển cho tài xế mới. Km chuyển giao: {$data['handover_km']}")
                     ->success()
                     ->send();
             });

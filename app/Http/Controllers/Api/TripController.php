@@ -96,7 +96,7 @@ class TripController extends Controller
      * @queryParam per_page int Số bản ghi mỗi trang (mặc định 15). Example: 10
      * @queryParam from_date string Lọc từ ngày (started_at >=, ISO date). Example: 2026-06-01
      * @queryParam to_date string Lọc đến ngày (started_at <=, ISO date). Example: 2026-06-23
-     * @queryParam status string Lọc theo trạng thái trip (Completed, DriverSwap). Example: Completed
+     * @queryParam status string Lọc theo trạng thái trip (completed, driver_swap). Example: completed
      * @queryParam vehicle_id int Lọc theo ID phương tiện. Example: 1
      *
      * @response array{data: TripResource[], meta: array{current_page: int, last_page: int, per_page: int, total: int}}

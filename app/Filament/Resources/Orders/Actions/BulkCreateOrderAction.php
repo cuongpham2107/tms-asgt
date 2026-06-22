@@ -38,8 +38,6 @@ class BulkCreateOrderAction
                     $newOrder = $record->replicate();
                     $newOrder->order_code = CreatesOrderTransportCards::generateOrderCode();
                     $newOrder->status = OrderStatus::Draft;
-                    $newOrder->vehicle_id = null;
-                    $newOrder->driver_id = null;
                     $newOrder->sent_at = null;
                     $newOrder->created_by = auth()->id();
                     $newOrder->created_at = now();

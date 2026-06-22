@@ -53,12 +53,7 @@ class EndShiftRequest extends FormRequest
                     return;
                 }
 
-                $currentSegment = $shift->shiftVehicles()
-                    ->whereNull('end_time')
-                    ->latest('start_time')
-                    ->first();
-
-                $referenceKm = $currentSegment?->start_km ?? $shift->effective_start_km;
+                $referenceKm = $shift->start_km;
 
                 if ($referenceKm === null) {
                     return;

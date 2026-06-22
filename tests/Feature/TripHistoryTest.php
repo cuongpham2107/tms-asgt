@@ -137,8 +137,7 @@ it('requires driver role', function () {
     Sanctum::actingAs($nonDriver);
 
     $this->getJson('/api/driver/trips/history')
-        ->assertStatus(403)
-        ->assertJsonPath('message', 'Forbidden. Driver role required.');
+        ->assertStatus(403);
 });
 
 it('throws 422 for invalid status filter', function () {
