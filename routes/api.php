@@ -44,12 +44,10 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::get('/shifts/current', [DriverShiftController::class, 'current']);
     Route::post('/shifts/switch-vehicle', [DriverShiftController::class, 'switchVehicle']);
 
-    // Trip checkpoints (single endpoint for different types)
-    Route::post('/checkpoints', [TripCheckpointController::class, 'checkpoint']);
-
     // Trips
     Route::get('/trips/active', [TripController::class, 'active']);
     Route::get('/trips/{trip}', [TripController::class, 'show']);
+    Route::post('/trips/{trip}/checkpoints', [TripCheckpointController::class, 'checkpoint']);
 
     // Empty kilometers (ghi nhận km không hàng)
     Route::post('/empty-kilometers', [EmptyKilometerController::class, 'store']);
