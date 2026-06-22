@@ -19,7 +19,7 @@ class DriverSwapRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'order_id' => 'required|exists:orders,id',
+            'trip_id' => 'required|exists:trips,id',
             'reason' => ['required', 'string', new Enum(DriverSwapReason::class)],
             'handover_km' => 'nullable|numeric',
             'note' => 'nullable|string|max:500',
