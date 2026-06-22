@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EndShiftRequest;
 use App\Http\Requests\StartShiftRequest;
 use App\Http\Requests\SwitchVehicleRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
-use App\Models\Order;
+use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
 use App\Services\ShiftKmCalculatorService;
 use Carbon\Carbon;
@@ -103,18 +106,9 @@ class DriverShiftController extends Controller
                 'start_gps_lng' => $payload['start_gps_lng'] ?? null,
             ]);
 
-            // Create initial shift vehicle segment (tracks vehicle usage, not orders)
-            $shift->shiftVehicles()->create([
-                'vehicle_id' => $activeVehicle->id,
-                'start_time' => $startTime,
-                'start_km' => $startKm,
-                'start_gps_lat' => $payload['start_gps_lat'] ?? null,
-                'start_gps_lng' => $payload['start_gps_lng'] ?? null,
-            ]);
-
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'shiftVehicles.vehicle']))]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -157,37 +151,39 @@ class DriverShiftController extends Controller
             $shift->end_gps_lng = $payload['end_gps_lng'] ?? null;
             $shift->save();
 
-            // End current shift vehicle segment
-            $currentSegment = $shift->currentShiftVehicle();
-            if ($currentSegment) {
-                $currentSegment->end_time = $endTime;
-                $currentSegment->end_km = $payload['end_km'] ?? $currentSegment->end_km;
-                $currentSegment->end_gps_lat = $payload['end_gps_lat'] ?? null;
-                $currentSegment->end_gps_lng = $payload['end_gps_lng'] ?? null;
-                $currentSegment->save();
-            }
-
-            // Auto driver_swap: chuyển đơn đang active sang driver_swap
-            $activeOrders = Order::query()
-                ->where('driver_id', $user->id)
+            // Auto driver_swap: chuyển trip đang active có đơn hàng chưa hoàn thành sang driver_swap
+            $incompleteTrips = Trip::where('driver_id', $user->id)
+                ->whereHas('orders', function ($q) {
+                    $q->whereIn('status', [OrderStatus::Sent, OrderStatus::Assigned]);
+                })
                 ->whereIn('status', [
-                    OrderStatus::Started,
-                    OrderStatus::ArrivedPickup,
-                    OrderStatus::Delivering,
-                    OrderStatus::ArrivedDelivery,
+                    TripStatus::Started,
+                    TripStatus::ArrivedPickup,
+                    TripStatus::Delivering,
+                    TripStatus::ArrivedDelivery,
                 ])
                 ->get();
 
-            foreach ($activeOrders as $activeOrder) {
-                $activeOrder->status = OrderStatus::DriverSwap;
-                $activeOrder->save();
+            foreach ($incompleteTrips as $trip) {
+                $trip->status = TripStatus::DriverSwap;
+                $trip->shift_id = null;
+                $trip->save();
+
+                TripCheckpoint::create([
+                    'trip_id' => $trip->id,
+                    'driver_id' => $user->id,
+                    'shift_id' => $shift->id,
+                    'checkpoint_type' => CheckpointType::DriverSwap->value,
+                    'occurred_at' => now(),
+                    'km_reading' => $payload['end_km'] ?? null,
+                ]);
             }
 
             app(ShiftKmCalculatorService::class)->calculate($shift);
 
-            // update vehicle info - use last vehicle from segments
-            $lastSegment = $shift->lastSegment();
-            $vehicle = $lastSegment ? Vehicle::find($lastSegment->vehicle_id) : null;
+            // update vehicle info - use latest trip's vehicle
+            $latestTrip = $shift->trips()->latest('started_at')->first();
+            $vehicle = $latestTrip?->vehicle;
             if ($vehicle) {
                 if (isset($payload['end_km'])) {
                     $vehicle->current_mileage = $payload['end_km'];
@@ -203,7 +199,7 @@ class DriverShiftController extends Controller
 
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'shiftVehicles.vehicle']))]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -235,7 +231,7 @@ class DriverShiftController extends Controller
             }
         }
 
-        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'shiftVehicles.vehicle'])) : null]);
+        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips.vehicle'])) : null]);
     }
 
     /**
@@ -259,53 +255,20 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'No active shift found'], 404);
         }
 
-        $currentSegment = $shift->currentShiftVehicle();
-        if (! $currentSegment) {
-            return response()->json(['message' => 'No active vehicle segment found'], 404);
-        }
-
-        if ((int) $currentSegment->vehicle_id === (int) $payload['new_vehicle_id']) {
-            return response()->json(['message' => 'Xe mới phải khác xe hiện tại'], 422);
-        }
-
         DB::beginTransaction();
         try {
-            // End current vehicle usage segment
-            $currentSegment->end_time = now();
-            $currentSegment->end_km = $payload['handover_km'];
-            $currentSegment->end_gps_lat = $payload['handover_gps_lat'] ?? null;
-            $currentSegment->end_gps_lng = $payload['handover_gps_lng'] ?? null;
-            $currentSegment->save();
-
-            // Create new vehicle usage segment
-            $shift->shiftVehicles()->create([
-                'vehicle_id' => $payload['new_vehicle_id'],
-                'start_time' => now(),
-                'start_km' => $payload['handover_km'],
-                'start_gps_lat' => $payload['handover_gps_lat'] ?? null,
-                'start_gps_lng' => $payload['handover_gps_lng'] ?? null,
-            ]);
-
-            // Note: Vehicle.current_driver_id is a static/default field — not modified here.
-            // Driver-vehicle assignment is tracked via Order.driver_id/vehicle_id and DriverSwap.
-
             // Update old vehicle: mileage and GPS
-            Vehicle::where('id', $currentSegment->vehicle_id)
+            Vehicle::where('id', $payload['new_vehicle_id'])
                 ->update([
                     'current_mileage' => $payload['handover_km'],
                     'gps_lat' => $payload['handover_gps_lat'] ?? null,
                     'gps_lng' => $payload['handover_gps_lng'] ?? null,
                 ]);
 
-            // Update new vehicle: mileage only (no driver assignment)
-            Vehicle::where('id', $payload['new_vehicle_id'])->update([
-                'current_mileage' => $payload['handover_km'],
-            ]);
-
             DB::commit();
 
             return response()->json([
-                'shift' => DriverShiftResource::make($shift->load(['driver', 'shiftVehicles.vehicle'])),
+                'shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle'])),
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
