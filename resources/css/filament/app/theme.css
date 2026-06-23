@@ -24,7 +24,7 @@
         display: grid;
     }
     .fi-sc.fi-sc-has-gap {
-        gap: calc(var(--spacing) * 4);
+        gap: calc(var(--spacing) * 2);
     }
     .fi-sc {
         font-size: var(--text-sm);

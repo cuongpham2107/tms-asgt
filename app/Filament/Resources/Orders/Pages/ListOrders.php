@@ -9,10 +9,6 @@ use App\Filament\Resources\Orders\Actions\CreateBulkOrdersAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHHHKAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHNAction;
 use App\Filament\Resources\Orders\OrderResource;
-use App\Filament\Resources\Orders\Widgets\CompletedOrdersWidget;
-use App\Filament\Resources\Orders\Widgets\PendingOrdersWidget;
-use App\Filament\Resources\Orders\Widgets\TotalOrdersWidget;
-use App\Filament\Resources\Orders\Widgets\TransportingOrdersWidget;
 use App\Models\Area;
 use App\Models\Order;
 use Carbon\Carbon;
@@ -130,16 +126,6 @@ class ListOrders extends ListRecords
             CreateBulkOrdersAction::make(),
         ];
     }
-
-    // protected function getHeaderWidgets(): array
-    // {
-    //     return [
-    //         TotalOrdersWidget::class,
-    //         PendingOrdersWidget::class,
-    //         TransportingOrdersWidget::class,
-    //         CompletedOrdersWidget::class,
-    //     ];
-    // }
 
     public function getHeaderWidgetsColumns(): int|array
     {

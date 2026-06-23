@@ -31,11 +31,13 @@ class LocationsTable extends BaseTable
                 TextColumn::make('loc_type')
                     ->label('Loại')
                     ->badge()
+                    ->alignCenter()
                     ->color(fn ($state): string => (is_object($state) && method_exists($state, 'getColor')) ? ($state->getColor() ?? 'gray') : 'gray')
                     ->formatStateUsing(fn ($state) => (is_object($state) && method_exists($state, 'getLabel')) ? $state->getLabel() : $state)
                     ->searchable(),
                 IconColumn::make('is_active')
                     ->label('Hoạt động')
+                    ->alignCenter()
                     ->boolean(),
                 TextColumn::make('address')
                     ->label('Địa chỉ')

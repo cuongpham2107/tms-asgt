@@ -7,13 +7,16 @@ use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Services\GeoSearchService;
+use EduardoRibeiroDev\FilamentLeaflet\ValueObjects\Coordinate;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Http;
 
 class LocationForm
 {
@@ -24,6 +27,7 @@ class LocationForm
                 Select::make('area_id')
                     ->label('Khu vực')
                     ->relationship('area', 'code')
+                    ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->code} - {$record->type->getLabel()}")
                     ->searchable()
                     ->preload()
                     ->native(false),
@@ -73,6 +77,34 @@ class LocationForm
                     ->fullscreenControl()
                     ->columnSpanFull()
                     ->pickMarker(fn (Marker $marker) => $marker->draggable())
+                    ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+                        if (! $state instanceof Coordinate) {
+                            return;
+                        }
+
+                        $currentAddress = $get('address');
+
+                        try {
+                            $response = Http::withHeaders([
+                                'User-Agent' => 'TMS-ASGT/1.0',
+                                'Accept' => 'application/json',
+                            ])->timeout(5)->get('https://nominatim.openstreetmap.org/reverse', [
+                                'lat' => $state->lat,
+                                'lon' => $state->lng,
+                                'format' => 'json',
+                                'addressdetails' => 0,
+                                'accept-language' => 'vi',
+                            ]);
+
+                            if ($response->successful()) {
+                                $data = $response->json();
+                                if (! empty($data) && isset($data['display_name']) && $data['display_name'] !== $currentAddress) {
+                                    $set('address', $data['display_name']);
+                                }
+                            }
+                        } catch (\Throwable) {
+                        }
+                    })
                     ->extraAttributes([
                         'x-init' => '
                             $nextTick(() => {

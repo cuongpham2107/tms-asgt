@@ -134,19 +134,16 @@ class ListVehicles extends ListRecords
         return $form
             ->components([
                 PillFilter::make('activeStatusFilter')
-                    ->labelPrefix('Trạng thái')
                     ->options($this->vehicleStatusFilters)
                     ->activeValue(fn ($livewire) => $livewire->activeStatusFilter)
                     ->clickAction('filterStatus'),
 
                 PillFilter::make('activeTypeFilter')
-                    ->labelPrefix('Loại xe')
                     ->options(fn () => collect($this->vehicleTypes)->except('all')->toArray())
                     ->activeValue(fn ($livewire) => $livewire->activeTypeFilter)
                     ->clickAction('filterType'),
 
                 PillFilter::make('activePlaceFilter')
-                    ->labelPrefix('Khu vực')
                     ->options(fn () => ['all' => 'Tất cả điểm'] + $this->placeVehicleCurrent)
                     ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
                     ->clickAction('filterPlace'),

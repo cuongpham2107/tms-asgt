@@ -13,7 +13,9 @@ class ListVehicleMaintenanceJobs extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()
+                ->label('Tạo công việc bảo dưỡng xe')
+                ->icon('heroicon-o-plus'),
         ];
     }
 }

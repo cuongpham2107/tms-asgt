@@ -13,7 +13,9 @@ class ListVehicleMaintenanceSchedules extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()
+                ->label('Tạo lịch bảo dưỡng xe')
+                ->icon('heroicon-o-plus'),
         ];
     }
 }

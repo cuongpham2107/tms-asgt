@@ -201,7 +201,6 @@ $cleanup = shell_exec("php artisan tinker --execute '
 DB::statement(\"PRAGMA foreign_keys = OFF\");
 DB::table(\"empty_kilometers\")->whereIn(\"shift_id\",\$shiftIds)->delete();
 foreach (\$shiftIds as \$sid) {
-    DB::table(\"shift_vehicles\")->where(\"shift_id\",\$sid)->delete();
     DB::table(\"trip_checkpoints\")->where(\"shift_id\",\$sid)->delete();
 }
 DB::table(\"driver_swaps\")->whereIn(\"old_shift_id\",\$shiftIds)->orWhereIn(\"new_shift_id\",\$shiftIds)->delete();

@@ -36,6 +36,7 @@ class OrderTemplateForm
                         'HHHK' => 'Hàng không (HHHK)',
                         'external' => 'Hàng không (HN)',
                     ])
+                    ->default('HHHK')
                     ->live()
                     ->required(),
                 Section::make('Thông tin chung')

@@ -83,7 +83,6 @@ class VehicleForm
                             ->step(1),
                         TextInput::make('load_capacity')
                             ->label('Tải trọng (tấn)')
-                            ->numeric()
                             ->inputMode('decimal')
                             ->minValue(0)
                             ->step(0.1)

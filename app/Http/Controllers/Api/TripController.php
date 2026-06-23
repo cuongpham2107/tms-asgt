@@ -32,7 +32,7 @@ class TripController extends Controller
                     OrderStatus::Sent,
                 ]);
             })
-            ->whereIn('status', ['pending', 'in_progress'])
+            ->whereNotIn('status', ['completed'])
             ->with([
                 'vehicle',
                 'orders' => fn ($q) => $q->with([

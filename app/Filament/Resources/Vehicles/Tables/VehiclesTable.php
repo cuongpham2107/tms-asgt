@@ -31,10 +31,10 @@ class VehiclesTable extends BaseTable
                     ->weight('bold'),
                 UniqueMapColumn::make('location')
                     ->label('Vị trí')
-                    ->height(100)
-                    ->width(150)
+                    ->height(80)
+                    ->width(100)
                     ->zoom(15)
-                    ->pickMarker(fn (Marker $marker) => $marker->icon(asset('images/truck.png'), [25, 25]))
+                    ->pickMarker(fn (Marker $marker) => $marker->icon(asset('images/truck.png'), [16, 16]))
                     ->static()
                     ->placeholder('—')
                     ->state(fn (Vehicle $record): ?array => $record->gps_lat && $record->gps_lng
@@ -71,12 +71,11 @@ class VehiclesTable extends BaseTable
                 TextColumn::make('current_mileage')
                     ->label('Số km')
                     ->formatStateUsing(fn ($state) => $state ? number_format($state, 0, ',', '.').' km' : '—')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable(),
                 TextColumn::make('load_capacity')
                     ->label('Tải trọng')
                     ->formatStateUsing(fn ($state) => $state ? number_format($state, 1).' tấn' : '—')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable(),
                 TextColumn::make('created_at')
                     ->label('Ngày tạo')
                     ->dateTime()

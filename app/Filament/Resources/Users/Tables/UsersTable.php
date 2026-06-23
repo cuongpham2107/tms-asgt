@@ -19,6 +19,7 @@ class UsersTable
             ->columns([
                 TextColumn::make('name')
                     ->label('Họ và tên')
+                    ->weight('bold')
                     ->searchable(),
                 TextColumn::make('email')
                     ->label('Email')
@@ -29,6 +30,8 @@ class UsersTable
                     ->sortable(),
                 TextColumn::make('license_class')
                     ->label('Hạng bằng lái')
+                    ->alignCenter()
+                    ->badge()
                     ->searchable(),
                 TextColumn::make('phone')
                     ->label('Số điện thoại')

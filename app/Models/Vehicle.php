@@ -9,14 +9,18 @@ use Database\Factories\VehicleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /** @use HasFactory<VehicleFactory> */
 class Vehicle extends Model
 {
     use HasFactory;
+
+    protected $attributes = [
+        'current_mileage' => 10000,
+    ];
 
     protected $fillable = [
         'plate_number',
@@ -81,9 +85,14 @@ class Vehicle extends Model
         return $this->hasMany(Trip::class, 'vehicle_id');
     }
 
-    public function driverShifts(): BelongsToMany
+    public function driverShifts(): HasManyThrough
     {
-        return $this->belongsToMany(DriverShift::class, 'shift_vehicles', 'vehicle_id', 'shift_id');
+        return $this->hasManyThrough(DriverShift::class, Trip::class, 'vehicle_id', 'id', 'id', 'shift_id');
+    }
+
+    public function orders(): HasManyThrough
+    {
+        return $this->hasManyThrough(Order::class, Trip::class, 'vehicle_id', 'trip_id', 'id', 'id');
     }
 
     public function documents(): HasMany

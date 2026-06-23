@@ -81,6 +81,8 @@ class DriverShiftsTable extends BaseTable
                 ActionGroup::make([
                     ViewAction::make()
                         ->label('Xem chi tiết')
+                        ->modalHeading('Chi tiết ca lái xe')
+                        ->modalDescription('Xem thông tin chi tiết về ca lái xe, bao gồm lái xe, loại ca, thời gian bắt đầu và kết thúc, cũng như các chuyến đi liên quan.')
                         ->modalWidth(Width::SevenExtraLarge)
                         ->slideOver(),
                     // EditAction::make()

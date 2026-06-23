@@ -136,9 +136,6 @@ DB::table(\"trip_checkpoints\")->where(\"order_id\",\$orderId)->delete();
     ->where(\"driver_id\",\$driverId)
     ->whereDate(\"start_time\",\$today)
     ->pluck(\"id\");
-foreach (\$shiftIds as \$sid) {
-    DB::table(\"shift_vehicles\")->where(\"shift_id\",\$sid)->delete();
-}
 DB::table(\"driver_shifts\")->whereIn(\"id\",\$shiftIds)->delete();
 
 // Reset vehicle v? tr?ng thái ban d?u

@@ -6,9 +6,11 @@ use App\Enums\ShiftType;
 use App\Filament\Resources\DriverShifts\Schemas\DriverShiftInfolist;
 use App\Models\DriverShift;
 use Filament\Actions\Action;
+use Filament\Actions\CreateAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Model;
 use Saade\FilamentFullCalendar\Actions\ViewAction;
 use Saade\FilamentFullCalendar\Data\EventData;
@@ -19,6 +21,14 @@ class DriverShiftCalendarWidget extends FullCalendarWidget
     public Model|string|null $model = DriverShift::class;
 
     protected int|string|array $columnSpan = 'full';
+
+    protected function headerActions(): array
+    {
+        return [
+            CreateAction::make()
+                ->hidden(),
+        ];
+    }
 
     /**
      * @param  array{start: string, end: string, timezone: string}  $info
@@ -84,6 +94,10 @@ class DriverShiftCalendarWidget extends FullCalendarWidget
     protected function viewAction(): Action
     {
         return ViewAction::make()
-            ->infolist(fn (Schema $infolist) => DriverShiftInfolist::configure($infolist));
+            ->slideOver()
+            ->modalHeading('Chi tiết ca lái xe')
+            ->modalDescription('Xem thông tin chi tiết về ca lái xe, bao gồm lái xe, loại ca, thời gian bắt đầu và kết thúc, cũng như các chuyến đi liên quan.')
+            ->modalWidth(Width::SevenExtraLarge)
+            ->schema(fn (Schema $infolist) => DriverShiftInfolist::configure($infolist));
     }
 }

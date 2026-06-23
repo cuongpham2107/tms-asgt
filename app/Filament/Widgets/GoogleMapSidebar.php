@@ -111,12 +111,11 @@ class GoogleMapSidebar extends Widget
                     ->with([
                         'customer',
                         'deliveryPoints.location',
-                        'driver',
                         'pickupLocation',
                         'tripCheckpoints' => fn ($q) => $q->orderBy('occurred_at'),
                     ])
                     ->where(fn (Builder $q): Builder => $q
-                        ->whereIn('status', $activeStatuses)
+                        ->whereIn('orders.status', $activeStatuses)
                         ->orWhereDate('planned_loading_at', today()))
                     ->orderByDesc('planned_loading_at'),
             ])

@@ -13,7 +13,9 @@ class ListVehicleDocuments extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()
+                ->label('Tạo giấy tờ xe')
+                ->icon('heroicon-o-plus'),
         ];
     }
 }

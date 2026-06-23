@@ -49,8 +49,9 @@ class AppPanelProvider extends PanelProvider
                 'Vận hành',
                 'Quản lý',
                 'Hoạt động',
-                'Bảo dưỡng',
                 'Cấu hình',
+                'Bảo dưỡng',
+
             ])
             ->userMenu(position: UserMenuPosition::Sidebar)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
@@ -76,7 +77,7 @@ class AppPanelProvider extends PanelProvider
                     ->navigationLabel('Phân quyền')
                     ->navigationIcon('heroicon-o-shield-check')
                     ->activeNavigationIcon('heroicon-s-shield-check')
-                    ->navigationGroup('Quản lý')
+                    ->navigationGroup('Cấu hình')
                     ->navigationSort(3),
                 FilamentFullCalendarPlugin::make()
                     ->selectable()
