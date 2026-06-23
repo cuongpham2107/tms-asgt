@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
+use App\Models\Order;
 use App\Models\Trip;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,14 +44,11 @@ class TripController extends Controller
                 ]),
                 'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
             ])
-            ->first();
-
-        if ($trip === null) {
-            return response()->json(['data' => null]);
-        }
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json([
-            'data' => TripResource::make($trip),
+            'data' => $trip->isNotEmpty() ? TripResource::collection($trip) : null,
         ]);
     }
 
@@ -146,6 +144,33 @@ class TripController extends Controller
                 'last_page' => $trips->lastPage(),
                 'per_page' => $trips->perPage(),
                 'total' => $trips->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * Thống kê số lượng đơn hàng theo nhóm trạng thái của lái xe.
+     *
+     * @response array{data: array{assigned: int, in_progress: int, completed: int}}
+     */
+    public function stats(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $counts = Order::query()
+            ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
+            ->selectRaw("
+                SUM(CASE WHEN status IN ('assigned') THEN 1 ELSE 0 END) as assigned,
+                SUM(CASE WHEN status IN ('sent') THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+            ")
+            ->first();
+
+        return response()->json([
+            'data' => [
+                'assigned' => (int) ($counts->assigned ?? 0),
+                'in_progress' => (int) ($counts->in_progress ?? 0),
+                'completed' => (int) ($counts->completed ?? 0),
             ],
         ]);
     }

@@ -14,6 +14,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 
 class TripForm
 {
@@ -120,7 +121,8 @@ class TripForm
                                     ->native(false)
                                     ->required(),
                                 TextInput::make('km_reading')
-                                    ->label('Km')
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
                                     ->numeric(),
                                 DateTimePicker::make('occurred_at')
                                     ->label('Giờ')
@@ -136,6 +138,7 @@ class TripForm
 
                                         return $record->trip?->orders?->pluck('order_code', 'id')->toArray() ?? [];
                                     })
+                                    ->disabled()
                                     ->native(false)
                                     ->nullable(),
                             ])

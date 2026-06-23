@@ -76,6 +76,61 @@ class OrdersTable extends BaseTable
                     })
                     ->html(),
 
+                TextColumn::make('status')
+                    ->label('Trạng thái')
+                    ->badge()
+                    ->color(fn ($state): string => (is_object($state) && method_exists($state, 'getColor')) ? ($state->getColor() ?? 'gray') : 'gray')
+                    ->icon(fn ($state): ?string => (is_object($state) && method_exists($state, 'getIcon')) ? $state->getIcon() : null)
+                    ->sortable(),
+                TextColumn::make('customer.code')
+                    ->label('Khách hàng')
+                    ->weight('bold')
+                    ->description(fn (Order $record): string => $record->cargo_name ?? '')
+                    ->searchable(),
+                TextColumn::make('route_timeline')
+                    ->state(fn (Order $record): string => $record->order_code)
+                    ->formatStateUsing(fn (Order $record): HtmlString => self::renderRouteTimeline($record))
+                    ->label('Hành trình')
+                    ->html()
+                    ->wrap(),
+                TextColumn::make('created_at')
+                    ->label('Ngày tạo')
+                    ->dateTime('d/m/Y')
+                    ->sortable(),
+                TextColumn::make('planned_loading_at')
+                    ->label('Thời gian đóng hàng')
+                    ->dateTime('H:i d/m/Y')
+                    ->weight('bold')
+                    ->sortable(),
+
+                TextColumn::make('total_packages')
+                    ->label('Tải trọng')
+                    ->formatStateUsing(function (Order $record): HtmlString {
+                        $totalPackages = number_format((float) ($record->total_packages ?? 0), 0, ',', '.');
+                        $totalWeight = number_format((float) ($record->total_weight ?? 0), 0, ',', '.');
+
+                        return new HtmlString(<<<HTML
+                                <div class="flex flex-col gap-1 leading-tight">
+                                    <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">Số kiện: {$totalPackages}</div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">Tải trọng: {$totalWeight} tấn</div>
+                                </div>
+                            HTML);
+                    })
+                    ->hidden(fn (): bool => $type === 'plan')
+                    ->sortable(),
+
+                TextColumn::make('transport_info')
+                    ->label('Phương tiện / Lái xe')
+                    ->state(fn (Order $record): string => $record->trip?->vehicle?->plate_number
+                        ?? $record->trip?->driver?->name
+                        ?? '')
+                    ->formatStateUsing(fn ($state, Order $record): HtmlString => self::renderTransportColumn($record))
+                    ->html()
+                    ->hidden(fn (): bool => $type === 'plan'),
+                TextColumn::make('notes')
+                    ->label('Ghi chú')
+                    ->limit(50),
+
                 UniqueMapColumn::make('map_coords')
                     ->label('Bản đồ')
                     ->height(72)
@@ -159,60 +214,6 @@ class OrdersTable extends BaseTable
                                 'mapConfig' => self::buildOrderMapConfig($record),
                             ]))),
                     ),
-                TextColumn::make('customer.code')
-                    ->label('Khách hàng')
-                    ->weight('bold')
-                    ->description(fn (Order $record): string => $record->cargo_name ?? '')
-                    ->searchable(),
-                TextColumn::make('route_timeline')
-                    ->state(fn (Order $record): string => $record->order_code)
-                    ->formatStateUsing(fn (Order $record): HtmlString => self::renderRouteTimeline($record))
-                    ->label('Hành trình')
-                    ->html()
-                    ->wrap(),
-                TextColumn::make('created_at')
-                    ->label('Ngày tạo')
-                    ->dateTime('d/m/Y')
-                    ->sortable(),
-                TextColumn::make('planned_loading_at')
-                    ->label('Thời gian đóng hàng')
-                    ->dateTime('H:i d/m/Y')
-                    ->weight('bold')
-                    ->sortable(),
-
-                TextColumn::make('total_packages')
-                    ->label('Tải trọng')
-                    ->formatStateUsing(function (Order $record): HtmlString {
-                        $totalPackages = number_format((float) ($record->total_packages ?? 0), 0, ',', '.');
-                        $totalWeight = number_format((float) ($record->total_weight ?? 0), 0, ',', '.');
-
-                        return new HtmlString(<<<HTML
-                                <div class="flex flex-col gap-1 leading-tight">
-                                    <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">Số kiện: {$totalPackages}</div>
-                                    <div class="text-sm text-gray-500 dark:text-gray-400">Tải trọng: {$totalWeight} tấn</div>
-                                </div>
-                            HTML);
-                    })
-                    ->hidden(fn (): bool => $type === 'plan')
-                    ->sortable(),
-
-                TextColumn::make('transport_info')
-                    ->label('Phương tiện / Lái xe')
-                    ->state(fn (Order $record): string => $record->trip?->vehicle?->plate_number
-                        ?? $record->trip?->driver?->name
-                        ?? '')
-                    ->formatStateUsing(fn ($state, Order $record): HtmlString => self::renderTransportColumn($record))
-                    ->html()
-                    ->hidden(fn (): bool => $type === 'plan'),
-                TextColumn::make('notes')
-                    ->label('Ghi chú')
-                    ->limit(50),
-                TextColumn::make('status')
-                    ->label('Trạng thái')
-                    ->badge()
-                    ->color(fn ($state): string => (is_object($state) && method_exists($state, 'getColor')) ? ($state->getColor() ?? 'gray') : 'gray')
-                    ->icon(fn ($state): ?string => (is_object($state) && method_exists($state, 'getIcon')) ? $state->getIcon() : null)
-                    ->sortable(),
                 TextColumn::make('createdBy.name')
                     ->label('Người tạo')
                     ->searchable(),

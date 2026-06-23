@@ -19,7 +19,6 @@
         "laravel/framework": "^13.7",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
-        "malzariey/filament-daterangepicker-filter": "^5.0",
         "openplain/filament-shadcn-theme": "^1.1",
         "saade/filament-fullcalendar": "^4.0@beta",
         "watheqalshowaiter/filament-sticky-table-header": "^1.5"

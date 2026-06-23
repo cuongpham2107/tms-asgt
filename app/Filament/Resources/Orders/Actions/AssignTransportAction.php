@@ -94,7 +94,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
 
                 try {
                     $trip = Trip::create([
-                        'trip_code' => Trip::max('id') + 1,
+                        'trip_code' => Trip::generateTripCode(),
                         'vehicle_id' => $data['vehicle_id'],
                         'driver_id' => $data['driver_id'],
                         'status' => TripStatus::Pending,

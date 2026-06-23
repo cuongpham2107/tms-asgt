@@ -82,7 +82,7 @@ test('can bulk assign vehicle and driver to draft orders', function () {
     $this->actingAs($admin);
 
     $trip = Trip::create([
-        'trip_code' => (Trip::max('id') ?? 0) + 1,
+        'trip_code' => Trip::generateTripCode(),
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
         'status' => TripStatus::Pending,

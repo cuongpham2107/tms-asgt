@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\CheckpointType;
 use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\Order;
+use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -40,14 +41,14 @@ class TripCheckpointRequest extends FormRequest
             'km_reading' => [
                 'nullable',
                 'numeric',
+                'min:0',
                 Rule::when($type === 'started', 'prohibited'),
                 Rule::when(in_array($type, ['arrived_pickup', 'completed'], true), 'required'),
             ],
             'gps_lat' => 'nullable|numeric',
             'gps_lng' => 'nullable|numeric',
             'voice_note' => 'nullable|string',
-            'photos' => 'nullable|array',
-            'photos.*' => 'nullable|image|max:10240',
+            'photos' => 'nullable',
         ];
     }
 
@@ -77,15 +78,11 @@ class TripCheckpointRequest extends FormRequest
                     $hasNewLocationId = ! empty($this->input('new_delivery_location_id'));
 
                     if ($hasDeliveryPoints && ! $hasDeliveryPointId) {
-                        throw new HttpResponseException(response()->json([
-                            'message' => 'Vui lòng chọn điểm giao hàng cụ thể để hoàn thành.',
-                        ], 422));
+                        $validator->errors()->add('delivery_point_id', 'Vui lòng chọn điểm giao hàng cụ thể để hoàn thành.');
                     }
 
                     if (! $hasDeliveryPoints && ! $hasDeliveryPointId && ! $hasNewLocationId) {
-                        throw new HttpResponseException(response()->json([
-                            'message' => 'Đơn hàng chưa có điểm đến. Vui lòng chọn điểm giao hàng.',
-                        ], 422));
+                        $validator->errors()->add('delivery_point_id', 'Đơn hàng chưa có điểm đến. Vui lòng chọn điểm giao hàng.');
                     }
                 }
             },
@@ -97,12 +94,19 @@ class TripCheckpointRequest extends FormRequest
 
                 $lastOrderKm = TripCheckpoint::where('order_id', $this->input('order_id'))
                     ->whereNotNull('km_reading')
-                    ->orderBy('occurred_at', 'desc')
+                    ->orderByDesc('occurred_at')
+                    ->orderByDesc('id')
                     ->value('km_reading');
 
                 if ($lastOrderKm !== null && (float) $this->input('km_reading') < (float) $lastOrderKm) {
-                    $message = 'Số km phải lớn hơn hoặc bằng km gần nhất của đơn hàng này ('.number_format((float) $lastOrderKm, 1).' km)';
-                    throw new HttpResponseException(response()->json(['message' => $message], 422));
+                    $validator->errors()->add('km_reading', 'Số km phải lớn hơn hoặc bằng km gần nhất của đơn hàng này ('.number_format((float) $lastOrderKm, 1).' km)');
+                }
+
+                $trip = $this->route('trip');
+                if ($trip instanceof Trip && $trip->start_km !== null) {
+                    if ((float) $this->input('km_reading') < (float) $trip->start_km) {
+                        $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn km bắt đầu chuyến ('.number_format((float) $trip->start_km, 1).' km)');
+                    }
                 }
             },
 
@@ -116,11 +120,10 @@ class TripCheckpointRequest extends FormRequest
                     ->value('km_reading');
 
                 if ($leftPickupKm !== null && (float) $this->input('km_reading') <= (float) $leftPickupKm) {
-                    $message = sprintf(
+                    $validator->errors()->add('km_reading', sprintf(
                         'Số km kết thúc phải lớn hơn km lúc rời điểm nhận (%.1f km)',
                         $leftPickupKm
-                    );
-                    throw new HttpResponseException(response()->json(['message' => $message], 422));
+                    ));
                 }
             },
         ];

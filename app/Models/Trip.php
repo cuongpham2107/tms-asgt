@@ -65,7 +65,7 @@ class Trip extends Model
 
     public function checkpoints(): HasMany
     {
-        return $this->hasMany(TripCheckpoint::class);
+        return $this->hasMany(TripCheckpoint::class)->orderBy('occurred_at');
     }
 
     public function driverSwaps(): HasMany
@@ -96,6 +96,13 @@ class Trip extends Model
     public function isCompleted(): bool
     {
         return $this->status === TripStatus::Completed;
+    }
+
+    public static function generateTripCode(): string
+    {
+        $nextId = (self::max('id') ?? 0) + 1;
+
+        return 'CD-'.now()->format('Y-m-d').'-'.$nextId;
     }
 
     public function complete(?float $endKm = null, ?string $completedAt = null): void

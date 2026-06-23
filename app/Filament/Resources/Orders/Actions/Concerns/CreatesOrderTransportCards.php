@@ -644,7 +644,7 @@ abstract class CreatesOrderTransportCards
 
             if ($forceAssignedWhenTransportProvided && filled($data['vehicle_id'] ?? null) && filled($data['driver_id'] ?? null)) {
                 $trip = Trip::create([
-                    'trip_code' => (string) (Trip::max('id') + 1),
+                    'trip_code' => Trip::generateTripCode(),
                     'vehicle_id' => $data['vehicle_id'],
                     'driver_id' => $data['driver_id'],
                     'status' => TripStatus::Pending,
