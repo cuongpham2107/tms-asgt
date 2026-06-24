@@ -30,6 +30,30 @@ enum TripStatus: string implements HasColor, HasLabel
         };
     }
 
+    /**
+     * Các trạng thái được coi là "đang chạy" — chuyến chưa kết thúc.
+     * Dùng để kiểm tra tài xế có đang thực hiện chuyến khác không.
+     *
+     * @return self[]
+     */
+    public static function activeStatuses(): array
+    {
+        return [
+            self::Started,
+            self::ArrivedPickup,
+            self::Delivering,
+            self::ArrivedDelivery,
+            self::Delivered,
+            self::DriverSwap,
+        ];
+    }
+
+    /** Alias của getLabel() — dùng trong message lỗi API. */
+    public function label(): string
+    {
+        return $this->getLabel();
+    }
+
     public function getColor(): string|array|null
     {
         return match ($this) {

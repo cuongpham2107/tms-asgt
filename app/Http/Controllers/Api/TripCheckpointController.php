@@ -2,30 +2,19 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\CheckpointType;
-use App\Enums\OrderDeliveryPointStatus;
-use App\Enums\OrderStatus;
-use App\Enums\TripStatus;
-use App\Enums\VehicleStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TripCheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
-use App\Models\DriverShift;
-use App\Models\Location;
-use App\Models\Order;
-use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
-use App\Models\TripCheckpoint;
-use App\Models\TripPhoto;
-use App\Models\Vehicle;
-use Illuminate\Filesystem\FilesystemAdapter;
+use App\Services\Trip\TripCheckpointService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class TripCheckpointController extends Controller
 {
+    public function __construct(
+        private readonly TripCheckpointService $service,
+    ) {}
+
     public function checkpoint(TripCheckpointRequest $request, Trip $trip): JsonResponse
     {
         $user = $request->user();
@@ -61,7 +50,7 @@ class TripCheckpointController extends Controller
 
             $this->resolveDeliveryPoint($payload);
 
-            $checkpoint = $this->createCheckpoint($trip, $payload, $checkpointType);
+            $checkpoint = $this->createCheckpoint($trip, $user, $payload, $checkpointType);
 
             $this->updateVehicleFromCheckpoint($trip, $payload);
 
@@ -104,7 +93,7 @@ class TripCheckpointController extends Controller
         }
     }
 
-    private function createCheckpoint(Trip $trip, array $payload, CheckpointType $type): TripCheckpoint
+    private function createCheckpoint(Trip $trip, $user, array $payload, CheckpointType $type): TripCheckpoint
     {
         $shiftId = $trip->shift_id;
         $occurredAt = $payload['occurred_at'] ?? now();
@@ -112,11 +101,6 @@ class TripCheckpointController extends Controller
         if (in_array($type, [CheckpointType::Started, CheckpointType::ArrivedPickup, CheckpointType::LeftPickup], true)) {
             $checkpoint = null;
             $orders = $trip->orders;
-
-            if ($orders->isEmpty()) {
-                throw new \RuntimeException('Trip không có đơn hàng nào để tạo checkpoint');
-            }
-
             foreach ($orders as $order) {
                 $checkpoint = TripCheckpoint::create([
                     'trip_id' => $trip->id,
@@ -177,10 +161,7 @@ class TripCheckpointController extends Controller
             ]);
         }
 
-        return $checkpoint ?? TripCheckpoint::where('trip_id', $trip->id)
-            ->where('checkpoint_type', $type->value)
-            ->latest('occurred_at')
-            ->firstOrFail();
+        return $checkpoint;
     }
 
     private function resolveDeliveryPoint(array &$payload): void
@@ -260,26 +241,45 @@ class TripCheckpointController extends Controller
 
     private function handleCompleted(Trip $trip, array $payload): void
     {
-        $this->updateDeliveryPoint($payload, OrderDeliveryPointStatus::Delivered);
+        // Tìm tất cả orders trong trip cùng delivery location
+        $completedOrderIds = collect([$payload['order_id']]);
 
-        $order = Order::findOrFail($payload['order_id']);
-        $order->status = OrderStatus::Completed;
-        $order->save();
+        if (! empty($payload['delivery_point_id'])) {
+            $deliveryPoint = OrderDeliveryPoint::find($payload['delivery_point_id']);
+            if ($deliveryPoint?->location_id !== null) {
+                $sameLocationOrderIds = OrderDeliveryPoint::where('location_id', $deliveryPoint->location_id)
+                    ->whereIn('order_id', $trip->orders()->pluck('id'))
+                    ->pluck('order_id');
+
+                $completedOrderIds = $sameLocationOrderIds;
+            }
+        }
+
+        // Update delivery points & orders
+        $occurredAt = $payload['occurred_at'] ?? now();
+        OrderDeliveryPoint::whereIn('order_id', $completedOrderIds)
+            ->where('status', '!=', OrderDeliveryPointStatus::Delivered)
+            ->update([
+                'status' => OrderDeliveryPointStatus::Delivered,
+                'delivered_at' => $occurredAt,
+            ]);
+
+        Order::whereIn('id', $completedOrderIds)->update(['status' => OrderStatus::Completed]);
 
         $hasMoreActiveInTrip = $trip->orders()
-            ->where('id', '!=', $order->id)
+            ->whereNotIn('id', $completedOrderIds)
             ->whereIn('status', [OrderStatus::Assigned, OrderStatus::Sent])
             ->exists();
 
         if (! $hasMoreActiveInTrip) {
             $trip->complete(
                 endKm: $payload['km_reading'] ?? null,
-                completedAt: $payload['occurred_at'] ?? now(),
+                completedAt: $occurredAt,
             );
         }
 
         $hasMoreActiveOnVehicle = Order::whereHas('trip', fn ($q) => $q->where('vehicle_id', $trip->vehicle_id))
-            ->where('id', '!=', $order->id)
+            ->whereNotIn('id', $completedOrderIds)
             ->whereIn('status', [OrderStatus::Assigned, OrderStatus::Sent])
             ->exists();
 
