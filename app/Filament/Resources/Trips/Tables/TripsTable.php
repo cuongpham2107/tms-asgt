@@ -55,7 +55,8 @@ class TripsTable extends BaseTable
 
                 TextColumn::make('delivery_destination')
                     ->label('Điểm đến')
-                    ->state(fn (Trip $record): string => self::getDeliveryDestination($record)),
+                    ->state(fn (Trip $record): string => self::getDeliveryDestination($record))
+                    ->wrap(),
 
                 TextColumn::make('order_count')
                     ->label('Số đơn')

@@ -89,13 +89,13 @@ class OrderForm extends CreatesOrderTransportCards
                                     })
                                     ->createOptionForm(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents()),
 
-                                Select::make('priority')
-                                    ->label('Mức ưu tiên')
-                                    ->options(Priority::class)
-                                    ->default(Priority::Medium->value)
-                                    ->native(false)
-                                    ->required()
-                                    ->columnSpanFull(),
+                                // Select::make('priority')
+                                //     ->label('Mức ưu tiên')
+                                //     ->options(Priority::class)
+                                //     ->default(Priority::Medium->value)
+                                //     ->native(false)
+                                //     ->required()
+                                //     ->columnSpanFull(),
 
                                 TextInput::make('cargo_name')
                                     ->label('Tên hàng hoá')
@@ -128,7 +128,9 @@ class OrderForm extends CreatesOrderTransportCards
                                         titleAttribute: 'name',
                                         modifyQueryUsing: fn (Builder $query, Get $get) => $query
                                             ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                            ->when($get('pickup_location_id'), fn ($q, $id) => $q->orWhere('id', $id))
                                     )
+                                    ->searchable()->preload()
                                     ->native(false)
                                     ->required(fn (Get $get): bool => self::isHhhkOrder($get))
                                     ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents())
@@ -191,7 +193,9 @@ class OrderForm extends CreatesOrderTransportCards
                                                         titleAttribute: 'name',
                                                         modifyQueryUsing: fn (Builder $query, Get $get) => $query
                                                             ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                                            ->when($get('location_id'), fn ($q, $id) => $q->orWhere('id', $id))
                                                     )
+                                                    ->searchable()->preload()
                                                     ->prefixIcon(Heroicon::OutlinedMapPin)
                                                     ->native(false)
                                                     ->required()
@@ -273,8 +277,13 @@ class OrderForm extends CreatesOrderTransportCards
                                                     ->columnSpan(2),
                                                 Select::make('delivery_point_id')
                                                     ->label('Điểm giao hàng')
-                                                    ->options(function (Get $get): array {
+                                                    ->options(function (Get $get, $record): array {
                                                         $orderId = $get('../../id');
+
+                                                        if (! $orderId && $record?->trip?->orders->first()?->id) {
+                                                            $orderId = $record->trip->orders->first()->id;
+                                                        }
+
                                                         if (! $orderId) {
                                                             return [];
                                                         }

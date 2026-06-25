@@ -14,6 +14,21 @@ class Trip extends Model
 {
     use HasFactory;
 
+    // protected static function booted(): void
+    // {
+    //     static::creating(function (Trip $trip) {
+    //         if ($trip->shift_id === null && $trip->driver_id !== null) {
+    //             $activeShift = DriverShift::where('driver_id', $trip->driver_id)
+    //                 ->whereNull('end_time')
+    //                 ->first();
+
+    //             if ($activeShift !== null) {
+    //                 $trip->shift_id = $activeShift->id;
+    //             }
+    //         }
+    //     });
+    // }
+
     protected $fillable = [
         'trip_code',
         'vehicle_id',
