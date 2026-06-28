@@ -1,0 +1,15 @@
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/bin/Debug/net10.0/TMS.Infrastructure.deps.json
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/bin/Debug/net10.0/TMS.Infrastructure.dll
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/bin/Debug/net10.0/TMS.Infrastructure.pdb
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/bin/Debug/net10.0/TMS.Core.dll
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/bin/Debug/net10.0/TMS.Core.pdb
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/TMS.Infrastructure.csproj.AssemblyReference.cache
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/TMS.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/TMS.Infrastructure.AssemblyInfoInputs.cache
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/TMS.Infrastructure.AssemblyInfo.cs
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/TMS.Infrastructure.csproj.CoreCompileInputs.cache
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/TMS.Infr.DB4E3C57.Up2Date
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/TMS.Infrastructure.dll
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/refint/TMS.Infrastructure.dll
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/TMS.Infrastructure.pdb
+/Users/cuongpham/Deverlop/dotnet/TMS/TMS.Infrastructure/obj/Debug/net10.0/ref/TMS.Infrastructure.dll
