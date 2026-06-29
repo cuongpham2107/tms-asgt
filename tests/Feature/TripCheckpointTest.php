@@ -294,7 +294,7 @@ test('completed handles orders at different locations separately', function () {
     expect($this->order2->fresh()->status)->toBe(OrderStatus::Completed);
 
     // order3 khác location → chưa completed
-    expect($order3->fresh()->status)->toBe(OrderStatus::Sent);
+    expect($order3->fresh()->status)->toBe(OrderStatus::InTransit);
 
     $this->trip->refresh();
     expect($this->trip->status)->toBe(TripStatus::ArrivedDelivery);
@@ -463,7 +463,7 @@ test('completed does not complete order with remaining delivery points', functio
     ])->assertSuccessful();
 
     // Order chưa completed vì còn delivery point seq 2
-    expect($order3->fresh()->status)->toBe(OrderStatus::Sent);
+    expect($order3->fresh()->status)->toBe(OrderStatus::InTransit);
     expect($dpSeq1->fresh()->status)->toBe(OrderDeliveryPointStatus::Delivered);
     expect($dpSeq2->fresh()->status)->toBe(OrderDeliveryPointStatus::Pending);
 

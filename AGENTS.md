@@ -291,3 +291,71 @@ Correct behavior: always check for and use skills first.
 **Note**: Project-specific skills (filament-leaflet, laravel-best-practices, pest-testing, tailwindcss-development) take priority over generic agent-skills.
 
 <!-- AGENT_SKILLS_END -->
+
+<!-- REPO_SPECIFIC_START -->
+
+## Repo-specific
+
+### Architecture
+
+- **Filament v5 pattern**: Every resource follows `app/Filament/Resources/{Name}/` with `{Name}Resource.php`, `Tables/{Name}Table.php` (extends `BaseTable`), `Schemas/{Name}Form.php`, `Pages/`, and optionally `Actions/`.
+  - `BaseTable::applyDefaults()` provides default bulk/record actions — call it BEFORE adding columns.
+  - `BaseResource` auto-handles soft-delete route binding.
+- **Trip checkpoint system** at `app/Services/Trip/` — uses handler pattern: `TripCheckpointService` → `CheckpointFactory` + individual `*Handler` classes. Each handler only receives the params it needs (variadic interface).
+- **Authorization**: Filament Shield auto-generates policies in `app/Policies/`. New resources need `php artisan shield:generate --all --ignore-config-changes` to create policies.
+- **API**: Sanctum-based, all driver endpoints behind `auth:sanctum` + `EnsureRoleVehicle` middleware (checks `driver` role). Routes in `routes/api.php`, prefix `driver/`.
+- **Observers**: `OrderObserver` logs changes to tracked fields into `OrderEditLog` on update.
+- **Mapbox** loaded via CDN in `AppPanelProvider` (also `mapbox-gl` npm package for Filament leaflet maps).
+
+### DB & Migrations
+
+- **SQLite** by default (both local and test). Production may differ — verify before writing raw SQL or platform-specific migrations.
+- **ENUM columns** (`$table->enum()`): In SQLite these become CHECK constraints. Adding new values requires a migration with `->change()`. Tests use `:memory:`, so all migrations run fresh on each test run.
+
+### Enum → query pitfall
+
+When updating via **Eloquent relations** (`$trip->orders()->update([...])`), enum values must use `->value`:
+```php
+// CORRECT on relations:
+$trip->orders()->where('status', OrderStatus::Sent->value)
+    ->update(['status' => OrderStatus::InTransit->value]);
+
+// OK on model queries (automatic cast):
+Order::where('id', $id)->update(['status' => OrderStatus::Completed]);
+```
+
+### Commands
+
+```bash
+# Full dev stack (serve + queue + logs + vite)
+composer run dev
+
+# Test
+php artisan test --compact
+php artisan test --compact --filter=TestName
+
+# Format (always before finalizing changes)
+vendor/bin/pint --format agent
+
+# Migration for new filament resource
+php artisan make:filament-resource {name} --soft-deletes --view --generate --no-interaction
+# Then generate shield policies:
+php artisan shield:generate --all --ignore-config-changes
+
+# Create Pest test
+php artisan make:test --pest SomeFeatureTest
+```
+
+### Tests
+
+- Pest v4, `uses(RefreshDatabase::class)` per test file (not global).
+- Common pattern: `beforeEach()` sets up models via `Model::create()`, then `Sanctum::actingAs($driver)` for API calls.
+- Key test files: `TripCheckpointTest` (checkpoint flow), `OrderFullFlowTest` (end-to-end with driver swaps), `TripHistoryTest` (API history endpoint), `OrderFlowHHHKTest` (order status transitions).
+
+### Other gotchas
+
+- Filament v5 uses `Schema` (not `Forms` from v3). Form builder is at `Filament\Schemas\Schema`.
+- Filament track `activeStatusFilter` as `#[Url]` property on List pages — reset `$this->resetPage()` on `updatedActiveStatusFilter()`.
+- The `opencode.json` at root enables `laravel-boost` MCP server and `codegraph` MCP server.
+
+<!-- REPO_SPECIFIC_END -->

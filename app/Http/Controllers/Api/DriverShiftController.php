@@ -11,6 +11,7 @@ use App\Http\Requests\StartShiftRequest;
 use App\Http\Requests\SwitchVehicleRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
+use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
@@ -56,28 +57,28 @@ class DriverShiftController extends Controller
         }
 
         // prevent invalid shift combinations on the same day
-        $existingShiftsToday = DriverShift::query()
-            ->where('driver_id', $user->id)
-            ->whereDate('start_time', $startTime->toDateString())
-            ->get();
+        // $existingShiftsToday = DriverShift::query()
+        //     ->where('driver_id', $user->id)
+        //     ->whereDate('start_time', $startTime->toDateString())
+        //     ->get();
 
-        $requestedType = $payload['shift_type'];
+        // $requestedType = $payload['shift_type'];
 
-        foreach ($existingShiftsToday as $shift) {
-            $existingType = $shift->shift_type->value ?? $shift->shift_type;
+        // foreach ($existingShiftsToday as $shift) {
+        //     $existingType = $shift->shift_type->value ?? $shift->shift_type;
 
-            if ($requestedType === 'full') {
-                return response()->json(['message' => 'Không thể tạo ca cả ngày vì bạn đã có ca khác trong hôm nay.'], 409);
-            }
+        //     if ($requestedType === 'full') {
+        //         return response()->json(['message' => 'Không thể tạo ca cả ngày vì bạn đã có ca khác trong hôm nay.'], 409);
+        //     }
 
-            if ($existingType === 'full') {
-                return response()->json(['message' => 'Bạn đã có ca cả ngày trong hôm nay, không thể tạo thêm ca mới.'], 409);
-            }
+        //     if ($existingType === 'full') {
+        //         return response()->json(['message' => 'Bạn đã có ca cả ngày trong hôm nay, không thể tạo thêm ca mới.'], 409);
+        //     }
 
-            if ($requestedType === $existingType) {
-                return response()->json(['message' => 'Đã có ca cùng loại vào hôm nay.'], 409);
-            }
-        }
+        //     if ($requestedType === $existingType) {
+        //         return response()->json(['message' => 'Đã có ca cùng loại vào hôm nay.'], 409);
+        //     }
+        // }
 
         // Ensure driver does not have an open shift
         $existing = DriverShift::query()
@@ -87,7 +88,7 @@ class DriverShiftController extends Controller
 
         if ($existing) {
             /** @status 409 */
-            return response()->json(['message' => 'You already have an active shift'], 409);
+            return response()->json(['message' => 'Bạn đã có một ca làm việc đang hoạt động'], 409);
         }
 
         DB::beginTransaction();
@@ -113,7 +114,7 @@ class DriverShiftController extends Controller
             DB::rollBack();
 
             /** @status 500 */
-            return response()->json(['message' => 'Unable to start shift', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Không thể bắt đầu ca làm việc', 'error' => $e->getMessage()], 500);
         }
     }
 
@@ -139,13 +140,12 @@ class DriverShiftController extends Controller
 
         if (! $shift) {
             /** @status 404 */
-            return response()->json(['message' => 'No active shift found'], 404);
+            return response()->json(['message' => 'Không tìm thấy ca làm việc đang hoạt động'], 404);
         }
 
         DB::beginTransaction();
         try {
-            $endTime = $payload['end_time'] ?? now();
-            $shift->end_time = $endTime;
+            $shift->end_time = now();
             $shift->end_km = $payload['end_km'] ?? $shift->end_km;
             $shift->end_gps_lat = $payload['end_gps_lat'] ?? null;
             $shift->end_gps_lng = $payload['end_gps_lng'] ?? null;
@@ -154,7 +154,7 @@ class DriverShiftController extends Controller
             // Auto driver_swap: chuyển trip đang active có đơn hàng chưa hoàn thành sang driver_swap
             $incompleteTrips = Trip::where('driver_id', $user->id)
                 ->whereHas('orders', function ($q) {
-                    $q->whereIn('status', [OrderStatus::Sent, OrderStatus::Assigned]);
+                    $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value]);
                 })
                 ->whereIn('status', [
                     TripStatus::Started,
@@ -168,6 +168,10 @@ class DriverShiftController extends Controller
                 $trip->status = TripStatus::DriverSwap;
                 $trip->shift_id = null;
                 $trip->save();
+
+                $trip->orders()
+                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
+                    ->update(['status' => OrderStatus::DriverSwap->value]);
 
                 TripCheckpoint::create([
                     'trip_id' => $trip->id,
@@ -205,7 +209,7 @@ class DriverShiftController extends Controller
             DB::rollBack();
 
             /** @status 500 */
-            return response()->json(['message' => 'Unable to end shift', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Không thể kết thúc ca làm việc', 'error' => $e->getMessage()], 500);
         }
     }
 
@@ -253,7 +257,7 @@ class DriverShiftController extends Controller
             ->first();
 
         if (! $shift) {
-            return response()->json(['message' => 'No active shift found'], 404);
+            return response()->json(['message' => 'Không tìm thấy ca làm việc đang hoạt động'], 404);
         }
 
         DB::beginTransaction();
@@ -274,7 +278,7 @@ class DriverShiftController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Unable to switch vehicle', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Không thể chuyển xe', 'error' => $e->getMessage()], 500);
         }
     }
 }

@@ -82,7 +82,7 @@ class AppPanelProvider extends PanelProvider
                 FilamentFullCalendarPlugin::make()
                     ->selectable()
                     ->editable(),
-                StickyTableHeaderPlugin::make(),
+                // StickyTableHeaderPlugin::make(),
             ])
             ->authMiddleware([
                 Authenticate::class,

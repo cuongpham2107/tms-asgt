@@ -2,11 +2,12 @@
 
 namespace App\Filament\Resources\Trips\Pages;
 
+use App\Enums\TripStatus;
 use App\Filament\Forms\Components\OrderDateRangePicker;
-use App\Filament\Resources\Orders\Actions\CreateOrderHHHKAction;
-use App\Filament\Resources\Orders\Actions\CreateOrderHNAction;
+use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\Trips\TripResource;
 use App\Filament\Resources\Trips\Widgets\TripStatsOverviewWidget;
+use App\Models\Trip;
 use Carbon\Carbon;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
@@ -23,7 +24,6 @@ class ListTrips extends ListRecords
     #[Url(keep: true)]
     public ?string $dateFrom = null;
 
-    #[Url(keep: true)]
     public ?string $dateTo = null;
 
     public ?array $dateRange = null;
@@ -31,14 +31,25 @@ class ListTrips extends ListRecords
     #[Url]
     public ?string $tripSearch = null;
 
+    #[Url]
+    public ?string $activeStatusFilter = 'all';
+
+    public array $tripStatusFilters = [
+        'all' => ['label' => 'Tất cả', 'color' => 'bg-gray-900'],
+        'pending' => ['label' => 'Chờ chạy', 'color' => 'bg-gray-500'],
+        'started' => ['label' => 'Đã bắt đầu', 'color' => 'bg-blue-500'],
+        'arrived_pickup' => ['label' => 'Đến lấy hàng', 'color' => 'bg-orange-500'],
+        'delivering' => ['label' => 'Đang giao', 'color' => 'bg-sky-500'],
+        'arrived_delivery' => ['label' => 'Đến giao hàng', 'color' => 'bg-amber-500'],
+        'delivered' => ['label' => 'Đã giao', 'color' => 'bg-teal-500'],
+        'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
+        'completed' => ['label' => 'Hoàn thành', 'color' => 'bg-emerald-500'],
+    ];
+
     public function mount(): void
     {
         if (blank($this->dateFrom)) {
             $this->dateFrom = Carbon::today()->format('Y-m-d');
-        }
-
-        if (blank($this->dateTo)) {
-            $this->dateTo = Carbon::today()->format('Y-m-d');
         }
 
         $this->dateRange = [
@@ -69,17 +80,45 @@ class ListTrips extends ListRecords
         return 5;
     }
 
+    public function filterStatus(string $status): void
+    {
+        $this->activeStatusFilter = $status;
+
+        $this->resetPage();
+    }
+
+    public function getTripStatusCount(string $key): int
+    {
+        return $this->baseCountQuery()
+            ->when(
+                $key !== 'all',
+                fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $key),
+            )
+            ->count();
+    }
+
+    private function baseCountQuery(): Builder
+    {
+        return Trip::query()
+            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->whereDate('started_at', '>=', $this->dateFrom))
+            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->whereDate('started_at', '<=', $this->dateTo));
+    }
+
+    public function filtersForm(Schema $form): Schema
+    {
+        return $form
+            ->components([
+                PillFilter::make('activeStatusFilter')
+                    ->options($this->tripStatusFilters)
+                    ->countCallback(fn ($key) => $this->getTripStatusCount($key))
+                    ->activeValue(fn ($livewire) => $livewire->activeStatusFilter)
+                    ->clickAction('filterStatus'),
+            ]);
+    }
+
     public function exportExcel(): void
     {
         // TODO: Implement Excel export for trips
-    }
-
-    protected function getForms(): array
-    {
-        return [
-            'searchForm',
-            'dateRangeForm',
-        ];
     }
 
     public function searchForm(Schema $form): Schema
@@ -116,8 +155,9 @@ class ListTrips extends ListRecords
                 'orders.deliveryPoints.location',
                 'orders.tripCheckpoints.deliveryPoint.location',
             ])
-            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->whereDate('created_at', '<=', $this->dateTo))
+            ->when($this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
+            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->whereDate('started_at', '>=', $this->dateFrom))
+            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->whereDate('started_at', '<=', $this->dateTo))
             ->when(filled($this->tripSearch), function (Builder $query): Builder {
                 $search = trim((string) $this->tripSearch);
 
@@ -133,6 +173,21 @@ class ListTrips extends ListRecords
                         );
                 });
             });
+    }
+
+    private function applyStatusFilterByKey(Builder $query, string $key): Builder
+    {
+        return match ($key) {
+            'pending' => $query->where('status', TripStatus::Pending->value),
+            'started' => $query->where('status', TripStatus::Started->value),
+            'arrived_pickup' => $query->where('status', TripStatus::ArrivedPickup->value),
+            'delivering' => $query->where('status', TripStatus::Delivering->value),
+            'arrived_delivery' => $query->where('status', TripStatus::ArrivedDelivery->value),
+            'delivered' => $query->where('status', TripStatus::Delivered->value),
+            'driver_swap' => $query->where('status', TripStatus::DriverSwap->value),
+            'completed' => $query->where('status', TripStatus::Completed->value),
+            default => $query,
+        };
     }
 
     public function updatedTripSearch(): void

@@ -10,6 +10,8 @@ enum OrderStatus: string implements HasColor, HasLabel
     case Draft = 'draft';
     case Assigned = 'assigned';
     case Sent = 'sent';
+    case InTransit = 'in_transit';
+    case DriverSwap = 'driver_swap';
     case Completed = 'completed';
     case Cancelled = 'cancelled';
 
@@ -19,6 +21,8 @@ enum OrderStatus: string implements HasColor, HasLabel
             self::Draft => 'Nháp',
             self::Assigned => 'Đã gán xe',
             self::Sent => 'Đã gửi',
+            self::InTransit => 'Đang vận chuyển',
+            self::DriverSwap => 'Đảo lái',
             self::Completed => 'Hoàn thành',
             self::Cancelled => 'Hủy',
         };
@@ -30,6 +34,8 @@ enum OrderStatus: string implements HasColor, HasLabel
             self::Draft => 'gray',
             self::Assigned => 'info',
             self::Sent => 'info',
+            self::InTransit => 'warning',
+            self::DriverSwap => 'danger',
             self::Completed => 'success',
             self::Cancelled => 'danger',
         };
@@ -52,7 +58,7 @@ enum OrderStatus: string implements HasColor, HasLabel
 
     public function canCancel(): bool
     {
-        return ! in_array($this, [self::Completed, self::Cancelled]);
+        return in_array($this, [self::Draft, self::Assigned, self::Sent]);
     }
 
     public function canEdit(): bool
@@ -62,7 +68,7 @@ enum OrderStatus: string implements HasColor, HasLabel
 
     public function canDelete(): bool
     {
-        return ! in_array($this, [self::Completed, self::Cancelled]);
+        return in_array($this, [self::Draft, self::Assigned, self::Sent]);
     }
 
     public function isClosed(): bool

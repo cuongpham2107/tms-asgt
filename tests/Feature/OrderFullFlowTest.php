@@ -355,7 +355,7 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
  * Flow: Driver A làm 2 đơn — hoàn tất đơn 1 → hết giờ, kết thúc ca → auto driver_swap cho chuyến còn lại
  *       → Điều hành swap Driver B → Driver B hoàn tất
  */
-test('driver with 2 orders runs out of shift time triggers swap via DriverSwapAction', function () {
+test('driver with 2 orders runs out of shift time triggers swap via trip DriverSwapAction', function () {
     $adminUser = User::factory()->create();
     $adminUser->assignRole('driver');
 
@@ -515,7 +515,7 @@ test('driver with 2 orders runs out of shift time triggers swap via DriverSwapAc
     ])->assertSuccessful();
     $shiftB = DriverShift::find($shiftBResponse->json('shift.id'));
 
-    // Simulate DriverSwapAction: tạo swap và gán lại driver cho trip
+    // Simulate driver swap (same logic as Trips DriverSwapAction): tạo swap và gán lại driver cho trip
     DriverSwap::create([
         'trip_id' => $trip2->id,
         'from_driver_id' => $driverA->id,

@@ -23,7 +23,6 @@ class PendingOrdersWidget extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-m-arrow-trending-up', IconPosition::After)
                 ->descriptionColor('warning')
                 ->chart(self::weeklyTrend([
-                    'draft',
                     'assigned',
                 ]))
                 ->chartColor('warning'),

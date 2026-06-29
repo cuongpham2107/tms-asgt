@@ -9,8 +9,6 @@ use App\Filament\Resources\Orders\Actions\BulkSendOrderAction;
 use App\Filament\Resources\Orders\Actions\CancelOrderAction;
 use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
-use App\Filament\Resources\Orders\Actions\DriverSwapAction;
-use App\Filament\Resources\Orders\Actions\ReassignDriverAction;
 use App\Filament\Resources\Orders\Actions\SendOrderAction;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Filament\Tables\Columns\UniqueMapColumn;
@@ -104,7 +102,7 @@ class OrdersTable extends BaseTable
                     ->sortable(),
 
                 TextColumn::make('total_packages')
-                    ->label('Tải trọng')
+                    ->label('Tải trọng/Số kiện')
                     ->formatStateUsing(function (Order $record): HtmlString {
                         $totalPackages = number_format((float) ($record->total_packages ?? 0), 0, ',', '.');
                         $totalWeight = number_format((float) ($record->total_weight ?? 0), 0, ',', '.');
@@ -257,8 +255,6 @@ class OrdersTable extends BaseTable
                     AssignTransportAction::make(),
                     SendOrderAction::make(),
                     UnsendOrderAction::make(),
-                    DriverSwapAction::make(),
-                    ReassignDriverAction::make(),
                     CreateReturnTripAction::make(),
                     CancelOrderAction::make(),
                     DeleteAction::make()
@@ -272,12 +268,12 @@ class OrdersTable extends BaseTable
                 ]),
             ], position: RecordActionsPosition::BeforeColumns)
             ->groups([
-                Group::make('area.type')
+                Group::make('area.code')
                     ->label('Loại khu vực')
                     ->getTitleFromRecordUsing(fn (Order $record): string => $record->area?->code ?? 'Chưa xác định')
                     ->collapsible(),
             ])
-            ->defaultGroup('area.type')
+            ->defaultGroup('area.code')
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),

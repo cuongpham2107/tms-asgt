@@ -87,6 +87,14 @@ class ListOrders extends ListRecords
             'label' => 'Đã gửi',
             'color' => 'bg-sky-500',
         ],
+        'in_transit' => [
+            'label' => 'Đang vận chuyển',
+            'color' => 'bg-amber-500',
+        ],
+        'driver_swap' => [
+            'label' => 'Đảo lái',
+            'color' => 'bg-red-600',
+        ],
         'completed' => [
             'label' => 'Hoàn thành',
             'color' => 'bg-emerald-500',
@@ -248,6 +256,7 @@ class ListOrders extends ListRecords
     public function getOrderStatusCount(string $status): int
     {
         return Order::query()
+            ->where('status', '!=', OrderStatus::Draft->value)
             ->when(
                 $status !== 'all',
                 fn (Builder $query): Builder => $query->whereIn('status', $this->resolveStatusValues($status)),
@@ -258,18 +267,18 @@ class ListOrders extends ListRecords
                     $start = Carbon::parse($this->startDate)->startOfDay();
                     $end = Carbon::parse($this->endDate)->endOfDay();
 
-                    return $query->whereBetween('created_at', [$start, $end]);
+                    return $query->whereBetween('planned_loading_at', [$start, $end]);
                 }
 
                 if (filled($this->startDate)) {
                     $start = Carbon::parse($this->startDate)->startOfDay();
 
-                    return $query->where('created_at', '>=', $start);
+                    return $query->where('planned_loading_at', '>=', $start);
                 }
 
                 $end = Carbon::parse($this->endDate)->endOfDay();
 
-                return $query->where('created_at', '<=', $end);
+                return $query->where('planned_loading_at', '<=', $end);
             })
             ->count();
     }
@@ -289,7 +298,25 @@ class ListOrders extends ListRecords
 
     protected function getTableQuery(): Builder
     {
+        $statusOrder = [
+            OrderStatus::Assigned->value => 0,
+            OrderStatus::Sent->value => 1,
+            OrderStatus::InTransit->value => 2,
+            OrderStatus::DriverSwap->value => 3,
+            OrderStatus::Completed->value => 4,
+            OrderStatus::Cancelled->value => 5,
+        ];
+
+        $caseSql = 'CASE status '
+            .collect($statusOrder)->map(fn ($ord, $status) => "WHEN '{$status}' THEN {$ord}")->implode(' ')
+            .' END';
+
         return OrderResource::getEloquentQuery()
+            ->leftJoin('areas', 'orders.area_id', '=', 'areas.id')
+            ->orderBy('areas.sort_order')
+            ->orderByRaw($caseSql)
+            ->orderBy('orders.created_at', 'desc')
+            ->select('orders.*')
             ->with([
                 'customer',
                 'deliveryPoints.location',
@@ -328,24 +355,24 @@ class ListOrders extends ListRecords
                 });
             })
 
-            // Date range filter (by created_at). Supports start, end or both.
+            // Date range filter (by planned_loading_at). Supports start, end or both.
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
                     $start = Carbon::parse($this->startDate)->startOfDay();
                     $end = Carbon::parse($this->endDate)->endOfDay();
 
-                    return $query->whereBetween('created_at', [$start, $end]);
+                    return $query->whereBetween('planned_loading_at', [$start, $end]);
                 }
 
                 if (filled($this->startDate)) {
                     $start = Carbon::parse($this->startDate)->startOfDay();
 
-                    return $query->where('created_at', '>=', $start);
+                    return $query->where('planned_loading_at', '>=', $start);
                 }
 
                 $end = Carbon::parse($this->endDate)->endOfDay();
 
-                return $query->where('created_at', '<=', $end);
+                return $query->where('planned_loading_at', '<=', $end);
             });
     }
 
@@ -358,6 +385,8 @@ class ListOrders extends ListRecords
             'draft' => [OrderStatus::Draft->value],
             'assigned' => [OrderStatus::Assigned->value],
             'sent' => [OrderStatus::Sent->value],
+            'in_transit' => [OrderStatus::InTransit->value],
+            'driver_swap' => [OrderStatus::DriverSwap->value],
             'completed' => [OrderStatus::Completed->value],
             'cancelled' => [OrderStatus::Cancelled->value],
             default => [],
@@ -367,24 +396,25 @@ class ListOrders extends ListRecords
     private function baseCountQuery(): Builder
     {
         return Order::query()
+            ->where('status', '!=', OrderStatus::Draft->value)
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
                     $start = Carbon::parse($this->startDate)->startOfDay();
                     $end = Carbon::parse($this->endDate)->endOfDay();
 
-                    return $query->whereBetween('created_at', [$start, $end]);
+                    return $query->whereBetween('planned_loading_at', [$start, $end]);
                 }
 
                 if (filled($this->startDate)) {
                     $start = Carbon::parse($this->startDate)->startOfDay();
 
-                    return $query->where('created_at', '>=', $start);
+                    return $query->where('planned_loading_at', '>=', $start);
                 }
 
                 $end = Carbon::parse($this->endDate)->endOfDay();
 
-                return $query->where('created_at', '<=', $end);
+                return $query->where('planned_loading_at', '<=', $end);
             });
     }
 }

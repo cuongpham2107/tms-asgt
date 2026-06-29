@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Orders\Actions;
+namespace App\Filament\Resources\Trips\Actions;
 
 use App\Enums\CheckpointType;
 use App\Enums\DriverSwapReason;
@@ -8,7 +8,7 @@ use App\Enums\TripStatus;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\DriverShift;
 use App\Models\DriverSwap;
-use App\Models\Order;
+use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -23,23 +23,40 @@ class ReassignDriverAction
             ->label('Gán lại tài xế')
             ->icon('heroicon-o-arrow-path')
             ->color('warning')
-            ->visible(fn (Order $record): bool => $record->trip && $record->trip->status === TripStatus::DriverSwap)
+            ->visible(fn (Trip $record): bool => $record->status === TripStatus::DriverSwap)
             ->modalHeading('Gán lại tài xế mới')
             ->modalDescription('Chuyến đi đang yêu cầu đảo tài xế. Chọn tài xế mới để tiếp tục xử lý.')
             ->form([
                 Select::make('new_driver_id')
                     ->label('Tài xế mới')
-                    ->options(fn (Order $record): array => User::query()
+                    ->options(fn (): array => User::query()
                         ->where('is_active', true)
-                        ->whereHas('driverShifts', fn ($q) => $q->whereNull('end_time'))
-                        ->with(['vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng')])
+                        ->with([
+                            'vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng'),
+                            'driverShifts' => fn ($q) => $q->whereNull('end_time'),
+                        ])
                         ->get()
+                        ->sortByDesc(fn (User $driver): bool => $driver->driverShifts->isNotEmpty())
                         ->mapWithKeys(function (User $driver): array {
                             $parts = [$driver->name];
 
                             $assignedVehicle = $driver->vehiclesAsDriver->first();
                             if ($assignedVehicle) {
                                 $parts[] = $assignedVehicle->plate_number;
+                            }
+
+                            if ($driver->phone) {
+                                $parts[] = $driver->phone;
+                            }
+
+                            $activeShift = $driver->driverShifts->first();
+                            if ($activeShift && $activeShift->shift_type) {
+                                $shiftLabel = $activeShift->shift_type->getLabel();
+                                $startTime = $activeShift->start_time?->format('H:i');
+                                $parts[] = "Ca: {$shiftLabel}";
+                                if ($startTime) {
+                                    $parts[] = $startTime;
+                                }
                             }
 
                             if ($assignedVehicle?->gps_lat && $assignedVehicle?->gps_lng) {
@@ -62,19 +79,8 @@ class ReassignDriverAction
                     ->options(DriverSwapReason::class)
                     ->required(),
             ])
-            ->action(function (Order $record, array $data): void {
-                $trip = $record->trip;
-                if (! $trip) {
-                    Notification::make()
-                        ->danger()
-                        ->title('Không tìm thấy chuyến đi')
-                        ->body('Đơn hàng này chưa được gán chuyến đi.')
-                        ->send();
-
-                    return;
-                }
-
-                $oldDriver = $trip->driver;
+            ->action(function (Trip $record, array $data): void {
+                $oldDriver = $record->driver;
                 if (! $oldDriver) {
                     Notification::make()
                         ->danger()
@@ -104,28 +110,18 @@ class ReassignDriverAction
                     ->whereNull('end_time')
                     ->first();
 
-                if (! $newShift) {
-                    Notification::make()
-                        ->danger()
-                        ->title('Tài xế mới chưa có ca trực')
-                        ->body('Tài xế này hiện không có ca đang hoạt động. Vui lòng chọn tài xế khác.')
-                        ->send();
-
-                    return;
-                }
-
                 DriverSwap::create([
-                    'trip_id' => $trip->id,
-                    'from_driver_id' => $trip->driver_id,
+                    'trip_id' => $record->id,
+                    'from_driver_id' => $record->driver_id,
                     'to_driver_id' => $data['new_driver_id'],
                     'from_shift_id' => $oldShift?->id,
-                    'to_shift_id' => $newShift->id,
+                    'to_shift_id' => $newShift?->id,
                     'reason' => $data['reason'],
                     'created_by' => auth()->id(),
                 ]);
 
                 $lastCheckpoint = TripCheckpoint::query()
-                    ->where('trip_id', $trip->id)
+                    ->where('trip_id', $record->id)
                     ->where('checkpoint_type', '!=', CheckpointType::DriverSwap)
                     ->latest('occurred_at')
                     ->first();
@@ -139,7 +135,7 @@ class ReassignDriverAction
                     default => TripStatus::Pending,
                 };
 
-                $trip->update([
+                $record->update([
                     'driver_id' => $data['new_driver_id'],
                     'shift_id' => $newShift?->id,
                     'status' => $status,
@@ -150,7 +146,7 @@ class ReassignDriverAction
                     ->title('Đã gán lại tài xế')
                     ->body(sprintf(
                         'Chuyến #%s đã được gán lại từ %s sang %s',
-                        $trip->trip_code,
+                        $record->trip_code,
                         $oldDriver?->name ?? 'N/A',
                         $newDriver->name ?? 'N/A',
                     ))

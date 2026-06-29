@@ -4,12 +4,15 @@ namespace App\Filament\Resources\Trips\Tables;
 
 use App\Enums\TripStatus;
 use App\Filament\BaseTable;
+use App\Filament\Resources\Trips\Actions\DriverSwapAction;
+use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -153,27 +156,30 @@ class TripsTable extends BaseTable
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(25)
             ->recordActions([
-                Action::make('view_timeline')
-                    ->label('Hành trình')
-                    ->icon('heroicon-o-map-pin')
-                    ->iconButton()
-                    ->color('primary')
-                    ->modal()
-                    ->modalWidth('5xl')
-                    ->modalHeading(fn (Trip $record): string => 'Hành trình — '.$record->vehicle?->plate_number)
-                    ->modalContent(fn (Trip $record) => view('filament.resources.trips.components.trip-timeline-popup', [
-                        'trip' => $record,
-                    ]))
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Đóng'),
+                ActionGroup::make([
+                    Action::make('view_timeline')
+                        ->label('Hành trình')
+                        ->icon('heroicon-o-map-pin')
+                        ->color('primary')
+                        ->modal()
+                        ->modalWidth('5xl')
+                        ->modalHeading(fn (Trip $record): string => 'Hành trình — '.$record->vehicle?->plate_number)
+                        ->modalContent(fn (Trip $record) => view('filament.resources.trips.components.trip-timeline-popup', [
+                            'trip' => $record,
+                        ]))
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Đóng'),
 
-                EditAction::make()
-                    ->slideOver()
-                    ->iconButton()
-                    ->stickyModalFooter()
-                    ->modalWidth('7xl')
-                    ->modalHeading(fn (Trip $record): string => 'Sửa chuyến — '.$record->trip_code)
-                    ->form(fn (Schema $schema): Schema => TripForm::configure($schema)),
+                    EditAction::make()
+                        ->slideOver()
+                        ->stickyModalFooter()
+                        ->modalWidth('7xl')
+                        ->modalHeading(fn (Trip $record): string => 'Sửa chuyến — '.$record->trip_code)
+                        ->form(fn (Schema $schema): Schema => TripForm::configure($schema)),
+
+                    DriverSwapAction::make(),
+                    ReassignDriverAction::make(),
+                ]),
             ], position: RecordActionsPosition::BeforeColumns);
     }
 
@@ -242,18 +248,22 @@ class TripsTable extends BaseTable
     private static function getDrivers(Trip $record): string
     {
         $names = [];
+        $swaps = $record->driverSwaps->sortBy('created_at');
 
-        if ($record->driver) {
+        if ($swaps->isNotEmpty()) {
+            $firstSwap = $swaps->first();
+            if ($firstSwap->fromDriver) {
+                $names[] = $firstSwap->fromDriver->name;
+            }
+
+            foreach ($swaps as $swap) {
+                if ($swap->toDriver) {
+                    $names[] = $swap->toDriver->name;
+                }
+            }
+        } elseif ($record->driver) {
             $names[] = $record->driver->name;
         }
-
-        foreach ($record->driverSwaps->sortBy('created_at') as $swap) {
-            if ($swap->toDriver) {
-                $names[] = $swap->toDriver->name;
-            }
-        }
-
-        $names = array_unique(array_filter($names));
 
         return ! empty($names) ? implode(' → ', $names) : '—';
     }

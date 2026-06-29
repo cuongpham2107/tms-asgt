@@ -36,6 +36,7 @@ class TripController extends Controller
             ->whereNotIn('status', ['completed'])
             ->with([
                 'vehicle',
+                'driverSwaps.toDriver',
                 'orders' => fn ($q) => $q->with([
                     'customer',
                     'pickupLocation',
@@ -71,6 +72,7 @@ class TripController extends Controller
 
         $trip->load([
             'vehicle',
+            'driverSwaps.toDriver',
             'orders' => fn ($q) => $q->with([
                 'customer',
                 'pickupLocation',

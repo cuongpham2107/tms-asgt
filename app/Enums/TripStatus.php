@@ -75,7 +75,6 @@ enum TripStatus: string implements HasColor, HasLabel
             self::ArrivedPickup,
             self::Delivering,
             self::ArrivedDelivery,
-            self::DriverSwap,
         ]);
     }
 }

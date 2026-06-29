@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\CheckpointType;
+use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DriverSwapRequest;
@@ -121,6 +122,10 @@ class DriverSwapController extends Controller
             $trip->shift_id = null;
             $trip->save();
 
+            $trip->orders()
+                ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
+                ->update(['status' => OrderStatus::DriverSwap->value]);
+
             DB::commit();
 
             $checkpoint->load('photos');
@@ -132,7 +137,7 @@ class DriverSwapController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Unable to swap driver', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Không thể chuyển lái xe', 'error' => $e->getMessage()], 500);
         }
     }
 }

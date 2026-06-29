@@ -19,7 +19,6 @@ trait InteractsWithOrderStats
     {
         return Order::query()
             ->whereIn('status', [
-                OrderStatus::Draft->value,
                 OrderStatus::Assigned->value,
             ])
             ->count();

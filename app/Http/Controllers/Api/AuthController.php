@@ -28,7 +28,7 @@ class AuthController extends Controller
 
         if (! Auth::attempt($data)) {
             /** @status 401 */
-            return response()->json(['message' => 'Invalid credentials'], 401);
+            return response()->json(['message' => 'Thông tin đăng nhập không hợp lệ'], 401);
         }
 
         /** @var User $user */
@@ -55,6 +55,6 @@ class AuthController extends Controller
             $user->currentAccessToken()?->delete();
         }
 
-        return response()->json(['message' => 'Logged out']);
+        return response()->json(['message' => 'Đã đăng xuất thành công']);
     }
 }
