@@ -2,7 +2,7 @@
 
 ## Project
 
-.NET 10.0 ASP.NET Core Web API (Clean Architecture). No README yet.
+.NET 10.0 ASP.NET Core Web API — Transport Management System (Clean Architecture).
 
 ## Architecture
 
@@ -42,7 +42,7 @@ TMS.Api/
   Program.cs           OData EDM model + Swagger + DI wiring
 ```
 
-No test projects, no CI, no README, no opencode.json yet.
+No test projects, no CI, no opencode.json yet.
 
 ## Commands
 
@@ -64,6 +64,7 @@ Swagger UI at `/swagger` in Development.
 - Domain entities are pure POCOs in Core — zero EF dependency
 - EF config uses Fluent API in `IEntityTypeConfiguration<T>` classes, not data annotations
 - Repositories return `IQueryable<T>` for OData query push-down
+- Generic repository interface `IRepository<TEntity,TKey>` in Core — controllers inherit from `BaseODataController<TEntity,TKey>` for reusable CRUD
 - No test framework chosen yet — if adding tests, default to xUnit unless documented otherwise
 - `.slnx` is the solution file — use `dotnet sln TMS.slnx add <project.csproj>` to add projects
 
