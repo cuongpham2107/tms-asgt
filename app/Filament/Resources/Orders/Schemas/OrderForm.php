@@ -103,6 +103,14 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->required()
                                     ->columnSpan(fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2),
 
+                                TextInput::make('chargeable_weight')
+                                    ->label('Tải trọng tính cước')
+                                    ->suffix('tấn')
+                                    ->numeric()
+                                    ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
+                                    ->visible(fn (Get $get): bool => self::isExternalOrder($get))
+                                    ->columnSpan(1),
+
                                 ToggleButtons::make('cargo_type')
                                     ->label('Loại hàng')
                                     ->default(CargoType::Gcr->value)

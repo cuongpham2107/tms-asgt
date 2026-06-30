@@ -23,7 +23,14 @@ class TripCheckpointController extends Controller
             return response()->json(['message' => 'Bạn không phải tài xế được gán cho chuyến này'], 403);
         }
 
-        $result = $this->service->recordCheckpoint($trip, $request->validated(), $request->file('photos'));
+        $photos = $request->file('photos');
+        $photosArray = match (true) {
+            is_array($photos) => $photos,
+            $photos !== null => [$photos],
+            default => null,
+        };
+
+        $result = $this->service->recordCheckpoint($trip, $request->validated(), $photosArray);
 
         return response()->json([
             'checkpoints' => TripCheckpointResource::collection($result),

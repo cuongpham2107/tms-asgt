@@ -89,7 +89,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                     DateTimePicker::make('planned_loading_at')
                         ->label('Thời gian dự kiến đóng hàng')
                         ->seconds(false)
-                        ->native(false)
+                        ->native(true)
                         ->default(now())
                         ->required()
                         ->prefixIcon(Heroicon::OutlinedCalendarDays)
@@ -97,16 +97,20 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                     self::getDeliveryPointsRepeaterField('external'),
 
                     TextInput::make('cargo_name')
-                        ->label('Tên hàng hoá')
-                        ->columnSpanFull()
-                        ->columnSpan(2),
+                        ->label('Tên hàng hoá'),
                     TextInput::make('total_packages')
                         ->label('Số kiện')
                         ->numeric(),
                     TextInput::make('total_weight')
                         ->label('Trọng lượng (tấn)')
                         ->live(onBlur: true)
+                        ->suffix('tấn')
                         ->numeric(),
+                    TextInput::make('chargeable_weight')
+                        ->label('Tải trọng tính cước')
+                        ->suffix('tấn')
+                        ->numeric()
+                        ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14]),
                     Textarea::make('notes')
                         ->label('Ghi chú')
                         ->columnSpanFull(),

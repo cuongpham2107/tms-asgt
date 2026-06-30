@@ -7,6 +7,7 @@ use App\Enums\Priority;
 use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
+use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Location;
@@ -184,7 +185,7 @@ abstract class CreatesOrderTransportCards
                         $loadCapacity.' tấn',
                         $currentLocation['name'] ?? '',
                     ],
-                    'suggestedBadge' => 'Phù hợp nhất',
+                    // 'suggestedBadge' => 'Phù hợp nhất',
                     'suggestedBadgeClasses' => 'border border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800/40 dark:bg-primary-900/30 dark:text-primary-200',
                     'isSuggested' => $isSuggested,
                     'suggestionScore' => $suggestionScore,
@@ -444,7 +445,7 @@ abstract class CreatesOrderTransportCards
             ->searchable()
             ->columnSpanFull()
             ->live()
-            ->afterStateUpdated(function ($state, Set $set) use ($setAreaId): void {
+            ->afterStateUpdated(function ($state, Set $set): void {
                 if (blank($state)) {
                     return;
                 }
@@ -454,9 +455,6 @@ abstract class CreatesOrderTransportCards
                     $firstLocation = $customer->locations()->first();
                     if ($firstLocation !== null) {
                         $set('pickup_location_id', $firstLocation->id);
-                        if ($setAreaId && $firstLocation->area_id !== null) {
-                            $set('area_id', $firstLocation->area_id);
-                        }
                     }
                 }
             })
@@ -529,7 +527,8 @@ abstract class CreatesOrderTransportCards
                                 $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
 
                                 return $type === 'HHHK' ? 'full' : 2;
-                            }),
+                            })
+                            ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents()),
                         TextInput::make('contact_person')
                             ->label('Người nhận')
                             ->placeholder('Họ tên')

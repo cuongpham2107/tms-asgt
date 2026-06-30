@@ -15,27 +15,11 @@
                 this.activeTab = 'suggested';
             }
 
-            this.$watch(() => {
-                try {
-                    const val = this.getNestedValue(this.$wire, '{{ $getStatePath() }}');
-                    console.log('[VehiclePicker] Watch getter for {{ $getStatePath() }}:', val);
-                    return val;
-                } catch (e) {
-                    console.error('[VehiclePicker] Watch getter error for {{ $getStatePath() }}:', e);
-                    return undefined;
-                }
-            }, (val) => {
-                console.log('[VehiclePicker] Watch triggered for {{ $getStatePath() }} to:', val, 'current state:', this.state);
-                if (val !== undefined && val !== this.state) {
-                    this.state = val;
+            this.$watch('search', (val) => {
+                if (val.length === 0 && this.hasSuggestionTab()) {
+                    this.activeTab = 'suggested';
                 }
             });
-        },
-        getNestedValue(obj, path) {
-            return path.split('.').reduce((acc, part) => {
-                if (acc === null || acc === undefined) return undefined;
-                return acc[part];
-            }, obj);
         },
         hasSuggestionTab() {
             return this.cards.some(card => card.isSuggested === true);
@@ -66,6 +50,10 @@
                 .slice(0, 3);
         },
         scopedCards() {
+            if (this.search) {
+                return this.cards;
+            }
+
             if (this.hasSuggestionTab() && this.activeTab === 'suggested') {
                 return this.suggestedCards();
             }
@@ -116,7 +104,7 @@
             };
             return colors[dot] ?? 'bg-gray-400';
         },
-    }" x-effect="cards = @js($cards)" class="space-y-3">
+    }" class="space-y-3">
         {{-- Tabs + Search --}}
         <div class="flex items-center justify-between gap-3">
             <div x-show="hasSuggestionTab() || hasVehicleTypeFilters()" x-cloak
@@ -176,14 +164,14 @@
                     <div class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                         <x-filament::icon icon="heroicon-m-magnifying-glass" class="h-4 w-4" />
                     </div>
-                    <input type="search" x-model.debounce.200ms="search" placeholder="{{ $getSearchPlaceholder() }}"
+                    <input type="search" x-model="search" placeholder="{{ $getSearchPlaceholder() }}"
                         class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500" />
                 </div>
             </div>
         </div>
 
         {{-- Cards Grid --}}
-        <div class="grid max-h-162.5 gap-2.5 overflow-y-auto p-2 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
+        <div class="grid max-h-162.5 gap-2.5 overflow-y-auto p-1 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
             <template x-for="card in visibleCards()" :key="card.value">
                 <div x-show="matches(card)" x-cloak class="h-full">
                     <button type="button" x-on:click="select(card.value)"
@@ -202,7 +190,7 @@
                         </div>
 
                         {{-- Card Header --}}
-                        <div class="flex items-center gap-3 border-b border-gray-100 px-3.5 py-3 dark:border-gray-800">
+                        <div class="flex items-center gap-3 border-b border-gray-100 p-2 dark:border-gray-800">
                             {{-- Avatar / Icon --}}
                             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm"
                                 :class="isSelected(card.value) ?
@@ -238,7 +226,7 @@
 
                             {{-- Badge --}}
                             <span x-show="card.badge"
-                                class="shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
+                                class="shrink-0 rounded-lg px-2 py-1 text-[8px] font-semibold uppercase "
                                 :class="activeTab === 'suggested' && card.isSuggested ?
                                     (card.suggestedBadgeClasses ?? card.badgeClasses ??
                                         'border-gray-200 bg-gray-50 text-gray-600') :
@@ -291,7 +279,7 @@
                 <x-filament::icon icon="heroicon-o-magnifying-glass" class="h-5 w-5 text-gray-400" />
             </div>
             <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Không tìm thấy kết quả phù hợp</p>
-            <p class="text-xs text-gray-400 dark:text-gray-500">Thử từ khóa khác hoặc chuyển sang tab "Tất cả"</p>
+            <p class="text-xs text-gray-400 dark:text-gray-500">Thử từ khóa khác để tìm kiếm</p>
         </div>
     </div>
 </x-dynamic-component>

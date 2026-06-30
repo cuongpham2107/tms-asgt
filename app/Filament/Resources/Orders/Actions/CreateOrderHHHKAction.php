@@ -99,7 +99,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                     DateTimePicker::make('planned_loading_at')
                         ->label('Thời gian dự kiến đóng hàng')
                         ->seconds(false)
-                        ->native(false)
+                        ->native(true)
                         ->default(now())
                         ->prefixIcon(Heroicon::OutlinedCalendarDays)
                         ->required(),

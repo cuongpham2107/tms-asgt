@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Vehicles\Schemas;
 
+use App\Models\Vehicle;
 use CodeWithDennis\FilamentAdvancedChoice\Filament\Forms\Components\RadioCard;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -61,7 +62,6 @@ class VehicleForm
                             ->label('Hãng xe')
                             ->prefixIcon(Heroicon::OutlinedBuildingOffice)
                             ->native(false)
-                            ->required()
                             ->options([
                                 'HYUNDAI' => 'HYUNDAI',
                                 'ISUZU' => 'ISUZU',
@@ -86,17 +86,18 @@ class VehicleForm
                             ->inputMode('decimal')
                             ->minValue(0)
                             ->step(0.1)
+                            ->required()
                             ->suffix(' tấn'),
-                        Select::make('fuel_type')
-                            ->label('Loại nhiên liệu')
-                            ->native(false)
-                            ->options([
-                                'Diesel' => 'Diesel',
-                                'Gasoline' => 'Xăng',
-                                'Electric' => 'Điện',
-                                'Hybrid' => 'Hybrid',
-                                'Other' => 'Khác',
-                            ]),
+                        // Select::make('fuel_type')
+                        //     ->label('Loại nhiên liệu')
+                        //     ->native(false)
+                        //     ->options([
+                        //         'Diesel' => 'Diesel',
+                        //         'Gasoline' => 'Xăng',
+                        //         'Electric' => 'Điện',
+                        //         'Hybrid' => 'Hybrid',
+                        //         'Other' => 'Khác',
+                        //     ]),
                         TextInput::make('current_mileage')
                             ->label('Số km hiện tại')
                             ->numeric()
@@ -105,7 +106,11 @@ class VehicleForm
                             ->suffix(' km'),
                         TextInput::make('owner')
                             ->label('Chủ xe')
-                            ->required()
+                            ->datalist(fn (): array => Vehicle::distinct()
+                                ->whereNotNull('owner')
+                                ->where('owner', '!=', '')
+                                ->pluck('owner')
+                                ->toArray())
                             ->maxLength(255),
                         Select::make('current_driver_id')
                             ->label('Lái xe hiện tại')
@@ -128,7 +133,7 @@ class VehicleForm
                         Toggle::make('is_active')
                             ->label('Trạng thái hoạt động')
                             ->default(true)
-                            ->inline(true),
+                            ->inline(false),
                         Textarea::make('notes')
                             ->label('Ghi chú')
                             ->maxLength(1000)

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Trips\Actions;
 
 use App\Enums\CheckpointType;
 use App\Enums\DriverSwapReason;
+use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\DriverShift;
@@ -140,6 +141,16 @@ class ReassignDriverAction
                     'shift_id' => $newShift?->id,
                     'status' => $status,
                 ]);
+
+                $restoredStatus = in_array($status, [
+                    TripStatus::Delivering,
+                    TripStatus::ArrivedDelivery,
+                    TripStatus::Delivered,
+                ]) ? OrderStatus::InTransit : OrderStatus::Sent;
+
+                $record->orders()
+                    ->where('status', OrderStatus::DriverSwap->value)
+                    ->update(['status' => $restoredStatus->value]);
 
                 Notification::make()
                     ->success()

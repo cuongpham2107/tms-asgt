@@ -32,6 +32,7 @@ class VehiclePicker extends CardPicker
             ->extraAttributes([
                 'class' => 'shrink-0 whitespace-nowrap w-max',
             ])
+            ->model(Vehicle::class)
             ->modal()
             ->modalHeading('Thêm phương tiện mới')
             ->modalWidth(Width::MaxContent)

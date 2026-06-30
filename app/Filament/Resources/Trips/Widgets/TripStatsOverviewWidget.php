@@ -7,6 +7,7 @@ use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Filament\Traits\InteractsWithPageTable;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Database\Eloquent\Builder;
 
 class TripStatsOverviewWidget extends StatsOverviewWidget
 {
@@ -27,24 +28,28 @@ class TripStatsOverviewWidget extends StatsOverviewWidget
 
         $total = (clone $baseQuery)->count();
 
-        $completed = (clone $baseQuery)->where('status', 'completed')->count();
+        $activeStatuses = TripStatus::activeStatuses();
 
         $running = (clone $baseQuery)
-            ->where('status', 'in_progress')
+            ->whereIn('status', array_map(fn ($s) => $s->value, $activeStatuses))
             ->count();
 
         $pending = (clone $baseQuery)
-            ->where('status', 'pending')
+            ->where('status', TripStatus::Pending->value)
+            ->count();
+
+        $completed = (clone $baseQuery)
+            ->where('status', TripStatus::Completed->value)
             ->count();
 
         $delayed = (clone $baseQuery)
-            ->where('status', 'in_progress')
-            ->whereHas('orders', fn ($q) => $q
-                ->whereIn('status', [
-                    TripStatus::Started->value,
-                    TripStatus::ArrivedPickup->value,
-                    TripStatus::Delivering->value,
-                ])
+            ->whereIn('status', [
+                TripStatus::Started->value,
+                TripStatus::ArrivedPickup->value,
+                TripStatus::Delivering->value,
+                TripStatus::ArrivedDelivery->value,
+            ])
+            ->whereHas('orders', fn (Builder $q) => $q
                 ->where('planned_loading_at', '<', now())
             )->count();
 
@@ -52,32 +57,27 @@ class TripStatsOverviewWidget extends StatsOverviewWidget
             Stat::make('Tổng chuyến', $total)
                 ->description('Tất cả chuyến đi')
                 ->descriptionIcon('heroicon-m-truck')
-                ->color('primary')
-                ->chart([7, 3, 4, 5, 6, 3, 5, 3]),
+                ->color('primary'),
 
             Stat::make('Đang chạy', $running)
-                ->description('Trên đường giao')
+                ->description('Đang vận chuyển')
                 ->descriptionIcon('heroicon-m-play-circle')
-                ->color('info')
-                ->chart([2, 4, 3, 6, 5, 7, 8, 6]),
+                ->color('info'),
 
-            Stat::make('Đã gửi', $pending)
+            Stat::make('Chờ chạy', $pending)
                 ->description('Chưa khởi hành')
                 ->descriptionIcon('heroicon-m-calendar-days')
-                ->color('warning')
-                ->chart([3, 2, 4, 2, 5, 2, 1, 2]),
+                ->color('warning'),
 
             Stat::make('Hoàn thành', $completed)
                 ->description('Đã kết thúc')
                 ->descriptionIcon('heroicon-m-check-badge')
-                ->color('success')
-                ->chart([5, 6, 5, 8, 9, 12, 10, 15]),
+                ->color('success'),
 
             Stat::make('Trễ giờ', $delayed)
-                ->description('Cần lưu ý')
+                ->description('Quá thời gian dự kiến')
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
-                ->color('danger')
-                ->chart([0, 1, 0, 1, 2, 1, 3, 1]),
+                ->color('danger'),
         ];
     }
 }

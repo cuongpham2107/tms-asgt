@@ -33,7 +33,7 @@ class ListVehicles extends ListRecords
                 ->modal()
                 ->modalHeading('Thêm xe mới')
                 ->modalDescription('Điền thông tin chi tiết về xe để thêm vào hệ thống quản lý.')
-                ->modalWidth('2xl')
+                ->modalWidth('3xl')
                 ->extraAttributes([
                     'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors',
                 ]),

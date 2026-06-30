@@ -243,9 +243,56 @@ class ListOrders extends ListRecords
         $this->resetPage();
     }
 
+    /**
+     * Base query with cross-filters for a specific pill type.
+     * Includes all active filters EXCEPT the one being counted.
+     *
+     * @param  array<int, string>  $excludeFilters  e.g. ['type'], ['status'], ['place']
+     */
+    private function crossFilteredQuery(array $excludeFilters = []): Builder
+    {
+        return Order::query()
+            ->where('status', '!=', OrderStatus::Draft->value)
+            ->when(
+                ! in_array('status', $excludeFilters) && $this->activeStatusFilter === 'all',
+                fn (Builder $q): Builder => $q->where('status', '!=', OrderStatus::Completed->value),
+            )
+            ->when(
+                ! in_array('type', $excludeFilters) && $this->activeOrderTypeFilter !== 'all',
+                fn (Builder $q): Builder => $q->where('type', $this->activeOrderTypeFilter),
+            )
+            ->when(
+                ! in_array('status', $excludeFilters) && $this->activeStatusFilter !== 'all',
+                fn (Builder $q): Builder => $q->whereIn('status', $this->resolveStatusValues($this->activeStatusFilter)),
+            )
+            ->when(
+                ! in_array('place', $excludeFilters) && $this->activePlaceFilter !== 'all',
+                fn (Builder $q): Builder => $q->whereHas('area', fn (Builder $aq): Builder => $aq->where('code', $this->activePlaceFilter)),
+            )
+            ->when($this->showMineOnly, fn (Builder $q): Builder => $q->where('created_by', Auth::id()))
+            ->when(filled($this->startDate) || filled($this->endDate), function (Builder $q): Builder {
+                if (filled($this->startDate) && filled($this->endDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $end = Carbon::parse($this->endDate)->endOfDay();
+
+                    return $q->whereBetween('planned_loading_at', [$start, $end]);
+                }
+
+                if (filled($this->startDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+
+                    return $q->where('planned_loading_at', '>=', $start);
+                }
+
+                $end = Carbon::parse($this->endDate)->endOfDay();
+
+                return $q->where('planned_loading_at', '<=', $end);
+            });
+    }
+
     public function getOrderTypeCount(string $type): int
     {
-        return $this->baseCountQuery()
+        return $this->crossFilteredQuery(['type'])
             ->when(
                 $type !== 'all',
                 fn (Builder $query): Builder => $query->where('type', $type),
@@ -255,37 +302,17 @@ class ListOrders extends ListRecords
 
     public function getOrderStatusCount(string $status): int
     {
-        return Order::query()
-            ->where('status', '!=', OrderStatus::Draft->value)
+        return $this->crossFilteredQuery(['status'])
             ->when(
                 $status !== 'all',
                 fn (Builder $query): Builder => $query->whereIn('status', $this->resolveStatusValues($status)),
             )
-            ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
-            ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
-                if (filled($this->startDate) && filled($this->endDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
-                    $end = Carbon::parse($this->endDate)->endOfDay();
-
-                    return $query->whereBetween('planned_loading_at', [$start, $end]);
-                }
-
-                if (filled($this->startDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
-
-                    return $query->where('planned_loading_at', '>=', $start);
-                }
-
-                $end = Carbon::parse($this->endDate)->endOfDay();
-
-                return $query->where('planned_loading_at', '<=', $end);
-            })
             ->count();
     }
 
     public function getOrderPlaceCount(string $place): int
     {
-        return $this->baseCountQuery()
+        return $this->crossFilteredQuery(['place'])
             ->when(
                 $place !== 'all',
                 fn (Builder $query): Builder => $query->whereHas(
@@ -303,11 +330,12 @@ class ListOrders extends ListRecords
             OrderStatus::Sent->value => 1,
             OrderStatus::InTransit->value => 2,
             OrderStatus::DriverSwap->value => 3,
-            OrderStatus::Completed->value => 4,
             OrderStatus::Cancelled->value => 5,
         ];
 
-        $caseSql = 'CASE status '
+        $completedExcluded = true;
+
+        $caseSql = 'CASE orders.status '
             .collect($statusOrder)->map(fn ($ord, $status) => "WHEN '{$status}' THEN {$ord}")->implode(' ')
             .' END';
 
@@ -328,7 +356,7 @@ class ListOrders extends ListRecords
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(
                 $this->activeOrderTypeFilter !== 'all',
-                fn (Builder $query): Builder => $query->where('type', $this->activeOrderTypeFilter),
+                fn (Builder $query): Builder => $query->where('orders.type', $this->activeOrderTypeFilter),
             )
             ->when(
                 $this->activeStatusFilter !== 'all',
@@ -340,6 +368,10 @@ class ListOrders extends ListRecords
                     'area',
                     fn (Builder $categoryQuery): Builder => $categoryQuery->where('code', $this->activePlaceFilter),
                 ),
+            )
+            ->when(
+                $this->activeStatusFilter === 'all',
+                fn (Builder $query): Builder => $query->where('orders.status', '!=', OrderStatus::Completed->value),
             )
             ->when(filled($this->orderSearch), function (Builder $query): Builder {
                 $search = trim((string) $this->orderSearch);

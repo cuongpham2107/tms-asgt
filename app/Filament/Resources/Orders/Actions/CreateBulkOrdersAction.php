@@ -103,6 +103,8 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->label('Thời gian dự kiến đóng hàng')
                                             ->seconds(false)
                                             ->native(true)
+                                            ->format('d/m/Y H:i')
+                                            ->displayFormat('d/m/Y H:i')
                                             ->default(now())
                                             ->required(),
                                         // Pickup address for HN
@@ -152,10 +154,17 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->default('GCR')
                                             ->native(false)
                                             ->required(),
+
                                     ]),
 
                                 // Delivery points repeater (Route)
                                 self::getDeliveryPointsRepeaterField(fn (Get $get): ?string => $get('order_type_code')),
+                                TextInput::make('chargeable_weight')
+                                    ->label('Tải trọng tính cước')
+                                    ->suffix('tấn')
+                                    ->numeric()
+                                    ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
+                                    ->visible(fn (Get $get): bool => $get('order_type_code') === 'external'),
                             ]),
 
                         // Phân vùng 2: Số lượng bản ghi cần tạo (Chiếm 5 cột)
@@ -250,6 +259,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                 'cargo_type' => $data['cargo_type'] ?? 'GCR',
                                 'total_packages' => null,
                                 'total_weight' => null,
+                                'chargeable_weight' => $data['chargeable_weight'] ?? null,
                                 'planned_loading_at' => $data['planned_loading_at'] ?? null,
                                 'status' => OrderStatus::Draft->value,
                                 'priority' => Priority::Medium->value,

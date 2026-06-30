@@ -181,9 +181,44 @@ class ListOrderPlans extends ListRecords
         $this->resetPage();
     }
 
+    /**
+     * @param  array<int, string>  $excludeFilters
+     */
+    private function crossFilteredQuery(array $excludeFilters = []): Builder
+    {
+        return OrderPlanResource::getEloquentQuery()
+            ->where('status', 'draft')
+            ->when(
+                ! in_array('type', $excludeFilters) && $this->activeOrderTypeFilter !== 'all',
+                fn (Builder $q): Builder => $q->where('type', $this->activeOrderTypeFilter),
+            )
+            ->when(
+                ! in_array('place', $excludeFilters) && $this->activePlaceFilter !== 'all',
+                fn (Builder $q): Builder => $q->whereHas('area', fn (Builder $aq): Builder => $aq->where('code', $this->activePlaceFilter)),
+            )
+            ->when(filled($this->startDate) || filled($this->endDate), function (Builder $q): Builder {
+                if (filled($this->startDate) && filled($this->endDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $end = Carbon::parse($this->endDate)->endOfDay();
+
+                    return $q->whereBetween('created_at', [$start, $end]);
+                }
+
+                if (filled($this->startDate)) {
+                    $start = Carbon::parse($this->startDate)->startOfDay();
+
+                    return $q->where('created_at', '>=', $start);
+                }
+
+                $end = Carbon::parse($this->endDate)->endOfDay();
+
+                return $q->where('created_at', '<=', $end);
+            });
+    }
+
     public function getOrderTypeCount(string $type): int
     {
-        return $this->baseCountQuery()
+        return $this->crossFilteredQuery(['type'])
             ->when(
                 $type !== 'all',
                 fn (Builder $query): Builder => $query->where('type', $type),
@@ -193,7 +228,7 @@ class ListOrderPlans extends ListRecords
 
     public function getOrderPlaceCount(string $place): int
     {
-        return $this->baseCountQuery()
+        return $this->crossFilteredQuery(['place'])
             ->when(
                 $place !== 'all',
                 fn (Builder $query): Builder => $query->whereHas(
@@ -240,30 +275,6 @@ class ListOrderPlans extends ListRecords
                         ->orWhereHas('trip.driver', fn (Builder $driverQuery): Builder => $driverQuery->where('name', 'like', "%{$search}%"));
                 });
             })
-            ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
-                if (filled($this->startDate) && filled($this->endDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
-                    $end = Carbon::parse($this->endDate)->endOfDay();
-
-                    return $query->whereBetween('created_at', [$start, $end]);
-                }
-
-                if (filled($this->startDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
-
-                    return $query->where('created_at', '>=', $start);
-                }
-
-                $end = Carbon::parse($this->endDate)->endOfDay();
-
-                return $query->where('created_at', '<=', $end);
-            });
-    }
-
-    private function baseCountQuery(): Builder
-    {
-        return OrderPlanResource::getEloquentQuery()
-            ->where('status', 'draft')
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
                     $start = Carbon::parse($this->startDate)->startOfDay();

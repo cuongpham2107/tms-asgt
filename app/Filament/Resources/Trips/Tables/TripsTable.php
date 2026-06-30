@@ -232,7 +232,7 @@ class TripsTable extends BaseTable
         $destinations = [];
         foreach ($orders as $order) {
             foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
-                $destinations[] = $dp->address ?? $dp->location?->name;
+                $destinations[] = $dp->location?->code ?? $dp->location?->name;
             }
         }
 

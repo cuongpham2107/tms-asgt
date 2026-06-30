@@ -80,6 +80,14 @@ class OrdersTable extends BaseTable
                     ->color(fn ($state): string => (is_object($state) && method_exists($state, 'getColor')) ? ($state->getColor() ?? 'gray') : 'gray')
                     ->icon(fn ($state): ?string => (is_object($state) && method_exists($state, 'getIcon')) ? $state->getIcon() : null)
                     ->sortable(),
+                TextColumn::make('transport_info')
+                    ->label('Phương tiện / Lái xe')
+                    ->state(fn (Order $record): string => $record->trip?->vehicle?->plate_number
+                        ?? $record->trip?->driver?->name
+                        ?? '')
+                    ->formatStateUsing(fn ($state, Order $record): HtmlString => self::renderTransportColumn($record))
+                    ->html()
+                    ->hidden(fn (): bool => $type === 'plan'),
                 TextColumn::make('customer.code')
                     ->label('Khách hàng')
                     ->weight('bold')
@@ -91,10 +99,7 @@ class OrdersTable extends BaseTable
                     ->label('Hành trình')
                     ->html()
                     ->wrap(),
-                TextColumn::make('created_at')
-                    ->label('Ngày tạo')
-                    ->dateTime('d/m/Y')
-                    ->sortable(),
+
                 TextColumn::make('planned_loading_at')
                     ->label('Thời gian đóng hàng')
                     ->dateTime('H:i d/m/Y')
@@ -117,18 +122,13 @@ class OrdersTable extends BaseTable
                     ->hidden(fn (): bool => $type === 'plan')
                     ->sortable(),
 
-                TextColumn::make('transport_info')
-                    ->label('Phương tiện / Lái xe')
-                    ->state(fn (Order $record): string => $record->trip?->vehicle?->plate_number
-                        ?? $record->trip?->driver?->name
-                        ?? '')
-                    ->formatStateUsing(fn ($state, Order $record): HtmlString => self::renderTransportColumn($record))
-                    ->html()
-                    ->hidden(fn (): bool => $type === 'plan'),
                 TextColumn::make('notes')
                     ->label('Ghi chú')
                     ->limit(50),
-
+                TextColumn::make('created_at')
+                    ->label('Ngày tạo')
+                    ->dateTime('d/m/Y')
+                    ->sortable(),
                 UniqueMapColumn::make('map_coords')
                     ->label('Bản đồ')
                     ->height(72)
@@ -294,7 +294,7 @@ class OrdersTable extends BaseTable
 
         foreach ($deliveryPoints as $deliveryPoint) {
             $locations->push(
-                e($deliveryPoint->address ?: $deliveryPoint->location?->name ?: 'Chưa có điểm đến')
+                e($deliveryPoint->location->name ?: $deliveryPoint->location?->code ?: 'Chưa có điểm đến')
             );
         }
 
