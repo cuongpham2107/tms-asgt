@@ -103,8 +103,6 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->label('Thời gian dự kiến đóng hàng')
                                             ->seconds(false)
                                             ->native(true)
-                                            ->format('d/m/Y H:i')
-                                            ->displayFormat('d/m/Y H:i')
                                             ->default(now())
                                             ->required(),
                                         // Pickup address for HN

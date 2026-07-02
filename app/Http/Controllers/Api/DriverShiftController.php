@@ -81,15 +81,15 @@ class DriverShiftController extends Controller
         // }
 
         // Ensure driver does not have an open shift
-        $existing = DriverShift::query()
-            ->where('driver_id', $user->id)
-            ->whereNull('end_time')
-            ->first();
+        // $existing = DriverShift::query()
+        //     ->where('driver_id', $user->id)
+        //     ->whereNull('end_time')
+        //     ->first();
 
-        if ($existing) {
-            /** @status 409 */
-            return response()->json(['message' => 'Bạn đã có một ca làm việc đang hoạt động'], 409);
-        }
+        // if ($existing) {
+        //     /** @status 409 */
+        //     return response()->json(['message' => 'Bạn đã có một ca làm việc đang hoạt động'], 409);
+        // }
 
         DB::beginTransaction();
         try {
@@ -136,6 +136,7 @@ class DriverShiftController extends Controller
         $shift = DriverShift::query()
             ->where('driver_id', $user->id)
             ->whereNull('end_time')
+            ->latest('start_time')
             ->first();
 
         if (! $shift) {
@@ -229,12 +230,12 @@ class DriverShiftController extends Controller
             ->first();
 
         // only return the active shift if it started today
-        if ($shift) {
-            $start = $shift->start_time ? Carbon::parse($shift->start_time) : null;
-            if (! $start || ! $start->isToday()) {
-                return response()->json(['shift' => null]);
-            }
-        }
+        // if ($shift) {
+        //     $start = $shift->start_time ? Carbon::parse($shift->start_time) : null;
+        //     if (! $start || ! $start->isToday()) {
+        //         return response()->json(['shift' => null]);
+        //     }
+        // }
 
         return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips.vehicle'])) : null]);
     }

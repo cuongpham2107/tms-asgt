@@ -15,13 +15,14 @@ class LocationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $search = $request->query('search');
-        $area_code = $request->query('area_code');
+        $area_id = $request->query('area_id');
         $limit = min((int) $request->query('limit', $request->query('per_page', 15)), 100);
         if ($limit <= 0) {
             $limit = 15;
         }
 
         $query = Location::query()
+            ->with('area')
             ->where('is_active', true);
 
         if (filled($search)) {
@@ -32,8 +33,8 @@ class LocationController extends Controller
 
             });
         }
-        if (filled($area_code)) {
-            $query->whereRelation('area', 'code', $area_code);
+        if (filled($area_id)) {
+            $query->where('area_id', $area_id);
         }
         $locations = $query->paginate($limit);
 

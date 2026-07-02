@@ -12,5 +12,11 @@ html.dark {
 }
 
 html {
-    font-size: 14px !important;
+    font-size: 11px !important;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 12px !important;
+    }
 }

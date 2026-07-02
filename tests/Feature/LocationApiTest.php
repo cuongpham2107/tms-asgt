@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Area;
 use App\Models\Location;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,6 +56,35 @@ test('driver can list locations', function () {
     $response->assertStatus(200)
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.code', 'LOC-1');
+});
+
+test('driver can see location area relation', function () {
+    $driver = User::factory()->create();
+    $driver->assignRole($this->driverRole);
+    Sanctum::actingAs($driver);
+
+    $area = Area::create([
+        'type' => 'HHHK',
+        'code' => 'AREA-1',
+        'name' => 'Khu vực 1',
+        'color' => '#ff0000',
+        'sort_order' => 1,
+        'is_active' => true,
+    ]);
+
+    Location::create([
+        'code' => 'LOC-AREA',
+        'name' => 'Location With Area',
+        'address' => 'Address',
+        'area_id' => $area->id,
+        'is_active' => true,
+    ]);
+
+    $response = $this->getJson('/api/driver/locations');
+
+    $response->assertStatus(200)
+        ->assertJsonPath('data.0.area.id', $area->id)
+        ->assertJsonPath('data.0.area.code', 'AREA-1');
 });
 
 test('driver can search locations by name code or address', function () {

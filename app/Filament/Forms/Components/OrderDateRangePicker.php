@@ -63,13 +63,13 @@ class OrderDateRangePicker extends DateRangePicker
             $start = $livewire->$startProperty ? Carbon::parse($livewire->$startProperty)->format('Y-m-d') : null;
             $end = $livewire->$endProperty ? Carbon::parse($livewire->$endProperty)->format('Y-m-d') : null;
 
-            $component->state([
-                'start' => $start,
-                'end' => $end,
-            ]);
+            if ($component->getState() !== ['start' => $start, 'end' => $end]) {
+                $component->state([
+                    'start' => $start,
+                    'end' => $end,
+                ]);
+            }
         });
-
-        $this->live();
 
         $this->afterStateUpdated(function ($livewire, ?array $state) use ($startProperty, $endProperty) {
             if (is_array($state)) {
@@ -82,11 +82,11 @@ class OrderDateRangePicker extends DateRangePicker
                 $livewire->$startProperty = null;
                 $livewire->$endProperty = null;
             }
-
-            if (method_exists($livewire, 'resetPage')) {
-                $livewire->resetPage();
-            }
         });
+
+        if (! $this->evaluate($this->isLive)) {
+            $this->live();
+        }
 
         return $this;
     }

@@ -40,10 +40,24 @@ class ListOrders extends ListRecords
     #[Url]
     public bool $showMineOnly = true;
 
-    #[Url(keep: true)]
+    #[Url]
     public ?string $startDate = null;
 
-    #[Url(keep: true)]
+    /**
+     * Catch layer clicks from the map widget inside the column-action modal.
+     * The action uses `<x-filament-leaflet::map widget>` which dispatches
+     * Livewire calls that would otherwise throw MethodNotFoundException.
+     */
+    public function handleLayerClick(string $layerId): void {}
+
+    public function handleMapClick(float $latitude, float $longitude): void {}
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function handleLayerUpdated(string $layerId, array $data): void {}
+
+    #[Url]
     public ?string $endDate = null;
 
     public ?array $dateRange = null;
@@ -109,6 +123,10 @@ class ListOrders extends ListRecords
     {
         if (blank($this->startDate)) {
             $this->startDate = today()->toDateString();
+        }
+
+        if (blank($this->endDate)) {
+            $this->endDate = today()->addDay()->toDateString();
         }
 
         $this->dateRange = [
@@ -272,21 +290,21 @@ class ListOrders extends ListRecords
             ->when($this->showMineOnly, fn (Builder $q): Builder => $q->where('created_by', Auth::id()))
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $q): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
-                    $end = Carbon::parse($this->endDate)->endOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
+                    $end = Carbon::parse($this->endDate)->hour(8);
 
-                    return $q->whereBetween('planned_loading_at', [$start, $end]);
+                    return $q->where('planned_loading_at', '>=', $start)->where('planned_loading_at', '<', $end);
                 }
 
                 if (filled($this->startDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
 
                     return $q->where('planned_loading_at', '>=', $start);
                 }
 
-                $end = Carbon::parse($this->endDate)->endOfDay();
+                $end = Carbon::parse($this->endDate)->hour(8);
 
-                return $q->where('planned_loading_at', '<=', $end);
+                return $q->where('planned_loading_at', '<', $end);
             });
     }
 
@@ -390,21 +408,21 @@ class ListOrders extends ListRecords
             // Date range filter (by planned_loading_at). Supports start, end or both.
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
-                    $end = Carbon::parse($this->endDate)->endOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
+                    $end = Carbon::parse($this->endDate)->hour(8);
 
-                    return $query->whereBetween('planned_loading_at', [$start, $end]);
+                    return $query->where('planned_loading_at', '>=', $start)->where('planned_loading_at', '<', $end);
                 }
 
                 if (filled($this->startDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
 
                     return $query->where('planned_loading_at', '>=', $start);
                 }
 
-                $end = Carbon::parse($this->endDate)->endOfDay();
+                $end = Carbon::parse($this->endDate)->hour(8);
 
-                return $query->where('planned_loading_at', '<=', $end);
+                return $query->where('planned_loading_at', '<', $end);
             });
     }
 
@@ -432,21 +450,21 @@ class ListOrders extends ListRecords
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
-                    $end = Carbon::parse($this->endDate)->endOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
+                    $end = Carbon::parse($this->endDate)->hour(8);
 
-                    return $query->whereBetween('planned_loading_at', [$start, $end]);
+                    return $query->where('planned_loading_at', '>=', $start)->where('planned_loading_at', '<', $end);
                 }
 
                 if (filled($this->startDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
 
                     return $query->where('planned_loading_at', '>=', $start);
                 }
 
-                $end = Carbon::parse($this->endDate)->endOfDay();
+                $end = Carbon::parse($this->endDate)->hour(8);
 
-                return $query->where('planned_loading_at', '<=', $end);
+                return $query->where('planned_loading_at', '<', $end);
             });
     }
 }

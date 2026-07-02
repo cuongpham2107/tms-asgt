@@ -13,9 +13,9 @@ use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Location;
+use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Vehicle;
-use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -100,7 +100,6 @@ class OrderForm extends CreatesOrderTransportCards
                                 TextInput::make('cargo_name')
                                     ->label('Tên hàng hoá')
                                     ->placeholder('Ví dụ: Hàng gia dụng')
-                                    ->required()
                                     ->columnSpan(fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2),
 
                                 TextInput::make('chargeable_weight')
@@ -296,14 +295,30 @@ class OrderForm extends CreatesOrderTransportCards
                                                             return [];
                                                         }
 
-                                                        return OrderDeliveryPoint::query()
+                                                        $deliveryPoints = OrderDeliveryPoint::query()
                                                             ->where('order_id', $orderId)
                                                             ->with('location')
-                                                            ->get()
-                                                            ->mapWithKeys(fn ($dp) => [
-                                                                $dp->id => $dp->address ?: ($dp->location?->name ?? 'Điểm giao '.$dp->sequence),
-                                                            ])
-                                                            ->toArray();
+                                                            ->get();
+
+                                                        if ($deliveryPoints->isNotEmpty()) {
+                                                            return $deliveryPoints
+                                                                ->mapWithKeys(fn ($dp) => [
+                                                                    $dp->id => $dp->location?->code ?: ($dp->location?->code ?? 'Điểm giao '.$dp->sequence),
+                                                                ])
+                                                                ->toArray();
+                                                        }
+
+                                                        $order = Order::find($orderId);
+
+                                                        if ($order?->area_id) {
+                                                            return Location::query()
+                                                                ->where('area_id', $order->area_id)
+                                                                ->where('is_active', true)
+                                                                ->pluck('name', 'id')
+                                                                ->toArray();
+                                                        }
+
+                                                        return [];
                                                     })
                                                     ->placeholder('Chọn điểm giao')
                                                     ->native(false)
@@ -344,13 +359,6 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->searchPlaceholder('Tìm tên, email...')
                                     ->required(),
 
-                                Checkbox::make('override_shift_check')
-                                    ->label('Bỏ qua kiểm tra ca')
-                                    ->helperText('Cho phép gán xe dù xe không có ca đang hoạt động')
-                                    ->default(true)
-                                    ->live()
-                                    ->dehydrated(false)
-                                    ->visible(fn (Get $get): bool => filled($get('vehicle_id'))),
                             ]),
                     ])
                     ->columnSpanFull(),

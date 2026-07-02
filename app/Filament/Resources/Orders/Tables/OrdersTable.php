@@ -2,6 +2,9 @@
 
 namespace App\Filament\Resources\Orders\Tables;
 
+use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
+use App\Enums\VehicleStatus;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
 use App\Filament\Resources\Orders\Actions\BulkAssignTransportAction;
@@ -13,7 +16,7 @@ use App\Filament\Resources\Orders\Actions\SendOrderAction;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Order;
-use App\Models\User;
+use App\Models\Trip;
 use App\Models\Vehicle;
 use App\Services\OsrmService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
@@ -28,7 +31,6 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
-use Filament\Notifications\Notification;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -232,25 +234,48 @@ class OrdersTable extends BaseTable
                         ->stickyModalFooter()
                         ->modalWidth(Width::ScreenExtraLarge)
                         ->modalDescription(fn (Order $record): string => 'Loại đơn hàng: '.($record->type?->getLabel() ?? 'Chưa xác định'))
-                        ->before(function (array $data, EditAction $action, Order $record): void {
-                            $vehicle = isset($data['vehicle_id']) ? Vehicle::query()->find($data['vehicle_id']) : null;
+                        ->mutateRecordDataUsing(function (array $data, Order $record): array {
+                            $data['vehicle_id'] = $record->trip?->vehicle_id;
+                            $data['driver_id'] = $record->trip?->driver_id;
 
-                            if ($vehicle !== null && ! ($data['override_shift_check'] ?? false)) {
-                                $driverId = $data['driver_id'] ?? null;
-                                $driver = $driverId ? User::query()->find($driverId) : null;
+                            return $data;
+                        })
+                        ->using(function (Order $record, array $data): Order {
+                            $vehicleId = $data['vehicle_id'] ?? null;
+                            $driverId = $data['driver_id'] ?? null;
 
-                                $hasActiveShift = $driver !== null && $driver->driverShifts()->whereNull('driver_shifts.end_time')->exists();
+                            unset($data['vehicle_id'], $data['driver_id']);
 
-                                if (! $hasActiveShift) {
-                                    Notification::make()
-                                        ->warning()
-                                        ->title('Xe hoặc tài xế chưa có ca làm việc')
-                                        ->body('Phương tiện hoặc tài xế được chọn hiện không có ca nào đang hoạt động. Đánh dấu "Bỏ qua kiểm tra ca" nếu vẫn muốn gán.')
-                                        ->send();
+                            $record->update($data);
 
-                                    $action->halt();
+                            if (filled($vehicleId) && filled($driverId)) {
+                                if ($record->trip) {
+                                    $record->trip->update([
+                                        'vehicle_id' => $vehicleId,
+                                        'driver_id' => $driverId,
+                                    ]);
+                                } else {
+                                    $trip = Trip::create([
+                                        'trip_code' => Trip::generateTripCode(),
+                                        'vehicle_id' => $vehicleId,
+                                        'driver_id' => $driverId,
+                                        'status' => TripStatus::Pending,
+                                    ]);
+
+                                    $record->update([
+                                        'trip_id' => $trip->id,
+                                        'status' => OrderStatus::Assigned,
+                                    ]);
+                                }
+
+                                $vehicle = Vehicle::query()->find($vehicleId);
+                                if ($vehicle !== null) {
+                                    $vehicle->status = VehicleStatus::Running;
+                                    $vehicle->save();
                                 }
                             }
+
+                            return $record;
                         }),
                     AssignTransportAction::make(),
                     SendOrderAction::make(),

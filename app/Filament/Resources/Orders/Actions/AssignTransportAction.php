@@ -10,13 +10,10 @@ use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
 use App\Models\Trip;
-use App\Models\User;
 use App\Models\Vehicle;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Checkbox;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Throwable;
@@ -65,33 +62,8 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             ->required(),
                     ]),
 
-                Checkbox::make('override_shift_check')
-                    ->label('Bỏ qua kiểm tra ca')
-                    ->helperText('Cho phép gán xe dù xe không có ca đang hoạt động')
-                    ->default(true)
-                    ->live()
-                    ->visible(fn (Get $get): bool => filled($get('vehicle_id'))),
             ])
             ->action(function (Order $record, array $data): void {
-                $vehicle = Vehicle::find($data['vehicle_id'] ?? null);
-
-                if ($vehicle !== null && ! ($data['override_shift_check'] ?? false)) {
-                    $driverId = $data['driver_id'] ?? null;
-                    $driver = $driverId ? User::find($driverId) : null;
-
-                    $hasActiveShift = $driver !== null && $driver->driverShifts()->whereNull('driver_shifts.end_time')->exists();
-
-                    if (! $hasActiveShift) {
-                        Notification::make()
-                            ->warning()
-                            ->title('Xe hoặc tài xế chưa có ca làm việc')
-                            ->body('Phương tiện hoặc tài xế được chọn hiện không có ca nào đang hoạt động. Đánh dấu "Bỏ qua kiểm tra ca" nếu vẫn muốn gán.')
-                            ->send();
-
-                        return;
-                    }
-                }
-
                 try {
                     $trip = Trip::create([
                         'trip_code' => Trip::generateTripCode(),

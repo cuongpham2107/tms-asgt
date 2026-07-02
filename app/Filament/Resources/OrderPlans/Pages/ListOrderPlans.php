@@ -22,10 +22,10 @@ class ListOrderPlans extends ListRecords
 
     protected string $view = 'filament.resources.order-plans.pages.list-order-plans';
 
-    #[Url(keep: true)]
+    #[Url]
     public ?string $startDate = null;
 
-    #[Url(keep: true)]
+    #[Url]
     public ?string $endDate = null;
 
     public ?array $dateRange = null;
@@ -66,6 +66,10 @@ class ListOrderPlans extends ListRecords
     {
         if (blank($this->startDate)) {
             $this->startDate = today()->toDateString();
+        }
+
+        if (blank($this->endDate)) {
+            $this->endDate = today()->addDay()->toDateString();
         }
 
         $this->dateRange = [
@@ -198,21 +202,21 @@ class ListOrderPlans extends ListRecords
             )
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $q): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
-                    $end = Carbon::parse($this->endDate)->endOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
+                    $end = Carbon::parse($this->endDate)->hour(8);
 
-                    return $q->whereBetween('created_at', [$start, $end]);
+                    return $q->where('created_at', '>=', $start)->where('created_at', '<', $end);
                 }
 
                 if (filled($this->startDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
 
                     return $q->where('created_at', '>=', $start);
                 }
 
-                $end = Carbon::parse($this->endDate)->endOfDay();
+                $end = Carbon::parse($this->endDate)->hour(8);
 
-                return $q->where('created_at', '<=', $end);
+                return $q->where('created_at', '<', $end);
             });
     }
 
@@ -277,21 +281,21 @@ class ListOrderPlans extends ListRecords
             })
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
-                    $end = Carbon::parse($this->endDate)->endOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
+                    $end = Carbon::parse($this->endDate)->hour(8);
 
-                    return $query->whereBetween('created_at', [$start, $end]);
+                    return $query->where('created_at', '>=', $start)->where('created_at', '<', $end);
                 }
 
                 if (filled($this->startDate)) {
-                    $start = Carbon::parse($this->startDate)->startOfDay();
+                    $start = Carbon::parse($this->startDate)->hour(8);
 
                     return $query->where('created_at', '>=', $start);
                 }
 
-                $end = Carbon::parse($this->endDate)->endOfDay();
+                $end = Carbon::parse($this->endDate)->hour(8);
 
-                return $query->where('created_at', '<=', $end);
+                return $query->where('created_at', '<', $end);
             });
     }
 }

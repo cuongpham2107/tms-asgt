@@ -52,6 +52,10 @@ class ListTrips extends ListRecords
             $this->dateFrom = Carbon::today()->format('Y-m-d');
         }
 
+        if (blank($this->dateTo)) {
+            $this->dateTo = Carbon::today()->addDay()->format('Y-m-d');
+        }
+
         $this->dateRange = [
             'start' => $this->dateFrom,
             'end' => $this->dateTo,
@@ -100,8 +104,8 @@ class ListTrips extends ListRecords
     private function baseCountQuery(): Builder
     {
         return Trip::query()
-            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->whereDate('started_at', '>=', $this->dateFrom))
-            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->whereDate('started_at', '<=', $this->dateTo));
+            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->where('started_at', '>=', Carbon::parse($this->dateFrom)->hour(8)))
+            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->where('started_at', '<', Carbon::parse($this->dateTo)->hour(8)));
     }
 
     public function filtersForm(Schema $form): Schema
@@ -156,8 +160,8 @@ class ListTrips extends ListRecords
                 'orders.tripCheckpoints.deliveryPoint.location',
             ])
             ->when($this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
-            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->whereDate('started_at', '>=', $this->dateFrom))
-            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->whereDate('started_at', '<=', $this->dateTo))
+            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->where('started_at', '>=', Carbon::parse($this->dateFrom)->hour(8)))
+            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->where('started_at', '<', Carbon::parse($this->dateTo)->hour(8)))
             ->when(filled($this->tripSearch), function (Builder $query): Builder {
                 $search = trim((string) $this->tripSearch);
 

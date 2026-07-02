@@ -512,7 +512,7 @@ abstract class CreatesOrderTransportCards
                                     $area = Area::find($areaId);
 
                                     return $area !== null
-                                        ? $q->whereRelation('area', 'code', $area->code)
+                                        ? $q->whereRelation('area', 'id', $area->id)
                                         : $q;
                                 })
                                 ->pluck('name', 'id')
@@ -661,6 +661,8 @@ abstract class CreatesOrderTransportCards
                 }
             }
         });
+
+        assert($order !== null);
 
         return $order;
     }

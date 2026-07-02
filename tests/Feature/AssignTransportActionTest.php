@@ -70,7 +70,6 @@ test('can assign vehicle and driver to order and update vehicle current driver',
         ->setTableActionData([
             'vehicle_id' => $vehicle->id,
             'driver_id' => $driver->id,
-            'override_shift_check' => true,
         ])
         ->callMountedTableAction()
         ->assertHasNoTableActionErrors();
@@ -86,47 +85,7 @@ test('can assign vehicle and driver to order and update vehicle current driver',
     expect($vehicle->status)->toBe(VehicleStatus::Running);
 });
 
-test('warns when vehicle or driver has no active shift and override is false', function () {
-    $driver = User::factory()->create();
-    $driver->assignRole($this->driverRole);
-
-    $vehicle = Vehicle::create([
-        'plate_number' => '51C-123.45',
-        'vehicle_type' => VehicleType::Normal,
-        'owner' => 'ASGT',
-        'is_active' => true,
-        'status' => VehicleStatus::On,
-        'type' => VehicleOwnerType::Company,
-    ]);
-
-    $order = Order::create([
-        'order_code' => 'ORD-002',
-        'type' => 'HHHK',
-        'area_id' => $this->area->id,
-        'customer_id' => $this->customer->id,
-        'status' => OrderStatus::Draft,
-        'created_by' => User::factory()->create()->id,
-    ]);
-
-    $admin = User::factory()->create();
-    $this->actingAs($admin);
-
-    Livewire::test(ListOrderPlans::class)
-        ->mountTableAction('assign_transport', $order)
-        ->setTableActionData([
-            'vehicle_id' => $vehicle->id,
-            'driver_id' => $driver->id,
-            'override_shift_check' => false,
-        ])
-        ->callMountedTableAction()
-        ->assertHasNoTableActionErrors();
-
-    $order->refresh();
-    expect($order->trip)->toBeNull();
-    expect($order->status)->toBe(OrderStatus::Draft);
-});
-
-test('assigns successfully without override when driver has active shift', function () {
+test('assigns successfully when driver has active shift', function () {
     $driver = User::factory()->create();
     $driver->assignRole($this->driverRole);
 
@@ -162,7 +121,6 @@ test('assigns successfully without override when driver has active shift', funct
         ->setTableActionData([
             'vehicle_id' => $vehicle->id,
             'driver_id' => $driver->id,
-            'override_shift_check' => false,
         ])
         ->callMountedTableAction()
         ->assertHasNoTableActionErrors();

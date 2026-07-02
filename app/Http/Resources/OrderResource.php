@@ -35,6 +35,8 @@ class OrderResource extends JsonResource
                 'id' => $this->trip->id,
                 'status' => $this->trip->status,
             ]),
+            /** ID khu vực (từ chuyến xe, nếu có). */
+            'area_id' => $this->area_id,
             /** Biển số xe (từ chuyến xe, nếu có). */
             'vehicle_plate_number' => $this->trip?->vehicle?->plate_number,
             /** Loại xe (từ chuyến xe, nếu có). */
