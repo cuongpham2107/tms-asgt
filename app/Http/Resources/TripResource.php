@@ -26,6 +26,7 @@ class TripResource extends JsonResource
             'vehicle' => $this->whenLoaded('vehicle', fn () => [
                 'id' => $this->vehicle->id,
                 'plate_number' => $this->vehicle->plate_number,
+                'km_reading' => $this->vehicle->current_mileage,
             ]),
 
             'shift' => $this->whenLoaded('shift', fn () => DriverShiftResource::make($this->shift)),
