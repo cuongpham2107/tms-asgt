@@ -111,7 +111,7 @@ class TripCheckpointRequest extends FormRequest
             },
 
             function (\Illuminate\Validation\Validator $validator) {
-                if ($this->input('checkpoint_type') !== 'completed' || $this->input('km_reading') === null || $this->input('order_id') === null) {
+                if (! in_array($this->input('checkpoint_type'), ['arrived_delivery', 'completed'], true) || $this->input('km_reading') === null || $this->input('order_id') === null) {
                     return;
                 }
 
@@ -121,7 +121,7 @@ class TripCheckpointRequest extends FormRequest
 
                 if ($leftPickupKm !== null && (float) $this->input('km_reading') <= (float) $leftPickupKm) {
                     $validator->errors()->add('km_reading', sprintf(
-                        'Số km kết thúc phải lớn hơn km lúc rời điểm nhận (%.1f km)',
+                        'Số km phải lớn hơn km lúc rời điểm nhận (%.1f km)',
                         $leftPickupKm
                     ));
                 }

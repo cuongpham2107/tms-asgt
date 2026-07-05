@@ -15,6 +15,7 @@ enum TripStatus: string implements HasColor, HasLabel
     case Delivered = 'delivered';
     case Completed = 'completed';
     case DriverSwap = 'driver_swap';
+    case Cancelled = 'cancelled';
 
     public function getLabel(): string
     {
@@ -27,6 +28,7 @@ enum TripStatus: string implements HasColor, HasLabel
             self::Delivered => 'Đã giao',
             self::Completed => 'Hoàn thành',
             self::DriverSwap => 'Đảo lái',
+            self::Cancelled => 'Đã huỷ',
         };
     }
 
@@ -65,6 +67,7 @@ enum TripStatus: string implements HasColor, HasLabel
             self::Delivered => 'success',
             self::Completed => 'success',
             self::DriverSwap => 'primary',
+            self::Cancelled => 'danger',
         };
     }
 

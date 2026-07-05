@@ -42,8 +42,9 @@ class ListTrips extends ListRecords
         'delivering' => ['label' => 'Đang giao', 'color' => 'bg-sky-500'],
         'arrived_delivery' => ['label' => 'Đến giao hàng', 'color' => 'bg-amber-500'],
         'delivered' => ['label' => 'Đã giao', 'color' => 'bg-teal-500'],
-        'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
         'completed' => ['label' => 'Hoàn thành', 'color' => 'bg-emerald-500'],
+        'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
+        'cancelled' => ['label' => 'Đã huỷ', 'color' => 'bg-red-500'],
     ];
 
     public function mount(): void
@@ -104,8 +105,14 @@ class ListTrips extends ListRecords
     private function baseCountQuery(): Builder
     {
         return Trip::query()
-            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->where('started_at', '>=', Carbon::parse($this->dateFrom)->hour(8)))
-            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->where('started_at', '<', Carbon::parse($this->dateTo)->hour(8)));
+            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
+                ->whereNull('started_at')
+                ->orWhere('started_at', '>=', Carbon::parse($this->dateFrom)->hour(8)),
+            ))
+            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
+                ->whereNull('started_at')
+                ->orWhere('started_at', '<', Carbon::parse($this->dateTo)->hour(8)),
+            ));
     }
 
     public function filtersForm(Schema $form): Schema
@@ -149,7 +156,25 @@ class ListTrips extends ListRecords
 
     protected function getTableQuery(): Builder
     {
+        $statusOrder = [
+            TripStatus::Pending->value => 0,
+            TripStatus::Started->value => 1,
+            TripStatus::ArrivedPickup->value => 2,
+            TripStatus::Delivering->value => 3,
+            TripStatus::ArrivedDelivery->value => 4,
+            TripStatus::Delivered->value => 5,
+            TripStatus::Completed->value => 6,
+            TripStatus::DriverSwap->value => 7,
+            TripStatus::Cancelled->value => 8,
+        ];
+
+        $caseSql = 'CASE trips.status '
+            .collect($statusOrder)->map(fn ($ord, $status) => "WHEN '{$status}' THEN {$ord}")->implode(' ')
+            .' END';
+
         return TripResource::getEloquentQuery()
+            ->orderByRaw($caseSql)
+            ->orderBy('trips.created_at', 'desc')
             ->with([
                 'vehicle',
                 'driver',
@@ -160,8 +185,14 @@ class ListTrips extends ListRecords
                 'orders.tripCheckpoints.deliveryPoint.location',
             ])
             ->when($this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
-            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->where('started_at', '>=', Carbon::parse($this->dateFrom)->hour(8)))
-            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->where('started_at', '<', Carbon::parse($this->dateTo)->hour(8)))
+            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
+                ->whereNull('started_at')
+                ->orWhere('started_at', '>=', Carbon::parse($this->dateFrom)->hour(8)),
+            ))
+            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
+                ->whereNull('started_at')
+                ->orWhere('started_at', '<', Carbon::parse($this->dateTo)->hour(8)),
+            ))
             ->when(filled($this->tripSearch), function (Builder $query): Builder {
                 $search = trim((string) $this->tripSearch);
 

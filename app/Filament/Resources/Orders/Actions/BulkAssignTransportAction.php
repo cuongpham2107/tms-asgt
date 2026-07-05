@@ -7,9 +7,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
-use App\Filament\Resources\OrderPlans\Pages\ListOrderPlans;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
-use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
@@ -34,19 +32,6 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
             ->modalDescription('Chọn phương tiện cho các đơn hàng được chọn. Lái xe sẽ tự động gán theo xe.')
             ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
-            ->visible(function (BulkAction $action): bool {
-                $livewire = $action->getLivewire();
-
-                if ($livewire instanceof ListOrderPlans) {
-                    return true;
-                }
-
-                if ($livewire instanceof ListOrders) {
-                    return $livewire->activeStatusFilter === 'planned';
-                }
-
-                return true;
-            })
             ->schema([
                 Grid::make(2)
                     ->schema([

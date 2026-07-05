@@ -22,7 +22,16 @@ class ShiftKmCalculatorService
 
         $startKm = (float) $shift->start_km;
         $endKm = (float) $shift->end_km;
-        $totalKm = $endKm - $startKm;
+
+        if ($startKm === 0.0 && $endKm > 0) {
+            $firstTrip = $shift->trips()->orderBy('started_at')->first();
+
+            if ($firstTrip?->start_km !== null && (float) $firstTrip->start_km > 0) {
+                $startKm = (float) $firstTrip->start_km;
+            }
+        }
+
+        $totalKm = max(0, $endKm - $startKm);
 
         if ($totalKm <= 0) {
             $shift->total_km = max(0, $totalKm);
@@ -41,6 +50,8 @@ class ShiftKmCalculatorService
             ->get(['checkpoint_type', 'order_id', 'km_reading']);
 
         $arrivedOrderIds = $events->where('checkpoint_type', 'arrived_pickup')->pluck('order_id');
+        // Orders that have a 'completed' checkpoint WITHOUT a preceding 'arrived_pickup'
+        // (preloaded: already on board when the shift started)
         $preloadedIds = $events->where('checkpoint_type', 'completed')
             ->pluck('order_id')
             ->diff($arrivedOrderIds);

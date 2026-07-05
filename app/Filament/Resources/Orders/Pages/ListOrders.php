@@ -93,6 +93,10 @@ class ListOrders extends ListRecords
             'label' => 'Tất cả trạng thái',
             'color' => 'bg-gray-900',
         ],
+        'draft' => [
+            'label' => 'Nháp',
+            'color' => 'bg-gray-400',
+        ],
         'assigned' => [
             'label' => 'Đã gán xe',
             'color' => 'bg-orange-400',
@@ -270,7 +274,6 @@ class ListOrders extends ListRecords
     private function crossFilteredQuery(array $excludeFilters = []): Builder
     {
         return Order::query()
-            ->where('status', '!=', OrderStatus::Draft->value)
             ->when(
                 ! in_array('status', $excludeFilters) && $this->activeStatusFilter === 'all',
                 fn (Builder $q): Builder => $q->where('status', '!=', OrderStatus::Completed->value),
@@ -446,7 +449,6 @@ class ListOrders extends ListRecords
     private function baseCountQuery(): Builder
     {
         return Order::query()
-            ->where('status', '!=', OrderStatus::Draft->value)
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {

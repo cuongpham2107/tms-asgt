@@ -152,7 +152,7 @@ class TripsTable extends BaseTable
                     ->label('Phương tiện'),
             ])
             ->searchable(false)
-            ->defaultSort('created_at', 'desc')
+
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(25)
             ->recordActions([

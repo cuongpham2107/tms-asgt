@@ -134,7 +134,7 @@ class CustomerLocationSeeder extends Seeder
 
             DB::table('locations')->upsert(
                 $locationsToInsert,
-                'code',
+                ['loc_type', 'code'],
                 ['name', 'address', 'loc_type', 'is_active', 'area_id', 'lat', 'lng']
             );
 

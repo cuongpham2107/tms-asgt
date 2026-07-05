@@ -10,6 +10,7 @@ use App\Filament\Resources\Orders\Actions\AssignTransportAction;
 use App\Filament\Resources\Orders\Actions\BulkAssignTransportAction;
 use App\Filament\Resources\Orders\Actions\BulkSendOrderAction;
 use App\Filament\Resources\Orders\Actions\CancelOrderAction;
+use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
 use App\Filament\Resources\Orders\Actions\SendOrderAction;
@@ -30,7 +31,9 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\ReplicateAction;
 use Filament\Actions\RestoreBulkAction;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -289,6 +292,45 @@ class OrdersTable extends BaseTable
                         ->modalDescription('Bạn chắc chắn muốn xóa đơn hàng này? Chỉ đơn ở trạng thái Nháp hoặc Đã hủy mới có thể xóa.')
                         ->modalSubmitActionLabel('Xóa')
                         ->modalCancelActionLabel('Hủy'),
+                    ReplicateAction::make()
+                        ->label('Sao chép đơn hàng')
+                        ->icon('heroicon-o-document-duplicate')
+                        ->color('gray')
+                        ->excludeAttributes([
+                            'order_code', 'created_by',
+                            'sent_at', 'cancelled_at', 'cancel_reason',
+                            'parent_order_id',
+                        ])
+                        ->mutateRecordDataUsing(function (array $data): array {
+                            $data['order_code'] = CreatesOrderTransportCards::generateOrderCode();
+                            $data['status'] = OrderStatus::Draft;
+                            $data['trip_id'] = null;
+                            $data['trip_sequence'] = null;
+                            $data['created_by'] = auth()->id();
+
+                            return $data;
+                        })
+                        ->form([
+                            DateTimePicker::make('planned_loading_at')
+                                ->label('Thời gian đóng hàng')
+                                ->required()
+                                ->native(false),
+                        ])
+                        ->after(function ($replica, $record): void {
+                            foreach ($record->deliveryPoints as $dp) {
+                                $replica->deliveryPoints()->create([
+                                    'location_id' => $dp->location_id,
+                                    'sequence' => $dp->sequence,
+                                    'address' => $dp->address,
+                                    'contact_person' => $dp->contact_person,
+                                    'contact_phone' => $dp->contact_phone,
+                                    'total_packages' => $dp->total_packages,
+                                    'total_weight' => $dp->total_weight,
+                                    'status' => $dp->status,
+                                ]);
+                            }
+                        })
+                        ->successNotificationTitle('Đã sao chép đơn hàng'),
                     CopyTransportInfoAction::make(),
                 ]),
             ], position: RecordActionsPosition::BeforeColumns)

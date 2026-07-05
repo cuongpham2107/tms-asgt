@@ -16,6 +16,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
 use App\Services\ShiftKmCalculatorService;
+use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
@@ -166,6 +167,13 @@ class DriverShiftController extends Controller
                 ->get();
 
             foreach ($incompleteTrips as $trip) {
+                $endKm = (float) ($payload['end_km'] ?? $shift->end_km ?? 0);
+
+                if ($endKm > 0) {
+                    app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
+                    $trip->refresh();
+                }
+
                 $trip->status = TripStatus::DriverSwap;
                 $trip->shift_id = null;
                 $trip->save();

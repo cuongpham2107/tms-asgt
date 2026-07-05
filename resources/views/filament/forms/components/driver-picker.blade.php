@@ -206,7 +206,7 @@
                                 class="shrink-0 rounded-xl px-2 py-1 text-[8px] font-semibold uppercase"
                                 :class="activeTab === 'suggested' && card.isSuggested ?
                                     (card.suggestedBadgeClasses ?? card.badgeClasses ??
-                                        'border-gray-200 bg-gray-50 text-gray-600') :
+                                        'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200') :
                                     (card.badgeClasses ??
                                         'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'
                                     )"
@@ -219,7 +219,7 @@
                         <div x-show="Array.isArray(card.details) && card.details.length" class="grid grid-cols-2 gap-x-3 gap-y-2 px-3.5 py-3 border-t border-gray-50/50 bg-gray-50/20 dark:border-gray-800/50 dark:bg-gray-900/10">
                             <template x-for="(detail, idx) in card.details" :key="idx">
                                 <div x-show="detail" class="flex items-center gap-1.5 min-w-0">
-                                    <div x-show="detail && detail.icon" class="flex shrink-0 items-center justify-center p-1 rounded bg-gray-100/80 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                    <div x-show="detail && detail.icon" class="flex shrink-0 items-center justify-center p-1 rounded bg-gray-100/80 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
                                         <x-filament::icon x-bind:icon="detail.icon"
                                             class="h-3.5 w-3.5" />
                                     </div>

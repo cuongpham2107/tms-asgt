@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use App\Enums\TripStatus;
+use App\Services\TripKmCalculatorService;
 use Database\Factories\TripFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 /** @use HasFactory<TripFactory> */
 class Trip extends Model
@@ -37,6 +39,7 @@ class Trip extends Model
         'status',
         'started_at',
         'completed_at',
+        'cancelled_at',
         'start_km',
         'end_km',
         'total_km',
@@ -49,6 +52,7 @@ class Trip extends Model
         return [
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
             'start_km' => 'decimal:1',
             'end_km' => 'decimal:1',
             'total_km' => 'decimal:1',
@@ -122,14 +126,18 @@ class Trip extends Model
 
     public function complete(?float $endKm = null, ?string $completedAt = null): void
     {
-        $this->status = TripStatus::Completed;
-        $this->completed_at = $completedAt ?? now();
-        $this->end_km = $endKm ?? $this->end_km;
+        DB::transaction(function () use ($endKm, $completedAt) {
+            $this->status = TripStatus::Completed;
+            $this->completed_at = $completedAt ?? now();
+            $this->end_km = $endKm ?? $this->end_km;
 
-        $startKm = (float) ($this->start_km ?? 0);
-        $endKmValue = (float) ($this->end_km ?? 0);
-        $this->total_km = max(0, $endKmValue - $startKm);
+            $startKm = (float) ($this->start_km ?? 0);
+            $endKmValue = (float) ($this->end_km ?? 0);
+            $this->total_km = max(0, $endKmValue - $startKm);
 
-        $this->save();
+            $this->save();
+
+            app(TripKmCalculatorService::class)->calculate($this);
+        });
     }
 }
