@@ -277,8 +277,7 @@ class ListOrders extends ListRecords
             ->when(
                 ! in_array('status', $excludeFilters) && $this->activeStatusFilter === 'all',
                 fn (Builder $q): Builder => $q
-                    ->where('status', '!=', OrderStatus::Completed->value)
-                    ->where('status', '!=', OrderStatus::Draft->value),
+                    ->where('status', '!=', OrderStatus::Completed->value),
             )
             ->when(
                 ! in_array('type', $excludeFilters) && $this->activeOrderTypeFilter !== 'all',
@@ -395,8 +394,7 @@ class ListOrders extends ListRecords
             ->when(
                 $this->activeStatusFilter === 'all',
                 fn (Builder $query): Builder => $query
-                    ->where('orders.status', '!=', OrderStatus::Completed->value)
-                    ->where('orders.status', '!=', OrderStatus::Draft->value),
+                    ->where('orders.status', '!=', OrderStatus::Completed->value),
             )
             ->when(filled($this->orderSearch), function (Builder $query): Builder {
                 $search = trim((string) $this->orderSearch);
