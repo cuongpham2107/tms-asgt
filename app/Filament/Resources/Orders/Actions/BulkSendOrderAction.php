@@ -6,8 +6,7 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
-use Livewire\Livewire as LivewireManager;
+use Illuminate\Support\Collection;
 use Throwable;
 
 class BulkSendOrderAction
@@ -23,22 +22,9 @@ class BulkSendOrderAction
             ->modalDescription('Bạn chắc chắn muốn gửi lệnh cho các đơn hàng đã chọn?')
             ->modalSubmitActionLabel('Gửi')
             ->modalCancelActionLabel('Hủy')
-            ->visible(function (): bool {
-                $component = LivewireManager::current();
-
-                if ($component === null) {
-                    return false;
-                }
-
-                $class = $component::class;
-
-                if (str_contains($class, 'ListOrderPlans')) {
-                    return false;
-                }
-
-                return true;
-            })
-            ->action(function (EloquentCollection $records): void {
+            ->visible(fn (Collection $records): bool => $records->isNotEmpty()
+                && $records->every(fn (Order $record): bool => $record->status === OrderStatus::Assigned))
+            ->action(function (Collection $records): void {
                 $assignOrders = $records->filter(fn (Order $order): bool => $order->status->canSend());
 
                 if ($assignOrders->isEmpty()) {

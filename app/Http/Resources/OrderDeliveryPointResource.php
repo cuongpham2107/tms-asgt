@@ -25,6 +25,7 @@ class OrderDeliveryPointResource extends JsonResource
             'sequence' => $this->sequence,
             /** Địa chỉ giao hàng cụ thể. */
             'address' => $this->address,
+            'code' => $this->location->code,
             /** Người liên hệ nhận hàng. */
             'contact_person' => $this->contact_person,
             /** Số điện thoại người nhận. */

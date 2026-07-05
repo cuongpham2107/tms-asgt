@@ -16,7 +16,7 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -33,6 +33,8 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
             ->modalDescription('Chọn phương tiện cho các đơn hàng được chọn. Lái xe sẽ tự động gán theo xe.')
             ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
+            ->visible(fn (Collection $records): bool => $records->isNotEmpty()
+                && $records->every(fn (Order $record): bool => $record->status === OrderStatus::Draft))
             ->schema([
                 Grid::make(2)
                     ->schema([
@@ -60,7 +62,7 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                     ]),
 
             ])
-            ->action(function (EloquentCollection $records, array $data): void {
+            ->action(function (Collection $records, array $data): void {
                 $draftOrders = $records->filter(fn (Order $order): bool => $order->status === OrderStatus::Draft);
 
                 if ($draftOrders->isEmpty()) {

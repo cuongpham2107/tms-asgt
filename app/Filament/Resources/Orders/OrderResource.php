@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Orders;
 
-use App\Enums\OrderStatus;
 use App\Filament\BaseResource;
 use App\Filament\Resources\Orders\Pages\CreateOrder;
 use App\Filament\Resources\Orders\Pages\EditOrder;
@@ -15,7 +14,6 @@ use BackedEnum;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class OrderResource extends BaseResource
@@ -46,8 +44,7 @@ class OrderResource extends BaseResource
 
     public static function table(Table $table): Table
     {
-        return OrdersTable::configure($table, 'order')
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('status', '!=', OrderStatus::Draft->value));
+        return OrdersTable::configure($table, 'order');
     }
 
     public static function getPages(): array
