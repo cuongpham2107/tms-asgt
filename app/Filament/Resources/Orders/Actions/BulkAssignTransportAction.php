@@ -33,7 +33,6 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
             ->modalDescription('Chọn phương tiện cho các đơn hàng được chọn. Lái xe sẽ tự động gán theo xe.')
             ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
-            ->hidden(fn (Collection $records): bool => $records->isEmpty() || $records->every(fn (Order $order): bool => ! $order->status->canAssignTransport()))
             ->schema([
                 Grid::make(2)
                     ->schema([

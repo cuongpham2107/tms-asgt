@@ -22,7 +22,6 @@ class BulkSendOrderAction
             ->modalDescription('Bạn chắc chắn muốn gửi lệnh cho các đơn hàng đã chọn?')
             ->modalSubmitActionLabel('Gửi')
             ->modalCancelActionLabel('Hủy')
-            ->hidden(fn (Collection $records): bool => $records->isEmpty() || $records->every(fn (Order $order): bool => ! $order->status->canSend()))
             ->action(function (Collection $records): void {
                 $assignOrders = $records->filter(fn (Order $order): bool => $order->status->canSend());
 
