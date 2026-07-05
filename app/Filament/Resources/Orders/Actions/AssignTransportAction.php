@@ -16,6 +16,7 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class AssignTransportAction extends CreatesOrderTransportCards
@@ -65,26 +66,28 @@ class AssignTransportAction extends CreatesOrderTransportCards
             ])
             ->action(function (Order $record, array $data): void {
                 try {
-                    $trip = Trip::create([
-                        'trip_code' => Trip::generateTripCode(),
-                        'vehicle_id' => $data['vehicle_id'],
-                        'driver_id' => $data['driver_id'],
-                        'status' => TripStatus::Pending,
-                    ]);
+                    DB::transaction(function () use ($record, $data) {
+                        $trip = Trip::create([
+                            'trip_code' => Trip::generateTripCode(),
+                            'vehicle_id' => $data['vehicle_id'],
+                            'driver_id' => $data['driver_id'],
+                            'status' => TripStatus::Pending,
+                        ]);
 
-                    $record->update([
-                        'trip_id' => $trip->id,
-                        'status' => OrderStatus::Assigned,
-                    ]);
+                        $record->update([
+                            'trip_id' => $trip->id,
+                            'status' => OrderStatus::Assigned,
+                        ]);
 
-                    if (filled($data['vehicle_id'] ?? null)) {
-                        $vehicle = Vehicle::query()->find($data['vehicle_id']);
+                        if (filled($data['vehicle_id'] ?? null)) {
+                            $vehicle = Vehicle::query()->find($data['vehicle_id']);
 
-                        if ($vehicle !== null) {
-                            $vehicle->status = VehicleStatus::Running;
-                            $vehicle->save();
+                            if ($vehicle !== null) {
+                                $vehicle->status = VehicleStatus::Running;
+                                $vehicle->save();
+                            }
                         }
-                    }
+                    });
 
                     Notification::make()
                         ->title('Gán phương tiện thành công')

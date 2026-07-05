@@ -17,6 +17,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class BulkAssignTransportAction extends CreatesOrderTransportCards
@@ -73,31 +74,33 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                 }
 
                 try {
-                    $trip = Trip::create([
-                        'trip_code' => Trip::generateTripCode(),
-                        'vehicle_id' => $data['vehicle_id'],
-                        'driver_id' => $data['driver_id'],
-                        'status' => TripStatus::Pending,
-                    ]);
-
-                    $orderIds = $draftOrders->pluck('id');
-                    $sequence = 0;
-                    foreach ($draftOrders as $order) {
-                        $order->update([
-                            'trip_id' => $trip->id,
-                            'trip_sequence' => $sequence++,
-                            'status' => OrderStatus::Assigned,
+                    DB::transaction(function () use ($draftOrders, $data) {
+                        $trip = Trip::create([
+                            'trip_code' => Trip::generateTripCode(),
+                            'vehicle_id' => $data['vehicle_id'],
+                            'driver_id' => $data['driver_id'],
+                            'status' => TripStatus::Pending,
                         ]);
-                    }
 
-                    if (filled($data['vehicle_id'] ?? null)) {
-                        $vehicle = Vehicle::query()->find($data['vehicle_id']);
-
-                        if ($vehicle !== null) {
-                            $vehicle->status = VehicleStatus::Running;
-                            $vehicle->save();
+                        $orderIds = $draftOrders->pluck('id');
+                        $sequence = 0;
+                        foreach ($draftOrders as $order) {
+                            $order->update([
+                                'trip_id' => $trip->id,
+                                'trip_sequence' => $sequence++,
+                                'status' => OrderStatus::Assigned,
+                            ]);
                         }
-                    }
+
+                        if (filled($data['vehicle_id'] ?? null)) {
+                            $vehicle = Vehicle::query()->find($data['vehicle_id']);
+
+                            if ($vehicle !== null) {
+                                $vehicle->status = VehicleStatus::Running;
+                                $vehicle->save();
+                            }
+                        }
+                    });
 
                     Notification::make()
                         ->title('Gán phương tiện hàng loạt thành công')
