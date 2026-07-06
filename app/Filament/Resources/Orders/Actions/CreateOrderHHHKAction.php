@@ -121,6 +121,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
         if ($forceAssignedWhenTransportProvided) {
             $tabs[] = Tab::make('Phân xe và lái xe')
                 ->icon('heroicon-o-truck')
+                ->columns(2)
                 ->schema([
                     VehiclePicker::make('vehicle_id')
                         ->label('Phương tiện')
@@ -156,9 +157,9 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                 'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors',
             ])
             ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
-            ->slideOver()
+            // ->slideOver()
             ->modal()
-            ->modalWidth(Width::SevenExtraLarge)
+            ->modalWidth(Width::MaxContent)
             ->modalHeading('Tạo đơn hàng không')
             ->modalDescription('Tạo đơn hàng không cho khách hàng HHHK')
             ->stickyModalFooter()
