@@ -74,10 +74,14 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             'status' => TripStatus::Pending,
                         ]);
 
-                        $record->update([
+                        $updated = $record->update([
                             'trip_id' => $trip->id,
                             'status' => OrderStatus::Assigned,
                         ]);
+
+                        if (! $updated) {
+                            throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
+                        }
 
                         if (filled($data['vehicle_id'] ?? null)) {
                             $vehicle = Vehicle::query()->find($data['vehicle_id']);

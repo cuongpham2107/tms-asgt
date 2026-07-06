@@ -748,10 +748,14 @@ abstract class CreatesOrderTransportCards
                     'status' => TripStatus::Pending,
                 ]);
 
-                $order->update([
+                $updated = $order->update([
                     'trip_id' => $trip->id,
                     'status' => OrderStatus::Assigned->value,
                 ]);
+
+                if (! $updated) {
+                    throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
+                }
 
                 $vehicle = Vehicle::query()->find($data['vehicle_id']);
 

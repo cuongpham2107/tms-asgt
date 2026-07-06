@@ -85,11 +85,15 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                         $orderIds = $draftOrders->pluck('id');
                         $sequence = 0;
                         foreach ($draftOrders as $order) {
-                            $order->update([
+                            $updated = $order->update([
                                 'trip_id' => $trip->id,
                                 'trip_sequence' => $sequence++,
                                 'status' => OrderStatus::Assigned,
                             ]);
+
+                            if (! $updated) {
+                                throw new \RuntimeException("Không thể gán đơn hàng {$order->order_code} vào chuyến.");
+                            }
                         }
 
                         if (filled($data['vehicle_id'] ?? null)) {
