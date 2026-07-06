@@ -9,10 +9,9 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Unique;
 
 class VehicleForm
 {
@@ -43,14 +42,9 @@ class VehicleForm
                             ->prefixIcon(Heroicon::OutlinedTruck)
                             ->required()
                             ->maxLength(20)
-                            ->rule(fn (string $state, ?Vehicle $record): Unique => Rule::unique('vehicles', 'plate_number')
-                                ->where(fn ($query) => $query->whereRaw(
-                                    "REPLACE(plate_number, ' ', '') = ?",
-                                    [str_replace(' ', '', $state)],
-                                ))
-                                ->ignore($record?->id)
-                            )
-                            ->mutateDehydratedStateUsing(fn (string $state): string => str_replace(' ', '', $state)),
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn (Set $set, string $state): mixed => $set('plate_number', str_replace(' ', '', $state)))
+                            ->unique(ignoreRecord: true),
 
                         Select::make('vehicle_type')
                             ->label('Loại xe')
