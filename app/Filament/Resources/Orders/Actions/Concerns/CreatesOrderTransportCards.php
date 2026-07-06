@@ -409,7 +409,7 @@ abstract class CreatesOrderTransportCards
         return is_numeric($value) ? (float) $value : null;
     }
 
-    protected function getLocationTypesForOrderType(string $orderType): array
+    protected static function getLocationTypesForOrderType(string $orderType): array
     {
         return match ($orderType) {
             'HHHK' => [LocationType::Pickup, LocationType::Warehouse],
@@ -624,7 +624,7 @@ abstract class CreatesOrderTransportCards
                                         ? $q->whereRelation('area', 'id', $area->id)
                                         : $q;
                                 })
-                                ->whereIn('loc_type', $this->getLocationTypesForOrderType(
+                                ->whereIn('loc_type', self::getLocationTypesForOrderType(
                                     $orderType instanceof Closure ? $orderType($get) : $orderType,
                                 ))
                                 ->pluck('code', 'id')
