@@ -156,11 +156,10 @@ class TripController extends Controller
         $counts = Order::query()
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
             ->selectRaw('
-                SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as assigned,
+                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as assigned,
                 SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
             ', [
-                OrderStatus::Assigned->value,
                 OrderStatus::Sent->value,
                 OrderStatus::InTransit->value,
                 OrderStatus::DriverSwap->value,
