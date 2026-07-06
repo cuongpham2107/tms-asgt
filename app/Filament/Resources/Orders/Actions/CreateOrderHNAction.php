@@ -74,7 +74,6 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                             ->toArray()
                         )
                         ->searchable()
-                        ->preload()
                         ->native(false)
                         ->required()
                         ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents())

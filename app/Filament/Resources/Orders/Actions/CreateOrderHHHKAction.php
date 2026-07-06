@@ -57,7 +57,6 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                             ->toArray()
                         )
                         ->searchable()
-                        ->preload()
                         ->native(false)
                         ->required()
                         ->createOptionForm([

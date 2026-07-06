@@ -13,6 +13,7 @@ use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use Closure;
@@ -38,7 +39,14 @@ abstract class CreatesOrderTransportCards
     {
         return User::query()
             ->role('driver')
-            ->select('users.*')
+            ->select([
+                'id',
+                'name',
+                'phone',
+                'email',
+                'license_class',
+                'license_number',
+            ])
             ->selectSub(
                 Order::selectRaw('COUNT(*)')
                     ->whereIn('trip_id', Trip::select('id')->whereColumn('trips.driver_id', 'users.id'))
@@ -105,8 +113,20 @@ abstract class CreatesOrderTransportCards
      */
     protected static function resolveVehicleCards(?float $requiredWeight, ?int $pickupLocationId, ?int $selectedVehicleId = null): array
     {
-        return Vehicle::query()
-            ->select('vehicles.*')
+        $vehicles = Vehicle::query()
+            ->select([
+                'id',
+                'plate_number',
+                'vehicle_type',
+                'make',
+                'load_capacity',
+                'current_driver_id',
+                'status',
+                'current_mileage',
+                'type',
+                'gps_lat',
+                'gps_lng',
+            ])
             ->where(function ($query) use ($selectedVehicleId): void {
                 $query->whereIn('status', ['on', 'running']);
 
@@ -127,15 +147,19 @@ abstract class CreatesOrderTransportCards
                     ]),
             ])
             ->orderBy('plate_number')
-            ->get()
-            ->map(function (Vehicle $vehicle) use ($requiredWeight, $pickupLocationId): array {
+            ->get();
+
+        $vehicleLocations = self::resolveVehicleLocations($vehicles);
+
+        return $vehicles
+            ->map(function (Vehicle $vehicle) use ($requiredWeight, $pickupLocationId, $vehicleLocations): array {
                 $loadCapacity = number_format((float) $vehicle->load_capacity, 1, ',', '.');
                 $make = $vehicle->make ?: 'Chưa rõ hãng';
 
                 $requiredWeight = $requiredWeight ?? 0;
                 $isCapacityMatch = $requiredWeight <= 0 || (float) $vehicle->load_capacity >= $requiredWeight;
 
-                $currentLocation = self::resolveCurrentVehicleLocation($vehicle);
+                $currentLocation = $vehicleLocations[$vehicle->id] ?? ['id' => null, 'name' => null];
                 $isLocationMatch = ! $pickupLocationId || (($currentLocation['id'] ?? null) === $pickupLocationId);
 
                 $hasActiveShift = $vehicle->driver?->driverShifts->isNotEmpty() ?? false;
@@ -154,14 +178,6 @@ abstract class CreatesOrderTransportCards
                 $activeOrders = (int) $vehicle->active_orders_count;
                 $mileage = $vehicle->current_mileage ? number_format((float) $vehicle->current_mileage, 0, ',', '.').' km' : 'N/A';
                 $ordersInShift = (int) ($vehicle->driver?->driverShifts->first()?->orders_in_shift ?? 0);
-
-                $fuelLabels = [
-                    'Diesel' => 'Diesel',
-                    'Gasoline' => 'Xăng',
-                    'Electric' => 'Điện',
-                    'Hybrid' => 'Hybrid',
-                ];
-                $fuelLabel = $fuelLabels[$vehicle->fuel_type] ?? 'Chưa rõ';
 
                 return [
                     'value' => $vehicle->id,
@@ -194,6 +210,87 @@ abstract class CreatesOrderTransportCards
                 ];
             })
             ->all();
+    }
+
+    /**
+     * @param  Collection<int, Vehicle>  $vehicles
+     * @return array<int, array{id: ?int, name: ?string}>
+     */
+    protected static function resolveVehicleLocations(Collection $vehicles): array
+    {
+        $vehicleIds = $vehicles->pluck('id')->filter()->all();
+
+        if ($vehicleIds === []) {
+            return [];
+        }
+
+        $tripVehicleMap = Trip::query()
+            ->whereIn('vehicle_id', $vehicleIds)
+            ->select('id', 'vehicle_id')
+            ->pluck('vehicle_id', 'id');
+
+        $tripIds = $tripVehicleMap->keys()->all();
+
+        $ordersByVehicle = collect();
+        if ($tripIds !== []) {
+            $ordersByVehicle = Order::query()
+                ->select('orders.*', 'trips.vehicle_id')
+                ->join('trips', 'orders.trip_id', '=', 'trips.id')
+                ->whereIn('trips.vehicle_id', $vehicleIds)
+                ->whereIn('orders.status', [
+                    OrderStatus::Assigned->value,
+                    OrderStatus::Sent->value,
+                ])
+                ->with('pickupLocation')
+                ->orderBy('orders.created_at', 'desc')
+                ->get()
+                ->groupBy('vehicle_id')
+                ->map
+                ->first();
+        }
+
+        $orderIds = $ordersByVehicle->pluck('id')->filter()->all();
+
+        $checkpoints = collect();
+        if ($orderIds !== []) {
+            $checkpoints = TripCheckpoint::query()
+                ->whereIn('order_id', $orderIds)
+                ->with('deliveryPoint.location')
+                ->orderBy('occurred_at', 'desc')
+                ->get()
+                ->groupBy('order_id')
+                ->map
+                ->first();
+        }
+
+        $locations = [];
+
+        foreach ($vehicleIds as $vehicleId) {
+            $order = $ordersByVehicle[$vehicleId] ?? null;
+
+            if ($order) {
+                $checkpoint = $checkpoints[$order->id] ?? null;
+                $deliveryLocation = $checkpoint?->deliveryPoint?->location;
+
+                if ($deliveryLocation) {
+                    $locations[$vehicleId] = ['id' => (int) $deliveryLocation->id, 'name' => $deliveryLocation->name];
+                } else {
+                    $pickupLocation = $order->pickupLocation;
+                    $locations[$vehicleId] = [
+                        'id' => $pickupLocation?->id ? (int) $pickupLocation->id : null,
+                        'name' => $pickupLocation?->name,
+                    ];
+                }
+            } else {
+                $vehicle = $vehicles->firstWhere('id', $vehicleId);
+
+                $locations[$vehicleId] = $vehicle !== null
+                    ? self::resolveVehicleGpsLocation($vehicle)
+                    : ['id' => null, 'name' => null];
+            }
+        }
+
+        return $locations;
     }
 
     /**
@@ -255,28 +352,31 @@ abstract class CreatesOrderTransportCards
      */
     public static function findNearestLocation(float $lat, float $lng): array
     {
-        /** @var Collection<int, Location> $locations */
-        $locations = Location::query()
-            ->whereNotNull('lat')
-            ->whereNotNull('lng')
-            ->where('is_active', true)
-            ->get(['id', 'name', 'code', 'lat', 'lng']);
+        /** @var array<int, array<string, mixed>> $locations */
+        $locations = Cache::remember('active-locations-with-coords-v2', now()->addHour(), function (): array {
+            return Location::query()
+                ->whereNotNull('lat')
+                ->whereNotNull('lng')
+                ->where('is_active', true)
+                ->get(['id', 'name', 'code', 'lat', 'lng'])
+                ->toArray();
+        });
 
         $nearest = null;
         $minDistance = PHP_FLOAT_MAX;
 
         foreach ($locations as $loc) {
-            $dist = self::haversineDistance($lat, $lng, (float) $loc->lat, (float) $loc->lng);
+            $dist = self::haversineDistance($lat, $lng, (float) $loc['lat'], (float) $loc['lng']);
             if ($dist < $minDistance) {
                 $minDistance = $dist;
                 $nearest = $loc;
             }
         }
 
-        if ($nearest && $minDistance <= 50) {
+        if ($nearest !== null && $minDistance <= 50) {
             return [
-                'id' => (int) $nearest->id,
-                'name' => $nearest->name.' ('.$nearest->code.')',
+                'id' => (int) $nearest['id'],
+                'name' => $nearest['name'].' ('.$nearest['code'].')',
             ];
         }
 
@@ -519,7 +619,6 @@ abstract class CreatesOrderTransportCards
                                 ->toArray()
                             )
                             ->searchable()
-                            ->preload()
                             ->native(false)
                             ->required()
                             ->live(onBlur: true)
