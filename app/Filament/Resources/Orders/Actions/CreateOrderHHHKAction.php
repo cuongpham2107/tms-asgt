@@ -20,6 +20,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Throwable;
 
@@ -152,12 +153,12 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->size('lg')
             ->icon('heroicon-o-globe-asia-australia')
             ->extraAttributes([
-                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors',
+                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors ',
             ])
             ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
             // ->slideOver()
             ->modal()
-            ->modalWidth('min-w-[900px]')
+            ->modalWidth(Width::MaxContent)
             ->modalHeading('Tạo đơn hàng không')
             ->modalDescription('Tạo đơn hàng không cho khách hàng HHHK')
             ->stickyModalFooter()

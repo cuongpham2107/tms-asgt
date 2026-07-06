@@ -21,6 +21,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Throwable;
 
@@ -156,7 +157,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
             ])
             // ->slideOver()
             ->modal()
-            ->modalWidth('min-w-[900px]')
+            ->modalWidth(Width::MaxContent)
             ->modalHeading('Tạo đơn hàng ngoài')
             ->modalDescription('Tạo đơn hàng ngoài cho khách hàng ')
             ->stickyModalFooter()

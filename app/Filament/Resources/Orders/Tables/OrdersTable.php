@@ -297,15 +297,16 @@ class OrdersTable extends BaseTable
                         ->icon('heroicon-o-document-duplicate')
                         ->color('gray')
                         ->excludeAttributes([
-                            'order_code', 'created_by',
+                            'order_code', 'created_by', 'planned_loading_at',
                             'sent_at', 'cancelled_at', 'cancel_reason',
                             'parent_order_id',
                         ])
-                        ->form([
+                        ->schema([
                             DateTimePicker::make('planned_loading_at')
                                 ->label('Thời gian đóng hàng')
                                 ->required()
-                                ->native(false),
+                                ->native(true)
+                                ->default(now()),
                         ])
                         ->beforeReplicaSaved(function (ReplicateAction $action): void {
                             $replica = $action->getReplica();
