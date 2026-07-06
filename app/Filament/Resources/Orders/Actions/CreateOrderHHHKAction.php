@@ -20,7 +20,6 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
-use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Throwable;
 
@@ -33,7 +32,6 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                 ->icon('heroicon-o-information-circle')
                 ->columns(2)
                 ->schema([
-
                     ToggleButtons::make('area_id')
                         ->label('Khu vực')
                         ->required()
@@ -159,7 +157,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
             // ->slideOver()
             ->modal()
-            ->modalWidth(Width::MaxContent)
+            ->modalWidth('min-w-[900px]')
             ->modalHeading('Tạo đơn hàng không')
             ->modalDescription('Tạo đơn hàng không cho khách hàng HHHK')
             ->stickyModalFooter()
