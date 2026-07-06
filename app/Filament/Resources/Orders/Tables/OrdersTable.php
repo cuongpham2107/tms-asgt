@@ -20,6 +20,7 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
 use App\Services\OsrmService;
+use Carbon\Carbon;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
@@ -306,7 +307,7 @@ class OrdersTable extends BaseTable
                                 ->label('Thời gian đóng hàng')
                                 ->required()
                                 ->native(true)
-                                ->default(now()),
+                                ->default(fn (): Carbon => now()),
                         ])
                         ->beforeReplicaSaved(function (ReplicateAction $action): void {
                             $replica = $action->getReplica();
