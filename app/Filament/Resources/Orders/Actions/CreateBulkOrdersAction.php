@@ -34,7 +34,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
             ->label('Tạo nhiều đơn hàng')
             ->size('lg')
             ->icon('heroicon-o-squares-plus')
-            ->slideOver()
+            // ->slideOver()
             ->modal()
             ->modalWidth('5xl')
             ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))

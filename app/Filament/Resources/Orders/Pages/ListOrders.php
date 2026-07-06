@@ -26,13 +26,13 @@ class ListOrders extends ListRecords
     protected string $view = 'filament.resources.orders.pages.list-orders';
 
     #[Url]
-    public ?string $activeOrderTypeFilter = 'all';
+    public ?string $activeOrderTypeFilter = 'HHHK';
 
     #[Url]
     public ?string $activeStatusFilter = 'all';
 
     #[Url]
-    public ?string $activePlaceFilter = 'all';
+    public ?string $activePlaceFilter = 'NBA';
 
     #[Url]
     public ?string $orderSearch = null;
@@ -71,16 +71,16 @@ class ListOrders extends ListRecords
      * @var array<string, array{label: string, color: string}>
      */
     public array $orderTypeFilters = [
-        'all' => [
-            'label' => 'Tất cả',
-            'color' => 'bg-[#008fd5]',
-        ],
         'HHHK' => [
             'label' => 'Hàng hóa hàng không',
             'color' => 'bg-[#008fd5]',
         ],
         'external' => [
             'label' => 'Hàng ngoài',
+            'color' => 'bg-[#008fd5]',
+        ],
+        'all' => [
+            'label' => 'Tất cả',
             'color' => 'bg-[#008fd5]',
         ],
     ];
@@ -232,7 +232,7 @@ class ListOrders extends ListRecords
 
                 PillFilter::make('activePlaceFilter')
                     // ->labelPrefix('Khu vực')
-                    ->options(fn (): array => ['all' => 'Tất cả'] + Area::query()
+                    ->options(fn (): array => Area::query()
                         ->when(
                             $this->activeOrderTypeFilter !== 'all',
                             fn ($query) => $query->where('type', $this->activeOrderTypeFilter)
@@ -240,7 +240,7 @@ class ListOrders extends ListRecords
                         ->orderBy('sort_order', 'asc')
                         ->pluck('code', 'code')
                         ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
-                        ->toArray())
+                        ->toArray() + ['all' => 'Tất cả'])
                     ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
                     ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
                     ->clickAction('filterPlace'),

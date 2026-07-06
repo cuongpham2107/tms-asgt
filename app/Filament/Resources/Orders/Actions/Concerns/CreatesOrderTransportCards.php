@@ -615,7 +615,7 @@ abstract class CreatesOrderTransportCards
                                         ? $q->whereRelation('area', 'id', $area->id)
                                         : $q;
                                 })
-                                ->pluck('name', 'id')
+                                ->pluck('code', 'id')
                                 ->toArray()
                             )
                             ->searchable()

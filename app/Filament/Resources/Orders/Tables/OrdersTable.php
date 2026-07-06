@@ -20,7 +20,6 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
 use App\Services\OsrmService;
-use Carbon\Carbon;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
@@ -302,12 +301,17 @@ class OrdersTable extends BaseTable
                             'sent_at', 'cancelled_at', 'cancel_reason',
                             'parent_order_id',
                         ])
+                        ->mutateRecordDataUsing(function (array $data): array {
+                            $data['planned_loading_at'] = now();
+
+                            return $data;
+                        })
                         ->schema([
                             DateTimePicker::make('planned_loading_at')
                                 ->label('Thời gian đóng hàng')
                                 ->required()
                                 ->native(true)
-                                ->default(fn (): Carbon => now()),
+                                ->default(now()),
                         ])
                         ->beforeReplicaSaved(function (ReplicateAction $action): void {
                             $replica = $action->getReplica();

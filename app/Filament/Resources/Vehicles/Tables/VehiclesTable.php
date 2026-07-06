@@ -24,6 +24,11 @@ class VehiclesTable extends BaseTable
             ->defaultGroup('type')
             ->groupingSettingsHidden()
             ->columns([
+                TextColumn::make('type')
+                    ->label('Quản lý xe')
+                    ->searchable()
+                    ->sortable()
+                    ->weight('bold'),
                 TextColumn::make('plate_number')
                     ->label('Biển số')
                     ->searchable()
