@@ -41,6 +41,7 @@ enum TripStatus: string implements HasColor, HasLabel
     public static function activeStatuses(): array
     {
         return [
+            self::Pending,
             self::Started,
             self::ArrivedPickup,
             self::Delivering,

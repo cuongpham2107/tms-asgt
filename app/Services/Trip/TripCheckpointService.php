@@ -85,7 +85,10 @@ class TripCheckpointService
 
         $activeTrip = Trip::where('driver_id', $trip->driver_id)
             ->where('id', '!=', $trip->id)
-            ->whereIn('status', TripStatus::activeStatuses())
+            ->whereIn('status', array_filter(
+                TripStatus::activeStatuses(),
+                fn (TripStatus $s) => $s !== TripStatus::Pending,
+            ))
             ->first();
 
         if ($activeTrip === null) {

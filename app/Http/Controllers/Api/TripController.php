@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
-use App\Models\Order;
 use App\Models\Trip;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -153,17 +151,21 @@ class TripController extends Controller
     {
         $user = $request->user();
 
-        $counts = Order::query()
-            ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
+        $counts = Trip::query()
+            ->where('driver_id', $user->id)
             ->selectRaw('
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as assigned,
-                SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status IN (?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
             ', [
-                OrderStatus::Sent->value,
-                OrderStatus::InTransit->value,
-                OrderStatus::DriverSwap->value,
-                OrderStatus::Completed->value,
+                TripStatus::Pending->value,
+                TripStatus::Started->value,
+                TripStatus::ArrivedPickup->value,
+                TripStatus::Delivering->value,
+                TripStatus::ArrivedDelivery->value,
+                TripStatus::Delivered->value,
+                TripStatus::DriverSwap->value,
+                TripStatus::Completed->value,
             ])
             ->first();
 
