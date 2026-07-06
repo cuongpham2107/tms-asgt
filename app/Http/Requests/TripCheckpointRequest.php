@@ -25,11 +25,11 @@ class TripCheckpointRequest extends FormRequest
     {
         $type = $this->input('checkpoint_type');
 
-        $orderIdRules = ['nullable', 'exists:orders,id'];
+        $orderIdRules = ['nullable', Rule::exists('orders', 'id')->whereNull('deleted_at')];
         $deliveryPointIdRules = ['nullable', 'exists:order_delivery_points,id'];
 
         if (in_array($type, ['arrived_delivery', 'completed'], true)) {
-            $orderIdRules = ['required', 'exists:orders,id'];
+            $orderIdRules = ['required', Rule::exists('orders', 'id')->whereNull('deleted_at')];
         }
 
         return [

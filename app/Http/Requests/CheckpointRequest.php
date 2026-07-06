@@ -23,7 +23,7 @@ class CheckpointRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'order_id' => 'required|exists:orders,id',
+            'order_id' => ['required', Rule::exists('orders', 'id')->whereNull('deleted_at')],
             'shift_id' => 'nullable|exists:driver_shifts,id',
             'delivery_point_id' => 'nullable|exists:order_delivery_points,id',
             'new_delivery_location_id' => 'nullable|exists:locations,id',

@@ -29,7 +29,7 @@ class TripController extends Controller
             ->with([
                 'vehicle',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->with([
+                'orders' => fn ($q) => $q->whereNull('deleted_at')->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints',
@@ -61,7 +61,7 @@ class TripController extends Controller
             ->with([
                 'vehicle',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->with([
+                'orders' => fn ($q) => $q->whereNull('deleted_at')->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints',
@@ -104,7 +104,7 @@ class TripController extends Controller
         $trip->load([
             'vehicle',
             'driverSwaps.toDriver',
-            'orders' => fn ($q) => $q->with([
+            'orders' => fn ($q) => $q->whereNull('deleted_at')->with([
                 'customer',
                 'pickupLocation',
                 'deliveryPoints',
@@ -152,7 +152,7 @@ class TripController extends Controller
                 'shift',
                 'driver',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->with([
+                'orders' => fn ($q) => $q->whereNull('deleted_at')->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',

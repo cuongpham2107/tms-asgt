@@ -233,9 +233,9 @@ class OrdersTable extends BaseTable
             ->recordActions([
                 ActionGroup::make([
                     EditAction::make()
-                        ->slideOver()
+                        // ->slideOver()
                         ->stickyModalFooter()
-                        ->modalWidth(Width::ScreenExtraLarge)
+                        ->modalWidth(Width::MaxContent)
                         ->modalDescription(fn (Order $record): string => 'Loại đơn hàng: '.($record->type?->getLabel() ?? 'Chưa xác định'))
                         ->mutateRecordDataUsing(function (array $data, Order $record): array {
                             $data['vehicle_id'] = $record->trip?->vehicle_id;
