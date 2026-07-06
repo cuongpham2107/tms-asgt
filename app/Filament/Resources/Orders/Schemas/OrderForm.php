@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\CargoType;
 use App\Enums\CheckpointType;
+use App\Enums\LocationType;
 use App\Enums\Priority;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
@@ -201,6 +202,9 @@ class OrderForm extends CreatesOrderTransportCards
                                                         modifyQueryUsing: fn (Builder $query, Get $get) => $query
                                                             ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
                                                             ->when($get('location_id'), fn ($q, $id) => $q->orWhere('id', $id))
+                                                            ->whereIn('loc_type', $get('../../type') === 'HHHK'
+                                                                ? [LocationType::Pickup, LocationType::Warehouse]
+                                                                : [LocationType::Other])
                                                     )
                                                     ->searchable()->preload()
                                                     ->prefixIcon(Heroicon::OutlinedMapPin)

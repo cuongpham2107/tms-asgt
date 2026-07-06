@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\OrderTemplates\Schemas;
 
+use App\Enums\LocationType;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Location;
@@ -152,6 +153,7 @@ class OrderTemplateForm
                                     Select::make('location_id')
                                         ->label('Điểm giao hàng')
                                         ->options(fn (): array => Location::query()
+                                            ->whereIn('loc_type', [LocationType::Pickup, LocationType::Warehouse])
                                             ->pluck('name', 'id')
                                             ->toArray())
                                         ->searchable()

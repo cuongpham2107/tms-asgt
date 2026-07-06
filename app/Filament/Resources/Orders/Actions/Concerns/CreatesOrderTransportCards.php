@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Actions\Concerns;
 
+use App\Enums\LocationType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Enums\TripStatus;
@@ -408,6 +409,14 @@ abstract class CreatesOrderTransportCards
         return is_numeric($value) ? (float) $value : null;
     }
 
+    protected function getLocationTypesForOrderType(string $orderType): array
+    {
+        return match ($orderType) {
+            'HHHK' => [LocationType::Pickup, LocationType::Warehouse],
+            default => [LocationType::Other],
+        };
+    }
+
     protected static function normalizeInteger(mixed $value): ?int
     {
         if ($value === null || $value === '') {
@@ -615,6 +624,9 @@ abstract class CreatesOrderTransportCards
                                         ? $q->whereRelation('area', 'id', $area->id)
                                         : $q;
                                 })
+                                ->whereIn('loc_type', $this->getLocationTypesForOrderType(
+                                    $orderType instanceof Closure ? $orderType($get) : $orderType,
+                                ))
                                 ->pluck('code', 'id')
                                 ->toArray()
                             )
