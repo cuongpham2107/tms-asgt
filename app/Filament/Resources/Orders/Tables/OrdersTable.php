@@ -301,21 +301,20 @@ class OrdersTable extends BaseTable
                             'sent_at', 'cancelled_at', 'cancel_reason',
                             'parent_order_id',
                         ])
-                        ->mutateRecordDataUsing(function (array $data): array {
-                            $data['order_code'] = CreatesOrderTransportCards::generateOrderCode();
-                            $data['status'] = OrderStatus::Draft;
-                            $data['trip_id'] = null;
-                            $data['trip_sequence'] = null;
-                            $data['created_by'] = auth()->id();
-
-                            return $data;
-                        })
                         ->form([
                             DateTimePicker::make('planned_loading_at')
                                 ->label('Thời gian đóng hàng')
                                 ->required()
                                 ->native(false),
                         ])
+                        ->beforeReplicaSaved(function (ReplicateAction $action): void {
+                            $replica = $action->getReplica();
+                            $replica->order_code = CreatesOrderTransportCards::generateOrderCode();
+                            $replica->status = OrderStatus::Draft;
+                            $replica->trip_id = null;
+                            $replica->trip_sequence = null;
+                            $replica->created_by = auth()->id();
+                        })
                         ->after(function ($replica, $record): void {
                             foreach ($record->deliveryPoints as $dp) {
                                 $replica->deliveryPoints()->create([
