@@ -27,13 +27,7 @@ class TripController extends Controller
         $user = $request->user();
 
         $trip = Trip::where('driver_id', $user->id)
-            ->whereHas('orders', function ($q) {
-                $q->whereIn('status', [
-                    OrderStatus::Assigned,
-                    OrderStatus::Sent,
-                ]);
-            })
-            ->whereNotIn('status', ['completed'])
+            ->whereIn('status', TripStatus::activeStatuses())
             ->with([
                 'vehicle',
                 'driverSwaps.toDriver',
@@ -161,11 +155,17 @@ class TripController extends Controller
 
         $counts = Order::query()
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
-            ->selectRaw("
-                SUM(CASE WHEN status IN ('assigned') THEN 1 ELSE 0 END) as assigned,
-                SUM(CASE WHEN status IN ('sent') THEN 1 ELSE 0 END) as in_progress,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
-            ")
+            ->selectRaw('
+                SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as assigned,
+                SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
+            ', [
+                OrderStatus::Assigned->value,
+                OrderStatus::Sent->value,
+                OrderStatus::InTransit->value,
+                OrderStatus::DriverSwap->value,
+                OrderStatus::Completed->value,
+            ])
             ->first();
 
         return response()->json([
