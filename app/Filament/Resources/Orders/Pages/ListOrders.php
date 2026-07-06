@@ -125,9 +125,6 @@ class ListOrders extends ListRecords
 
     public function mount(): void
     {
-        if (blank($this->startDate)) {
-            $this->startDate = today()->toDateString();
-        }
 
         if (blank($this->endDate)) {
             $this->endDate = today()->addDay()->toDateString();
@@ -348,11 +345,13 @@ class ListOrders extends ListRecords
     protected function getTableQuery(): Builder
     {
         $statusOrder = [
-            OrderStatus::Assigned->value => 0,
-            OrderStatus::Sent->value => 1,
-            OrderStatus::InTransit->value => 2,
-            OrderStatus::DriverSwap->value => 3,
-            OrderStatus::Cancelled->value => 5,
+            OrderStatus::Draft->value => 0,
+            OrderStatus::Assigned->value => 1,
+            OrderStatus::Sent->value => 2,
+            OrderStatus::InTransit->value => 3,
+            OrderStatus::DriverSwap->value => 4,
+            OrderStatus::Completed->value => 5,
+            OrderStatus::Cancelled->value => 6,
         ];
 
         $completedExcluded = true;
@@ -363,7 +362,6 @@ class ListOrders extends ListRecords
 
         return OrderResource::getEloquentQuery()
             ->leftJoin('areas', 'orders.area_id', '=', 'areas.id')
-            ->orderBy('areas.sort_order')
             ->orderByRaw($caseSql)
             ->orderBy('orders.created_at', 'desc')
             ->select('orders.*')

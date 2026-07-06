@@ -340,7 +340,7 @@ class OrdersTable extends BaseTable
                     ->getTitleFromRecordUsing(fn (Order $record): string => $record->area?->code ?? 'Chưa xác định')
                     ->collapsible(),
             ])
-            ->defaultGroup('area.code')
+            // ->defaultGroup('area.code')
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),

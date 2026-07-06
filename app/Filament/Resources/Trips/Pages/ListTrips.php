@@ -24,6 +24,7 @@ class ListTrips extends ListRecords
     #[Url(keep: true)]
     public ?string $dateFrom = null;
 
+    #[Url(keep: true)]
     public ?string $dateTo = null;
 
     public ?array $dateRange = null;
@@ -221,6 +222,7 @@ class ListTrips extends ListRecords
             'delivered' => $query->where('status', TripStatus::Delivered->value),
             'driver_swap' => $query->where('status', TripStatus::DriverSwap->value),
             'completed' => $query->where('status', TripStatus::Completed->value),
+            'cancelled' => $query->where('status', TripStatus::Cancelled->value),
             default => $query,
         };
     }
