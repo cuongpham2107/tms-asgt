@@ -141,8 +141,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                         TextInput::make('cargo_name')
                                             ->label('Tên hàng hoá')
                                             ->placeholder('Ví dụ: Hàng gia dụng')
-                                            ->default(fn (Get $get): ?string => $get('order_type_code') === 'HHHK' ? 'Hàng HHHK' : 'Hàng ngoài')
-                                            ->required(),
+                                            ->default(fn (Get $get): ?string => $get('order_type_code') === 'HHHK' ? 'Hàng HHHK' : 'Hàng ngoài'),
                                         Select::make('cargo_type')
                                             ->label('Loại hàng')
                                             ->options([

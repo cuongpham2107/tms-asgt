@@ -136,14 +136,12 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                             self::normalizeDecimal($get('total_weight')),
                             self::normalizeInteger($get('pickup_location_id')),
                         ))
-                        ->searchPlaceholder('Tìm biển số, loại xe...')
-                        ->required(),
+                        ->searchPlaceholder('Tìm biển số, loại xe...'),
                     DriverPicker::make('driver_id')
                         ->label('Lái xe')
                         ->live()
                         ->cards(fn (): array => self::resolveDriverCards())
-                        ->searchPlaceholder('Tìm tên, email...')
-                        ->required(),
+                        ->searchPlaceholder('Tìm tên, email...'),
                 ]);
         }
 
