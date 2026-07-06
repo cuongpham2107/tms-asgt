@@ -175,7 +175,7 @@ class ListTrips extends ListRecords
 
         return TripResource::getEloquentQuery()
             ->orderByRaw($caseSql)
-            ->orderBy('trips.created_at', 'desc')
+            ->orderBy('trips.updated_at', 'desc')
             ->with([
                 'vehicle',
                 'driver',
