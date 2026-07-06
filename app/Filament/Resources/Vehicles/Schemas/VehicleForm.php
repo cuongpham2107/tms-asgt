@@ -11,6 +11,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Validation\Rule;
 
 class VehicleForm
 {
@@ -41,7 +42,14 @@ class VehicleForm
                             ->prefixIcon(Heroicon::OutlinedTruck)
                             ->required()
                             ->maxLength(20)
-                            ->unique(ignoreRecord: true),
+                            ->rule(fn (string $state, ?Vehicle $record): Rule => Rule::unique('vehicles', 'plate_number')
+                                ->where(fn ($query) => $query->whereRaw(
+                                    "REPLACE(plate_number, ' ', '') = ?",
+                                    [str_replace(' ', '', $state)],
+                                ))
+                                ->ignore($record?->id)
+                            )
+                            ->mutateDehydratedStateUsing(fn (string $state): string => str_replace(' ', '', $state)),
 
                         Select::make('vehicle_type')
                             ->label('Loại xe')
@@ -87,6 +95,7 @@ class VehicleForm
                             ->inputMode('decimal')
                             ->minValue(0)
                             ->step(0.1)
+                            ->dataList(['1.25', '1.5', '2.5', '3.5', '5', '7', '8', '10', '14'])
                             ->required()
                             ->suffix(' tấn'),
                         // Select::make('fuel_type')
