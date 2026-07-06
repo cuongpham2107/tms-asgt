@@ -306,7 +306,7 @@ class OrdersTable extends BaseTable
                                 ->label('Thời gian đóng hàng')
                                 ->required()
                                 ->native(true)
-                                ->default(now()),
+                                ->default(fn (): Carbon => now()),
                         ])
                         ->beforeReplicaSaved(function (ReplicateAction $action): void {
                             $replica = $action->getReplica();

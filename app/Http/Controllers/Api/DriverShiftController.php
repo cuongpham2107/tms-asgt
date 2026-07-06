@@ -41,21 +41,21 @@ class DriverShiftController extends Controller
 
         $startTime = Carbon::now();
 
-        // Check vehicle requirements
-        $vehicleId = $payload['vehicle_id'] ?? null;
-        $currentVehicle = $user->vehiclesAsDriver()->first();
+        // // Check vehicle requirements
+        // $vehicleId = $payload['vehicle_id'] ?? null;
+        // $currentVehicle = $user->vehiclesAsDriver()->first();
 
-        if ($currentVehicle === null && $vehicleId === null) {
-            return response()->json(['message' => 'Vui lòng chọn phương tiện để bắt đầu ca.'], 422);
-        }
+        // if ($currentVehicle === null && $vehicleId === null) {
+        //     return response()->json(['message' => 'Vui lòng chọn phương tiện để bắt đầu ca.'], 422);
+        // }
 
-        $activeVehicle = $currentVehicle;
-        if ($vehicleId !== null) {
-            $activeVehicle = Vehicle::find($vehicleId);
-            if ($activeVehicle === null) {
-                return response()->json(['message' => 'Phương tiện không hợp lệ.'], 422);
-            }
-        }
+        // $activeVehicle = $currentVehicle;
+        // if ($vehicleId !== null) {
+        //     $activeVehicle = Vehicle::find($vehicleId);
+        //     if ($activeVehicle === null) {
+        //         return response()->json(['message' => 'Phương tiện không hợp lệ.'], 422);
+        //     }
+        // }
 
         // prevent invalid shift combinations on the same day
         // $existingShiftsToday = DriverShift::query()
