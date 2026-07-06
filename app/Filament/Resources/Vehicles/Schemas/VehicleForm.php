@@ -12,6 +12,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Unique;
 
 class VehicleForm
 {
@@ -42,7 +43,7 @@ class VehicleForm
                             ->prefixIcon(Heroicon::OutlinedTruck)
                             ->required()
                             ->maxLength(20)
-                            ->rule(fn (string $state, ?Vehicle $record): Rule => Rule::unique('vehicles', 'plate_number')
+                            ->rule(fn (string $state, ?Vehicle $record): Unique => Rule::unique('vehicles', 'plate_number')
                                 ->where(fn ($query) => $query->whereRaw(
                                     "REPLACE(plate_number, ' ', '') = ?",
                                     [str_replace(' ', '', $state)],
