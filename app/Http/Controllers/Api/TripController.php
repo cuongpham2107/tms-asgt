@@ -46,6 +46,45 @@ class TripController extends Controller
     }
 
     /**
+     * Lấy chuyến hiện tại của lái xe kèm số km xe.
+     *
+     * Trả về trip đang active gần nhất, kèm vehicle_mileage ở top-level.
+     *
+     * @response array{data: {trip: TripResource, vehicle_mileage: int|null}|null}
+     */
+    public function current(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $trip = Trip::where('driver_id', $user->id)
+            ->whereIn('status', TripStatus::activeStatuses())
+            ->with([
+                'vehicle',
+                'driverSwaps.toDriver',
+                'orders' => fn ($q) => $q->with([
+                    'customer',
+                    'pickupLocation',
+                    'deliveryPoints',
+                    'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                ]),
+                'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+            ])
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if ($trip === null) {
+            return response()->json(['data' => null]);
+        }
+
+        return response()->json([
+            'data' => [
+                'trip' => TripResource::make($trip),
+                'vehicle_mileage' => $trip->vehicle?->current_mileage,
+            ],
+        ]);
+    }
+
+    /**
      * Xem chi tiết một chuyến.
      *
      * @pathParam trip integer ID chuyến. Example: 1

@@ -45,6 +45,7 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::post('/shifts/switch-vehicle', [DriverShiftController::class, 'switchVehicle']);
 
     // Trips
+    Route::get('/trips/current', [TripController::class, 'current']);
     Route::get('/trips/history', [TripController::class, 'history']);
     Route::get('/trips/active', [TripController::class, 'active']);
     Route::get('/trips/stats', [TripController::class, 'stats']);
