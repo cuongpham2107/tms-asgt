@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\DriverShift;
+use App\Models\Order;
 use App\Models\TripCheckpoint;
 
 class ShiftKmCalculatorService
@@ -81,6 +82,26 @@ class ShiftKmCalculatorService
 
         if ($activeOrderIds->isNotEmpty() && $endKm > $prevKm) {
             $totalLoadedKm += $endKm - $prevKm;
+        }
+
+        // Record per-order loaded_km
+        $orderIds = $events->pluck('order_id')->unique();
+        foreach ($orderIds as $orderId) {
+            $pickup = $events
+                ->where('order_id', $orderId)
+                ->where('checkpoint_type', 'arrived_pickup')
+                ->first();
+
+            $complete = $events
+                ->where('order_id', $orderId)
+                ->where('checkpoint_type', 'completed')
+                ->sortByDesc('km_reading')
+                ->first();
+
+            if ($pickup && $complete) {
+                $orderLoadedKm = max(0, (float) $complete->km_reading - (float) $pickup->km_reading);
+                Order::where('id', $orderId)->update(['loaded_km' => $orderLoadedKm]);
+            }
         }
 
         $shift->total_km = $totalKm;
