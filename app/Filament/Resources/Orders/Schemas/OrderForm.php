@@ -361,8 +361,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->label('Lái xe')
                                     ->live()
                                     ->cards(fn (): array => self::resolveDriverCards())
-                                    ->searchPlaceholder('Tìm tên, email...')
-                                    ->required(),
+                                    ->searchPlaceholder('Tìm tên, email...'),
 
                             ]),
                     ])

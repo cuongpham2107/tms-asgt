@@ -55,8 +55,7 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                             ->label('Lái xe')
                             ->live()
                             ->cards(fn (): array => self::resolveDriverCards())
-                            ->searchPlaceholder('Tìm tên, email...')
-                            ->required(),
+                            ->searchPlaceholder('Tìm tên, email...'),
                     ]),
 
             ])
@@ -82,7 +81,7 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                         $trip = Trip::create([
                             'trip_code' => Trip::generateTripCode(),
                             'vehicle_id' => $data['vehicle_id'],
-                            'driver_id' => $data['driver_id'],
+                            'driver_id' => $data['driver_id'] ?? null,
                             'status' => TripStatus::Pending,
                             'start_location_id' => $firstOrder?->pickup_location_id,
                             'end_location_id' => $lastOrder?->deliveryPoints()

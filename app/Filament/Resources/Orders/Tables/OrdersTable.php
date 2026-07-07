@@ -251,7 +251,7 @@ class OrdersTable extends BaseTable
 
                             $record->update($data);
 
-                            if (filled($vehicleId) && filled($driverId)) {
+                            if (filled($vehicleId)) {
                                 if ($record->trip) {
                                     $record->trip->update([
                                         'vehicle_id' => $vehicleId,

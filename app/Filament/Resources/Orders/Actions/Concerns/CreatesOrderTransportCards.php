@@ -754,11 +754,11 @@ abstract class CreatesOrderTransportCards
                 $order->deliveryPoints()->createMany($deliveryPoints);
             }
 
-            if ($forceAssignedWhenTransportProvided && filled($data['vehicle_id'] ?? null) && filled($data['driver_id'] ?? null)) {
+            if ($forceAssignedWhenTransportProvided && filled($data['vehicle_id'] ?? null)) {
                 $trip = Trip::create([
                     'trip_code' => Trip::generateTripCode(),
                     'vehicle_id' => $data['vehicle_id'],
-                    'driver_id' => $data['driver_id'],
+                    'driver_id' => $data['driver_id'] ?? null,
                     'status' => TripStatus::Pending,
                     'start_location_id' => $order->pickup_location_id,
                     'end_location_id' => $order->deliveryPoints()
