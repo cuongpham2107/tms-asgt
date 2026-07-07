@@ -3,14 +3,12 @@
 namespace App\Filament\Resources\Trips\Pages;
 
 use App\Enums\TripStatus;
-use App\Enums\VehicleOwnerType;
 use App\Filament\Forms\Components\OrderDateRangePicker;
 use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\Trips\TripResource;
 use App\Filament\Resources\Trips\Widgets\TripStatsOverviewWidget;
 use App\Models\Trip;
 use Carbon\Carbon;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
@@ -52,6 +50,12 @@ class ListTrips extends ListRecords
         'return_trip' => ['label' => 'Chuyến quay đầu', 'color' => 'bg-violet-500'],
         'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
         'cancelled' => ['label' => 'Đã huỷ', 'color' => 'bg-red-500'],
+    ];
+
+    public array $vehicleOwnerFilters = [
+        'all' => ['label' => 'Tất cả', 'color' => 'bg-gray-900'],
+        'company' => ['label' => 'Xe công ty', 'color' => 'bg-blue-500'],
+        'rent' => ['label' => 'Xe thuê ngoài', 'color' => 'bg-amber-500'],
     ];
 
     public function mount(): void
@@ -99,12 +103,29 @@ class ListTrips extends ListRecords
         $this->resetPage();
     }
 
+    public function filterVehicleOwner(string $owner): void
+    {
+        $this->vehicleOwner = $owner;
+
+        $this->resetPage();
+    }
+
     public function getTripStatusCount(string $key): int
     {
         return $this->baseCountQuery()
             ->when(
                 $key !== 'all',
                 fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $key),
+            )
+            ->count();
+    }
+
+    public function getVehicleOwnerCount(string $key): int
+    {
+        return $this->baseCountQuery()
+            ->when(
+                $key !== 'all',
+                fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $key)),
             )
             ->count();
     }
@@ -131,16 +152,11 @@ class ListTrips extends ListRecords
                     ->countCallback(fn ($key) => $this->getTripStatusCount($key))
                     ->activeValue(fn ($livewire) => $livewire->activeStatusFilter)
                     ->clickAction('filterStatus'),
-                Select::make('vehicleOwner')
-                    ->label('Loại xe')
-                    ->options([
-                        'all' => 'Tất cả',
-                        VehicleOwnerType::Company->value => 'Xe công ty',
-                        VehicleOwnerType::Rent->value => 'Xe thuê ngoài',
-                    ])
-                    ->default('all')
-                    ->native(false)
-                    ->live(),
+                PillFilter::make('vehicleOwner')
+                    ->options($this->vehicleOwnerFilters)
+                    ->countCallback(fn ($key) => $this->getVehicleOwnerCount($key))
+                    ->activeValue(fn ($livewire) => $livewire->vehicleOwner)
+                    ->clickAction('filterVehicleOwner'),
             ]);
     }
 
@@ -244,11 +260,6 @@ class ListTrips extends ListRecords
             'cancelled' => $query->where('status', TripStatus::Cancelled->value),
             default => $query,
         };
-    }
-
-    public function updatedVehicleOwner(): void
-    {
-        $this->resetPage();
     }
 
     public function updatedTripSearch(): void
