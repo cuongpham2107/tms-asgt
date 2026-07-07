@@ -126,6 +126,16 @@ class ReassignDriverAction
                     ->latest('start_time')
                     ->first();
 
+                if (! $oldShift) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Không thể gán lại tài xế')
+                        ->body('Tài xế cũ không có ca trực đang hoạt động.')
+                        ->send();
+
+                    return;
+                }
+
                 $newShift = DriverShift::query()->where('driver_id', $data['new_driver_id'])
                     ->whereNull('end_time')
                     ->first();
