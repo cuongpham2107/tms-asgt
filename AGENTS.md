@@ -298,10 +298,12 @@ Correct behavior: always check for and use skills first.
 
 ### Architecture
 
-- **Filament v5 pattern**: Every resource follows `app/Filament/Resources/{Name}/` with `{Name}Resource.php`, `Tables/{Name}Table.php` (extends `BaseTable`), `Schemas/{Name}Form.php`, `Pages/`, and optionally `Actions/`.
+- **Filament v5 pattern**: Every resource follows `app/Filament/Resources/{Name}/` with `{Name}Resource.php`, `Tables/{Name}Table.php` (extends `BaseTable`), `Schemas/{Name}Form.php`, `Pages/`, and optionally `Actions/`, `Widgets/`.
   - `BaseTable::applyDefaults()` provides default bulk/record actions — call it BEFORE adding columns.
-  - `BaseResource` auto-handles soft-delete route binding.
-- **Trip checkpoint system** at `app/Services/Trip/` — uses handler pattern: `TripCheckpointService` → `CheckpointFactory` + individual `*Handler` classes. Each handler only receives the params it needs (variadic interface).
+  - `BaseResource` auto-handles soft-delete route binding via `getRecordRouteBindingEloquentQuery()`.
+- **Non-resource Filament code**: `app/Filament/Pages/` for non-resource pages, `app/Filament/Widgets/` for dashboard widgets.
+- **Custom form components** at `app/Filament/Forms/Components/`: `VehiclePicker`, `PillFilter`, `MapboxLocationPicker`, `CardPicker` — check here before building new ones.
+- **Trip checkpoint system** at `app/Services/Trip/` — uses handler pattern: `TripCheckpointService` → `CheckpointFactory` + individual `*Handler` classes (marker interface `CheckpointHandlerInterface`, no enforced signature – each handler receives only the params it needs).
 - **Authorization**: Filament Shield auto-generates policies in `app/Policies/`. New resources need `php artisan shield:generate --all --ignore-config-changes` to create policies.
 - **API**: Sanctum-based, all driver endpoints behind `auth:sanctum` + `EnsureRoleVehicle` middleware (checks `driver` role). Routes in `routes/api.php`, prefix `driver/`.
 - **Observers**: `OrderObserver` logs changes to tracked fields into `OrderEditLog` on update.
@@ -354,8 +356,9 @@ php artisan make:test --pest SomeFeatureTest
 
 ### Other gotchas
 
-- Filament v5 uses `Schema` (not `Forms` from v3). Form builder is at `Filament\Schemas\Schema`.
-- Filament track `activeStatusFilter` as `#[Url]` property on List pages — reset `$this->resetPage()` on `updatedActiveStatusFilter()`.
+- Filament v5 form builder uses `Filament\Schemas\Schema` (not `Filament\Forms` from v3). However, field components (e.g. `TextInput`, `Select`, `DateTimePicker`) still come from `Filament\Forms\Components` — both `Schemas` and `Forms` namespaces coexist.
+- Use `#[Url]` for `activeStatusFilter` on List pages; call `$this->resetPage()` when the filter value changes (see `ListTrips`, `ListOrders`, `ListVehicles` for examples).
 - The `opencode.json` at root enables `laravel-boost` MCP server and `codegraph` MCP server.
+- `CONTEXT.md` holds domain terminology (Vietnamese). `database/SCHEMA_REFERENCE.md` documents table schemas.
 
 <!-- REPO_SPECIFIC_END -->
