@@ -102,7 +102,7 @@ class ReassignDriverAction
                     ->searchable()
                     ->required(),
                 Placeholder::make('vehicle_gps_info')
-                    ->label('Điểm bắt đầu (vị trí xe)')
+                    ->label('Vị trí xe hiện tại')
                     ->content(function (callable $get): string {
                         $vehicleId = $get('return_vehicle_id');
                         if (! $vehicleId) {
@@ -115,6 +115,16 @@ class ReassignDriverAction
                             ?? ($vehicle ? sprintf('Lat: %s, Lng: %s', $vehicle->gps_lat ?? '—', $vehicle->gps_lng ?? '—') : '—');
                     })
                     ->visible(fn (callable $get): bool => (bool) $get('create_return_trip') && (bool) $get('return_vehicle_id')),
+                Select::make('start_location_id')
+                    ->label('Điểm bắt đầu')
+                    ->options(fn (): array => Location::query()
+                        ->where('is_active', true)
+                        ->select('id', 'name', 'address')
+                        ->get()
+                        ->mapWithKeys(fn ($loc) => [$loc->id => "{$loc->name}".($loc->address ? " ({$loc->address})" : '')])
+                        ->all())
+                    ->visible(fn (callable $get): bool => (bool) $get('create_return_trip'))
+                    ->searchable(),
                 Select::make('end_location_id')
                     ->label('Điểm kết thúc')
                     ->options(fn (): array => Location::query()
@@ -210,21 +220,29 @@ class ReassignDriverAction
                     ->send();
 
                 if (! empty($data['create_return_trip']) && ! empty($data['return_vehicle_id'])) {
+                    $vehicle = Vehicle::find($data['return_vehicle_id']);
+
+                    $now = now();
+
                     $returnTrip = Trip::create([
                         'trip_code' => Trip::generateTripCode(),
                         'vehicle_id' => $data['return_vehicle_id'],
                         'driver_id' => $data['new_driver_id'],
                         'shift_id' => $newShift?->id,
                         'status' => TripStatus::ReturnTrip,
+                        'start_location_id' => $data['start_location_id'] ?? null,
                         'end_location_id' => $data['end_location_id'] ?? null,
+                        'started_at' => $now,
+                        'start_km' => $vehicle?->current_mileage,
                     ]);
-
-                    $now = now();
 
                     TripCheckpoint::create([
                         'trip_id' => $returnTrip->id,
                         'checkpoint_type' => CheckpointType::Started->value,
                         'occurred_at' => $now,
+                        'km_reading' => $vehicle?->current_mileage,
+                        'gps_lat' => $vehicle?->gps_lat,
+                        'gps_lng' => $vehicle?->gps_lng,
                         'driver_id' => $data['new_driver_id'],
                         'shift_id' => $newShift?->id,
                     ]);
@@ -233,6 +251,9 @@ class ReassignDriverAction
                         'trip_id' => $returnTrip->id,
                         'checkpoint_type' => CheckpointType::Completed->value,
                         'occurred_at' => $now,
+                        'km_reading' => $vehicle?->current_mileage,
+                        'gps_lat' => $vehicle?->gps_lat,
+                        'gps_lng' => $vehicle?->gps_lng,
                         'driver_id' => $data['new_driver_id'],
                         'shift_id' => $newShift?->id,
                     ]);

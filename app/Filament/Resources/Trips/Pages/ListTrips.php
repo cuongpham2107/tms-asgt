@@ -44,6 +44,7 @@ class ListTrips extends ListRecords
         'arrived_delivery' => ['label' => 'Đến giao hàng', 'color' => 'bg-amber-500'],
         'delivered' => ['label' => 'Đã giao', 'color' => 'bg-teal-500'],
         'completed' => ['label' => 'Hoàn thành', 'color' => 'bg-emerald-500'],
+        'return_trip' => ['label' => 'Chuyến quay đầu', 'color' => 'bg-violet-500'],
         'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
         'cancelled' => ['label' => 'Đã huỷ', 'color' => 'bg-red-500'],
     ];
@@ -166,7 +167,8 @@ class ListTrips extends ListRecords
             TripStatus::Delivered->value => 5,
             TripStatus::Completed->value => 6,
             TripStatus::DriverSwap->value => 7,
-            TripStatus::Cancelled->value => 8,
+            TripStatus::ReturnTrip->value => 8,
+            TripStatus::Cancelled->value => 9,
         ];
 
         $caseSql = 'CASE trips.status '
@@ -221,6 +223,7 @@ class ListTrips extends ListRecords
             'arrived_delivery' => $query->where('status', TripStatus::ArrivedDelivery->value),
             'delivered' => $query->where('status', TripStatus::Delivered->value),
             'driver_swap' => $query->where('status', TripStatus::DriverSwap->value),
+            'return_trip' => $query->where('status', TripStatus::ReturnTrip->value),
             'completed' => $query->where('status', TripStatus::Completed->value),
             'cancelled' => $query->where('status', TripStatus::Cancelled->value),
             default => $query,
