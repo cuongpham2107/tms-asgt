@@ -350,6 +350,10 @@ class OrdersTable extends BaseTable
                     ->label('Loại khu vực')
                     ->getTitleFromRecordUsing(fn (Order $record): string => $record->area?->code ?? 'Chưa xác định')
                     ->collapsible(),
+                Group::make('trip_id')
+                    ->label('Chuyến đi')
+                    ->getTitleFromRecordUsing(fn (Order $record): string => $record->trip?->trip_code ?? 'Chưa có chuyến đi')
+                    ->collapsible(),
             ])
             // ->defaultGroup('area.code')
             ->toolbarActions([
