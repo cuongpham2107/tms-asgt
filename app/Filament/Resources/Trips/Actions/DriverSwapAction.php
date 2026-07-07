@@ -102,16 +102,6 @@ class DriverSwapAction
 
                 $toDriverId = $data['to_driver_id'];
 
-                if (! $record->shift_id) {
-                    Notification::make()
-                        ->title('Không thể đảo lái')
-                        ->body('Tài xế hiện tại không có ca trực.')
-                        ->warning()
-                        ->send();
-
-                    return;
-                }
-
                 DriverSwap::create([
                     'trip_id' => $record->id,
                     'from_driver_id' => $record->driver_id,
