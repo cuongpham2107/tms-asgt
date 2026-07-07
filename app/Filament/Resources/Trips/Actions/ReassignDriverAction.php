@@ -12,6 +12,7 @@ use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
+use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
@@ -86,27 +87,12 @@ class ReassignDriverAction
                     ->live(),
                 Select::make('return_vehicle_id')
                     ->label('Xe cho chuyến quay đầu')
-                    ->options(function (Trip $record, callable $get): array {
-                        $newDriverId = $get('new_driver_id');
-                        $vehicles = collect();
-
-                        $currentVehicle = $record->vehicle;
-                        if ($currentVehicle) {
-                            $vehicles->push($currentVehicle);
-                        }
-
-                        if ($newDriverId) {
-                            $newDriver = User::find($newDriverId);
-                            if ($newDriver) {
-                                $driverVehicles = $newDriver->vehiclesAsDriver()
-                                    ->select('id', 'plate_number')
-                                    ->get();
-                                $vehicles = $vehicles->merge($driverVehicles);
-                            }
-                        }
-
-                        return $vehicles->unique('id')
-                            ->mapWithKeys(fn ($v) => [$v->id => $v->plate_number])
+                    ->options(function (): array {
+                        return Vehicle::query()
+                            ->where('is_active', true)
+                            ->select('id', 'plate_number', 'status')
+                            ->get()
+                            ->mapWithKeys(fn ($v) => [$v->id => "{$v->plate_number} - {$v->status->getLabel()}"])
                             ->all();
                     })
                     ->visible(fn (callable $get): bool => (bool) $get('create_return_trip'))
