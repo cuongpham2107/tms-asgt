@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 
@@ -10,10 +11,6 @@ class TripKmCalculatorService
     public function calculate(Trip $trip, ?float $endKm = null): void
     {
         $trip->refresh();
-
-        if ($trip->total_km_loaded !== null) {
-            return;
-        }
 
         $startKm = (float) ($trip->start_km ?? 0);
         $endKmValue = $endKm ?? (float) ($trip->end_km ?? 0);
@@ -74,6 +71,26 @@ class TripKmCalculatorService
 
         if ($activeOrderIds->isNotEmpty() && $endKmValue > $prevKm) {
             $totalLoadedKm += $endKmValue - $prevKm;
+        }
+
+        // Record per-order loaded_km
+        $orderIds = $events->pluck('order_id')->unique();
+        foreach ($orderIds as $orderId) {
+            $pickup = $events
+                ->where('order_id', $orderId)
+                ->where('checkpoint_type', 'arrived_pickup')
+                ->first();
+
+            $complete = $events
+                ->where('order_id', $orderId)
+                ->where('checkpoint_type', 'completed')
+                ->sortByDesc('km_reading')
+                ->first();
+
+            if ($pickup && $complete) {
+                $orderLoadedKm = max(0, (float) $complete->km_reading - (float) $pickup->km_reading);
+                Order::where('id', $orderId)->update(['loaded_km' => $orderLoadedKm]);
+            }
         }
 
         $trip->total_km = $totalKm;
