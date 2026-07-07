@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\Orders\Actions\Concerns;
 
+use App\Enums\CheckpointType;
 use App\Enums\LocationType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
@@ -773,6 +775,8 @@ abstract class CreatesOrderTransportCards
                     throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
                 }
 
+                static::createCheckpointsForExternalVehicle($trip, collect([$order]));
+
                 $vehicle = Vehicle::query()->find($data['vehicle_id']);
 
                 if ($vehicle !== null) {
@@ -784,5 +788,47 @@ abstract class CreatesOrderTransportCards
         assert($order !== null);
 
         return $order;
+    }
+
+    protected static function createCheckpointsForExternalVehicle(Trip $trip, \Illuminate\Support\Collection $orders): void
+    {
+        $vehicle = $trip->vehicle;
+
+        if ($vehicle?->type !== VehicleOwnerType::Rent) {
+            return;
+        }
+
+        $driverId = $trip->driver_id;
+        $shiftId = $trip->shift_id;
+        $now = now();
+
+        foreach ($orders as $order) {
+            foreach ([CheckpointType::Started, CheckpointType::ArrivedPickup, CheckpointType::LeftPickup] as $type) {
+                TripCheckpoint::create([
+                    'trip_id' => $trip->id,
+                    'order_id' => $order->id,
+                    'checkpoint_type' => $type,
+                    'occurred_at' => $now,
+                    'km_reading' => null,
+                    'driver_id' => $driverId,
+                    'shift_id' => $shiftId,
+                ]);
+            }
+
+            foreach ($order->deliveryPoints as $dp) {
+                foreach ([CheckpointType::ArrivedDelivery, CheckpointType::Completed] as $type) {
+                    TripCheckpoint::create([
+                        'trip_id' => $trip->id,
+                        'order_id' => $order->id,
+                        'delivery_point_id' => $dp->id,
+                        'checkpoint_type' => $type,
+                        'occurred_at' => $now,
+                        'km_reading' => null,
+                        'driver_id' => $driverId,
+                        'shift_id' => $shiftId,
+                    ]);
+                }
+            }
+        }
     }
 }

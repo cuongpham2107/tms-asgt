@@ -3,12 +3,14 @@
 namespace App\Filament\Resources\Trips\Pages;
 
 use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Filament\Forms\Components\OrderDateRangePicker;
 use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\Trips\TripResource;
 use App\Filament\Resources\Trips\Widgets\TripStatsOverviewWidget;
 use App\Models\Trip;
 use Carbon\Carbon;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
@@ -34,6 +36,9 @@ class ListTrips extends ListRecords
 
     #[Url]
     public ?string $activeStatusFilter = 'all';
+
+    #[Url]
+    public string $vehicleOwner = 'all';
 
     public array $tripStatusFilters = [
         'all' => ['label' => 'Tất cả', 'color' => 'bg-gray-900'],
@@ -126,6 +131,16 @@ class ListTrips extends ListRecords
                     ->countCallback(fn ($key) => $this->getTripStatusCount($key))
                     ->activeValue(fn ($livewire) => $livewire->activeStatusFilter)
                     ->clickAction('filterStatus'),
+                Select::make('vehicleOwner')
+                    ->label('Loại xe')
+                    ->options([
+                        'all' => 'Tất cả',
+                        VehicleOwnerType::Company->value => 'Xe công ty',
+                        VehicleOwnerType::Rent->value => 'Xe thuê ngoài',
+                    ])
+                    ->default('all')
+                    ->native(false)
+                    ->live(),
             ]);
     }
 
@@ -188,6 +203,7 @@ class ListTrips extends ListRecords
                 'orders.tripCheckpoints.deliveryPoint.location',
             ])
             ->when($this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
+            ->when($this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
             ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
                 ->whereNull('started_at')
                 ->orWhere('started_at', '>=', Carbon::parse($this->dateFrom)->hour(8)),
@@ -228,6 +244,11 @@ class ListTrips extends ListRecords
             'cancelled' => $query->where('status', TripStatus::Cancelled->value),
             default => $query,
         };
+    }
+
+    public function updatedVehicleOwner(): void
+    {
+        $this->resetPage();
     }
 
     public function updatedTripSearch(): void

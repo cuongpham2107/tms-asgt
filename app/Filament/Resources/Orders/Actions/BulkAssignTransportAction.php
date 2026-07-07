@@ -104,6 +104,8 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                             }
                         }
 
+                        static::createCheckpointsForExternalVehicle($trip, $draftOrders);
+
                         if (filled($data['vehicle_id'] ?? null)) {
                             $vehicle = Vehicle::query()->find($data['vehicle_id']);
 

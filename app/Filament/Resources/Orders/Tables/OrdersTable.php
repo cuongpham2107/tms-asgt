@@ -273,6 +273,8 @@ class OrdersTable extends BaseTable
                                         'trip_id' => $trip->id,
                                         'status' => OrderStatus::Assigned,
                                     ]);
+
+                                    CreatesOrderTransportCards::createCheckpointsForExternalVehicle($trip, collect([$record]));
                                 }
 
                                 $vehicle = Vehicle::query()->find($vehicleId);
