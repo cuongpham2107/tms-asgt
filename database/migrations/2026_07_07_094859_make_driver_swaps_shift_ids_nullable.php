@@ -1,89 +1,60 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('PRAGMA foreign_keys = OFF');
+        // SQLite: recreate table with nullable from_shift_id
+        DB::statement('ALTER TABLE driver_swaps RENAME TO driver_swaps_old');
 
-        Schema::create('driver_swaps_new', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('trip_id')
-                ->constrained('trips')
-                ->cascadeOnDelete();
-            $table->foreignId('from_driver_id')
-                ->constrained('users');
-            $table->foreignId('to_driver_id')
-                ->constrained('users');
-            $table->foreignId('from_shift_id')
-                ->nullable()
-                ->constrained('driver_shifts')
-                ->nullOnDelete();
-            $table->foreignId('to_shift_id')
-                ->nullable()
-                ->constrained('driver_shifts')
-                ->nullOnDelete();
-            $table->decimal('handover_km', 10, 1)->nullable();
-            $table->string('reason');
-            $table->text('note')->nullable();
-            $table->foreignId('created_by')
-                ->constrained('users');
-            $table->timestamp('created_at')->useCurrent();
+        DB::statement('CREATE TABLE driver_swaps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+            from_driver_id INTEGER NOT NULL REFERENCES users(id),
+            to_driver_id INTEGER NOT NULL REFERENCES users(id),
+            from_shift_id INTEGER REFERENCES driver_shifts(id) ON DELETE SET NULL,
+            to_shift_id INTEGER REFERENCES driver_shifts(id) ON DELETE SET NULL,
+            handover_km NUMERIC,
+            reason VARCHAR NOT NULL,
+            note TEXT,
+            created_by INTEGER NOT NULL REFERENCES users(id),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+        )');
 
-            $table->index('trip_id');
-            $table->index('from_driver_id');
-            $table->index('to_driver_id');
-        });
+        DB::statement('INSERT INTO driver_swaps SELECT * FROM driver_swaps_old');
+        DB::statement('DROP TABLE driver_swaps_old');
 
-        DB::statement('INSERT INTO driver_swaps_new SELECT * FROM driver_swaps');
-
-        Schema::drop('driver_swaps');
-        Schema::rename('driver_swaps_new', 'driver_swaps');
-
-        DB::statement('PRAGMA foreign_keys = ON');
+        DB::statement('CREATE INDEX driver_swaps_trip_id_index ON driver_swaps (trip_id)');
+        DB::statement('CREATE INDEX driver_swaps_from_driver_id_index ON driver_swaps (from_driver_id)');
+        DB::statement('CREATE INDEX driver_swaps_to_driver_id_index ON driver_swaps (to_driver_id)');
     }
 
     public function down(): void
     {
-        DB::statement('PRAGMA foreign_keys = OFF');
+        DB::statement('ALTER TABLE driver_swaps RENAME TO driver_swaps_new');
 
-        Schema::create('driver_swaps_old', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('trip_id')
-                ->constrained('trips')
-                ->cascadeOnDelete();
-            $table->foreignId('from_driver_id')
-                ->constrained('users');
-            $table->foreignId('to_driver_id')
-                ->constrained('users');
-            $table->foreignId('from_shift_id')
-                ->constrained('driver_shifts');
-            $table->foreignId('to_shift_id')
-                ->nullable()
-                ->constrained('driver_shifts')
-                ->nullOnDelete();
-            $table->decimal('handover_km', 10, 1)->nullable();
-            $table->string('reason');
-            $table->text('note')->nullable();
-            $table->foreignId('created_by')
-                ->constrained('users');
-            $table->timestamp('created_at')->useCurrent();
+        DB::statement('CREATE TABLE driver_swaps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+            from_driver_id INTEGER NOT NULL REFERENCES users(id),
+            to_driver_id INTEGER NOT NULL REFERENCES users(id),
+            from_shift_id INTEGER NOT NULL REFERENCES driver_shifts(id),
+            to_shift_id INTEGER REFERENCES driver_shifts(id) ON DELETE SET NULL,
+            handover_km NUMERIC,
+            reason VARCHAR NOT NULL,
+            note TEXT,
+            created_by INTEGER NOT NULL REFERENCES users(id),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+        )');
 
-            $table->index('trip_id');
-            $table->index('from_driver_id');
-            $table->index('to_driver_id');
-        });
+        DB::statement('INSERT INTO driver_swaps SELECT * FROM driver_swaps_new');
+        DB::statement('DROP TABLE driver_swaps_new');
 
-        DB::statement('INSERT INTO driver_swaps_old SELECT * FROM driver_swaps');
-
-        Schema::drop('driver_swaps');
-        Schema::rename('driver_swaps_old', 'driver_swaps');
-
-        DB::statement('PRAGMA foreign_keys = ON');
+        DB::statement('CREATE INDEX driver_swaps_trip_id_index ON driver_swaps (trip_id)');
+        DB::statement('CREATE INDEX driver_swaps_from_driver_id_index ON driver_swaps (from_driver_id)');
+        DB::statement('CREATE INDEX driver_swaps_to_driver_id_index ON driver_swaps (to_driver_id)');
     }
 };
