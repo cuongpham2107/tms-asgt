@@ -42,6 +42,7 @@ class Order extends Model
         'cancelled_at',
         'cancel_reason',
         'notes',
+        'loaded_km',
     ];
 
     protected function casts(): array
@@ -56,6 +57,7 @@ class Order extends Model
             'status' => OrderStatus::class,
             'type' => OrderType::class,
             'priority' => Priority::class,
+            'loaded_km' => 'decimal:1',
         ];
     }
 
