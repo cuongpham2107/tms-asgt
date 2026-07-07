@@ -263,6 +263,10 @@ class OrdersTable extends BaseTable
                                         'vehicle_id' => $vehicleId,
                                         'driver_id' => $driverId,
                                         'status' => TripStatus::Pending,
+                                        'start_location_id' => $record->pickup_location_id,
+                                        'end_location_id' => $record->deliveryPoints()
+                                            ->orderBy('sequence', 'desc')
+                                            ->first()?->location_id,
                                     ]);
 
                                     $record->update([

@@ -758,6 +758,10 @@ abstract class CreatesOrderTransportCards
                     'vehicle_id' => $data['vehicle_id'],
                     'driver_id' => $data['driver_id'],
                     'status' => TripStatus::Pending,
+                    'start_location_id' => $order->pickup_location_id,
+                    'end_location_id' => $order->deliveryPoints()
+                        ->orderBy('sequence', 'desc')
+                        ->first()?->location_id,
                 ]);
 
                 $updated = $order->update([

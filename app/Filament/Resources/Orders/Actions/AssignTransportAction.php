@@ -72,6 +72,10 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             'vehicle_id' => $data['vehicle_id'],
                             'driver_id' => $data['driver_id'],
                             'status' => TripStatus::Pending,
+                            'start_location_id' => $record->pickup_location_id,
+                            'end_location_id' => $record->deliveryPoints()
+                                ->orderBy('sequence', 'desc')
+                                ->first()?->location_id,
                         ]);
 
                         $updated = $record->update([

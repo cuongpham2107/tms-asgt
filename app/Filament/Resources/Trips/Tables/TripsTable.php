@@ -35,6 +35,8 @@ class TripsTable extends BaseTable
                     'driverSwaps.toDriver',
                     'driverSwapCheckpoints' => fn ($q) => $q->where('checkpoint_type', 'driver_swap'),
                     'shift',
+                    'startLocation',
+                    'endLocation',
                     'orders.customer',
                     'orders.pickupLocation',
                     'orders.deliveryPoints.location',
@@ -204,7 +206,7 @@ class TripsTable extends BaseTable
         $orders = $record->orders->sortBy('planned_loading_at');
 
         if ($orders->isEmpty()) {
-            return '—';
+            return $record->startLocation?->name ?? '—';
         }
 
         $pickups = [];
@@ -226,13 +228,13 @@ class TripsTable extends BaseTable
         $orders = $record->orders->sortBy('planned_loading_at');
 
         if ($orders->isEmpty()) {
-            return '—';
+            return $record->endLocation?->name ?? '—';
         }
 
         $destinations = [];
         foreach ($orders as $order) {
             foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
-                $destinations[] = $dp->location?->code ?? $dp->location?->name;
+                $destinations[] = $dp->location?->code ?? $dp->location?->name ?? $dp->address;
             }
         }
 

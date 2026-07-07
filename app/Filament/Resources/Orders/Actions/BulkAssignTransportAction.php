@@ -75,11 +75,19 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
 
                 try {
                     DB::transaction(function () use ($draftOrders, $data) {
+                        $sorted = $draftOrders->sortBy('planned_loading_at')->values();
+                        $firstOrder = $sorted->first();
+                        $lastOrder = $sorted->last();
+
                         $trip = Trip::create([
                             'trip_code' => Trip::generateTripCode(),
                             'vehicle_id' => $data['vehicle_id'],
                             'driver_id' => $data['driver_id'],
                             'status' => TripStatus::Pending,
+                            'start_location_id' => $firstOrder?->pickup_location_id,
+                            'end_location_id' => $lastOrder?->deliveryPoints()
+                                ->orderBy('sequence', 'desc')
+                                ->first()?->location_id,
                         ]);
 
                         $orderIds = $draftOrders->pluck('id');
