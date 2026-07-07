@@ -13,6 +13,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 
@@ -78,6 +79,38 @@ class ReassignDriverAction
                 Select::make('reason')
                     ->label('Lý do')
                     ->options(DriverSwapReason::class)
+                    ->required(),
+                Checkbox::make('create_return_trip')
+                    ->label('Tạo chuyến không hàng (quay đầu)')
+                    ->helperText('Tạo chuyến đi rỗng cho tài xế mới để nhập km')
+                    ->live(),
+                Select::make('return_vehicle_id')
+                    ->label('Xe cho chuyến quay đầu')
+                    ->options(function (Trip $record, callable $get): array {
+                        $newDriverId = $get('new_driver_id');
+                        $vehicles = collect();
+
+                        $currentVehicle = $record->vehicle;
+                        if ($currentVehicle) {
+                            $vehicles->push($currentVehicle);
+                        }
+
+                        if ($newDriverId) {
+                            $newDriver = User::find($newDriverId);
+                            if ($newDriver) {
+                                $driverVehicles = $newDriver->vehiclesAsDriver()
+                                    ->select('id', 'plate_number')
+                                    ->get();
+                                $vehicles = $vehicles->merge($driverVehicles);
+                            }
+                        }
+
+                        return $vehicles->unique('id')
+                            ->mapWithKeys(fn ($v) => [$v->id => $v->plate_number])
+                            ->all();
+                    })
+                    ->visible(fn (callable $get): bool => (bool) $get('create_return_trip'))
+                    ->searchable()
                     ->required(),
             ])
             ->action(function (Trip $record, array $data): void {
@@ -162,6 +195,40 @@ class ReassignDriverAction
                         $newDriver->name ?? 'N/A',
                     ))
                     ->send();
+
+                if (! empty($data['create_return_trip']) && ! empty($data['return_vehicle_id'])) {
+                    $returnTrip = Trip::create([
+                        'trip_code' => Trip::generateTripCode(),
+                        'vehicle_id' => $data['return_vehicle_id'],
+                        'driver_id' => $data['new_driver_id'],
+                        'shift_id' => $newShift?->id,
+                        'status' => TripStatus::Pending,
+                    ]);
+
+                    $now = now();
+
+                    TripCheckpoint::create([
+                        'trip_id' => $returnTrip->id,
+                        'checkpoint_type' => CheckpointType::Started->value,
+                        'occurred_at' => $now,
+                        'driver_id' => $data['new_driver_id'],
+                        'shift_id' => $newShift?->id,
+                    ]);
+
+                    TripCheckpoint::create([
+                        'trip_id' => $returnTrip->id,
+                        'checkpoint_type' => CheckpointType::Completed->value,
+                        'occurred_at' => $now,
+                        'driver_id' => $data['new_driver_id'],
+                        'shift_id' => $newShift?->id,
+                    ]);
+
+                    Notification::make()
+                        ->success()
+                        ->title('Đã tạo chuyến quay đầu')
+                        ->body("Chuyến không hàng #{$returnTrip->trip_code} đã được tạo cho tài xế {$newDriver->name}")
+                        ->send();
+                }
             });
     }
 }
