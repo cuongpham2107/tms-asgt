@@ -9,12 +9,14 @@ use App\Enums\TripStatus;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\DriverShift;
 use App\Models\DriverSwap;
+use App\Models\Location;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 
@@ -96,8 +98,33 @@ class ReassignDriverAction
                             ->all();
                     })
                     ->visible(fn (callable $get): bool => (bool) $get('create_return_trip'))
+                    ->live()
                     ->searchable()
                     ->required(),
+                Placeholder::make('vehicle_gps_info')
+                    ->label('Điểm bắt đầu (vị trí xe)')
+                    ->content(function (callable $get): string {
+                        $vehicleId = $get('return_vehicle_id');
+                        if (! $vehicleId) {
+                            return '—';
+                        }
+
+                        $vehicle = Vehicle::find($vehicleId);
+
+                        return $vehicle?->gps_address
+                            ?? ($vehicle ? sprintf('Lat: %s, Lng: %s', $vehicle->gps_lat ?? '—', $vehicle->gps_lng ?? '—') : '—');
+                    })
+                    ->visible(fn (callable $get): bool => (bool) $get('create_return_trip') && (bool) $get('return_vehicle_id')),
+                Select::make('end_location_id')
+                    ->label('Điểm kết thúc')
+                    ->options(fn (): array => Location::query()
+                        ->where('is_active', true)
+                        ->select('id', 'name', 'address')
+                        ->get()
+                        ->mapWithKeys(fn ($loc) => [$loc->id => "{$loc->name}".($loc->address ? " ({$loc->address})" : '')])
+                        ->all())
+                    ->visible(fn (callable $get): bool => (bool) $get('create_return_trip'))
+                    ->searchable(),
             ])
             ->action(function (Trip $record, array $data): void {
                 $oldDriver = $record->driver;
@@ -188,7 +215,8 @@ class ReassignDriverAction
                         'vehicle_id' => $data['return_vehicle_id'],
                         'driver_id' => $data['new_driver_id'],
                         'shift_id' => $newShift?->id,
-                        'status' => TripStatus::Pending,
+                        'status' => TripStatus::ReturnTrip,
+                        'end_location_id' => $data['end_location_id'] ?? null,
                     ]);
 
                     $now = now();

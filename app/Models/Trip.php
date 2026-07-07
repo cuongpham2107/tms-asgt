@@ -45,6 +45,8 @@ class Trip extends Model
         'total_km',
         'total_km_loaded',
         'total_km_empty',
+        'start_location_id',
+        'end_location_id',
     ];
 
     protected function casts(): array
@@ -75,6 +77,16 @@ class Trip extends Model
     public function shift(): BelongsTo
     {
         return $this->belongsTo(DriverShift::class, 'shift_id');
+    }
+
+    public function startLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'start_location_id');
+    }
+
+    public function endLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'end_location_id');
     }
 
     public function orders(): HasMany
