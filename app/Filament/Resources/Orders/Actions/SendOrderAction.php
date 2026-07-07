@@ -16,7 +16,7 @@ class SendOrderAction
             ->label('Gửi lệnh')
             ->icon('heroicon-o-paper-airplane')
             ->color('success')
-            ->hidden(fn (Order $record): bool => ! $record->status->canSend())
+            ->hidden(fn (Order $record): bool => ! $record->status->canSend() || $record->trip_id === null)
             ->requiresConfirmation()
             ->modalHeading('Xác nhận gửi lệnh')
             ->modalDescription('Bạn chắc chắn muốn gửi lệnh cho đơn hàng này không?')

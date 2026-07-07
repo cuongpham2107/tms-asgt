@@ -710,7 +710,7 @@ abstract class CreatesOrderTransportCards
                         'pickup_contact' => $data['pickup_contact'] ?? null,
                         'pickup_phone' => $data['pickup_phone'] ?? null,
                         'planned_loading_at' => $data['planned_loading_at'] ?? null,
-                        'status' => filled($data['driver_id'] ?? null) || filled($data['vehicle_id'] ?? null)
+                        'status' => filled($data['vehicle_id'] ?? null)
                             ? OrderStatus::Assigned->value
                             : OrderStatus::Draft->value,
                         'priority' => $data['priority'] ?? Priority::Medium->value,

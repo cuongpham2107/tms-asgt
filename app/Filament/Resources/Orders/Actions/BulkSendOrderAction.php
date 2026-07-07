@@ -23,7 +23,7 @@ class BulkSendOrderAction
             ->modalSubmitActionLabel('Gửi')
             ->modalCancelActionLabel('Hủy')
             ->action(function (Collection $records): void {
-                $assignOrders = $records->filter(fn (Order $order): bool => $order->status->canSend());
+                $assignOrders = $records->filter(fn (Order $order): bool => $order->status->canSend() && $order->trip_id !== null);
 
                 if ($assignOrders->isEmpty()) {
                     Notification::make()
