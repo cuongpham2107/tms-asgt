@@ -566,3 +566,32 @@ test('left_pickup updates trip status to delivering', function () {
     $this->trip->refresh();
     expect($this->trip->status)->toBe(TripStatus::Delivering);
 });
+
+test('cannot start new trip when driver has active trip', function () {
+    // Bắt đầu chuyến hiện tại
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // Tạo chuyến mới pending
+    $otherTrip = Trip::create([
+        'trip_code' => 'TRIP-TEST-002',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Pending,
+    ]);
+
+    // Cố bắt đầu chuyến mới → bị từ chối
+    $this->postJson("/api/driver/trips/{$otherTrip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertStatus(422)
+        ->assertJsonPath('errors.checkpoint_type.0', function ($msg) {
+            return str_contains($msg, 'Tài xế đang có chuyến')
+                && str_contains($msg, 'chưa hoàn thành');
+        });
+
+    // Chuyến mới vẫn pending
+    expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
+});
