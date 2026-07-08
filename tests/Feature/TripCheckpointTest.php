@@ -149,12 +149,12 @@ test('started updates trip.shift_id from driver active shift', function () {
     expect((int) $this->trip->shift_id)->toBe($shift->id);
 });
 
-test('started with km_reading fails validation', function () {
+test('started with km_reading succeeds', function () {
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'started',
         'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
-    ])->assertStatus(422);
+    ])->assertSuccessful();
 });
 
 test('arrived_pickup requires km_reading', function () {

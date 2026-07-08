@@ -228,13 +228,13 @@ class TripsTable extends BaseTable
         $orders = $record->orders->sortBy('planned_loading_at');
 
         if ($orders->isEmpty()) {
-            return $record->endLocation?->name ?? '—';
+            return $record->endLocation?->code ?? '—';
         }
 
         $destinations = [];
         foreach ($orders as $order) {
             foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
-                $destinations[] = $dp->location?->code ?? $dp->location?->name ?? $dp->address;
+                $destinations[] = $dp->location?->code ?? $dp->location?->code ?? $dp->address;
             }
         }
 

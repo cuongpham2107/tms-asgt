@@ -42,7 +42,6 @@ class TripCheckpointRequest extends FormRequest
                 'nullable',
                 'numeric',
                 'min:0',
-                Rule::when($type === 'started', 'prohibited'),
                 Rule::when(in_array($type, ['arrived_pickup', 'completed'], true), 'required'),
             ],
             'gps_lat' => 'nullable|numeric',
