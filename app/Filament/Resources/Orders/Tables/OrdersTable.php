@@ -359,8 +359,8 @@ class OrdersTable extends BaseTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
+                    // ForceDeleteBulkAction::make(),
+                    // RestoreBulkAction::make(),
                 ]),
 
                 BulkAssignTransportAction::make(),
@@ -376,7 +376,7 @@ class OrdersTable extends BaseTable
 
         foreach ($deliveryPoints as $deliveryPoint) {
             $locations->push(
-                e($deliveryPoint->location->name ?: $deliveryPoint->location?->code ?: 'Chưa có điểm đến')
+                e($deliveryPoint->location->code ?: $deliveryPoint->location?->code ?: 'Chưa có điểm đến')
             );
         }
 

@@ -125,11 +125,6 @@ class ListOrders extends ListRecords
 
     public function mount(): void
     {
-
-        if (blank($this->endDate)) {
-            $this->endDate = today()->addDay()->toDateString();
-        }
-
         $this->dateRange = [
             'start' => $this->startDate,
             'end' => $this->endDate,
@@ -294,18 +289,27 @@ class ListOrders extends ListRecords
                     $start = Carbon::parse($this->startDate)->hour(8);
                     $end = Carbon::parse($this->endDate)->hour(8);
 
-                    return $q->where('planned_loading_at', '>=', $start)->where('planned_loading_at', '<', $end);
+                    return $q->where(function (Builder $q) use ($start, $end): void {
+                        $q->whereBetween('planned_loading_at', [$start, $end])
+                            ->orWhereNull('planned_loading_at');
+                    });
                 }
 
                 if (filled($this->startDate)) {
                     $start = Carbon::parse($this->startDate)->hour(8);
 
-                    return $q->where('planned_loading_at', '>=', $start);
+                    return $q->where(function (Builder $q) use ($start): void {
+                        $q->where('planned_loading_at', '>=', $start)
+                            ->orWhereNull('planned_loading_at');
+                    });
                 }
 
                 $end = Carbon::parse($this->endDate)->hour(8);
 
-                return $q->where('planned_loading_at', '<', $end);
+                return $q->where(function (Builder $q) use ($end): void {
+                    $q->where('planned_loading_at', '<', $end)
+                        ->orWhereNull('planned_loading_at');
+                });
             });
     }
 
@@ -414,18 +418,27 @@ class ListOrders extends ListRecords
                     $start = Carbon::parse($this->startDate)->hour(8);
                     $end = Carbon::parse($this->endDate)->hour(8);
 
-                    return $query->where('planned_loading_at', '>=', $start)->where('planned_loading_at', '<', $end);
+                    return $query->where(function (Builder $query) use ($start, $end): void {
+                        $query->whereBetween('planned_loading_at', [$start, $end])
+                            ->orWhereNull('planned_loading_at');
+                    });
                 }
 
                 if (filled($this->startDate)) {
                     $start = Carbon::parse($this->startDate)->hour(8);
 
-                    return $query->where('planned_loading_at', '>=', $start);
+                    return $query->where(function (Builder $query) use ($start): void {
+                        $query->where('planned_loading_at', '>=', $start)
+                            ->orWhereNull('planned_loading_at');
+                    });
                 }
 
                 $end = Carbon::parse($this->endDate)->hour(8);
 
-                return $query->where('planned_loading_at', '<', $end);
+                return $query->where(function (Builder $query) use ($end): void {
+                    $query->where('planned_loading_at', '<', $end)
+                        ->orWhereNull('planned_loading_at');
+                });
             });
     }
 
@@ -455,18 +468,27 @@ class ListOrders extends ListRecords
                     $start = Carbon::parse($this->startDate)->hour(8);
                     $end = Carbon::parse($this->endDate)->hour(8);
 
-                    return $query->where('planned_loading_at', '>=', $start)->where('planned_loading_at', '<', $end);
+                    return $query->where(function (Builder $query) use ($start, $end): void {
+                        $query->whereBetween('planned_loading_at', [$start, $end])
+                            ->orWhereNull('planned_loading_at');
+                    });
                 }
 
                 if (filled($this->startDate)) {
                     $start = Carbon::parse($this->startDate)->hour(8);
 
-                    return $query->where('planned_loading_at', '>=', $start);
+                    return $query->where(function (Builder $query) use ($start): void {
+                        $query->where('planned_loading_at', '>=', $start)
+                            ->orWhereNull('planned_loading_at');
+                    });
                 }
 
                 $end = Carbon::parse($this->endDate)->hour(8);
 
-                return $query->where('planned_loading_at', '<', $end);
+                return $query->where(function (Builder $query) use ($end): void {
+                    $query->where('planned_loading_at', '<', $end)
+                        ->orWhereNull('planned_loading_at');
+                });
             });
     }
 }

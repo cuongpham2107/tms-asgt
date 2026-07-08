@@ -155,7 +155,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                     ]),
 
                                 // Delivery points repeater (Route)
-                                self::getDeliveryPointsRepeaterField(fn (Get $get): ?string => $get('order_type_code')),
+                                self::getDeliveryPointsRepeaterField(fn (Get $get): ?string => $get('../../order_type_code')),
                                 TextInput::make('chargeable_weight')
                                     ->label('Tải trọng tính cước')
                                     ->suffix('tấn')

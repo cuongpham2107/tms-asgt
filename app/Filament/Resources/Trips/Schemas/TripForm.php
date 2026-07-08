@@ -68,13 +68,13 @@ class TripForm
                             ->prefixIcon(Heroicon::OutlinedClock)
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
-                            ->native(false),
+                            ->native(true),
                         DateTimePicker::make('completed_at')
                             ->label('Kết thúc')
                             ->prefixIcon(Heroicon::OutlinedClock)
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
-                            ->native(false),
+                            ->native(true),
                     ]),
                 Section::make('Đơn hàng trong chuyến')
                     ->columnSpanFull()

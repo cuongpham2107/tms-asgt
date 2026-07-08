@@ -627,7 +627,7 @@ abstract class CreatesOrderTransportCards
                                         : $q;
                                 })
                                 ->whereIn('loc_type', self::getLocationTypesForOrderType(
-                                    $orderType instanceof Closure ? $orderType($get) : $orderType,
+                                    $orderType instanceof Closure ? ($orderType($get) ?? 'normal') : ($orderType ?? 'normal'),
                                 ))
                                 ->pluck('code', 'id')
                                 ->toArray()
@@ -790,7 +790,7 @@ abstract class CreatesOrderTransportCards
         return $order;
     }
 
-    protected static function createCheckpointsForExternalVehicle(Trip $trip, \Illuminate\Support\Collection $orders): void
+    public static function createCheckpointsForExternalVehicle(Trip $trip, \Illuminate\Support\Collection $orders): void
     {
         $vehicle = $trip->vehicle;
 
@@ -801,33 +801,73 @@ abstract class CreatesOrderTransportCards
         $driverId = $trip->driver_id;
         $shiftId = $trip->shift_id;
         $now = now();
+        $offset = 0;
 
         foreach ($orders as $order) {
-            foreach ([CheckpointType::Started, CheckpointType::ArrivedPickup, CheckpointType::LeftPickup] as $type) {
+            $base = (clone $now)->addSeconds($offset);
+
+            TripCheckpoint::create([
+                'trip_id' => $trip->id,
+                'order_id' => $order->id,
+                'checkpoint_type' => CheckpointType::Started,
+                'occurred_at' => $base,
+                'km_reading' => null,
+                'driver_id' => $driverId,
+                'shift_id' => $shiftId,
+            ]);
+
+            $offset++;
+
+            TripCheckpoint::create([
+                'trip_id' => $trip->id,
+                'order_id' => $order->id,
+                'checkpoint_type' => CheckpointType::ArrivedPickup,
+                'occurred_at' => (clone $now)->addSeconds($offset),
+                'km_reading' => null,
+                'driver_id' => $driverId,
+                'shift_id' => $shiftId,
+            ]);
+
+            $offset++;
+
+            TripCheckpoint::create([
+                'trip_id' => $trip->id,
+                'order_id' => $order->id,
+                'checkpoint_type' => CheckpointType::LeftPickup,
+                'occurred_at' => (clone $now)->addSeconds($offset),
+                'km_reading' => null,
+                'driver_id' => $driverId,
+                'shift_id' => $shiftId,
+            ]);
+
+            $offset++;
+
+            foreach ($order->deliveryPoints as $dp) {
                 TripCheckpoint::create([
                     'trip_id' => $trip->id,
                     'order_id' => $order->id,
-                    'checkpoint_type' => $type,
-                    'occurred_at' => $now,
+                    'delivery_point_id' => $dp->id,
+                    'checkpoint_type' => CheckpointType::ArrivedDelivery,
+                    'occurred_at' => (clone $now)->addSeconds($offset),
                     'km_reading' => null,
                     'driver_id' => $driverId,
                     'shift_id' => $shiftId,
                 ]);
-            }
 
-            foreach ($order->deliveryPoints as $dp) {
-                foreach ([CheckpointType::ArrivedDelivery, CheckpointType::Completed] as $type) {
-                    TripCheckpoint::create([
-                        'trip_id' => $trip->id,
-                        'order_id' => $order->id,
-                        'delivery_point_id' => $dp->id,
-                        'checkpoint_type' => $type,
-                        'occurred_at' => $now,
-                        'km_reading' => null,
-                        'driver_id' => $driverId,
-                        'shift_id' => $shiftId,
-                    ]);
-                }
+                $offset++;
+
+                TripCheckpoint::create([
+                    'trip_id' => $trip->id,
+                    'order_id' => $order->id,
+                    'delivery_point_id' => $dp->id,
+                    'checkpoint_type' => CheckpointType::Completed,
+                    'occurred_at' => (clone $now)->addSeconds($offset),
+                    'km_reading' => null,
+                    'driver_id' => $driverId,
+                    'shift_id' => $shiftId,
+                ]);
+
+                $offset++;
             }
         }
     }

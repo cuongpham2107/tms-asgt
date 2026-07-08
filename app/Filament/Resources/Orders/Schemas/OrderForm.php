@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\CargoType;
-use App\Enums\CheckpointType;
 use App\Enums\LocationType;
 use App\Enums\Priority;
 use App\Filament\Forms\Components\DriverPicker;
@@ -14,8 +13,6 @@ use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Location;
-use App\Models\Order;
-use App\Models\OrderDeliveryPoint;
 use App\Models\Vehicle;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
@@ -198,7 +195,7 @@ class OrderForm extends CreatesOrderTransportCards
                                                     ->label('Điểm giao hàng')
                                                     ->relationship(
                                                         name: 'location',
-                                                        titleAttribute: 'name',
+                                                        titleAttribute: 'code',
                                                         modifyQueryUsing: fn (Builder $query, Get $get) => $query
                                                             ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
                                                             ->when($get('location_id'), fn ($q, $id) => $q->orWhere('id', $id))
@@ -258,82 +255,6 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->label('Ghi chú')
                                     ->columnSpanFull(),
                             ]),
-
-                        // Tab::make('Hành trình')
-                        //     ->icon('heroicon-o-map')
-                        //     ->schema([
-                        //         Repeater::make('tripCheckpoints')
-                        //             ->label('Checkpoint hành trình')
-                        //             ->relationship()
-                        //             ->reorderableWithDragAndDrop()
-                        //             ->defaultItems(1)
-                        //             ->schema([
-                        //                 Grid::make(12)
-                        //                     ->schema([
-                        //                         Select::make('checkpoint_type')
-                        //                             ->label('Loại')
-                        //                             ->options(CheckpointType::class)
-                        //                             ->required()
-                        //                             ->native(false)
-                        //                             ->columnSpan(3),
-                        //                         DateTimePicker::make('occurred_at')
-                        //                             ->label('Thời điểm')
-                        //                             ->seconds(false)
-                        //                             ->native(false)
-                        //                             ->required()
-                        //                             ->columnSpan(3),
-                        //                         TextInput::make('km_reading')
-                        //                             ->label('Số km')
-                        //                             ->numeric()
-                        //                             ->columnSpan(2),
-                        //                         Select::make('delivery_point_id')
-                        //                             ->label('Điểm giao hàng')
-                        //                             ->options(function (Get $get, $record): array {
-                        //                                 $orderId = $get('../../id');
-
-                        //                                 if (! $orderId && $record?->trip?->orders->first()?->id) {
-                        //                                     $orderId = $record->trip->orders->first()->id;
-                        //                                 }
-
-                        //                                 if (! $orderId) {
-                        //                                     return [];
-                        //                                 }
-
-                        //                                 $deliveryPoints = OrderDeliveryPoint::query()
-                        //                                     ->where('order_id', $orderId)
-                        //                                     ->with('location')
-                        //                                     ->get();
-
-                        //                                 if ($deliveryPoints->isNotEmpty()) {
-                        //                                     return $deliveryPoints
-                        //                                         ->mapWithKeys(fn ($dp) => [
-                        //                                             $dp->id => $dp->location?->code ?: ($dp->location?->code ?? 'Điểm giao '.$dp->sequence),
-                        //                                         ])
-                        //                                         ->toArray();
-                        //                                 }
-
-                        //                                 $order = Order::find($orderId);
-
-                        //                                 if ($order?->area_id) {
-                        //                                     return Location::query()
-                        //                                         ->where('area_id', $order->area_id)
-                        //                                         ->where('is_active', true)
-                        //                                         ->pluck('name', 'id')
-                        //                                         ->toArray();
-                        //                                 }
-
-                        //                                 return [];
-                        //                             })
-                        //                             ->placeholder('Chọn điểm giao')
-                        //                             ->native(false)
-                        //                             ->columnSpan(4),
-                        //                         Textarea::make('voice_note')
-                        //                             ->label('Ghi chú')
-                        //                             ->columnSpanFull(),
-                        //                     ]),
-                        //             ])
-                        //             ->columnSpanFull(),
-                        //     ]),
 
                         Tab::make('Phân xe')
                             ->icon('heroicon-o-truck')
