@@ -199,7 +199,7 @@ test('scenario 1: HHHK order full lifecycle A to B', function () {
     fwPostCheckpoint($driver, $trip, CheckpointType::Started->value);
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedPickup->value, kmReading: 50010);
     fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
+    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, kmReading: 50050, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 50080, orderId: $order->id, deliveryPointId: $dp->id);
 
     // End shift
@@ -239,7 +239,7 @@ test('scenario 2: external order full lifecycle', function () {
     fwPostCheckpoint($driver, $trip, CheckpointType::Started->value);
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedPickup->value, kmReading: 60015);
     fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
+    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, kmReading: 60030, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 60055, orderId: $order->id, deliveryPointId: $dp->id);
 
     fwEndShift($driver, 60055);
@@ -288,11 +288,11 @@ test('scenario 3: two HHHK orders in same trip delivered sequentially', function
     fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
 
     // Giao đơn 1
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order1->id, deliveryPointId: $dp1->id);
+    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, kmReading: 70040, orderId: $order1->id, deliveryPointId: $dp1->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 70060, orderId: $order1->id, deliveryPointId: $dp1->id);
 
     // Giao đơn 2
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order2->id, deliveryPointId: $dp2->id);
+    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, kmReading: 70080, orderId: $order2->id, deliveryPointId: $dp2->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 70100, orderId: $order2->id, deliveryPointId: $dp2->id);
 
     fwEndShift($driver, 70100);
@@ -346,7 +346,7 @@ test('scenario 4: driver swap mid-trip with KM split correctly', function () {
     // Driver B: start → arrived_delivery → completed
     fwStartShift($driverB, $vehicle);
     fwPostCheckpoint($driverB, $trip, CheckpointType::Started->value);
-    fwPostCheckpoint($driverB, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
+    fwPostCheckpoint($driverB, $trip, CheckpointType::ArrivedDelivery->value, kmReading: 80050, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driverB, $trip, CheckpointType::Completed->value, kmReading: 80100, orderId: $order->id, deliveryPointId: $dp->id);
 
     // Recalculate trip KM after swap
@@ -382,7 +382,7 @@ test('scenario 5: return trip with empty KM after delivery', function () {
     fwPostCheckpoint($driver, $trip, CheckpointType::Started->value);
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedPickup->value, kmReading: 90010);
     fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
+    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, kmReading: 90040, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 90070, orderId: $order->id, deliveryPointId: $dp->id);
 
     // Create return trip (empty, going back)
@@ -455,7 +455,7 @@ test('scenario 6: rented vehicle creates auto-checkpoints on trip creation', fun
     fwPostCheckpoint($driver, $trip, CheckpointType::Started->value);
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedPickup->value, kmReading: 100010);
     fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
+    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, kmReading: 100050, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 100080, orderId: $order->id, deliveryPointId: $dp->id);
 
     fwEndShift($driver, 100080);
@@ -494,7 +494,7 @@ test('scenario 7: shift KM summary matches actual driven distance', function () 
     fwPostCheckpoint($driver, $trip, CheckpointType::Started->value);
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedPickup->value, kmReading: 20020);
     fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
+    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, kmReading: 20050, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 20090, orderId: $order->id, deliveryPointId: $dp->id);
 
     fwEndShift($driver, 20090);
