@@ -180,6 +180,7 @@ test('arrived_delivery requires order_id and delivery_point_id', function () {
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
         'delivery_point_id' => $this->dp1->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -208,6 +209,7 @@ test('completed completes all orders at same location and auto-completes trip', 
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
         'delivery_point_id' => $this->dp1->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -278,6 +280,7 @@ test('completed handles orders at different locations separately', function () {
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
         'delivery_point_id' => $this->dp1->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -304,6 +307,7 @@ test('completed handles orders at different locations separately', function () {
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $order3->id,
         'delivery_point_id' => $dp3->id,
+        'km_reading' => 50080,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -327,6 +331,7 @@ test('arrived_delivery groups orders at same location', function () {
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
         'delivery_point_id' => $this->dp1->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -372,6 +377,7 @@ test('arrived_delivery without delivery_point_id does not group', function () {
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $order3->id,
         'new_delivery_location_id' => $newLocation->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -385,6 +391,7 @@ test('arrived_delivery skips duplicate checkpoints in group', function () {
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
         'delivery_point_id' => $this->dp1->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -393,6 +400,7 @@ test('arrived_delivery skips duplicate checkpoints in group', function () {
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order2->id,
         'delivery_point_id' => $this->dp2->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ]);
 
@@ -451,6 +459,7 @@ test('completed does not complete order with remaining delivery points', functio
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $order3->id,
         'delivery_point_id' => $dpSeq1->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -472,6 +481,7 @@ test('completed does not complete order with remaining delivery points', functio
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $order3->id,
         'delivery_point_id' => $dpSeq2->id,
+        'km_reading' => 50080,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -500,6 +510,7 @@ test('arrived_delivery with photos attaches to all grouped checkpoints', functio
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
         'delivery_point_id' => $this->dp1->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
         'photos' => [$file],
     ])->assertSuccessful();
@@ -533,6 +544,7 @@ test('order not in trip returns 422', function () {
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
         'delivery_point_id' => $this->dp1->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
@@ -540,6 +552,7 @@ test('order not in trip returns 422', function () {
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
         'delivery_point_id' => $this->dp1->id,
+        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertStatus(422);
 });
