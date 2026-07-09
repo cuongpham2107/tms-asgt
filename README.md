@@ -56,3 +56,29 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+Được. Dùng chung domain tms.asgl.net.vn:
+
+- tms.asgl.net.vn/app → Laravel Filament admin (đã có)
+- tms.asgl.net.vn/mobile → Expo web build (tài xế)
+- tms.asgl.net.vn/api/driver → API (đã có, mobile tự gọi)
+  Cách làm:
+
+1. Build mobile ra static files:
+   cd tms-mobile
+   npx expo export --platform web
+
+# → dist/ folder
+
+2. Sửa src/lib/api.ts — API cùng domain, không cần IP:
+   const API = "/api/driver"; // relative URL, tự động gọi cùng domain
+3. Copy dist/ lên server vào thư mục public/mobile/ của Laravel (Laravel serve static files từ public/):
+   scp -r dist/\* user@server:/path/to/tms-asgt/public/mobile/
+4. Thêm rewrite rule cho SPA (React Router) vào Nginx hoặc Laravel route:
+
+# Nginx
+
+location /mobile {
+try_files $uri /mobile/index.html;
+}
+Vậy là xong — mobile chạy ở tms.asgl.net.vn/mobile, gọi API ở tms.asgl.net.vn/api/driver cùng domain nên không bị CORS.

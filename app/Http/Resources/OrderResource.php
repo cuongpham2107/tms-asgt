@@ -91,6 +91,7 @@ class OrderResource extends JsonResource
             /** Chi tiết địa điểm lấy hàng (nếu được load). */
             'pickup_location' => $this->whenLoaded('pickupLocation', fn () => [
                 'id' => $this->pickupLocation->id,
+                'code' => $this->pickupLocation->code,
                 'name' => $this->pickupLocation->name,
                 'address' => $this->pickupLocation->address,
                 'lat' => $this->pickupLocation->lat,
