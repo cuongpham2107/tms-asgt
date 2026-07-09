@@ -105,7 +105,6 @@ class TripForm
                     ->columnSpanFull()
                     ->schema([
                         View::make('checkpoints_grouped')
-                            ->label('Danh sách chốt chặng')
                             ->view('filament.resources.trips.components.grouped-checkpoints', [
                                 'trip' => fn ($record) => $record,
                             ])
