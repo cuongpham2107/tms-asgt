@@ -23,6 +23,7 @@ class TripCheckpoint extends Model
         'voice_note',
         'driver_id',
         'shift_id',
+        'vehicle_id',
     ];
 
     protected function casts(): array
@@ -65,5 +66,10 @@ class TripCheckpoint extends Model
     public function shift(): BelongsTo
     {
         return $this->belongsTo(DriverShift::class, 'shift_id');
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class);
     }
 }

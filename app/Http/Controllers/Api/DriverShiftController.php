@@ -7,6 +7,7 @@ use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EndShiftRequest;
+use App\Http\Requests\EndVehicleRequest;
 use App\Http\Requests\StartShiftRequest;
 use App\Http\Requests\SwitchVehicleRequest;
 use App\Http\Resources\DriverShiftResource;
@@ -16,6 +17,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
 use App\Services\ShiftKmCalculatorService;
+use App\Services\Trip\Handlers\EndHandler;
 use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
@@ -120,6 +122,52 @@ class DriverShiftController extends Controller
     }
 
     /**
+     * Nhập km khi rời xe (checkpoint type = end).
+     *
+     * @response array{checkpoint: array, vehicle: array}
+     */
+    #[BodyParameter('km_reading', type: 'number', description: 'Số km đồng hồ lúc rời xe.', required: true)]
+    public function endVehicle(EndVehicleRequest $request, DriverShift $shift): JsonResponse
+    {
+        $user = $request->user();
+        $payload = $request->validated();
+        $kmReading = (float) $payload['km_reading'];
+
+        if ($shift->driver_id !== $user->id) {
+            return response()->json(['message' => 'Ca này không thuộc về bạn'], 403);
+        }
+
+        if ($shift->end_time !== null) {
+            return response()->json(['message' => 'Ca đã kết thúc'], 422);
+        }
+
+        // Find vehicle: from any trip on this shift (even completed ones — driver
+        // may still be in the same vehicle after all trips are done)
+        $vehicle = $shift->trips()
+            ->latest('started_at')
+            ->first()?->vehicle;
+
+        if ($vehicle === null) {
+            return response()->json(['message' => 'Không tìm thấy xe đang hoạt động trong ca này'], 404);
+        }
+
+        // Validate km_reading >= vehicle.current_mileage (chặn nhập lùi km)
+        $currentMileage = (float) ($vehicle->current_mileage ?? 0);
+        if ($kmReading < $currentMileage) {
+            return response()->json([
+                'message' => 'Số km nhập vào ('.number_format($kmReading, 1).') nhỏ hơn số km hiện tại của xe ('.number_format($currentMileage, 1).')',
+            ], 422);
+        }
+
+        $checkpoint = app(EndHandler::class)->handle($shift, $vehicle, $kmReading);
+
+        return response()->json([
+            'checkpoint' => $checkpoint->toArray(),
+            'vehicle' => ['id' => $vehicle->id, 'current_mileage' => $vehicle->fresh()->current_mileage],
+        ]);
+    }
+
+    /**
      * Kết thúc ca làm việc.
      *
      * @response array{shift: DriverShiftResource}
@@ -145,10 +193,26 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Không tìm thấy ca làm việc đang hoạt động'], 404);
         }
 
+        // Gate: phải có checkpoint type='end' cho xe hiện tại trước khi kết thúc ca
+        $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
+            ->where('checkpoint_type', CheckpointType::End->value)
+            ->whereNotNull('km_reading')
+            ->whereNotNull('vehicle_id')
+            ->latest('id')
+            ->first();
+
+        if ($endCheckpoint === null) {
+            /** @status 422 */
+            return response()->json(['message' => 'Cần nhập km kết thúc trước khi kết thúc ca.'], 422);
+        }
+
+        // Use km_reading from the 'end' checkpoint (NOT from payload — avoids double entry drift)
+        $endKm = (float) $endCheckpoint->km_reading;
+
         DB::beginTransaction();
         try {
             $shift->end_time = now();
-            $shift->end_km = $payload['end_km'] ?? $shift->end_km;
+            $shift->end_km = $endKm;
             $shift->end_gps_lat = $payload['end_gps_lat'] ?? null;
             $shift->end_gps_lng = $payload['end_gps_lng'] ?? null;
             $shift->save();
@@ -167,8 +231,6 @@ class DriverShiftController extends Controller
                 ->get();
 
             foreach ($incompleteTrips as $trip) {
-                $endKm = (float) ($payload['end_km'] ?? $shift->end_km ?? 0);
-
                 if ($endKm > 0) {
                     app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
                     $trip->refresh();
@@ -188,27 +250,34 @@ class DriverShiftController extends Controller
                     'shift_id' => $shift->id,
                     'checkpoint_type' => CheckpointType::DriverSwap->value,
                     'occurred_at' => now(),
-                    'km_reading' => $payload['end_km'] ?? null,
+                    'km_reading' => $endKm,
                 ]);
             }
 
             app(ShiftKmCalculatorService::class)->calculate($shift);
 
-            // update vehicle info — use the vehicle from incomplete trips (before shift_id was cleared)
-            $vehicle = $incompleteTrips->first()?->vehicle
-                ?? $user->vehiclesAsDriver()->first()
-                ?? $shift->trips()->latest('started_at')->first()?->vehicle;
-            if ($vehicle) {
-                if (isset($payload['end_km'])) {
-                    $vehicle->current_mileage = $payload['end_km'];
-                }
+            // Clean up trips that were driver_swapped via EndHandler
+            // (status=DriverSwap but still linked to this shift)
+            $driverSwappedTrips = Trip::where('driver_id', $user->id)
+                ->where('shift_id', $shift->id)
+                ->where('status', TripStatus::DriverSwap)
+                ->get();
+
+            foreach ($driverSwappedTrips as $trip) {
+                $trip->shift_id = null;
+                $trip->save();
+            }
+
+            // Update vehicle mileage from the 'end' checkpoint's km_reading
+            if ($endCheckpoint->vehicle_id) {
+                $vehicleUpdate = ['current_mileage' => $endKm];
                 if (isset($payload['end_gps_lat'])) {
-                    $vehicle->gps_lat = $payload['end_gps_lat'];
+                    $vehicleUpdate['gps_lat'] = $payload['end_gps_lat'];
                 }
                 if (isset($payload['end_gps_lng'])) {
-                    $vehicle->gps_lng = $payload['end_gps_lng'];
+                    $vehicleUpdate['gps_lng'] = $payload['end_gps_lng'];
                 }
-                $vehicle->save();
+                Vehicle::where('id', $endCheckpoint->vehicle_id)->update($vehicleUpdate);
             }
 
             DB::commit();
@@ -269,9 +338,21 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Không tìm thấy ca làm việc đang hoạt động'], 404);
         }
 
+        // Gate: must have an 'end' checkpoint before switching vehicle
+        $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
+            ->where('checkpoint_type', CheckpointType::End->value)
+            ->whereNotNull('km_reading')
+            ->whereNotNull('vehicle_id')
+            ->latest('id')
+            ->first();
+
+        if ($endCheckpoint === null) {
+            return response()->json(['message' => 'Cần nhập km kết thúc xe hiện tại trước khi chuyển xe.'], 422);
+        }
+
         DB::beginTransaction();
         try {
-            // Update old vehicle: mileage and GPS
+            // Update new vehicle mileage with handover_km (setting up for the new vehicle)
             Vehicle::where('id', $payload['new_vehicle_id'])
                 ->update([
                     'current_mileage' => $payload['handover_km'],

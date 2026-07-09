@@ -81,16 +81,8 @@ class CompletedHandler implements CheckpointHandlerInterface
     /** @param  array<string, mixed>  $payload */
     private function completeTripIfAllOrdersDone(Trip $trip, array $payload, string $occurredAt): void
     {
-        $allDone = $trip->orders()
-            ->where('status', '!=', OrderStatus::Completed)
-            ->doesntExist();
-
-        if ($allDone) {
-            $trip->complete(
-                endKm: $payload['km_reading'] ?? null,
-                completedAt: $occurredAt,
-            );
-        }
+        // Trip completion is now manual via POST /api/driver/trips/{trip}/complete
+        // Auto-complete on last order is disabled.
     }
 
     private function resetVehicleIfIdle(Trip $trip): void

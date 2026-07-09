@@ -202,7 +202,7 @@ test('completed without order_id fails validation', function () {
     ])->assertStatus(422);
 });
 
-test('completed completes all orders at same location and auto-completes trip', function () {
+test('completed completes all orders and trip via manual complete endpoint', function () {
     // Cả 2 orders cùng location_id → arrived_delivery cho 1 order sẽ tạo cho cả 2
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_delivery',
@@ -221,7 +221,7 @@ test('completed completes all orders at same location and auto-completes trip', 
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
-    // Completed cho 1 order cùng location → complete cả 2 → trip completes
+    // Completed cho 1 order cùng location → complete cả 2 orders
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'completed',
         'order_id' => $this->order1->id,
@@ -232,6 +232,15 @@ test('completed completes all orders at same location and auto-completes trip', 
 
     expect($this->order1->fresh()->status)->toBe(OrderStatus::Completed);
     expect($this->order2->fresh()->status)->toBe(OrderStatus::Completed);
+
+    // Trip is NOT auto-completed — must call complete endpoint
+    $this->trip->refresh();
+    expect($this->trip->status)->not->toBe(TripStatus::Completed);
+
+    // Manual complete
+    $this->postJson("/api/driver/trips/{$this->trip->id}/complete", [
+        'end_km' => 50090,
+    ])->assertSuccessful();
 
     $this->trip->refresh();
     expect($this->trip->status)->toBe(TripStatus::Completed);
@@ -316,6 +325,15 @@ test('completed handles orders at different locations separately', function () {
     ])->assertSuccessful();
 
     expect($order3->fresh()->status)->toBe(OrderStatus::Completed);
+
+    $this->trip->refresh();
+    // Trip is NOT auto-completed
+    expect($this->trip->status)->not->toBe(TripStatus::Completed);
+
+    // Manual complete
+    $this->postJson("/api/driver/trips/{$this->trip->id}/complete", [
+        'end_km' => 50100,
+    ])->assertSuccessful();
 
     $this->trip->refresh();
     expect($this->trip->status)->toBe(TripStatus::Completed);
@@ -487,7 +505,14 @@ test('completed does not complete order with remaining delivery points', functio
     expect($order3->fresh()->status)->toBe(OrderStatus::Completed);
     expect($dpSeq2->fresh()->status)->toBe(OrderDeliveryPointStatus::Delivered);
 
-    // Trip auto-complete
+    // Trip is NOT auto-completed — must call complete endpoint
+    $this->trip->refresh();
+    expect($this->trip->status)->not->toBe(TripStatus::Completed);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/complete", [
+        'end_km' => 50100,
+    ])->assertSuccessful();
+
     $this->trip->refresh();
     expect($this->trip->status)->toBe(TripStatus::Completed);
 });

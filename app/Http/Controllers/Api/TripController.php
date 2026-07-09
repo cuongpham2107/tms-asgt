@@ -7,6 +7,7 @@ use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
 use App\Models\Trip;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -179,6 +180,75 @@ class TripController extends Controller
                 'per_page' => $trips->perPage(),
                 'total' => $trips->total(),
             ],
+        ]);
+    }
+
+    /**
+     * Kết thúc chuyến (manual complete).
+     *
+     * Nếu tất cả orders đã Completed → trip.status = Completed.
+     * Nếu còn orders chưa hoàn thành → trip.status = DriverSwap,
+     *   tính partial km, orders chưa xong → DriverSwap.
+     *
+     * @response array{data: TripResource}
+     */
+    #[BodyParameter('end_km', type: 'number', description: 'Số km đồng hồ lúc kết thúc chuyến.', required: true)]
+    #[BodyParameter('completed_at', type: 'string', format: 'date-time', description: 'Thời điểm kết thúc chuyến.', example: '2026-07-09T17:30:00Z')]
+    public function complete(Request $request, Trip $trip): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($trip->driver_id !== $user->id) {
+            return response()->json(['message' => 'Bạn không phải tài xế được gán cho chuyến này'], 403);
+        }
+
+        if ($trip->isCompleted() || $trip->status === TripStatus::DriverSwap) {
+            return response()->json(['message' => 'Chuyến đã kết thúc'], 422);
+        }
+
+        $validated = $request->validate([
+            'end_km' => 'required|numeric|min:0',
+            'completed_at' => 'nullable|date',
+        ]);
+
+        $endKm = (float) $validated['end_km'];
+        $completedAt = $validated['completed_at'] ?? null;
+
+        $allOrdersDone = $trip->orders()
+            ->where('status', '!=', OrderStatus::Completed)
+            ->doesntExist();
+
+        if ($allOrdersDone) {
+            // Tất cả orders đã xong → complete bình thường
+            $trip->complete(endKm: $endKm, completedAt: $completedAt);
+        } else {
+            // Còn orders chưa xong → driver_swap, tính partial km
+            \Illuminate\Support\Facades\DB::transaction(function () use ($trip, $endKm, $completedAt) {
+                app(\App\Services\TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
+                $trip->refresh();
+
+                $trip->end_km = $endKm;
+                $trip->status = TripStatus::DriverSwap;
+                $trip->save();
+
+                $trip->orders()
+                    ->whereIn('status', [
+                        OrderStatus::Sent->value,
+                        OrderStatus::InTransit->value,
+                        OrderStatus::Assigned->value,
+                    ])
+                    ->update(['status' => OrderStatus::DriverSwap->value]);
+            });
+        }
+
+        $trip->load([
+            'vehicle',
+            'orders' => fn ($q) => $q->whereNull('deleted_at'),
+            'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+        ]);
+
+        return response()->json([
+            'data' => TripResource::make($trip),
         ]);
     }
 

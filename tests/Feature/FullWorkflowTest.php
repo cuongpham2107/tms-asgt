@@ -113,9 +113,30 @@ function fwEndShift(User $driver, int $endKm): void
 {
     Sanctum::actingAs($driver);
 
+    // Get the active shift to find vehicle for end-vehicle checkpoint
+    $shift = DriverShift::where('driver_id', $driver->id)
+        ->whereNull('end_time')
+        ->latest('start_time')
+        ->first();
+
+    if ($shift) {
+        // Create 'end' checkpoint first (required before ending shift)
+        postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
+            'km_reading' => $endKm,
+        ])->assertSuccessful();
+    }
+
     postJson('/api/driver/shifts/end', [
-        'end_km' => $endKm,
         'end_time' => now()->toIso8601String(),
+    ])->assertSuccessful();
+}
+
+function fwCompleteTrip(User $driver, Trip $trip, int $endKm): void
+{
+    Sanctum::actingAs($driver);
+
+    postJson("/api/driver/trips/{$trip->id}/complete", [
+        'end_km' => $endKm,
     ])->assertSuccessful();
 }
 
@@ -202,6 +223,9 @@ test('scenario 1: HHHK order full lifecycle A to B', function () {
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 50080, orderId: $order->id, deliveryPointId: $dp->id);
 
+    // Complete trip manually
+    fwCompleteTrip($driver, $trip, 50080);
+
     // End shift
     fwEndShift($driver, 50080);
 
@@ -241,6 +265,8 @@ test('scenario 2: external order full lifecycle', function () {
     fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 60055, orderId: $order->id, deliveryPointId: $dp->id);
+
+    fwCompleteTrip($driver, $trip, 60055);
 
     fwEndShift($driver, 60055);
 
@@ -294,6 +320,8 @@ test('scenario 3: two HHHK orders in same trip delivered sequentially', function
     // Giao đơn 2
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order2->id, deliveryPointId: $dp2->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 70100, orderId: $order2->id, deliveryPointId: $dp2->id);
+
+    fwCompleteTrip($driver, $trip, 70100);
 
     fwEndShift($driver, 70100);
 
@@ -349,8 +377,7 @@ test('scenario 4: driver swap mid-trip with KM split correctly', function () {
     fwPostCheckpoint($driverB, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driverB, $trip, CheckpointType::Completed->value, kmReading: 80100, orderId: $order->id, deliveryPointId: $dp->id);
 
-    // Recalculate trip KM after swap
-    app(TripKmCalculatorService::class)->calculate($trip);
+    fwCompleteTrip($driverB, $trip, 80100);
 
     fwEndShift($driverB, 80100);
 
@@ -384,6 +411,8 @@ test('scenario 5: return trip with empty KM after delivery', function () {
     fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 90070, orderId: $order->id, deliveryPointId: $dp->id);
+
+    fwCompleteTrip($driver, $trip, 90070);
 
     // Create return trip (empty, going back)
     $returnTrip = Trip::create([
@@ -458,6 +487,8 @@ test('scenario 6: rented vehicle creates auto-checkpoints on trip creation', fun
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 100080, orderId: $order->id, deliveryPointId: $dp->id);
 
+    fwCompleteTrip($driver, $trip, 100080);
+
     fwEndShift($driver, 100080);
 
     $order->refresh();
@@ -496,6 +527,8 @@ test('scenario 7: shift KM summary matches actual driven distance', function () 
     fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
     fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 20090, orderId: $order->id, deliveryPointId: $dp->id);
+
+    fwCompleteTrip($driver, $trip, 20090);
 
     fwEndShift($driver, 20090);
 

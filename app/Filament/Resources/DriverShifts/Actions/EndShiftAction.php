@@ -11,7 +11,6 @@ use App\Models\TripCheckpoint;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\TripKmCalculatorService;
 use Filament\Actions\Action;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 
@@ -28,15 +27,26 @@ class EndShiftAction
             ->modalHeading('Kết thúc ca trực')
             ->modalDescription('Xác nhận kết thúc ca làm việc này? Hệ thống sẽ tự động tính toán km dựa trên dữ liệu đã ghi nhận.')
             ->modalSubmitActionLabel('Kết thúc ca')
-            ->form([
-                TextInput::make('end_km')
-                    ->label('Km kết thúc')
-                    ->numeric()
-                    ->minValue(0)
-                    ->required(),
-            ])
             ->action(function (array $data, DriverShift $record): void {
-                $endKm = (float) ($data['end_km'] ?? 0);
+                // Gate: phải có checkpoint type='end' trước khi kết thúc ca
+                $endCheckpoint = TripCheckpoint::where('shift_id', $record->id)
+                    ->where('checkpoint_type', CheckpointType::End->value)
+                    ->whereNotNull('km_reading')
+                    ->whereNotNull('vehicle_id')
+                    ->latest('id')
+                    ->first();
+
+                if ($endCheckpoint === null) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Không thể kết thúc ca')
+                        ->body('Cần nhập km kết thúc trước khi kết thúc ca.')
+                        ->send();
+
+                    return;
+                }
+
+                $endKm = (float) $endCheckpoint->km_reading;
 
                 DB::beginTransaction();
                 try {
@@ -82,6 +92,17 @@ class EndShiftAction
                     }
 
                     app(ShiftKmCalculatorService::class)->calculate($record);
+
+                    // Clean up trips that were driver_swapped via EndHandler
+                    $driverSwappedTrips = Trip::where('driver_id', $record->driver_id)
+                        ->where('shift_id', $record->id)
+                        ->where('status', TripStatus::DriverSwap)
+                        ->get();
+
+                    foreach ($driverSwappedTrips as $trip) {
+                        $trip->shift_id = null;
+                        $trip->save();
+                    }
 
                     DB::commit();
                 } catch (\Throwable $e) {

@@ -13,6 +13,7 @@ enum CheckpointType: string implements HasColor, HasLabel
     case ArrivedDelivery = 'arrived_delivery';
     case Completed = 'completed';
     case DriverSwap = 'driver_swap';
+    case End = 'end';
 
     public function getLabel(): string
     {
@@ -23,6 +24,7 @@ enum CheckpointType: string implements HasColor, HasLabel
             self::ArrivedDelivery => 'Đến giao hàng',
             self::Completed => 'Hoàn thành',
             self::DriverSwap => 'Đảo lái',
+            self::End => 'Kết thúc xe',
         };
     }
 
@@ -35,6 +37,7 @@ enum CheckpointType: string implements HasColor, HasLabel
             self::ArrivedDelivery => 'warning',
             self::Completed => 'success',
             self::DriverSwap => 'primary',
+            self::End => 'danger',
         };
     }
 }

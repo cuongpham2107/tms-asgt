@@ -238,10 +238,21 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     expect($deliveryPoint->fresh()->status)->toBe(OrderDeliveryPointStatus::Delivered);
 
     // ============================================
-    // 5. KẾT THÚC CA LÀM
+    // 5. KẾT THÚC CHUYẾN (manual)
     // ============================================
-    $this->postJson('/api/driver/shifts/end', [
+    $this->postJson("/api/driver/trips/{$trip->id}/complete", [
         'end_km' => 15100,
+    ])->assertSuccessful();
+
+    // ============================================
+    // 6. KẾT THÚC CA LÀM
+    // ============================================
+    // Create 'end' checkpoint before ending shift
+    $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
+        'km_reading' => 15100,
+    ])->assertSuccessful();
+
+    $this->postJson('/api/driver/shifts/end', [
         'end_time' => now()->toIso8601String(),
     ])->assertSuccessful();
 
