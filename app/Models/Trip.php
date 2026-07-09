@@ -149,6 +149,12 @@ class Trip extends Model
 
             $this->save();
 
+            // Cập nhật km xe theo km kết thúc chuyến
+            if ($endKmValue > 0 && $this->vehicle) {
+                $this->vehicle->current_mileage = $endKmValue;
+                $this->vehicle->save();
+            }
+
             app(TripKmCalculatorService::class)->calculate($this);
         });
     }
