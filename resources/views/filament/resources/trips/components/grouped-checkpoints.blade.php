@@ -2,8 +2,8 @@
     use App\Models\Trip;
     use App\Enums\CheckpointType;
 
-    /** @var Trip $trip */
-    $allCheckpoints = $trip->checkpoints()->with('order')->orderBy('occurred_at')->get();
+    /** @var Trip $record */
+    $allCheckpoints = $record->checkpoints()->with('order')->orderBy('occurred_at')->get();
 
     // Group by (checkpoint_type, km_reading) — same type+km = same row
     $grouped = $allCheckpoints->groupBy(function ($cp) {
