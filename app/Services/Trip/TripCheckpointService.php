@@ -43,7 +43,7 @@ class TripCheckpointService
         $checkpointType = CheckpointType::from($payload['checkpoint_type']);
 
         // Return trip: no orders, just update existing checkpoint km_reading
-        if ($trip->status === TripStatus::ReturnTrip && in_array($checkpointType, [CheckpointType::Started, CheckpointType::Completed], true)) {
+        if ($trip->status === TripStatus::ReturnTrip && in_array($checkpointType, [CheckpointType::Started, CheckpointType::End], true)) {
             $existing = TripCheckpoint::where('trip_id', $trip->id)
                 ->where('checkpoint_type', $checkpointType->value)
                 ->first();

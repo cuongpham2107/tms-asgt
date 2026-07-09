@@ -128,6 +128,11 @@ class DriverShift extends Model
         });
 
         $this->tripCheckpoints->each(function ($tc) use ($activities, $sortedSegments) {
+            // Bỏ qua end checkpoint không có đơn hàng (return trip)
+            if ($tc->checkpoint_type === CheckpointType::End && ! $tc->order_id) {
+                return;
+            }
+
             $checkpointLabel = $tc->checkpoint_type?->getLabel() ?? $tc->checkpoint_type;
 
             $orderCode = $tc->order?->order_code ?? '-';

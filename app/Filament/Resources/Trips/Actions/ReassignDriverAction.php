@@ -245,17 +245,19 @@ class ReassignDriverAction
                         'gps_lng' => $vehicle?->gps_lng,
                         'driver_id' => $oldDriver->id,
                         'shift_id' => $oldShift?->id,
+                        'vehicle_id' => $data['return_vehicle_id'],
                     ]);
 
                     TripCheckpoint::create([
                         'trip_id' => $returnTrip->id,
-                        'checkpoint_type' => CheckpointType::Completed->value,
-                        'occurred_at' => $now,
-                        'km_reading' => $vehicle?->current_mileage,
+                        'checkpoint_type' => CheckpointType::End->value,
+                        'occurred_at' => $now->addSecond(),
+                        'km_reading' => null,
                         'gps_lat' => $vehicle?->gps_lat,
                         'gps_lng' => $vehicle?->gps_lng,
                         'driver_id' => $oldDriver->id,
                         'shift_id' => $oldShift?->id,
+                        'vehicle_id' => $data['return_vehicle_id'],
                     ]);
 
                     Notification::make()
