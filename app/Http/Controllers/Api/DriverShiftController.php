@@ -271,7 +271,7 @@ class DriverShiftController extends Controller
             }
 
             // Update vehicle mileage from the 'end' checkpoint's km_reading
-            if ($endCheckpoint->vehicle_id) {
+            if ($endCheckpoint?->vehicle_id) {
                 $vehicleUpdate = ['current_mileage' => $endKm];
                 if (isset($payload['end_gps_lat'])) {
                     $vehicleUpdate['gps_lat'] = $payload['end_gps_lat'];

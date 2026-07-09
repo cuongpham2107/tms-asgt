@@ -20,18 +20,19 @@ class DriverShiftResource extends JsonResource
     {
         $firstTrip = $this->trips()->first();
         $latestTrip = $this->trips()->latest('started_at')->first();
+        $displayTrip = $latestTrip ?? $firstTrip;
 
         return [
             'id' => $this->id,
             'driver_id' => $this->driver_id,
             'driver' => $this->whenLoaded('driver', fn () => UserResource::make($this->driver)),
-            'vehicle_id' => $latestTrip?->vehicle_id ?? $firstTrip?->vehicle_id,
-            'vehicle' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle) ? [
-                'id' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->id,
-                'plate_number' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->plate_number,
-                'vehicle_type' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->vehicle_type,
-                'load_capacity' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->load_capacity,
-                'current_mileage' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->current_mileage,
+            'vehicle_id' => $displayTrip?->vehicle_id,
+            'vehicle' => $displayTrip?->vehicle ? [
+                'id' => $displayTrip->vehicle->id,
+                'plate_number' => $displayTrip->vehicle->plate_number,
+                'vehicle_type' => $displayTrip->vehicle->vehicle_type,
+                'load_capacity' => $displayTrip->vehicle->load_capacity,
+                'current_mileage' => $displayTrip->vehicle->current_mileage,
             ] : null,
             'shift_type' => $this->shift_type,
             'start_time' => $this->start_time?->toDateTimeString(),
