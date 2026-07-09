@@ -619,16 +619,23 @@ abstract class CreatesOrderTransportCards
                         Select::make('location_id')
                             ->label('Điểm giao hàng')
                             ->options(fn (Get $get): array => Location::query()
-                                ->when($get('../../area_id'), function ($q, $areaId) {
-                                    $area = Area::find($areaId);
-
-                                    return $area !== null
-                                        ? $q->whereRelation('area', 'id', $area->id)
-                                        : $q;
-                                })
                                 ->whereIn('loc_type', self::getLocationTypesForOrderType(
                                     $orderType instanceof Closure ? ($orderType($get) ?? 'normal') : ($orderType ?? 'normal'),
                                 ))
+                                ->when($get('../../area_id'), function ($q, $areaId) {
+                                    $area = Area::find($areaId);
+                                    if ($area === null) {
+                                        return $q;
+                                    }
+
+                                    // Filter by area, but fallback to all if area has no matching locations
+                                    $areaLocations = (clone $q)->whereRelation('area', 'id', $area->id)->pluck('id');
+                                    if ($areaLocations->isNotEmpty()) {
+                                        return $q->whereRelation('area', 'id', $area->id);
+                                    }
+
+                                    return $q;
+                                })
                                 ->pluck('code', 'id')
                                 ->toArray()
                             )

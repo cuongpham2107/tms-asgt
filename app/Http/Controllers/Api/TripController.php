@@ -6,10 +6,13 @@ use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
+use App\Models\DriverShift;
 use App\Models\Trip;
+use App\Services\TripKmCalculatorService;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TripController extends Controller
@@ -223,8 +226,8 @@ class TripController extends Controller
             $trip->complete(endKm: $endKm, completedAt: $completedAt);
         } else {
             // Còn orders chưa xong → driver_swap, tính partial km
-            \Illuminate\Support\Facades\DB::transaction(function () use ($trip, $endKm, $completedAt) {
-                app(\App\Services\TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
+            DB::transaction(function () use ($trip, $endKm) {
+                app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
                 $trip->refresh();
 
                 $trip->end_km = $endKm;
@@ -261,22 +264,30 @@ class TripController extends Controller
     {
         $user = $request->user();
 
-        $counts = Trip::query()
-            ->where('driver_id', $user->id)
-            ->selectRaw('
+        // Lọc theo ca đang active (nếu có)
+        $activeShift = DriverShift::where('driver_id', $user->id)
+            ->whereNull('end_time')
+            ->first();
+
+        $query = Trip::where('driver_id', $user->id);
+        if ($activeShift) {
+            $query->where('shift_id', $activeShift->id);
+        }
+
+        $counts = $query->selectRaw('
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as assigned,
                 SUM(CASE WHEN status IN (?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
             ', [
-                TripStatus::Pending->value,
-                TripStatus::Started->value,
-                TripStatus::ArrivedPickup->value,
-                TripStatus::Delivering->value,
-                TripStatus::ArrivedDelivery->value,
-                TripStatus::Delivered->value,
-                TripStatus::DriverSwap->value,
-                TripStatus::Completed->value,
-            ])
+            TripStatus::Pending->value,
+            TripStatus::Started->value,
+            TripStatus::ArrivedPickup->value,
+            TripStatus::Delivering->value,
+            TripStatus::ArrivedDelivery->value,
+            TripStatus::Delivered->value,
+            TripStatus::DriverSwap->value,
+            TripStatus::Completed->value,
+        ])
             ->first();
 
         return response()->json([

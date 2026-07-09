@@ -2,19 +2,14 @@
 
 namespace App\Filament\Resources\Trips\Schemas;
 
-use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Models\User;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Filament\Support\RawJs;
 
 class TripForm
 {
@@ -105,46 +100,12 @@ class TripForm
                 Section::make('Các mốc hành trình')
                     ->columnSpanFull()
                     ->schema([
-                        Repeater::make('checkpoints')
-                            ->relationship('checkpoints')
+                        View::make('checkpoints_grouped')
                             ->label('Danh sách chốt chặng')
-                            ->table([
-                                TableColumn::make('Loại')->width('140px'),
-                                TableColumn::make('Km')->width('80px'),
-                                TableColumn::make('Giờ')->width('160px'),
-                                TableColumn::make('Đơn hàng')->width('120px'),
+                            ->view('filament.resources.trips.components.grouped-checkpoints', [
+                                'trip' => fn ($record) => $record,
                             ])
-                            ->schema([
-                                Select::make('checkpoint_type')
-                                    ->label('Loại')
-                                    ->options(CheckpointType::class)
-                                    ->native(false)
-                                    ->required(),
-                                TextInput::make('km_reading')
-                                    ->mask(RawJs::make('$money($input)'))
-                                    ->stripCharacters(',')
-                                    ->numeric(),
-                                DateTimePicker::make('occurred_at')
-                                    ->label('Giờ')
-                                    ->displayFormat('H:i d/m/Y')
-                                    ->seconds(false)
-                                    ->native(false),
-                                Select::make('order_id')
-                                    ->label('Đơn hàng')
-                                    ->options(function ($record): array {
-                                        if ($record === null) {
-                                            return [];
-                                        }
-
-                                        return $record->trip?->orders?->pluck('order_code', 'id')->toArray() ?? [];
-                                    })
-                                    ->disabled()
-                                    ->native(false)
-                                    ->nullable(),
-                            ])
-                            ->addable(false)
-                            ->deletable(false)
-                            ->reorderable(false),
+                            ->columnSpanFull(),
                     ]),
             ]);
     }
