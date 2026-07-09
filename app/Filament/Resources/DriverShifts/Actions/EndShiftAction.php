@@ -32,7 +32,6 @@ class EndShiftAction
                 $endCheckpoint = TripCheckpoint::where('shift_id', $record->id)
                     ->where('checkpoint_type', CheckpointType::End->value)
                     ->whereNotNull('km_reading')
-                    ->whereNotNull('vehicle_id')
                     ->latest('id')
                     ->first();
 

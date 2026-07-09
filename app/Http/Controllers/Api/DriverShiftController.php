@@ -193,21 +193,23 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Không tìm thấy ca làm việc đang hoạt động'], 404);
         }
 
+        $hasTrips = $shift->trips()->exists();
+
         // Gate: phải có checkpoint type='end' cho xe hiện tại trước khi kết thúc ca
+        // (chỉ bắt buộc nếu ca có chuyến — không có chuyến nào thì không cần)
         $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
             ->where('checkpoint_type', CheckpointType::End->value)
             ->whereNotNull('km_reading')
-            ->whereNotNull('vehicle_id')
             ->latest('id')
             ->first();
 
-        if ($endCheckpoint === null) {
+        if ($hasTrips && $endCheckpoint === null) {
             /** @status 422 */
             return response()->json(['message' => 'Cần nhập km kết thúc trước khi kết thúc ca.'], 422);
         }
 
         // Use km_reading from the 'end' checkpoint (NOT from payload — avoids double entry drift)
-        $endKm = (float) $endCheckpoint->km_reading;
+        $endKm = $endCheckpoint ? (float) $endCheckpoint->km_reading : ($payload['end_km'] ?? null);
 
         DB::beginTransaction();
         try {
@@ -342,7 +344,6 @@ class DriverShiftController extends Controller
         $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
             ->where('checkpoint_type', CheckpointType::End->value)
             ->whereNotNull('km_reading')
-            ->whereNotNull('vehicle_id')
             ->latest('id')
             ->first();
 

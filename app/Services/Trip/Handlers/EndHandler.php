@@ -47,7 +47,6 @@ class EndHandler implements CheckpointHandlerInterface
                 'trip_id' => $activeTripId,
                 'shift_id' => $shift->id,
                 'driver_id' => $shift->driver_id,
-                'vehicle_id' => $vehicle->id,
                 'km_reading' => $kmReading,
                 'occurred_at' => now(),
             ]);
