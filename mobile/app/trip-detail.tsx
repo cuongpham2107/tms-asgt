@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, TextInput } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { api } from "../src/lib/api";
+import { showAlert } from "../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 
 const statusConfig: Record<string, { icon: string; bg: string; text: string; label: string }> = {
@@ -66,15 +67,15 @@ export default function TripDetailScreen() {
     setStarting(true);
     try {
       await api.trips.checkpoint(String(trip.id), { checkpoint_type: "started", occurred_at: new Date().toISOString() }, token);
-      Alert.alert("Thành công", "Đã bắt đầu chuyến");
+      showAlert("Thành công", "Đã bắt đầu chuyến");
       await load();
-    } catch (e: any) { Alert.alert("Lỗi", e.message); }
+    } catch (e: any) { showAlert("Lỗi", e.message); }
     finally { setStarting(false); }
   };
 
   const handleStartReturn = async () => {
     const sKm = parseFloat(startKmInput);
-    if (!sKm) { Alert.alert("Thiếu", "Nhập Km bắt đầu"); return; }
+    if (!sKm) { showAlert("Thiếu", "Nhập Km bắt đầu"); return; }
     if (!trip?.id || !token) return;
     setStarting(true);
     try {
@@ -88,15 +89,15 @@ export default function TripDetailScreen() {
         }, token);
       }
       setReturnStarted(true);
-      Alert.alert("Thành công", "Đã ghi nhận Km bắt đầu");
+      showAlert("Thành công", "Đã ghi nhận Km bắt đầu");
       await load();
-    } catch (e: any) { Alert.alert("Lỗi", e.message); }
+    } catch (e: any) { showAlert("Lỗi", e.message); }
     finally { setStarting(false); }
   };
 
   const handleCompleteReturn = async () => {
     const eKm = parseFloat(completeKm);
-    if (!eKm) { Alert.alert("Thiếu", "Nhập Km kết thúc"); return; }
+    if (!eKm) { showAlert("Thiếu", "Nhập Km kết thúc"); return; }
     if (!trip?.id || !token) return;
     setCompleting(true);
     try {
@@ -111,9 +112,9 @@ export default function TripDetailScreen() {
         }, token);
       }
       await api.trips.complete(String(trip.id), eKm, token);
-      Alert.alert("Thành công", "Đã kết thúc chuyến quay đầu");
+      showAlert("Thành công", "Đã kết thúc chuyến quay đầu");
       await load();
-    } catch (e: any) { Alert.alert("Lỗi", e.message); }
+    } catch (e: any) { showAlert("Lỗi", e.message); }
     finally { setCompleting(false); }
   };
 
@@ -121,15 +122,15 @@ export default function TripDetailScreen() {
     if (isReturnTrip) { /* handled by handleStartReturn + handleCompleteReturn */ return; }
 
     const km = autoEndKm ? parseFloat(autoEndKm) : parseFloat(completeKm);
-    if (!km) { Alert.alert("Thiếu", "Nhập số Km kết thúc chuyến"); return; }
+    if (!km) { showAlert("Thiếu", "Nhập số Km kết thúc chuyến"); return; }
     if (!trip?.id || !token) return;
     setCompleting(true);
     try {
       await api.trips.complete(String(trip.id), km, token);
       const hasIncomplete = orders.some((o: any) => o.status !== "completed");
-      Alert.alert("Thành công", hasIncomplete ? "Chuyến → Đảo lái (đơn chưa xong)" : "Đã kết thúc chuyến");
+      showAlert("Thành công", hasIncomplete ? "Chuyến → Đảo lái (đơn chưa xong)" : "Đã kết thúc chuyến");
       await load();
-    } catch (e: any) { Alert.alert("Lỗi", e.message); }
+    } catch (e: any) { showAlert("Lỗi", e.message); }
     finally { setCompleting(false); }
   };
 
@@ -255,7 +256,7 @@ export default function TripDetailScreen() {
                 <TouchableOpacity key={o.id} style={s.orderCard} activeOpacity={0.7}
                   onPress={() => {
                     if (currentStatus === "pending") {
-                      Alert.alert("Chưa bắt đầu chuyến", "Vui lòng bắt đầu chuyến trước khi xem chi tiết đơn hàng");
+                      showAlert("Chưa bắt đầu chuyến", "Vui lòng bắt đầu chuyến trước khi xem chi tiết đơn hàng");
                       return;
                     }
                     router.push({ pathname: "/order-detail", params: { id: o.id, order: JSON.stringify({ ...o, trip_id: trip.id, vehicle: detail?.vehicle || trip.vehicle }) } });

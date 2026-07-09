@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   RefreshControl,
   FlatList,
   Modal,
@@ -15,6 +14,7 @@ import {
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { api } from "../src/lib/api";
+import { showAlert } from "../src/lib/alert";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -176,7 +176,7 @@ export default function OrderDetailScreen() {
   async function pickImage() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Quyền", "Cần cấp quyền camera");
+      showAlert("Quyền", "Cần cấp quyền camera");
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
@@ -191,7 +191,7 @@ export default function OrderDetailScreen() {
       !km &&
       ["arrived_pickup", "arrived_delivery", "completed", "end"].includes(type)
     ) {
-      Alert.alert("Thiếu", "Vui lòng nhập số Km");
+      showAlert("Thiếu", "Vui lòng nhập số Km");
       return;
     }
     const body: any = {
@@ -217,14 +217,14 @@ export default function OrderDetailScreen() {
     setLoading(true);
     try {
       await api.trips.checkpoint(String(tripId), body, token);
-      Alert.alert("Thành công", `Đã cập nhật: ${cpInfo[type]?.label || type}`);
+      showAlert("Thành công", `Đã cập nhật: ${cpInfo[type]?.label || type}`);
       setKm("");
       setNote("");
       setPhotos([]);
       setSelectedLoc(null);
       await loadDetail(); // refresh
     } catch (e: any) {
-      Alert.alert("Lỗi", e.message);
+      showAlert("Lỗi", e.message);
     } finally {
       setLoading(false);
     }

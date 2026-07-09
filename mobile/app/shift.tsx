@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, StyleSheet } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { api } from "../src/lib/api";
+import { showAlert } from "../src/lib/alert";
 
 const shiftOptions = [
   { key: "full", label: "Cả ca (X)", desc: "Làm việc toàn thời gian" },
@@ -38,7 +39,7 @@ export default function ShiftScreen() {
         router.replace("/");
       }
     } catch (e: any) {
-      Alert.alert("Lỗi", e.message);
+      showAlert("Lỗi", e.message);
     } finally {
       setLoading(false);
     }
@@ -46,7 +47,7 @@ export default function ShiftScreen() {
 
   async function handleEndShift() {
     const km = parseFloat(endKm);
-    if (!km || km <= 0) { Alert.alert("Thiếu", "Nhập số Km kết thúc"); return; }
+    if (!km || km <= 0) { showAlert("Thiếu", "Nhập số Km kết thúc"); return; }
     if (!shift?.id) return;
     setEnding(true);
     try {
@@ -56,9 +57,9 @@ export default function ShiftScreen() {
       const res = await api.shifts.end(token!);
       setShift(res?.shift || null);
       setShowEnd(false);
-      Alert.alert("Thành công", "Đã kết thúc ca");
+      showAlert("Thành công", "Đã kết thúc ca");
     } catch (e: any) {
-      Alert.alert("Lỗi", e.message);
+      showAlert("Lỗi", e.message);
     } finally {
       setEnding(false);
     }

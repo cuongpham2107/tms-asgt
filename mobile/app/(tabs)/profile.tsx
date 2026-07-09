@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
+import { showAlert, showDestructiveConfirm } from "../../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen() {
@@ -14,16 +15,13 @@ export default function ProfileScreen() {
   const activeTrips = shiftTrips.filter((t: any) => t.status !== "completed" && t.status !== "driver_swap");
 
   const handleEndShift = () => {
-    if (!shift?.id) { Alert.alert("Không có ca", "Bạn chưa vào ca"); return; }
+    if (!shift?.id) { showAlert("Không có ca", "Bạn chưa vào ca"); return; }
 
     if (activeTrips.length > 0) {
-      Alert.alert(
+      showDestructiveConfirm(
         "Cảnh báo",
         `${activeTrips.length} chuyến chưa kết thúc. Tiếp tục sẽ chuyển sang Đảo lái.`,
-        [
-          { text: "Huỷ", style: "cancel" },
-          { text: "Vẫn kết thúc", style: "destructive", onPress: () => doEnd() },
-        ]
+        () => doEnd(),
       );
     } else {
       doEnd();
@@ -45,9 +43,9 @@ export default function ProfileScreen() {
       }
       await api.shifts.end(token!);
       setShift(null);
-      Alert.alert("Thành công", "Đã kết thúc ca");
+      showAlert("Thành công", "Đã kết thúc ca");
       router.replace("/shift");
-    } catch (e: any) { Alert.alert("Lỗi", e.message); }
+    } catch (e: any) { showAlert("Lỗi", e.message); }
     finally { setEnding(false); }
   };
 

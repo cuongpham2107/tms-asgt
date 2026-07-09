@@ -11,3 +11,8 @@ Route::post('/mapbox/match', [MapboxController::class, 'match']);
 Route::get('/gps-sync', function (EupGpsService $service) {
     return response()->json($service->sync());
 })->name('gps.sync');
+
+// Mobile SPA — serve Expo web build
+Route::get('/mobile/{any?}', function () {
+    return response()->file(public_path('mobile/index.html'));
+})->where('any', '.*');
