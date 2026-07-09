@@ -134,6 +134,7 @@ class TripCheckpointService
             CheckpointType::ArrivedDelivery => $this->arrivedDeliveryHandler->handle($trip, $payload, $checkpoints),
             CheckpointType::Completed => $this->completedHandler->handle($trip, $payload, $checkpoints),
             CheckpointType::DriverSwap => null,
+            CheckpointType::End => null,
         };
     }
 }

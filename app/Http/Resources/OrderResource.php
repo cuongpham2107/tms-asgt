@@ -47,6 +47,7 @@ class OrderResource extends JsonResource
                 fn () => [
                     'id' => $this->trip->vehicle->id,
                     'plate_number' => $this->trip->vehicle->plate_number,
+                    'current_mileage' => $this->trip->vehicle->current_mileage,
                 ]
             ),
             /** Thông tin khách hàng (nếu được load). */
