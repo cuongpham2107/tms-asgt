@@ -435,7 +435,7 @@ abstract class CreatesOrderTransportCards
         $latestOrderCode = Order::query()
             ->withTrashed()
             ->where('order_code', 'like', $prefix.'%')
-            ->orderByDesc('order_code')
+            ->orderByRaw('CAST(REPLACE(order_code, ?, \'\') AS INTEGER) DESC', [$prefix])
             ->value('order_code');
 
         $nextSequence = 1;
@@ -448,7 +448,7 @@ abstract class CreatesOrderTransportCards
             }
         }
 
-        return sprintf('%s%02d', $prefix, $nextSequence);
+        return sprintf('%s%d', $prefix, $nextSequence);
     }
 
     protected static function isOrderCodeDuplicate(Throwable $throwable): bool
