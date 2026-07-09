@@ -106,7 +106,7 @@ class TripController extends Controller
         $trip->load([
             'vehicle',
             'driverSwaps.toDriver',
-            'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
+            'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft])->with([
                 'customer',
                 'pickupLocation',
                 'deliveryPoints',
