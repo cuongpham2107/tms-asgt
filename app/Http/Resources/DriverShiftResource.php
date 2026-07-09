@@ -19,18 +19,19 @@ class DriverShiftResource extends JsonResource
     public function toArray(Request $request): array
     {
         $firstTrip = $this->trips()->first();
+        $latestTrip = $this->trips()->latest('started_at')->first();
 
         return [
             'id' => $this->id,
             'driver_id' => $this->driver_id,
             'driver' => $this->whenLoaded('driver', fn () => UserResource::make($this->driver)),
-            'vehicle_id' => $firstTrip?->vehicle_id,
-            'vehicle' => $firstTrip?->vehicle ? [
-                'id' => $firstTrip->vehicle->id,
-                'plate_number' => $firstTrip->vehicle->plate_number,
-                'vehicle_type' => $firstTrip->vehicle->vehicle_type,
-                'load_capacity' => $firstTrip->vehicle->load_capacity,
-                'current_mileage' => $firstTrip->vehicle->current_mileage,
+            'vehicle_id' => $latestTrip?->vehicle_id ?? $firstTrip?->vehicle_id,
+            'vehicle' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle) ? [
+                'id' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->id,
+                'plate_number' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->plate_number,
+                'vehicle_type' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->vehicle_type,
+                'load_capacity' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->load_capacity,
+                'current_mileage' => ($latestTrip?->vehicle ?? $firstTrip?->vehicle)->current_mileage,
             ] : null,
             'shift_type' => $this->shift_type,
             'start_time' => $this->start_time?->toDateTimeString(),
@@ -48,6 +49,7 @@ class DriverShiftResource extends JsonResource
                 'id' => $trip->id,
                 'trip_code' => $trip->trip_code,
                 'vehicle_id' => $trip->vehicle_id,
+                'status' => $trip->status,
                 'vehicle' => $trip->vehicle ? [
                     'id' => $trip->vehicle->id,
                     'plate_number' => $trip->vehicle->plate_number,
@@ -56,6 +58,9 @@ class DriverShiftResource extends JsonResource
                 'completed_at' => $trip->completed_at?->toDateTimeString(),
                 'start_km' => $trip->start_km,
                 'end_km' => $trip->end_km,
+                'total_km' => $trip->total_km,
+                'total_km_loaded' => $trip->total_km_loaded,
+                'total_km_empty' => $trip->total_km_empty,
             ])),
             'created_at' => $this->created_at?->toIso8601String(),
         ];

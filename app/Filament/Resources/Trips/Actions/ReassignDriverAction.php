@@ -227,8 +227,8 @@ class ReassignDriverAction
                     $returnTrip = Trip::create([
                         'trip_code' => Trip::generateTripCode(),
                         'vehicle_id' => $data['return_vehicle_id'],
-                        'driver_id' => $data['new_driver_id'],
-                        'shift_id' => $newShift?->id,
+                        'driver_id' => $oldDriver->id,
+                        'shift_id' => $oldShift?->id,
                         'status' => TripStatus::ReturnTrip,
                         'start_location_id' => $data['start_location_id'] ?? null,
                         'end_location_id' => $data['end_location_id'] ?? null,
@@ -243,8 +243,8 @@ class ReassignDriverAction
                         'km_reading' => $vehicle?->current_mileage,
                         'gps_lat' => $vehicle?->gps_lat,
                         'gps_lng' => $vehicle?->gps_lng,
-                        'driver_id' => $data['new_driver_id'],
-                        'shift_id' => $newShift?->id,
+                        'driver_id' => $oldDriver->id,
+                        'shift_id' => $oldShift?->id,
                     ]);
 
                     TripCheckpoint::create([
@@ -254,14 +254,14 @@ class ReassignDriverAction
                         'km_reading' => $vehicle?->current_mileage,
                         'gps_lat' => $vehicle?->gps_lat,
                         'gps_lng' => $vehicle?->gps_lng,
-                        'driver_id' => $data['new_driver_id'],
-                        'shift_id' => $newShift?->id,
+                        'driver_id' => $oldDriver->id,
+                        'shift_id' => $oldShift?->id,
                     ]);
 
                     Notification::make()
                         ->success()
                         ->title('Đã tạo chuyến quay đầu')
-                        ->body("Chuyến không hàng #{$returnTrip->trip_code} đã được tạo cho tài xế {$newDriver->name}")
+                        ->body("Chuyến không hàng #{$returnTrip->trip_code} đã được tạo cho tài xế {$oldDriver->name}")
                         ->send();
                 }
             });

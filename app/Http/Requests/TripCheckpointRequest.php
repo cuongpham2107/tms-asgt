@@ -29,7 +29,11 @@ class TripCheckpointRequest extends FormRequest
         $deliveryPointIdRules = ['nullable', 'exists:order_delivery_points,id'];
 
         if (in_array($type, ['arrived_delivery', 'completed'], true)) {
-            $orderIdRules = ['required', Rule::exists('orders', 'id')->whereNull('deleted_at')];
+            $trip = $this->route('trip');
+            // Chỉ bắt buộc order_id nếu trip có orders (return trip không có)
+            if ($trip instanceof Trip && $trip->orders()->exists()) {
+                $orderIdRules = ['required', Rule::exists('orders', 'id')->whereNull('deleted_at')];
+            }
         }
 
         return [
@@ -130,8 +134,10 @@ class TripCheckpointRequest extends FormRequest
 
     protected function failedValidation(Validator $validator): void
     {
+        $firstError = $validator->errors()->first();
         throw new HttpResponseException(response()->json([
-            'message' => $validator->errors(),
+            'message' => $firstError,
+            'errors' => $validator->errors(),
         ], 422));
     }
 }

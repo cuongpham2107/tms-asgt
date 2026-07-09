@@ -160,7 +160,7 @@ class ShiftKmCalculatorService
                 ->filter(fn ($cp) => in_array($cp->checkpoint_type->value, ['arrived_pickup', 'completed'], true)
                     && $cp->order_id !== null
                     && $cp->km_reading !== null
-                    && ($cp->km_reading >= $segStartKm || $cp->km_reading <= $segEndKm))
+                    && $cp->km_reading >= $segStartKm && (float) $cp->km_reading <= $segEndKm)
                 ->sortBy('km_reading')
                 ->values()
                 ->all();

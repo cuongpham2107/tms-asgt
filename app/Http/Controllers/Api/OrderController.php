@@ -32,7 +32,7 @@ class OrderController extends Controller
                 'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
             ])
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
-            ->whereIn('status', [OrderStatus::Assigned, OrderStatus::Sent])
+            ->whereNotIn('status', [OrderStatus::Draft])
             ->orderBy('planned_loading_at')
             ->get();
 
