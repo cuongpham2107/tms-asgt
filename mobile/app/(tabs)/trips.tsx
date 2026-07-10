@@ -123,7 +123,7 @@ export default function TripsScreen() {
         ListEmptyComponent={<View style={s.empty}><Ionicons name="car-outline" size={56} color="#E5E7EB" /><Text style={s.emptyText}>{loading ? "Đang tải..." : "Không có chuyến nào"}</Text></View>}
         renderItem={({ item }) => {
           const st = statusConfig[item.status] || statusConfig["pending"];
-          return <TouchableOpacity style={[s.card, { borderColor: st.text + "40", borderWidth: 1 }]} activeOpacity={0.7}
+          return <TouchableOpacity style={s.card} activeOpacity={0.7}
             onPress={() => router.push({ pathname: "/trip-detail", params: { id: item.id, trip: JSON.stringify(item) } })}>
             <View style={s.topRow}>
               <View style={[s.iconBox, { backgroundColor: st.bg }]}><Ionicons name={st.icon as any} size={24} color={st.text} /></View>
@@ -158,7 +158,7 @@ const s = StyleSheet.create({
   tabsScroll: { paddingHorizontal: 12, gap: 6 },
   tab: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 18, backgroundColor: "#F3F4F6" },
   tabText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
-  card: { backgroundColor: "#fff", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "#F3F4F6", marginBottom: 10 },
+  card: { backgroundColor: "#fff", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "#F3F4F6", marginBottom: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
   iconBox: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   code: { fontSize: 16, fontWeight: "700", color: "#111827" }, plate: { fontSize: 13, color: "#6B7280", marginTop: 2 },

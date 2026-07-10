@@ -252,7 +252,7 @@ export default function TripDetailScreen() {
               const osColor = o.status === "completed" ? "#059669" : o.status === "in_transit" ? "#D97706" : o.status === "driver_swap" ? "#8B5CF6" : "#6B7280";
               const hasEndCk = (o.trip_checkpoints || []).some((cp: any) => cp.checkpoint_type === "end");
               return (
-                <TouchableOpacity key={o.id} style={[s.orderCard, { borderColor: osColor + "40", borderWidth: 1 }]} activeOpacity={0.7}
+                <TouchableOpacity key={o.id} style={s.orderCard} activeOpacity={0.7}
                   onPress={() => {
                     if (currentStatus === "pending") {
                       showAlert("Chưa bắt đầu chuyến", "Vui lòng bắt đầu chuyến trước khi xem chi tiết đơn hàng");
@@ -332,7 +332,7 @@ const s = StyleSheet.create({
   timeRow: { flexDirection: "row", alignItems: "center", gap: 8 }, timeText: { fontSize: 13, color: "#374151" },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, marginBottom: 10, marginTop: 4 },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: "#111827" },
-  orderCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", marginHorizontal: 16, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#F3F4F6", gap: 12 },
+  orderCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", marginHorizontal: 16, marginBottom: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#F3F4F6", gap: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   orderSeq: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#4F46E5", alignItems: "center", justifyContent: "center" },
   seqText: { color: "#fff", fontSize: 12, fontWeight: "700" }, orderCode: { fontSize: 14, fontWeight: "700", color: "#111827" },
   orderBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }, orderBadgeText: { fontSize: 10, fontWeight: "700" },

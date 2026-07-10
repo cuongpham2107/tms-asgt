@@ -26,7 +26,7 @@ export default function CompletedTripsScreen() {
       contentContainerStyle={{ padding: 16, paddingTop: 8 }}
       ListEmptyComponent={<View style={s.empty}><Ionicons name="checkmark-circle-outline" size={48} color="#E5E7EB" /><Text style={s.emptyText}>{loading ? "Đang tải..." : "Chưa có chuyến hoàn thành"}</Text></View>}
       renderItem={({ item }) => (
-        <View style={[s.card, { borderColor: "#6EE7B7", borderWidth: 1 }]}>
+        <View style={s.card}>
           <View style={s.topRow}>
             <View style={s.iconBox}><Ionicons name="checkmark-circle" size={22} color="#059669" /></View>
             <View style={{ flex: 1 }}><Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text></View>
@@ -49,7 +49,7 @@ export default function CompletedTripsScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FAFB" },
-  card: { backgroundColor: "#fff", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "#F3F4F6", marginBottom: 10 },
+  card: { backgroundColor: "#fff", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "#F3F4F6", marginBottom: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   iconBox: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center" },
   code: { fontSize: 16, fontWeight: "700", color: "#111827" }, plate: { fontSize: 13, color: "#6B7280", marginTop: 2 },
