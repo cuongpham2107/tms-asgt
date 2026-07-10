@@ -98,24 +98,10 @@ export default function MapScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [token]));
 
-  if (loading) {
-    return <View style={s.center}><ActivityIndicator size="large" color="#4F46E5" /></View>;
-  }
+  const orders = trip?.orders || [];
+  const vehicleLat = trip?.vehicle?.last_gps_lat || null;
+  const vehicleLng = trip?.vehicle?.last_gps_lng || null;
 
-  if (!trip) {
-    return (
-      <View style={s.center}>
-        <Ionicons name="map-outline" size={56} color="#D1D5DB" />
-        <Text style={s.emptyText}>Chưa có chuyến đang chạy</Text>
-      </View>
-    );
-  }
-
-  const orders = trip.orders || [];
-  const vehicleLat = trip.vehicle?.last_gps_lat || null;
-  const vehicleLng = trip.vehicle?.last_gps_lng || null;
-
-  // Tính region từ tất cả điểm
   const allPoints = orders.flatMap((o: any) => {
     const pts: { latitude: number; longitude: number }[] = [];
     if (o.pickup_location?.lat) pts.push({ latitude: o.pickup_location.lat, longitude: o.pickup_location.lng });
@@ -128,7 +114,7 @@ export default function MapScreen() {
     allPoints.push({ latitude: vehicleLat, longitude: vehicleLng });
   }
 
-  // Auto-zoom to fit all points when data is loaded
+  // Auto-zoom to fit all points when data is loaded (must be BEFORE conditional returns)
   useEffect(() => {
     if (allPoints.length > 0 && mapRef.current) {
       const coords = allPoints.map((p: { latitude: number; longitude: number }) => ({ latitude: p.latitude, longitude: p.longitude }));
@@ -138,6 +124,19 @@ export default function MapScreen() {
       });
     }
   }, [allPoints.length, routes.length]);
+
+  if (loading) {
+    return <View style={s.center}><ActivityIndicator size="large" color="#4F46E5" /></View>;
+  }
+
+  if (!trip) {
+    return (
+      <View style={s.center}>
+        <Ionicons name="map-outline" size={56} color="#D1D5DB" />
+        <Text style={s.emptyText}>Chưa có chuyến đang chạy</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={s.container}>
