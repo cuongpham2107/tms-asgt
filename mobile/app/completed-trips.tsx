@@ -29,7 +29,7 @@ export default function CompletedTripsScreen() {
         <View style={s.card}>
           <View style={s.topRow}>
             <View style={s.iconBox}><Ionicons name="checkmark-circle" size={22} color="#059669" /></View>
-            <View style={{ flex: 1 }}><Text style={s.code}>{item.trip_code}</Text><Text style={s.plate}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text></View>
+            <View style={{ flex: 1 }}><Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text><Text style={s.plate}>{item.trip_code}</Text></View>
             <View style={s.badge}><Text style={s.badgeText}>Hoàn thành</Text></View>
           </View>
           <View style={s.kmRow}>
