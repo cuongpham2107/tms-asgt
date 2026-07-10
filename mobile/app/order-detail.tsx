@@ -264,7 +264,10 @@ export default function OrderDetailScreen() {
       >
         <View style={s.heroRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.orderCode}>{d.order_code}</Text>
+            <Text style={s.orderCode}>
+              {d.order_code}
+              <Text style={[s.typeBadge, { backgroundColor: d.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', color: d.type === 'HHHK' ? '#0369A1' : '#B45309' }]}> {d.type_label || d.type} </Text>
+            </Text>
             <Text style={s.cargoName}>
               {d.cargo_name || "Chưa có tên hàng"}
             </Text>
@@ -742,6 +745,7 @@ const s = StyleSheet.create({
   },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   orderCode: { fontSize: 20, fontWeight: "800", color: "#111827" },
+  typeBadge: { fontSize: 11, fontWeight: "700", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: "hidden" },
   cargoName: { fontSize: 14, color: "#6B7280", marginTop: 3 },
   statusPill: {
     flexDirection: "row",

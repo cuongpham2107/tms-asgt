@@ -264,7 +264,10 @@ export default function TripDetailScreen() {
                   <View style={s.orderSeq}><Text style={s.seqText}>{i + 1}</Text></View>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={s.orderCode}>{o.order_code}</Text>
+                      <Text style={s.orderCode}>
+                        {o.order_code}
+                        <Text style={{ fontSize: 10, fontWeight: "600", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: o.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', color: o.type === 'HHHK' ? '#0369A1' : '#B45309', marginLeft: 4 }}> {o.type_label || o.type} </Text>
+                      </Text>
                       <View style={{ flexDirection: "row", gap: 4 }}>
                         {hasEndCk && <Ionicons name="close-circle" size={14} color="#EF4444" />}
                         <View style={[s.orderBadge, { backgroundColor: osColor + "20" }]}>
