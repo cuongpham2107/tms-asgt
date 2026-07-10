@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 const API = Platform.select({
   ios: "http://localhost:8000/api/driver",
   android: "http://10.0.2.2:8000/api/driver",
-  default: "/api/driver",
+  default: "http://localhost:8000/api/driver",
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────
