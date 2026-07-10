@@ -127,7 +127,7 @@ export default function TripsScreen() {
             onPress={() => router.push({ pathname: "/trip-detail", params: { id: item.id, trip: JSON.stringify(item) } })}>
             <View style={s.topRow}>
               <View style={[s.iconBox, { backgroundColor: st.bg }]}><Ionicons name={st.icon as any} size={24} color={st.text} /></View>
-              <View style={{ flex: 1 }}><Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text><Text style={s.plate}>{item.trip_code}</Text></View>
+              <View style={{ flex: 1 }}><Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text></View>
               <View style={[s.badge, { backgroundColor: st.bg }]}><Text style={[s.badgeText, { color: st.text }]}>{st.label}</Text></View>
             </View>
             <Text style={s.kmLine}>📏 {fmt(item.total_km)} km · {fmt(item.start_km)} → {fmt(item.end_km)}</Text>

@@ -148,7 +148,6 @@ export default function TripDetailScreen() {
           <View style={s.heroRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.tripCode}>{detail?.vehicle?.plate_number || trip.vehicle?.plate_number || "Chưa gán xe"}</Text>
-              <Text style={s.plate}>{trip.trip_code}</Text>
             </View>
             <View style={[s.statusPill, { backgroundColor: st.bg }]}>
               <Ionicons name={st.icon as any} size={14} color={st.text} />
