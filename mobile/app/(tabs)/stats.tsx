@@ -65,9 +65,11 @@ export default function StatsScreen() {
 
   // Tính tổng km từ shift trips
   const tripsInShift: any[] = shiftData?.trips || [];
-  const totalKm = shiftData?.total_km != null ? parseFloat(shiftData.total_km) : tripsInShift.reduce((s: number, t: any) => s + Math.max(0, (parseFloat(t.end_km) || 0) - (parseFloat(t.start_km) || 0)), 0);
-  const loadedKm = shiftData?.total_km_loaded != null ? parseFloat(shiftData.total_km_loaded) : tripsInShift.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
-  const emptyKm = totalKm != null && loadedKm != null ? totalKm - loadedKm : null;
+  const calcTotal = tripsInShift.reduce((s: number, t: any) => s + Math.max(0, (parseFloat(t.end_km) || 0) - (parseFloat(t.start_km) || 0)), 0);
+  const calcLoaded = tripsInShift.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
+  const totalKm = shiftData?.total_km != null ? parseFloat(shiftData.total_km) : (calcTotal > 0 ? calcTotal : null);
+  const loadedKm = shiftData?.total_km_loaded != null ? parseFloat(shiftData.total_km_loaded) : (calcLoaded > 0 ? calcLoaded : null);
+  const emptyKm = shiftData?.total_km_empty != null ? parseFloat(shiftData.total_km_empty) : (totalKm != null && loadedKm != null ? totalKm - loadedKm : null);
 
   // Tổng từ lịch sử
   const histTotalKm = filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.total_km) || 0), 0);
