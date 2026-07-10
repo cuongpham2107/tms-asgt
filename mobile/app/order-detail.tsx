@@ -301,7 +301,7 @@ export default function OrderDetailScreen() {
             <View key={i} style={{ flexDirection: "row", alignItems: "center" }}>
               <Ionicons name="arrow-forward" size={12} color="#D1D5DB" />
               <Text style={s.routePoint} numberOfLines={1}>
-                {dp.location?.code || dp.address?.split(",")[0] || `Điểm ${dp.sequence || i + 1}`}
+                {dp.code || dp.location?.code || dp.address?.split(",")[0] || `Điểm ${dp.sequence || i + 1}`}
               </Text>
             </View>
           ))}
