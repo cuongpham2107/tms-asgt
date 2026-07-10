@@ -135,6 +135,7 @@ export default function TripsScreen() {
                   <Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text>
                   {isCurrent && <View style={{ backgroundColor: "#10B981", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontWeight: "700", color: "#fff" }}>● HIỆN TẠI</Text></View>}
                 </View>
+                {item.route ? <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>📍 {item.route}</Text> : null}
               </View>
               <View style={[s.badge, { backgroundColor: st.bg }]}><Text style={[s.badgeText, { color: st.text }]}>{st.label}</Text></View>
             </View>

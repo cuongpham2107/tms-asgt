@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\OrderStatus;
-use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
@@ -68,14 +67,6 @@ class OrderController extends Controller
             return response()->json(['message' => 'Order has not been sent yet'], 403);
         }
 
-        if ($order->trip?->status === TripStatus::Pending) {
-            /** @status 403 */
-            return response()->json([
-                'message' => 'Chưa bắt đầu chuyến',
-                'detail' => 'Vui lòng bắt đầu chuyến trước khi xem chi tiết đơn hàng',
-            ], 403);
-        }
-
         $order->load([
             'customer',
             'pickupLocation',
@@ -109,14 +100,6 @@ class OrderController extends Controller
         if ($order->status === OrderStatus::Assigned) {
             /** @status 403 */
             return response()->json(['message' => 'Order has not been sent yet'], 403);
-        }
-
-        if ($order->trip?->status === TripStatus::Pending) {
-            /** @status 403 */
-            return response()->json([
-                'message' => 'Chưa bắt đầu chuyến',
-                'detail' => 'Vui lòng bắt đầu chuyến trước khi xem chi tiết đơn hàng',
-            ], 403);
         }
 
         $points = $order->deliveryPoints()
