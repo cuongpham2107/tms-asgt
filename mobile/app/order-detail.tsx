@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  Alert,
   RefreshControl,
   FlatList,
   Modal,
@@ -14,7 +15,6 @@ import {
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { api } from "../src/lib/api";
-import { showAlert } from "../src/lib/alert";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -176,7 +176,7 @@ export default function OrderDetailScreen() {
   async function pickImage() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      showAlert("Quyền", "Cần cấp quyền camera");
+      Alert.alert("Quyền", "Cần cấp quyền camera");
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
@@ -191,7 +191,7 @@ export default function OrderDetailScreen() {
       !km &&
       ["arrived_pickup", "arrived_delivery", "completed", "end"].includes(type)
     ) {
-      showAlert("Thiếu", "Vui lòng nhập số Km");
+      Alert.alert("Thiếu", "Vui lòng nhập số Km");
       return;
     }
     const body: any = {
@@ -217,14 +217,14 @@ export default function OrderDetailScreen() {
     setLoading(true);
     try {
       await api.trips.checkpoint(String(tripId), body, token);
-      showAlert("Thành công", `Đã cập nhật: ${cpInfo[type]?.label || type}`);
+      Alert.alert("Thành công", `Đã cập nhật: ${cpInfo[type]?.label || type}`);
       setKm("");
       setNote("");
       setPhotos([]);
       setSelectedLoc(null);
       await loadDetail(); // refresh
     } catch (e: any) {
-      showAlert("Lỗi", e.message);
+      Alert.alert("Lỗi", e.message);
     } finally {
       setLoading(false);
     }
@@ -681,23 +681,14 @@ export default function OrderDetailScreen() {
                     <Text style={s.tlNote}>💬 {cp.voice_note}</Text>
                   ) : null}
                   {cp.photos?.length > 0 && (
-                    <ScrollView
-                      horizontal
-                      style={{ marginTop: 6 }}
-                      showsHorizontalScrollIndicator={false}
-                    >
-                      {cp.photos.map((p: any, pi: number) => (
-                        <Image
-                          key={pi}
-                          source={{ uri: p.url || p }}
-                          style={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 8,
-                            marginRight: 4,
-                          }}
-                        />
-                      ))}
+                    <ScrollView horizontal style={{ marginTop: 6 }} showsHorizontalScrollIndicator={false}>
+                      {cp.photos.map((p: any, pi: number) => {
+                        const uri = p.photo_url || p.photo_path || (typeof p === 'string' ? p : null);
+                        if (!uri) return null;
+                        return (
+                          <Image key={pi} source={{ uri }} style={{ width: 48, height: 48, borderRadius: 8, marginRight: 4 }} />
+                        );
+                      })}
                     </ScrollView>
                   )}
                 </View>
