@@ -264,30 +264,21 @@ class TripController extends Controller
     {
         $user = $request->user();
 
-        // Lọc theo ca đang active (nếu có)
-        $activeShift = DriverShift::where('driver_id', $user->id)
-            ->whereNull('end_time')
-            ->first();
-
-        $query = Trip::where('driver_id', $user->id);
-        if ($activeShift) {
-            $query->where('shift_id', $activeShift->id);
-        }
-
-        $counts = $query->selectRaw('
+        $counts = Trip::where('driver_id', $user->id)
+            ->selectRaw('
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as assigned,
                 SUM(CASE WHEN status IN (?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
             ', [
-            TripStatus::Pending->value,
-            TripStatus::Started->value,
-            TripStatus::ArrivedPickup->value,
-            TripStatus::Delivering->value,
-            TripStatus::ArrivedDelivery->value,
-            TripStatus::Delivered->value,
-            TripStatus::DriverSwap->value,
-            TripStatus::Completed->value,
-        ])
+                TripStatus::Pending->value,
+                TripStatus::Started->value,
+                TripStatus::ArrivedPickup->value,
+                TripStatus::Delivering->value,
+                TripStatus::ArrivedDelivery->value,
+                TripStatus::Delivered->value,
+                TripStatus::ReturnTrip->value,
+                TripStatus::Completed->value,
+            ])
             ->first();
 
         return response()->json([
