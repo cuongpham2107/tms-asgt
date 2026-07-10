@@ -56,6 +56,13 @@ class TripCheckpointService
             return collect($existing ? [$existing] : []);
         }
 
+        // Gate: non-started checkpoints require the trip to be started first
+        if ($checkpointType !== CheckpointType::Started && $trip->isPending()) {
+            throw ValidationException::withMessages([
+                'checkpoint_type' => 'Vui lòng bắt đầu chuyến trước khi chốt chặng. Vào chi tiết chuyến → Bắt đầu chuyến.',
+            ]);
+        }
+
         $this->validateOrderBelongsToTrip($trip, $payload, $checkpointType);
         $this->validateNoActiveTrip($trip, $checkpointType);
 
