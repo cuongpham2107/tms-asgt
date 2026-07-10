@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
@@ -61,6 +61,14 @@ export default function TripDetailScreen() {
   // Auto lấy km hiện tại của xe nếu tất cả orders đã end
   const vehicleKm = detail?.vehicle?.km_reading ?? trip.vehicle?.km_reading;
   const autoEndKm = allOrdersHaveEnd && vehicleKm != null ? String(parseInt(vehicleKm)) : null;
+
+  // Auto-fill KM input for return trip with vehicle's current mileage
+  useEffect(() => {
+    if (vehicleKm != null) {
+      if (!startKmInput) setStartKmInput(String(Math.round(vehicleKm)));
+      if (!completeKm) setCompleteKm(String(Math.round(vehicleKm)));
+    }
+  }, [vehicleKm]);
 
   const handleStart = async () => {
     if (!trip?.id || !token) return;
