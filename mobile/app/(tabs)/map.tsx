@@ -19,6 +19,7 @@ interface Step {
   distance: number;
   duration: number;
   name: string;
+  coordinate: { latitude: number; longitude: number };
   maneuver: { type: string; modifier?: string };
 }
 
@@ -87,6 +88,7 @@ export default function MapScreen() {
   const [region, setRegion] = useState({ ...HANOI_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 });
   const [directions, setDirections] = useState<{ steps: Step[]; totalDistance: number; totalDuration: number } | null>(null);
   const [showDirections, setShowDirections] = useState(false);
+  const [selectedStep, setSelectedStep] = useState<number | null>(null);
   const mapRef = useRef<MapView>(null);
 
   const load = async () => {
@@ -165,10 +167,16 @@ export default function MapScreen() {
           const legs = json.data.legs || [];
           for (const leg of legs) {
             for (const step of leg.steps || []) {
+              // Get step start coordinate from geometry (OSRM: [lng, lat])
+              const coords = step.geometry?.coordinates;
+              const startCoord = coords && coords.length > 0
+                ? { latitude: coords[0][1], longitude: coords[0][0] }
+                : { latitude: pickup.lat, longitude: pickup.lng };
               allSteps.push({
                 distance: step.distance,
                 duration: step.duration,
                 name: step.name || "",
+                coordinate: startCoord,
                 maneuver: step.maneuver || { type: "straight" },
               });
             }
@@ -316,17 +324,30 @@ export default function MapScreen() {
               const icon = maneuverIcons[step.maneuver.type] || ("arrow-forward" as keyof typeof Ionicons.glyphMap);
               const isArrive = step.maneuver.type === "arrive";
               const label = step.name || maneuverLabels[step.maneuver.type] || step.maneuver.type;
+              const isSelected = selectedStep === idx;
               return (
-                <View key={idx} style={[s.dirStep, isArrive && { backgroundColor: "#ECFDF5" }]}>
-                  <View style={[s.dirIcon, isArrive && { backgroundColor: "#D1FAE5" }]}>
-                    <Ionicons name={icon} size={16} color={isArrive ? "#059669" : "#4F46E5"} />
+                <TouchableOpacity
+                  key={idx}
+                  style={[s.dirStep, isArrive && { backgroundColor: "#ECFDF5" }, isSelected && { backgroundColor: "#EEF2FF" }]}
+                  activeOpacity={0.6}
+                  onPress={() => {
+                    setSelectedStep(idx);
+                    mapRef.current?.animateToRegion({
+                      ...step.coordinate,
+                      latitudeDelta: 0.005,
+                      longitudeDelta: 0.005,
+                    }, 400);
+                  }}
+                >
+                  <View style={[s.dirIcon, isArrive && { backgroundColor: "#D1FAE5" }, isSelected && { backgroundColor: "#4F46E5" }]}>
+                    <Ionicons name={icon} size={16} color={isSelected ? "#fff" : isArrive ? "#059669" : "#4F46E5"} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.dirText, isArrive && { fontWeight: "700", color: "#059669" }]}>{label}</Text>
                     <Text style={s.dirMeta}>{fmtMeters(step.distance)}</Text>
                   </View>
-                  <Ionicons name="chevron-down" size={0} color="transparent" />
-                </View>
+                  {isSelected && <Ionicons name="radio-button-on" size={14} color="#4F46E5" />}
+                </TouchableOpacity>
               );
             })}
           </ScrollView>
