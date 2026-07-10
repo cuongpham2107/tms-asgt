@@ -576,12 +576,6 @@ export default function OrderDetailScreen() {
                 value={km}
                 onChangeText={setKm}
               />
-              {vehicleKm != null && (
-                <Text style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
-                  Km hiện tại của xe:{" "}
-                  {Math.round(vehicleKm).toLocaleString("vi-VN")} km
-                </Text>
-              )}
             </View>
             <View style={s.inputRow}>
               <Ionicons
