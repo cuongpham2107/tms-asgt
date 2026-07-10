@@ -22,21 +22,24 @@ interface Step {
   maneuver: { type: string; modifier?: string };
 }
 
-const maneuverIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
-  "turn-left": "arrow-back",
-  "turn-right": "arrow-forward",
-  "turn-sharp-left": "arrow-back",
-  "turn-sharp-right": "arrow-forward",
-  "turn-slight-left": "arrow-back",
-  "turn-slight-right": "arrow-forward",
-  "uturn-left": "arrow-undo",
-  "uturn-right": "arrow-redo",
-  "roundabout": "refresh",
-  "continue": "arrow-up",
-  "merge": "git-merge",
-  "fork": "git-branch",
-  "depart": "play",
-  "arrive": "flag",
+const maneuverLabels: Record<string, string> = {
+  "turn-left": "Rẽ trái",
+  "turn-right": "Rẽ phải",
+  "turn-sharp-left": "Rẽ gắt trái",
+  "turn-sharp-right": "Rẽ gắt phải",
+  "turn-slight-left": "Rẽ nhẹ trái",
+  "turn-slight-right": "Rẽ nhẹ phải",
+  "uturn-left": "Quay đầu trái",
+  "uturn-right": "Quay đầu phải",
+  "roundabout": "Vào vòng xuyến",
+  "exit-roundabout": "Ra vòng xuyến",
+  "continue": "Đi thẳng",
+  "merge": "Nhập làn",
+  "fork": "Rẽ nhánh",
+  "depart": "Bắt đầu",
+  "arrive": "Đã đến nơi",
+  "new name": "Đi tiếp",
+  "straight": "Đi thẳng",
 };
 
 function fmtMeters(m: number) {
@@ -285,13 +288,14 @@ export default function MapScreen() {
             {directions.steps.map((step, idx) => {
               const icon = maneuverIcons[step.maneuver.type] || ("arrow-forward" as keyof typeof Ionicons.glyphMap);
               const isArrive = step.maneuver.type === "arrive";
+              const label = step.name || maneuverLabels[step.maneuver.type] || step.maneuver.type;
               return (
                 <View key={idx} style={[s.dirStep, isArrive && { backgroundColor: "#ECFDF5" }]}>
                   <View style={[s.dirIcon, isArrive && { backgroundColor: "#D1FAE5" }]}>
                     <Ionicons name={icon} size={16} color={isArrive ? "#059669" : "#4F46E5"} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.dirText, isArrive && { fontWeight: "700", color: "#059669" }]}>{step.name || "—"}</Text>
+                    <Text style={[s.dirText, isArrive && { fontWeight: "700", color: "#059669" }]}>{label}</Text>
                     <Text style={s.dirMeta}>{fmtMeters(step.distance)}</Text>
                   </View>
                   <Ionicons name="chevron-down" size={0} color="transparent" />
