@@ -155,15 +155,13 @@ class OrderController extends Controller
         $counts = Order::query()
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
             ->selectRaw("
-                SUM(CASE WHEN status IN ('assigned') THEN 1 ELSE 0 END) as assigned,
-                SUM(CASE WHEN status IN ('sent') THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status IN ('assigned', 'sent') THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
             ")
             ->first();
 
         return response()->json([
             'data' => [
-                'assigned' => (int) ($counts->assigned ?? 0),
                 'in_progress' => (int) ($counts->in_progress ?? 0),
                 'completed' => (int) ($counts->completed ?? 0),
             ],

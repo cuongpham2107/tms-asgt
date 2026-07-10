@@ -95,7 +95,8 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                             $updated = $order->update([
                                 'trip_id' => $trip->id,
                                 'trip_sequence' => $sequence++,
-                                'status' => OrderStatus::Assigned,
+                                'status' => OrderStatus::Sent,
+                                'sent_at' => now(),
                             ]);
 
                             if (! $updated) {

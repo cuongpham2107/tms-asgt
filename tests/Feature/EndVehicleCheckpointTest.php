@@ -256,9 +256,11 @@ test('vehicle swap mid-shift calculates correct segmented km', function () {
     expect((float) $shift->total_km_empty)->toBeLessThan(1000000);
 });
 
-// === TEST 5: End Shift khi chưa có checkpoint 'end' → reject ===
+// === TEST 5: End Shift khi đang có trip, chưa có checkpoint 'end' → reject ===
 test('end shift without end checkpoint is rejected', function () {
     $shift = endMakeShift($this->driver);
+    // Create a trip so the gate applies (no-trip shifts skip the gate)
+    endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
 
     $response = $this->postJson('/api/driver/shifts/end', []);
 
