@@ -26,7 +26,7 @@ export default function CompletedTripsScreen() {
       contentContainerStyle={{ padding: 16, paddingTop: 8 }}
       ListEmptyComponent={<View style={s.empty}><Ionicons name="checkmark-circle-outline" size={48} color="#E5E7EB" /><Text style={s.emptyText}>{loading ? "Đang tải..." : "Chưa có chuyến hoàn thành"}</Text></View>}
       renderItem={({ item }) => (
-        <View style={s.card}>
+        <View style={[s.card, { borderColor: "#A7F3D0" }]}>
           <View style={s.topRow}>
             <View style={s.iconBox}><Ionicons name="checkmark-circle" size={22} color="#059669" /></View>
             <View style={{ flex: 1 }}><Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text></View>

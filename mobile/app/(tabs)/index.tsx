@@ -97,17 +97,17 @@ export default function DashboardScreen() {
       )}
 
       <View style={st.statRow}>
-        <View style={[st.statCard, { backgroundColor: "#F3F4F6" }]}>
+        <View style={[st.statCard, { backgroundColor: "#F3F4F6", borderColor: "#D1D5DB" }]}>
           <Ionicons name="time-outline" size={22} color="#6B7280" />
           <Text style={[st.statVal, { color: "#6B7280" }]}>{stats?.assigned ?? 0}</Text>
           <Text style={st.statLbl}>Chờ chạy</Text>
         </View>
-        <View style={[st.statCard, { backgroundColor: "#EEF2FF" }]}>
+        <View style={[st.statCard, { backgroundColor: "#EEF2FF", borderColor: "#C7D2FE" }]}>
           <Ionicons name="car-sport" size={22} color="#4F46E5" />
           <Text style={[st.statVal, { color: "#4F46E5" }]}>{stats?.in_progress ?? activeTrips.length}</Text>
           <Text style={st.statLbl}>Đang chạy</Text>
         </View>
-        <View style={[st.statCard, { backgroundColor: "#D1FAE5" }]}>
+        <View style={[st.statCard, { backgroundColor: "#D1FAE5", borderColor: "#A7F3D0" }]}>
           <Ionicons name="checkmark-circle" size={22} color="#059669" />
           <Text style={[st.statVal, { color: "#059669" }]}>{completedCount}</Text>
           <Text style={st.statLbl}>Hoàn thành</Text>
@@ -130,7 +130,7 @@ export default function DashboardScreen() {
         activeTrips.slice(0, 5).map((t) => {
           const sc = statusColors[t.status] || statusColors["pending"];
           return (
-            <TouchableOpacity key={t.id} style={st.tripCard} activeOpacity={0.7}
+            <TouchableOpacity key={t.id} style={[st.tripCard, { borderColor: sc.text + "20" }]} activeOpacity={0.7}
               onPress={() => router.push({ pathname: "/trip-detail", params: { id: t.id, trip: JSON.stringify(t) } })}>
               <View style={[st.tripIcon, { backgroundColor: sc.bg }]}>
                 <Ionicons name="car" size={20} color={sc.text} />
@@ -178,7 +178,7 @@ const st = StyleSheet.create({
   shiftKmLbl: { fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 },
   shiftKmSep: { width: 1, height: 24, backgroundColor: "rgba(255,255,255,0.15)" },
   statRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, marginBottom: 20 },
-  statCard: { flex: 1, padding: 16, borderRadius: 14, alignItems: "center", gap: 6, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  statCard: { flex: 1, padding: 16, borderRadius: 14, alignItems: "center", gap: 6, borderWidth: 1, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   statVal: { fontSize: 20, fontWeight: "800" },
   statLbl: { fontSize: 11, color: "#6B7280", textAlign: "center" },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, marginBottom: 10 },
