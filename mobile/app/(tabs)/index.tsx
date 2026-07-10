@@ -20,7 +20,7 @@ const statusColors: Record<string, { bg: string; text: string; label: string }> 
 };
 
 export default function DashboardScreen() {
-  const { token, shift: authShift, logout, setShift } = useAuth();
+  const { token, shift: authShift, setShift } = useAuth();
   const router = useRouter();
   const [trips, setTrips] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,9 +69,6 @@ export default function DashboardScreen() {
           <Text style={st.greeting}>Xin chào, Tài xế 👋</Text>
           <Text style={st.subtitle}>{shift ? "Ca đang hoạt động" : "Chưa vào ca"}</Text>
         </View>
-        <TouchableOpacity onPress={logout} style={st.logoutBtn}>
-          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-        </TouchableOpacity>
       </View>
 
       {shift && (
