@@ -11,7 +11,6 @@ export default function ProfileScreen() {
   const [ending, setEnding] = useState(false);
 
   const driver = shift?.driver;
-  const vehicleKm = shift?.vehicle?.current_mileage;
   const shiftTrips: any[] = shift?.trips || [];
   const activeTrips = shiftTrips.filter((t: any) => t.status !== "completed" && t.status !== "driver_swap");
 
@@ -32,13 +31,11 @@ export default function ProfileScreen() {
   const doEnd = async () => {
     setEnding(true);
     try {
-      // Refresh shift data để lấy km xe mới nhất
       let kmToUse = shift?.vehicle?.current_mileage;
       const fresh = await api.shifts.current(token!).catch(() => null);
       if (fresh?.shift?.vehicle?.current_mileage != null) {
         kmToUse = fresh.shift.vehicle.current_mileage;
       }
-
       if (kmToUse != null) {
         await api.shifts.endVehicle(String(shift.id), parseInt(kmToUse), token!);
       }
@@ -50,26 +47,55 @@ export default function ProfileScreen() {
     finally { setEnding(false); }
   };
 
-  const initials = driver?.name ? driver.name.split(" ").pop()?.charAt(0)?.toUpperCase() || "TX" : "TX";
+  const initials = driver?.name
+    ? driver.name.split(" ").pop()?.charAt(0)?.toUpperCase() || "TX"
+    : "TX";
 
   return (
     <ScrollView style={s.container}>
-      <View style={s.header}>
-        <View style={s.avatar}><Text style={s.avatarText}>{initials}</Text></View>
-        <Text style={s.name}>{driver?.name || "Tài xế"}</Text>
-        <Text style={s.role}>{driver?.roles?.includes("driver") ? "Lái xe" : "Nhân viên"}</Text>
+      {/* Header với background + avatar */}
+      <View style={s.headerBg}>
+        <View style={s.header}>
+          <View style={s.avatar}>
+            <Text style={s.avatarText}>{initials}</Text>
+          </View>
+          <Text style={s.name}>{driver?.name || "Tài xế"}</Text>
+          <View style={s.roleBadge}>
+            <Ionicons name="car-sport" size={12} color="#4F46E5" />
+            <Text style={s.roleText}>Lái xe</Text>
+          </View>
+          {shift && !shift.end_time && (
+            <View style={s.statusBar}>
+              <View style={s.statusDot} />
+              <Text style={s.statusText}>Đang trong ca</Text>
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* Thông tin cơ bản */}
-      <View style={s.infoSection}>
+      {/* Thông tin cá nhân */}
+      <View style={s.section}>
         <Text style={s.sectionTitle}>Thông tin cá nhân</Text>
-        {driver?.email ? <InfoRow icon="mail-outline" label="Email" value={driver.email} /> : null}
-        {driver?.phone ? <InfoRow icon="call-outline" label="SĐT" value={driver.phone} /> : null}
-        {driver?.cccd ? <InfoRow icon="card-outline" label="CCCD" value={driver.cccd} /> : null}
-        {driver?.license_number ? <InfoRow icon="id-card-outline" label="GPLX" value={`${driver.license_number}${driver.license_class ? ` (${driver.license_class})` : ""}`} /> : null}
-        {driver?.license_expiry_date ? <InfoRow icon="calendar-outline" label="GPLX hết hạn" value={new Date(driver.license_expiry_date).toLocaleDateString("vi-VN")} /> : null}
+        <View style={s.infoGrid}>
+          {driver?.email && (
+            <InfoCard icon="mail" color="#3B82F6" label="Email" value={driver.email} />
+          )}
+          {driver?.phone && (
+            <InfoCard icon="call" color="#10B981" label="Số điện thoại" value={driver.phone} />
+          )}
+          {driver?.cccd && (
+            <InfoCard icon="card" color="#8B5CF6" label="CCCD/CMND" value={driver.cccd} />
+          )}
+          {driver?.license_number && (
+            <InfoCard icon="ribbon" color="#F59E0B" label="GPLX" value={`${driver.license_number}${driver.license_class ? ` · Hạng ${driver.license_class}` : ""}`} />
+          )}
+          {driver?.license_expiry_date && (
+            <InfoCard icon="calendar" color="#EC4899" label="Hết hạn GPLX" value={new Date(driver.license_expiry_date).toLocaleDateString("vi-VN")} />
+          )}
+        </View>
       </View>
 
+      {/* Kết thúc ca */}
       {shift && !shift.end_time && (
         <TouchableOpacity style={s.endShiftBtn} onPress={handleEndShift} disabled={ending} activeOpacity={0.8}>
           <Ionicons name="stop-circle" size={24} color="#fff" />
@@ -77,43 +103,64 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Menu */}
       <View style={s.menu}>
         <TouchableOpacity style={s.menuItem} onPress={() => router.push("/completed-trips")}>
-          <Ionicons name="checkmark-done-outline" size={20} color="#4F46E5" /><Text style={s.menuText}>Chuyến đã hoàn thành</Text>
+          <View style={[s.menuIcon, { backgroundColor: "#EEF2FF" }]}>
+            <Ionicons name="checkmark-done" size={20} color="#4F46E5" />
+          </View>
+          <Text style={s.menuText}>Chuyến đã hoàn thành</Text>
+          <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
         </TouchableOpacity>
         <TouchableOpacity style={s.menuItem} onPress={logout}>
-          <Ionicons name="log-out-outline" size={20} color="#EF4444" /><Text style={[s.menuText, { color: "#EF4444" }]}>Đăng xuất</Text>
+          <View style={[s.menuIcon, { backgroundColor: "#FEF2F2" }]}>
+            <Ionicons name="log-out" size={20} color="#EF4444" />
+          </View>
+          <Text style={[s.menuText, { color: "#EF4444" }]}>Đăng xuất</Text>
+          <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
         </TouchableOpacity>
       </View>
+
+      <View style={{ height: 60 }} />
     </ScrollView>
   );
 }
 
-function InfoRow({ icon, label, value }: { icon: any; label: string; value: string }) {
+function InfoCard({ icon, color, label, value }: { icon: any; color: string; label: string; value: string }) {
   return (
-    <View style={s.infoRow}>
-      <Ionicons name={icon} size={18} color="#6B7280" />
+    <View style={s.infoCard}>
+      <View style={[s.infoIcon, { backgroundColor: color + "14" }]}>
+        <Ionicons name={icon} size={16} color={color} />
+      </View>
       <Text style={s.infoLabel}>{label}</Text>
-      <Text style={s.infoValue}>{value}</Text>
+      <Text style={s.infoValue} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB", padding: 16 },
-  header: { alignItems: "center", paddingVertical: 24 },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: "#4F46E5", alignItems: "center", justifyContent: "center", marginBottom: 12 },
-  avatarText: { fontSize: 24, fontWeight: "700", color: "#fff" },
-  name: { fontSize: 18, fontWeight: "600", color: "#111827" },
-  role: { fontSize: 14, color: "#6B7280", marginTop: 2 },
-  infoSection: { backgroundColor: "#fff", borderRadius: 14, padding: 16, marginTop: 12, borderWidth: 1, borderColor: "#E5E7EB" },
-  sectionTitle: { fontSize: 14, fontWeight: "700", color: "#374151", marginBottom: 12 },
-  infoRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", gap: 10 },
-  infoLabel: { fontSize: 13, color: "#9CA3AF", width: 80 },
-  infoValue: { fontSize: 13, fontWeight: "600", color: "#111827", flex: 1 },
-  endShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#EF4444", marginTop: 12, padding: 16, borderRadius: 14 },
+  container: { flex: 1, backgroundColor: "#F3F4F6" },
+  headerBg: { backgroundColor: "#fff", paddingBottom: 24, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 12, elevation: 2 },
+  header: { alignItems: "center", paddingTop: 32, paddingHorizontal: 16 },
+  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: "#4F46E5", alignItems: "center", justifyContent: "center", shadowColor: "#4F46E5", shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  avatarText: { fontSize: 30, fontWeight: "700", color: "#fff" },
+  name: { fontSize: 20, fontWeight: "700", color: "#111827", marginTop: 14 },
+  roleBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#EEF2FF", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginTop: 8 },
+  roleText: { fontSize: 12, fontWeight: "600", color: "#4F46E5" },
+  statusBar: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, backgroundColor: "#ECFDF5", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#10B981" },
+  statusText: { fontSize: 12, fontWeight: "600", color: "#059669" },
+  section: { marginTop: 20, paddingHorizontal: 16 },
+  sectionTitle: { fontSize: 14, fontWeight: "700", color: "#6B7280", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 },
+  infoGrid: { gap: 10 },
+  infoCard: { backgroundColor: "#fff", borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 },
+  infoIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  infoLabel: { fontSize: 12, color: "#9CA3AF", position: "absolute", top: 14, left: 62 },
+  infoValue: { fontSize: 14, fontWeight: "600", color: "#111827", flex: 1, marginLeft: 0, marginTop: 14 },
+  endShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#EF4444", marginHorizontal: 16, marginTop: 20, padding: 16, borderRadius: 14, shadowColor: "#EF4444", shadowOpacity: 0.25, shadowRadius: 8, elevation: 3 },
   endShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  menu: { marginTop: 20 },
-  menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", marginBottom: 8, gap: 12 },
-  menuText: { fontSize: 15, color: "#111827", flex: 1 },
+  menu: { marginTop: 24, marginHorizontal: 16, gap: 10 },
+  menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", padding: 16, borderRadius: 14, gap: 14 },
+  menuIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  menuText: { fontSize: 15, fontWeight: "600", color: "#111827", flex: 1 },
 });
