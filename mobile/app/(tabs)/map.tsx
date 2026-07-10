@@ -141,7 +141,7 @@ export default function MapScreen() {
 
   return (
     <View style={s.container}>
-      <MapView ref={mapRef} style={s.map} region={region} onRegionChangeComplete={setRegion} showsUserLocation={false} showsCompass={false} showsScale={true}>
+      <MapView ref={mapRef} style={s.map} region={region} onRegionChangeComplete={setRegion} showsUserLocation={true} showsCompass={false} showsScale={true}>
         {/* Vehicle position */}
         {vehicleLat && vehicleLng && (
           <Marker coordinate={{ latitude: vehicleLat, longitude: vehicleLng }} title="Vị trí xe" pinColor="#4F46E5">
