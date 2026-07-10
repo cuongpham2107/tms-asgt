@@ -140,7 +140,7 @@ export default function MapScreen() {
 
   return (
     <View style={s.container}>
-      <MapView ref={mapRef} style={s.map} initialRegion={{ ...HANOI_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 }} showsUserLocation={false}>
+      <MapView ref={mapRef} style={s.map} initialRegion={{ ...HANOI_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 }} showsUserLocation={false} showsCompass={false} showsScale={true} zoomControlEnabled={true}>
         {/* Vehicle position */}
         {vehicleLat && vehicleLng && (
           <Marker coordinate={{ latitude: vehicleLat, longitude: vehicleLng }} title="Vị trí xe" pinColor="#4F46E5">
