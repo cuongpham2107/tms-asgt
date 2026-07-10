@@ -22,6 +22,26 @@ interface Step {
   maneuver: { type: string; modifier?: string };
 }
 
+const maneuverIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
+  "turn-left": "arrow-back",
+  "turn-right": "arrow-forward",
+  "turn-sharp-left": "arrow-back",
+  "turn-sharp-right": "arrow-forward",
+  "turn-slight-left": "arrow-back",
+  "turn-slight-right": "arrow-forward",
+  "uturn-left": "arrow-undo",
+  "uturn-right": "arrow-redo",
+  "roundabout": "refresh",
+  "exit-roundabout": "refresh",
+  "continue": "arrow-up",
+  "merge": "git-merge",
+  "fork": "git-branch",
+  "depart": "play",
+  "arrive": "flag",
+  "new name": "arrow-forward",
+  "straight": "arrow-up",
+};
+
 const maneuverLabels: Record<string, string> = {
   "turn-left": "Rẽ trái",
   "turn-right": "Rẽ phải",
