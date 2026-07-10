@@ -119,7 +119,7 @@ export default function MapScreen() {
     if (allPoints.length > 0 && mapRef.current) {
       const coords = allPoints.map((p: { latitude: number; longitude: number }) => ({ latitude: p.latitude, longitude: p.longitude }));
       mapRef.current.fitToCoordinates(coords, {
-        edgePadding: { top: 60, right: 40, bottom: 60, left: 40 },
+        edgePadding: { top: 100, right: 100, bottom: 100, left: 100 },
         animated: true,
       });
     }
