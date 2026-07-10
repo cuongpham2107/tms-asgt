@@ -265,8 +265,10 @@ export default function TripDetailScreen() {
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                       <Text style={s.orderCode}>
                         {o.order_code}
-                        <Text style={{ fontSize: 10, fontWeight: "600", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: o.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', color: o.type === 'HHHK' ? '#0369A1' : '#B45309', marginLeft: 4 }}> {o.type_label || o.type} </Text>
                       </Text>
+                      <View style={{ paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: o.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', marginLeft: 4 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "600", color: o.type === 'HHHK' ? '#0369A1' : '#B45309' }}>{o.type_label || o.type}</Text>
+                      </View>
                       <View style={{ flexDirection: "row", gap: 4 }}>
                         <View style={[s.orderBadge, { backgroundColor: osColor + "20" }]}>
                           <Text style={[s.orderBadgeText, { color: osColor }]}>{osText}</Text>

@@ -274,8 +274,10 @@ export default function OrderDetailScreen() {
           <View style={{ flex: 1 }}>
             <Text style={s.orderCode}>
               {d.order_code}
-              <Text style={[s.typeBadge, { backgroundColor: d.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', color: d.type === 'HHHK' ? '#0369A1' : '#B45309' }]}> {d.type_label || d.type} </Text>
             </Text>
+            <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: d.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', alignSelf: 'flex-start' }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: d.type === 'HHHK' ? '#0369A1' : '#B45309' }}>{d.type_label || d.type}</Text>
+            </View>
             <Text style={s.cargoName}>
               {d.cargo_name || "Chưa có tên hàng"}
             </Text>
