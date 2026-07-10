@@ -477,43 +477,41 @@ export default function OrderDetailScreen() {
         </View>
       </Modal>
 
-      {/* Delivery point selector (multi-DP orders) */}
-      {deliveryPoints.length > 1 && (
-        <View style={{ paddingHorizontal: 16, marginTop: 16, marginBottom: 4 }}>
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#6B7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Chọn điểm giao</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            {deliveryPoints.map((dp: any) => {
-              const isSelected = dp.id === activeDpId;
-              const isDone = dp.status === "delivered" || dp.status === "completed";
-              const bg = isDone ? "#D1FAE5" : isSelected ? "#EEF2FF" : "#fff";
-              const border = isDone ? "#6EE7B7" : isSelected ? "#818CF8" : "#E5E7EB";
-              const textColor = isDone ? "#059669" : isSelected ? "#4F46E5" : "#6B7280";
-              return (
-                <TouchableOpacity
-                  key={dp.id}
-                  onPress={() => !isDone && setSelectedDpId(dp.id)}
-                  disabled={isDone}
-                  activeOpacity={0.7}
-                  style={{
-                    flex: 1,
-                    backgroundColor: bg,
-                    borderWidth: 1.5,
-                    borderColor: border,
-                    borderRadius: 10,
-                    padding: 10,
-                    alignItems: "center",
-                  }}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: textColor }}>
-                    Điểm {dp.sequence || "?"}
-                  </Text>
-                  <Text style={{ fontSize: 10, color: textColor, marginTop: 2 }} numberOfLines={1}>
-                    {dp.code || dp.location?.code || "..."}
-                  </Text>
-                  {isDone && <Ionicons name="checkmark-circle" size={14} color="#059669" style={{ marginTop: 2 }} />}
-                </TouchableOpacity>
-              );
-            })}
+      {/* Delivery point selector (multi-DP, only during delivery stage) */}
+      {deliveryPoints.length > 1 && (canArriveDelivery || canComplete) && (
+        <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: "#6B7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Chọn điểm giao
+          </Text>
+          <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+            {deliveryPoints
+              .filter((dp: any) => dp.status !== "delivered" && dp.status !== "completed")
+              .map((dp: any) => {
+                const isSelected = dp.id === activeDpId;
+                return (
+                  <TouchableOpacity
+                    key={dp.id}
+                    onPress={() => setSelectedDpId(dp.id)}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      backgroundColor: isSelected ? "#4F46E5" : "#F3F4F6",
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: isSelected ? "#fff" : "#6B7280" }}>
+                      Điểm {dp.sequence || "?"}
+                    </Text>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: isSelected ? "#C7D2FE" : "#9CA3AF" }}>
+                      {dp.code || dp.location?.code || "..."}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
           </View>
         </View>
       )}
@@ -674,7 +672,9 @@ export default function OrderDetailScreen() {
                   disabled={loading}
                 >
                   <Ionicons name="location" size={16} color="#fff" />
-                  <Text style={s.btnText}>Đến giao hàng</Text>
+                  <Text style={s.btnText}>
+                    Đến giao hàng{activeDp?.sequence ? ` (Điểm ${activeDp.sequence})` : ""}
+                  </Text>
                 </TouchableOpacity>
               )}
               {canComplete && (
@@ -684,7 +684,9 @@ export default function OrderDetailScreen() {
                   disabled={loading}
                 >
                   <Ionicons name="flag" size={16} color="#fff" />
-                  <Text style={s.btnText}>Giao hàng xong</Text>
+                  <Text style={s.btnText}>
+                    Giao hàng xong{activeDp?.sequence ? ` (Điểm ${activeDp.sequence})` : ""}
+                  </Text>
                 </TouchableOpacity>
               )}
               {canEnd && (
