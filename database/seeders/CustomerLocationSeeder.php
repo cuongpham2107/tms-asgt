@@ -16,8 +16,8 @@ class CustomerLocationSeeder extends Seeder
     public function run(): void
     {
         $files = [
-            base_path(self::CSV_HHHK),
-            base_path(self::CSV_HANGNGOAI),
+            'HHHK' => base_path(self::CSV_HHHK),
+            'external' => base_path(self::CSV_HANGNGOAI),
         ];
 
         foreach ($files as $file) {
@@ -28,11 +28,16 @@ class CustomerLocationSeeder extends Seeder
             }
         }
 
+        $areaMap = DB::table('areas')
+            ->get()
+            ->mapWithKeys(fn ($a) => ["{$a->type}|{$a->code}" => $a->id])
+            ->toArray();
+
         $customers = [];
         $locations = [];
         $pivotRows = [];
 
-        foreach ($files as $file) {
+        foreach ($files as $csvType => $file) {
             $handle = fopen($file, 'r');
             $header = fgetcsv($handle);
 
@@ -57,6 +62,25 @@ class CustomerLocationSeeder extends Seeder
                     continue;
                 }
 
+                $mappedAreaCode = $areaCode;
+                if ($areaCode === 'Tỉnh lẻ' || $areaCode === 'Tỉnh lẻ ') {
+                    $mappedAreaCode = 'PROVINCE';
+                }
+
+                $areaId = $areaMap["{$csvType}|{$mappedAreaCode}"] ?? null;
+                if ($areaId === null && ! empty($areaCode)) {
+                    $areaId = DB::table('areas')->insertGetId([
+                        'type' => $csvType,
+                        'code' => $mappedAreaCode,
+                        'name' => $areaCode,
+                        'sort_order' => 0,
+                        'is_active' => true,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                    $areaMap["{$csvType}|{$mappedAreaCode}"] = $areaId;
+                }
+
                 if (! empty($customerCode)) {
                     $customers[$customerCode] = [
                         'code' => $customerCode,
@@ -67,13 +91,16 @@ class CustomerLocationSeeder extends Seeder
                 }
 
                 if (! empty($locationCode)) {
+                    if (isset($locations[$locationCode])) {
+                        continue;
+                    }
                     $locations[$locationCode] = [
                         'code' => $locationCode,
                         'name' => $locationCode,
                         'address' => $address,
                         'loc_type' => LocationType::Pickup->value,
                         'is_active' => true,
-                        'area_code' => $areaCode,
+                        'area_id' => $areaId,
                     ];
                 }
 
@@ -101,39 +128,8 @@ class CustomerLocationSeeder extends Seeder
                 ['name', 'address', 'is_active']
             );
 
-            $areaMap = DB::table('areas')->pluck('id', 'code')->toArray();
-            $locationsToInsert = [];
-
-            foreach ($locations as $loc) {
-                $areaCode = $loc['area_code'] ?? null;
-                $areaId = null;
-                if (! empty($areaCode)) {
-                    $mappedCode = $areaCode;
-                    if ($areaCode === 'Tỉnh lẻ') {
-                        $mappedCode = 'PROVINCE';
-                    }
-                    if (isset($areaMap[$mappedCode])) {
-                        $areaId = $areaMap[$mappedCode];
-                    } else {
-                        $areaId = DB::table('areas')->insertGetId([
-                            'type' => 'external',
-                            'code' => $mappedCode,
-                            'name' => $areaCode,
-                            'sort_order' => 0,
-                            'is_active' => true,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                        $areaMap[$mappedCode] = $areaId;
-                    }
-                }
-                unset($loc['area_code']);
-                $loc['area_id'] = $areaId;
-                $locationsToInsert[] = $loc;
-            }
-
             DB::table('locations')->upsert(
-                $locationsToInsert,
+                array_values($locations),
                 ['loc_type', 'code'],
                 ['name', 'address', 'loc_type', 'is_active', 'area_id', 'lat', 'lng']
             );
