@@ -30,6 +30,7 @@ class TripController extends Controller
 
         $trip = Trip::where('driver_id', $user->id)
             ->whereIn('status', TripStatus::activeStatuses())
+            ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
             ->with([
                 'vehicle',
                 'driverSwaps.toDriver',
@@ -62,6 +63,7 @@ class TripController extends Controller
 
         $trip = Trip::where('driver_id', $user->id)
             ->whereIn('status', TripStatus::activeStatuses())
+            ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
             ->with([
                 'vehicle',
                 'driverSwaps.toDriver',
