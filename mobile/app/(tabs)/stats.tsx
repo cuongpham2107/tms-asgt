@@ -78,9 +78,9 @@ export default function StatsScreen() {
         {/* Trip counts */}
         <Text style={s.sectionTitle}>📊 Tổng quan chuyến</Text>
         <View style={s.summaryRow}>
-          <View style={[s.sumCard, { backgroundColor: "#EEF2FF" }]}><Ionicons name="today-outline" size={22} color="#4F46E5" /><Text style={[s.sumVal, { color: "#4F46E5" }]}>{data.in_progress ?? 0}</Text><Text style={s.sumLbl}>đang chạy</Text></View>
-          <View style={[s.sumCard, { backgroundColor: "#ECFDF5" }]}><Ionicons name="checkmark-circle" size={22} color="#059669" /><Text style={[s.sumVal, { color: "#059669" }]}>{data.completed ?? 0}</Text><Text style={s.sumLbl}>hoàn thành</Text></View>
-          <View style={[s.sumCard, { backgroundColor: "#FFFBEB" }]}><Ionicons name="trophy-outline" size={22} color="#F59E0B" /><Text style={[s.sumVal, { color: "#F59E0B" }]}>{data.assigned ?? 0}</Text><Text style={s.sumLbl}>đã gán</Text></View>
+          <View style={[s.sumCard, { backgroundColor: "#EEF2FF", borderColor: "#A5B4FC" }]}><Ionicons name="today-outline" size={22} color="#4F46E5" /><Text style={[s.sumVal, { color: "#4F46E5" }]}>{data.in_progress ?? 0}</Text><Text style={s.sumLbl}>đang chạy</Text></View>
+          <View style={[s.sumCard, { backgroundColor: "#ECFDF5", borderColor: "#6EE7B7" }]}><Ionicons name="checkmark-circle" size={22} color="#059669" /><Text style={[s.sumVal, { color: "#059669" }]}>{data.completed ?? 0}</Text><Text style={s.sumLbl}>hoàn thành</Text></View>
+          <View style={[s.sumCard, { backgroundColor: "#FFFBEB", borderColor: "#FCD34D" }]}><Ionicons name="trophy-outline" size={22} color="#F59E0B" /><Text style={[s.sumVal, { color: "#F59E0B" }]}>{data.assigned ?? 0}</Text><Text style={s.sumLbl}>đã gán</Text></View>
         </View>
 
         {/* Shift KM stats */}
@@ -119,7 +119,7 @@ export default function StatsScreen() {
         {filteredHistory.length === 0 ? (
           <View style={s.empty}><Text style={s.emptyText}>Chưa có chuyến hoàn thành</Text></View>
         ) : filteredHistory.slice(0, 10).map((t: any) => (
-          <View key={t.id} style={s.tripCard}>
+          <View key={t.id} style={[s.tripCard, { borderColor: "#6EE7B7" }]}>
             <View style={{ flex: 1 }}>
               <Text style={s.tripCode}>{t.trip_code}</Text>
               <Text style={s.tripPlate}>{t.vehicle?.plate_number || "-"}</Text>
@@ -132,7 +132,7 @@ export default function StatsScreen() {
         ))}
 
         {histTotalKm > 0 && (
-          <View style={s.totalCard}>
+          <View style={[s.totalCard, { borderColor: "#A5B4FC" }]}>
             <Text style={s.totalText}>Tổng km đã chạy: {fmt(histTotalKm)} km</Text>
           </View>
         )}
@@ -146,7 +146,7 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FAFB" }, loading: { textAlign: "center", color: "#9CA3AF", marginTop: 40 },
   sectionTitle: { fontSize: 15, fontWeight: "700", color: "#111827", paddingHorizontal: 16, marginTop: 20, marginBottom: 10 },
   summaryRow: { flexDirection: "row", gap: 8, paddingHorizontal: 12 },
-  sumCard: { flex: 1, padding: 16, borderRadius: 14, alignItems: "center", gap: 6 },
+  sumCard: { flex: 1, padding: 16, borderRadius: 14, alignItems: "center", gap: 6, borderWidth: 1 },
   sumVal: { fontSize: 24, fontWeight: "800" }, sumLbl: { fontSize: 11, color: "#6B7280" },
   // Km card
   kmCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#4F46E5", marginHorizontal: 16, padding: 18, borderRadius: 14 },
@@ -156,7 +156,7 @@ const s = StyleSheet.create({
   tripCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", marginHorizontal: 16, marginBottom: 6, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#F3F4F6" },
   tripCode: { fontSize: 14, fontWeight: "700", color: "#111827" }, tripPlate: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   tripKm: { fontSize: 15, fontWeight: "700", color: "#4F46E5" }, tripDate: { fontSize: 11, color: "#9CA3AF", marginTop: 2 },
-  totalCard: { backgroundColor: "#EEF2FF", marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12, alignItems: "center" },
+  totalCard: { backgroundColor: "#EEF2FF", marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12, alignItems: "center", borderWidth: 1 },
   totalText: { fontSize: 15, fontWeight: "700", color: "#4F46E5" },
   // Period filter
   periodTab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: "#F3F4F6" },
