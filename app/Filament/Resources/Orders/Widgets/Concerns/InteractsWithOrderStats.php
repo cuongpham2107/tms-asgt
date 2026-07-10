@@ -20,6 +20,7 @@ trait InteractsWithOrderStats
         return Order::query()
             ->whereIn('status', [
                 OrderStatus::Assigned->value,
+                OrderStatus::Sent->value,
             ])
             ->count();
     }

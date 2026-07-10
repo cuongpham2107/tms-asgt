@@ -24,6 +24,7 @@ class PendingOrdersWidget extends StatsOverviewWidget
                 ->descriptionColor('warning')
                 ->chart(self::weeklyTrend([
                     'assigned',
+                    'sent',
                 ]))
                 ->chartColor('warning'),
         ];
