@@ -81,11 +81,7 @@ export default function TripDetailScreen() {
       showAlert("Lỗi", e.message);
       const match = (e.message || "").match(/#(\d+)/);
       if (match) {
-        const targetTripId = match[1];
-        const targetTrip = trips.find((t: any) => t.id === Number(targetTripId));
-        if (targetTrip) {
-          router.push({ pathname: "/trip-detail", params: { id: targetTripId, trip: JSON.stringify(targetTrip) } });
-        }
+        router.push({ pathname: "/trip-detail", params: { id: match[1] } });
       }
     }
     finally { setStarting(false); }
