@@ -263,16 +263,14 @@ export default function TripDetailScreen() {
                   <View style={s.orderSeq}><Text style={s.seqText}>{i + 1}</Text></View>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={s.orderCode}>
-                        {o.order_code}
-                      </Text>
-                      <View style={{ paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: o.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', marginLeft: 4 }}>
-                        <Text style={{ fontSize: 10, fontWeight: "600", color: o.type === 'HHHK' ? '#0369A1' : '#B45309' }}>{o.type_label || o.type}</Text>
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 4 }}>
-                        <View style={[s.orderBadge, { backgroundColor: osColor + "20" }]}>
-                          <Text style={[s.orderBadgeText, { color: osColor }]}>{osText}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                        <Text style={s.orderCode}>{o.order_code}</Text>
+                        <View style={{ paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: o.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', marginLeft: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: "600", color: o.type === 'HHHK' ? '#0369A1' : '#B45309' }}>{o.type_label || o.type}</Text>
                         </View>
+                      </View>
+                      <View style={[s.orderBadge, { backgroundColor: osColor + "20" }]}>
+                        <Text style={[s.orderBadgeText, { color: osColor }]}>{osText}</Text>
                       </View>
                     </View>
                     <Text style={s.orderCargo} numberOfLines={1}>{o.cargo_name || "Chưa có tên"}</Text>

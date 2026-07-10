@@ -152,24 +152,38 @@ export default function OrderDetailScreen() {
   }, [vehicleKm]);
   // Find next pending delivery point (for multi-DP orders)
   const deliveryPoints: any[] = d.delivery_points || [];
-  const nextPendingDp = deliveryPoints.find((dp: any) => dp.status !== "delivered" && dp.status !== "completed");
+  const nextPendingDp = deliveryPoints.find(
+    (dp: any) => dp.status !== "delivered" && dp.status !== "completed",
+  );
   const dpId = nextPendingDp?.id || deliveryPoints[0]?.id;
   const checkpoints = d.trip_checkpoints || [];
   // Map DP id to sequence for timeline display
   const dpSeqMap: Record<string, number> = {};
-  deliveryPoints.forEach((dp: any) => { dpSeqMap[dp.id] = dp.sequence; });
+  deliveryPoints.forEach((dp: any) => {
+    dpSeqMap[dp.id] = dp.sequence;
+  });
   const hasDeliveryPoint = !!dpId || deliveryPoints.length > 0;
-  const hasEndCheckpoint = checkpoints.some((cp: any) => cp.checkpoint_type === "end");
+  const hasEndCheckpoint = checkpoints.some(
+    (cp: any) => cp.checkpoint_type === "end",
+  );
 
   // Sequential: chỉ hiện 1 action tại 1 thời điểm, theo đúng luồng
-  const hasArrivedPickup = checkpoints.some((cp: any) => cp.checkpoint_type === "arrived_pickup");
-  const hasLeftPickup = checkpoints.some((cp: any) => cp.checkpoint_type === "left_pickup");
+  const hasArrivedPickup = checkpoints.some(
+    (cp: any) => cp.checkpoint_type === "arrived_pickup",
+  );
+  const hasLeftPickup = checkpoints.some(
+    (cp: any) => cp.checkpoint_type === "left_pickup",
+  );
 
   // Check next pending DP for arrived_delivery/completed
   const pendingDpHasCp = (cpType: string) =>
-    nextPendingDp ? checkpoints.some((cp: any) =>
-      cp.checkpoint_type === cpType && cp.delivery_point_id === nextPendingDp.id
-    ) : false;
+    nextPendingDp
+      ? checkpoints.some(
+          (cp: any) =>
+            cp.checkpoint_type === cpType &&
+            cp.delivery_point_id === nextPendingDp.id,
+        )
+      : false;
   const hasArrivedDelivery = pendingDpHasCp("arrived_delivery");
   const hasCompleted = pendingDpHasCp("completed");
 
@@ -177,9 +191,13 @@ export default function OrderDetailScreen() {
     (d.status === "assigned" || d.status === "sent") && !hasArrivedPickup;
   const canLeftPickup =
     d.status === "sent" && hasArrivedPickup && !hasLeftPickup;
-  const canArriveDelivery = d.status === "in_transit" && !!nextPendingDp && !hasArrivedDelivery;
+  const canArriveDelivery =
+    d.status === "in_transit" && !!nextPendingDp && !hasArrivedDelivery;
   const canComplete =
-    d.status === "in_transit" && !!nextPendingDp && hasArrivedDelivery && !hasCompleted;
+    d.status === "in_transit" &&
+    !!nextPendingDp &&
+    hasArrivedDelivery &&
+    !hasCompleted;
   const canEnd = d.status === "completed" && !hasEndCheckpoint;
 
   async function pickImage() {
@@ -198,9 +216,13 @@ export default function OrderDetailScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") return null;
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
       return { gps_lat: pos.coords.latitude, gps_lng: pos.coords.longitude };
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   async function submitCheckpoint(type: string) {
@@ -272,11 +294,25 @@ export default function OrderDetailScreen() {
       >
         <View style={s.heroRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.orderCode}>
-              {d.order_code}
-            </Text>
-            <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: d.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', alignSelf: 'flex-start' }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: d.type === 'HHHK' ? '#0369A1' : '#B45309' }}>{d.type_label || d.type}</Text>
+            <Text style={s.orderCode}>{d.order_code}</Text>
+            <View
+              style={{
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 6,
+                backgroundColor: d.type === "HHHK" ? "#E0F2FE" : "#FEF3C7",
+                alignSelf: "flex-start",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "700",
+                  color: d.type === "HHHK" ? "#0369A1" : "#B45309",
+                }}
+              >
+                {d.type_label || d.type}
+              </Text>
             </View>
             <Text style={s.cargoName}>
               {d.cargo_name || "Chưa có tên hàng"}
@@ -338,7 +374,9 @@ export default function OrderDetailScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.addressLabel}>Điểm lấy hàng</Text>
-            <Text style={s.addressValue}>{d.pickup_location?.code || d.pickup_address}</Text>
+            <Text style={s.addressValue}>
+              {d.pickup_location?.code || d.pickup_address}
+            </Text>
             {d.pickup_location?.name && (
               <Text style={s.addressSub}>{d.pickup_location.name}</Text>
             )}
@@ -375,7 +413,10 @@ export default function OrderDetailScreen() {
                     : ""}
               </Text>
               <Text style={s.addressValue}>
-                {dp.location?.code || dp.location_name || dp.address || "Địa chỉ đã chọn"}
+                {dp.location?.code ||
+                  dp.location_name ||
+                  dp.address ||
+                  "Địa chỉ đã chọn"}
               </Text>
               {dp.location?.name && (
                 <Text style={s.addressSub}>{dp.location.name}</Text>
@@ -499,8 +540,14 @@ export default function OrderDetailScreen() {
             <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}>
               📋 Cập nhật chốt chặng
               {deliveryPoints.length > 1 && nextPendingDp && (
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#4F46E5" }}>
-                  {" "}• Điểm {nextPendingDp.sequence || (deliveryPoints.indexOf(nextPendingDp) + 1)}/{deliveryPoints.length}
+                <Text
+                  style={{ fontSize: 13, fontWeight: "600", color: "#4F46E5" }}
+                >
+                  {" "}
+                  • Điểm{" "}
+                  {nextPendingDp.sequence ||
+                    deliveryPoints.indexOf(nextPendingDp) + 1}
+                  /{deliveryPoints.length}
                 </Text>
               )}
             </Text>
@@ -531,7 +578,8 @@ export default function OrderDetailScreen() {
               />
               {vehicleKm != null && (
                 <Text style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
-                  Km hiện tại của xe: {Math.round(vehicleKm).toLocaleString("vi-VN")} km
+                  Km hiện tại của xe:{" "}
+                  {Math.round(vehicleKm).toLocaleString("vi-VN")} km
                 </Text>
               )}
             </View>
@@ -699,7 +747,9 @@ export default function OrderDetailScreen() {
                     />
                     <Text style={[s.tlLabel, { color: ci.color }]}>
                       {ci.label}
-                      {cp.delivery_point_id && dpSeqMap[cp.delivery_point_id] && deliveryPoints.length > 1
+                      {cp.delivery_point_id &&
+                      dpSeqMap[cp.delivery_point_id] &&
+                      deliveryPoints.length > 1
                         ? ` (${dpSeqMap[cp.delivery_point_id]})`
                         : ""}
                     </Text>
@@ -715,12 +765,28 @@ export default function OrderDetailScreen() {
                     <Text style={s.tlNote}>💬 {cp.voice_note}</Text>
                   ) : null}
                   {cp.photos?.length > 0 && (
-                    <ScrollView horizontal style={{ marginTop: 6 }} showsHorizontalScrollIndicator={false}>
+                    <ScrollView
+                      horizontal
+                      style={{ marginTop: 6 }}
+                      showsHorizontalScrollIndicator={false}
+                    >
                       {cp.photos.map((p: any, pi: number) => {
-                        const uri = p.photo_url || p.photo_path || (typeof p === 'string' ? p : null);
+                        const uri =
+                          p.photo_url ||
+                          p.photo_path ||
+                          (typeof p === "string" ? p : null);
                         if (!uri) return null;
                         return (
-                          <Image key={pi} source={{ uri }} style={{ width: 48, height: 48, borderRadius: 8, marginRight: 4 }} />
+                          <Image
+                            key={pi}
+                            source={{ uri }}
+                            style={{
+                              width: 48,
+                              height: 48,
+                              borderRadius: 8,
+                              marginRight: 4,
+                            }}
+                          />
                         );
                       })}
                     </ScrollView>
@@ -760,7 +826,14 @@ const s = StyleSheet.create({
   },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   orderCode: { fontSize: 20, fontWeight: "800", color: "#111827" },
-  typeBadge: { fontSize: 11, fontWeight: "700", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: "hidden" },
+  typeBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
   cargoName: { fontSize: 14, color: "#6B7280", marginTop: 3 },
   statusPill: {
     flexDirection: "row",
