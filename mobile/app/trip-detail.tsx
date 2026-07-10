@@ -149,8 +149,20 @@ export default function TripDetailScreen() {
     finally { setCompleting(false); }
   };
 
-  if (!trip) return null;
-  const st = statusConfig[currentStatus] || statusConfig["pending"];
+  // Show loading while fetching trip data
+  if (!trip && !detail) {
+    return (
+      <View style={s.container}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: "#9CA3AF", fontSize: 14 }}>Đang tải...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Use detail (from API) or trip (from params)
+  const effectiveTrip = detail || trip;
+  const st = statusConfig[effectiveTrip?.status || currentStatus] || statusConfig["pending"];
 
   return (
     <View style={s.container}>
