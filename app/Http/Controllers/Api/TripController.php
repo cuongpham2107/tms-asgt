@@ -33,6 +33,8 @@ class TripController extends Controller
             ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
             ->with([
                 'vehicle',
+                'startLocation',
+                'endLocation',
                 'driverSwaps.toDriver',
                 'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
@@ -66,6 +68,8 @@ class TripController extends Controller
             ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
             ->with([
                 'vehicle',
+                'startLocation',
+                'endLocation',
                 'driverSwaps.toDriver',
                 'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',

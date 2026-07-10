@@ -32,6 +32,17 @@ class TripResource extends JsonResource
                 'km_reading' => $this->vehicle->current_mileage,
             ]),
 
+            'route' => $this->whenLoaded('startLocation', function () {
+                $from = $this->startLocation?->code;
+                $to = $this->endLocation?->code;
+
+                if ($from && $to) {
+                    return "{$from} → {$to}";
+                }
+
+                return null;
+            }),
+
             'shift' => $this->whenLoaded('shift', fn () => DriverShiftResource::make($this->shift)),
 
             'orders' => OrderResource::collection($this->whenLoaded('orders')),
