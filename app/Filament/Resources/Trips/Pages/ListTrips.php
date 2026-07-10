@@ -60,14 +60,6 @@ class ListTrips extends ListRecords
 
     public function mount(): void
     {
-        if (blank($this->dateFrom)) {
-            $this->dateFrom = Carbon::today()->format('Y-m-d');
-        }
-
-        if (blank($this->dateTo)) {
-            $this->dateTo = Carbon::today()->addDay()->format('Y-m-d');
-        }
-
         $this->dateRange = [
             'start' => $this->dateFrom,
             'end' => $this->dateTo,

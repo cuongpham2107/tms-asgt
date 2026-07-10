@@ -6,7 +6,6 @@ use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
-use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Services\TripKmCalculatorService;
 use Dedoc\Scramble\Attributes\BodyParameter;
@@ -34,7 +33,7 @@ class TripController extends Controller
             ->with([
                 'vehicle',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft])->with([
+                'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints',
@@ -66,7 +65,7 @@ class TripController extends Controller
             ->with([
                 'vehicle',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft])->with([
+                'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints',
@@ -109,7 +108,7 @@ class TripController extends Controller
         $trip->load([
             'vehicle',
             'driverSwaps.toDriver',
-            'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft])->with([
+            'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                 'customer',
                 'pickupLocation',
                 'deliveryPoints',
@@ -157,7 +156,7 @@ class TripController extends Controller
                 'shift',
                 'driver',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft])->with([
+                'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',

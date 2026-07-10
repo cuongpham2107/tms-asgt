@@ -179,3 +179,26 @@ test('trip resolves orders and lists pickups/deliveries correctly', function () 
     expect($pickups)->toBe('Pickup A → Pickup B → Pickup C');
     expect($deliveries)->toBe('Delivery A → Delivery B → Delivery C');
 });
+
+test('trips list shows pending trip when no date filter applied', function () {
+    $vehicle = Vehicle::create([
+        'plate_number' => '51P-123.45',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    Trip::create([
+        'trip_code' => 'TRIP-PENDING-1',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Pending,
+        'started_at' => null,
+    ]);
+
+    Livewire::test(ListTrips::class)
+        ->assertStatus(200)
+        ->assertHasNoErrors()
+        ->assertSee('51P-123.45');
+});
