@@ -187,7 +187,24 @@ class ListTrips extends ListRecords
 
     protected function getTableQuery(): Builder
     {
+        $statusOrder = [
+            TripStatus::Pending->value => 0,
+            TripStatus::Started->value => 1,
+            TripStatus::ArrivedPickup->value => 2,
+            TripStatus::Delivering->value => 3,
+            TripStatus::ArrivedDelivery->value => 4,
+            TripStatus::Delivered->value => 5,
+            TripStatus::DriverSwap->value => 6,
+            TripStatus::ReturnTrip->value => 7,
+            TripStatus::Cancelled->value => 8,
+        ];
+
+        $caseSql = 'CASE trips.status '
+            .collect($statusOrder)->map(fn ($ord, $status) => "WHEN '{$status}' THEN {$ord}")->implode(' ')
+            .' ELSE 99 END';
+
         return TripResource::getEloquentQuery()
+            ->orderByRaw($caseSql)
             ->orderBy('trips.updated_at', 'desc')
             ->with([
                 'vehicle',
