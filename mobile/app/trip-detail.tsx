@@ -252,7 +252,7 @@ export default function TripDetailScreen() {
               const osColor = o.status === "completed" ? "#059669" : o.status === "in_transit" ? "#D97706" : o.status === "driver_swap" ? "#8B5CF6" : "#6B7280";
               const hasEndCk = (o.trip_checkpoints || []).some((cp: any) => cp.checkpoint_type === "end");
               return (
-                <TouchableOpacity key={o.id} style={s.orderCard} activeOpacity={0.7}
+                <TouchableOpacity key={o.id} style={[s.orderCard, { borderLeftColor: osColor, borderLeftWidth: 4 }]} activeOpacity={0.7}
                   onPress={() => {
                     if (currentStatus === "pending") {
                       showAlert("Chưa bắt đầu chuyến", "Vui lòng bắt đầu chuyến trước khi xem chi tiết đơn hàng");
