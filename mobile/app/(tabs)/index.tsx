@@ -43,6 +43,9 @@ export default function DashboardScreen() {
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const activeTrips = trips.filter((t) => t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap");
+  // Sort: current/active trips first, then pending
+  const isCurrentTrip = (t: any) => t.status !== "pending";
+  const sortedTrips = [...activeTrips].sort((a, b) => (isCurrentTrip(b) ? 1 : 0) - (isCurrentTrip(a) ? 1 : 0));
   const completedCount = stats?.completed ?? 0;
 
   const shiftDuration = shift?.start_time ? (() => {
@@ -127,17 +130,21 @@ export default function DashboardScreen() {
           <Text style={st.emptyText}>Chưa có chuyến nào</Text>
         </View>
       ) : (
-        activeTrips.slice(0, 5).map((t) => {
+        sortedTrips.slice(0, 5).map((t) => {
           const sc = statusColors[t.status] || statusColors["pending"];
+          const isCurrent = isCurrentTrip(t);
           return (
-            <TouchableOpacity key={t.id} style={[st.tripCard, { borderColor: sc.text + "20" }]} activeOpacity={0.7}
+            <TouchableOpacity key={t.id} style={[st.tripCard, { borderColor: isCurrent ? sc.text + "40" : "#F3F4F6" }]} activeOpacity={0.7}
               onPress={() => router.push({ pathname: "/trip-detail", params: { id: t.id, trip: JSON.stringify(t) } })}>
               <View style={[st.tripIcon, { backgroundColor: sc.bg }]}>
                 <Ionicons name="car" size={20} color={sc.text} />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={st.tripCode}>{t.vehicle?.plate_number || "Chưa gán xe"}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={st.tripCode}>{t.vehicle?.plate_number || "Chưa gán xe"}</Text>
+                    {isCurrent && <View style={{ backgroundColor: "#10B981", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontWeight: "700", color: "#fff" }}>● HIỆN TẠI</Text></View>}
+                  </View>
                   <View style={[st.tripBadge, { backgroundColor: sc.bg }]}>
                     <Text style={[st.tripBadgeText, { color: sc.text }]}>{sc.label}</Text>
                   </View>

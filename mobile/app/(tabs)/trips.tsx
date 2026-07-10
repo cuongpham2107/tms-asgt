@@ -90,7 +90,9 @@ export default function TripsScreen() {
       const q = search.toLowerCase();
       result = result.filter((t) => (t.trip_code || "").toLowerCase().includes(q) || (t.vehicle?.plate_number || "").toLowerCase().includes(q));
     }
-    return result;
+    // Sort: current/active trips first, then pending
+    const isCurrent = (t: any) => t.status !== "pending" && t.status !== "driver_swap" && t.status !== "completed" && t.status !== "cancelled";
+    return result.sort((a: any, b: any) => (isCurrent(b) ? 1 : 0) - (isCurrent(a) ? 1 : 0));
   }, [trips, activeTab, activePeriod, search]);
 
   const counts = useMemo(() => {
@@ -123,11 +125,17 @@ export default function TripsScreen() {
         ListEmptyComponent={<View style={s.empty}><Ionicons name="car-outline" size={56} color="#E5E7EB" /><Text style={s.emptyText}>{loading ? "Đang tải..." : "Không có chuyến nào"}</Text></View>}
         renderItem={({ item }) => {
           const st = statusConfig[item.status] || statusConfig["pending"];
-          return <TouchableOpacity style={[s.card, { borderColor: st.text + "20" }]} activeOpacity={0.7}
+          const isCurrent = item.status !== "pending" && item.status !== "driver_swap" && item.status !== "completed";
+          return <TouchableOpacity style={[s.card, { borderColor: isCurrent ? st.text + "40" : "#F3F4F6" }]} activeOpacity={0.7}
             onPress={() => router.push({ pathname: "/trip-detail", params: { id: item.id, trip: JSON.stringify(item) } })}>
             <View style={s.topRow}>
               <View style={[s.iconBox, { backgroundColor: st.bg }]}><Ionicons name={st.icon as any} size={24} color={st.text} /></View>
-              <View style={{ flex: 1 }}><Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text></View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text>
+                  {isCurrent && <View style={{ backgroundColor: "#10B981", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontWeight: "700", color: "#fff" }}>● HIỆN TẠI</Text></View>}
+                </View>
+              </View>
               <View style={[s.badge, { backgroundColor: st.bg }]}><Text style={[s.badgeText, { color: st.text }]}>{st.label}</Text></View>
             </View>
             <Text style={s.kmLine}>📏 {fmt(item.total_km)} km · {fmt(item.start_km)} → {fmt(item.end_km)}</Text>
