@@ -415,7 +415,7 @@ abstract class CreatesOrderTransportCards
     {
         return match ($orderType) {
             'HHHK' => [LocationType::Pickup, LocationType::Warehouse],
-            default => [LocationType::Other],
+            default => [LocationType::Pickup, LocationType::Other],
         };
     }
 
