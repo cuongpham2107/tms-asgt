@@ -78,13 +78,7 @@ export default function TripDetailScreen() {
       await api.trips.checkpoint(String(trip.id), { checkpoint_type: "started", occurred_at: new Date().toISOString() }, token);
       showAlert("Thành công", "Đã bắt đầu chuyến");
       await load();
-    } catch (e: any) {
-      showAlert("Lỗi", e.message);
-      const match = (e.message || "").match(/#(\d+)/);
-      if (match) {
-        router.push({ pathname: "/trip-detail", params: { id: match[1] } });
-      }
-    }
+    } catch (e: any) { showAlert("Không thể bắt đầu", e.message); }
     finally { setStarting(false); }
   };
 
