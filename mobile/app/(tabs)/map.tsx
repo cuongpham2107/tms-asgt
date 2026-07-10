@@ -20,6 +20,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [routes, setRoutes] = useState<{ points: { latitude: number; longitude: number }[]; color: string }[]>([]);
+  const [region, setRegion] = useState({ ...HANOI_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 });
   const mapRef = useRef<MapView>(null);
 
   const load = async () => {
@@ -140,7 +141,7 @@ export default function MapScreen() {
 
   return (
     <View style={s.container}>
-      <MapView ref={mapRef} style={s.map} initialRegion={{ ...HANOI_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 }} showsUserLocation={false} showsCompass={false} showsScale={true}>
+      <MapView ref={mapRef} style={s.map} region={region} onRegionChangeComplete={setRegion} showsUserLocation={false} showsCompass={false} showsScale={true}>
         {/* Vehicle position */}
         {vehicleLat && vehicleLng && (
           <Marker coordinate={{ latitude: vehicleLat, longitude: vehicleLng }} title="Vị trí xe" pinColor="#4F46E5">
@@ -213,38 +214,11 @@ export default function MapScreen() {
 
       {/* Custom zoom controls */}
       <View style={s.zoomControls}>
-        <TouchableOpacity style={s.zoomBtn} onPress={() => {
-          mapRef.current?.getCamera().then((cam: any) => {
-            cam.zoom += 1;
-            mapRef.current?.animateCamera(cam, { duration: 200 });
-          }).catch(() => {
-            // Fallback: animate to region with smaller delta
-            mapRef.current?.getMapBoundaries().then((b: any) => {
-              const lat = (b.northEast.latitude + b.southWest.latitude) / 2;
-              const lng = (b.northEast.longitude + b.southWest.longitude) / 2;
-              const d = (b.northEast.latitude - b.southWest.latitude) / 2;
-              mapRef.current?.animateToRegion({ latitude: lat, longitude: lng, latitudeDelta: d, longitudeDelta: d }, 200);
-            });
-          });
-        }}>
+        <TouchableOpacity style={s.zoomBtn} onPress={() => setRegion((r: any) => ({ ...r, latitudeDelta: r.latitudeDelta / 2, longitudeDelta: r.longitudeDelta / 2 }))}>
           <Ionicons name="add" size={22} color="#374151" />
         </TouchableOpacity>
         <View style={s.zoomSep} />
-        <TouchableOpacity style={s.zoomBtn} onPress={() => {
-          mapRef.current?.getCamera().then((cam: any) => {
-            if (cam.zoom > 3) {
-              cam.zoom -= 1;
-              mapRef.current?.animateCamera(cam, { duration: 200 });
-            }
-          }).catch(() => {
-            mapRef.current?.getMapBoundaries().then((b: any) => {
-              const lat = (b.northEast.latitude + b.southWest.latitude) / 2;
-              const lng = (b.northEast.longitude + b.southWest.longitude) / 2;
-              const d = (b.northEast.latitude - b.southWest.latitude) * 2;
-              mapRef.current?.animateToRegion({ latitude: lat, longitude: lng, latitudeDelta: d, longitudeDelta: d }, 200);
-            });
-          });
-        }}>
+        <TouchableOpacity style={s.zoomBtn} onPress={() => setRegion((r: any) => ({ ...r, latitudeDelta: r.latitudeDelta * 2, longitudeDelta: r.longitudeDelta * 2 }))}>
           <Ionicons name="remove" size={22} color="#374151" />
         </TouchableOpacity>
       </View>
