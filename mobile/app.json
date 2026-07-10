@@ -9,13 +9,20 @@
     "scheme": "tms-driver",
     "plugins": [
       "expo-router",
-      "expo-image-picker"
+      "expo-image-picker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Cần GPS để ghi nhận vị trí chốt chặng"
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Cần camera để chụp ảnh chốt chặng",
         "NSPhotoLibraryUsageDescription": "Cần thư viện ảnh để chọn ảnh",
+        "NSLocationWhenInUseUsageDescription": "Cần GPS để ghi nhận vị trí chốt chặng",
         "UIDesignRequiresCompatibility": true,
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
@@ -37,11 +44,7 @@
       "package": "com.anonymous.tmsmobile"
     },
     "web": {
-      "favicon": "./assets/favicon.png",
-      "bundler": "metro"
-    },
-    "experiments": {
-      "baseUrl": "/mobile"
+      "favicon": "./assets/favicon.png"
     }
   }
 }

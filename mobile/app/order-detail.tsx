@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   RefreshControl,
   FlatList,
   Modal,
@@ -15,7 +14,9 @@ import {
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { api } from "../src/lib/api";
+import { showAlert } from "../src/lib/alert";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 
 const statusConfig: Record<
@@ -176,7 +177,7 @@ export default function OrderDetailScreen() {
   async function pickImage() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Quyền", "Cần cấp quyền camera");
+      showAlert("Quyền", "Cần cấp quyền camera");
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
@@ -185,19 +186,34 @@ export default function OrderDetailScreen() {
     }
   }
 
+  async function getGpsCoordinates() {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return null;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      return { gps_lat: pos.coords.latitude, gps_lng: pos.coords.longitude };
+    } catch { return null; }
+  }
+
   async function submitCheckpoint(type: string) {
     if (!tripId || !token || !d.id) return;
     if (
       !km &&
       ["arrived_pickup", "arrived_delivery", "completed", "end"].includes(type)
     ) {
-      Alert.alert("Thiếu", "Vui lòng nhập số Km");
+      showAlert("Thiếu", "Vui lòng nhập số Km");
       return;
     }
     const body: any = {
       checkpoint_type: type,
       occurred_at: new Date().toISOString(),
     };
+    // Capture GPS coordinates
+    const gps = await getGpsCoordinates();
+    if (gps) {
+      body.gps_lat = gps.gps_lat;
+      body.gps_lng = gps.gps_lng;
+    }
     if (km) body.km_reading = parseFloat(km);
     if (note) body.voice_note = note;
     if (d.id) body.order_id = d.id;
@@ -217,14 +233,14 @@ export default function OrderDetailScreen() {
     setLoading(true);
     try {
       await api.trips.checkpoint(String(tripId), body, token);
-      Alert.alert("Thành công", `Đã cập nhật: ${cpInfo[type]?.label || type}`);
+      showAlert("Thành công", `Đã cập nhật: ${cpInfo[type]?.label || type}`);
       setKm("");
       setNote("");
       setPhotos([]);
       setSelectedLoc(null);
       await loadDetail(); // refresh
     } catch (e: any) {
-      Alert.alert("Lỗi", e.message);
+      showAlert("Lỗi", e.message);
     } finally {
       setLoading(false);
     }

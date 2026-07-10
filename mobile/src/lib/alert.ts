@@ -1,6 +1,5 @@
 import { Alert, Platform } from "react-native";
 
-// Cross-platform alert: React Native Alert on mobile, window.confirm/alert on web
 export function showAlert(title: string, message: string) {
   if (Platform.OS === "web") {
     window.alert(`${title}\n\n${message}`);
