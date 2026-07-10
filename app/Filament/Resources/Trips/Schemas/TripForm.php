@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Trips\Schemas;
 
 use App\Enums\TripStatus;
+use App\Models\Trip;
 use App\Models\User;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Placeholder;
@@ -57,7 +58,20 @@ class TripForm
                         TextInput::make('start_km')
                             ->label('Km bắt đầu')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
-                            ->numeric(),
+                            ->numeric()
+                            ->afterStateHydrated(function (TextInput $component, ?Trip $record): void {
+                                if ($record === null || $component->getState() !== null) {
+                                    return;
+                                }
+
+                                $minKm = $record->checkpoints()
+                                    ->whereNotNull('km_reading')
+                                    ->min('km_reading');
+
+                                if ($minKm !== null) {
+                                    $component->state((float) $minKm);
+                                }
+                            }),
                         TextInput::make('end_km')
                             ->label('Km kết thúc')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
@@ -67,7 +81,20 @@ class TripForm
                             ->prefixIcon(Heroicon::OutlinedClock)
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
-                            ->native(true),
+                            ->native(true)
+                            ->afterStateHydrated(function (DateTimePicker $component, ?Trip $record): void {
+                                if ($record === null || $component->getState() !== null) {
+                                    return;
+                                }
+
+                                $minTime = $record->checkpoints()
+                                    ->whereNotNull('occurred_at')
+                                    ->min('occurred_at');
+
+                                if ($minTime !== null) {
+                                    $component->state($minTime);
+                                }
+                            }),
                         DateTimePicker::make('completed_at')
                             ->label('Kết thúc')
                             ->prefixIcon(Heroicon::OutlinedClock)

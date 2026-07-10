@@ -141,6 +141,10 @@ class TripCheckpointService
         array $payload,
         Collection $checkpoints,
     ): void {
+        if ($trip->isPending() && $type !== CheckpointType::Started) {
+            $this->startedHandler->handle($trip, $payload);
+        }
+
         match ($type) {
             CheckpointType::Started => $this->startedHandler->handle($trip, $payload),
             CheckpointType::ArrivedPickup => $this->arrivedPickupHandler->handle($trip),

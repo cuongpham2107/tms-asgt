@@ -196,6 +196,8 @@ class ReassignDriverAction
                     'driver_id' => $data['new_driver_id'],
                     'shift_id' => $newShift?->id,
                     'status' => $status,
+                    'start_km' => $record->start_km ?? $record->vehicle?->current_mileage,
+                    'started_at' => $record->started_at ?? now(),
                 ]);
 
                 $restoredStatus = in_array($status, [
