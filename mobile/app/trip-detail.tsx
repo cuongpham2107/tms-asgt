@@ -37,17 +37,18 @@ export default function TripDetailScreen() {
   const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
 
   const load = async () => {
-    if (!token || !trip?.id) return;
-    try { const r = await api.trips.detail(trip.id, token); setDetail(r.data || r); } finally { setLoading(false); }
+    const tripId = trip?.id || params.id;
+    if (!token || !tripId) return;
+    try { const r = await api.trips.detail(String(tripId), token); setDetail(r.data || r); } finally { setLoading(false); }
   };
-  useFocusEffect(useCallback(() => { load(); }, [token, trip?.id]));
+  useFocusEffect(useCallback(() => { load(); }, [token, trip?.id, params.id]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
-  const currentStatus = detail?.status || trip.status;
+  const currentStatus = detail?.status || trip?.status || "pending";
   const isReturnTrip = currentStatus === "return_trip";
   const canStart = currentStatus === "pending" && !isReturnTrip;
   const canComplete = !["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed");
-  const orders: any[] = detail?.orders || trip.orders || [];
+  const orders: any[] = detail?.orders || trip?.orders || [];
 
   // Kiểm tra tất cả orders đã có checkpoint "end" chưa
   const allOrdersHaveEnd = useMemo(() => {
@@ -161,7 +162,7 @@ export default function TripDetailScreen() {
         <View style={[s.heroCard, { borderLeftColor: st.text, borderLeftWidth: 4 }]}>
           <View style={s.heroRow}>
             <View style={{ flex: 1 }}>
-              <Text style={s.tripCode}>{detail?.vehicle?.plate_number || trip.vehicle?.plate_number || "Chưa gán xe"}</Text>
+              <Text style={s.tripCode}>{detail?.vehicle?.plate_number || trip?.vehicle?.plate_number || "Chưa gán xe"}</Text>
             </View>
             <View style={[s.statusPill, { backgroundColor: st.bg }]}>
               <Ionicons name={st.icon as any} size={14} color={st.text} />
@@ -180,9 +181,9 @@ export default function TripDetailScreen() {
         {!isReturnTrip && (
           <View style={s.statsGrid}>
             {[
-              { icon: "speedometer-outline", label: "Tổng Km", value: fmt(detail?.total_km ?? trip.total_km), color: "#4F46E5", bg: "#EEF2FF" },
-              { icon: "cube-outline", label: "Km có hàng", value: fmt(detail?.total_km_loaded ?? trip.total_km_loaded), color: "#3B82F6", bg: "#EFF6FF" },
-              { icon: "arrow-down-circle-outline", label: "Km bắt đầu", value: fmt(detail?.start_km ?? trip.start_km), color: "#10B981", bg: "#ECFDF5" },
+              { icon: "speedometer-outline", label: "Tổng Km", value: fmt(detail?.total_km ?? trip?.total_km), color: "#4F46E5", bg: "#EEF2FF" },
+              { icon: "cube-outline", label: "Km có hàng", value: fmt(detail?.total_km_loaded ?? trip?.total_km_loaded), color: "#3B82F6", bg: "#EFF6FF" },
+              { icon: "arrow-down-circle-outline", label: "Km bắt đầu", value: fmt(detail?.start_km ?? trip?.start_km), color: "#10B981", bg: "#ECFDF5" },
               { icon: "arrow-up-circle-outline", label: "Km xe", value: fmt(vehicleKm), color: "#F59E0B", bg: "#FFFBEB" },
             ].map((st2, i) => (
               <View key={i} style={s.statCard}>
@@ -211,15 +212,15 @@ export default function TripDetailScreen() {
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                   <View style={{ flex: 1, backgroundColor: "#ECFDF5", padding: 12, borderRadius: 10 }}>
                     <Text style={{ fontSize: 11, color: "#6B7280" }}>Km bắt đầu</Text>
-                    <Text style={{ fontSize: 18, fontWeight: "800", color: "#059669" }}>{fmt(detail?.start_km ?? trip.start_km)}</Text>
+                    <Text style={{ fontSize: 18, fontWeight: "800", color: "#059669" }}>{fmt(detail?.start_km ?? trip?.start_km)}</Text>
                   </View>
                   <View style={{ flex: 1, backgroundColor: "#ECFDF5", padding: 12, borderRadius: 10 }}>
                     <Text style={{ fontSize: 11, color: "#6B7280" }}>Km kết thúc</Text>
-                    <Text style={{ fontSize: 18, fontWeight: "800", color: "#059669" }}>{fmt(detail?.end_km ?? trip.end_km)}</Text>
+                    <Text style={{ fontSize: 18, fontWeight: "800", color: "#059669" }}>{fmt(detail?.end_km ?? trip?.end_km)}</Text>
                   </View>
                 </View>
                 <Text style={{ fontSize: 13, color: "#6B7280", textAlign: "center", marginTop: 8 }}>
-                  Tổng: <Text style={{ fontWeight: "700", color: "#111827" }}>{fmt(detail?.total_km ?? trip.total_km)} km</Text>
+                  Tổng: <Text style={{ fontWeight: "700", color: "#111827" }}>{fmt(detail?.total_km ?? trip?.total_km)} km</Text>
                 </Text>
               </>
             ) : (
@@ -272,7 +273,7 @@ export default function TripDetailScreen() {
                       showAlert("Chưa bắt đầu chuyến", "Vui lòng bắt đầu chuyến trước khi xem chi tiết đơn hàng");
                       return;
                     }
-                    router.push({ pathname: "/order-detail", params: { id: o.id, order: JSON.stringify({ ...o, trip_id: trip.id, vehicle: detail?.vehicle || trip.vehicle }) } });
+                    router.push({ pathname: "/order-detail", params: { id: o.id, order: JSON.stringify({ ...o, trip_id: trip?.id || params.id, vehicle: detail?.vehicle || trip?.vehicle }) } });
                   }}>
                   <View style={s.orderSeq}><Text style={s.seqText}>{i + 1}</Text></View>
                   <View style={{ flex: 1 }}>
