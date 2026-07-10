@@ -43,6 +43,9 @@
       ],
       "package": "com.anonymous.tmsmobile"
     },
+    "experiments": {
+      "basePath": "/mobile"
+    },
     "web": {
       "favicon": "./assets/favicon.png"
     }
