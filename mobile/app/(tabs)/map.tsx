@@ -20,6 +20,7 @@ interface Step {
   duration: number;
   name: string;
   coordinate: { latitude: number; longitude: number };
+  geometry: { latitude: number; longitude: number }[];
   maneuver: { type: string; modifier?: string };
 }
 
@@ -168,15 +169,20 @@ export default function MapScreen() {
           for (const leg of legs) {
             for (const step of leg.steps || []) {
               // Get step start coordinate from geometry (OSRM: [lng, lat])
-              const coords = step.geometry?.coordinates;
-              const startCoord = coords && coords.length > 0
-                ? { latitude: coords[0][1], longitude: coords[0][0] }
+              const rawCoords = step.geometry?.coordinates;
+              const startCoord = rawCoords && rawCoords.length > 0
+                ? { latitude: rawCoords[0][1], longitude: rawCoords[0][0] }
                 : { latitude: pickup.lat, longitude: pickup.lng };
+              const stepCoords = (rawCoords || []).map((c: [number, number]) => ({
+                latitude: c[1],
+                longitude: c[0],
+              }));
               allSteps.push({
                 distance: step.distance,
                 duration: step.duration,
                 name: step.name || "",
                 coordinate: startCoord,
+                geometry: stepCoords,
                 maneuver: step.maneuver || { type: "straight" },
               });
             }
@@ -283,9 +289,19 @@ export default function MapScreen() {
             })}
           </View>
         ))}
+        {/* Route polylines — muted when a step is selected */}
         {routes.map((r, i) => (
-          <Polyline key={i} coordinates={r.points} strokeColor={r.color} strokeWidth={3} />
+          <Polyline key={i} coordinates={r.points} strokeColor={r.color} strokeWidth={selectedStep != null ? 1.5 : 3} />
         ))}
+        {/* Highlight selected step segment */}
+        {selectedStep != null && directions?.steps[selectedStep]?.geometry && (
+          <Polyline
+            coordinates={directions.steps[selectedStep].geometry}
+            strokeColor="#4F46E5"
+            strokeWidth={5}
+            zIndex={10}
+          />
+        )}
       </MapView>
 
       {/* Zoom controls */}
