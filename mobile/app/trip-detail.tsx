@@ -60,7 +60,7 @@ export default function TripDetailScreen() {
   }, [orders]);
 
   // Auto lấy km hiện tại của xe nếu tất cả orders đã end
-  const vehicleKm = detail?.vehicle?.km_reading ?? trip.vehicle?.km_reading;
+  const vehicleKm = detail?.vehicle?.km_reading ?? trip?.vehicle?.km_reading;
   const autoEndKm = allOrdersHaveEnd && vehicleKm != null ? String(parseInt(vehicleKm)) : null;
 
   // Auto-fill KM input for return trip with vehicle's current mileage
