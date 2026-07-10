@@ -87,14 +87,17 @@ export default function MapScreen() {
     for (let i = 0; i < orders.length; i++) {
       const o = orders[i];
       const pickup = o.pickup_location;
-      const dp = o.delivery_points?.[0];
+      // Sort delivery points by sequence, use last as destination, rest as waypoints
+      const dps = (o.delivery_points || []).filter((d: any) => d.location?.lat && d.location?.lng);
+      const lastDp = dps[dps.length - 1];
+      const waypoints = dps.slice(0, -1);
 
       if (!pickup?.lat || !pickup?.lng) {
         console.warn(`[map] pickup missing lat/lng for ${o.order_code}`);
         continue;
       }
-      if (!dp?.location?.lat || !dp?.location?.lng) {
-        console.warn(`[map] delivery missing lat/lng for ${o.order_code}`, dp);
+      if (!lastDp) {
+        console.warn(`[map] no valid delivery points for ${o.order_code}`);
         continue;
       }
 
@@ -102,14 +105,14 @@ export default function MapScreen() {
         const body: any = {
           origin_lat: pickup.lat,
           origin_lng: pickup.lng,
-          destination_lat: dp.location.lat,
-          destination_lng: dp.location.lng,
+          destination_lat: lastDp.location.lat,
+          destination_lng: lastDp.location.lng,
         };
-        if (o.delivery_points?.length > 1) {
-          body.waypoints = o.delivery_points.slice(0, -1).map((d: any) => ({
-            lat: d.location?.lat,
-            lng: d.location?.lng,
-          })).filter((w: any) => w.lat && w.lng);
+        if (waypoints.length > 0) {
+          body.waypoints = waypoints.map((d: any) => ({
+            lat: d.location.lat,
+            lng: d.location.lng,
+          }));
         }
 
         const res = await fetch(`${API_BASE}/route`, {
