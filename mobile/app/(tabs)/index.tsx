@@ -97,17 +97,17 @@ export default function DashboardScreen() {
       )}
 
       <View style={st.statRow}>
-        <View style={[st.statCard, { backgroundColor: "#F3F4F6", borderLeftColor: "#9CA3AF" }]}>
+        <View style={[st.statCard, { backgroundColor: "#F3F4F6", borderColor: "#9CA3AF" }]}>
           <Ionicons name="time-outline" size={22} color="#6B7280" />
           <Text style={[st.statVal, { color: "#6B7280" }]}>{stats?.assigned ?? 0}</Text>
           <Text style={st.statLbl}>Chờ chạy</Text>
         </View>
-        <View style={[st.statCard, { backgroundColor: "#EEF2FF", borderLeftColor: "#4F46E5" }]}>
+        <View style={[st.statCard, { backgroundColor: "#EEF2FF", borderColor: "#4F46E5" }]}>
           <Ionicons name="car-sport" size={22} color="#4F46E5" />
           <Text style={[st.statVal, { color: "#4F46E5" }]}>{stats?.in_progress ?? activeTrips.length}</Text>
           <Text style={st.statLbl}>Đang chạy</Text>
         </View>
-        <View style={[st.statCard, { backgroundColor: "#D1FAE5", borderLeftColor: "#059669" }]}>
+        <View style={[st.statCard, { backgroundColor: "#D1FAE5", borderColor: "#059669" }]}>
           <Ionicons name="checkmark-circle" size={22} color="#059669" />
           <Text style={[st.statVal, { color: "#059669" }]}>{completedCount}</Text>
           <Text style={st.statLbl}>Hoàn thành</Text>
@@ -130,7 +130,7 @@ export default function DashboardScreen() {
         activeTrips.slice(0, 5).map((t) => {
           const sc = statusColors[t.status] || statusColors["pending"];
           return (
-            <TouchableOpacity key={t.id} style={[st.tripCard, { borderLeftColor: sc.text, borderLeftWidth: 4 }]} activeOpacity={0.7}
+            <TouchableOpacity key={t.id} style={[st.tripCard, { borderColor: sc.text, borderWidth: 1.5 }]} activeOpacity={0.7}
               onPress={() => router.push({ pathname: "/trip-detail", params: { id: t.id, trip: JSON.stringify(t) } })}>
               <View style={[st.tripIcon, { backgroundColor: sc.bg }]}>
                 <Ionicons name="car" size={20} color={sc.text} />
@@ -178,7 +178,7 @@ const st = StyleSheet.create({
   shiftKmLbl: { fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 },
   shiftKmSep: { width: 1, height: 24, backgroundColor: "rgba(255,255,255,0.15)" },
   statRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, marginBottom: 20 },
-  statCard: { flex: 1, padding: 16, borderRadius: 14, alignItems: "center", gap: 6, borderLeftWidth: 3 },
+  statCard: { flex: 1, padding: 16, borderRadius: 14, alignItems: "center", gap: 6, borderWidth: 1.5 },
   statVal: { fontSize: 20, fontWeight: "800" },
   statLbl: { fontSize: 11, color: "#6B7280", textAlign: "center" },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, marginBottom: 10 },
