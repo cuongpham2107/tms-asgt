@@ -268,7 +268,6 @@ export default function TripDetailScreen() {
                         <Text style={{ fontSize: 10, fontWeight: "600", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: o.type === 'HHHK' ? '#E0F2FE' : '#FEF3C7', color: o.type === 'HHHK' ? '#0369A1' : '#B45309', marginLeft: 4 }}> {o.type_label || o.type} </Text>
                       </Text>
                       <View style={{ flexDirection: "row", gap: 4 }}>
-                        {hasEndCk && <Ionicons name="close-circle" size={14} color="#EF4444" />}
                         <View style={[s.orderBadge, { backgroundColor: osColor + "20" }]}>
                           <Text style={[s.orderBadgeText, { color: osColor }]}>{osText}</Text>
                         </View>
