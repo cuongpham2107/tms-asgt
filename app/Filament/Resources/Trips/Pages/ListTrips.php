@@ -133,14 +133,20 @@ class ListTrips extends ListRecords
     private function baseCountQuery(): Builder
     {
         return Trip::query()
-            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
-                ->whereNull('started_at')
-                ->orWhere('started_at', '>=', Carbon::parse($this->dateFrom)->hour(8)),
-            ))
-            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
-                ->whereNull('started_at')
-                ->orWhere('started_at', '<', Carbon::parse($this->dateTo)->hour(8)),
-            ));
+            ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
+                if (filled($this->dateFrom) && filled($this->dateTo)) {
+                    return $query->whereBetween('started_at', [
+                        Carbon::parse($this->dateFrom)->startOfDay(),
+                        Carbon::parse($this->dateTo)->endOfDay(),
+                    ]);
+                }
+
+                if (filled($this->dateFrom)) {
+                    return $query->where('started_at', '>=', Carbon::parse($this->dateFrom)->startOfDay());
+                }
+
+                return $query->where('started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
+            });
     }
 
     public function filtersForm(Schema $form): Schema
@@ -220,14 +226,20 @@ class ListTrips extends ListRecords
             ])
             ->when($this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
             ->when($this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
-            ->when(filled($this->dateFrom), fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
-                ->whereNull('started_at')
-                ->orWhere('started_at', '>=', Carbon::parse($this->dateFrom)->hour(8)),
-            ))
-            ->when(filled($this->dateTo), fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
-                ->whereNull('started_at')
-                ->orWhere('started_at', '<', Carbon::parse($this->dateTo)->hour(8)),
-            ))
+            ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
+                if (filled($this->dateFrom) && filled($this->dateTo)) {
+                    return $query->whereBetween('started_at', [
+                        Carbon::parse($this->dateFrom)->startOfDay(),
+                        Carbon::parse($this->dateTo)->endOfDay(),
+                    ]);
+                }
+
+                if (filled($this->dateFrom)) {
+                    return $query->where('started_at', '>=', Carbon::parse($this->dateFrom)->startOfDay());
+                }
+
+                return $query->where('started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
+            })
             ->when(filled($this->tripSearch), function (Builder $query): Builder {
                 $search = trim((string) $this->tripSearch);
 

@@ -286,30 +286,17 @@ class ListOrders extends ListRecords
             ->when($this->showMineOnly, fn (Builder $q): Builder => $q->where('created_by', Auth::id()))
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $q): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
-                    $start = Carbon::parse($this->startDate)->hour(8);
-                    $end = Carbon::parse($this->endDate)->hour(8);
-
-                    return $q->where(function (Builder $q) use ($start, $end): void {
-                        $q->whereBetween('planned_loading_at', [$start, $end])
-                            ->orWhereNull('planned_loading_at');
-                    });
+                    return $q->whereBetween('planned_loading_at', [
+                        Carbon::parse($this->startDate)->startOfDay(),
+                        Carbon::parse($this->endDate)->endOfDay(),
+                    ]);
                 }
 
                 if (filled($this->startDate)) {
-                    $start = Carbon::parse($this->startDate)->hour(8);
-
-                    return $q->where(function (Builder $q) use ($start): void {
-                        $q->where('planned_loading_at', '>=', $start)
-                            ->orWhereNull('planned_loading_at');
-                    });
+                    return $q->where('planned_loading_at', '>=', Carbon::parse($this->startDate)->startOfDay());
                 }
 
-                $end = Carbon::parse($this->endDate)->hour(8);
-
-                return $q->where(function (Builder $q) use ($end): void {
-                    $q->where('planned_loading_at', '<', $end)
-                        ->orWhereNull('planned_loading_at');
-                });
+                return $q->where('planned_loading_at', '<=', Carbon::parse($this->endDate)->endOfDay());
             });
     }
 
@@ -415,30 +402,17 @@ class ListOrders extends ListRecords
             // Date range filter (by planned_loading_at). Supports start, end or both.
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
-                    $start = Carbon::parse($this->startDate)->hour(8);
-                    $end = Carbon::parse($this->endDate)->hour(8);
-
-                    return $query->where(function (Builder $query) use ($start, $end): void {
-                        $query->whereBetween('planned_loading_at', [$start, $end])
-                            ->orWhereNull('planned_loading_at');
-                    });
+                    return $query->whereBetween('planned_loading_at', [
+                        Carbon::parse($this->startDate)->startOfDay(),
+                        Carbon::parse($this->endDate)->endOfDay(),
+                    ]);
                 }
 
                 if (filled($this->startDate)) {
-                    $start = Carbon::parse($this->startDate)->hour(8);
-
-                    return $query->where(function (Builder $query) use ($start): void {
-                        $query->where('planned_loading_at', '>=', $start)
-                            ->orWhereNull('planned_loading_at');
-                    });
+                    return $query->where('planned_loading_at', '>=', Carbon::parse($this->startDate)->startOfDay());
                 }
 
-                $end = Carbon::parse($this->endDate)->hour(8);
-
-                return $query->where(function (Builder $query) use ($end): void {
-                    $query->where('planned_loading_at', '<', $end)
-                        ->orWhereNull('planned_loading_at');
-                });
+                return $query->where('planned_loading_at', '<=', Carbon::parse($this->endDate)->endOfDay());
             });
     }
 
