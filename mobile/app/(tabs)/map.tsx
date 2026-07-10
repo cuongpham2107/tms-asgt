@@ -79,7 +79,7 @@ export default function MapScreen() {
           body: JSON.stringify(body),
         });
         const json = await res.json();
-        console.log(`[map] route for ${o.order_code}:`, json.success, json.data?.distance);
+        console.log(`[map] route for ${o.order_code}:`, JSON.stringify({ success: json.success, distance: json.data?.distance, hasCoords: !!json.data?.geometry?.coordinates }));
         if (json.success && json.data?.geometry?.coordinates) {
           const coords = json.data.geometry.coordinates.map((c: [number, number]) => ({
             latitude: c[1],

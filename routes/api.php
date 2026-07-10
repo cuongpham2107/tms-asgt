@@ -59,4 +59,7 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
 
     // Locations (danh sách địa điểm có search và limit)
     Route::get('/locations', [LocationController::class, 'index']);
+
+    // OSRM routing (dùng cho map mobile)
+    Route::post('/route', [RouteController::class, 'route']);
 });
