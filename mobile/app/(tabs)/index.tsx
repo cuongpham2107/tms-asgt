@@ -42,7 +42,7 @@ export default function DashboardScreen() {
   useFocusEffect(useCallback(() => { load(); }, [token]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
-  const activeTrips = trips.filter((t) => t.status !== "completed" && t.status !== "cancelled");
+  const activeTrips = trips.filter((t) => t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap");
   const completedCount = stats?.completed ?? 0;
 
   const shiftDuration = shift?.start_time ? (() => {

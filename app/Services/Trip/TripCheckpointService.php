@@ -101,7 +101,7 @@ class TripCheckpointService
             ->where('id', '!=', $trip->id)
             ->whereIn('status', array_filter(
                 TripStatus::activeStatuses(),
-                fn (TripStatus $s) => $s !== TripStatus::Pending,
+                fn (TripStatus $s) => ! in_array($s, [TripStatus::Pending, TripStatus::DriverSwap]),
             ))
             ->first();
 
