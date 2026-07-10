@@ -131,8 +131,27 @@ class DriverShiftInfolist
                                 TextEntry::make('time')
                                     ->label('Thời gian')
                                     ->dateTime('d/m/Y H:i'),
-                                TextEntry::make('details')
+                                TextEntry::make('activity_display')
                                     ->label('Hoạt động')
+                                    ->formatStateUsing(function ($record) {
+                                        $type = $record['type'] ?? '';
+
+                                        return match ($type) {
+                                            'trip_start' => view('filament.resources.driver-shifts.components.timeline-trip-start', [
+                                                'trip_code' => $record['trip_code'] ?? '-',
+                                                'km' => $record['km'],
+                                            ])->render(),
+                                            'trip_end' => view('filament.resources.driver-shifts.components.timeline-trip-end', [
+                                                'trip_code' => $record['trip_code'] ?? '-',
+                                                'km' => $record['km'],
+                                                'total_km' => $record['total_km'] ?? null,
+                                            ])->render(),
+                                            'order_checkpoint' => view('filament.resources.driver-shifts.components.timeline-checkpoint', [
+                                                'checkpoint' => $record,
+                                            ])->render(),
+                                            default => '-',
+                                        };
+                                    })
                                     ->html(),
                                 TextEntry::make('vehicle')
                                     ->label('Phương tiện')

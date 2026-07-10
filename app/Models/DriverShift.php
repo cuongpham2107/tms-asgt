@@ -78,48 +78,35 @@ class DriverShift extends Model
     {
         $this->loadMissing([
             'trips.vehicle',
-            'tripCheckpoints.order',
+            'tripCheckpoints.order.deliveryPoints',
         ]);
 
         $activities = collect();
 
         $sortedSegments = $this->trips->sortBy('started_at')->values();
 
+        // Trip start/end markers
         $sortedSegments->each(function ($trip, $index) use ($activities) {
             if ($trip->started_at) {
-                $label = 'Bắt đầu chuyến';
-                $color = 'background-color: #f0fdf4; color: #15803d;';
-                $text = sprintf('Mã chuyến: %s | Km: %s km',
-                    $trip->trip_code,
-                    number_format((float) $trip->start_km, 1),
-                );
-                $html = "<span style='padding: 2px 6px; {$color} border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-right: 8px;'>{$label}</span> {$text}";
-
                 $activities->push([
                     'time' => $trip->started_at,
                     'type' => 'trip_start',
+                    'trip_code' => $trip->trip_code,
                     'vehicle' => $trip->vehicle?->plate_number,
-                    'details' => $html,
+                    'km' => $trip->start_km ? number_format((float) $trip->start_km, 1).' km' : null,
                     'group_index' => $index,
                     'sub_priority' => 0,
                     'time_for_sort' => $trip->started_at,
                 ]);
             }
             if ($trip->completed_at) {
-                $label = 'Kết thúc chuyến';
-                $color = 'background-color: #fef2f2; color: #b91c1c;';
-                $text = sprintf('Mã chuyến: %s | Km: %s km (Tổng chạy: %s km)',
-                    $trip->trip_code,
-                    number_format((float) $trip->end_km, 1),
-                    number_format(max(0, (float) $trip->total_km), 1),
-                );
-                $html = "<span style='padding: 2px 6px; {$color} border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-right: 8px;'>{$label}</span> {$text}";
-
                 $activities->push([
                     'time' => $trip->completed_at,
                     'type' => 'trip_end',
+                    'trip_code' => $trip->trip_code,
                     'vehicle' => $trip->vehicle?->plate_number,
-                    'details' => $html,
+                    'km' => $trip->end_km ? number_format((float) $trip->end_km, 1).' km' : null,
+                    'total_km' => max(0, (float) $trip->total_km),
                     'group_index' => $index,
                     'sub_priority' => 2,
                     'time_for_sort' => $trip->completed_at,
@@ -127,47 +114,51 @@ class DriverShift extends Model
             }
         });
 
-        $this->tripCheckpoints->each(function ($tc) use ($activities, $sortedSegments) {
-            // Bỏ qua end checkpoint không có đơn hàng (return trip)
-            if ($tc->checkpoint_type === CheckpointType::End && ! $tc->order_id) {
-                return;
+        // Group checkpoints by (type, km, time) to collapse duplicates
+        $groupedCheckpoints = $this->tripCheckpoints
+            ->filter(fn ($tc) => ! ($tc->checkpoint_type === CheckpointType::End && ! $tc->order_id))
+            ->groupBy(function ($tc) {
+                $km = $tc->km_reading ? number_format((float) $tc->km_reading, 1, '.', '') : 'null';
+                $time = $tc->occurred_at?->format('Y-m-d H:i:s') ?? 'null';
+                return $tc->checkpoint_type->value.'|'.$km.'|'.$time;
+            });
+
+        foreach ($groupedCheckpoints as $group) {
+            $first = $group->first();
+            $orderCodes = $group->pluck('order.order_code')->filter()->unique()->values();
+            $deliveryPointId = $first->delivery_point_id;
+
+            // Get DP sequence if multiple DPs
+            $dpLabel = '';
+            if ($deliveryPointId && $first->order?->deliveryPoints->count() > 1) {
+                $dp = $first->order->deliveryPoints->firstWhere('id', $deliveryPointId);
+                if ($dp?->sequence) {
+                    $dpLabel = " (Điểm {$dp->sequence})";
+                }
             }
-
-            $checkpointLabel = $tc->checkpoint_type?->getLabel() ?? $tc->checkpoint_type;
-
-            $orderCode = $tc->order?->order_code ?? '-';
-
-            $text = "Đơn: {$orderCode}";
-            if ($tc->km_reading) {
-                $text .= sprintf(' | Số Km: %s km', number_format((float) $tc->km_reading, 1));
-            }
-            if ($tc->voice_note) {
-                $text .= " | Ghi chú: {$tc->voice_note}";
-            }
-
-            $html = "<span style='padding: 2px 6px; background-color: #e0f2fe; color: #0369a1; border-radius: 4px; font-size: 0.85rem; font-weight: 600; margin-right: 8px;'>{$checkpointLabel}</span> {$text}";
 
             $groupIndex = -1;
             foreach ($sortedSegments as $index => $trip) {
-                if ($tc->occurred_at && $trip->started_at && $tc->occurred_at->greaterThanOrEqualTo($trip->started_at)) {
+                if ($first->occurred_at && $trip->started_at && $first->occurred_at->gte($trip->started_at)) {
                     $groupIndex = $index;
                 }
             }
 
             $activities->push([
-                'time' => $tc->occurred_at,
+                'time' => $first->occurred_at,
                 'type' => 'order_checkpoint',
-                'checkpoint_label' => $checkpointLabel,
-                'order_code' => $tc->order?->order_code,
-                'order_id' => $tc->order_id,
-                'vehicle' => $tc->trip?->vehicle?->plate_number,
-                'details' => $html,
-                'gps' => $tc->gps_lat && $tc->gps_lng ? "{$tc->gps_lat}, {$tc->gps_lng}" : null,
+                'checkpoint_type' => $first->checkpoint_type,
+                'order_codes' => $orderCodes->toArray(),
+                'km' => $first->km_reading ? number_format((float) $first->km_reading, 1).' km' : null,
+                'voice_note' => $first->voice_note,
+                'dp_label' => $dpLabel,
+                'vehicle' => $first->trip?->vehicle?->plate_number,
+                'gps' => $first->gps_lat && $first->gps_lng ? "{$first->gps_lat}, {$first->gps_lng}" : null,
                 'group_index' => $groupIndex,
                 'sub_priority' => 1,
-                'time_for_sort' => $tc->occurred_at,
+                'time_for_sort' => $first->occurred_at,
             ]);
-        });
+        }
 
         return $activities->sort(function ($a, $b) {
             if ($a['group_index'] !== $b['group_index']) {
