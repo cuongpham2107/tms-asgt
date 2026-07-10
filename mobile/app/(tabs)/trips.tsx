@@ -123,7 +123,7 @@ export default function TripsScreen() {
         ListEmptyComponent={<View style={s.empty}><Ionicons name="car-outline" size={56} color="#E5E7EB" /><Text style={s.emptyText}>{loading ? "Đang tải..." : "Không có chuyến nào"}</Text></View>}
         renderItem={({ item }) => {
           const st = statusConfig[item.status] || statusConfig["pending"];
-          return <TouchableOpacity style={[s.card, { borderColor: st.text, borderWidth: 1.5 }]} activeOpacity={0.7}
+          return <TouchableOpacity style={[s.card, { borderColor: st.text + "40", borderWidth: 1 }]} activeOpacity={0.7}
             onPress={() => router.push({ pathname: "/trip-detail", params: { id: item.id, trip: JSON.stringify(item) } })}>
             <View style={s.topRow}>
               <View style={[s.iconBox, { backgroundColor: st.bg }]}><Ionicons name={st.icon as any} size={24} color={st.text} /></View>
