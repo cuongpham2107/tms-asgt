@@ -292,27 +292,30 @@ export default function OrderDetailScreen() {
       <View
         style={[s.heroCard, { borderLeftColor: st.text, borderLeftWidth: 4 }]}
       >
+        {/* Route bar: pickup → dp1 → dp2 ... */}
+        <View style={s.routeBar}>
+          <Text style={s.routePoint} numberOfLines={1}>
+            {d.pickup_location?.code || d.pickup_address?.split(",")[0] || "..."}
+          </Text>
+          {deliveryPoints.map((dp: any, i: number) => (
+            <View key={i} style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons name="arrow-forward" size={12} color="#D1D5DB" />
+              <Text style={s.routePoint} numberOfLines={1}>
+                {dp.location?.code || dp.address?.split(",")[0] || `Điểm ${dp.sequence || i + 1}`}
+              </Text>
+            </View>
+          ))}
+        </View>
+
         <View style={s.heroRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.orderCode}>{d.order_code}</Text>
-            <View
-              style={{
-                paddingHorizontal: 6,
-                paddingVertical: 2,
-                borderRadius: 6,
-                backgroundColor: d.type === "HHHK" ? "#E0F2FE" : "#FEF3C7",
-                alignSelf: "flex-start",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "700",
-                  color: d.type === "HHHK" ? "#0369A1" : "#B45309",
-                }}
-              >
-                {d.type_label || d.type}
-              </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={s.orderCode}>{d.order_code}</Text>
+              <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: d.type === "HHHK" ? "#E0F2FE" : "#FEF3C7" }}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: d.type === "HHHK" ? "#0369A1" : "#B45309" }}>
+                  {d.type_label || d.type}
+                </Text>
+              </View>
             </View>
             <Text style={s.cargoName}>
               {d.cargo_name || "Chưa có tên hàng"}
@@ -819,6 +822,8 @@ const s = StyleSheet.create({
     borderColor: "#F3F4F6",
   },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  routeBar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 4, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+  routePoint: { fontSize: 13, fontWeight: "700", color: "#374151", backgroundColor: "#F3F4F6", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   orderCode: { fontSize: 20, fontWeight: "800", color: "#111827" },
   typeBadge: {
     fontSize: 11,
