@@ -370,64 +370,6 @@ export default function OrderDetailScreen() {
         ))}
       </View>
 
-      {d.pickup_address && (
-        <View style={s.addressCard}>
-          <View style={s.addressIcon}>
-            <Ionicons name="location" size={18} color="#4F46E5" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.addressLabel}>Điểm lấy hàng</Text>
-            <Text style={s.addressValue}>
-              {d.pickup_location?.code || d.pickup_address}
-            </Text>
-            {d.pickup_location?.name && (
-              <Text style={s.addressSub}>{d.pickup_location.name}</Text>
-            )}
-          </View>
-        </View>
-      )}
-
-      {d.delivery_points?.length > 0 &&
-        d.delivery_points.map((dp: any, i: number) => (
-          <View key={dp.id || i} style={s.addressCard}>
-            <View
-              style={[
-                s.addressIcon,
-                {
-                  backgroundColor:
-                    dp.status === "delivered"
-                      ? "#D1FAE5"
-                      : dp.status === "arrived"
-                        ? "#FEF3C7"
-                        : "#EEF2FF",
-                },
-              ]}
-            >
-              <Ionicons name="navigate" size={18} color="#4F46E5" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.addressLabel}>
-                Điểm giao{" "}
-                {d.delivery_points.length > 1 ? `#${dp.sequence || i + 1}` : ""}
-                {dp.status === "delivered"
-                  ? " ✅"
-                  : dp.status === "arrived"
-                    ? " 📍"
-                    : ""}
-              </Text>
-              <Text style={s.addressValue}>
-                {dp.location?.code ||
-                  dp.location_name ||
-                  dp.address ||
-                  "Địa chỉ đã chọn"}
-              </Text>
-              {dp.location?.name && (
-                <Text style={s.addressSub}>{dp.location.name}</Text>
-              )}
-            </View>
-          </View>
-        ))}
-
       {/* Location picker — khi đơn chưa có điểm đến */}
       {!hasDeliveryPoint && (canArriveDelivery || canComplete) && (
         <>
