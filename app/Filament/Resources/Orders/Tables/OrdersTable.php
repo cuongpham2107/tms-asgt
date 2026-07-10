@@ -271,8 +271,7 @@ class OrdersTable extends BaseTable
 
                                     $record->update([
                                         'trip_id' => $trip->id,
-                                        'status' => OrderStatus::Sent,
-                                        'sent_at' => now(),
+                                        'status' => OrderStatus::Assigned,
                                     ]);
 
                                     CreatesOrderTransportCards::createCheckpointsForExternalVehicle($trip, collect([$record]));

@@ -79,8 +79,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
 
                         $updated = $record->update([
                             'trip_id' => $trip->id,
-                            'status' => OrderStatus::Sent,
-                            'sent_at' => now(),
+                            'status' => OrderStatus::Assigned,
                         ]);
 
                         if (! $updated) {

@@ -98,7 +98,11 @@ class ListOrders extends ListRecords
             'color' => 'bg-gray-400',
         ],
         'assigned' => [
-            'label' => 'Đã gán xe / Đã gửi',
+            'label' => 'Đã gán xe',
+            'color' => 'bg-orange-400',
+        ],
+        'sent' => [
+            'label' => 'Đã gửi',
             'color' => 'bg-sky-500',
         ],
         'in_transit' => [
@@ -445,7 +449,8 @@ class ListOrders extends ListRecords
     {
         return match ($status) {
             'draft' => [OrderStatus::Draft->value],
-            'assigned' => [OrderStatus::Assigned->value, OrderStatus::Sent->value],
+            'assigned' => [OrderStatus::Assigned->value],
+            'sent' => [OrderStatus::Sent->value],
             'in_transit' => [OrderStatus::InTransit->value],
             'driver_swap' => [OrderStatus::DriverSwap->value],
             'completed' => [OrderStatus::Completed->value],

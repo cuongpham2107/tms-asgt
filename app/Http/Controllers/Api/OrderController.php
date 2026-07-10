@@ -12,10 +12,11 @@ use Illuminate\Http\Request;
 class OrderController extends Controller
 {
     /**
-     * Danh sách đơn hàng được gán cho lái xe.
+     * Danh sách đơn hàng được gửi lệnh cho lái xe.
      *
-     * Chỉ trả về đơn đang hoạt động (trạng thái: Assigned, Sent).
-     * Sắp xếp theo planned_loading_at tăng dần (đơn cần đóng hàng sớm nhất lên trước).
+     * Chỉ trả về đơn đã gửi lệnh (status: Sent, InTransit).
+     * Đơn ở trạng thái Assigned (chưa gửi lệnh) sẽ không hiển thị.
+     * Sắp xếp theo planned_loading_at tăng dần.
      *
      * @response array{data: OrderResource[]}
      */
@@ -32,7 +33,7 @@ class OrderController extends Controller
                 'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
             ])
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
-            ->whereNotIn('status', [OrderStatus::Draft])
+            ->whereIn('status', [OrderStatus::Sent, OrderStatus::InTransit])
             ->orderBy('planned_loading_at')
             ->get();
 
@@ -54,11 +55,16 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        // Only allow driver to view their own orders
         $order->load('trip');
         if ($order->trip?->driver_id !== $user->id) {
             /** @status 403 */
             return response()->json(['message' => 'This order is not assigned to you'], 403);
+        }
+
+        // Driver only sees orders that have been sent
+        if ($order->status === OrderStatus::Assigned) {
+            /** @status 403 */
+            return response()->json(['message' => 'Order has not been sent yet'], 403);
         }
 
         $order->load([
@@ -89,6 +95,11 @@ class OrderController extends Controller
         if ($order->trip?->driver_id !== $user->id) {
             /** @status 403 */
             return response()->json(['message' => 'This order is not assigned to you'], 403);
+        }
+
+        if ($order->status === OrderStatus::Assigned) {
+            /** @status 403 */
+            return response()->json(['message' => 'Order has not been sent yet'], 403);
         }
 
         $points = $order->deliveryPoints()
@@ -155,13 +166,15 @@ class OrderController extends Controller
         $counts = Order::query()
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
             ->selectRaw("
-                SUM(CASE WHEN status IN ('assigned', 'sent') THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status IN ('assigned') THEN 1 ELSE 0 END) as assigned,
+                SUM(CASE WHEN status IN ('sent') THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
             ")
             ->first();
 
         return response()->json([
             'data' => [
+                'assigned' => (int) ($counts->assigned ?? 0),
                 'in_progress' => (int) ($counts->in_progress ?? 0),
                 'completed' => (int) ($counts->completed ?? 0),
             ],
