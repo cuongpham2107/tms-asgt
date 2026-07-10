@@ -160,10 +160,15 @@ export default function OrderDetailScreen() {
   );
   // Use selected DP, or fallback to next pending, or first DP
   const activeDpId = selectedDpId || nextPendingDp?.id || deliveryPoints[0]?.id;
-  // Auto-select only DP for single-DP orders
+  // Auto-select only DP for single-DP orders; reset on complete
   useEffect(() => {
     if (deliveryPoints.length === 1 && !selectedDpId) {
       setSelectedDpId(deliveryPoints[0].id);
+    }
+    // If selected DP is now completed, auto-advance to next pending
+    if (selectedDpId && dpStatusMap[selectedDpId]?.completed) {
+      const next = deliveryPoints.find((dp: any) => dp.id !== selectedDpId && !dpStatusMap[dp.id]?.completed && dp.status !== "delivered");
+      setSelectedDpId(next?.id || null);
     }
   }, [deliveryPoints]);
   const activeDp = deliveryPoints.find((dp: any) => dp.id === activeDpId);
@@ -197,6 +202,19 @@ export default function OrderDetailScreen() {
       : false;
   const hasArrivedDelivery = activeDpHasCp("arrived_delivery");
   const hasCompleted = activeDpHasCp("completed");
+
+  // Compute per-DP checkpoint status
+  const dpStatusMap: Record<number, { arrived: boolean; completed: boolean }> = {};
+  deliveryPoints.forEach((dp: any) => {
+    dpStatusMap[dp.id] = {
+      arrived: checkpoints.some((cp: any) => cp.checkpoint_type === "arrived_delivery" && cp.delivery_point_id === dp.id),
+      completed: checkpoints.some((cp: any) => cp.checkpoint_type === "completed" && cp.delivery_point_id === dp.id),
+    };
+  });
+
+  // Mid-delivery: đã đến DP nhưng chưa giao xong → lock, không chọn được DP khác
+  const isMidDelivery = hasArrivedDelivery && !hasCompleted;
+  const canSelectDp = !isMidDelivery;
 
   // Can do actions on the SELECTED DP (not necessarily next pending)
   const canArrivePickup =
@@ -485,28 +503,42 @@ export default function OrderDetailScreen() {
           </Text>
           <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
             {deliveryPoints
-              .filter((dp: any) => dp.status !== "delivered" && dp.status !== "completed")
+              .filter((dp: any) => {
+                // Ẩn DP đã giao xong
+                if (dp.status === "delivered" || dp.status === "completed") return false;
+                const s = dpStatusMap[dp.id];
+                // Ẩn DP đã có cả arrived_delivery + completed checkpoint
+                if (s?.completed) return false;
+                return true;
+              })
               .map((dp: any) => {
                 const isSelected = dp.id === activeDpId;
+                const s = dpStatusMap[dp.id];
+                const isArrived = s?.arrived || false;
+                // Locked: DP khác không chọn được khi đang mid-delivery, hoặc DP đã arrived nhưng chưa selected
+                const isLocked = !isSelected && (isMidDelivery || (isArrived && !s?.completed));
                 return (
                   <TouchableOpacity
                     key={dp.id}
-                    onPress={() => setSelectedDpId(dp.id)}
+                    onPress={() => canSelectDp && !isLocked && setSelectedDpId(dp.id)}
+                    disabled={isLocked}
                     activeOpacity={0.7}
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 6,
-                      backgroundColor: isSelected ? "#4F46E5" : "#F3F4F6",
+                      backgroundColor: isSelected ? "#4F46E5" : isLocked ? "#F9FAFB" : "#F3F4F6",
                       paddingHorizontal: 12,
                       paddingVertical: 8,
                       borderRadius: 20,
+                      opacity: isLocked ? 0.5 : 1,
                     }}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: isSelected ? "#fff" : "#6B7280" }}>
+                    {isArrived && <Ionicons name="time" size={12} color={isSelected ? "#A5B4FC" : "#F59E0B"} />}
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: isSelected ? "#fff" : isLocked ? "#D1D5DB" : "#6B7280" }}>
                       Điểm {dp.sequence || "?"}
                     </Text>
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: isSelected ? "#C7D2FE" : "#9CA3AF" }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: isSelected ? "#C7D2FE" : isLocked ? "#E5E7EB" : "#9CA3AF" }}>
                       {dp.code || dp.location?.code || "..."}
                     </Text>
                   </TouchableOpacity>
