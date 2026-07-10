@@ -30,6 +30,8 @@ class OrderDeliveryPointResource extends JsonResource
                 'name' => $this->location->name,
                 'address' => $this->location->address,
                 'code' => $this->location->code,
+                'lat' => $this->location->lat,
+                'lng' => $this->location->lng,
             ]),
             'code' => $this->location?->code,
             'location_name' => $this->location?->name,
