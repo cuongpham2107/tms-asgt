@@ -60,6 +60,13 @@ const maneuverLabels: Record<string, string> = {
   "arrive": "Đã đến nơi",
   "new name": "Đi tiếp",
   "straight": "Đi thẳng",
+  "turn": "Rẽ",
+  "on ramp": "Lên đường cao tốc",
+  "off ramp": "Xuống đường cao tốc",
+  "end of road": "Cuối đường",
+  "rotary": "Vòng xuyến",
+  "roundabout turn": "Thoát vòng xuyến",
+  "notification": "Tiếp tục",
 };
 
 function fmtMeters(m: number) {
