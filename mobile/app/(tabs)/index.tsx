@@ -66,7 +66,7 @@ export default function DashboardScreen() {
     <ScrollView style={st.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}>
       <View style={st.header}>
         <View>
-          <Text style={st.greeting}>Xin chào, Tài xế 👋</Text>
+          <Text style={st.greeting}>Xin chào, {shift?.driver?.name || "Tài xế"} 👋</Text>
           <Text style={st.subtitle}>{shift ? "Ca đang hoạt động" : "Chưa vào ca"}</Text>
         </View>
       </View>
