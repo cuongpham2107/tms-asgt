@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Platform } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import MapView, { Marker, Polyline, Callout } from "react-native-maps";
 import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
 import { useFocusEffect } from "expo-router";
@@ -20,6 +20,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [routes, setRoutes] = useState<{ points: { latitude: number; longitude: number }[]; color: string }[]>([]);
+  const mapRef = useRef<MapView>(null);
 
   const load = async () => {
     if (!token) return;
@@ -126,44 +127,82 @@ export default function MapScreen() {
   if (vehicleLat && vehicleLng) {
     allPoints.push({ latitude: vehicleLat, longitude: vehicleLng });
   }
-  const region = allPoints.length > 0
-    ? { latitude: allPoints[0].latitude, longitude: allPoints[0].longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }
-    : { ...HANOI_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+
+  // Auto-zoom to fit all points when data is loaded
+  useEffect(() => {
+    if (allPoints.length > 0 && mapRef.current) {
+      const coords = allPoints.map(p => ({ latitude: p.latitude, longitude: p.longitude }));
+      mapRef.current.fitToCoordinates(coords, {
+        edgePadding: { top: 60, right: 40, bottom: 60, left: 40 },
+        animated: true,
+      });
+    }
+  }, [allPoints.length, routes.length]);
 
   return (
     <View style={s.container}>
-      <MapView style={s.map} initialRegion={region} showsUserLocation={false}>
+      <MapView ref={mapRef} style={s.map} initialRegion={{ ...HANOI_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 }} showsUserLocation={false}>
         {/* Vehicle position */}
         {vehicleLat && vehicleLng && (
           <Marker coordinate={{ latitude: vehicleLat, longitude: vehicleLng }} title="Vị trí xe" pinColor="#4F46E5">
             <View style={s.vehicleMarker}>
               <Ionicons name="car" size={18} color="#fff" />
             </View>
+            <Callout>
+              <View style={{ width: 160 }}>
+                <Text style={{ fontWeight: "700", fontSize: 14, color: "#111827" }}>{trip.vehicle?.plate_number}</Text>
+                <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>Vị trí hiện tại</Text>
+              </View>
+            </Callout>
           </Marker>
         )}
 
-        {/* Pickup & delivery markers */}
+        {/* Pickup & delivery markers with rich callout */}
         {orders.map((o: any) => (
           <View key={o.id}>
             {o.pickup_location?.lat && (
               <Marker
                 coordinate={{ latitude: o.pickup_location.lat, longitude: o.pickup_location.lng }}
-                title={o.pickup_location.code || "Điểm lấy"}
-                description={o.order_code}
                 pinColor="#10B981"
-              />
+              >
+                <Callout>
+                  <View style={{ width: 200 }}>
+                    <Text style={s.calloutCode}>{o.order_code}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981" }} />
+                      <Text style={s.calloutText}>Lấy: {o.pickup_location.code || "?"}</Text>
+                    </View>
+                    <Text style={s.calloutSub}>{o.cargo_name || "—"}</Text>
+                    <Text style={s.calloutSub}>{o.customer?.name || "—"}</Text>
+                  </View>
+                </Callout>
+              </Marker>
             )}
-            {(o.delivery_points || []).map((dp: any, di: number) =>
-              dp.location?.lat ? (
+            {(o.delivery_points || []).map((dp: any, di: number) => {
+              if (!dp.location?.lat) return null;
+              const isDone = dp.status === "delivered" || dp.status === "completed";
+              return (
                 <Marker
                   key={dp.id || di}
                   coordinate={{ latitude: dp.location.lat, longitude: dp.location.lng }}
-                  title={`${dp.location.code || `Giao ${di + 1}`} — ${o.order_code}`}
-                  description={dp.address || dp.location.name}
-                  pinColor="#EF4444"
-                />
-              ) : null
-            )}
+                  pinColor={isDone ? "#6EE7B7" : "#EF4444"}
+                >
+                  <Callout>
+                    <View style={{ width: 200 }}>
+                      <Text style={s.calloutCode}>{o.order_code}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isDone ? "#10B981" : "#EF4444" }} />
+                        <Text style={s.calloutText}>
+                          Giao{di + 1}: {dp.location.code || dp.location_name || "?"}
+                          {isDone ? " ✅" : ""}
+                        </Text>
+                      </View>
+                      <Text style={s.calloutSub}>{dp.address || dp.location?.name || "—"}</Text>
+                    </View>
+                  </Callout>
+                </Marker>
+              );
+            })}
           </View>
         ))}
 
@@ -197,4 +236,7 @@ const s = StyleSheet.create({
   infoPlate: { fontSize: 15, fontWeight: "700", color: "#111827" },
   infoText: { fontSize: 13, color: "#6B7280", marginTop: 2 },
   refreshBtn: { padding: 8, backgroundColor: "#EEF2FF", borderRadius: 8 },
+  calloutCode: { fontWeight: "700", fontSize: 14, color: "#111827" },
+  calloutText: { fontSize: 12, color: "#374151", fontWeight: "600" },
+  calloutSub: { fontSize: 11, color: "#6B7280", marginTop: 2 },
 });
