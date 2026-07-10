@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Orders\Actions\Concerns;
 
 use App\Enums\CheckpointType;
-use App\Enums\LocationType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Enums\TripStatus;
@@ -411,14 +410,6 @@ abstract class CreatesOrderTransportCards
         return is_numeric($value) ? (float) $value : null;
     }
 
-    protected static function getLocationTypesForOrderType(string $orderType): array
-    {
-        return match ($orderType) {
-            'HHHK' => [LocationType::Pickup, LocationType::Warehouse],
-            default => [LocationType::Pickup, LocationType::Other],
-        };
-    }
-
     protected static function normalizeInteger(mixed $value): ?int
     {
         if ($value === null || $value === '') {
@@ -619,9 +610,6 @@ abstract class CreatesOrderTransportCards
                         Select::make('location_id')
                             ->label('Điểm giao hàng')
                             ->options(fn (Get $get): array => Location::query()
-                                ->whereIn('loc_type', self::getLocationTypesForOrderType(
-                                    $orderType instanceof Closure ? ($orderType($get) ?? 'normal') : ($orderType ?? 'normal'),
-                                ))
                                 ->when($get('../../area_id'), function ($q, $areaId) {
                                     $area = Area::find($areaId);
                                     if ($area === null) {
