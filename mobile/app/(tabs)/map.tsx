@@ -131,7 +131,7 @@ export default function MapScreen() {
   // Auto-zoom to fit all points when data is loaded
   useEffect(() => {
     if (allPoints.length > 0 && mapRef.current) {
-      const coords = allPoints.map(p => ({ latitude: p.latitude, longitude: p.longitude }));
+      const coords = allPoints.map((p: { latitude: number; longitude: number }) => ({ latitude: p.latitude, longitude: p.longitude }));
       mapRef.current.fitToCoordinates(coords, {
         edgePadding: { top: 60, right: 40, bottom: 60, left: 40 },
         animated: true,
