@@ -225,10 +225,13 @@ class DriverShiftController extends Controller
                     $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value]);
                 })
                 ->whereIn('status', [
+                    TripStatus::Pending,
                     TripStatus::Started,
                     TripStatus::ArrivedPickup,
                     TripStatus::Delivering,
                     TripStatus::ArrivedDelivery,
+                    TripStatus::Delivered,
+                    TripStatus::ReturnTrip,
                 ])
                 ->get();
 
@@ -243,7 +246,7 @@ class DriverShiftController extends Controller
                 $trip->save();
 
                 $trip->orders()
-                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
+                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value])
                     ->update(['status' => OrderStatus::DriverSwap->value]);
 
                 TripCheckpoint::create([
