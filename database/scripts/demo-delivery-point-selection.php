@@ -57,7 +57,7 @@ function request(string $method, string $url, ?string $token = null, ?array $dat
     $isSuccess = $status >= 200 && $status < 300;
 
     if (! $isSuccess && ! $allowError) {
-        echo "  ⛔ HTTP $status: " . ($result['message'] ?? $body) . "\n";
+        echo "  ⛔ HTTP $status: ".($result['message'] ?? $body)."\n";
         exit(1);
     }
 
@@ -133,12 +133,12 @@ function createOrderWithTrip(int $vehicleId, int $driverId, int $customerId, int
     global $deliveryLocationId;
 
     $now = date('Y-m-d H:i:s');
-    $orderCode = 'ORD-DEMO-' . $suffix . '-' . date('YmdHis');
+    $orderCode = 'ORD-DEMO-'.$suffix.'-'.date('YmdHis');
 
     // Tạo trip
     $tripId = (int) trim(shell_exec("php artisan tinker --execute '
 \$tripId = DB::table(\"trips\")->insertGetId([
-    \"trip_code\" => \"TRIP-DEMO-" . $suffix . "-" . date('YmdHis') . "\",
+    \"trip_code\" => \"TRIP-DEMO-".$suffix.'-'.date('YmdHis')."\",
     \"vehicle_id\" => {$vehicleId},
     \"driver_id\" => {$driverId},
     \"status\" => \"pending\",
@@ -156,7 +156,7 @@ echo \$tripId;
     \"order_category_id\" => {$categoryId},
     \"customer_id\" => {$customerId},
     \"trip_id\" => {$tripId},
-    \"cargo_name\" => \"Hàng demo " . $suffix . "\",
+    \"cargo_name\" => \"Hàng demo ".$suffix."\",
     \"cargo_type\" => \"GCR\",
     \"total_packages\" => 5,
     \"total_weight\" => 1.5,
@@ -247,7 +247,7 @@ $loginResult = request('POST', "$baseUrl/api/driver/login", null, [
     'password' => $password,
 ]);
 $token = $loginResult['body']['token'];
-ok('Token: ' . substr($token, 0, 20) . '...');
+ok('Token: '.substr($token, 0, 20).'...');
 
 // ─── Vào ca ───────────────────────────────────────────────────────────
 step(2, '🟢 Vào ca');
@@ -421,7 +421,7 @@ DB::table(\"vehicles\")->where(\"id\",{$vehicle2Id})->update([\"current_mileage\
         'new_vehicle_id' => $vehicle2Id,
         'handover_km' => 50000,
     ]);
-    ok('Switch to vehicle ' . $vehicle2Id);
+    ok('Switch to vehicle '.$vehicle2Id);
 
     step(18, 'TH2 — Về điểm đỗ xe mới (end-vehicle, km=50010)');
     request('POST', "$baseUrl/api/driver/shifts/{$shiftId3}/end-vehicle", $token, [
@@ -442,5 +442,5 @@ DB::table(\"vehicles\")->where(\"id\",{$vehicle2Id})->update([\"current_mileage\
 
 // ======================================================================
 echo "\n\n══════════════════════════════════════════════════════════════\n";
-echo "  ✅ Hoàn tất demo TH1 + TH4" . ($vehicle2Id > 0 ? ' + TH2' : '') . "!\n";
+echo '  ✅ Hoàn tất demo TH1 + TH4'.($vehicle2Id > 0 ? ' + TH2' : '')."!\n";
 echo "══════════════════════════════════════════════════════════════\n";

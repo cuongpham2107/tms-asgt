@@ -122,6 +122,7 @@ class DriverShift extends Model
             ->groupBy(function ($tc) {
                 $km = $tc->km_reading ? number_format((float) $tc->km_reading, 1, '.', '') : 'null';
                 $time = $tc->occurred_at?->format('Y-m-d H:i:s') ?? 'null';
+
                 return $tc->checkpoint_type->value.'|'.$km.'|'.$time;
             });
 
