@@ -90,10 +90,11 @@ class DriverShift extends Model
             if ($trip->started_at) {
                 $activities->push([
                     'time' => $trip->started_at,
-                    'type' => 'trip_start',
-                    'trip_code' => $trip->trip_code,
+                    'display' => view('filament.resources.driver-shifts.components.timeline-trip-start', [
+                        'trip_code' => $trip->trip_code,
+                        'km' => $trip->start_km ? number_format((float) $trip->start_km, 1).' km' : null,
+                    ])->render(),
                     'vehicle' => $trip->vehicle?->plate_number,
-                    'km' => $trip->start_km ? number_format((float) $trip->start_km, 1).' km' : null,
                     'group_index' => $index,
                     'sub_priority' => 0,
                     'time_for_sort' => $trip->started_at,
@@ -102,11 +103,12 @@ class DriverShift extends Model
             if ($trip->completed_at) {
                 $activities->push([
                     'time' => $trip->completed_at,
-                    'type' => 'trip_end',
-                    'trip_code' => $trip->trip_code,
+                    'display' => view('filament.resources.driver-shifts.components.timeline-trip-end', [
+                        'trip_code' => $trip->trip_code,
+                        'km' => $trip->end_km ? number_format((float) $trip->end_km, 1).' km' : null,
+                        'total_km' => max(0, (float) $trip->total_km),
+                    ])->render(),
                     'vehicle' => $trip->vehicle?->plate_number,
-                    'km' => $trip->end_km ? number_format((float) $trip->end_km, 1).' km' : null,
-                    'total_km' => max(0, (float) $trip->total_km),
                     'group_index' => $index,
                     'sub_priority' => 2,
                     'time_for_sort' => $trip->completed_at,
@@ -146,12 +148,15 @@ class DriverShift extends Model
 
             $activities->push([
                 'time' => $first->occurred_at,
-                'type' => 'order_checkpoint',
-                'checkpoint_type' => $first->checkpoint_type,
-                'order_codes' => $orderCodes->toArray(),
-                'km' => $first->km_reading ? number_format((float) $first->km_reading, 1).' km' : null,
-                'voice_note' => $first->voice_note,
-                'dp_label' => $dpLabel,
+                'display' => view('filament.resources.driver-shifts.components.timeline-checkpoint', [
+                    'checkpoint' => [
+                        'checkpoint_type' => $first->checkpoint_type,
+                        'order_codes' => $orderCodes->toArray(),
+                        'km' => $first->km_reading ? number_format((float) $first->km_reading, 1).' km' : null,
+                        'voice_note' => $first->voice_note,
+                        'dp_label' => $dpLabel,
+                    ],
+                ])->render(),
                 'vehicle' => $first->trip?->vehicle?->plate_number,
                 'gps' => $first->gps_lat && $first->gps_lng ? "{$first->gps_lat}, {$first->gps_lng}" : null,
                 'group_index' => $groupIndex,
