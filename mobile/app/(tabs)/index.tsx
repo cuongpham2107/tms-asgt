@@ -140,12 +140,11 @@ export default function DashboardScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={st.tripCode}>{t.trip_code}</Text>
+                  <Text style={st.tripCode}>{t.vehicle?.plate_number || "Chưa gán xe"}</Text>
                   <View style={[st.tripBadge, { backgroundColor: sc.bg }]}>
                     <Text style={[st.tripBadgeText, { color: sc.text }]}>{sc.label}</Text>
                   </View>
                 </View>
-                <Text style={st.tripPlate}>{t.vehicle?.plate_number || "Chưa gán xe"}</Text>
                 <Text style={st.tripKm}>
                   📏 {t.total_km ?? "-"} km · {t.start_km != null ? `${t.start_km} → ${t.end_km ?? "?"}` : "Chưa có Km"}
                 </Text>
