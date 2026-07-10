@@ -18,6 +18,7 @@ export default function MapScreen() {
   const { token } = useAuth();
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [routes, setRoutes] = useState<{ points: { latitude: number; longitude: number }[]; color: string }[]>([]);
 
   const load = async () => {
@@ -39,6 +40,7 @@ export default function MapScreen() {
   };
 
   const fetchRoutes = async (trip: any) => {
+    setLoadingRoutes(true);
     const orders = trip.orders || [];
     const allRoutes: { points: { latitude: number; longitude: number }[]; color: string }[] = [];
     const colors = ["#4F46E5", "#059669", "#F59E0B", "#EF4444", "#8B5CF6"];
@@ -48,40 +50,49 @@ export default function MapScreen() {
       const pickup = o.pickup_location;
       const dp = o.delivery_points?.[0];
 
-      if (pickup?.lat && pickup?.lng && dp?.location?.lat && dp?.location?.lng) {
-        try {
-          const body: any = {
-            origin_lat: pickup.lat,
-            origin_lng: pickup.lng,
-            destination_lat: dp.location.lat,
-            destination_lng: dp.location.lng,
-          };
-          // Add intermediate delivery points as waypoints
-          if (o.delivery_points?.length > 1) {
-            body.waypoints = o.delivery_points.slice(0, -1).map((d: any) => ({
-              lat: d.location?.lat,
-              lng: d.location?.lng,
-            })).filter((w: any) => w.lat && w.lng);
-          }
+      if (!pickup?.lat || !pickup?.lng) {
+        console.warn(`[map] pickup location missing lat/lng for order ${o.order_code}`);
+        continue;
+      }
+      if (!dp?.location?.lat || !dp?.location?.lng) {
+        console.warn(`[map] delivery location missing lat/lng for order ${o.order_code}`, dp);
+        continue;
+      }
 
-          const res = await fetch(`${API_BASE}/route`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify(body),
-          });
-          const json = await res.json();
-          if (json.success && json.data?.geometry?.coordinates) {
-            // GeoJSON → [{latitude, longitude}]
-            const coords = json.data.geometry.coordinates.map((c: [number, number]) => ({
-              latitude: c[1],
-              longitude: c[0],
-            }));
-            allRoutes.push({ points: coords, color: colors[i % colors.length] });
-          }
-        } catch {}
+      try {
+        const body: any = {
+          origin_lat: pickup.lat,
+          origin_lng: pickup.lng,
+          destination_lat: dp.location.lat,
+          destination_lng: dp.location.lng,
+        };
+        if (o.delivery_points?.length > 1) {
+          body.waypoints = o.delivery_points.slice(0, -1).map((d: any) => ({
+            lat: d.location?.lat,
+            lng: d.location?.lng,
+          })).filter((w: any) => w.lat && w.lng);
+        }
+
+        const res = await fetch(`${API_BASE}/route`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        console.log(`[map] route for ${o.order_code}:`, json.success, json.data?.distance);
+        if (json.success && json.data?.geometry?.coordinates) {
+          const coords = json.data.geometry.coordinates.map((c: [number, number]) => ({
+            latitude: c[1],
+            longitude: c[0],
+          }));
+          allRoutes.push({ points: coords, color: colors[i % colors.length] });
+        }
+      } catch (err) {
+        console.warn(`[map] route fetch error for ${o.order_code}:`, err);
       }
     }
     setRoutes(allRoutes);
+    setLoadingRoutes(false);
   };
 
   useFocusEffect(useCallback(() => { load(); }, [token]));
@@ -166,7 +177,7 @@ export default function MapScreen() {
       <View style={s.infoBar}>
         <View style={{ flex: 1 }}>
           <Text style={s.infoPlate}>{trip.vehicle?.plate_number || "Chưa gán xe"}</Text>
-          <Text style={s.infoText}>{orders.length} đơn hàng</Text>
+          <Text style={s.infoText}>{orders.length} đơn hàng{loadingRoutes ? " · Đang tải lộ trình..." : routes.length > 0 ? ` · ${routes.length} tuyến đường` : ""}</Text>
         </View>
         <TouchableOpacity style={s.refreshBtn} onPress={load}>
           <Ionicons name="refresh" size={20} color="#4F46E5" />
