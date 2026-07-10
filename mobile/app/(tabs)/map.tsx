@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Platform } from "react-native";
 import MapView, { Marker, Polyline, Callout } from "react-native-maps";
+import * as Location from "expo-location";
 import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
 import { useFocusEffect } from "expo-router";
@@ -25,6 +26,8 @@ export default function MapScreen() {
 
   const load = async () => {
     if (!token) return;
+    // Request location permission for user location dot
+    await Location.requestForegroundPermissionsAsync().catch(() => {});
     try {
       const [tripRes] = await Promise.all([
         api.trips.active(token).catch(() => ({ data: [] })),
