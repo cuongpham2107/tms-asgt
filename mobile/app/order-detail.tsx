@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -142,6 +142,14 @@ export default function OrderDetailScreen() {
     label: d.status,
   };
   const tripId = d.trip_id;
+  const vehicleKm = d.vehicle?.current_mileage ?? d.vehicle?.km_reading ?? null;
+
+  // Auto-fill KM from vehicle's current mileage
+  useEffect(() => {
+    if (vehicleKm != null && !km) {
+      setKm(String(Math.round(vehicleKm)));
+    }
+  }, [vehicleKm]);
   // Find next pending delivery point (for multi-DP orders)
   const deliveryPoints: any[] = d.delivery_points || [];
   const nextPendingDp = deliveryPoints.find((dp: any) => dp.status !== "delivered" && dp.status !== "completed");
@@ -519,6 +527,11 @@ export default function OrderDetailScreen() {
                 value={km}
                 onChangeText={setKm}
               />
+              {vehicleKm != null && (
+                <Text style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
+                  Km hiện tại của xe: {Math.round(vehicleKm).toLocaleString("vi-VN")} km
+                </Text>
+              )}
             </View>
             <View style={s.inputRow}>
               <Ionicons
