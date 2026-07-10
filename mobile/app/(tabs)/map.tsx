@@ -214,11 +214,19 @@ export default function MapScreen() {
 
       {/* Custom zoom controls */}
       <View style={s.zoomControls}>
-        <TouchableOpacity style={s.zoomBtn} onPress={() => setRegion((r: any) => ({ ...r, latitudeDelta: r.latitudeDelta / 2, longitudeDelta: r.longitudeDelta / 2 }))}>
+        <TouchableOpacity style={s.zoomBtn} onPress={() => {
+          const newLat = Math.max(0.0001, region.latitudeDelta / 3);
+          const newLng = Math.max(0.0001, region.longitudeDelta / 3);
+          setRegion((r: any) => ({ ...r, latitudeDelta: newLat, longitudeDelta: newLng }));
+        }}>
           <Ionicons name="add" size={22} color="#374151" />
         </TouchableOpacity>
         <View style={s.zoomSep} />
-        <TouchableOpacity style={s.zoomBtn} onPress={() => setRegion((r: any) => ({ ...r, latitudeDelta: r.latitudeDelta * 2, longitudeDelta: r.longitudeDelta * 2 }))}>
+        <TouchableOpacity style={s.zoomBtn} onPress={() => {
+          const newLat = Math.min(100, region.latitudeDelta * 3);
+          const newLng = Math.min(100, region.longitudeDelta * 3);
+          setRegion((r: any) => ({ ...r, latitudeDelta: newLat, longitudeDelta: newLng }));
+        }}>
           <Ionicons name="remove" size={22} color="#374151" />
         </TouchableOpacity>
       </View>
