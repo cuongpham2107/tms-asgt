@@ -175,7 +175,6 @@ export default function TripDetailScreen() {
           <View style={s.heroRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.tripCode}>{detail?.vehicle?.plate_number || trip?.vehicle?.plate_number || "Chưa gán xe"}</Text>
-              {(detail?.route || trip?.route) ? <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>📍 {detail?.route || trip?.route}</Text> : null}
             </View>
             <View style={[s.statusPill, { backgroundColor: st.bg }]}>
               <Ionicons name={st.icon as any} size={14} color={st.text} />
@@ -269,6 +268,9 @@ export default function TripDetailScreen() {
           <>
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>📦 Đơn hàng ({orders.length})</Text>
+              {currentStatus === "pending" && orders.length > 0 && (
+                <Text style={{ fontSize: 11, color: "#F59E0B", fontWeight: "600" }}>🔒 Bắt đầu chuyến để xem</Text>
+              )}
             </View>
             {orders.length === 0 ? (
               <View style={s.empty}><Ionicons name="cube-outline" size={40} color="#E5E7EB" /><Text style={s.emptyText}>Chưa có đơn hàng</Text></View>
@@ -279,6 +281,10 @@ export default function TripDetailScreen() {
               return (
                 <TouchableOpacity key={o.id} style={[s.orderCard, { borderColor: osColor + "20" }]} activeOpacity={0.7}
                   onPress={() => {
+                    if (currentStatus === "pending") {
+                      showAlert("Chưa bắt đầu chuyến", "Vui lòng bắt đầu chuyến trước khi xem chi tiết đơn hàng");
+                      return;
+                    }
                     router.push({ pathname: "/order-detail", params: { id: o.id, order: JSON.stringify({ ...o, trip_id: trip?.id || params.id, vehicle: detail?.vehicle || trip?.vehicle }) } });
                   }}>
                   <View style={s.orderSeq}><Text style={s.seqText}>{i + 1}</Text></View>
