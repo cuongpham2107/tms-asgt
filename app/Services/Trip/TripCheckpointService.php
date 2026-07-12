@@ -6,6 +6,7 @@ use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\Handlers\ArrivedDeliveryHandler;
 use App\Services\Trip\Handlers\ArrivedPickupHandler;
 use App\Services\Trip\Handlers\CompletedHandler;
@@ -80,6 +81,13 @@ class TripCheckpointService
             }
 
             $this->dispatchHandler($checkpointType, $trip, $payload, $checkpoints);
+
+            // Recalculate shift km so dashboard shows up-to-date totals
+            // including in-progress trips using latest checkpoint km
+            $trip->refresh();
+            if ($trip->shift_id) {
+                app(ShiftKmCalculatorService::class)->calculate($trip->shift);
+            }
 
             $checkpoints->each->load('photos');
             $startedCheckpoints->each->load('photos');
@@ -168,7 +176,7 @@ class TripCheckpointService
      * Tự động bắt đầu chuyến khi tài xế gửi checkpoint đầu tiên (vd: arrived_pickup).
      * Dùng km hiện tại của xe làm start_km, tạo Started checkpoint, cập nhật trip.
      *
-     * @return \Illuminate\Support\Collection<int, TripCheckpoint>
+     * @return Collection<int, TripCheckpoint>
      */
     private function autoStartTrip(Trip $trip, array $payload): Collection
     {

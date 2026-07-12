@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Trips\Tables;
 
+use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Trips\Actions\DriverSwapAction;
@@ -46,6 +47,7 @@ class TripsTable extends BaseTable
             ->columns([
                 TextColumn::make('vehicle.plate_number')
                     ->label('BSX')
+                    ->html()
                     ->state(fn (Trip $record): string => self::renderBsx($record)),
 
                 TextColumn::make('status')
@@ -195,10 +197,28 @@ class TripsTable extends BaseTable
 
         $plate = $vehicle->plate_number;
         $tonnage = $vehicle->load_capacity
-            ? number_format((float) $vehicle->load_capacity, 1, ',', '.').'T'
+            ? ' '.number_format((float) $vehicle->load_capacity, 1, ',', '.').'T'
             : '';
 
-        return trim("{$plate} {$tonnage}");
+        $typeBadges = $record->orders->pluck('type')->filter()->unique()->values();
+        $badgeColors = [
+            OrderType::Hhhk->value => ['bg' => '#eef2ff', 'text' => '#4f46e5', 'darkBg' => '#312e81', 'darkText' => '#a5b4fc'],
+            OrderType::External->value => ['bg' => '#ecfdf5', 'text' => '#059669', 'darkBg' => '#064e3b', 'darkText' => '#6ee7b7'],
+        ];
+        $badges = $typeBadges->map(function ($type) use ($badgeColors) {
+            $c = $badgeColors[$type->value] ?? ['bg' => '#f3f4f6', 'text' => '#6b7280', 'darkBg' => '#374151', 'darkText' => '#d1d5db'];
+
+            return '<span class="fi-badge inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium" style="background-color: '.$c['bg'].'; color: '.$c['text'].';">'.$type->getLabel().'</span>';
+        })->implode(' ');
+
+        $html = '<div class="flex flex-col">';
+        $html .= '<span class="font-semibold text-sm">'.e($plate).e($tonnage).'</span>';
+        if ($badges !== '') {
+            $html .= '<span class="mt-1">'.$badges.'</span>';
+        }
+        $html .= '</div>';
+
+        return $html;
     }
 
     public static function getPickupLocations(Trip $record): string

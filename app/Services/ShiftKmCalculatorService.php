@@ -12,7 +12,7 @@ class ShiftKmCalculatorService
     {
         $shift->refresh();
 
-        if ($shift->start_km === null || $shift->end_km === null) {
+        if ($shift->start_km === null) {
             $shift->total_km = null;
             $shift->total_km_loaded = null;
             $shift->total_km_empty = null;
@@ -34,6 +34,7 @@ class ShiftKmCalculatorService
             // Chuyến đang chạy chưa có total_km → dùng km checkpoint mới nhất
             if ($tripTotalKm <= 0 && $trip->start_km > 0) {
                 $latestKm = $trip->checkpoints()
+                    ->reorder()
                     ->whereNotNull('km_reading')
                     ->orderByDesc('occurred_at')
                     ->value('km_reading');
@@ -47,15 +48,14 @@ class ShiftKmCalculatorService
             $totalLoaded += $tripLoadedKm;
         }
 
-        // Thêm phần km lang thang sau trip cuối (nếu có)
+        // Thêm phần km lang thang sau trip cuối (nếu có) — chỉ khi ca đã kết thúc
         $lastTrip = $allTrips->sortByDesc('completed_at')->first();
-        $shiftEndKm = (float) $shift->end_km;
+        $shiftEndKm = (float) ($shift->end_km ?? 0);
         if ($lastTrip && $shiftEndKm > 0) {
             $lastTripEnd = (float) ($lastTrip->end_km ?? 0);
             if ($shiftEndKm > $lastTripEnd) {
                 $wanderingKm = $shiftEndKm - $lastTripEnd;
                 $totalKm += $wanderingKm;
-                // Wandering km is empty (no orders)
             }
         }
 
