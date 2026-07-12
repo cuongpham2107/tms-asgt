@@ -59,7 +59,9 @@ export default function DashboardScreen() {
   // Hiển thị km ca: từ DB nếu đã tính, nếu không tổng hợp từ trips
   const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
   const tripsInShift: any[] = shift?.trips || [];
-  const calcTotal = tripsInShift.reduce((s: number, t: any) => s + Math.max(0, (parseFloat(t.end_km) || 0) - (parseFloat(t.start_km) || 0)), 0);
+  const calcTotal = tripsInShift.reduce((s: number, t: any) => s + (
+    parseFloat(t.total_km) || Math.max(0, (parseFloat(t.end_km) || 0) - (parseFloat(t.start_km) || 0))
+  ), 0);
   const calcLoaded = tripsInShift.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
   const shiftTotalKm = shift?.total_km != null ? parseFloat(shift.total_km) : (calcTotal > 0 ? calcTotal : null);
   const shiftLoaded = shift?.total_km_loaded != null ? parseFloat(shift.total_km_loaded) : (calcLoaded > 0 ? calcLoaded : null);

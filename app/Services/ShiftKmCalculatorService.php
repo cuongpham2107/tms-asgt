@@ -21,19 +21,34 @@ class ShiftKmCalculatorService
             return;
         }
 
-        // Tổng hợp từ trip totals — chính xác nhất vì mỗi trip có start_km/end_km riêng
-        $trips = $shift->trips()->whereNotNull('start_km')->whereNotNull('end_km')->get();
+        // Tổng hợp từ trip totals — gồm cả chuyến đang chạy (chưa có end_km)
+        $allTrips = $shift->trips()->whereNotNull('start_km')->get();
 
         $totalKm = 0;
         $totalLoaded = 0;
 
-        foreach ($trips as $trip) {
-            $totalKm += max(0, (float) ($trip->total_km ?? 0));
-            $totalLoaded += (float) ($trip->total_km_loaded ?? 0);
+        foreach ($allTrips as $trip) {
+            $tripTotalKm = (float) ($trip->total_km ?? 0);
+            $tripLoadedKm = (float) ($trip->total_km_loaded ?? 0);
+
+            // Chuyến đang chạy chưa có total_km → dùng km checkpoint mới nhất
+            if ($tripTotalKm <= 0 && $trip->start_km > 0) {
+                $latestKm = $trip->checkpoints()
+                    ->whereNotNull('km_reading')
+                    ->orderByDesc('occurred_at')
+                    ->value('km_reading');
+
+                if ($latestKm !== null) {
+                    $tripTotalKm = max(0, (float) $latestKm - (float) $trip->start_km);
+                }
+            }
+
+            $totalKm += max(0, $tripTotalKm);
+            $totalLoaded += $tripLoadedKm;
         }
 
         // Thêm phần km lang thang sau trip cuối (nếu có)
-        $lastTrip = $trips->sortByDesc('completed_at')->first();
+        $lastTrip = $allTrips->sortByDesc('completed_at')->first();
         $shiftEndKm = (float) $shift->end_km;
         if ($lastTrip && $shiftEndKm > 0) {
             $lastTripEnd = (float) ($lastTrip->end_km ?? 0);

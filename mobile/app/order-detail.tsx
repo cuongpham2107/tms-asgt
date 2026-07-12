@@ -72,6 +72,11 @@ const cpInfo: Record<string, { icon: string; color: string; label: string }> = {
   end: { icon: "close-circle", color: "#EF4444", label: "Kết thúc đơn hàng" },
 };
 
+const localISO = (d: Date = new Date()) => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
 export default function OrderDetailScreen() {
   const { token } = useAuth();
   const params = useLocalSearchParams<{ id: string; order: string }>();
@@ -147,12 +152,12 @@ export default function OrderDetailScreen() {
   const tripId = d.trip_id;
   const vehicleKm = d.vehicle?.current_mileage ?? d.vehicle?.km_reading ?? null;
 
-  // Auto-fill KM from vehicle's current mileage
+  // Auto-fill KM from vehicle's current mileage (re-fill sau mỗi lần loadDetail)
   useEffect(() => {
     if (vehicleKm != null && !km) {
       setKm(String(Math.round(vehicleKm)));
     }
-  }, [vehicleKm]);
+  }, [detail]);
   // Find next pending delivery point (for multi-DP orders)
   const deliveryPoints: any[] = d.delivery_points || [];
   const nextPendingDp = deliveryPoints.find(
@@ -222,10 +227,10 @@ export default function OrderDetailScreen() {
   const canLeftPickup =
     d.status === "sent" && hasArrivedPickup && !hasLeftPickup;
   const canArriveDelivery =
-    d.status === "in_transit" && !!activeDpId && !hasArrivedDelivery;
+    d.status === "in_transit" && (!!activeDpId || !!selectedLoc) && !hasArrivedDelivery;
   const canComplete =
     d.status === "in_transit" &&
-    !!activeDpId &&
+    (!!activeDpId || !!selectedLoc) &&
     hasArrivedDelivery &&
     !hasCompleted;
   const canEnd = d.status === "completed" && !hasEndCheckpoint;
@@ -266,7 +271,7 @@ export default function OrderDetailScreen() {
     }
     const body: any = {
       checkpoint_type: type,
-      occurred_at: new Date().toISOString(),
+      occurred_at: localISO(),
     };
     // Capture GPS coordinates
     const gps = await getGpsCoordinates();
@@ -401,7 +406,7 @@ export default function OrderDetailScreen() {
       </View>
 
       {/* Location picker — khi đơn chưa có điểm đến */}
-      {!hasDeliveryPoint && (canArriveDelivery || canComplete) && (
+      {!hasDeliveryPoint && (d.status === "sent" || d.status === "in_transit") && (
         <>
           <Text style={s.sectionTitle}>📍 Chọn điểm đến</Text>
           <View style={s.formCard}>

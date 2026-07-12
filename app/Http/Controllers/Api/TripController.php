@@ -270,6 +270,7 @@ class TripController extends Controller
         $user = $request->user();
 
         $counts = Trip::where('driver_id', $user->id)
+            ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
             ->selectRaw('
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as assigned,
                 SUM(CASE WHEN status IN (?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as in_progress,
