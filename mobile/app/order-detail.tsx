@@ -405,8 +405,8 @@ export default function OrderDetailScreen() {
         ))}
       </View>
 
-      {/* Location picker — khi đơn chưa có điểm đến */}
-      {!hasDeliveryPoint && (d.status === "sent" || d.status === "in_transit") && (
+      {/* Location picker — chỉ hiện khi đã đến lấy hàng, sắp tới bước giao */}
+      {!hasDeliveryPoint && hasArrivedPickup && (
         <>
           <Text style={s.sectionTitle}>📍 Chọn điểm đến</Text>
           <View style={s.formCard}>
