@@ -13,6 +13,7 @@ const statusColors: Record<string, { bg: string; text: string; label: string }> 
   arrived_pickup: { bg: "#FEF3C7", text: "#D97706", label: "Đến lấy hàng" },
   delivering: { bg: "#DBEAFE", text: "#2563EB", label: "Đang giao" },
   arrived_delivery: { bg: "#FEF3C7", text: "#D97706", label: "Đến giao" },
+  delivered: { bg: "#D1FAE5", text: "#059669", label: "Đã giao" },
   completed: { bg: "#D1FAE5", text: "#059669", label: "Hoàn thành" },
   driver_swap: { bg: "#E0E7FF", text: "#4F46E5", label: "Đảo lái" },
   return_trip: { bg: "#FEE2E2", text: "#DC2626", label: "Quay đầu" },

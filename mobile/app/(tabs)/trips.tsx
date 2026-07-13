@@ -11,6 +11,7 @@ const statusConfig: Record<string, { icon: string; bg: string; text: string; lab
   arrived_pickup: { icon: "cube-outline", bg: "#FEF3C7", text: "#D97706", label: "Đến lấy" },
   delivering: { icon: "car-outline", bg: "#DBEAFE", text: "#2563EB", label: "Đang giao" },
   arrived_delivery: { icon: "location-outline", bg: "#FEF3C7", text: "#D97706", label: "Đến giao" },
+  delivered: { icon: "checkmark-done", bg: "#D1FAE5", text: "#059669", label: "Đã giao" },
   completed: { icon: "checkmark-circle", bg: "#D1FAE5", text: "#059669", label: "Hoàn thành" },
   driver_swap: { icon: "swap-horizontal", bg: "#E0E7FF", text: "#4F46E5", label: "Đảo lái" },
   return_trip: { icon: "arrow-undo", bg: "#FEE2E2", text: "#DC2626", label: "Quay đầu" },
@@ -20,6 +21,7 @@ const tabs = [
   { key: "all", label: "Tất cả" },
   { key: "started", label: "Đang chạy", color: "#D97706" },
   { key: "pending", label: "Chờ", color: "#6B7280" },
+  { key: "delivered", label: "Đã giao", color: "#059669" },
   { key: "completed", label: "Hoàn thành", color: "#059669" },
   { key: "driver_swap", label: "Đảo lái", color: "#4F46E5" },
 ];
