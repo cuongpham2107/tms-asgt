@@ -327,17 +327,31 @@ export default function OrderDetailScreen() {
       <View
         style={[s.heroCard, { borderLeftColor: st.text, borderLeftWidth: 4 }]}
       >
-        {/* Route bar: pickup → dp1 → dp2 ... */}
+        {/* Route bar: pickup ↓ dp1 ↓ dp2 ... */}
         <View style={s.routeBar}>
-          <Text style={s.routePoint} numberOfLines={1}>
-            {d.pickup_location?.code || d.pickup_address?.split(",")[0] || "..."}
-          </Text>
+          <View style={s.routeRow}>
+            <View style={s.routeDot} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.routeCode}>{d.pickup_location?.code || d.pickup_address?.split(",")[0] || "..."}</Text>
+              {(d.pickup_location?.address || d.pickup_address) && (
+                <Text style={s.routeAddr} numberOfLines={1}>{d.pickup_location?.address || d.pickup_address}</Text>
+              )}
+            </View>
+          </View>
           {deliveryPoints.map((dp: any, i: number) => (
-            <View key={i} style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons name="arrow-forward" size={12} color="#D1D5DB" />
-              <Text style={s.routePoint} numberOfLines={1}>
-                {dp.code || dp.location?.code || dp.address?.split(",")[0] || `Điểm ${dp.sequence || i + 1}`}
-              </Text>
+            <View key={i}>
+              <View style={s.routeArrow}>
+                <Ionicons name="arrow-down" size={14} color="#D1D5DB" />
+              </View>
+              <View style={s.routeRow}>
+                <View style={[s.routeDot, { backgroundColor: i === deliveryPoints.length - 1 ? "#EF4444" : "#3B82F6" }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.routeCode}>{dp.code || dp.location?.code || `Điểm ${dp.sequence || i + 1}`}</Text>
+                  {(dp.address || dp.location?.address) && (
+                    <Text style={s.routeAddr} numberOfLines={1}>{dp.address || dp.location?.address}</Text>
+                  )}
+                </View>
+              </View>
             </View>
           ))}
         </View>
@@ -856,8 +870,12 @@ const s = StyleSheet.create({
     borderColor: "#F3F4F6",
   },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  routeBar: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 4, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
-  routePoint: { fontSize: 13, fontWeight: "700", color: "#374151", backgroundColor: "#F3F4F6", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  routeBar: { marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+  routeRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  routeDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#10B981", marginTop: 4 },
+  routeArrow: { paddingLeft: 4, paddingVertical: 2 },
+  routeCode: { fontSize: 14, fontWeight: "700", color: "#111827" },
+  routeAddr: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   orderCode: { fontSize: 20, fontWeight: "800", color: "#111827" },
   typeBadge: {
     fontSize: 11,

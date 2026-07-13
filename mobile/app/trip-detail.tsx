@@ -274,8 +274,21 @@ export default function TripDetailScreen() {
                   onPress={() => {
                     router.push({ pathname: "/order-detail", params: { id: o.id, order: JSON.stringify({ ...o, trip_id: trip?.id || params.id, vehicle: detail?.vehicle || trip?.vehicle }) } });
                   }}>
-                  <View style={s.orderSeq}><Text style={s.seqText}>{i + 1}</Text></View>
                   <View style={{ flex: 1 }}>
+                    {(() => {
+                      const codes: string[] = [];
+                      if (o.pickup_location?.code) codes.push(o.pickup_location.code);
+                      (o.delivery_points || []).forEach((dp: any) => {
+                        if (dp.location?.code) codes.push(dp.location.code);
+                      });
+                      if (codes.length > 0) return (
+                        <View style={s.routeWrap}>
+                          <Ionicons name="navigate" size={12} color="#4F46E5" />
+                          <Text style={s.orderRoute}>{codes.join("  →  ")}</Text>
+                        </View>
+                      );
+                      return null;
+                    })()}
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                       <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                         <Text style={s.orderCode}>{o.order_code}</Text>
@@ -384,6 +397,8 @@ const s = StyleSheet.create({
   seqText: { color: "#fff", fontSize: 12, fontWeight: "700" }, orderCode: { fontSize: 14, fontWeight: "700", color: "#111827" },
   orderBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 }, orderBadgeText: { fontSize: 10, fontWeight: "700" },
   orderCargo: { fontSize: 13, color: "#6B7280", marginTop: 2 }, orderCustomer: { fontSize: 12, color: "#9CA3AF", marginTop: 1 },
+  routeWrap: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+  orderRoute: { fontSize: 13, fontWeight: "700", color: "#4F46E5", flex: 1 },
   orderKm: { fontSize: 11, color: "#9CA3AF", marginTop: 2 },
   empty: { alignItems: "center", paddingVertical: 32 }, emptyText: { color: "#9CA3AF", marginTop: 6, fontSize: 13 },
   // Sticky bottom bar

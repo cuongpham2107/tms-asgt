@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
@@ -24,12 +25,12 @@ class AssignTransportAction extends CreatesOrderTransportCards
     public static function make(): Action
     {
         return Action::make('assign_transport')
-            ->label('Gán xe')
+            ->label('Tạo chuyến')
             ->icon('heroicon-o-truck')
             ->color('primary')
             ->hidden(fn (Order $record): bool => ! $record->status->canAssign())
             ->modal()
-            ->modalHeading('Gán phương tiện')
+            ->modalHeading('Tạo chuyến')
             ->modalDescription('Chọn phương tiện cho đơn hàng này. Lái xe sẽ tự động gán theo xe.')
             ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
@@ -61,55 +62,68 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             ->cards(fn (): array => self::resolveDriverCards())
                             ->searchPlaceholder('Tìm tên, email...'),
                     ]),
+                Toggle::make('send_immediately')
+                    ->label('Gửi chuyến ngay cho tài xế')
+                    ->helperText('Bật để chuyển trạng thái đơn hàng thành Đã gửi')
+                    ->default(false),
 
             ])
+            ->modalSubmitActionLabel('Tạo chuyến')
             ->action(function (Order $record, array $data): void {
-                try {
-                    DB::transaction(function () use ($record, $data) {
-                        $trip = Trip::create([
-                            'trip_code' => Trip::generateTripCode(),
-                            'vehicle_id' => $data['vehicle_id'],
-                            'driver_id' => $data['driver_id'] ?? null,
-                            'status' => TripStatus::Pending,
-                            'start_location_id' => $record->pickup_location_id,
-                            'end_location_id' => $record->deliveryPoints()
-                                ->orderBy('sequence', 'desc')
-                                ->first()?->location_id,
-                        ]);
+                $status = ! empty($data['send_immediately']) ? OrderStatus::Sent : OrderStatus::Assigned;
+                self::createTripForOrder($record, $data, $status);
+            });
+    }
 
-                        $updated = $record->update([
-                            'trip_id' => $trip->id,
-                            'status' => OrderStatus::Assigned,
-                        ]);
+    private static function createTripForOrder(Order $record, array $data, OrderStatus $orderStatus): void
+    {
+        try {
+            DB::transaction(function () use ($record, $data, $orderStatus) {
+                $trip = Trip::create([
+                    'trip_code' => Trip::generateTripCode(),
+                    'vehicle_id' => $data['vehicle_id'],
+                    'driver_id' => $data['driver_id'] ?? null,
+                    'status' => TripStatus::Pending,
+                    'start_location_id' => $record->pickup_location_id,
+                    'end_location_id' => $record->deliveryPoints()
+                        ->orderBy('sequence', 'desc')
+                        ->first()?->location_id,
+                ]);
 
-                        if (! $updated) {
-                            throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
-                        }
+                $updated = $record->update([
+                    'trip_id' => $trip->id,
+                    'status' => $orderStatus,
+                ]);
 
-                        static::createCheckpointsForExternalVehicle($trip, collect([$record]));
+                if (! $updated) {
+                    throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
+                }
 
-                        if (filled($data['vehicle_id'] ?? null)) {
-                            $vehicle = Vehicle::query()->find($data['vehicle_id']);
+                static::createCheckpointsForExternalVehicle($trip, collect([$record]));
 
-                            if ($vehicle !== null) {
-                                $vehicle->status = VehicleStatus::Running;
-                                $vehicle->save();
-                            }
-                        }
-                    });
+                if (filled($data['vehicle_id'] ?? null)) {
+                    $vehicle = Vehicle::query()->find($data['vehicle_id']);
 
-                    Notification::make()
-                        ->title('Gán phương tiện thành công')
-                        ->body('Đã tạo chuyến và gán đơn hàng.')
-                        ->success()
-                        ->send();
-                } catch (Throwable $e) {
-                    Notification::make()
-                        ->title('Lỗi')
-                        ->body('Không thể gán phương tiện: '.$e->getMessage())
-                        ->danger()
-                        ->send();
+                    if ($vehicle !== null) {
+                        $vehicle->status = VehicleStatus::Running;
+                        $vehicle->save();
+                    }
                 }
             });
+
+            $label = $orderStatus === OrderStatus::Sent ? 'Tạo và gửi chuyến' : 'Tạo chuyến';
+
+            Notification::make()
+                ->title("{$label} thành công")
+                ->body('Đã tạo chuyến và gán đơn hàng.')
+                ->success()
+                ->send();
+        } catch (Throwable $e) {
+            Notification::make()
+                ->title('Lỗi')
+                ->body('Không thể tạo chuyến: '.$e->getMessage())
+                ->danger()
+                ->send();
+        }
     }
 }

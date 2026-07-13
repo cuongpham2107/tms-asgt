@@ -12,7 +12,6 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 
@@ -131,9 +130,40 @@ class TripForm
                 Section::make('Các mốc hành trình')
                     ->columnSpanFull()
                     ->schema([
-                        View::make('checkpoints_grouped')
-                            ->view('filament.resources.trips.components.grouped-checkpoints')
-                            ->columnSpanFull(),
+                        Repeater::make('checkpoints')
+                            ->relationship('checkpoints')
+                            ->addable(false)
+                            ->deletable(false)
+                            ->label('')
+                            ->compact()
+                            ->table([
+                                TableColumn::make('Loại')
+                                    ->width('140px'),
+                                TableColumn::make('Km')
+                                    ->width('100px'),
+                                TableColumn::make('Giờ')
+                                    ->width('180px'),
+                                TableColumn::make('Đơn hàng'),
+                            ])
+                            ->schema([
+                                Placeholder::make('checkpoint_type')
+                                    ->alignCenter()
+                                    ->content(fn ($record) => view('filament.resources.trips.components.checkpoint-badge', [
+                                        'label' => $record->checkpoint_type->getLabel(),
+                                        'color' => $record->checkpoint_type->getColor(),
+                                    ])),
+                                TextInput::make('km_reading')
+                                    ->numeric()
+                                    ->step(0.1),
+                                DateTimePicker::make('occurred_at')
+                                    ->label('Giờ')
+
+                                    ->native(false)
+                                    ->displayFormat('H:i d/m/Y'),
+                                Placeholder::make('order_code')
+                                    ->alignCenter()
+                                    ->content(fn ($record) => $record->order?->order_code ?? '—'),
+                            ]),
                     ]),
             ]);
     }
