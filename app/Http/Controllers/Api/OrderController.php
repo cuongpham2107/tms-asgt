@@ -70,7 +70,7 @@ class OrderController extends Controller
         $order->load([
             'customer',
             'pickupLocation',
-            'deliveryPoints',
+            'deliveryPoints.location',
             'trip.vehicle',
             'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
         ]);
