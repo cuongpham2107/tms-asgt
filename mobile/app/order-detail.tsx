@@ -163,8 +163,8 @@ export default function OrderDetailScreen() {
   const nextPendingDp = deliveryPoints.find(
     (dp: any) => dp.status !== "delivered" && dp.status !== "completed",
   );
-  // Use selected DP, or fallback to next pending, or first DP
-  const activeDpId = selectedDpId || nextPendingDp?.id || deliveryPoints[0]?.id;
+  // Use selected DP, or fallback to next pending, or last DP (final destination)
+  const activeDpId = selectedDpId || nextPendingDp?.id || deliveryPoints[deliveryPoints.length - 1]?.id;
   // Auto-select only DP for single-DP orders; reset on complete
   useEffect(() => {
     if (deliveryPoints.length === 1 && !selectedDpId) {
