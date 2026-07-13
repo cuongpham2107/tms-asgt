@@ -54,7 +54,7 @@ export default function TripDetailScreen() {
   const currentStatus = detail?.status || trip?.status || "pending";
   const isReturnTrip = currentStatus === "return_trip";
   const canStart = currentStatus === "pending" && !isReturnTrip;
-  const canComplete = !["pending", "delivered", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed");
+  const canComplete = !["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed");
   const orders: any[] = detail?.orders || trip?.orders || [];
 
   // Auto lấy km hiện tại của xe
