@@ -5,10 +5,11 @@
     /** @var Trip $record */
     $allCheckpoints = $record->checkpoints()->with(['order', 'deliveryPoint.location'])->orderBy('occurred_at')->get();
 
-    // Group by (checkpoint_type, km_reading) — same type+km = same row
+    // Group by (checkpoint_type, km_reading, delivery_point_id) — same type+km+dp = same row
     $grouped = $allCheckpoints->groupBy(function ($cp) {
         $km = $cp->km_reading ? number_format((float) $cp->km_reading, 1, '.', '') : null;
-        return $cp->checkpoint_type->value . '|' . ($km ?? '_null');
+        $dpId = $cp->delivery_point_id ?? 0;
+        return $cp->checkpoint_type->value . '|' . ($km ?? '_null') . '|' . $dpId;
     });
 
     $typeLabels = collect(CheckpointType::cases())->mapWithKeys(fn ($t) => [$t->value => $t->getLabel()]);
