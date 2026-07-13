@@ -30,68 +30,29 @@ class CheckpointFactory
 
     /**
      * Nhánh A: tạo 1 checkpoint cho mỗi order trong trip.
-     * Nếu đã có checkpoint template (km_reading = null) cùng type+order → update.
      *
      * @return Collection<int, TripCheckpoint>
      */
     private function createForAllOrders(Trip $trip, array $payload, CheckpointType $type): Collection
     {
-        $hasKm = ! empty($payload['km_reading'] ?? null);
-
         return $trip->orders
-            ->map(function ($order) use ($trip, $payload, $type, $hasKm) {
-                $data = $this->buildData($trip, $payload, $type, $order->id, $payload['delivery_point_id'] ?? null);
-
-                if ($hasKm) {
-                    $existing = TripCheckpoint::where('trip_id', $trip->id)
-                        ->where('order_id', $order->id)
-                        ->where('checkpoint_type', $type->value)
-                        ->whereNull('km_reading')
-                        ->first();
-
-                    if ($existing) {
-                        $existing->update($data);
-
-                        return $existing;
-                    }
-                }
-
-                return TripCheckpoint::create($data);
-            });
+            ->map(fn ($order) => TripCheckpoint::create(
+                $this->buildData($trip, $payload, $type, $order->id, $payload['delivery_point_id'] ?? null)
+            ));
     }
 
     /**
      * Nhánh B: tạo checkpoint cho nhóm orders cùng location_id (hoặc đơn lẻ nếu không có location).
-     * Nếu có payload km thật + đã có template (km_reading = null) → update.
      *
      * @return Collection<int, TripCheckpoint>
      */
     private function createForDeliveryGroup(Trip $trip, array $payload, CheckpointType $type): Collection
     {
         $deliveryPoints = $this->resolveDeliveryGroup($trip, $payload);
-        $hasKm = ! empty($payload['km_reading'] ?? null);
 
         $created = collect();
 
         foreach ($deliveryPoints as $dp) {
-            $data = $this->buildData($trip, $payload, $type, $dp->order_id, $dp->id);
-
-            if ($hasKm) {
-                $existing = TripCheckpoint::where('trip_id', $trip->id)
-                    ->where('order_id', $dp->order_id)
-                    ->where('checkpoint_type', $type->value)
-                    ->where('delivery_point_id', $dp->id)
-                    ->whereNull('km_reading')
-                    ->first();
-
-                if ($existing) {
-                    $existing->update($data);
-                    $created->push($existing);
-
-                    continue;
-                }
-            }
-
             $alreadyExists = TripCheckpoint::where('trip_id', $trip->id)
                 ->where('order_id', $dp->order_id)
                 ->where('checkpoint_type', $type->value)
@@ -102,7 +63,9 @@ class CheckpointFactory
                 continue;
             }
 
-            $created->push(TripCheckpoint::create($data));
+            $created->push(TripCheckpoint::create(
+                $this->buildData($trip, $payload, $type, $dp->order_id, $dp->id)
+            ));
         }
 
         return $created;
