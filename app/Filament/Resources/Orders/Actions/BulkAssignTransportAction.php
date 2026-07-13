@@ -26,7 +26,7 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
     public static function make(): BulkAction
     {
         return BulkAction::make('bulk_assign_transport')
-            ->label('Tạo chuyến')
+            ->label('Gán nhiều đơn hàng cho xe')
             ->icon('heroicon-o-truck')
             ->color('primary')
             ->modal()
@@ -64,7 +64,7 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                     ->default(false),
 
             ])
-            ->modalSubmitActionLabel('Tạo chuyến')
+            ->modalSubmitActionLabel('Tạo')
             ->action(function (Collection $records, array $data): void {
                 $status = ! empty($data['send_immediately']) ? OrderStatus::Sent : OrderStatus::Assigned;
                 self::createTripForOrders($records, $data, $status);

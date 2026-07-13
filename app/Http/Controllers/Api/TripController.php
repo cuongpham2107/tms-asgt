@@ -117,7 +117,7 @@ class TripController extends Controller
             'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                 'customer',
                 'pickupLocation',
-                'deliveryPoints',
+                'deliveryPoints.location',
                 'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
             ]),
             'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),

@@ -14,6 +14,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Tabs;
@@ -141,6 +142,11 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->live()
                         ->cards(fn (): array => self::resolveDriverCards())
                         ->searchPlaceholder('Tìm tên, email...'),
+                    Toggle::make('send_immediately')
+                        ->label('Gửi chuyến ngay cho tài xế')
+                        ->helperText('Bật để chuyển trạng thái đơn hàng thành Đã gửi')
+                        ->default(false)
+                        ->columnSpanFull(),
                 ]);
         }
 

@@ -761,9 +761,11 @@ abstract class CreatesOrderTransportCards
                         ->first()?->location_id,
                 ]);
 
+                $status = ! empty($data['send_immediately']) ? OrderStatus::Sent->value : OrderStatus::Assigned->value;
+
                 $updated = $order->update([
                     'trip_id' => $trip->id,
-                    'status' => OrderStatus::Assigned->value,
+                    'status' => $status,
                 ]);
 
                 if (! $updated) {

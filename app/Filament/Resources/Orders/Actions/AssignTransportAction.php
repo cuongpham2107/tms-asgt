@@ -25,12 +25,12 @@ class AssignTransportAction extends CreatesOrderTransportCards
     public static function make(): Action
     {
         return Action::make('assign_transport')
-            ->label('Tạo chuyến')
+            ->label('Gán lái, xe')
             ->icon('heroicon-o-truck')
             ->color('primary')
             ->hidden(fn (Order $record): bool => ! $record->status->canAssign())
             ->modal()
-            ->modalHeading('Tạo chuyến')
+            ->modalHeading('Gán lái, xe')
             ->modalDescription('Chọn phương tiện cho đơn hàng này. Lái xe sẽ tự động gán theo xe.')
             ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
@@ -68,7 +68,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     ->default(false),
 
             ])
-            ->modalSubmitActionLabel('Tạo chuyến')
+            ->modalSubmitActionLabel('Tạo')
             ->action(function (Order $record, array $data): void {
                 $status = ! empty($data['send_immediately']) ? OrderStatus::Sent : OrderStatus::Assigned;
                 self::createTripForOrder($record, $data, $status);

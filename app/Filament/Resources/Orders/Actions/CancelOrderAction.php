@@ -16,7 +16,7 @@ class CancelOrderAction
     public static function make(): Action
     {
         return Action::make('cancel_order')
-            ->label('Huỷ chuyến')
+            ->label('Huỷ đơn')
             ->icon('heroicon-o-x-circle')
             ->color('danger')
             ->hidden(fn (Order $record): bool => ! $record->status->canCancel())

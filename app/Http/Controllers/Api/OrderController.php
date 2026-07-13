@@ -28,7 +28,7 @@ class OrderController extends Controller
             ->with([
                 'customer',
                 'pickupLocation',
-                'deliveryPoints',
+                'deliveryPoints.location',
                 'trip.vehicle',
                 'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
             ])
@@ -130,7 +130,7 @@ class OrderController extends Controller
             ->with([
                 'customer',
                 'pickupLocation',
-                'deliveryPoints',
+                'deliveryPoints.location',
                 'trip.vehicle',
                 'trip.driverSwaps',
                 'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
