@@ -157,7 +157,6 @@ class ListOrders extends ListRecords
     public function filterOrderType(string $type): void
     {
         $this->activeOrderTypeFilter = $type;
-        $this->activePlaceFilter = 'all';
 
         $this->resetPage();
     }

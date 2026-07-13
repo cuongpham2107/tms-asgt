@@ -26,8 +26,8 @@ abstract class BaseTable
         return [
             BulkActionGroup::make([
                 DeleteBulkAction::make(),
-                ForceDeleteBulkAction::make(),
-                RestoreBulkAction::make(),
+                // ForceDeleteBulkAction::make(),
+                // RestoreBulkAction::make(),
             ]),
         ];
     }

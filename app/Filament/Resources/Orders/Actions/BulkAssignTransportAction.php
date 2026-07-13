@@ -100,7 +100,7 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                     'driver_id' => $data['driver_id'] ?? null,
                     'status' => TripStatus::Pending,
                     'start_location_id' => $firstOrder?->pickup_location_id,
-                    'end_location_id' => $lastOrder?->deliveryPoints()?->orderBy('sequence', 'desc')->first()?->location_id,
+                    'end_location_id' => $lastOrder?->deliveryPoints()?->orderBy('sequence', 'desc')?->first()?->location_id,
                 ]);
 
                 $sequence = 0;
