@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\CheckpointType;
+use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Services\TripKmCalculatorService;
 use Database\Factories\TripFactory;
@@ -156,6 +158,41 @@ class Trip extends Model
             }
 
             app(TripKmCalculatorService::class)->calculate($this);
+
+            $this->createMissingEndCheckpoints($endKmValue, $this->completed_at);
         });
+    }
+
+    /**
+     * Tự động tạo end checkpoint cho các order đã completed nhưng chưa có end.
+     * Chạy bên trong DB transaction của complete().
+     */
+    private function createMissingEndCheckpoints(float $endKm, string $occurredAt): void
+    {
+        $completedOrderIds = $this->orders()
+            ->where('status', OrderStatus::Completed->value)
+            ->pluck('id');
+
+        if ($completedOrderIds->isEmpty()) {
+            return;
+        }
+
+        $existingEndOrderIds = TripCheckpoint::whereIn('order_id', $completedOrderIds)
+            ->where('checkpoint_type', CheckpointType::End->value)
+            ->pluck('order_id');
+
+        $missingOrderIds = $completedOrderIds->diff($existingEndOrderIds);
+
+        foreach ($missingOrderIds as $orderId) {
+            TripCheckpoint::create([
+                'checkpoint_type' => CheckpointType::End->value,
+                'trip_id' => $this->id,
+                'order_id' => $orderId,
+                'km_reading' => $endKm,
+                'occurred_at' => $occurredAt,
+                'driver_id' => $this->driver_id,
+                'shift_id' => $this->shift_id,
+            ]);
+        }
     }
 }

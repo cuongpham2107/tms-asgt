@@ -341,12 +341,22 @@ export default function TripDetailScreen() {
             <Text style={s.modalTitle}>Kết thúc chuyến</Text>
 
             <Text style={s.modalSectionLabel}>Trạng thái đơn hàng ({orders.length})</Text>
-            {orders.map((o: any, i: number) => (
-              <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" }}>
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#111827" }}>{o.order_code || `#${o.id}`}</Text>
-                <Text style={{ fontSize: 13, color: o.status === "completed" ? "#059669" : "#D97706", fontWeight: "600" }}>{orderStatusLabel[o.status] || o.status}</Text>
-              </View>
-            ))}
+            {orders.map((o: any, i: number) => {
+              const hasEnd = (o.trip_checkpoints || []).some((cp: any) => cp.checkpoint_type === "end");
+              return (
+                <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#111827" }}>{o.order_code || `#${o.id}`}</Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: o.status === "completed" ? "#059669" : "#D97706", fontWeight: "600", marginRight: 6 }}>{orderStatusLabel[o.status] || o.status}</Text>
+                  {o.status === "completed" && (
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: hasEnd ? "#059669" : "#F59E0B" }}>
+                      {hasEnd ? "✓ End" : "✗ End"}
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
 
             <Text style={[s.modalSectionLabel, { marginTop: 16 }]}>Km đồng hồ</Text>
             <TextInput style={s.modalKmInput} placeholder="Km hiện tại" placeholderTextColor="#D1D5DB" keyboardType="numeric" value={completeKm} onChangeText={setCompleteKm} autoFocus />
@@ -354,6 +364,12 @@ export default function TripDetailScreen() {
             {orders.some((o: any) => o.status !== "completed") && (
               <View style={{ backgroundColor: "#FEF3C7", padding: 10, borderRadius: 8, marginTop: 12 }}>
                 <Text style={{ fontSize: 12, color: "#D97706", textAlign: "center" }}>⚠️ Kết thúc chuyến sẽ tạo Đảo lái cho đơn chưa xong</Text>
+              </View>
+            )}
+
+            {orders.some((o: any) => o.status === "completed" && !(o.trip_checkpoints || []).some((cp: any) => cp.checkpoint_type === "end")) && (
+              <View style={{ backgroundColor: "#FEF3C7", padding: 10, borderRadius: 8, marginTop: 12 }}>
+                <Text style={{ fontSize: 12, color: "#D97706", textAlign: "center" }}>⚠️ Một số đơn chưa có chốt "Kết thúc đơn hàng" — sẽ được tự động tạo</Text>
               </View>
             )}
 
