@@ -10,11 +10,12 @@ abstract class TestCase extends BaseTestCase
 {
     public function createApplication(): Application
     {
-        $app = require __DIR__.'/../bootstrap/app.php';
+        $_ENV['DB_DATABASE'] = ':memory:';
+        putenv('DB_DATABASE=:memory:');
+
+        $app = require Application::inferBasePath().'/bootstrap/app.php';
 
         $app->make(Kernel::class)->bootstrap();
-
-        $app['config']->set('database.connections.sqlite.database', ':memory:');
 
         return $app;
     }

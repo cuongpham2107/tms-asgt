@@ -4,6 +4,7 @@ namespace App\Services\Trip\Handlers;
 
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
@@ -81,8 +82,14 @@ class CompletedHandler implements CheckpointHandlerInterface
     /** @param  array<string, mixed>  $payload */
     private function completeTripIfAllOrdersDone(Trip $trip, array $payload, string $occurredAt): void
     {
-        // Trip completion is now manual via POST /api/driver/trips/{trip}/complete
-        // Auto-complete on last order is disabled.
+        $allDone = $trip->orders()
+            ->where('status', '!=', OrderStatus::Completed->value)
+            ->doesntExist();
+
+        if ($allDone) {
+            $trip->status = TripStatus::Delivered;
+            $trip->save();
+        }
     }
 
     private function resetVehicleIfIdle(Trip $trip): void

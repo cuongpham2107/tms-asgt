@@ -9,6 +9,7 @@ use App\Models\TripCheckpoint;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\Handlers\ArrivedDeliveryHandler;
 use App\Services\Trip\Handlers\ArrivedPickupHandler;
+use App\Services\Trip\Handlers\CheckpointEndHandler;
 use App\Services\Trip\Handlers\CompletedHandler;
 use App\Services\Trip\Handlers\LeftPickupHandler;
 use App\Services\Trip\Handlers\StartedHandler;
@@ -30,6 +31,7 @@ class TripCheckpointService
         private readonly LeftPickupHandler $leftPickupHandler,
         private readonly ArrivedDeliveryHandler $arrivedDeliveryHandler,
         private readonly CompletedHandler $completedHandler,
+        private readonly CheckpointEndHandler $checkpointEndHandler,
     ) {}
 
     /**
@@ -168,7 +170,7 @@ class TripCheckpointService
             CheckpointType::ArrivedDelivery => $this->arrivedDeliveryHandler->handle($trip, $payload, $checkpoints),
             CheckpointType::Completed => $this->completedHandler->handle($trip, $payload, $checkpoints),
             CheckpointType::DriverSwap => null,
-            CheckpointType::End => null,
+            CheckpointType::End => $this->checkpointEndHandler->handle($trip, $payload),
         };
     }
 
