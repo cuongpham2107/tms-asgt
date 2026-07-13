@@ -67,7 +67,19 @@ class TripsTable extends BaseTable
 
                 TextColumn::make('order_count')
                     ->label('Số đơn')
-                    ->state(fn (Trip $record): string => (string) $record->orders->count()),
+                    ->html()
+                    ->alignCenter()
+                    ->state(function (Trip $record): string {
+                        $codes = $record->orders->pluck('order_code')->filter()->values();
+                        if ($codes->isEmpty()) {
+                            return '—';
+                        }
+
+                        $badges = $codes->map(fn ($c) => '<span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">'.e($c).'</span>')->implode(' ');
+
+                        return '<div class="flex flex-wrap gap-1 justify-center">'.$badges.'</div>';
+                    })
+                    ->wrap(),
 
                 TextColumn::make('drivers')
                     ->label('Lái xe')

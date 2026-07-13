@@ -178,10 +178,10 @@ export default function OrderDetailScreen() {
   }, [deliveryPoints]);
   const activeDp = deliveryPoints.find((dp: any) => dp.id === activeDpId);
   const checkpoints = d.trip_checkpoints || [];
-  // Map DP id to sequence for timeline display
-  const dpSeqMap: Record<string, number> = {};
+  // Map DP id to location code for timeline display
+  const dpCodeMap: Record<string, string> = {};
   deliveryPoints.forEach((dp: any) => {
-    dpSeqMap[dp.id] = dp.sequence;
+    dpCodeMap[dp.id] = dp.code || dp.location?.code || `Điểm ${dp.sequence}`;
   });
   const hasDeliveryPoint = !!activeDpId || deliveryPoints.length > 0;
   const hasEndCheckpoint = checkpoints.some(
@@ -793,9 +793,9 @@ export default function OrderDetailScreen() {
                     <Text style={[s.tlLabel, { color: ci.color }]}>
                       {ci.label}
                       {cp.delivery_point_id &&
-                      dpSeqMap[cp.delivery_point_id] &&
+                      dpCodeMap[cp.delivery_point_id] &&
                       deliveryPoints.length > 1
-                        ? ` (${dpSeqMap[cp.delivery_point_id]})`
+                        ? ` (${dpCodeMap[cp.delivery_point_id]})`
                         : ""}
                     </Text>
                   </View>
