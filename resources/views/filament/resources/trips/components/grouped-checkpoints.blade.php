@@ -53,7 +53,7 @@
                     $ids = $groupIds[$groupKey] ?? [];
                     $idsJson = json_encode($ids);
                 @endphp
-                <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors" x-data="{ km: '{{ $first->km_reading ?? '' }}', time: '{{ $first->occurred_at?->format('Y-m-d\TH:i') ?? '' }}' }">
+                <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors" x-data="{ km: '{{ (int) ($first->km_reading ?? 0) ?: '' }}', time: '{{ $first->occurred_at?->format('Y-m-d\TH:i') ?? '' }}' }">
                     <td class="px-4 py-3">
                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border {{ $colorClass }}">
                             {{ $label }}
@@ -64,7 +64,7 @@
                             <input type="number" step="0.1" x-model="km" class="w-20 rounded-md border-gray-300 text-sm py-1 px-2 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200" />
                         </template>
                         <template x-if="editing !== '{{ $groupKey }}'">
-                            <span>{{ $first->km_reading ? number_format((float) $first->km_reading, 1) : '—' }}</span>
+                            <span>{{ $first->km_reading ? number_format((float) $first->km_reading, 0, ',', '.') : '—' }}</span>
                         </template>
                     </td>
                     <td class="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">
@@ -93,7 +93,8 @@
                             <div class="flex items-center gap-1">
                                 <button
                                     type="button"
-                                    class="text-green-600 hover:text-green-800"
+                                    class="p-1.5 rounded-lg text-white bg-green-500 hover:bg-green-600 transition-colors"
+                                    title="Lưu"
                                     @click="
                                         fetch('/trips/{{ $record->id }}/checkpoints/bulk-update', {
                                             method: 'POST',
@@ -101,12 +102,26 @@
                                             body: JSON.stringify({ ids: {{ $idsJson }}, km_reading: km || null, occurred_at: time || null })
                                         }).then(r => { editing = null; location.reload(); })
                                     "
-                                >✓</button>
-                                <button type="button" class="text-red-500 hover:text-red-700" @click="editing = null">✕</button>
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="p-1.5 rounded-lg text-gray-500 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-400 transition-colors"
+                                    title="Huỷ"
+                                    @click="editing = null"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
                             </div>
                         </template>
                         <template x-if="editing !== '{{ $groupKey }}'">
-                            <button type="button" class="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400" @click="editing = '{{ $groupKey }}'">
+                            <button
+                                type="button"
+                                class="p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-500/10 dark:hover:text-primary-400 transition-colors"
+                                title="Sửa"
+                                @click="editing = '{{ $groupKey }}'"
+                            >
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                             </button>
                         </template>
