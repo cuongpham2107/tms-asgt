@@ -3,7 +3,7 @@
     use App\Enums\CheckpointType;
 
     /** @var Trip $record */
-    $allCheckpoints = $record->checkpoints()->with('order')->orderBy('occurred_at')->get();
+    $allCheckpoints = $record->checkpoints()->with(['order', 'deliveryPoint.location'])->orderBy('occurred_at')->get();
 
     // Group by (checkpoint_type, km_reading) — same type+km = same row
     $grouped = $allCheckpoints->groupBy(function ($cp) {
@@ -52,11 +52,18 @@
                     $orderCodes = $group->pluck('order.order_code')->filter()->unique()->values();
                     $ids = $groupIds[$groupKey] ?? [];
                     $idsJson = json_encode($ids);
+
+                    // Collect delivery point codes for types that have them
+                    $showDpCodes = in_array($type, ['arrived_delivery', 'completed', 'end']);
+                    $dpCodes = [];
+                    if ($showDpCodes) {
+                        $dpCodes = $group->pluck('deliveryPoint.location.code')->filter()->unique()->values()->toArray();
+                    }
                 @endphp
                 <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors" x-data="{ km: '{{ (int) ($first->km_reading ?? 0) ?: '' }}', time: '{{ $first->occurred_at?->format('Y-m-d\TH:i') ?? '' }}' }">
                     <td class="px-4 py-3">
                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border {{ $colorClass }}">
-                            {{ $label }}
+                            {{ $label }}{{ ! empty($dpCodes) ? ' ('.implode(', ', $dpCodes).')' : '' }}
                         </span>
                     </td>
                     <td class="px-4 py-3 text-gray-700 dark:text-gray-300 font-mono tabular-nums">
