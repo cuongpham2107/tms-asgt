@@ -12,6 +12,7 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 
@@ -101,69 +102,38 @@ class TripForm
                             ->seconds(false)
                             ->native(true),
                     ]),
-                Section::make('Đơn hàng trong chuyến')
-                    ->columnSpanFull()
-                    ->schema([
-                        Repeater::make('orders')
-                            ->relationship('orders')
-                            ->label('Danh sách đơn hàng')
-                            ->table([
-                                TableColumn::make('Mã đơn')->width('150px'),
-                                TableColumn::make('Khách hàng')->width('200px'),
-                                TableColumn::make('Trạng thái')->width('120px'),
-                            ])
-                            ->schema([
-                                Placeholder::make('order_code')
-                                    ->label('Mã đơn')
-                                    ->content(fn ($record) => $record?->order_code ?? '-'),
-                                Placeholder::make('customer_name')
-                                    ->label('Khách hàng')
-                                    ->content(fn ($record) => $record?->customer?->name ?? '-'),
-                                Placeholder::make('order_status')
-                                    ->label('Trạng thái')
-                                    ->content(fn ($record) => $record?->status?->getLabel() ?? '-'),
-                            ])
-                            ->addable(false)
-                            ->deletable(false)
-                            ->reorderable(false),
-                    ]),
+                // Section::make('Đơn hàng trong chuyến')
+                //     ->columnSpanFull()
+                //     ->schema([
+                //         Repeater::make('orders')
+                //             ->relationship('orders')
+                //             ->label('Danh sách đơn hàng')
+                //             ->table([
+                //                 TableColumn::make('Mã đơn')->width('150px'),
+                //                 TableColumn::make('Khách hàng')->width('200px'),
+                //                 TableColumn::make('Trạng thái')->width('120px'),
+                //             ])
+                //             ->schema([
+                //                 Placeholder::make('order_code')
+                //                     ->label('Mã đơn')
+                //                     ->content(fn ($record) => $record?->order_code ?? '-'),
+                //                 Placeholder::make('customer_name')
+                //                     ->label('Khách hàng')
+                //                     ->content(fn ($record) => $record?->customer?->name ?? '-'),
+                //                 Placeholder::make('order_status')
+                //                     ->label('Trạng thái')
+                //                     ->content(fn ($record) => $record?->status?->getLabel() ?? '-'),
+                //             ])
+                //             ->addable(false)
+                //             ->deletable(false)
+                //             ->reorderable(false),
+                //     ]),
                 Section::make('Các mốc hành trình')
                     ->columnSpanFull()
                     ->schema([
-                        Repeater::make('checkpoints')
-                            ->relationship('checkpoints')
-                            ->addable(false)
-                            ->deletable(false)
-                            ->label('')
-                            ->compact()
-                            ->table([
-                                TableColumn::make('Loại')
-                                    ->width('140px'),
-                                TableColumn::make('Km')
-                                    ->width('100px'),
-                                TableColumn::make('Giờ')
-                                    ->width('180px'),
-                                TableColumn::make('Đơn hàng'),
-                            ])
-                            ->schema([
-                                Placeholder::make('checkpoint_type')
-                                    ->alignCenter()
-                                    ->content(fn ($record) => view('filament.resources.trips.components.checkpoint-badge', [
-                                        'label' => $record->checkpoint_type->getLabel(),
-                                        'color' => $record->checkpoint_type->getColor(),
-                                    ])),
-                                TextInput::make('km_reading')
-                                    ->numeric()
-                                    ->step(0.1),
-                                DateTimePicker::make('occurred_at')
-                                    ->label('Giờ')
-
-                                    ->native(false)
-                                    ->displayFormat('H:i d/m/Y'),
-                                Placeholder::make('order_code')
-                                    ->alignCenter()
-                                    ->content(fn ($record) => $record->order?->order_code ?? '—'),
-                            ]),
+                        View::make('checkpoints_grouped')
+                            ->view('filament.resources.trips.components.grouped-checkpoints')
+                            ->columnSpanFull(),
                     ]),
             ]);
     }
