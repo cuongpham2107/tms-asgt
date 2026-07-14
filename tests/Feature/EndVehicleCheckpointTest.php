@@ -288,6 +288,13 @@ test('end vehicle with active incomplete trip triggers driver swap', function ()
     // shift_id is cleared during end() cleanup, not in EndHandler
     expect((float) $trip->end_km)->toBe(10060.0);
     expect((float) $trip->total_km_loaded)->toBeGreaterThan(0);
+
+    // Verify checkpoint type is DriverSwap, not End
+    $checkpoint = TripCheckpoint::where('trip_id', $trip->id)
+        ->where('checkpoint_type', CheckpointType::DriverSwap->value)
+        ->first();
+    expect($checkpoint)->not->toBeNull();
+    expect((float) $checkpoint->km_reading)->toBe(10060.0);
 });
 
 // === TEST 7: Nhập km_reading nhỏ hơn vehicle.current_mileage → reject ===

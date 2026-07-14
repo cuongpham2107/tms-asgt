@@ -94,7 +94,7 @@ class TripCheckpointService
             $checkpoints->each->load('photos');
             $startedCheckpoints->each->load('photos');
 
-            return $checkpoints->merge($startedCheckpoints);
+            return $startedCheckpoints->merge($checkpoints);
         });
     }
 
