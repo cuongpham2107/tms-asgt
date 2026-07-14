@@ -140,6 +140,11 @@ export default function StatsScreen() {
               })()}
               <Text style={s.tripCode}>{t.trip_code}</Text>
               <Text style={s.tripPlate}>{t.vehicle?.plate_number || "-"}</Text>
+              {(() => {
+                const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
+                if (loadingTimes.length === 0) return null;
+                return <Text style={s.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
+              })()}
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={s.tripKm}>{fmt(t.total_km)} km</Text>
@@ -175,6 +180,7 @@ const s = StyleSheet.create({
   tripKm: { fontSize: 15, fontWeight: "700", color: "#4F46E5" }, tripDate: { fontSize: 11, color: "#9CA3AF", marginTop: 2 },
   routeWrap: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 },
   routeText: { fontSize: 11, color: "#4F46E5", fontWeight: "600", flex: 1 },
+  loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   totalCard: { backgroundColor: "#EEF2FF", marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12, alignItems: "center", borderWidth: 1, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   totalText: { fontSize: 15, fontWeight: "700", color: "#4F46E5" },
   // Period filter

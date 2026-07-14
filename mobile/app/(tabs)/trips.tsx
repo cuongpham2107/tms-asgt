@@ -158,6 +158,11 @@ export default function TripsScreen() {
               <View style={[s.badge, { backgroundColor: st.bg }]}><Text style={[s.badgeText, { color: st.text }]}>{st.label}</Text></View>
             </View>
             <Text style={s.kmLine}>📏 {fmt(item.total_km)} km · {fmt(item.start_km)} → {fmt(item.end_km)}</Text>
+            {(() => {
+              const loadingTimes = (item.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
+              if (loadingTimes.length === 0) return null;
+              return <Text style={s.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
+            })()}
             {item.orders?.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} contentContainerStyle={{ gap: 6 }}>
                 {item.orders.map((o: any) => {
@@ -193,6 +198,7 @@ const s = StyleSheet.create({
   kmLine: { fontSize: 12, color: "#6B7280", marginTop: 8 }, time: { fontSize: 11, color: "#9CA3AF" },
   routeWrap: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10 },
   routeText: { fontSize: 11, color: "#4F46E5", fontWeight: "600", flex: 1 },
+  loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 4 },
   empty: { alignItems: "center", paddingVertical: 48 }, emptyText: { fontSize: 16, fontWeight: "600", color: "#9CA3AF", marginTop: 12 },
   searchWrap: { flexDirection: "row", alignItems: "center", marginHorizontal: 16, marginTop: 12, backgroundColor: "#fff", borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: "#E5E7EB", gap: 8 },
   searchInput: { flex: 1, paddingVertical: 10, fontSize: 15, color: "#111827" },

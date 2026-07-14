@@ -172,6 +172,11 @@ export default function DashboardScreen() {
                 <Text style={st.tripKm}>
                   📏 {t.total_km ?? "-"} km · {t.start_km != null ? `${t.start_km} → ${t.end_km ?? "?"}` : "Chưa có Km"}
                 </Text>
+                {(() => {
+                  const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
+                  if (loadingTimes.length === 0) return null;
+                  return <Text style={st.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
+                })()}
               </View>
               <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
             </TouchableOpacity>
@@ -222,6 +227,7 @@ const st = StyleSheet.create({
   tripKm: { fontSize: 12, color: "#9CA3AF", marginTop: 3 },
   routeWrap: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 6 },
   routeText: { fontSize: 11, color: "#4F46E5", fontWeight: "600", flex: 1 },
+  loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   linkBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 4, padding: 16 },
   linkText: { color: "#4F46E5", fontWeight: "600", fontSize: 14 },
 });

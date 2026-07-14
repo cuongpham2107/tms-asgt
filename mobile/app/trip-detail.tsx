@@ -303,6 +303,7 @@ export default function TripDetailScreen() {
                     </View>
                     <Text style={s.orderCargo} numberOfLines={1}>{o.cargo_name || "Chưa có tên"}</Text>
                     {o.customer?.name && <Text style={s.orderCustomer}>{o.customer.name}</Text>}
+                    {o.planned_loading_at && <Text style={s.orderLoading}>🕐 Đóng hàng: {new Date(o.planned_loading_at).toLocaleString("vi-VN")}</Text>}
                     <Text style={s.orderKm}>📏 loaded: {fmt(o.loaded_km)} km</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
@@ -417,6 +418,7 @@ const s = StyleSheet.create({
   routeWrap: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
   orderRoute: { fontSize: 13, fontWeight: "700", color: "#4F46E5", flex: 1 },
   orderKm: { fontSize: 11, color: "#9CA3AF", marginTop: 2 },
+  orderLoading: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   empty: { alignItems: "center", paddingVertical: 32 }, emptyText: { color: "#9CA3AF", marginTop: 6, fontSize: 13 },
   // Sticky bottom bar
   stickyBar: { backgroundColor: "#fff", padding: 12, paddingBottom: 32, borderTopWidth: 1, borderTopColor: "#F3F4F6" },

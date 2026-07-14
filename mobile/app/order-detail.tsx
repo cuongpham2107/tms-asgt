@@ -410,6 +410,11 @@ export default function OrderDetailScreen() {
             value: d.total_weight ? `${d.total_weight} tấn` : "-",
           },
           {
+            icon: "time",
+            label: "Đóng hàng",
+            value: d.planned_loading_at ? new Date(d.planned_loading_at).toLocaleString("vi-VN") : "-",
+          },
+          {
             icon: "car",
             label: "Biển số",
             value: d.vehicle?.plate_number || d.vehicle_plate_number || "-",
