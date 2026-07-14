@@ -199,7 +199,7 @@ class DriverShiftController extends Controller
         // Gate: phải có checkpoint type='end' cho xe hiện tại trước khi kết thúc ca
         // (chỉ bắt buộc nếu ca có chuyến — không có chuyến nào thì không cần)
         $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
-            ->where('checkpoint_type', CheckpointType::End->value)
+            ->whereIn('checkpoint_type', [CheckpointType::End->value, CheckpointType::DriverSwap->value])
             ->whereNotNull('km_reading')
             ->latest('id')
             ->first();
@@ -343,7 +343,7 @@ class DriverShiftController extends Controller
 
         // Gate: must have an 'end' checkpoint before switching vehicle
         $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
-            ->where('checkpoint_type', CheckpointType::End->value)
+            ->whereIn('checkpoint_type', [CheckpointType::End->value, CheckpointType::DriverSwap->value])
             ->whereNotNull('km_reading')
             ->latest('id')
             ->first();
