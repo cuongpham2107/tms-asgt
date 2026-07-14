@@ -155,7 +155,7 @@ class DriverDutyReport extends Page implements HasTable
             ->selectSub(function ($q) use ($from, $to) {
                 $q->selectRaw('COUNT(t.id)')
                     ->from('trips', 't')
-                    ->join('driver_shifts', 's2', 's2.id', '=', 't.shift_id')
+                    ->join('driver_shifts as s2', 's2.id', '=', 't.shift_id')
                     ->whereColumn('s2.driver_id', 'users.id')
                     ->where(function ($q2) use ($from, $to) {
                         $q2->whereBetween('s2.start_time', [$from, $to])
@@ -200,20 +200,17 @@ class DriverDutyReport extends Page implements HasTable
             $hasSwap = $swapTrip !== null;
             $plate = $vehicle?->plate_number;
 
-            return (object) [
-                'id' => $driver->id,
-                'name' => $driver->name,
-                'station' => $driver->station?->value,
-                'plate' => $plate,
-                'swap_note' => $hasSwap ? 'đảo lái' : null,
-                'shift_type' => $shift?->shift_type,
-                'trip_count' => (int) ($driver->trip_count ?? 0),
-                'km_loaded' => (float) ($driver->km_loaded ?? 0),
-                'km_empty' => (float) ($driver->km_empty ?? 0),
-                'total_km' => (float) ($driver->total_km ?? 0),
-                'start_time' => $shift?->start_time,
-                'end_time' => $shift?->end_time,
-            ];
+            $driver->plate = $plate;
+            $driver->swap_note = $hasSwap ? 'đảo lái' : null;
+            $driver->shift_type = $shift?->shift_type;
+            $driver->trip_count = (int) ($driver->trip_count ?? 0);
+            $driver->km_loaded = (float) ($driver->km_loaded ?? 0);
+            $driver->km_empty = (float) ($driver->km_empty ?? 0);
+            $driver->total_km = (float) ($driver->total_km ?? 0);
+            $driver->start_time = $shift?->start_time;
+            $driver->end_time = $shift?->end_time;
+
+            return $driver;
         });
 
         return new LengthAwarePaginator(

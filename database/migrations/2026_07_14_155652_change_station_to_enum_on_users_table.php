@@ -14,6 +14,7 @@ return new class extends Migration
 
         // SQLite: recreate column with CHECK constraint
         if (DB::getDriverName() === 'sqlite') {
+            DB::statement('PRAGMA foreign_keys = OFF');
             DB::statement('ALTER TABLE users RENAME TO users_old');
 
             DB::statement('CREATE TABLE users (
