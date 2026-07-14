@@ -11,13 +11,15 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class DriverDutySummaryWidget extends BaseWidget
 {
-    protected int|array|null $columns = 3;
+    protected int|array|null $columns = 4;
 
     protected function getStats(): array
     {
         $drivers = User::role('driver')->where('is_active', true)->get();
 
         $stats = [];
+        $grandTotal = 0;
+        $grandWorking = 0;
 
         foreach (OnDutyLocation::cases() as $station) {
             $stationDrivers = $drivers->filter(fn (User $d) => $d->station === $station);
@@ -25,6 +27,8 @@ class DriverDutySummaryWidget extends BaseWidget
             if ($total === 0) {
                 continue;
             }
+
+            $grandTotal += $total;
 
             $working = 0;
             $full = 0;
@@ -46,16 +50,41 @@ class DriverDutySummaryWidget extends BaseWidget
                 }
             }
 
+            $grandWorking += $working;
             $off = $total - $working;
+
+            $shiftBreakdown = [];
+            if ($full > 0) {
+                $shiftBreakdown[] = "Cả:{$full}";
+            }
+            if ($morningHalf > 0) {
+                $shiftBreakdown[] = "Sáng:{$morningHalf}";
+            }
+            if ($nightHalf > 0) {
+                $shiftBreakdown[] = "Tối:{$nightHalf}";
+            }
+
+            $descParts = ["Đi làm: {$working}"];
+            if (! empty($shiftBreakdown)) {
+                $descParts[] = '('.implode(' ', $shiftBreakdown).')';
+            }
+            $descParts[] = "· Nghỉ: {$off}";
 
             $stats[] = Stat::make(
                 $station->getLabel(),
-                number_format($total)
+                (string) $total
             )
-                ->description("Đi làm: {$working} (Cả:{$full} Sáng:{$morningHalf} Tối:{$nightHalf}) · Nghỉ: {$off}")
+                ->description(implode(' ', $descParts))
                 ->descriptionIcon('heroicon-m-user-group')
                 ->color($station->getColor());
         }
+
+        // Tổng hàng
+        $grandOff = $grandTotal - $grandWorking;
+        $stats[] = Stat::make('Tổng', (string) $grandTotal)
+            ->description("Đi làm: {$grandWorking} · Nghỉ: {$grandOff}")
+            ->descriptionIcon('heroicon-m-users')
+            ->color('gray');
 
         return $stats;
     }

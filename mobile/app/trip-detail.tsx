@@ -5,6 +5,7 @@ import { useAuth } from "../src/lib/auth";
 import { api } from "../src/lib/api";
 import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
 
 const statusConfig: Record<string, { icon: string; bg: string; text: string; label: string }> = {
   pending: { icon: "time-outline", bg: "#F3F4F6", text: "#6B7280", label: "Chờ" },
@@ -44,6 +45,14 @@ export default function TripDetailScreen() {
   // Format: bỏ .0, hiển thị số nguyên
   const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
 
+  const getGps = async () => {
+    try {
+      await Location.requestForegroundPermissionsAsync();
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      return { gps_lat: pos.coords.latitude, gps_lng: pos.coords.longitude };
+    } catch { return null; }
+  };
+
   const load = async () => {
     const tripId = trip?.id || params.id;
     if (!token || !tripId) return;
@@ -54,7 +63,7 @@ export default function TripDetailScreen() {
 
   const currentStatus = detail?.status || trip?.status || "pending";
   const isReturnTrip = currentStatus === "return_trip";
-  const isSwapped = userId && detail?.driver_id !== userId;
+  const isSwapped = detail && userId && detail.driver_id !== userId;
   const canStart = currentStatus === "pending" && !isReturnTrip && !isSwapped;
   const canComplete = (!["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed")) && !isSwapped;
   const orders: any[] = detail?.orders || trip?.orders || [];
@@ -74,7 +83,10 @@ export default function TripDetailScreen() {
     if (!trip?.id || !token) return;
     setStarting(true);
     try {
-      await api.trips.checkpoint(String(trip.id), { checkpoint_type: "started", occurred_at: localISO() }, token);
+      const gps = await getGps();
+      const body: any = { checkpoint_type: "started", occurred_at: localISO() };
+      if (gps) { body.gps_lat = gps.gps_lat; body.gps_lng = gps.gps_lng; }
+      await api.trips.checkpoint(String(trip.id), body, token);
       showAlert("Thành công", "Đã bắt đầu chuyến");
       await load();
     } catch (e: any) {
@@ -137,7 +149,8 @@ export default function TripDetailScreen() {
     if (!trip?.id || !token) return;
     setCompleting(true);
     try {
-      await api.trips.complete(String(trip.id), km, token);
+      const gps = await getGps();
+      await api.trips.complete(String(trip.id), km, token, gps ?? undefined);
       const hasIncomplete = orders.some((o: any) => o.status !== "completed");
       showAlert("Thành công", hasIncomplete ? "Chuyến → Đảo lái (đơn chưa xong)" : "Đã kết thúc chuyến");
       setShowCompleteModal(false);

@@ -22,6 +22,7 @@ class TripCheckpointResource extends JsonResource
             'id' => $this->id,
             'order_id' => $this->order_id,
             'driver_id' => $this->driver_id,
+            'driver_name' => $this->whenLoaded('driver', fn () => $this->driver->name),
             'shift_id' => $this->shift_id,
             'delivery_point_id' => $this->delivery_point_id,
             'checkpoint_type' => $this->checkpoint_type,

@@ -137,11 +137,12 @@ class CheckpointFactory
             'delivery_point_id' => $deliveryPointId,
             'driver_id' => $trip->driver_id,
             'shift_id' => $trip->shift_id,
+            'vehicle_id' => $trip->vehicle_id,
             'checkpoint_type' => $type->value,
             'occurred_at' => $payload['occurred_at'] ?? now(),
             'km_reading' => $kmReading,
-            'gps_lat' => $payload['gps_lat'] ?? null,
-            'gps_lng' => $payload['gps_lng'] ?? null,
+            'gps_lat' => $payload['gps_lat'] ?? $trip->vehicle?->gps_lat,
+            'gps_lng' => $payload['gps_lng'] ?? $trip->vehicle?->gps_lng,
             'voice_note' => $payload['voice_note'] ?? null,
         ];
     }

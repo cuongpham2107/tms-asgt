@@ -30,7 +30,7 @@ class OrderController extends Controller
                 'pickupLocation',
                 'deliveryPoints.location',
                 'trip.vehicle',
-                'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
+                'tripCheckpoints' => fn ($query) => $query->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
             ->whereIn('status', [OrderStatus::Sent, OrderStatus::InTransit])
@@ -72,7 +72,7 @@ class OrderController extends Controller
             'pickupLocation',
             'deliveryPoints.location',
             'trip.vehicle',
-            'tripCheckpoints' => fn ($query) => $query->with('photos')->orderBy('occurred_at'),
+            'tripCheckpoints' => fn ($query) => $query->with('photos')->with('driver')->orderBy('occurred_at'),
         ]);
 
         return response()->json([
@@ -133,7 +133,7 @@ class OrderController extends Controller
                 'deliveryPoints.location',
                 'trip.vehicle',
                 'trip.driverSwaps',
-                'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
             ->whereHas('trip', function ($q) use ($user) {
                 $q->where('driver_id', $user->id)

@@ -65,8 +65,8 @@ export const api = {
       return fetchApi<{ data: any[]; meta: any }>(`/trips/history?${qs}`, t);
     },
     detail: (id: string, t: string) => fetchApi<{ data: any }>(`/trips/${id}`, t),
-    complete: (tripId: string, endKm: number, t: string) =>
-      fetchApi<{ data: any }>(`/trips/${tripId}/complete`, t, { method: "POST", body: JSON.stringify({ end_km: endKm }) }),
+    complete: (tripId: string, endKm: number, t: string, gps?: { gps_lat?: number; gps_lng?: number }) =>
+      fetchApi<{ data: any }>(`/trips/${tripId}/complete`, t, { method: "POST", body: JSON.stringify({ end_km: endKm, ...gps }) }),
     checkpoint: (tripId: string, body: any, t: string) => {
       const hasPhotos = body.photos && Array.isArray(body.photos) && body.photos.length > 0;
       if (hasPhotos) {

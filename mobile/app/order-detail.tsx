@@ -79,7 +79,7 @@ const localISO = (d: Date = new Date()) => {
 };
 
 export default function OrderDetailScreen() {
-  const { token } = useAuth();
+  const { token, shift } = useAuth();
   const params = useLocalSearchParams<{ id: string; order: string }>();
   const order = params.order ? JSON.parse(params.order) : null;
   const isSwapped = order?.is_swapped || false;
@@ -822,6 +822,7 @@ export default function OrderDetailScreen() {
                       ? parseInt(cp.km_reading).toLocaleString("vi-VN")
                       : "-"}{" "}
                     • {new Date(cp.occurred_at).toLocaleString("vi-VN")}
+                    {cp.driver_name ? ` • ${cp.driver_id === shift?.driver?.id ? "Tôi" : cp.driver_name}` : ""}
                   </Text>
                   {cp.voice_note ? (
                     <Text style={s.tlNote}>💬 {cp.voice_note}</Text>

@@ -12,7 +12,6 @@ use App\Http\Requests\StartShiftRequest;
 use App\Http\Requests\SwitchVehicleRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
-use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
@@ -44,63 +43,22 @@ class DriverShiftController extends Controller
 
         $startTime = Carbon::now();
 
-        // // Check vehicle requirements
-        // $vehicleId = $payload['vehicle_id'] ?? null;
-        // $currentVehicle = $user->vehiclesAsDriver()->first();
-
-        // if ($currentVehicle === null && $vehicleId === null) {
-        //     return response()->json(['message' => 'Vui lòng chọn phương tiện để bắt đầu ca.'], 422);
-        // }
-
-        // $activeVehicle = $currentVehicle;
-        // if ($vehicleId !== null) {
-        //     $activeVehicle = Vehicle::find($vehicleId);
-        //     if ($activeVehicle === null) {
-        //         return response()->json(['message' => 'Phương tiện không hợp lệ.'], 422);
-        //     }
-        // }
-
-        // prevent invalid shift combinations on the same day
-        // $existingShiftsToday = DriverShift::query()
-        //     ->where('driver_id', $user->id)
-        //     ->whereDate('start_time', $startTime->toDateString())
-        //     ->get();
-
-        // $requestedType = $payload['shift_type'];
-
-        // foreach ($existingShiftsToday as $shift) {
-        //     $existingType = $shift->shift_type->value ?? $shift->shift_type;
-
-        //     if ($requestedType === 'full') {
-        //         return response()->json(['message' => 'Không thể tạo ca cả ngày vì bạn đã có ca khác trong hôm nay.'], 409);
-        //     }
-
-        //     if ($existingType === 'full') {
-        //         return response()->json(['message' => 'Bạn đã có ca cả ngày trong hôm nay, không thể tạo thêm ca mới.'], 409);
-        //     }
-
-        //     if ($requestedType === $existingType) {
-        //         return response()->json(['message' => 'Đã có ca cùng loại vào hôm nay.'], 409);
-        //     }
-        // }
-
         // Ensure driver does not have an open shift
-        // $existing = DriverShift::query()
-        //     ->where('driver_id', $user->id)
-        //     ->whereNull('end_time')
-        //     ->first();
+        $existing = DriverShift::query()
+            ->where('driver_id', $user->id)
+            ->whereNull('end_time')
+            ->first();
 
-        // if ($existing) {
-        //     /** @status 409 */
-        //     return response()->json(['message' => 'Bạn đã có một ca làm việc đang hoạt động'], 409);
-        // }
+        if ($existing) {
+            return response()->json(['message' => 'Bạn đã có một ca làm việc đang hoạt động'], 409);
+        }
+
+        // Lấy xe hiện tại của tài xế (qua current_driver_id)
+        $activeVehicle = $user->vehiclesAsDriver()->first();
 
         DB::beginTransaction();
         try {
-            // Vehicle assignment is tracked via Order.driver_id and Order.vehicle_id only.
-            // Vehicle.current_driver_id is a static/default field — not modified here.
-
-            $startKm = $activeVehicle->current_mileage ?? 0;
+            $startKm = $activeVehicle?->current_mileage ?? 0;
 
             $shift = DriverShift::create([
                 'driver_id' => $user->id,

@@ -44,7 +44,7 @@ export default function DashboardScreen() {
   useFocusEffect(useCallback(() => { load(); }, [token]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
-  const activeTrips = trips.filter((t) => t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap");
+  const activeTrips = trips.filter((t) => t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap" && t.driver_id === userId);
   // Sort: current/active trips first, then pending
   const isCurrentTrip = (t: any) => t.status !== "pending";
   const sortedTrips = [...activeTrips].sort((a, b) => (isCurrentTrip(b) ? 1 : 0) - (isCurrentTrip(a) ? 1 : 0));

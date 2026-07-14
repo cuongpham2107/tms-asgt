@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
 use App\Models\Trip;
+use App\Services\Trip\CheckpointFactory;
 use App\Services\TripKmCalculatorService;
+use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,9 +46,9 @@ class TripController extends Controller
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',
-                    'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                    'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
                 ]),
-                'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -78,9 +81,9 @@ class TripController extends Controller
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',
-                    'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                    'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
                 ]),
-                'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
             ->orderBy('created_at', 'desc')
             ->first();
@@ -122,9 +125,9 @@ class TripController extends Controller
                 'customer',
                 'pickupLocation',
                 'deliveryPoints.location',
-                'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ]),
-            'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+            'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
         ]);
 
         return response()->json([
@@ -174,9 +177,9 @@ class TripController extends Controller
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',
-                    'tripCheckpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                    'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
                 ]),
-                'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+                'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
             ->whereIn('status', $validStatuses)
             ->when($request->filled('from_date'), fn ($q) => $q->whereDate('started_at', '>=', $request->from_date))
@@ -224,6 +227,8 @@ class TripController extends Controller
         $validated = $request->validate([
             'end_km' => 'required|numeric|min:0',
             'completed_at' => 'nullable|date',
+            'gps_lat' => 'nullable|numeric',
+            'gps_lng' => 'nullable|numeric',
         ]);
 
         $endKm = (float) $validated['end_km'];
@@ -238,7 +243,7 @@ class TripController extends Controller
             $trip->complete(endKm: $endKm, completedAt: $completedAt);
         } else {
             // Còn orders chưa xong → driver_swap, tính partial km
-            DB::transaction(function () use ($trip, $endKm) {
+            DB::transaction(function () use ($trip, $endKm, $completedAt) {
                 app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
                 $trip->refresh();
 
@@ -253,13 +258,31 @@ class TripController extends Controller
                         OrderStatus::Assigned->value,
                     ])
                     ->update(['status' => OrderStatus::DriverSwap->value]);
+
+                // Cập nhật km hiện tại của xe
+                if ($endKm > 0 && $trip->vehicle) {
+                    $trip->vehicle->current_mileage = $endKm;
+                    $trip->vehicle->save();
+                }
+
+                // Tạo checkpoint đảo lái cho từng order trong trip
+                app(CheckpointFactory::class)->create(
+                    $trip,
+                    [
+                        'km_reading' => $endKm,
+                        'occurred_at' => $completedAt ? Carbon::parse($completedAt) : now(),
+                        'gps_lat' => $validated['gps_lat'] ?? null,
+                        'gps_lng' => $validated['gps_lng'] ?? null,
+                    ],
+                    CheckpointType::DriverSwap,
+                );
             });
         }
 
         $trip->load([
             'vehicle',
             'orders' => fn ($q) => $q->whereNull('deleted_at'),
-            'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
+            'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
         ]);
 
         return response()->json([
