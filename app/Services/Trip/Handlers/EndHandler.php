@@ -9,6 +9,7 @@ use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
+use App\Services\Trip\CheckpointFactory;
 use App\Services\TripKmCalculatorService;
 use Illuminate\Support\Facades\DB;
 
@@ -41,15 +42,24 @@ class EndHandler implements CheckpointHandlerInterface
                 $activeTripId = $activeTrip->id;
             }
 
-            // 2. Create TripCheckpoint
-            $checkpoint = TripCheckpoint::create([
-                'checkpoint_type' => $activeTripId !== null ? CheckpointType::DriverSwap->value : CheckpointType::End->value,
-                'trip_id' => $activeTripId,
-                'shift_id' => $shift->id,
-                'driver_id' => $shift->driver_id,
-                'km_reading' => $kmReading,
-                'occurred_at' => now(),
-            ]);
+            // 2. Create TripCheckpoint(s)
+            if ($activeTripId !== null) {
+                $checkpoints = app(CheckpointFactory::class)->create(
+                    $activeTrip,
+                    ['occurred_at' => now(), 'km_reading' => $kmReading],
+                    CheckpointType::DriverSwap,
+                );
+                $checkpoint = $checkpoints->first();
+            } else {
+                $checkpoint = TripCheckpoint::create([
+                    'checkpoint_type' => CheckpointType::End->value,
+                    'trip_id' => null,
+                    'shift_id' => $shift->id,
+                    'driver_id' => $shift->driver_id,
+                    'km_reading' => $kmReading,
+                    'occurred_at' => now(),
+                ]);
+            }
 
             // 3. Update vehicle mileage — critical for Bug 1 fix
             $vehicle->current_mileage = $kmReading;

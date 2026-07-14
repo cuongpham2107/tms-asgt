@@ -15,6 +15,7 @@ class CheckpointFactory
         CheckpointType::Started,
         CheckpointType::ArrivedPickup,
         CheckpointType::LeftPickup,
+        CheckpointType::DriverSwap,
     ];
 
     /**

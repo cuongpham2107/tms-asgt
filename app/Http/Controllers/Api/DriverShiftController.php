@@ -17,6 +17,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
 use App\Services\ShiftKmCalculatorService;
+use App\Services\Trip\CheckpointFactory;
 use App\Services\Trip\Handlers\EndHandler;
 use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
@@ -249,14 +250,11 @@ class DriverShiftController extends Controller
                     ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value])
                     ->update(['status' => OrderStatus::DriverSwap->value]);
 
-                TripCheckpoint::create([
-                    'trip_id' => $trip->id,
-                    'driver_id' => $user->id,
-                    'shift_id' => $shift->id,
-                    'checkpoint_type' => CheckpointType::DriverSwap->value,
-                    'occurred_at' => now(),
-                    'km_reading' => $endKm,
-                ]);
+                app(CheckpointFactory::class)->create(
+                    $trip,
+                    ['occurred_at' => now(), 'km_reading' => $endKm],
+                    CheckpointType::DriverSwap,
+                );
             }
 
             app(ShiftKmCalculatorService::class)->calculate($shift);

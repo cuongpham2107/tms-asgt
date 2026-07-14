@@ -295,6 +295,7 @@ test('end vehicle with active incomplete trip triggers driver swap', function ()
         ->first();
     expect($checkpoint)->not->toBeNull();
     expect((float) $checkpoint->km_reading)->toBe(10060.0);
+    expect($checkpoint->order_id)->not->toBeNull();
 });
 
 // === TEST 7: Nhập km_reading nhỏ hơn vehicle.current_mileage → reject ===
