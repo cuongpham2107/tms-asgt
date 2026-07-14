@@ -399,7 +399,6 @@ export default function OrderDetailScreen() {
             label: "Khách hàng",
             value: d.customer?.name || "-",
           },
-          { icon: "cube", label: "Hàng hóa", value: d.cargo_name || "-" },
           {
             icon: "file-tray-full",
             label: "Số kiện",
