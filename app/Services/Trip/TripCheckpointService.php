@@ -13,6 +13,7 @@ use App\Services\Trip\Handlers\CheckpointEndHandler;
 use App\Services\Trip\Handlers\CompletedHandler;
 use App\Services\Trip\Handlers\LeftPickupHandler;
 use App\Services\Trip\Handlers\StartedHandler;
+use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -193,9 +194,12 @@ class TripCheckpointService
             ]);
         }
 
+        // Lùi 1 giây để started luôn đứng trước checkpoint thực tế trong timeline
+        $startOccurredAt = Carbon::parse($occurredAt)->subSecond();
+
         $startPayload = [
             'checkpoint_type' => CheckpointType::Started->value,
-            'occurred_at' => $occurredAt,
+            'occurred_at' => $startOccurredAt,
             'km_reading' => $vehicleKm,
         ];
 
