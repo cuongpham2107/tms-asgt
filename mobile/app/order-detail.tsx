@@ -69,6 +69,7 @@ const cpInfo: Record<string, { icon: string; color: string; label: string }> = {
     label: "Đến giao hàng",
   },
   completed: { icon: "flag", color: "#10B981", label: "Giao hàng xong" },
+  driver_swap: { icon: "swap-horizontal", color: "#8B5CF6", label: "Đảo lái" },
   end: { icon: "close-circle", color: "#EF4444", label: "Kết thúc đơn hàng" },
 };
 
