@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert } from "reac
 import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { api } from "../src/lib/api";
+import * as Location from "expo-location";
 
 const shiftOptions = [
   { key: "full", label: "Cả ca (X)", desc: "Làm việc toàn thời gian" },
@@ -32,7 +33,15 @@ export default function ShiftScreen() {
   async function startShift(type: string) {
     setLoading(true);
     try {
-      const res = await api.shifts.start({ shift_type: type }, token!);
+      let gps = null;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          gps = { start_gps_lat: pos.coords.latitude, start_gps_lng: pos.coords.longitude };
+        }
+      } catch {}
+      const res = await api.shifts.start({ shift_type: type, ...(gps || {}) }, token!);
       if (res?.shift?.id) {
         setAuth(token!, String(res.shift.id), res.shift);
         router.replace("/");
