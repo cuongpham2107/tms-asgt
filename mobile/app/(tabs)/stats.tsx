@@ -121,6 +121,23 @@ export default function StatsScreen() {
         ) : filteredHistory.slice(0, 10).map((t: any) => (
           <View key={t.id} style={[s.tripCard, { borderColor: "#A7F3D0" }]}>
             <View style={{ flex: 1 }}>
+              {(() => {
+                const codes: string[] = [];
+                (t.orders || []).forEach((o: any) => {
+                  if (o.pickup_location?.code) codes.push(o.pickup_location.code);
+                  (o.delivery_points || []).forEach((dp: any) => {
+                    if (dp.location?.code) codes.push(dp.location.code);
+                  });
+                });
+                const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
+                if (deduped.length > 0) return (
+                  <View style={s.routeWrap}>
+                    <Ionicons name="navigate" size={11} color="#4F46E5" />
+                    <Text style={s.routeText} numberOfLines={1}>{deduped.join("  →  ")}</Text>
+                  </View>
+                );
+                return null;
+              })()}
               <Text style={s.tripCode}>{t.trip_code}</Text>
               <Text style={s.tripPlate}>{t.vehicle?.plate_number || "-"}</Text>
             </View>
@@ -156,6 +173,8 @@ const s = StyleSheet.create({
   tripCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", marginHorizontal: 16, marginBottom: 6, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#F3F4F6", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   tripCode: { fontSize: 14, fontWeight: "700", color: "#111827" }, tripPlate: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   tripKm: { fontSize: 15, fontWeight: "700", color: "#4F46E5" }, tripDate: { fontSize: 11, color: "#9CA3AF", marginTop: 2 },
+  routeWrap: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 },
+  routeText: { fontSize: 11, color: "#4F46E5", fontWeight: "600", flex: 1 },
   totalCard: { backgroundColor: "#EEF2FF", marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12, alignItems: "center", borderWidth: 1, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   totalText: { fontSize: 15, fontWeight: "700", color: "#4F46E5" },
   // Period filter

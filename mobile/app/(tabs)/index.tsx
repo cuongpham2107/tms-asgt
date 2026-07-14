@@ -143,6 +143,23 @@ export default function DashboardScreen() {
                 <Ionicons name="car" size={20} color={sc.text} />
               </View>
               <View style={{ flex: 1 }}>
+                {(() => {
+                  const codes: string[] = [];
+                  (t.orders || []).forEach((o: any) => {
+                    if (o.pickup_location?.code) codes.push(o.pickup_location.code);
+                    (o.delivery_points || []).forEach((dp: any) => {
+                      if (dp.location?.code) codes.push(dp.location.code);
+                    });
+                  });
+                  const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
+                  if (deduped.length > 0) return (
+                    <View style={st.routeWrap}>
+                      <Ionicons name="navigate" size={11} color="#4F46E5" />
+                      <Text style={st.routeText} numberOfLines={1}>{deduped.join("  →  ")}</Text>
+                    </View>
+                  );
+                  return null;
+                })()}
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text style={st.tripCode}>{t.vehicle?.plate_number || "Chưa gán xe"}</Text>
@@ -203,6 +220,8 @@ const st = StyleSheet.create({
   tripBadgeText: { fontSize: 10, fontWeight: "700" },
   tripPlate: { fontSize: 13, color: "#6B7280", marginTop: 2 },
   tripKm: { fontSize: 12, color: "#9CA3AF", marginTop: 3 },
+  routeWrap: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 6 },
+  routeText: { fontSize: 11, color: "#4F46E5", fontWeight: "600", flex: 1 },
   linkBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 4, padding: 16 },
   linkText: { color: "#4F46E5", fontWeight: "600", fontSize: 14 },
 });

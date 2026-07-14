@@ -130,6 +130,23 @@ export default function TripsScreen() {
           const isCurrent = item.status !== "pending" && item.status !== "driver_swap" && item.status !== "completed";
           return <TouchableOpacity style={[s.card, { borderColor: isCurrent ? st.text + "40" : "#F3F4F6" }]} activeOpacity={0.7}
             onPress={() => router.push({ pathname: "/trip-detail", params: { id: item.id, trip: JSON.stringify(item) } })}>
+            {(() => {
+              const codes: string[] = [];
+              (item.orders || []).forEach((o: any) => {
+                if (o.pickup_location?.code) codes.push(o.pickup_location.code);
+                (o.delivery_points || []).forEach((dp: any) => {
+                  if (dp.location?.code) codes.push(dp.location.code);
+                });
+              });
+              const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
+              if (deduped.length > 0) return (
+                <View style={s.routeWrap}>
+                  <Ionicons name="navigate" size={11} color="#4F46E5" />
+                  <Text style={s.routeText} numberOfLines={1}>{deduped.join("  →  ")}</Text>
+                </View>
+              );
+              return null;
+            })()}
             <View style={s.topRow}>
               <View style={[s.iconBox, { backgroundColor: st.bg }]}><Ionicons name={st.icon as any} size={24} color={st.text} /></View>
               <View style={{ flex: 1 }}>
@@ -174,6 +191,8 @@ const s = StyleSheet.create({
   code: { fontSize: 16, fontWeight: "700", color: "#111827" }, plate: { fontSize: 13, color: "#6B7280", marginTop: 2 },
   badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }, badgeText: { fontSize: 12, fontWeight: "700" },
   kmLine: { fontSize: 12, color: "#6B7280", marginTop: 8 }, time: { fontSize: 11, color: "#9CA3AF" },
+  routeWrap: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10 },
+  routeText: { fontSize: 11, color: "#4F46E5", fontWeight: "600", flex: 1 },
   empty: { alignItems: "center", paddingVertical: 48 }, emptyText: { fontSize: 16, fontWeight: "600", color: "#9CA3AF", marginTop: 12 },
   searchWrap: { flexDirection: "row", alignItems: "center", marginHorizontal: 16, marginTop: 12, backgroundColor: "#fff", borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: "#E5E7EB", gap: 8 },
   searchInput: { flex: 1, paddingVertical: 10, fontSize: 15, color: "#111827" },
