@@ -28,7 +28,7 @@ const localISO = (d: Date = new Date()) => {
 };
 
 export default function TripDetailScreen() {
-  const { token } = useAuth(); const router = useRouter();
+  const { token, shift } = useAuth(); const router = useRouter();
   const params = useLocalSearchParams<{ id: string; trip: string }>();
   const trip = params.trip ? JSON.parse(params.trip) : null;
   const [detail, setDetail] = useState<any>(null); const [loading, setLoading] = useState(true);
@@ -39,6 +39,7 @@ export default function TripDetailScreen() {
   const [startKmInput, setStartKmInput] = useState("");
   const [returnStarted, setReturnStarted] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const userId = shift?.driver?.id;
 
   // Format: bỏ .0, hiển thị số nguyên
   const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
@@ -53,8 +54,9 @@ export default function TripDetailScreen() {
 
   const currentStatus = detail?.status || trip?.status || "pending";
   const isReturnTrip = currentStatus === "return_trip";
-  const canStart = currentStatus === "pending" && !isReturnTrip;
-  const canComplete = !["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed");
+  const isSwapped = userId && detail?.driver_id !== userId;
+  const canStart = currentStatus === "pending" && !isReturnTrip && !isSwapped;
+  const canComplete = (!["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed")) && !isSwapped;
   const orders: any[] = detail?.orders || trip?.orders || [];
 
   // Auto lấy km hiện tại của xe
@@ -165,6 +167,14 @@ export default function TripDetailScreen() {
         style={{ flex: 1 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}
       >
+        {/* Bàn giao banner */}
+        {isSwapped && (
+          <View style={s.swappedBanner}>
+            <Ionicons name="swap-horizontal" size={18} color="#D97706" />
+            <Text style={s.swappedBannerText}>Chuyến đã bàn giao — chỉ xem</Text>
+          </View>
+        )}
+
         {/* Hero */}
         <View style={[s.heroCard, { borderLeftColor: st.text, borderLeftWidth: 4 }]}>
           <View style={s.heroRow}>
@@ -273,7 +283,7 @@ export default function TripDetailScreen() {
               return (
                 <TouchableOpacity key={o.id} style={[s.orderCard, { borderColor: osColor + "20" }]} activeOpacity={0.7}
                   onPress={() => {
-                    router.push({ pathname: "/order-detail", params: { id: o.id, order: JSON.stringify({ ...o, trip_id: trip?.id || params.id, vehicle: detail?.vehicle || trip?.vehicle }) } });
+                    router.push({ pathname: "/order-detail", params: { id: o.id, order: JSON.stringify({ ...o, trip_id: trip?.id || params.id, vehicle: detail?.vehicle || trip?.vehicle, is_swapped: isSwapped }) } });
                   }}>
                   <View style={{ flex: 1 }}>
                     {(() => {
@@ -395,6 +405,8 @@ export default function TripDetailScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FAFB" },
+  swappedBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFFBEB", marginHorizontal: 16, marginTop: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#FDE68A" },
+  swappedBannerText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#92400E" },
   heroCard: { backgroundColor: "#fff", margin: 16, marginBottom: 4, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: "#F3F4F6" },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   tripCode: { fontSize: 20, fontWeight: "800", color: "#111827" }, plate: { fontSize: 14, color: "#6B7280", marginTop: 3 },

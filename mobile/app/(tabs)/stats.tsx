@@ -138,8 +138,7 @@ export default function StatsScreen() {
                 );
                 return null;
               })()}
-              <Text style={s.tripCode}>{t.trip_code}</Text>
-              <Text style={s.tripPlate}>{t.vehicle?.plate_number || "-"}</Text>
+              <Text style={s.tripCode}>{t.vehicle?.plate_number || "-"}</Text>
               {(() => {
                 const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
                 if (loadingTimes.length === 0) return null;

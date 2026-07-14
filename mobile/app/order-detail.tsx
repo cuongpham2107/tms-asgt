@@ -82,6 +82,7 @@ export default function OrderDetailScreen() {
   const { token } = useAuth();
   const params = useLocalSearchParams<{ id: string; order: string }>();
   const order = params.order ? JSON.parse(params.order) : null;
+  const isSwapped = order?.is_swapped || false;
   const [km, setKm] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -588,7 +589,7 @@ export default function OrderDetailScreen() {
         canLeftPickup ||
         canArriveDelivery ||
         canComplete ||
-        canEnd) && (
+        canEnd) && !isSwapped && (
         <>
           <View
             style={{
