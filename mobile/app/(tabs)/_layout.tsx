@@ -28,7 +28,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "Tổng quan" }} />
       <Tabs.Screen name="trips" options={{ title: "Chuyến đi" }} />
-      <Tabs.Screen name="map" options={{ title: "Bản đồ" }} />
+      <Tabs.Screen name="map" options={{ title: "Bản đồ", href: null }} />
       <Tabs.Screen name="stats" options={{ title: "Thống kê" }} />
       <Tabs.Screen name="profile" options={{ title: "Cá nhân" }} />
     </Tabs>

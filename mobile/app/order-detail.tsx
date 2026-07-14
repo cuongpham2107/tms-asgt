@@ -379,6 +379,17 @@ export default function OrderDetailScreen() {
         </View>
       </View>
 
+      {/* Notes */}
+      {d.notes ? (
+        <View style={s.notesCard}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <Ionicons name="document-text-outline" size={16} color="#4F46E5" />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#4F46E5" }}>Ghi chú</Text>
+          </View>
+          <Text style={s.notesText}>{d.notes}</Text>
+        </View>
+      ) : null}
+
       {/* Info grid */}
       <View style={s.infoGrid}>
         {[
@@ -886,6 +897,18 @@ const s = StyleSheet.create({
     overflow: "hidden",
   },
   cargoName: { fontSize: 14, color: "#6B7280", marginTop: 3 },
+  notesCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#EEF2FF",
+    borderLeftWidth: 3,
+    borderLeftColor: "#4F46E5",
+  },
+  notesText: { fontSize: 14, color: "#374151", lineHeight: 20 },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",

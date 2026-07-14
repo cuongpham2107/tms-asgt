@@ -182,6 +182,8 @@ class TripCheckpointService
      */
     private function autoStartTrip(Trip $trip, array $payload): Collection
     {
+        $this->validateNoActiveTrip($trip, CheckpointType::Started);
+
         $vehicleKm = $trip->vehicle?->current_mileage;
         $occurredAt = $payload['occurred_at'] ?? now();
 

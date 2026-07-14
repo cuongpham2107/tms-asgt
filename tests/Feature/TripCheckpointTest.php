@@ -607,3 +607,46 @@ test('cannot start new trip when driver has active trip', function () {
     // Chuyến mới vẫn pending
     expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
 });
+
+test('cannot auto-start trip via arrived_pickup when driver has active trip', function () {
+    // Bắt đầu chuyến hiện tại
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'km_reading' => 50010,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // Tạo chuyến mới pending
+    $otherTrip = Trip::create([
+        'trip_code' => 'TRIP-TEST-003',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Pending,
+    ]);
+
+    $otherOrder = Order::create([
+        'order_code' => 'ORD-TEST-003',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $otherTrip->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'pickup_address' => 'Pickup address',
+        'status' => OrderStatus::Sent,
+        'created_by' => $this->driver->id,
+    ]);
+
+    // Gửi arrived_pickup cho chuyến mới → auto-start bị từ chối vì driver đang có chuyến active
+    $this->postJson("/api/driver/trips/{$otherTrip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'km_reading' => 50050,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertStatus(422)
+        ->assertJsonPath('errors.checkpoint_type.0', function ($msg) {
+            return str_contains($msg, 'Tài xế đang có chuyến')
+                && str_contains($msg, 'chưa hoàn thành');
+        });
+
+    // Chuyến mới vẫn pending
+    expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
+});
