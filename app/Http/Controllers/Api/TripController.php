@@ -28,7 +28,10 @@ class TripController extends Controller
     {
         $user = $request->user();
 
-        $trip = Trip::where('driver_id', $user->id)
+        $trip = Trip::where(function ($q) use ($user) {
+            $q->where('driver_id', $user->id)
+                ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
+        })
             ->whereIn('status', TripStatus::activeStatuses())
             ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
             ->with([
@@ -105,7 +108,8 @@ class TripController extends Controller
     {
         $user = $request->user();
 
-        $belongsToDriver = $trip->driver_id === $user->id;
+        $belongsToDriver = $trip->driver_id === $user->id
+            || $trip->driverSwaps()->where('from_driver_id', $user->id)->exists();
 
         if (! $belongsToDriver) {
             return response()->json(['message' => 'This trip is not assigned to you'], 403);
@@ -157,6 +161,10 @@ class TripController extends Controller
         ]);
 
         $trips = Trip::query()
+            ->where(function ($q) use ($user) {
+                $q->where('driver_id', $user->id)
+                    ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
+            })
             ->with([
                 'vehicle',
                 'shift',
@@ -170,7 +178,6 @@ class TripController extends Controller
                 ]),
                 'checkpoints' => fn ($q) => $q->with('photos')->orderBy('occurred_at'),
             ])
-            ->where('driver_id', $user->id)
             ->whereIn('status', $validStatuses)
             ->when($request->filled('from_date'), fn ($q) => $q->whereDate('started_at', '>=', $request->from_date))
             ->when($request->filled('to_date'), fn ($q) => $q->whereDate('started_at', '<=', $request->to_date))

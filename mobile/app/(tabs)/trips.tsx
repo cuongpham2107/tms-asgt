@@ -36,11 +36,12 @@ const periods = [
 const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
 
 export default function TripsScreen() {
-  const { token } = useAuth(); const router = useRouter();
+  const { token, shift } = useAuth(); const router = useRouter();
   const [trips, setTrips] = useState<any[]>([]); const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false); const [activeTab, setActiveTab] = useState("all");
   const [activePeriod, setActivePeriod] = useState("all");
   const [search, setSearch] = useState("");
+  const userId = shift?.driver?.id;
 
   const getPeriodDates = (period: string) => {
     const now = new Date();
@@ -128,6 +129,8 @@ export default function TripsScreen() {
         renderItem={({ item }) => {
           const st = statusConfig[item.status] || statusConfig["pending"];
           const isCurrent = item.status !== "pending" && item.status !== "driver_swap" && item.status !== "completed";
+          const isSwapped = userId && item.driver_id !== userId;
+          const handoverKm = isSwapped ? (item.driver_swaps || []).find((s: any) => s.from_driver_id === userId)?.handover_km : null;
           return <TouchableOpacity style={[s.card, { borderColor: isCurrent ? st.text + "40" : "#F3F4F6" }]} activeOpacity={0.7}
             onPress={() => router.push({ pathname: "/trip-detail", params: { id: item.id, trip: JSON.stringify(item) } })}>
             {(() => {
@@ -153,11 +156,12 @@ export default function TripsScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text>
                   {isCurrent && <View style={{ backgroundColor: "#10B981", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontWeight: "700", color: "#fff" }}>● HIỆN TẠI</Text></View>}
+                  {isSwapped && <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontWeight: "700", color: "#D97706" }}>⤿ ĐÃ BÀN GIAO</Text></View>}
                 </View>
               </View>
               <View style={[s.badge, { backgroundColor: st.bg }]}><Text style={[s.badgeText, { color: st.text }]}>{st.label}</Text></View>
             </View>
-            <Text style={s.kmLine}>📏 {fmt(item.total_km)} km · {fmt(item.start_km)} → {fmt(item.end_km)}</Text>
+            <Text style={s.kmLine}>📏 {fmt(item.total_km)} km · {fmt(item.start_km)} → {isSwapped && handoverKm != null ? fmt(handoverKm) : fmt(item.end_km)}</Text>
             {(() => {
               const loadingTimes = (item.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
               if (loadingTimes.length === 0) return null;
