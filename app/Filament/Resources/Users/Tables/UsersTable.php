@@ -52,6 +52,10 @@ class UsersTable
                 TextColumn::make('cccd')
                     ->label('Số CCCD')
                     ->searchable(),
+                TextColumn::make('station')
+                    ->label('Điểm trực')
+                    ->badge()
+                    ->sortable(),
             ])
             ->filters([
                 //

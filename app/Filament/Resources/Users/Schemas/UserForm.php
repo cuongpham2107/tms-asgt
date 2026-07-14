@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users\Schemas;
 
+use App\Enums\OnDutyLocation;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
@@ -69,6 +70,9 @@ class UserForm
                         TextInput::make('address')
                             ->label('Địa chỉ')
                             ->columnSpanFull(),
+                        Select::make('station')
+                            ->label('Điểm trực')
+                            ->options(OnDutyLocation::class),
                     ]),
 
                 Section::make('Giấy tờ & Bằng lái')
