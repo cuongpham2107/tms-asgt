@@ -6,6 +6,7 @@ use App\Enums\OnDutyLocation;
 use App\Filament\Widgets\DriverDutySummaryWidget;
 use App\Models\DriverShift;
 use App\Models\User;
+use App\Models\Vehicle;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Pages\Page;
@@ -187,18 +188,32 @@ class DriverDutyReport extends Page implements HasTable
                 ->orderByDesc('start_time')
                 ->first();
 
-            $vehicle = $shift?->trips()
-                ->latest('started_at')
-                ->first()?->vehicle;
+            // Lấy xe: ưu tiên current_driver_id, fallback qua trip
+            $vehicle = Vehicle::where('current_driver_id', $driver->id)->first();
+            if ($vehicle === null && $shift) {
+                $vehicle = $shift->trips()
+                    ->latest('started_at')
+                    ->first()?->vehicle;
+            }
 
             $swapTrip = $shift?->trips()
                 ->whereNotNull('end_km')
                 ->where('status', 'driver_swap')
                 ->first();
 
-            // Nếu có chuyến đảo lái, xe đã bàn giao
             $hasSwap = $swapTrip !== null;
             $plate = $vehicle?->plate_number;
+
+            // Lấy giá trị thô station, map giá trị cũ sang mới
+            $rawStation = $driver->getRawOriginal('station');
+            $station = match ($rawStation) {
+                'T', 'TN' => 'TN',
+                'BE', 'BN' => 'BN',
+                'NBA' => 'NBA',
+                default => null,
+            };
+
+            $driver->station = $station;
 
             $driver->plate = $plate;
             $driver->swap_note = $hasSwap ? 'đảo lái' : null;
