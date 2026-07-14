@@ -95,6 +95,27 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Chuyến đang chạy */}
+      {shift && !shift.end_time && activeTrips.length > 0 && (
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Chuyến đang chạy ({activeTrips.length})</Text>
+          {activeTrips.map((t: any) => (
+            <TouchableOpacity key={t.id} style={s.activeTripCard}
+              onPress={() => router.push({
+                pathname: "/trip-detail",
+                params: { id: t.id, trip: JSON.stringify(t) },
+              })}>
+              <View style={[s.activeTripDot, { backgroundColor: t.status === "pending" ? "#6B7280" : "#F59E0B" }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.activeTripCode}>{t.trip_code}</Text>
+                <Text style={s.activeTripPlate}>{t.vehicle?.plate_number || "Chưa gán xe"}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {/* Kết thúc ca */}
       {shift && !shift.end_time && (
         <TouchableOpacity style={s.endShiftBtn} onPress={handleEndShift} disabled={ending} activeOpacity={0.8}>
@@ -159,6 +180,10 @@ const s = StyleSheet.create({
   infoValue: { fontSize: 14, fontWeight: "600", color: "#111827", flex: 1, marginLeft: 0, marginTop: 14 },
   endShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#EF4444", marginHorizontal: 16, marginTop: 20, padding: 16, borderRadius: 14, shadowColor: "#EF4444", shadowOpacity: 0.25, shadowRadius: 8, elevation: 3 },
   endShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  activeTripCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFF7ED", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#FED7AA", marginBottom: 8, gap: 12 },
+  activeTripDot: { width: 10, height: 10, borderRadius: 5 },
+  activeTripCode: { fontSize: 14, fontWeight: "700", color: "#111827" },
+  activeTripPlate: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   menu: { marginTop: 24, marginHorizontal: 16, gap: 10 },
   menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", padding: 16, borderRadius: 14, gap: 14 },
   menuIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
