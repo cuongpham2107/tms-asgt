@@ -8,6 +8,7 @@ use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
 use App\Models\Trip;
+use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
 use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
@@ -36,7 +37,10 @@ class TripController extends Controller
                 ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
         })
             ->whereIn('status', TripStatus::activeStatuses())
-            ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
+            ->where(function ($q) {
+                $q->where('is_empty_run', true)
+                    ->orWhereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]));
+            })
             ->with([
                 'vehicle',
                 'startLocation',
@@ -71,7 +75,10 @@ class TripController extends Controller
 
         $trip = Trip::where('driver_id', $user->id)
             ->whereIn('status', TripStatus::activeStatuses())
-            ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
+            ->where(function ($q) {
+                $q->where('is_empty_run', true)
+                    ->orWhereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]));
+            })
             ->with([
                 'vehicle',
                 'startLocation',
@@ -246,6 +253,10 @@ class TripController extends Controller
             DB::transaction(function () use ($trip, $endKm, $completedAt) {
                 app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
                 $trip->refresh();
+
+                if ($trip->shift) {
+                    app(ShiftKmCalculatorService::class)->calculate($trip->shift);
+                }
 
                 $trip->end_km = $endKm;
                 $trip->status = TripStatus::DriverSwap;

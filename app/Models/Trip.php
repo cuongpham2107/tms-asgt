@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
+use App\Services\ShiftKmCalculatorService;
 use App\Services\TripKmCalculatorService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -160,6 +161,10 @@ class Trip extends Model
             }
 
             app(TripKmCalculatorService::class)->calculate($this);
+
+            if ($this->shift) {
+                app(ShiftKmCalculatorService::class)->calculate($this->shift);
+            }
 
             $this->createMissingEndCheckpoints($endKmValue, $this->completed_at);
         });

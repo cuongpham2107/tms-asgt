@@ -192,6 +192,11 @@ class TripsTable extends BaseTable
                         ->modal()
                         ->modalWidth(Width::MaxContent)
                         ->modalHeading(fn (Trip $record): string => 'Sửa chuyến — '.$record->trip_code)
+                        ->mutateRecordDataUsing(function (array $data, Trip $record): array {
+                            $record->loadMissing(['startLocation', 'endLocation']);
+
+                            return $data;
+                        })
                         ->form(fn (Schema $schema): Schema => TripForm::configure($schema)),
 
                     DriverSwapAction::make(),

@@ -26,6 +26,8 @@ class TripResource extends JsonResource
             'total_km' => $this->total_km,
             'total_km_loaded' => $this->total_km_loaded,
             'total_km_empty' => $this->total_km_empty,
+            'is_empty_run' => $this->is_empty_run,
+            'note' => $this->note,
 
             'vehicle' => $this->whenLoaded('vehicle', fn () => [
                 'id' => $this->vehicle->id,

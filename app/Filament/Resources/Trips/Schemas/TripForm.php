@@ -9,7 +9,6 @@ use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
@@ -18,6 +17,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
+use Illuminate\Database\Eloquent\Model;
 
 class TripForm
 {
@@ -58,6 +58,16 @@ class TripForm
                     ->columns(4)
                     ->columnSpanFull()
                     ->schema([
+                        TextInput::make('start_location_code')
+                            ->label('Điểm bắt đầu')
+                            ->hidden(fn (Model $record) => ! $record->is_empty_run)
+                            ->afterStateHydrated(fn (TextInput $component, ?Trip $record) => $component->state($record?->startLocation?->code))
+                            ->columnSpan(2),
+                        TextInput::make('end_location_code')
+                            ->label('Điểm kết thúc')
+                            ->hidden(fn (Model $record) => ! $record->is_empty_run)
+                            ->afterStateHydrated(fn (TextInput $component, ?Trip $record) => $component->state($record?->endLocation?->code))
+                            ->columnSpan(2),
                         TextInput::make('start_km')
                             ->label('Km bắt đầu')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
@@ -109,34 +119,9 @@ class TripForm
                             ->seconds(false)
                             ->native(true),
                     ]),
-                // Section::make('Đơn hàng trong chuyến')
-                //     ->columnSpanFull()
-                //     ->schema([
-                //         Repeater::make('orders')
-                //             ->relationship('orders')
-                //             ->label('Danh sách đơn hàng')
-                //             ->table([
-                //                 TableColumn::make('Mã đơn')->width('150px'),
-                //                 TableColumn::make('Khách hàng')->width('200px'),
-                //                 TableColumn::make('Trạng thái')->width('120px'),
-                //             ])
-                //             ->schema([
-                //                 Placeholder::make('order_code')
-                //                     ->label('Mã đơn')
-                //                     ->content(fn ($record) => $record?->order_code ?? '-'),
-                //                 Placeholder::make('customer_name')
-                //                     ->label('Khách hàng')
-                //                     ->content(fn ($record) => $record?->customer?->name ?? '-'),
-                //                 Placeholder::make('order_status')
-                //                     ->label('Trạng thái')
-                //                     ->content(fn ($record) => $record?->status?->getLabel() ?? '-'),
-                //             ])
-                //             ->addable(false)
-                //             ->deletable(false)
-                //             ->reorderable(false),
-                //     ]),
                 Section::make('Các mốc hành trình')
                     ->columnSpanFull()
+                    ->hidden(fn (Model $record) => $record->is_empty_run)
                     ->schema([
                         Repeater::make('checkpoints')
                             ->relationship('checkpoints')
@@ -148,6 +133,7 @@ class TripForm
                                 TableColumn::make('Giờ')->width('180px'),
                                 TableColumn::make('Điểm giao')->width('120px'),
                             ])
+                            ->orderColumn('created_at')
                             ->compact()
                             ->schema([
                                 Select::make('checkpoint_type')

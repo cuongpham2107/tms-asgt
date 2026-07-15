@@ -87,7 +87,18 @@ class DriverDutyReport extends Page implements HasTable
                         $morning = (int) ($record->morning_half_count ?? 0);
                         $night = (int) ($record->night_half_count ?? 0);
 
-                        return "{$full}, {$morning}/2, {$night}/2";
+                        $parts = [];
+                        for ($i = 0; $i < $full; $i++) {
+                            $parts[] = 'X';
+                        }
+                        for ($i = 0; $i < $morning; $i++) {
+                            $parts[] = 'X/2';
+                        }
+                        for ($i = 0; $i < $night; $i++) {
+                            $parts[] = 'Y/2';
+                        }
+
+                        return $parts !== [] ? implode(', ', $parts) : '—';
                     }),
                 TextColumn::make('trip_count')
                     ->label('Số chuyến')
@@ -193,9 +204,11 @@ class DriverDutyReport extends Page implements HasTable
 
         $stations = [];
         $grandTotal = 0;
-        $grandWorking = 0;
+        $grandWorkingTtl = 0;
         $grandFull = 0;
-        $grandHalf = 0;
+        $grandMorningHalf = 0;
+        $grandNightHalf = 0;
+        $grandOff = 0;
 
         foreach (OnDutyLocation::cases() as $station) {
             $stationDrivers = $drivers->filter(fn ($d) => $d->station === $station);
@@ -204,38 +217,51 @@ class DriverDutyReport extends Page implements HasTable
                 continue;
             }
 
-            $working = 0;
             $full = 0;
-            $half = 0;
+            $morningHalf = 0;
+            $nightHalf = 0;
+            $workingDriverIds = [];
+
             foreach ($stationDrivers as $driver) {
-                $shift = DriverShift::where('driver_id', $driver->id)
+                $shifts = DriverShift::where('driver_id', $driver->id)
                     ->where(function ($q) use ($from, $to) {
                         $q->whereBetween('start_time', [$from, $to])
                             ->orWhereNull('end_time');
-                    })->first();
-                if ($shift) {
-                    $working++;
-                    if ($shift->shift_type === ShiftType::Full) {
-                        $full++;
-                    } else {
-                        $half++;
+                    })->get();
+
+                if ($shifts->isNotEmpty()) {
+                    $workingDriverIds[] = $driver->id;
+
+                    foreach ($shifts as $shift) {
+                        match ($shift->shift_type) {
+                            ShiftType::Full => $full++,
+                            ShiftType::MorningHalf => $morningHalf++,
+                            ShiftType::NightHalf => $nightHalf++,
+                        };
                     }
                 }
             }
 
+            $workingTtl = $full + $morningHalf + $nightHalf;
+            $workingDrivers = count(array_unique($workingDriverIds));
+            $off = $total - $workingDrivers;
+
             $grandTotal += $total;
-            $grandWorking += $working;
+            $grandWorkingTtl += $workingTtl;
             $grandFull += $full;
-            $grandHalf += $half;
+            $grandMorningHalf += $morningHalf;
+            $grandNightHalf += $nightHalf;
+            $grandOff += $off;
 
             $stations[] = [
                 'label' => $station->getLabel(),
                 'color' => $station->getColor(),
                 'total' => $total,
-                'working' => $working,
+                'working_ttl' => $workingTtl,
                 'full' => $full,
-                'half' => $half,
-                'off' => $total - $working,
+                'morning_half' => $morningHalf,
+                'night_half' => $nightHalf,
+                'off' => $off,
             ];
         }
 
@@ -243,10 +269,11 @@ class DriverDutyReport extends Page implements HasTable
             'stations' => $stations,
             'grand' => [
                 'total' => $grandTotal,
-                'working' => $grandWorking,
+                'working_ttl' => $grandWorkingTtl,
                 'full' => $grandFull,
-                'half' => $grandHalf,
-                'off' => $grandTotal - $grandWorking,
+                'morning_half' => $grandMorningHalf,
+                'night_half' => $grandNightHalf,
+                'off' => $grandOff,
             ],
         ];
     }
