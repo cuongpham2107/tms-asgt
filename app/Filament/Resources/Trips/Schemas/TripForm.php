@@ -142,6 +142,7 @@ class TripForm
                                 TableColumn::make('Giờ')->width('180px'),
                                 TableColumn::make('Điểm giao')->width('120px'),
                             ])
+                            ->compact()
                             ->schema([
                                 Select::make('checkpoint_type')
                                     ->label('Loại')
@@ -175,6 +176,7 @@ class TripForm
                                         titleAttribute: 'location.code',
                                         modifyQueryUsing: fn (Builder $query, $get) => $query->where('order_id', $get('order_id'))
                                     )
+                                    ->placeholder('Chọn điểm')
                                     ->searchable()
                                     ->native(false)
                                     ->nullable(),
