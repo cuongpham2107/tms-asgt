@@ -16,6 +16,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Grouping\Group;
@@ -178,7 +179,7 @@ class TripsTable extends BaseTable
                         ->icon('heroicon-o-map-pin')
                         ->color('primary')
                         ->modal()
-                        ->modalWidth('5xl')
+                        ->modalWidth(Width::MaxContent)
                         ->modalHeading(fn (Trip $record): string => 'Hành trình — '.$record->vehicle?->plate_number)
                         ->modalContent(fn (Trip $record) => view('filament.resources.trips.components.trip-timeline-popup', [
                             'trip' => $record,
@@ -187,9 +188,9 @@ class TripsTable extends BaseTable
                         ->modalCancelActionLabel('Đóng'),
 
                     EditAction::make()
-                        ->slideOver()
                         ->stickyModalFooter()
-                        ->modalWidth('7xl')
+                        ->modal()
+                        ->modalWidth(Width::MaxContent)
                         ->modalHeading(fn (Trip $record): string => 'Sửa chuyến — '.$record->trip_code)
                         ->form(fn (Schema $schema): Schema => TripForm::configure($schema)),
 
