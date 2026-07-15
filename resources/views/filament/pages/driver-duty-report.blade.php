@@ -62,5 +62,59 @@
         @endforeach
     </div>
 
-    {{ $this->table }}
+    {{-- Grid 2-1 layout --}}
+    <div class="grid grid-cols-3 gap-4">
+        {{-- Left: summary table (col-span-2) --}}
+        <div class="col-span-2">
+            @php $data = $this->getSummaryData(); @endphp
+            <div class="rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div class="border-b border-gray-200 px-4 py-3">
+                    <h3 class="text-sm font-semibold text-gray-900">Tổng hợp ca trực lái xe</h3>
+                </div>
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b bg-gray-50">
+                            <th class="px-4 py-2 text-left font-medium text-gray-700">Điểm trực</th>
+                            <th class="px-3 py-2 text-center font-medium text-gray-700" colspan="3">Đi làm</th>
+                            <th class="px-3 py-2 text-center font-medium text-gray-700">Nghỉ</th>
+                            <th class="px-3 py-2 text-center font-medium text-gray-700">TTL</th>
+                        </tr>
+                        <tr class="border-b bg-gray-50 text-xs text-gray-500">
+                            <th></th>
+                            <th class="px-3 py-1 text-center">TTL</th>
+                            <th class="px-3 py-1 text-center">X</th>
+                            <th class="px-3 py-1 text-center">Y/2</th>
+                            <th class="px-3 py-1 text-center">X</th>
+                            <th class="px-3 py-1 text-center"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($data['stations'] as $s)
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="px-4 py-2 font-medium">{{ $s['label'] }}</td>
+                            <td class="px-3 py-2 text-center">{{ $s['working'] }}</td>
+                            <td class="px-3 py-2 text-center">{{ $s['full'] }}</td>
+                            <td class="px-3 py-2 text-center">{{ $s['half'] }}</td>
+                            <td class="px-3 py-2 text-center text-red-600">{{ $s['off'] }}</td>
+                            <td class="px-3 py-2 text-center font-bold">{{ $s['total'] }}</td>
+                        </tr>
+                        @endforeach
+                        <tr class="border-t-2 border-gray-300 bg-gray-100 font-bold">
+                            <td class="px-4 py-2">Tổng lái xe</td>
+                            <td class="px-3 py-2 text-center">{{ $data['grand']['working'] }}</td>
+                            <td class="px-3 py-2 text-center">{{ $data['grand']['full'] }}</td>
+                            <td class="px-3 py-2 text-center">{{ $data['grand']['half'] }}</td>
+                            <td class="px-3 py-2 text-center text-red-600">{{ $data['grand']['off'] }}</td>
+                            <td class="px-3 py-2 text-center">{{ $data['grand']['total'] }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- Right: main table (col-span-1) --}}
+        <div class="col-span-1">
+            {{ $this->table }}
+        </div>
+    </div>
 </x-filament-panels::page>

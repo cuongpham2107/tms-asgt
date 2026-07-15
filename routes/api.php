@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DriverShiftController;
-use App\Http\Controllers\Api\EmptyKilometerController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\RouteController;
@@ -53,9 +52,6 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::get('/trips/{trip}', [TripController::class, 'show']);
     Route::post('/trips/{trip}/checkpoints', [TripCheckpointController::class, 'checkpoint']);
     Route::post('/trips/{trip}/complete', [TripController::class, 'complete']);
-
-    // Empty kilometers (ghi nhận km không hàng)
-    Route::post('/empty-kilometers', [EmptyKilometerController::class, 'store']);
 
     // Locations (danh sách địa điểm có search và limit)
     Route::get('/locations', [LocationController::class, 'index']);

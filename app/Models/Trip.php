@@ -6,7 +6,6 @@ use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Services\TripKmCalculatorService;
-use Database\Factories\TripFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -47,6 +46,8 @@ class Trip extends Model
         'total_km',
         'total_km_loaded',
         'total_km_empty',
+        'is_empty_run',
+        'note',
         'start_location_id',
         'end_location_id',
     ];
@@ -62,6 +63,7 @@ class Trip extends Model
             'total_km' => 'decimal:1',
             'total_km_loaded' => 'decimal:1',
             'total_km_empty' => 'decimal:1',
+            'is_empty_run' => 'boolean',
             'status' => TripStatus::class,
         ];
     }

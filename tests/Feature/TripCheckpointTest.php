@@ -340,6 +340,12 @@ test('completed handles orders at different locations separately', function () {
 });
 
 test('arrived_delivery groups orders at same location', function () {
+    // Start trip first so auto-start doesn't add checkpoints to the arrived_delivery response
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
     // Cả 2 orders cùng location_id → arrived_delivery tạo checkpoint cho cả 2
     $response = $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_delivery',
@@ -348,7 +354,7 @@ test('arrived_delivery groups orders at same location', function () {
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
-    // Response trả về mảng checkpoints
+    // Response trả về mảng checkpoints (chỉ chứa arrived_delivery, không chứa auto-start)
     $response->assertJsonStructure(['checkpoints']);
     expect(collect($response->json('checkpoints')))->toHaveCount(2);
 

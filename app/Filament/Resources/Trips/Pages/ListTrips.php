@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Trips\Pages;
 use App\Enums\TripStatus;
 use App\Filament\Forms\Components\OrderDateRangePicker;
 use App\Filament\Forms\Components\PillFilter;
+use App\Filament\Resources\Trips\Actions\CreateEmptyRunAction;
 use App\Filament\Resources\Trips\TripResource;
 use App\Filament\Resources\Trips\Widgets\TripStatsOverviewWidget;
 use App\Models\Trip;
@@ -71,6 +72,7 @@ class ListTrips extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            CreateEmptyRunAction::make(),
             // CreateOrderHHHKAction::make(),
             // CreateOrderHNAction::make(),
         ];

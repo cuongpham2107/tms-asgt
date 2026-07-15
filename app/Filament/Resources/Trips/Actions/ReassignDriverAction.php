@@ -236,6 +236,7 @@ class ReassignDriverAction
                         'end_location_id' => $data['end_location_id'] ?? null,
                         'started_at' => $now,
                         'start_km' => $vehicle?->current_mileage,
+                        'is_empty_run' => true,
                     ]);
 
                     TripCheckpoint::create([
@@ -248,6 +249,7 @@ class ReassignDriverAction
                         'driver_id' => $oldDriver->id,
                         'shift_id' => $oldShift?->id,
                         'vehicle_id' => $data['return_vehicle_id'],
+                        'order_id' => null,
                     ]);
 
                     TripCheckpoint::create([
@@ -260,6 +262,7 @@ class ReassignDriverAction
                         'driver_id' => $oldDriver->id,
                         'shift_id' => $oldShift?->id,
                         'vehicle_id' => $data['return_vehicle_id'],
+                        'order_id' => null,
                     ]);
 
                     Notification::make()

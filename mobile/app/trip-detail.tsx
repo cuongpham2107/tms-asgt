@@ -66,6 +66,7 @@ export default function TripDetailScreen() {
   const isSwapped = detail && userId && detail.driver_id !== userId;
   const canStart = currentStatus === "pending" && !isReturnTrip && !isSwapped;
   const canComplete = (!["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed")) && !isSwapped;
+  const isEmptyRun = (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true || currentStatus === "return_trip";
   const orders: any[] = detail?.orders || trip?.orders || [];
 
   // Auto lấy km hiện tại của xe
@@ -198,6 +199,11 @@ export default function TripDetailScreen() {
               <Ionicons name={st.icon as any} size={14} color={st.text} />
               <Text style={[s.statusPillText, { color: st.text }]}>{st.label}</Text>
             </View>
+            {isEmptyRun && (
+              <View style={s.badgeEmpty}>
+                <Text style={s.badgeEmptyText}>Chuyến không hàng</Text>
+              </View>
+            )}
           </View>
           {canStart && (
             <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#10B981", marginTop: 12 }]} onPress={handleStart} disabled={starting}>
@@ -425,6 +431,8 @@ const s = StyleSheet.create({
   tripCode: { fontSize: 20, fontWeight: "800", color: "#111827" }, plate: { fontSize: 14, color: "#6B7280", marginTop: 3 },
   statusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   statusPillText: { fontSize: 12, fontWeight: "700" },
+  badgeEmpty: { backgroundColor: "#8B5CF6", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  badgeEmptyText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 12 },
   actionBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   statsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, gap: 8, marginBottom: 8 },

@@ -220,9 +220,8 @@ function cleanupShifts(int $driverId, int $vehicleId): void
 \$driverId = {$driverId};
 \$vehicleId = {$vehicleId};
 \$shiftIds = DB::table(\"driver_shifts\")->where(\"driver_id\",\$driverId)->pluck(\"id\");
-DB::statement(\"PRAGMA foreign_keys = OFF\");
-DB::table(\"empty_kilometers\")->whereIn(\"shift_id\",\$shiftIds)->delete();
-foreach (\$shiftIds as \$sid) {
+DB::statement("PRAGMA foreign_keys = OFF");
+foreach ($shiftIds as $sid) {
     DB::table(\"trip_checkpoints\")->where(\"shift_id\",\$sid)->delete();
 }
 DB::table(\"driver_swaps\")->whereIn(\"old_shift_id\",\$shiftIds)->orWhereIn(\"new_shift_id\",\$shiftIds)->delete();
