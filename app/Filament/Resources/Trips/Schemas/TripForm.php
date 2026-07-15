@@ -15,6 +15,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
 
 class TripForm
 {
@@ -152,10 +153,13 @@ class TripForm
                                     ->native(false),
                                 Select::make('order_id')
                                     ->label('Đơn hàng')
-                                    ->relationship('order', 'order_code')
+                                    ->relationship(
+                                        name: 'order',
+                                        titleAttribute: 'order_code',
+                                        modifyQueryUsing: fn (Builder $query, $get) => $query->where('trip_id', $get('../../id'))
+                                    )
                                     ->searchable()
-                                    ->native(false)
-                                    ->modifyQueryUsing(fn ($query, $get) => $query->where('trip_id', $get('../../id'))),
+                                    ->native(false),
                                 TextInput::make('km_reading')
                                     ->label('Km')
                                     ->numeric()
@@ -172,11 +176,14 @@ class TripForm
                                     ->nullable(),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')
-                                    ->relationship('deliveryPoint', 'address')
+                                    ->relationship(
+                                        name: 'deliveryPoint',
+                                        titleAttribute: 'address',
+                                        modifyQueryUsing: fn (Builder $query, $get) => $query->where('order_id', $get('order_id'))
+                                    )
                                     ->searchable()
                                     ->native(false)
-                                    ->nullable()
-                                    ->modifyQueryUsing(fn ($query, $get) => $query->where('order_id', $get('order_id'))),
+                                    ->nullable(),
                                 TextInput::make('gps_lat')
                                     ->label('GPS Lat')
                                     ->numeric()
