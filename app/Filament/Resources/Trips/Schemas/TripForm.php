@@ -136,14 +136,11 @@ class TripForm
                             ->relationship('checkpoints')
                             ->label('Danh sách mốc hành trình')
                             ->table([
-                                TableColumn::make('Loại')->width('150px'),
+                                TableColumn::make('Loại')->width('180px'),
                                 TableColumn::make('Đơn hàng')->width('120px'),
-                                TableColumn::make('Km')->width('80px'),
-                                TableColumn::make('Giờ')->width('150px'),
-                                TableColumn::make('Ghi chú')->width('120px'),
+                                TableColumn::make('Km')->width('120px'),
+                                TableColumn::make('Giờ')->width('180px'),
                                 TableColumn::make('Điểm giao')->width('120px'),
-                                TableColumn::make('Lat')->width('90px'),
-                                TableColumn::make('Lng')->width('90px'),
                             ])
                             ->schema([
                                 Select::make('checkpoint_type')
@@ -171,29 +168,17 @@ class TripForm
                                     ->displayFormat('H:i d/m/Y')
                                     ->seconds(false)
                                     ->native(true),
-                                TextInput::make('voice_note')
-                                    ->label('Ghi chú')
-                                    ->nullable(),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')
                                     ->relationship(
                                         name: 'deliveryPoint',
-                                        titleAttribute: 'address',
+                                        titleAttribute: 'location.code',
                                         modifyQueryUsing: fn (Builder $query, $get) => $query->where('order_id', $get('order_id'))
                                     )
                                     ->searchable()
                                     ->native(false)
                                     ->nullable(),
-                                TextInput::make('gps_lat')
-                                    ->label('GPS Lat')
-                                    ->numeric()
-                                    ->step(0.0000001)
-                                    ->nullable(),
-                                TextInput::make('gps_lng')
-                                    ->label('GPS Lng')
-                                    ->numeric()
-                                    ->step(0.0000001)
-                                    ->nullable(),
+
                             ])
                             ->addable()
                             ->deletable()
