@@ -205,17 +205,17 @@ class TripForm
                             ->addable()
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
-                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data, Trip $record): array {
-                                $data['driver_id'] = $record->driver_id;
-                                $data['shift_id'] = $record->shift_id;
-                                $data['vehicle_id'] = $record->vehicle_id;
+                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data, $get): array {
+                                $data['driver_id'] = $get('../../driver_id');
+                                $data['shift_id'] = $get('../../shift_id');
+                                $data['vehicle_id'] = $get('../../vehicle_id');
 
                                 return $data;
                             })
-                            ->mutateRelationshipDataBeforeSaveUsing(function (array $data, Trip $record): array {
-                                $data['driver_id'] = $record->driver_id;
-                                $data['shift_id'] = $record->shift_id;
-                                $data['vehicle_id'] = $record->vehicle_id;
+                            ->mutateRelationshipDataBeforeSaveUsing(function (array $data, $get): array {
+                                $data['driver_id'] = $get('../../driver_id');
+                                $data['shift_id'] = $get('../../shift_id');
+                                $data['vehicle_id'] = $get('../../vehicle_id');
 
                                 return $data;
                             })
