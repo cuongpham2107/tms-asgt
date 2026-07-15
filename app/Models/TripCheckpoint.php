@@ -23,6 +23,7 @@ class TripCheckpoint extends Model
         'voice_note',
         'driver_id',
         'shift_id',
+        'vehicle_id',
     ];
 
     protected function casts(): array
