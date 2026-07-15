@@ -79,42 +79,42 @@
                 </div>
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b-0.5 bg-gray-50">
-                            <th class="px-4 py-2 text-left font-medium text-gray-700">Điểm trực</th>
-                            <th class="px-3 py-2 text-center font-medium text-gray-700" colspan="4">Đi làm</th>
-                            <th class="px-3 py-2 text-center font-medium text-gray-700">Nghỉ</th>
-                            <th class="px-3 py-2 text-center font-medium text-gray-700">TTL</th>
+                        <tr class="bg-gray-50">
+                            <th class="border border-gray-200 px-4 py-2 text-left font-medium text-gray-700">Điểm trực</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-medium text-gray-700" colspan="4">Đi làm</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-medium text-gray-700">Nghỉ</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-medium text-gray-700">TTL</th>
                         </tr>
-                        <tr class="border-b-0.5 bg-gray-50 text-xs text-gray-500">
-                            <th></th>
-                            <th class="px-3 py-1 text-center">TTL</th>
-                            <th class="px-3 py-1 text-center">X/2</th>
-                            <th class="px-3 py-1 text-center">Y/2</th>
-                            <th class="px-3 py-1 text-center">X</th>
-                            <th class="px-3 py-1 text-center"></th>
-                            <th class="px-3 py-1 text-center"></th>
+                        <tr class="bg-gray-50 text-xs text-gray-500">
+                            <th class="border border-gray-200"></th>
+                            <th class="border border-gray-200 px-3 py-1 text-center">TTL</th>
+                            <th class="border border-gray-200 px-3 py-1 text-center">X/2</th>
+                            <th class="border border-gray-200 px-3 py-1 text-center">Y/2</th>
+                            <th class="border border-gray-200 px-3 py-1 text-center">X</th>
+                            <th class="border border-gray-200 px-3 py-1 text-center"></th>
+                            <th class="border border-gray-200 px-3 py-1 text-center"></th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($data['stations'] as $s)
-                        <tr class="border-b-0.5 hover:bg-gray-50">
-                            <td class="px-4 py-2 font-medium">{{ $s['label'] }}</td>
-                            <td class="px-3 py-2 text-center font-bold">{{ $s['working_ttl'] }}</td>
-                            <td class="px-3 py-2 text-center">{{ $s['morning_half'] }}</td>
-                            <td class="px-3 py-2 text-center">{{ $s['night_half'] }}</td>
-                            <td class="px-3 py-2 text-center">{{ $s['full'] }}</td>
-                            <td class="px-3 py-2 text-center text-red-600">{{ $s['off'] }}</td>
-                            <td class="px-3 py-2 text-center font-bold">{{ $s['total'] }}</td>
+                        <tr class="hover:bg-gray-50">
+                            <td class="border border-gray-200 px-4 py-2 font-medium">{{ $s['label'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center font-bold">{{ $s['working_ttl'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $s['morning_half'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $s['night_half'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $s['full'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center text-red-600">{{ $s['off'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center font-bold">{{ $s['total'] }}</td>
                         </tr>
                         @endforeach
-                        <tr class="border-t-0.5 border-gray-300 bg-gray-100 font-bold">
-                            <td class="px-4 py-2">Tổng lái xe</td>
-                            <td class="px-3 py-2 text-center">{{ $data['grand']['working_ttl'] }}</td>
-                            <td class="px-3 py-2 text-center">{{ $data['grand']['morning_half'] }}</td>
-                            <td class="px-3 py-2 text-center">{{ $data['grand']['night_half'] }}</td>
-                            <td class="px-3 py-2 text-center">{{ $data['grand']['full'] }}</td>
-                            <td class="px-3 py-2 text-center text-red-600">{{ $data['grand']['off'] }}</td>
-                            <td class="px-3 py-2 text-center">{{ $data['grand']['total'] }}</td>
+                        <tr class="bg-gray-100 font-bold">
+                            <td class="border border-gray-200 px-4 py-2">Tổng lái xe</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['working_ttl'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['morning_half'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['night_half'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['full'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center text-red-600">{{ $data['grand']['off'] }}</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['total'] }}</td>
                         </tr>
                     </tbody>
                 </table>
