@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Trips\Schemas;
 
+use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Models\Trip;
 use App\Models\User;
@@ -12,7 +13,6 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 
@@ -131,8 +131,81 @@ class TripForm
                 Section::make('Các mốc hành trình')
                     ->columnSpanFull()
                     ->schema([
-                        View::make('checkpoints_grouped')
-                            ->view('filament.resources.trips.components.grouped-checkpoints')
+                        Repeater::make('checkpoints')
+                            ->relationship('checkpoints')
+                            ->label('Danh sách mốc hành trình')
+                            ->table([
+                                TableColumn::make('Loại')->width('150px'),
+                                TableColumn::make('Đơn hàng')->width('120px'),
+                                TableColumn::make('Km')->width('80px'),
+                                TableColumn::make('Giờ')->width('150px'),
+                                TableColumn::make('Ghi chú')->width('150px'),
+                            ])
+                            ->schema([
+                                Select::make('checkpoint_type')
+                                    ->label('Loại')
+                                    ->options(CheckpointType::class)
+                                    ->required()
+                                    ->native(false),
+                                Select::make('order_id')
+                                    ->label('Đơn hàng')
+                                    ->relationship('order', 'order_code')
+                                    ->searchable()
+                                    ->native(false)
+                                    ->modifyQueryUsing(fn ($query, $get) => $query->where('trip_id', $get('../../id'))),
+                                TextInput::make('km_reading')
+                                    ->label('Km')
+                                    ->numeric()
+                                    ->step(0.1)
+                                    ->nullable(),
+                                DateTimePicker::make('occurred_at')
+                                    ->label('Thời gian')
+                                    ->required()
+                                    ->displayFormat('H:i d/m/Y')
+                                    ->seconds(false)
+                                    ->native(true),
+                                TextInput::make('voice_note')
+                                    ->label('Ghi chú')
+                                    ->nullable(),
+                                Select::make('delivery_point_id')
+                                    ->label('Điểm giao')
+                                    ->relationship('deliveryPoint', 'address')
+                                    ->searchable()
+                                    ->native(false)
+                                    ->nullable()
+                                    ->modifyQueryUsing(fn ($query, $get) => $query->where('order_id', $get('order_id'))),
+                                TextInput::make('gps_lat')
+                                    ->label('GPS Lat')
+                                    ->numeric()
+                                    ->step(0.0000001)
+                                    ->nullable(),
+                                TextInput::make('gps_lng')
+                                    ->label('GPS Lng')
+                                    ->numeric()
+                                    ->step(0.0000001)
+                                    ->nullable(),
+                                Select::make('driver_id')
+                                    ->relationship('driver', 'name')
+                                    ->hidden()
+                                    ->default(fn ($get) => $get('../../driver_id')),
+                                Select::make('shift_id')
+                                    ->relationship('shift', 'id')
+                                    ->hidden()
+                                    ->default(fn ($get) => $get('../../shift_id')),
+                                Select::make('vehicle_id')
+                                    ->relationship('vehicle', 'plate_number')
+                                    ->hidden()
+                                    ->default(fn ($get) => $get('../../vehicle_id')),
+                            ])
+                            ->addable()
+                            ->deletable()
+                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data, Trip $record): array {
+                                $data['driver_id'] = $record->driver_id;
+                                $data['shift_id'] = $record->shift_id;
+                                $data['vehicle_id'] = $record->vehicle_id;
+
+                                return $data;
+                            })
                             ->columnSpanFull(),
                     ]),
             ]);
