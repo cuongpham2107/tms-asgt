@@ -139,7 +139,10 @@ class TripForm
                                 TableColumn::make('Đơn hàng')->width('120px'),
                                 TableColumn::make('Km')->width('80px'),
                                 TableColumn::make('Giờ')->width('150px'),
-                                TableColumn::make('Ghi chú')->width('150px'),
+                                TableColumn::make('Ghi chú')->width('120px'),
+                                TableColumn::make('Điểm giao')->width('120px'),
+                                TableColumn::make('Lat')->width('90px'),
+                                TableColumn::make('Lng')->width('90px'),
                             ])
                             ->schema([
                                 Select::make('checkpoint_type')
@@ -184,22 +187,18 @@ class TripForm
                                     ->numeric()
                                     ->step(0.0000001)
                                     ->nullable(),
-                                Select::make('driver_id')
-                                    ->relationship('driver', 'name')
-                                    ->hidden()
-                                    ->default(fn ($get) => $get('../../driver_id')),
-                                Select::make('shift_id')
-                                    ->relationship('shift', 'id')
-                                    ->hidden()
-                                    ->default(fn ($get) => $get('../../shift_id')),
-                                Select::make('vehicle_id')
-                                    ->relationship('vehicle', 'plate_number')
-                                    ->hidden()
-                                    ->default(fn ($get) => $get('../../vehicle_id')),
                             ])
                             ->addable()
                             ->deletable()
+                            ->addActionLabel('Thêm mốc hành trình')
                             ->mutateRelationshipDataBeforeCreateUsing(function (array $data, Trip $record): array {
+                                $data['driver_id'] = $record->driver_id;
+                                $data['shift_id'] = $record->shift_id;
+                                $data['vehicle_id'] = $record->vehicle_id;
+
+                                return $data;
+                            })
+                            ->mutateRelationshipDataBeforeSaveUsing(function (array $data, Trip $record): array {
                                 $data['driver_id'] = $record->driver_id;
                                 $data['shift_id'] = $record->shift_id;
                                 $data['vehicle_id'] = $record->vehicle_id;
