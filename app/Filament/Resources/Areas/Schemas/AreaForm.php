@@ -10,6 +10,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 
 class AreaForm
 {
@@ -42,6 +43,8 @@ class AreaForm
                             ->label('Thứ tự hiển thị')
                             ->prefixIcon(Heroicon::OutlinedBarsArrowDown)
                             ->required()
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric()
                             ->default(0),
                         Toggle::make('is_active')

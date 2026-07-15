@@ -27,6 +27,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 use Illuminate\Database\Eloquent\Builder;
 
 class OrderForm extends CreatesOrderTransportCards
@@ -103,6 +104,8 @@ class OrderForm extends CreatesOrderTransportCards
                                 TextInput::make('chargeable_weight')
                                     ->label('Tải trọng tính cước')
                                     ->suffix('tấn')
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
                                     ->numeric()
                                     ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
@@ -227,11 +230,15 @@ class OrderForm extends CreatesOrderTransportCards
                                                 TextInput::make('total_packages')
                                                     ->label('Số kiện')
                                                     ->prefixIcon(Heroicon::OutlinedSquares2x2)
+                                                    ->mask(RawJs::make('$money($input)'))
+                                                    ->stripCharacters(',')
                                                     ->numeric()
                                                     ->columnSpan(2),
                                                 TextInput::make('total_weight')
                                                     ->label('Trọng lượng (tấn)')
                                                     ->prefixIcon(Heroicon::OutlinedScale)
+                                                    ->mask(RawJs::make('$money($input)'))
+                                                    ->stripCharacters(',')
                                                     ->numeric()
                                                     ->columnSpan(3),
                                             ]),
@@ -246,10 +253,14 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->columnSpanFull(),
                                 TextInput::make('total_packages')
                                     ->label('Số kiện')
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
                                     ->numeric(),
                                 TextInput::make('total_weight')
                                     ->label('Trọng lượng (tấn)')
                                     ->live(onBlur: true)
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
                                     ->numeric(),
                                 Textarea::make('notes')
                                     ->label('Ghi chú')

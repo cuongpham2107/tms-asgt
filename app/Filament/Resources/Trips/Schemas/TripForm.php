@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Trips\Schemas;
 
 use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
+use App\Models\Order;
+use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use Filament\Forms\Components\DateTimePicker;
@@ -15,7 +17,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Database\Eloquent\Builder;
+use Filament\Support\RawJs;
 
 class TripForm
 {
@@ -59,6 +61,8 @@ class TripForm
                         TextInput::make('start_km')
                             ->label('Km bắt đầu')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric()
                             ->afterStateHydrated(function (TextInput $component, ?Trip $record): void {
                                 if ($record === null || $component->getState() !== null) {
@@ -76,6 +80,8 @@ class TripForm
                         TextInput::make('end_km')
                             ->label('Km kết thúc')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric(),
                         DateTimePicker::make('started_at')
                             ->label('Bắt đầu')
@@ -151,15 +157,22 @@ class TripForm
                                     ->native(false),
                                 Select::make('order_id')
                                     ->label('Đơn hàng')
-                                    ->relationship(
-                                        name: 'order',
-                                        titleAttribute: 'order_code',
-                                        modifyQueryUsing: fn (Builder $query, $get) => $query->where('trip_id', $get('../../id'))
-                                    )
+                                    ->options(function ($get): array {
+                                        $tripId = $get('../../id');
+                                        if (! $tripId) {
+                                            return [];
+                                        }
+
+                                        return Order::where('trip_id', $tripId)
+                                            ->pluck('order_code', 'id')
+                                            ->toArray();
+                                    })
                                     ->searchable()
                                     ->native(false),
                                 TextInput::make('km_reading')
                                     ->label('Km')
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
                                     ->numeric()
                                     ->step(0.1)
                                     ->nullable(),
@@ -171,11 +184,18 @@ class TripForm
                                     ->native(true),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')
-                                    ->relationship(
-                                        name: 'deliveryPoint',
-                                        titleAttribute: 'location.code',
-                                        modifyQueryUsing: fn (Builder $query, $get) => $query->where('order_id', $get('order_id'))
-                                    )
+                                    ->options(function ($get): array {
+                                        $orderId = $get('order_id');
+                                        if (! $orderId) {
+                                            return [];
+                                        }
+
+                                        return OrderDeliveryPoint::where('order_id', $orderId)
+                                            ->with('location')
+                                            ->get()
+                                            ->mapWithKeys(fn ($dp) => [$dp->id => $dp->location?->code ?? 'DP#'.$dp->id])
+                                            ->toArray();
+                                    })
                                     ->placeholder('Chọn điểm')
                                     ->searchable()
                                     ->native(false)

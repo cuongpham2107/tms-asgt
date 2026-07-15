@@ -12,6 +12,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 
 class VehicleMaintenanceJobForm
 {
@@ -50,15 +51,21 @@ class VehicleMaintenanceJobForm
                     ->label('Nhắc trước (ngày)')
                     ->prefixIcon(Heroicon::OutlinedBellAlert)
                     ->required()
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric()
                     ->default(3),
                 TextInput::make('estimated_cost')
                     ->label('Dự toán')
                     ->prefixIcon(Heroicon::OutlinedCurrencyDollar)
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric(),
                 TextInput::make('actual_cost')
                     ->label('Thực tế')
                     ->prefixIcon(Heroicon::OutlinedCurrencyDollar)
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric(),
                 TextInput::make('garage')
                     ->label('Garage')
@@ -69,6 +76,8 @@ class VehicleMaintenanceJobForm
                 TextInput::make('km_at_service')
                     ->label('Km lúc bảo dưỡng')
                     ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric(),
                 DatePicker::make('next_service_date')
                     ->label('Bảo dưỡng tiếp theo')

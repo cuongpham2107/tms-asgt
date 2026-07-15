@@ -10,6 +10,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 
 class VehicleDocumentForm
 {
@@ -46,6 +47,8 @@ class VehicleDocumentForm
                 TextInput::make('renewal_cost')
                     ->label('Phí gia hạn')
                     ->prefixIcon(Heroicon::OutlinedCurrencyDollar)
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric()
                     ->prefix('$'),
                 DatePicker::make('last_renewed_date')

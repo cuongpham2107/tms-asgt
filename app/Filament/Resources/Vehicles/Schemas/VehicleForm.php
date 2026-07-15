@@ -12,6 +12,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 
 class VehicleForm
 {
@@ -80,12 +81,16 @@ class VehicleForm
                             ]),
                         TextInput::make('model_year')
                             ->label('Năm sản xuất')
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric()
                             ->minValue(1900)
                             ->maxValue(date('Y') + 1)
                             ->step(1),
                         TextInput::make('load_capacity')
                             ->label('Tải trọng (tấn)')
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric()
                             ->inputMode('decimal')
                             ->minValue(0)
@@ -105,6 +110,8 @@ class VehicleForm
                         //     ]),
                         TextInput::make('current_mileage')
                             ->label('Số km hiện tại')
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric()
                             ->minValue(0)
                             ->step(0.1)

@@ -13,6 +13,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 
 class VehicleMaintenanceScheduleForm
 {
@@ -51,20 +52,30 @@ class VehicleMaintenanceScheduleForm
                 TextInput::make('km_interval')
                     ->label('Chu kỳ km')
                     ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric(),
                 TextInput::make('km_current')
                     ->label('Km hiện tại')
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric(),
                 TextInput::make('km_next_trigger')
                     ->label('Km kích hoạt tiếp')
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric(),
                 TextInput::make('km_remind_before')
                     ->label('Nhắc trước (km)')
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric()
                     ->default(500),
                 TextInput::make('date_interval_days')
                     ->label('Chu kỳ ngày')
                     ->prefixIcon(Heroicon::OutlinedCalendarDays)
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric(),
                 DatePicker::make('last_service_date')
                     ->label('Bảo dưỡng lần cuối'),
@@ -73,11 +84,15 @@ class VehicleMaintenanceScheduleForm
                 TextInput::make('date_remind_before_days')
                     ->label('Nhắc trước (ngày)')
                     ->prefixIcon(Heroicon::OutlinedBellAlert)
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric()
                     ->default(14),
                 TextInput::make('estimated_cost')
                     ->label('Dự toán')
                     ->prefixIcon(Heroicon::OutlinedCurrencyDollar)
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric(),
                 TextInput::make('garage')
                     ->label('Garage')

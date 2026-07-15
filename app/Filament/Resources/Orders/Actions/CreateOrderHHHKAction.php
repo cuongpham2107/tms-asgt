@@ -23,6 +23,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
 
@@ -107,10 +108,14 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
 
                     TextInput::make('total_packages')
                         ->label('Số kiện')
+                        ->mask(RawJs::make('$money($input)'))
+                        ->stripCharacters(',')
                         ->numeric(),
                     TextInput::make('total_weight')
                         ->label('Trọng lượng (tấn)')
                         ->live(onBlur: true)
+                        ->mask(RawJs::make('$money($input)'))
+                        ->stripCharacters(',')
                         ->numeric(),
                     Textarea::make('notes')
                         ->label('Ghi chú')

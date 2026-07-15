@@ -13,6 +13,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 use Illuminate\Support\HtmlString;
 
 class DriverShiftForm
@@ -50,12 +51,18 @@ class DriverShiftForm
                         TextInput::make('total_km')
                             ->label('Tổng km')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric(),
                         TextInput::make('total_km_loaded')
                             ->label('Km có tải')
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric(),
                         TextInput::make('total_km_empty')
                             ->label('Km rỗng')
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric(),
                     ]),
                 Section::make('Các chuyến đi trong ca')
@@ -91,9 +98,13 @@ class DriverShiftForm
                                     ->native(false),
                                 TextInput::make('start_km')
                                     ->label('Km đầu')
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
                                     ->numeric(),
                                 TextInput::make('end_km')
                                     ->label('Km cuối')
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
                                     ->numeric(),
                             ])
                             ->columns(3)

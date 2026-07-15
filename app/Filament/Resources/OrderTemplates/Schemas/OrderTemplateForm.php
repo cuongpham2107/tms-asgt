@@ -18,6 +18,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -132,10 +133,14 @@ class OrderTemplateForm
                             ->columnSpan(1),
                         TextInput::make('order_data.total_packages')
                             ->label('Số kiện')
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric()
                             ->placeholder('Ví dụ: 10'),
                         TextInput::make('order_data.total_weight')
                             ->label('Trọng lượng')
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->numeric()
                             ->placeholder('Ví dụ: 500'),
                     ]),
@@ -175,10 +180,14 @@ class OrderTemplateForm
                                         ->columnSpan(3),
                                     TextInput::make('total_packages')
                                         ->label('Số kiện')
+                                        ->mask(RawJs::make('$money($input)'))
+                                        ->stripCharacters(',')
                                         ->numeric()
                                         ->columnSpan(2),
                                     TextInput::make('total_weight')
                                         ->label('Trọng lượng')
+                                        ->mask(RawJs::make('$money($input)'))
+                                        ->stripCharacters(',')
                                         ->numeric()
                                         ->columnSpan(3),
                                 ]),
@@ -197,6 +206,8 @@ class OrderTemplateForm
                     ->label('Số lượng')
                     ->prefixIcon(Heroicon::OutlinedCube)
                     ->required()
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric()
                     ->default(1),
                 TextInput::make('cron_expression')

@@ -24,6 +24,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\RawJs;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
 
@@ -101,15 +102,21 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->label('Tên hàng hoá'),
                     TextInput::make('total_packages')
                         ->label('Số kiện')
+                        ->mask(RawJs::make('$money($input)'))
+                        ->stripCharacters(',')
                         ->numeric(),
                     TextInput::make('total_weight')
                         ->label('Trọng lượng (tấn)')
                         ->live(onBlur: true)
                         ->suffix('tấn')
+                        ->mask(RawJs::make('$money($input)'))
+                        ->stripCharacters(',')
                         ->numeric(),
                     TextInput::make('chargeable_weight')
                         ->label('Tải trọng tính cước')
                         ->suffix('tấn')
+                        ->mask(RawJs::make('$money($input)'))
+                        ->stripCharacters(',')
                         ->numeric()
                         ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14]),
                     Textarea::make('notes')

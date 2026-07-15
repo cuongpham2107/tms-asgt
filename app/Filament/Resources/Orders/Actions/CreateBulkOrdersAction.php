@@ -22,6 +22,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\RawJs;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -159,6 +160,8 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                 TextInput::make('chargeable_weight')
                                     ->label('Tải trọng tính cước')
                                     ->suffix('tấn')
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
                                     ->numeric()
                                     ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
                                     ->visible(fn (Get $get): bool => $get('order_type_code') === 'external'),
@@ -172,6 +175,8 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                 TextInput::make('records_count')
                                     ->label('Số bản ghi cần tạo')
                                     ->helperText('Ví dụ: nhập 5 để tạo 5 đơn hàng giống nhau về thông tin chung.')
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
                                     ->numeric()
                                     ->default(1)
                                     ->minValue(1)

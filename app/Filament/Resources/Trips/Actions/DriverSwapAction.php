@@ -13,6 +13,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Support\RawJs;
 use Illuminate\Support\Facades\Auth;
 
 class DriverSwapAction
@@ -68,6 +69,8 @@ class DriverSwapAction
                     ->preload(),
                 TextInput::make('handover_km')
                     ->label('Km chuyển giao')
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
                     ->numeric()
                     ->required()
                     ->helperText('Nhập số km hiện tại của xe tại thời điểm chuyển giao'),
