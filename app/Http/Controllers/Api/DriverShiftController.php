@@ -16,9 +16,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
 use App\Services\ShiftKmCalculatorService;
-use App\Services\Trip\CheckpointFactory;
 use App\Services\Trip\Handlers\EndHandler;
-use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
@@ -167,6 +165,35 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Cần nhập km kết thúc trước khi kết thúc ca.'], 422);
         }
 
+        // Gate: không cho kết thúc ca nếu còn trip đang chạy với đơn hàng chưa hoàn thành
+        $incompleteTrips = Trip::where('driver_id', $user->id)
+            ->whereHas('orders', function ($q) {
+                $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value]);
+            })
+            ->whereIn('status', [
+                TripStatus::Pending,
+                TripStatus::Started,
+                TripStatus::ArrivedPickup,
+                TripStatus::Delivering,
+                TripStatus::ArrivedDelivery,
+                TripStatus::Delivered,
+                TripStatus::ReturnTrip,
+            ])
+            ->get();
+
+        if ($incompleteTrips->isNotEmpty()) {
+            $codes = $incompleteTrips->pluck('trip_code')->implode(', ');
+            $orderCount = $incompleteTrips->sum(function (Trip $trip) {
+                return $trip->orders()
+                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value])
+                    ->count();
+            });
+
+            return response()->json([
+                'message' => "Bạn có {$incompleteTrips->count()} chuyến đang hoạt động ({$codes}) với {$orderCount} đơn hàng chưa hoàn thành. Vui lòng hoàn thành tất cả đơn hàng trước khi kết thúc ca.",
+            ], 422);
+        }
+
         // Use km_reading from the 'end' checkpoint (NOT from payload — avoids double entry drift)
         $endKm = $endCheckpoint ? (float) $endCheckpoint->km_reading : ($payload['end_km'] ?? null);
 
@@ -177,43 +204,6 @@ class DriverShiftController extends Controller
             $shift->end_gps_lat = $payload['end_gps_lat'] ?? null;
             $shift->end_gps_lng = $payload['end_gps_lng'] ?? null;
             $shift->save();
-
-            // Auto driver_swap: chuyển trip đang active có đơn hàng chưa hoàn thành sang driver_swap
-            $incompleteTrips = Trip::where('driver_id', $user->id)
-                ->whereHas('orders', function ($q) {
-                    $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value]);
-                })
-                ->whereIn('status', [
-                    TripStatus::Pending,
-                    TripStatus::Started,
-                    TripStatus::ArrivedPickup,
-                    TripStatus::Delivering,
-                    TripStatus::ArrivedDelivery,
-                    TripStatus::Delivered,
-                    TripStatus::ReturnTrip,
-                ])
-                ->get();
-
-            foreach ($incompleteTrips as $trip) {
-                if ($endKm > 0) {
-                    app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
-                    $trip->refresh();
-                }
-
-                $trip->status = TripStatus::DriverSwap;
-                $trip->shift_id = null;
-                $trip->save();
-
-                $trip->orders()
-                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value])
-                    ->update(['status' => OrderStatus::DriverSwap->value]);
-
-                app(CheckpointFactory::class)->create(
-                    $trip,
-                    ['occurred_at' => now(), 'km_reading' => $endKm],
-                    CheckpointType::DriverSwap,
-                );
-            }
 
             app(ShiftKmCalculatorService::class)->calculate($shift);
 
