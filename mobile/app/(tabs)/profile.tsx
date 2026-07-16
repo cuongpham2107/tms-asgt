@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
-import { showAlert, showDestructiveConfirm } from "../../src/lib/alert";
+import { showAlert } from "../../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen() {
@@ -18,14 +18,15 @@ export default function ProfileScreen() {
     if (!shift?.id) { showAlert("Không có ca", "Bạn chưa vào ca"); return; }
 
     if (activeTrips.length > 0) {
-      showDestructiveConfirm(
-        "Cảnh báo",
-        `${activeTrips.length} chuyến chưa kết thúc. Tiếp tục sẽ chuyển sang Đảo lái.`,
-        () => doEnd(),
+      const codes = activeTrips.map((t: any) => t.trip_code).join(", ");
+      showAlert(
+        "Chưa thể kết thúc ca",
+        `Bạn có ${activeTrips.length} chuyến đang hoạt động (${codes}). Vui lòng hoàn thành tất cả đơn hàng trước khi kết thúc ca.`,
       );
-    } else {
-      doEnd();
+      return;
     }
+
+    doEnd();
   };
 
   const doEnd = async () => {
