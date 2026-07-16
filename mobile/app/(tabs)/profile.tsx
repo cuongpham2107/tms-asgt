@@ -21,7 +21,7 @@ export default function ProfileScreen() {
       const codes = activeTrips.map((t: any) => t.trip_code).join(", ");
       showAlert(
         "Chưa thể kết thúc ca",
-        `Bạn có ${activeTrips.length} chuyến đang hoạt động (${codes}). Vui lòng hoàn thành tất cả đơn hàng trước khi kết thúc ca.`,
+        `Bạn có ${activeTrips.length} chuyến đang hoạt động (${codes}). Vui lòng hoàn thành tất cả đơn hàng hoặc kết thúc đơn hàng trước khi kết thúc ca.`,
       );
       return;
     }

@@ -190,7 +190,7 @@ class DriverShiftController extends Controller
             });
 
             return response()->json([
-                'message' => "Bạn có {$incompleteTrips->count()} chuyến đang hoạt động ({$codes}) với {$orderCount} đơn hàng chưa hoàn thành. Vui lòng hoàn thành tất cả đơn hàng trước khi kết thúc ca.",
+                'message' => "Bạn có {$incompleteTrips->count()} chuyến đang hoạt động ({$codes}) với {$orderCount} đơn hàng chưa hoàn thành. Vui lòng hoàn thành tất cả đơn hàng hoặc kết thúc đơn hàng trước khi kết thúc ca.",
             ], 422);
         }
 
