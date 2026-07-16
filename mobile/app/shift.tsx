@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, ScrollView } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { api } from "../src/lib/api";
+import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 
 const shiftOptions = [
@@ -11,12 +12,15 @@ const shiftOptions = [
   { key: "night_half", label: "Nửa ca đêm (Y/2)", desc: "Buổi tối" },
 ];
 
+const INCOMPLETE_ORDER_STATUSES = ["sent", "in_transit", "assigned"];
+
 export default function ShiftScreen() {
   const { token, setAuth, shift, setShift } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showEnd, setShowEnd] = useState(false);
   const [endKm, setEndKm] = useState("");
   const [ending, setEnding] = useState(false);
+  const [activeWarning, setActiveWarning] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (!token || !shift) return;
@@ -28,6 +32,34 @@ export default function ShiftScreen() {
         if (vKm != null && !endKm) setEndKm(String(parseInt(vKm)));
       }
     }).catch(() => {});
+  }, [token]));
+
+  useFocusEffect(useCallback(() => {
+    if (!token) return;
+    api.trips.active(token).then((res) => {
+      const trips = res?.data;
+      if (!trips || !Array.isArray(trips) || trips.length === 0) {
+        setActiveWarning(null);
+        return;
+      }
+      const incompleteOrders: { tripCode: string; count: number }[] = [];
+      trips.forEach((trip: any) => {
+        const cnt = (trip.orders || []).filter((o: any) =>
+          INCOMPLETE_ORDER_STATUSES.includes(o.status)
+        ).length;
+        if (cnt > 0) incompleteOrders.push({ tripCode: trip.trip_code, count: cnt });
+      });
+      if (incompleteOrders.length > 0) {
+        const lines = incompleteOrders.map(
+          (item) => `  • ${item.tripCode}: ${item.count} đơn chưa xong`
+        ).join("\n");
+        setActiveWarning(
+          `Bạn có ${trips.length} chuyến đang hoạt động với đơn hàng chưa hoàn thành:\n${lines}\n\nVui lòng hoàn thành tất cả đơn hàng trước khi kết thúc ca.`
+        );
+      } else {
+        setActiveWarning(null);
+      }
+    }).catch(() => setActiveWarning(null));
   }, [token]));
 
   async function startShift(type: string) {
@@ -57,11 +89,16 @@ export default function ShiftScreen() {
     const km = parseFloat(endKm);
     if (!km || km <= 0) { Alert.alert("Thiếu", "Nhập số Km kết thúc"); return; }
     if (!shift?.id) return;
+
+    // Check for active trips first
+    if (activeWarning) {
+      Alert.alert("Chưa thể kết thúc ca", activeWarning, [{ text: "OK" }]);
+      return;
+    }
+
     setEnding(true);
     try {
-      // B1: Nhập km rời xe (end-vehicle)
       await api.shifts.endVehicle(String(shift.id), km, token!);
-      // B2: Kết thúc ca
       const res = await api.shifts.end(token!);
       setShift(res?.shift || null);
       setShowEnd(false);
@@ -91,6 +128,17 @@ export default function ShiftScreen() {
         <>
           <Text style={s.title}>Kết thúc ca làm việc</Text>
           <Text style={s.subtitle}>Ca đang hoạt động — nhập Km đồng hồ để kết thúc</Text>
+
+          {activeWarning && (
+            <View style={s.warnBox}>
+              <View style={s.warnHeader}>
+                <Ionicons name="warning" size={18} color="#D97706" />
+                <Text style={s.warnTitle}>Có chuyến đang hoạt động</Text>
+              </View>
+              <Text style={s.warnText}>{activeWarning}</Text>
+            </View>
+          )}
+
           <View style={s.endCard}>
             <Text style={s.endLabel}>Km đồng hồ hiện tại</Text>
             <TextInput
@@ -125,4 +173,8 @@ const s = StyleSheet.create({
   endBtn: { backgroundColor: "#EF4444", padding: 16, borderRadius: 12, alignItems: "center" },
   endBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   btnDisabled: { opacity: 0.6 },
+  warnBox: { backgroundColor: "#FFFBEB", borderWidth: 1, borderColor: "#FCD34D", borderRadius: 12, padding: 14, marginBottom: 16 },
+  warnHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  warnTitle: { fontSize: 15, fontWeight: "700", color: "#92400E" },
+  warnText: { fontSize: 13, color: "#78350F", lineHeight: 20 },
 });
