@@ -50,12 +50,10 @@ export default function ShiftScreen() {
         if (cnt > 0) incompleteOrders.push({ tripCode: trip.trip_code, count: cnt });
       });
       if (incompleteOrders.length > 0) {
-        const lines = incompleteOrders.map(
-          (item) => `  • ${item.tripCode}: ${item.count} đơn chưa xong`
-        ).join("\n");
-        setActiveWarning(
-          `Bạn có ${trips.length} chuyến đang hoạt động với đơn hàng chưa hoàn thành:\n${lines}\n\nVui lòng hoàn thành tất cả đơn hàng trước khi kết thúc ca.`
-        );
+        const lines = incompleteOrders
+          .map((item) => `${item.tripCode}: ${item.count} đơn chưa xong`)
+          .join(", ");
+        setActiveWarning(`${trips.length} chuyến đang hoạt động — ${lines}`);
       } else {
         setActiveWarning(null);
       }
@@ -90,12 +88,6 @@ export default function ShiftScreen() {
     if (!km || km <= 0) { Alert.alert("Thiếu", "Nhập số Km kết thúc"); return; }
     if (!shift?.id) return;
 
-    // Check for active trips first
-    if (activeWarning) {
-      Alert.alert("Chưa thể kết thúc ca", activeWarning, [{ text: "OK" }]);
-      return;
-    }
-
     setEnding(true);
     try {
       await api.shifts.endVehicle(String(shift.id), km, token!);
@@ -104,7 +96,7 @@ export default function ShiftScreen() {
       setShowEnd(false);
       Alert.alert("Thành công", "Đã kết thúc ca");
     } catch (e: any) {
-      Alert.alert("Lỗi", e.message);
+      Alert.alert("Chưa thể kết thúc ca", e.message);
     } finally {
       setEnding(false);
     }
@@ -132,8 +124,8 @@ export default function ShiftScreen() {
           {activeWarning && (
             <View style={s.warnBox}>
               <View style={s.warnHeader}>
-                <Ionicons name="warning" size={18} color="#D97706" />
-                <Text style={s.warnTitle}>Có chuyến đang hoạt động</Text>
+                <Ionicons name="information-circle" size={18} color="#2563EB" />
+                <Text style={s.warnTitle}>Chú ý</Text>
               </View>
               <Text style={s.warnText}>{activeWarning}</Text>
             </View>
@@ -173,8 +165,8 @@ const s = StyleSheet.create({
   endBtn: { backgroundColor: "#EF4444", padding: 16, borderRadius: 12, alignItems: "center" },
   endBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   btnDisabled: { opacity: 0.6 },
-  warnBox: { backgroundColor: "#FFFBEB", borderWidth: 1, borderColor: "#FCD34D", borderRadius: 12, padding: 14, marginBottom: 16 },
-  warnHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  warnTitle: { fontSize: 15, fontWeight: "700", color: "#92400E" },
-  warnText: { fontSize: 13, color: "#78350F", lineHeight: 20 },
+  warnBox: { backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#93C5FD", borderRadius: 12, padding: 14, marginBottom: 16 },
+  warnHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  warnTitle: { fontSize: 15, fontWeight: "700", color: "#1E40AF" },
+  warnText: { fontSize: 13, color: "#1E3A8A", lineHeight: 20 },
 });
