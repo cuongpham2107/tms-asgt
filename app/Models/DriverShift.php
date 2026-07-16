@@ -180,38 +180,68 @@ class DriverShift extends Model
 
     public function getOrdersWithKmDetailsAttribute(): Collection
     {
-        return $this->trips->flatMap(function ($trip) {
-            return $trip->orders->map(function ($order) use ($trip) {
-                $arrivedCheckpoint = $trip->checkpoints
-                    ->where('order_id', $order->id)
-                    ->where('checkpoint_type', CheckpointType::ArrivedPickup)
-                    ->first();
+        $this->loadMissing([
+            'trips.orders',
+            'trips.checkpoints',
+            'trips.vehicle',
+            'tripCheckpoints.order',
+            'tripCheckpoints.trip.checkpoints',
+            'tripCheckpoints.trip.vehicle',
+        ]);
 
-                $completedCheckpoint = $trip->checkpoints
-                    ->where('order_id', $order->id)
-                    ->where('checkpoint_type', CheckpointType::Completed)
-                    ->first();
+        $seenOrderIds = [];
 
-                $startKm = $arrivedCheckpoint?->km_reading;
-                $endKm = $completedCheckpoint?->km_reading;
+        $fromTrips = $this->trips->flatMap(function ($trip) use (&$seenOrderIds) {
+            return $trip->orders->map(function ($order) use ($trip, &$seenOrderIds) {
+                $seenOrderIds[$order->id] = true;
 
-                $loadedKm = 0;
-                if ($startKm !== null && $endKm !== null) {
-                    $loadedKm = max(0, (float) $endKm - (float) $startKm);
-                }
-
-                return [
-                    'id' => $order->id,
-                    'order_code' => $order->order_code,
-                    'vehicle_plate' => $trip->vehicle?->plate_number ?? '-',
-                    'start_km' => $startKm ? number_format((float) $startKm, 1).' km' : '-',
-                    'end_km' => $endKm ? number_format((float) $endKm, 1).' km' : '-',
-                    'loaded_km' => $loadedKm > 0 ? number_format((float) $loadedKm, 1).' km' : '-',
-                    'status' => $order->status?->getLabel() ?? $order->status,
-                    'pickup_time' => $arrivedCheckpoint?->occurred_at?->format('d/m/Y H:i') ?? '-',
-                    'completed_time' => $completedCheckpoint?->occurred_at?->format('d/m/Y H:i') ?? '-',
-                ];
+                return $this->buildOrderKmDetail($order, $trip);
             });
         });
+
+        // Fallback: collect orders from tripCheckpoints for trips not linked via shift_id
+        $fromCheckpoints = $this->tripCheckpoints
+            ->filter(fn ($cp) => $cp->trip && $cp->order && ! isset($seenOrderIds[$cp->order_id]))
+            ->groupBy('order_id')
+            ->map(function ($group) {
+                $first = $group->first();
+
+                return $this->buildOrderKmDetail($first->order, $first->trip);
+            });
+
+        return $fromTrips->merge($fromCheckpoints->values());
+    }
+
+    private function buildOrderKmDetail($order, $trip): array
+    {
+        $arrivedCheckpoint = $trip->checkpoints
+            ->where('order_id', $order->id)
+            ->where('checkpoint_type', CheckpointType::ArrivedPickup)
+            ->first();
+
+        $completedCheckpoint = $trip->checkpoints
+            ->where('order_id', $order->id)
+            ->where('checkpoint_type', CheckpointType::Completed)
+            ->first();
+
+        $startKm = $arrivedCheckpoint?->km_reading;
+        $endKm = $completedCheckpoint?->km_reading;
+
+        $loadedKm = 0;
+        if ($startKm !== null && $endKm !== null) {
+            $loadedKm = max(0, (float) $endKm - (float) $startKm);
+        }
+
+        return [
+            'id' => $order->id,
+            'order_code' => $order->order_code,
+            'vehicle_plate' => $trip->vehicle?->plate_number ?? '-',
+            'start_km' => $startKm ? number_format((float) $startKm, 1).' km' : '-',
+            'end_km' => $endKm ? number_format((float) $endKm, 1).' km' : '-',
+            'loaded_km' => $loadedKm > 0 ? number_format((float) $loadedKm, 1).' km' : '-',
+            'status' => $order->status?->getLabel() ?? $order->status,
+            'pickup_time' => $arrivedCheckpoint?->occurred_at?->format('d/m/Y H:i') ?? '-',
+            'completed_time' => $completedCheckpoint?->occurred_at?->format('d/m/Y H:i') ?? '-',
+        ];
     }
 }
