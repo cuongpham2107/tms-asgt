@@ -222,6 +222,7 @@ class DriverShift extends Model
         $completedCheckpoint = $trip->checkpoints
             ->where('order_id', $order->id)
             ->where('checkpoint_type', CheckpointType::Completed)
+            ->sortByDesc('km_reading')
             ->first();
 
         $startKm = $arrivedCheckpoint?->km_reading;

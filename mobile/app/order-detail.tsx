@@ -398,7 +398,7 @@ export default function OrderDetailScreen() {
           {
             icon: "business",
             label: "Khách hàng",
-            value: d.customer?.name || "-",
+            value: d.customer?.code || "-",
           },
           {
             icon: "file-tray-full",
@@ -436,8 +436,8 @@ export default function OrderDetailScreen() {
         ))}
       </View>
 
-      {/* Location picker — chỉ hiện khi đã đến lấy hàng, sắp tới bước giao */}
-      {!hasDeliveryPoint && hasArrivedPickup && (
+      {/* Location picker — chỉ hiện khi trạng thái tiếp theo là đến điểm giao hàng */}
+      {d.status === "in_transit" && hasLeftPickup && !hasDeliveryPoint && !hasArrivedDelivery && (
         <>
           <Text style={s.sectionTitle}>📍 Chọn điểm đến</Text>
           <View style={s.formCard}>

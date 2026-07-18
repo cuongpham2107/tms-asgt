@@ -50,6 +50,15 @@ class TripKmCalculatorService
         $totalLoadedKm = 0;
         $prevKm = $startKm;
 
+        // Count completed events per order — support multi-delivery-point orders
+        $completedCounts = [];
+        foreach ($events as $evt) {
+            if ($evt->getRawOriginal('checkpoint_type') === 'completed') {
+                $completedCounts[$evt->order_id] = ($completedCounts[$evt->order_id] ?? 0) + 1;
+            }
+        }
+        $completedSeen = [];
+
         foreach ($events as $event) {
             $eventKm = max((float) $event->km_reading, $prevKm);
             $typeStr = $event->getRawOriginal('checkpoint_type');
@@ -63,7 +72,10 @@ class TripKmCalculatorService
                     $activeOrderIds->push($event->order_id);
                 }
             } else {
-                $activeOrderIds = $activeOrderIds->filter(fn ($id) => $id !== $event->order_id);
+                $completedSeen[$event->order_id] = ($completedSeen[$event->order_id] ?? 0) + 1;
+                if ($completedSeen[$event->order_id] >= ($completedCounts[$event->order_id] ?? 0)) {
+                    $activeOrderIds = $activeOrderIds->filter(fn ($id) => $id !== $event->order_id);
+                }
             }
 
             $prevKm = $eventKm;

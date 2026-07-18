@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Tables;
 
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
@@ -396,34 +397,49 @@ class OrdersTable extends BaseTable
                 $isLast = $index === $locations->count() - 1;
 
                 return '
-                                    <div class="flex items-center gap-1">
-                                        <div class="
-                                            text-sm
-                                            whitespace-nowrap
-                                        ">
-                                            '.$location.'
-                                        </div>
-                                        '.(! $isLast ? $arrowIcon : '').'
-                                    </div>
-                                ';
+                    <div class="flex items-center gap-1">
+                        <div class="
+                            text-sm
+                            whitespace-nowrap
+                        ">
+                            '.$location.'
+                        </div>
+                        '.(! $isLast ? $arrowIcon : '').'
+                    </div>
+                ';
             })
             ->implode('');
 
         return new HtmlString(
             '
-                            <div class="
-                                flex items-center flex-wrap gap-2
-                                p-2
-                            ">
-                                '.$timeline.'
-                            </div>
-                            '
+                <div class="
+                    flex items-center flex-wrap gap-2
+                    p-2
+                ">
+                    '.$timeline.'
+                </div>
+            '
         );
     }
 
     private static function renderTransportColumn(Order $record): HtmlString
     {
+
         $trip = $record->trip;
+        if ($trip?->vehicle && $trip->vehicle->type === VehicleOwnerType::Rent) {
+            return new HtmlString(
+                <<<HTML
+                    <div class="flex flex-col items-center gap-1.5 leading-tight text-center">
+                        <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                            <span class="font-bold text-sm text-black">{$trip?->vehicle->owner}</span>
+                        </div>
+                        <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-300">
+                            <span class="whitespace-nowrap">{$trip?->vehicle->vehicle_type?->getLabel()}</span>
+                        </div>
+                    </div>
+                HTML
+            );
+        }
         $vehiclePlate = e($trip?->vehicle?->plate_number ?? 'Chưa phân phương tiện');
         $driverName = e($trip?->driver?->name ?? 'Chưa phân lái xe');
 
