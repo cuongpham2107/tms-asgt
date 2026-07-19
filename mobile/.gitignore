@@ -11,5 +11,5 @@ web-build/
 .env
 .mimocode/
 package-lock.json
-ios/Pods/
-ios/build/
+android/
+ios/

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TMS Driver",
-    "slug": "tms-mobile",
+    "slug": "asgt",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,7 +15,9 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Cần GPS để ghi nhận vị trí chốt chặng"
         }
-      ]
+      ],
+      "expo-status-bar",
+      "expo-font"
     ],
     "ios": {
       "supportsTablet": true,
@@ -26,7 +28,8 @@
         "UIDesignRequiresCompatibility": true,
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.anonymous.tmsmobile"
     },
@@ -39,15 +42,21 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.anonymous.tmsmobile"
     },
-    "experiments": {
-      "basePath": "/mobile"
-    },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6f998364-07b3-4def-867b-e074dcd6373d"
+      }
+    },
+    "owner": "asgl"
   }
 }

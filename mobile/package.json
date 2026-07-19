@@ -3,19 +3,22 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@expo/vector-icons": "^14.0.0",
+    "@expo/metro-runtime": "~57.0.6",
+    "@expo/vector-icons": "^15.0.2",
     "expo": "~57.0.2",
-    "expo-image-picker": "~16.0.6",
-    "expo-linking": "~7.0.5",
-    "expo-location": "~18.0.0",
-    "expo-router": "~5.0.5",
-    "expo-status-bar": "~57.0.0",
+    "expo-constants": "~57.0.6",
+    "expo-font": "~57.0.1",
+    "expo-image-picker": "~57.0.5",
+    "expo-linking": "~57.0.3",
+    "expo-location": "~57.0.5",
+    "expo-router": "~57.0.7",
+    "expo-status-bar": "~57.0.1",
     "leaflet": "^1.9.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
-    "react-native-safe-area-context": "^5.8.0",
-    "react-native-screens": "~4.7.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2",
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {
@@ -28,8 +31,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "postinstall": "sed -i \"s|baseUrl = process.env.EXPO_BASE_URL|baseUrl = '/mobile'|g\" node_modules/expo-router/build/fork/getPathFromState.js node_modules/expo-router/build/fork/getPathFromState-forks.js node_modules/expo-router/build/fork/getStateFromPath-forks.js",
-    "build:web": "rm -rf ../public/mobile && npx expo export --platform web --output-dir ../public/mobile && sed -i 's|href=\"/favicon.ico\"|href=\"/mobile/favicon.ico\"|' ../public/mobile/index.html && sed -i 's|href=\"/_expo/|href=\"/mobile/_expo/|g' ../public/mobile/index.html && sed -i 's|src=\"/_expo/|src=\"/mobile/_expo/|' ../public/mobile/index.html && sed -i 's|\"/assets/|\"/mobile/assets/|g' ../public/mobile/_expo/static/js/web/entry-*.js"
+    "postinstall": "node -e \"var fs=require('fs');['node_modules/expo-router/build/fork/getPathFromState.js','node_modules/expo-router/build/fork/getPathFromState-forks.js','node_modules/expo-router/build/fork/getStateFromPath-forks.js'].forEach(f=>{try{var c=fs.readFileSync(f,'utf8');c=c.replace(/baseUrl = process\\.env\\.EXPO_BASE_URL/g,\\\"baseUrl = '/mobile'\\\");fs.writeFileSync(f,c)}catch(e){}})\"",
+    "build:web": "rm -rf ../public/mobile && npx expo export --platform web --output-dir ../public/mobile && sed -i.bak 's|href=\"/favicon.ico\"|href=\"/mobile/favicon.ico\"|' ../public/mobile/index.html && rm -f ../public/mobile/index.html.bak && sed -i.bak 's|href=\"/_expo/|href=\"/mobile/_expo/|g' ../public/mobile/index.html && rm -f ../public/mobile/index.html.bak && sed -i.bak 's|src=\"/_expo/|src=\"/mobile/_expo/|' ../public/mobile/index.html && rm -f ../public/mobile/index.html.bak && sed -i.bak 's|\"/assets/|\"/mobile/assets/|g' ../public/mobile/_expo/static/js/web/entry-*.js && rm -f ../public/mobile/_expo/static/js/web/entry-*.js.bak"
   },
   "private": true
 }

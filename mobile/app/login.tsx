@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { login, api } from "../src/lib/api";
@@ -31,7 +31,7 @@ export default function LoginScreen() {
 
   return (
     <View style={s.container}>
-      <Text style={s.title}>TMS Driver</Text>
+      <Image source={require("../assets/icon.png")} style={s.logo} />
       <Text style={s.subtitle}>Đăng nhập tài xế</Text>
       {error ? <Text style={s.error}>{error}</Text> : null}
       <TextInput style={s.input} placeholder="Email" placeholderTextColor="#9CA3AF" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
@@ -45,7 +45,7 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#F9FAFB" },
-  title: { fontSize: 32, fontWeight: "800", color: "#4F46E5", textAlign: "center", marginBottom: 4 },
+  logo: { width: 120, height: 120, alignSelf: "center", marginBottom: 16, resizeMode: "contain" },
   subtitle: { fontSize: 14, color: "#6B7280", textAlign: "center", marginBottom: 32 },
   input: { backgroundColor: "#fff", padding: 14, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: "#E5E7EB", marginBottom: 12, color: "#111827" },
   btn: { backgroundColor: "#4F46E5", padding: 16, borderRadius: 12, alignItems: "center", marginTop: 8 },
