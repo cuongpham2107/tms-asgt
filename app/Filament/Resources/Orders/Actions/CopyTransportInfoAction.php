@@ -32,10 +32,21 @@ class CopyTransportInfoAction
                     ->success()
                     ->send();
             })
-            ->extraAttributes([
-                'x-data' => '{}',
-                'x-on:click' => 'window.navigator.clipboard.writeText(`Biển số xe: —\nHọ tên lái xe: —`)',
-            ]);
+            ->extraAttributes(function (Order $record): array {
+                $trip = $record->trip;
+                $vehicle = $trip?->vehicle;
+                $driver = $trip?->driver;
+
+                $info = 'Biển số xe: '.($vehicle?->plate_number ?? '—').'\n'
+                    .'Tải trọng: '.($vehicle?->load_capacity ? number_format((float) $vehicle->load_capacity, 1, ',', '.').' tấn' : '—').'\n'
+                    .'Loại xe: '.($vehicle?->vehicle_type?->getLabel() ?? '—').'\n'
+                    .'Họ tên lái xe: '.($driver?->name ?? '—').'\n'
+                    .'SĐT lái xe: '.($driver?->phone ?? '—');
+
+                return [
+                    'x-on:click' => 'window.navigator.clipboard.writeText(`'.e($info).'`)',
+                ];
+            });
     }
 
     /** @return array{vehicle: string, driver: string} */

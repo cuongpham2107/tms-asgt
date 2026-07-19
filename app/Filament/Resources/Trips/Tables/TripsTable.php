@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Trips\Tables;
 
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Trips\Actions\DriverSwapAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
@@ -234,6 +235,18 @@ class TripsTable extends BaseTable
         if ($badges !== '') {
             $html .= '<span class="mt-1">'.$badges.'</span>';
         }
+
+        if ($vehicle->type === VehicleOwnerType::Rent) {
+            $html .= '<div class="mt-1 flex flex-col items-center gap-1 leading-tight text-center">';
+            if ($vehicle->owner) {
+                $html .= '<span class="text-xs font-semibold text-gray-700 dark:text-gray-200">'.e($vehicle->owner).'</span>';
+            }
+            if ($vehicle->vehicle_type) {
+                $html .= '<span class="text-xs font-medium text-gray-500 dark:text-gray-300">'.e($vehicle->vehicle_type->getLabel()).'</span>';
+            }
+            $html .= '</div>';
+        }
+
         $html .= '</div>';
 
         return $html;
