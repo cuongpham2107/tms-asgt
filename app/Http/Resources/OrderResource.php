@@ -53,6 +53,7 @@ class OrderResource extends JsonResource
             /** Thông tin khách hàng (nếu được load). */
             'customer' => $this->whenLoaded('customer', fn () => [
                 'id' => $this->customer->id,
+                'code' => $this->customer->code,
                 'name' => $this->customer->name,
                 'phone' => $this->customer->phone,
                 'email' => $this->customer->email,

@@ -232,6 +232,8 @@ class OrdersTable extends BaseTable
             ->stackedOnMobile()
             ->searchable(false)
             ->recordActions([
+            AssignTransportAction::make(),
+            SendOrderAction::make(),
                 ActionGroup::make([
                     EditAction::make()
                         // ->slideOver()
@@ -287,8 +289,7 @@ class OrdersTable extends BaseTable
 
                             return $record;
                         }),
-                    AssignTransportAction::make(),
-                    SendOrderAction::make(),
+
                     UnsendOrderAction::make(),
                     CreateReturnTripAction::make(),
                     CancelOrderAction::make(),
@@ -364,8 +365,8 @@ class OrdersTable extends BaseTable
                     // RestoreBulkAction::make(),
                 ]),
 
-                BulkAssignTransportAction::make(),
-                BulkSendOrderAction::make(),
+                // BulkAssignTransportAction::make(),
+                // BulkSendOrderAction::make(),
             ]);
     }
 
