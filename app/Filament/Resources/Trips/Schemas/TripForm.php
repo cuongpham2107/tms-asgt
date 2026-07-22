@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Trips\Schemas;
 use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
@@ -71,7 +72,18 @@ class TripForm
                             ->columnSpan(2),
                         Select::make('end_location_id')
                             ->label('Điểm kết thúc')
-                            ->relationship('endLocation', 'code')
+                            ->options(function (?Model $record): array {
+                                if (! $record) {
+                                    return [];
+                                }
+
+                                $areaId = $record->orders()->first()?->area_id;
+                                if (! $areaId) {
+                                    return [];
+                                }
+
+                                return Location::where('area_id', $areaId)->pluck('code', 'id')->toArray();
+                            })
                             ->preload()
                             ->searchable()
                             ->native(false)
@@ -195,7 +207,12 @@ class TripForm
                                             return [];
                                         }
 
-                                        return OrderDeliveryPoint::where('order_id', $orderId)
+                                        $areaId = Order::find($orderId)?->area_id;
+                                        if (! $areaId) {
+                                            return [];
+                                        }
+
+                                        return OrderDeliveryPoint::whereHas('order', fn ($q) => $q->where('area_id', $areaId))
                                             ->with('location')
                                             ->get()
                                             ->mapWithKeys(fn ($dp) => [$dp->id => $dp->location?->code ?? 'DP#'.$dp->id])

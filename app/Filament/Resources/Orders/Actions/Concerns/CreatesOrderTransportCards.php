@@ -875,11 +875,40 @@ abstract class CreatesOrderTransportCards
 
             $offset++;
 
-            foreach ($order->deliveryPoints as $dp) {
+            $deliveryPoints = $order->deliveryPoints;
+
+            if ($deliveryPoints->isNotEmpty()) {
+                foreach ($deliveryPoints as $dp) {
+                    TripCheckpoint::create([
+                        'trip_id' => $trip->id,
+                        'order_id' => $order->id,
+                        'delivery_point_id' => $dp->id,
+                        'checkpoint_type' => CheckpointType::ArrivedDelivery,
+                        'occurred_at' => (clone $now)->addSeconds($offset),
+                        'km_reading' => null,
+                        'driver_id' => $driverId,
+                        'shift_id' => $shiftId,
+                    ]);
+
+                    $offset++;
+
+                    TripCheckpoint::create([
+                        'trip_id' => $trip->id,
+                        'order_id' => $order->id,
+                        'delivery_point_id' => $dp->id,
+                        'checkpoint_type' => CheckpointType::Completed,
+                        'occurred_at' => (clone $now)->addSeconds($offset),
+                        'km_reading' => null,
+                        'driver_id' => $driverId,
+                        'shift_id' => $shiftId,
+                    ]);
+
+                    $offset++;
+                }
+            } else {
                 TripCheckpoint::create([
                     'trip_id' => $trip->id,
                     'order_id' => $order->id,
-                    'delivery_point_id' => $dp->id,
                     'checkpoint_type' => CheckpointType::ArrivedDelivery,
                     'occurred_at' => (clone $now)->addSeconds($offset),
                     'km_reading' => null,
@@ -892,7 +921,6 @@ abstract class CreatesOrderTransportCards
                 TripCheckpoint::create([
                     'trip_id' => $trip->id,
                     'order_id' => $order->id,
-                    'delivery_point_id' => $dp->id,
                     'checkpoint_type' => CheckpointType::Completed,
                     'occurred_at' => (clone $now)->addSeconds($offset),
                     'km_reading' => null,

@@ -248,7 +248,7 @@ class OrderForm extends CreatesOrderTransportCards
                                 DateTimePicker::make('planned_loading_at')
                                     ->label('Thời gian dự kiến đóng hàng')
                                     ->seconds(false)
-                                    ->native(false)
+                                    ->native(true)
                                     ->required()
                                     ->columnSpanFull(),
                                 TextInput::make('total_packages')

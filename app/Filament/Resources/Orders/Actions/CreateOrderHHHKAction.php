@@ -101,6 +101,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->label('Thời gian dự kiến đóng hàng')
                         ->seconds(false)
                         ->native(true)
+                        // ->hourMode(24)
                         ->default(now())
                         ->prefixIcon(Heroicon::OutlinedCalendarDays)
                         ->required(),
