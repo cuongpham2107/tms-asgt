@@ -67,13 +67,23 @@ export const api = {
     detail: (id: string, t: string) => fetchApi<{ data: any }>(`/trips/${id}`, t),
     complete: (tripId: string, endKm: number, t: string, gps?: { gps_lat?: number; gps_lng?: number }) =>
       fetchApi<{ data: any }>(`/trips/${tripId}/complete`, t, { method: "POST", body: JSON.stringify({ end_km: endKm, ...gps }) }),
-    checkpoint: (tripId: string, body: any, t: string) => {
+    checkpoint: async (tripId: string, body: any, t: string) => {
       const hasPhotos = body.photos && Array.isArray(body.photos) && body.photos.length > 0;
       if (hasPhotos) {
         const fd = new FormData();
+        // Upload photos as Blobs (avoids "Unsupported FormDataPart" on RN)
+        const photoBlobs = await Promise.all(
+          (body.photos as string[]).map(async (uri, i) => {
+            const res = await fetch(uri);
+            const blob = await res.blob();
+            return { blob, i };
+          }),
+        );
         Object.entries(body).forEach(([k, v]) => {
           if (k === "photos") {
-            (v as string[]).forEach((uri, i) => fd.append(`photos[${i}]`, { uri, name: `photo_${i}.jpg`, type: "image/jpeg" } as any));
+            photoBlobs.forEach(({ blob, i }) =>
+              fd.append(`photos[${i}]`, blob, `photo_${i}.jpg`),
+            );
           } else if (v !== undefined && v !== null) {
             fd.append(k, String(v));
           }
