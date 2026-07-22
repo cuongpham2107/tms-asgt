@@ -10,8 +10,6 @@ import {
   FlatList,
   Modal,
   Image,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
@@ -316,14 +314,12 @@ export default function OrderDetailScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
     <ScrollView
       style={s.container}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      automaticallyAdjustKeyboardInsets
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -880,7 +876,6 @@ export default function OrderDetailScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
-    </KeyboardAvoidingView>
   );
 }
 
