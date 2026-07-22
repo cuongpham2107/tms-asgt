@@ -3,6 +3,7 @@
 @import "mapbox-gl/dist/mapbox-gl.css";
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../../../vendor/relaticle/activity-log/resources/views/**/*';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Trips\Schemas;
 
 use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
@@ -32,6 +33,7 @@ class TripForm
                         TextInput::make('trip_code')
                             ->label('Mã chuyến')
                             ->prefixIcon(Heroicon::OutlinedIdentification)
+                            ->columnSpan(fn (Model $record) => $record->vehicle?->type === VehicleOwnerType::Rent ? 2 : 1)
                             ->disabled(),
                         Select::make('status')
                             ->label('Trạng thái')
@@ -45,6 +47,7 @@ class TripForm
                             ->native(false),
                         Select::make('driver_id')
                             ->label('Lái xe')
+                            ->hidden(fn (Model $record) => $record->vehicle?->type === VehicleOwnerType::Rent)
                             ->options(fn (): array => User::query()
                                 ->whereHas('roles', fn ($q) => $q->where('name', 'driver'))
                                 ->pluck('name', 'id')
@@ -58,21 +61,28 @@ class TripForm
                     ->columns(4)
                     ->columnSpanFull()
                     ->schema([
-                        TextInput::make('start_location_code')
+                        Select::make('start_location_id')
                             ->label('Điểm bắt đầu')
-                            ->hidden(fn (Model $record) => ! $record->is_empty_run)
-                            ->afterStateHydrated(fn (TextInput $component, ?Trip $record) => $component->state($record?->startLocation?->code))
+                            ->relationship('startLocation', 'code')
+                            ->preload()
+                            ->searchable()
+                            ->native(false)
+                            ->hidden(fn (Model $record) => $record->vehicle?->type !== VehicleOwnerType::Rent)
                             ->columnSpan(2),
-                        TextInput::make('end_location_code')
+                        Select::make('end_location_id')
                             ->label('Điểm kết thúc')
-                            ->hidden(fn (Model $record) => ! $record->is_empty_run)
-                            ->afterStateHydrated(fn (TextInput $component, ?Trip $record) => $component->state($record?->endLocation?->code))
+                            ->relationship('endLocation', 'code')
+                            ->preload()
+                            ->searchable()
+                            ->native(false)
+                            ->hidden(fn (Model $record) => $record->vehicle?->type !== VehicleOwnerType::Rent)
                             ->columnSpan(2),
                         TextInput::make('start_km')
                             ->label('Km bắt đầu')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
+                            ->hidden(fn (Model $record) => $record->vehicle?->type === VehicleOwnerType::Rent)
                             ->numeric()
                             ->afterStateHydrated(function (TextInput $component, ?Trip $record): void {
                                 if ($record === null || $component->getState() !== null) {
@@ -92,6 +102,15 @@ class TripForm
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
+                            ->hidden(fn (Model $record) => $record->vehicle?->type === VehicleOwnerType::Rent)
+                            ->numeric(),
+                        TextInput::make('total_km')
+                            ->label('Km tổng')
+                            ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
+                            ->hidden(fn (Model $record) => $record->vehicle?->type !== VehicleOwnerType::Rent)
+                            ->columnSpan(2)
                             ->numeric(),
                         DateTimePicker::make('started_at')
                             ->label('Bắt đầu')
@@ -121,7 +140,7 @@ class TripForm
                     ]),
                 Section::make('Các mốc hành trình')
                     ->columnSpanFull()
-                    ->hidden(fn (Model $record) => $record->is_empty_run)
+                    ->hidden(fn (Model $record) => $record->is_empty_run || $record->checkpoints->isEmpty())
                     ->schema([
                         Repeater::make('checkpoints')
                             ->relationship('checkpoints')

@@ -16,6 +16,7 @@ use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
@@ -202,6 +203,7 @@ class TripsTable extends BaseTable
 
                     DriverSwapAction::make(),
                     ReassignDriverAction::make(),
+                    DeleteAction::make(),
                 ]),
             ], position: RecordActionsPosition::BeforeColumns);
     }
@@ -231,21 +233,24 @@ class TripsTable extends BaseTable
         })->implode(' ');
 
         $html = '<div class="flex flex-col">';
-        $html .= '<span class="font-semibold text-sm">'.e($plate).e($tonnage).'</span>';
-        if ($badges !== '') {
-            $html .= '<span class="mt-1">'.$badges.'</span>';
-        }
-
         if ($vehicle->type === VehicleOwnerType::Rent) {
-            $html .= '<div class="mt-1 flex flex-col items-center gap-1 leading-tight text-center">';
+            $html .= '<div class="mt-0.5 flex flex-col gap-0.5 leading-tight">';
             if ($vehicle->owner) {
-                $html .= '<span class="text-xs font-semibold text-gray-700 dark:text-gray-200">'.e($vehicle->owner).'</span>';
+                $html .= '<span class="text-sm font-semibold text-gray-900 dark:text-gray-100">'.e($vehicle->owner).'</span>';
             }
             if ($vehicle->vehicle_type) {
-                $html .= '<span class="text-xs font-medium text-gray-500 dark:text-gray-300">'.e($vehicle->vehicle_type->getLabel()).'</span>';
+                $html .= '<span class="text-xs font-medium text-gray-500 dark:text-gray-400">'.e($vehicle->vehicle_type->getLabel()).'</span>';
             }
             $html .= '</div>';
+        }else{
+            $html .= '<span class="font-semibold text-sm">'.e($plate).e($tonnage).'</span>';
+            if ($badges !== '') {
+                $html .= '<span class="mt-1">'.$badges.'</span>';
+            }
         }
+
+
+
 
         $html .= '</div>';
 
