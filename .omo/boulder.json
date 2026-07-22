@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "active_work_id": "remove-empty-kilometers-be8021dc",
+  "works": {
+    "remove-empty-kilometers-be8021dc": {
+      "work_id": "remove-empty-kilometers-be8021dc",
+      "active_plan": "/Users/cuongpham/Deverlop/ASGL/tms-asgt/.omo/plans/remove-empty-kilometers.md",
+      "plan_name": "remove-empty-kilometers",
+      "status": "completed",
+      "started_at": "2026-07-15T12:16:03.965Z",
+      "ended_at": "2026-07-15T13:00:01.531Z",
+      "updated_at": "2026-07-15T13:00:01.531Z",
+      "session_ids": [
+        "opencode:ses_09b11bdd8ffeh6Gq8EWz5c31p9",
+        "opencode:ses_09a4adb9dffeBlOskS5ATRZYZn",
+        "opencode:ses_09a4acbe9ffefHoAvBmEpGd8QN",
+        "opencode:ses_09a4abf0cffe4yOG6ppFhVoENp",
+        "opencode:ses_09a4ab1e6ffeRQn9ps5YHMjEDG",
+        "opencode:ses_09a495404ffejKs2Q7cnigKWWw",
+        "opencode:ses_09a493eaaffeFNXeLtU5S2bXrW",
+        "opencode:ses_09a49309effeowCKXPG83ltkBB",
+        "opencode:ses_09a47f508ffeMnz3bR0xQC20Wd",
+        "opencode:ses_09a47e0e8ffeU8SrN2StFZShw3",
+        "opencode:ses_09a45c4bdffecrJzBUpsNZZRL6",
+        "opencode:ses_09a431bc3ffeuKiFc9f8G3VZxU"
+      ],
+      "session_origins": {
+        "opencode:ses_09b11bdd8ffeh6Gq8EWz5c31p9": "direct",
+        "opencode:ses_09a4adb9dffeBlOskS5ATRZYZn": "appended",
+        "opencode:ses_09a4acbe9ffefHoAvBmEpGd8QN": "appended",
+        "opencode:ses_09a4abf0cffe4yOG6ppFhVoENp": "appended",
+        "opencode:ses_09a4ab1e6ffeRQn9ps5YHMjEDG": "appended",
+        "opencode:ses_09a495404ffejKs2Q7cnigKWWw": "appended",
+        "opencode:ses_09a493eaaffeFNXeLtU5S2bXrW": "appended",
+        "opencode:ses_09a49309effeowCKXPG83ltkBB": "appended",
+        "opencode:ses_09a47f508ffeMnz3bR0xQC20Wd": "appended",
+        "opencode:ses_09a47e0e8ffeU8SrN2StFZShw3": "appended",
+        "opencode:ses_09a45c4bdffecrJzBUpsNZZRL6": "appended",
+        "opencode:ses_09a431bc3ffeuKiFc9f8G3VZxU": "appended"
+      },
+      "agent": "atlas",
+      "task_sessions": {
+        "todo:1": {
+          "task_key": "todo:1",
+          "task_label": "1",
+          "task_title": "Only show drivers who have at least one shift in the selected date range",
+          "session_id": "opencode:ses_09a25caa9ffe67wfJ44GAv3ob3",
+          "agent": "Sisyphus-Junior",
+          "category": "unspecified-high",
+          "updated_at": "2026-07-15T12:59:56.071Z",
+          "started_at": "2026-07-15T12:58:03.722Z",
+          "status": "completed",
+          "ended_at": "2026-07-15T12:59:56.071Z",
+          "elapsed_ms": 112349
+        }
+      },
+      "elapsed_ms": 2637566
+    }
+  },
+  "active_plan": "/Users/cuongpham/Deverlop/ASGL/tms-asgt/.omo/plans/remove-empty-kilometers.md",
+  "started_at": "2026-07-15T12:16:03.965Z",
+  "status": "completed",
+  "updated_at": "2026-07-15T13:00:01.531Z",
+  "session_ids": [
+    "opencode:ses_09b11bdd8ffeh6Gq8EWz5c31p9",
+    "opencode:ses_09a4adb9dffeBlOskS5ATRZYZn",
+    "opencode:ses_09a4acbe9ffefHoAvBmEpGd8QN",
+    "opencode:ses_09a4abf0cffe4yOG6ppFhVoENp",
+    "opencode:ses_09a4ab1e6ffeRQn9ps5YHMjEDG",
+    "opencode:ses_09a495404ffejKs2Q7cnigKWWw",
+    "opencode:ses_09a493eaaffeFNXeLtU5S2bXrW",
+    "opencode:ses_09a49309effeowCKXPG83ltkBB",
+    "opencode:ses_09a47f508ffeMnz3bR0xQC20Wd",
+    "opencode:ses_09a47e0e8ffeU8SrN2StFZShw3",
+    "opencode:ses_09a45c4bdffecrJzBUpsNZZRL6",
+    "opencode:ses_09a431bc3ffeuKiFc9f8G3VZxU"
+  ],
+  "session_origins": {
+    "opencode:ses_09b11bdd8ffeh6Gq8EWz5c31p9": "direct",
+    "opencode:ses_09a4adb9dffeBlOskS5ATRZYZn": "appended",
+    "opencode:ses_09a4acbe9ffefHoAvBmEpGd8QN": "appended",
+    "opencode:ses_09a4abf0cffe4yOG6ppFhVoENp": "appended",
+    "opencode:ses_09a4ab1e6ffeRQn9ps5YHMjEDG": "appended",
+    "opencode:ses_09a495404ffejKs2Q7cnigKWWw": "appended",
+    "opencode:ses_09a493eaaffeFNXeLtU5S2bXrW": "appended",
+    "opencode:ses_09a49309effeowCKXPG83ltkBB": "appended",
+    "opencode:ses_09a47f508ffeMnz3bR0xQC20Wd": "appended",
+    "opencode:ses_09a47e0e8ffeU8SrN2StFZShw3": "appended",
+    "opencode:ses_09a45c4bdffecrJzBUpsNZZRL6": "appended",
+    "opencode:ses_09a431bc3ffeuKiFc9f8G3VZxU": "appended"
+  },
+  "plan_name": "remove-empty-kilometers",
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Only show drivers who have at least one shift in the selected date range",
+      "session_id": "opencode:ses_09a25caa9ffe67wfJ44GAv3ob3",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-07-15T12:59:56.071Z",
+      "started_at": "2026-07-15T12:58:03.722Z",
+      "status": "completed",
+      "ended_at": "2026-07-15T12:59:56.071Z",
+      "elapsed_ms": 112349
+    }
+  },
+  "agent": "atlas",
+  "ended_at": "2026-07-15T13:00:01.531Z",
+  "elapsed_ms": 2637566
+}
