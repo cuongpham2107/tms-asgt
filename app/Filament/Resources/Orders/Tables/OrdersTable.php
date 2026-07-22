@@ -291,7 +291,7 @@ class OrdersTable extends BaseTable
                         }),
 
                     UnsendOrderAction::make(),
-                    CreateReturnTripAction::make(),
+                    // CreateReturnTripAction::make(),
                     CancelOrderAction::make(),
                     DeleteAction::make()
                         ->hidden(fn (Order $record): bool => ! $record->status->canDelete())
