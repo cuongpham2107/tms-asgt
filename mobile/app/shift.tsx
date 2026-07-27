@@ -18,6 +18,7 @@ export default function ShiftScreen() {
   const { token, setAuth, shift, setShift } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showEnd, setShowEnd] = useState(false);
+  const [justEnded, setJustEnded] = useState(false);
   const [endKm, setEndKm] = useState("");
   const [ending, setEnding] = useState(false);
   const [activeWarning, setActiveWarning] = useState<string | null>(null);
@@ -94,6 +95,7 @@ export default function ShiftScreen() {
       const res = await api.shifts.end(token!);
       setShift(res?.shift || null);
       setShowEnd(false);
+      setJustEnded(true);
       Alert.alert("Thành công", "Đã kết thúc ca");
     } catch (e: any) {
       Alert.alert("Chưa thể kết thúc ca", e.message);
@@ -104,7 +106,16 @@ export default function ShiftScreen() {
 
   return (
     <View style={s.container}>
-      {!showEnd ? (
+      {justEnded ? (
+        <View style={s.doneWrap}>
+          <Ionicons name="checkmark-done-circle" size={56} color="#059669" />
+          <Text style={s.doneTitle}>Đã kết thúc ca</Text>
+          <Text style={s.doneSub}>Bạn có thể xem lịch sử, đăng xuất, hoặc bắt đầu ca mới bất cứ lúc nào.</Text>
+          <TouchableOpacity style={s.primaryBtn} onPress={() => setJustEnded(false)}>
+            <Text style={s.primaryBtnText}>Vào ca mới</Text>
+          </TouchableOpacity>
+        </View>
+      ) : !showEnd ? (
         <>
           <Text style={s.title}>Bắt đầu ca làm việc</Text>
           <Text style={s.subtitle}>Chọn loại ca để bắt đầu</Text>
@@ -169,4 +180,9 @@ const s = StyleSheet.create({
   warnHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
   warnTitle: { fontSize: 15, fontWeight: "700", color: "#1E40AF" },
   warnText: { fontSize: 13, color: "#1E3A8A", lineHeight: 20 },
+  doneWrap: { alignItems: "center", justifyContent: "center", paddingVertical: 24 },
+  doneTitle: { fontSize: 20, fontWeight: "700", color: "#111827", marginTop: 12, marginBottom: 8 },
+  doneSub: { fontSize: 14, color: "#6B7280", textAlign: "center", marginBottom: 20, lineHeight: 20 },
+  primaryBtn: { backgroundColor: "#4F46E5", paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, alignItems: "center" },
+  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
 });
