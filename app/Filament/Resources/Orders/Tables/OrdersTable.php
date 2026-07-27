@@ -232,8 +232,8 @@ class OrdersTable extends BaseTable
             ->stackedOnMobile()
             ->searchable(false)
             ->recordActions([
-            AssignTransportAction::make(),
-            SendOrderAction::make(),
+                AssignTransportAction::make(),
+                SendOrderAction::make(),
                 ActionGroup::make([
                     EditAction::make()
                         // ->slideOver()

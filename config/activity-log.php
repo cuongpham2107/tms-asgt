@@ -9,7 +9,6 @@ return [
     // to override that.
     'activity_model' => null,
 
-
     'default_per_page' => 20,
     'pagination_buffer' => 2,
     'deduplicate_by_default' => true,

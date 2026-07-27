@@ -115,6 +115,7 @@ class TripForm
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
                             ->hidden(fn (Model $record) => $record->vehicle?->type === VehicleOwnerType::Rent)
+
                             ->numeric(),
                         TextInput::make('total_km')
                             ->label('Km tổng')
@@ -148,6 +149,7 @@ class TripForm
                             ->prefixIcon(Heroicon::OutlinedClock)
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
+                            ->readOnly()
                             ->native(true),
                     ]),
                 Section::make('Các mốc hành trình')
@@ -198,6 +200,12 @@ class TripForm
                                     ->required()
                                     ->displayFormat('H:i d/m/Y')
                                     ->seconds(false)
+                                    ->live(onBlur:true)
+                                    ->afterStateUpdated(function ($state, $set, $get) {
+                                        if ($get('checkpoint_type') === CheckpointType::Completed) {
+                                            $set('../../completed_at', $state);
+                                        }
+                                    })
                                     ->native(true),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')

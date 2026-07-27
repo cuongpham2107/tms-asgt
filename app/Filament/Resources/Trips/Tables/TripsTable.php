@@ -15,8 +15,8 @@ use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
-use Filament\Actions\EditAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
@@ -242,15 +242,12 @@ class TripsTable extends BaseTable
                 $html .= '<span class="text-xs font-medium text-gray-500 dark:text-gray-400">'.e($vehicle->vehicle_type->getLabel()).'</span>';
             }
             $html .= '</div>';
-        }else{
+        } else {
             $html .= '<span class="font-semibold text-sm">'.e($plate).e($tonnage).'</span>';
             if ($badges !== '') {
                 $html .= '<span class="mt-1">'.$badges.'</span>';
             }
         }
-
-
-
 
         $html .= '</div>';
 
@@ -290,8 +287,12 @@ class TripsTable extends BaseTable
         $destinations = [];
         foreach ($orders as $order) {
             foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
-                $destinations[] = $dp->location?->code ?? $dp->location?->code ?? $dp->address;
+                $destinations[] = $dp->location?->code ?? $dp->address;
             }
+        }
+
+        if ($record->endLocation) {
+            $destinations[] = $record->endLocation->code;
         }
 
         $destinations = array_filter(array_unique($destinations));
