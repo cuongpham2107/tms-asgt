@@ -319,11 +319,7 @@ class TripController extends Controller
         $from = $request->query('from_date');
         $to = $request->query('to_date');
 
-        $query = Trip::where('driver_id', $user->id)
-            ->where(function ($q) {
-                $q->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
-                  ->orWhereDoesntHave('orders');
-            });
+        $query = Trip::where('driver_id', $user->id);
 
         if ($from) {
             $query->whereDate('created_at', '>=', $from);
