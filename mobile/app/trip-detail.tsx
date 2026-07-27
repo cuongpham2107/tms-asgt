@@ -67,6 +67,7 @@ export default function TripDetailScreen() {
   const canStart = currentStatus === "pending" && !isReturnTrip && !isSwapped;
   const canComplete = (!["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed")) && !isSwapped;
   const isEmptyRun = (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true || currentStatus === "return_trip";
+  const hasStarted = (detail?.start_km != null || trip?.start_km != null);
   const orders: any[] = detail?.orders || trip?.orders || [];
 
   // Auto lấy km hiện tại của xe
@@ -278,25 +279,25 @@ export default function TripDetailScreen() {
                 <Text style={{ fontSize: 13, color: "#6B7280", textAlign: "center", marginTop: 4 }}>
                   Km xe hiện tại: <Text style={{ fontWeight: "700", color: "#4F46E5" }}>{fmt(vehicleKm)}</Text>
                 </Text>
-                {!returnStarted ? (
-                  <>
-                    <Text style={s.infoDesc}>Bước 1: Nhập Km bắt đầu</Text>
-                    <TextInput style={[s.kmInput, { marginTop: 12, marginBottom: 12 }]} placeholder="Km bắt đầu" placeholderTextColor="#D1D5DB" keyboardType="numeric" value={startKmInput} onChangeText={setStartKmInput} />
-                    <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#10B981", marginTop: 4 }]} onPress={handleStartReturn} disabled={starting}>
-                      <Ionicons name="play-circle" size={20} color="#fff" />
-                      <Text style={s.actionBtnText}>{starting ? "Đang xử lý..." : "Bắt đầu chuyến"}</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <Text style={s.infoDesc}>Bước 2: Nhập Km kết thúc</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, backgroundColor: "#ECFDF5", padding: 10, borderRadius: 10 }}>
-                      <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                      <Text style={{ fontSize: 13, color: "#059669", fontWeight: "600" }}>Km bắt đầu: {fmt(startKmInput)}</Text>
-                    </View>
-                    <TextInput style={[s.kmInput, { marginTop: 12 }]} placeholder="Km kết thúc" placeholderTextColor="#D1D5DB" keyboardType="numeric" value={completeKm} onChangeText={setCompleteKm} />
-                  </>
-                )}
+                 {hasStarted || returnStarted ? (
+                   <>
+                     <Text style={s.infoDesc}>Bước 2: Nhập Km kết thúc</Text>
+                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, backgroundColor: "#ECFDF5", padding: 10, borderRadius: 10 }}>
+                       <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                       <Text style={{ fontSize: 13, color: "#059669", fontWeight: "600" }}>Km bắt đầu: {fmt(detail?.start_km ?? trip?.start_km)}</Text>
+                     </View>
+                     <TextInput style={[s.kmInput, { marginTop: 12 }]} placeholder="Km kết thúc" placeholderTextColor="#D1D5DB" keyboardType="numeric" value={completeKm} onChangeText={setCompleteKm} />
+                   </>
+                 ) : (
+                   <>
+                     <Text style={s.infoDesc}>Bước 1: Nhập Km bắt đầu</Text>
+                     <TextInput style={[s.kmInput, { marginTop: 12, marginBottom: 12 }]} placeholder="Km bắt đầu" placeholderTextColor="#D1D5DB" keyboardType="numeric" value={startKmInput} onChangeText={setStartKmInput} />
+                     <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#10B981", marginTop: 4 }]} onPress={handleStartReturn} disabled={starting}>
+                       <Ionicons name="play-circle" size={20} color="#fff" />
+                       <Text style={s.actionBtnText}>{starting ? "Đang xử lý..." : "Bắt đầu chuyến"}</Text>
+                     </TouchableOpacity>
+                   </>
+                 )}
               </>
             )}
           </View>
