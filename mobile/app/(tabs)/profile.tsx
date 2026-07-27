@@ -43,7 +43,7 @@ export default function ProfileScreen() {
       await api.shifts.end(token!);
       setShift(null);
       showAlert("Thành công", "Đã kết thúc ca");
-      router.replace("/shift");
+      router.replace("/");
     } catch (e: any) { showAlert("Lỗi", e.message); }
     finally { setEnding(false); }
   };

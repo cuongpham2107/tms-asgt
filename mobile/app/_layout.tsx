@@ -17,15 +17,8 @@ function AuthGuard() {
     if (!isReady) return;
     if (!token && segments[0] !== "login") {
       router.replace("/login");
-    } else if (
-      token &&
-      !shiftId &&
-      segments[0] !== "shift" &&
-      segments[0] !== "login"
-    ) {
-      router.replace("/shift");
     }
-  }, [isReady, token, shiftId, segments[0]]);
+  }, [isReady, token, segments[0]]);
 
   return null;
 }

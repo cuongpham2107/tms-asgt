@@ -106,6 +106,13 @@ export default function DashboardScreen() {
         </View>
       )}
 
+      {!shift && (
+        <TouchableOpacity style={st.startShiftBtn} onPress={() => router.replace("/shift")} activeOpacity={0.8}>
+          <Ionicons name="play-circle" size={22} color="#fff" />
+          <Text style={st.startShiftText}>Vào ca</Text>
+        </TouchableOpacity>
+      )}
+
       <View style={st.statRow}>
         <View style={[st.statCard, { backgroundColor: "#F3F4F6", borderColor: "#D1D5DB" }]}>
           <Ionicons name="time-outline" size={22} color="#6B7280" />
@@ -239,4 +246,6 @@ const st = StyleSheet.create({
   loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   linkBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 4, padding: 16 },
   linkText: { color: "#4F46E5", fontWeight: "600", fontSize: 14 },
+  startShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4F46E5", paddingVertical: 14, borderRadius: 12, marginHorizontal: 16, marginTop: 12 },
+  startShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
