@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, Modal } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, Modal, KeyboardAvoidingView, Platform } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { api } from "../src/lib/api";
@@ -176,9 +176,13 @@ export default function TripDetailScreen() {
   const st = statusConfig[effectiveTrip?.status || currentStatus] || statusConfig["pending"];
 
   return (
-    <View style={s.container}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "android" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "android" ? 88 : 0}
+    >
       <ScrollView
-        style={{ flex: 1 }}
+        style={s.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}
       >
         {/* Bàn giao banner */}
@@ -199,12 +203,14 @@ export default function TripDetailScreen() {
               <Ionicons name={st.icon as any} size={14} color={st.text} />
               <Text style={[s.statusPillText, { color: st.text }]}>{st.label}</Text>
             </View>
-            {isEmptyRun && (
+          </View>
+          {isEmptyRun && (
+            <View style={s.badgeEmptyRow}>
               <View style={s.badgeEmpty}>
                 <Text style={s.badgeEmptyText}>Chuyến không hàng</Text>
               </View>
-            )}
-          </View>
+            </View>
+          )}
           {canStart && (
             <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#10B981", marginTop: 12 }]} onPress={handleStart} disabled={starting}>
               <Ionicons name="play-circle" size={20} color="#fff" />
@@ -418,7 +424,7 @@ export default function TripDetailScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -433,6 +439,7 @@ const s = StyleSheet.create({
   statusPillText: { fontSize: 12, fontWeight: "700" },
   badgeEmpty: { backgroundColor: "#8B5CF6", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   badgeEmptyText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  badgeEmptyRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 8 },
   actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 12 },
   actionBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   statsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, gap: 8, marginBottom: 8 },

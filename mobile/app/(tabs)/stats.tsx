@@ -18,7 +18,6 @@ export default function StatsScreen() {
   const { token } = useAuth();
   const [data, setData] = useState<any>(null); const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [shiftData, setShiftData] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [activePeriod, setActivePeriod] = useState("all");
 
@@ -50,27 +49,20 @@ export default function StatsScreen() {
 
   const load = async () => {
     if (!token) return;
-    const [statsRes, shiftRes, histRes] = await Promise.all([
-      api.stats(token).catch(() => null),
-      api.shifts.current(token).catch(() => null),
+    const [statsRes, histRes] = await Promise.all([
+      api.stats(activePeriod, token).catch(() => null),
       api.trips.history({ per_page: 20, status: "completed" }, token).catch(() => ({ data: [] })),
     ]);
     if (statsRes?.data) setData(statsRes.data);
-    if (shiftRes?.shift) setShiftData(shiftRes.shift);
     setHistory(histRes.data || []);
     setLoading(false);
   };
-  useFocusEffect(useCallback(() => { load(); }, [token]));
+  useFocusEffect(useCallback(() => { load(); }, [token, activePeriod]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
-  // Tính tổng km từ shift trips
-  const tripsInShift: any[] = shiftData?.trips || [];
-  const totalKm = shiftData?.total_km != null ? parseFloat(shiftData.total_km) : tripsInShift.reduce((s: number, t: any) => s + Math.max(0, (parseFloat(t.end_km) || 0) - (parseFloat(t.start_km) || 0)), 0);
-  const loadedKm = shiftData?.total_km_loaded != null ? parseFloat(shiftData.total_km_loaded) : tripsInShift.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
-  const emptyKm = totalKm != null && loadedKm != null ? totalKm - loadedKm : null;
-
-  // Tổng từ lịch sử
   const histTotalKm = filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.total_km) || 0), 0);
+  const histLoadedKm = filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
+  const histEmptyKm = histTotalKm != null && histLoadedKm != null ? histTotalKm - histLoadedKm : null;
 
   return (
     <ScrollView style={s.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}>
@@ -83,23 +75,23 @@ export default function StatsScreen() {
           <View style={[s.sumCard, { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" }]}><Ionicons name="trophy-outline" size={22} color="#F59E0B" /><Text style={[s.sumVal, { color: "#F59E0B" }]}>{data.assigned ?? 0}</Text><Text style={s.sumLbl}>đã gán</Text></View>
         </View>
 
-        {/* Shift KM stats */}
-        {shiftData && (
+        {/* KM đã thực hiện (theo period) */}
+        {(histTotalKm > 0 || activePeriod !== 'all') && (
           <>
-            <Text style={s.sectionTitle}>🚛 Km ca hiện tại</Text>
+            <Text style={s.sectionTitle}>🚛 KM đã thực hiện</Text>
             <View style={s.kmCard}>
               <View style={{ alignItems: "center", flex: 1 }}>
-                <Text style={s.kmVal}>{fmt(totalKm)}</Text>
+                <Text style={s.kmVal}>{fmt(histTotalKm)}</Text>
                 <Text style={s.kmLbl}>tổng km</Text>
               </View>
               <View style={s.kmSep} />
               <View style={{ alignItems: "center", flex: 1 }}>
-                <Text style={s.kmVal}>{fmt(loadedKm)}</Text>
+                <Text style={s.kmVal}>{fmt(histLoadedKm)}</Text>
                 <Text style={s.kmLbl}>có hàng</Text>
               </View>
               <View style={s.kmSep} />
               <View style={{ alignItems: "center", flex: 1 }}>
-                <Text style={s.kmVal}>{fmt(emptyKm)}</Text>
+                <Text style={s.kmVal}>{fmt(histEmptyKm)}</Text>
                 <Text style={s.kmLbl}>rỗng</Text>
               </View>
             </View>

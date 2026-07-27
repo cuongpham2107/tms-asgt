@@ -25,19 +25,16 @@ export default function DashboardScreen() {
   const router = useRouter();
   const [trips, setTrips] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState<any>(null);
   const [shift, setShiftState] = useState<any>(authShift);
   const userId = shift?.driver?.id;
 
   const load = async () => {
     if (!token) return;
-    const [tRes, sRes, shiftRes] = await Promise.all([
+    const [tRes, shiftRes] = await Promise.all([
       api.trips.active(token).catch(() => ({ data: [] })),
-      api.stats(token).catch(() => null),
       api.shifts.current(token).catch(() => null),
     ]);
     setTrips(tRes.data || []);
-    if (sRes?.data) setStats(sRes.data);
     if (shiftRes?.shift) { setShiftState(shiftRes.shift); setShift(shiftRes.shift); }
   };
 
@@ -48,7 +45,18 @@ export default function DashboardScreen() {
   // Sort: current/active trips first, then pending
   const isCurrentTrip = (t: any) => t.status !== "pending";
   const sortedTrips = [...activeTrips].sort((a, b) => (isCurrentTrip(b) ? 1 : 0) - (isCurrentTrip(a) ? 1 : 0));
-  const completedCount = stats?.completed ?? 0;
+
+  const tripsInShift: any[] = shift?.trips || [];
+  const shiftAssigned = tripsInShift.filter((t: any) => t.status === "pending").length;
+  const shiftInProgress = tripsInShift.filter((t: any) => ["started", "arrived_pickup", "delivering", "arrived_delivery", "delivered", "return_trip", "completed"].includes(t.status)).length;
+  const shiftCompleted = tripsInShift.filter((t: any) => t.status === "completed").length;
+  const calcTotal = tripsInShift.reduce((s: number, t: any) => s + (
+    parseFloat(t.total_km) || Math.max(0, (parseFloat(t.end_km) || 0) - (parseFloat(t.start_km) || 0))
+  ), 0);
+  const calcLoaded = tripsInShift.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
+  const shiftTotalKm = shift?.total_km != null ? parseFloat(shift.total_km) : (calcTotal > 0 ? calcTotal : null);
+  const shiftLoaded = shift?.total_km_loaded != null ? parseFloat(shift.total_km_loaded) : (calcLoaded > 0 ? calcLoaded : null);
+  const shiftEmpty = shift?.total_km_empty != null ? parseFloat(shift.total_km_empty) : (shiftTotalKm != null && shiftLoaded != null ? shiftTotalKm - shiftLoaded : null);
 
   const shiftDuration = shift?.start_time ? (() => {
     const start = new Date(shift.start_time);
@@ -60,14 +68,6 @@ export default function DashboardScreen() {
 
   // Hiển thị km ca: từ DB nếu đã tính, nếu không tổng hợp từ trips
   const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
-  const tripsInShift: any[] = shift?.trips || [];
-  const calcTotal = tripsInShift.reduce((s: number, t: any) => s + (
-    parseFloat(t.total_km) || Math.max(0, (parseFloat(t.end_km) || 0) - (parseFloat(t.start_km) || 0))
-  ), 0);
-  const calcLoaded = tripsInShift.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
-  const shiftTotalKm = shift?.total_km != null ? parseFloat(shift.total_km) : (calcTotal > 0 ? calcTotal : null);
-  const shiftLoaded = shift?.total_km_loaded != null ? parseFloat(shift.total_km_loaded) : (calcLoaded > 0 ? calcLoaded : null);
-  const shiftEmpty = shift?.total_km_empty != null ? parseFloat(shift.total_km_empty) : (shiftTotalKm != null && shiftLoaded != null ? shiftTotalKm - shiftLoaded : null);
 
   return (
     <ScrollView style={st.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}>
@@ -106,17 +106,17 @@ export default function DashboardScreen() {
       <View style={st.statRow}>
         <View style={[st.statCard, { backgroundColor: "#F3F4F6", borderColor: "#D1D5DB" }]}>
           <Ionicons name="time-outline" size={22} color="#6B7280" />
-          <Text style={[st.statVal, { color: "#6B7280" }]}>{stats?.assigned ?? 0}</Text>
+          <Text style={[st.statVal, { color: "#6B7280" }]}>{shiftAssigned}</Text>
           <Text style={st.statLbl}>Chờ chạy</Text>
         </View>
         <View style={[st.statCard, { backgroundColor: "#EEF2FF", borderColor: "#C7D2FE" }]}>
           <Ionicons name="car-sport" size={22} color="#4F46E5" />
-          <Text style={[st.statVal, { color: "#4F46E5" }]}>{stats?.in_progress ?? activeTrips.length}</Text>
+          <Text style={[st.statVal, { color: "#4F46E5" }]}>{shiftInProgress}</Text>
           <Text style={st.statLbl}>Đang chạy</Text>
         </View>
         <View style={[st.statCard, { backgroundColor: "#D1FAE5", borderColor: "#A7F3D0" }]}>
           <Ionicons name="checkmark-circle" size={22} color="#059669" />
-          <Text style={[st.statVal, { color: "#059669" }]}>{completedCount}</Text>
+          <Text style={[st.statVal, { color: "#059669" }]}>{shiftCompleted}</Text>
           <Text style={st.statLbl}>Hoàn thành</Text>
         </View>
       </View>

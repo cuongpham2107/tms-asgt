@@ -107,7 +107,26 @@ export const api = {
   },
 
   // Stats
-  stats: (t: string) => fetchApi<{ data: any }>("/trips/stats", t),
+  stats: (period?: string, t?: string) => {
+    const token = t;
+    if (period && period !== 'all') {
+      const now = new Date();
+      const to = now.toISOString().slice(0, 10);
+      let from = to;
+      if (period === 'today') {
+        from = to;
+      } else if (period === 'week') {
+        const d = new Date(now);
+        d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1));
+        from = d.toISOString().slice(0, 10);
+      } else if (period === 'month') {
+        from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      }
+      const qs = new URLSearchParams({ from_date: from, to_date: to });
+      return fetchApi<{ data: any }>(`/trips/stats?${qs}`, token);
+    }
+    return fetchApi<{ data: any }>('/trips/stats', token);
+  },
 
   // Vehicles
   vehicles: {

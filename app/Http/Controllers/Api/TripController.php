@@ -304,28 +304,41 @@ class TripController extends Controller
     /**
      * Thống kê số lượng đơn hàng theo nhóm trạng thái của lái xe.
      *
+     * @query from_date string|null YYYY-MM-DD
+     * @query to_date string|null YYYY-MM-DD
+     *
      * @response array{data: array{assigned: int, in_progress: int, completed: int}}
      */
     public function stats(Request $request): JsonResponse
     {
         $user = $request->user();
+        $from = $request->query('from_date');
+        $to = $request->query('to_date');
 
-        $counts = Trip::where('driver_id', $user->id)
-            ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]))
-            ->selectRaw('
+        $query = Trip::where('driver_id', $user->id)
+            ->whereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]));
+
+        if ($from) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+        if ($to) {
+            $query->whereDate('created_at', '<=', $to);
+        }
+
+        $counts = $query->selectRaw('
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as assigned,
                 SUM(CASE WHEN status IN (?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
             ', [
-                TripStatus::Pending->value,
-                TripStatus::Started->value,
-                TripStatus::ArrivedPickup->value,
-                TripStatus::Delivering->value,
-                TripStatus::ArrivedDelivery->value,
-                TripStatus::Delivered->value,
-                TripStatus::ReturnTrip->value,
-                TripStatus::Completed->value,
-            ])
+            TripStatus::Pending->value,
+            TripStatus::Started->value,
+            TripStatus::ArrivedPickup->value,
+            TripStatus::Delivering->value,
+            TripStatus::ArrivedDelivery->value,
+            TripStatus::Delivered->value,
+            TripStatus::ReturnTrip->value,
+            TripStatus::Completed->value,
+        ])
             ->first();
 
         return response()->json([
