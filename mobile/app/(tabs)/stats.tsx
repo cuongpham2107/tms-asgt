@@ -76,7 +76,7 @@ export default function StatsScreen() {
         </View>
 
         {/* KM đã thực hiện (theo period) */}
-        {(histTotalKm > 0 || activePeriod !== 'all') && (
+        {filteredHistory.length > 0 && (
           <>
             <Text style={s.sectionTitle}>🚛 KM đã thực hiện</Text>
             <View style={s.kmCard}>
