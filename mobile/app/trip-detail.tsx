@@ -64,7 +64,7 @@ export default function TripDetailScreen() {
   const currentStatus = detail?.status || trip?.status || "pending";
   const isReturnTrip = currentStatus === "return_trip";
   const isSwapped = detail && userId && detail.driver_id !== userId;
-  const canStart = currentStatus === "pending" && !isReturnTrip && !isSwapped;
+  const canStart = currentStatus === "pending" && !isReturnTrip && !isSwapped && !!shift;
   const canComplete = (!["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed")) && !isSwapped;
   const isEmptyRun = (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true || currentStatus === "return_trip";
   const hasStarted = (detail?.start_km != null || trip?.start_km != null);
@@ -223,6 +223,11 @@ export default function TripDetailScreen() {
               <Ionicons name="play-circle" size={20} color="#fff" />
               <Text style={s.actionBtnText}>{starting ? "Đang xử lý..." : "Bắt đầu chuyến"}</Text>
             </TouchableOpacity>
+          )}
+          {!canStart && !shift && (
+            <View style={s.warnBox}>
+              <Text style={s.warnText}>Bạn cần vào ca trước khi bắt đầu chuyến.</Text>
+            </View>
           )}
         </View>
 
