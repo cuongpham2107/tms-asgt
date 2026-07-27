@@ -39,6 +39,16 @@ class ListTrips extends ListRecords
     #[Url]
     public string $vehicleOwner = 'all';
 
+    #[Url]
+    public string $orderType = 'HHHK';
+
+    public array $orderTypeFilters = [
+
+        'HHHK' => ['label' => 'HHHK', 'color' => 'bg-blue-500'],
+        'external' => ['label' => 'Hàng ngoài', 'color' => 'bg-amber-500'],
+        'all' => ['label' => 'Tất cả', 'color' => 'bg-gray-900'],
+    ];
+
     public array $tripStatusFilters = [
         'all' => ['label' => 'Tất cả', 'color' => 'bg-gray-900'],
         'pending' => ['label' => 'Chờ chạy', 'color' => 'bg-gray-500'],
@@ -104,9 +114,29 @@ class ListTrips extends ListRecords
         $this->resetPage();
     }
 
+    public function filterOrderType(string $type): void
+    {
+        $this->orderType = $type;
+
+        $this->resetPage();
+    }
+
+    public function getOrderTypeCount(string $key): int
+    {
+        return $this->applyActiveFilters(Trip::query(), except: 'orderType')
+            ->when(
+                $key !== 'all',
+                fn (Builder $query): Builder => $query->whereHas(
+                    'orders',
+                    fn (Builder $q) => $q->where('type', $key),
+                ),
+            )
+            ->count();
+    }
+
     public function getTripStatusCount(string $key): int
     {
-        return $this->baseCountQuery()
+        return $this->applyActiveFilters(Trip::query(), except: 'status')
             ->when(
                 $key !== 'all',
                 fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $key),
@@ -116,7 +146,7 @@ class ListTrips extends ListRecords
 
     public function getVehicleOwnerCount(string $key): int
     {
-        return $this->baseCountQuery()
+        return $this->applyActiveFilters(Trip::query(), except: 'vehicleOwner')
             ->when(
                 $key !== 'all',
                 fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $key)),
@@ -124,9 +154,9 @@ class ListTrips extends ListRecords
             ->count();
     }
 
-    private function baseCountQuery(): Builder
+    private function applyActiveFilters(Builder $query, string $except = ''): Builder
     {
-        return Trip::query()
+        return $query
             ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
                 if (filled($this->dateFrom) && filled($this->dateTo)) {
                     return $query->whereBetween('started_at', [
@@ -140,13 +170,21 @@ class ListTrips extends ListRecords
                 }
 
                 return $query->where('started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
-            });
+            })
+            ->when($except !== 'status' && $this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
+            ->when($except !== 'vehicleOwner' && $this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
+            ->when($except !== 'orderType' && $this->orderType !== 'all', fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q) => $q->where('type', $this->orderType)));
     }
 
     public function filtersForm(Schema $form): Schema
     {
         return $form
             ->components([
+                PillFilter::make('orderType')
+                    ->options($this->orderTypeFilters)
+                    ->countCallback(fn ($key) => $this->getOrderTypeCount($key))
+                    ->activeValue(fn ($livewire) => $livewire->orderType)
+                    ->clickAction('filterOrderType'),
                 PillFilter::make('activeStatusFilter')
                     ->options($this->tripStatusFilters)
                     ->countCallback(fn ($key) => $this->getTripStatusCount($key))
@@ -157,6 +195,7 @@ class ListTrips extends ListRecords
                     ->countCallback(fn ($key) => $this->getVehicleOwnerCount($key))
                     ->activeValue(fn ($livewire) => $livewire->vehicleOwner)
                     ->clickAction('filterVehicleOwner'),
+
             ]);
     }
 
@@ -219,6 +258,7 @@ class ListTrips extends ListRecords
             ])
             ->when($this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
             ->when($this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
+            ->when($this->orderType !== 'all', fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q) => $q->where('type', $this->orderType)))
             ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
                 if (filled($this->dateFrom) && filled($this->dateTo)) {
                     return $query->whereBetween('started_at', [

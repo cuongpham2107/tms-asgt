@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Trips\Tables;
 
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
+use App\Enums\OrderStatus;
 use App\Enums\VehicleOwnerType;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Trips\Actions\DriverSwapAction;
@@ -24,6 +25,7 @@ use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
 
@@ -199,7 +201,19 @@ class TripsTable extends BaseTable
 
                             return $data;
                         })
-                        ->form(fn (Schema $schema): Schema => TripForm::configure($schema)),
+                        ->form(fn (Schema $schema): Schema => TripForm::configure($schema))
+                        ->using(function (Model $record, array $data): Model {
+                            $newStatus = $data['status'] ?? $record->status;
+
+                            if ($newStatus === TripStatus::Completed && $record->vehicle?->type === VehicleOwnerType::Rent) {
+                                $record->orders->each(function ($order) {
+                                    $order->update(['status' => OrderStatus::Completed]);
+                                });
+                            }
+                            $record->update($data);
+
+                            return $record;
+                        }),
 
                     DriverSwapAction::make(),
                     ReassignDriverAction::make(),

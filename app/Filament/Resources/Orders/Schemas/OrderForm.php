@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\CargoType;
 use App\Enums\LocationType;
+use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
@@ -29,6 +30,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class OrderForm extends CreatesOrderTransportCards
 {
@@ -269,6 +271,7 @@ class OrderForm extends CreatesOrderTransportCards
 
                         Tab::make('Phân xe')
                             ->icon('heroicon-o-truck')
+                            ->hidden(fn (?Model $record): bool => $record?->status === OrderStatus::DriverSwap)
                             ->columns(2)
                             ->schema([
                                 VehiclePicker::make('vehicle_id')

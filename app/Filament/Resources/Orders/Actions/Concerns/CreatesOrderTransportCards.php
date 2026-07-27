@@ -837,7 +837,7 @@ abstract class CreatesOrderTransportCards
         $offset = 0;
 
         foreach ($orders as $order) {
-            $base = (clone $now)->addSeconds($offset);
+            $base = (clone $now)->addMinutes($offset);
 
             TripCheckpoint::create([
                 'trip_id' => $trip->id,
@@ -855,7 +855,7 @@ abstract class CreatesOrderTransportCards
                 'trip_id' => $trip->id,
                 'order_id' => $order->id,
                 'checkpoint_type' => CheckpointType::ArrivedPickup,
-                'occurred_at' => (clone $now)->addSeconds($offset),
+                'occurred_at' => (clone $now)->addMinutes($offset),
                 'km_reading' => null,
                 'driver_id' => $driverId,
                 'shift_id' => $shiftId,
@@ -867,7 +867,7 @@ abstract class CreatesOrderTransportCards
                 'trip_id' => $trip->id,
                 'order_id' => $order->id,
                 'checkpoint_type' => CheckpointType::LeftPickup,
-                'occurred_at' => (clone $now)->addSeconds($offset),
+                'occurred_at' => (clone $now)->addMinutes($offset),
                 'km_reading' => null,
                 'driver_id' => $driverId,
                 'shift_id' => $shiftId,
@@ -910,7 +910,7 @@ abstract class CreatesOrderTransportCards
                     'trip_id' => $trip->id,
                     'order_id' => $order->id,
                     'checkpoint_type' => CheckpointType::ArrivedDelivery,
-                    'occurred_at' => (clone $now)->addSeconds($offset),
+                    'occurred_at' => (clone $now)->addMinutes($offset),
                     'km_reading' => null,
                     'driver_id' => $driverId,
                     'shift_id' => $shiftId,
@@ -922,7 +922,7 @@ abstract class CreatesOrderTransportCards
                     'trip_id' => $trip->id,
                     'order_id' => $order->id,
                     'checkpoint_type' => CheckpointType::Completed,
-                    'occurred_at' => (clone $now)->addSeconds($offset),
+                    'occurred_at' => (clone $now)->addMinutes($offset),
                     'km_reading' => null,
                     'driver_id' => $driverId,
                     'shift_id' => $shiftId,

@@ -15,7 +15,7 @@
     </div>
 
     {{-- Active filter summary --}}
-    @if ($activeStatusFilter !== 'all' || $vehicleOwner !== 'all')
+    @if ($activeStatusFilter !== 'all' || $vehicleOwner !== 'all' || $orderType !== 'all')
         <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <span>Đang lọc:</span>
             @if ($activeStatusFilter !== 'all')
@@ -28,6 +28,12 @@
             <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                 {{ $vehicleOwnerFilters[$vehicleOwner]['label'] ?? $vehicleOwner }}
                 <button wire:click="filterVehicleOwner('all')" class="ml-0.5 hover:text-red-500">&times;</button>
+            </span>
+            @endif
+            @if ($orderType !== 'all')
+            <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                {{ $orderTypeFilters[$orderType]['label'] ?? $orderType }}
+                <button wire:click="filterOrderType('all')" class="ml-0.5 hover:text-red-500">&times;</button>
             </span>
             @endif
         </div>
