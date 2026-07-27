@@ -361,7 +361,7 @@ export default function TripDetailScreen() {
       {/* Sticky bottom — Kết thúc chuyến */}
       {canComplete && (
         <View style={s.stickyBar}>
-          {isReturnTrip && returnStarted ? (
+          {isReturnTrip && (returnStarted || hasStarted) ? (
             <TouchableOpacity style={[{ backgroundColor: "#DC2626", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 12 }]} onPress={handleCompleteReturn} disabled={completing} activeOpacity={0.8}>
               <Ionicons name="flag" size={20} color="#fff" />
               <Text style={{ color: "#fff", fontSize: 17, fontWeight: "800" }}>{completing ? "Đang xử lý..." : "Kết thúc chuyến quay đầu"}</Text>
