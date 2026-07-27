@@ -127,6 +127,8 @@ class TripController extends Controller
 
         $trip->load([
             'vehicle',
+            'startLocation',
+            'endLocation',
             'driverSwaps.toDriver',
             'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                 'customer',
@@ -177,6 +179,8 @@ class TripController extends Controller
             })
             ->with([
                 'vehicle',
+                'startLocation',
+                'endLocation',
                 'shift',
                 'driver',
                 'driverSwaps.toDriver',

@@ -145,7 +145,7 @@ export default function DashboardScreen() {
                 <Ionicons name="car" size={20} color={sc.text} />
               </View>
               <View style={{ flex: 1 }}>
-                {(() => {
+                 {(() => {
                   const codes: string[] = [];
                   (t.orders || []).forEach((o: any) => {
                     if (o.pickup_location?.code) codes.push(o.pickup_location.code);
@@ -153,6 +153,9 @@ export default function DashboardScreen() {
                       if (dp.location?.code) codes.push(dp.location.code);
                     });
                   });
+                  if (codes.length === 0 && t.route) {
+                    codes.push(...t.route.split(' → '));
+                  }
                   const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
                   if (deduped.length > 0) return (
                     <View style={st.routeWrap}>

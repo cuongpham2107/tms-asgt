@@ -121,6 +121,9 @@ export default function StatsScreen() {
                     if (dp.location?.code) codes.push(dp.location.code);
                   });
                 });
+                if (codes.length === 0 && t.route) {
+                  codes.push(...t.route.split(' → '));
+                }
                 const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
                 if (deduped.length > 0) return (
                   <View style={s.routeWrap}>

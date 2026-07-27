@@ -211,6 +211,12 @@ export default function TripDetailScreen() {
               </View>
             </View>
           )}
+          {(detail?.route || trip?.route) && (
+            <View style={s.routeWrap}>
+              <Ionicons name="navigate" size={12} color="#4F46E5" />
+              <Text style={s.orderRoute}>{detail?.route || trip?.route}</Text>
+            </View>
+          )}
           {canStart && (
             <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#10B981", marginTop: 12 }]} onPress={handleStart} disabled={starting}>
               <Ionicons name="play-circle" size={20} color="#fff" />
