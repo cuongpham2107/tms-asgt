@@ -47,9 +47,12 @@ export default function DashboardScreen() {
   const sortedTrips = [...activeTrips].sort((a, b) => (isCurrentTrip(b) ? 1 : 0) - (isCurrentTrip(a) ? 1 : 0));
 
   const tripsInShift: any[] = shift?.trips || [];
-  const shiftAssigned = tripsInShift.filter((t: any) => t.status === "pending").length;
-  const shiftInProgress = tripsInShift.filter((t: any) => ["started", "arrived_pickup", "delivering", "arrived_delivery", "delivered", "return_trip"].includes(t.status)).length;
-  const shiftCompleted = tripsInShift.filter((t: any) => t.status === "completed").length;
+  const activeInShift = (trips || []).filter((t: any) => t.shift_id === shift?.id && t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap");
+  const mergedTrips = [...tripsInShift];
+  activeInShift.forEach((t: any) => { if (!mergedTrips.find((m: any) => m.id === t.id)) mergedTrips.push(t); });
+  const shiftAssigned = mergedTrips.filter((t: any) => t.status === "pending").length;
+  const shiftInProgress = mergedTrips.filter((t: any) => ["started", "arrived_pickup", "delivering", "arrived_delivery", "delivered", "return_trip"].includes(t.status)).length;
+  const shiftCompleted = mergedTrips.filter((t: any) => t.status === "completed").length;
   const calcTotal = tripsInShift.reduce((s: number, t: any) => s + (
     parseFloat(t.total_km) || Math.max(0, (parseFloat(t.end_km) || 0) - (parseFloat(t.start_km) || 0))
   ), 0);
