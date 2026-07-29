@@ -94,6 +94,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                         Select::make('pickup_location_id')
                                             ->label('Điểm nhận hàng (HHHK)')
                                             ->options(fn (Get $get): array => Location::query()
+                                                ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
                                                 ->pluck('name', 'id')
                                                 ->toArray()
                                             )->searchable()->preload()

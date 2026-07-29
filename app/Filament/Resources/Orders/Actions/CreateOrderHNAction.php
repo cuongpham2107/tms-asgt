@@ -25,7 +25,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
-use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 class CreateOrderHNAction extends CreatesOrderTransportCards
@@ -72,10 +71,12 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                     Select::make('pickup_location_id')
                         ->live(onBlur: true)
                         ->label('Điểm nhận hàng')
-                        ->options(fn (Get $get): array => Cache::remember('location-options', now()->addSeconds(60), fn (): array => Location::query()
-                            ->pluck('name', 'id')
-                            ->toArray()
-                        ))
+                        ->options(function (Get $get): array {
+                            return Location::query()
+                                ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                ->pluck('name', 'id')
+                                ->toArray();
+                        })
                         ->searchable()
                         ->native(false)
                         ->required()
