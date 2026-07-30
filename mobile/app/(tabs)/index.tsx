@@ -53,13 +53,9 @@ export default function DashboardScreen() {
   const shiftAssigned = mergedTrips.filter((t: any) => t.status === "pending").length;
   const shiftInProgress = mergedTrips.filter((t: any) => ["started", "arrived_pickup", "delivering", "arrived_delivery", "delivered", "return_trip"].includes(t.status)).length;
   const shiftCompleted = mergedTrips.filter((t: any) => t.status === "completed").length;
-  const calcTotal = tripsInShift.reduce((s: number, t: any) => s + (
-    parseFloat(t.total_km) || Math.max(0, (parseFloat(t.end_km) || 0) - (parseFloat(t.start_km) || 0))
-  ), 0);
-  const calcLoaded = tripsInShift.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
-  const shiftTotalKm = shift?.total_km != null ? parseFloat(shift.total_km) : (calcTotal > 0 ? calcTotal : null);
-  const shiftLoaded = shift?.total_km_loaded != null ? parseFloat(shift.total_km_loaded) : (calcLoaded > 0 ? calcLoaded : null);
-  const shiftEmpty = shift?.total_km_empty != null ? parseFloat(shift.total_km_empty) : (shiftTotalKm != null && shiftLoaded != null ? shiftTotalKm - shiftLoaded : null);
+  const shiftTotalKm = shift?.total_km != null ? parseFloat(shift.total_km) : null;
+  const shiftLoaded = shift?.total_km_loaded != null ? parseFloat(shift.total_km_loaded) : null;
+  const shiftEmpty = shift?.total_km_empty != null ? parseFloat(shift.total_km_empty) : null;
 
   const shiftDuration = shift?.start_time ? (() => {
     const start = new Date(shift.start_time);

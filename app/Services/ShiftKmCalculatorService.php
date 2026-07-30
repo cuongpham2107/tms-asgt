@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Enums\TripStatus;
 use App\Models\DriverShift;
+use App\Models\DriverSwap;
 use App\Models\Order;
 use App\Models\TripCheckpoint;
 
@@ -28,19 +30,42 @@ class ShiftKmCalculatorService
         $totalLoaded = 0;
 
         foreach ($allTrips as $trip) {
-            $tripTotalKm = (float) ($trip->total_km ?? 0);
-            $tripLoadedKm = (float) ($trip->total_km_loaded ?? 0);
+            // Nếu trip được swap vào shift này → chỉ tính KM từ checkpoint của shift hiện tại
+            $isSwappedIn = $trip->status === TripStatus::DriverSwap
+                && DriverSwap::where('trip_id', $trip->id)
+                    ->where('to_shift_id', $shift->id)
+                    ->exists();
 
-            // Chuyến đang chạy chưa có total_km → dùng km checkpoint mới nhất
-            if ($tripTotalKm <= 0 && $trip->start_km > 0) {
+            if ($isSwappedIn) {
+                $swap = DriverSwap::where('trip_id', $trip->id)
+                    ->where('to_shift_id', $shift->id)
+                    ->first();
+
+                $handoverKm = (float) ($swap->handover_km ?? 0);
+
                 $latestKm = $trip->checkpoints()
-                    ->reorder()
+                    ->where('shift_id', $shift->id)
                     ->whereNotNull('km_reading')
                     ->orderByDesc('occurred_at')
                     ->value('km_reading');
 
-                if ($latestKm !== null) {
-                    $tripTotalKm = max(0, (float) $latestKm - (float) $trip->start_km);
+                $tripTotalKm = $latestKm !== null ? max(0, (float) $latestKm - $handoverKm) : 0;
+                $tripLoadedKm = 0;
+            } else {
+                $tripTotalKm = (float) ($trip->total_km ?? 0);
+                $tripLoadedKm = (float) ($trip->total_km_loaded ?? 0);
+
+                // Chuyến đang chạy chưa có total_km → dùng km checkpoint mới nhất
+                if ($tripTotalKm <= 0 && $trip->start_km > 0) {
+                    $latestKm = $trip->checkpoints()
+                        ->reorder()
+                        ->whereNotNull('km_reading')
+                        ->orderByDesc('occurred_at')
+                        ->value('km_reading');
+
+                    if ($latestKm !== null) {
+                        $tripTotalKm = max(0, (float) $latestKm - (float) $trip->start_km);
+                    }
                 }
             }
 
