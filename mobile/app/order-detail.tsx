@@ -568,7 +568,7 @@ export default function OrderDetailScreen() {
                                 "-",
                         },
                     ].map((t, i) => (
-                        <View key={i} style={s.tile}>
+                        <View key={i} style={[s.tile, i >= 3 && { width: '48%' }]}>
                             <Ionicons
                                 name={t.icon as any}
                                 size={18}
