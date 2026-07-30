@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\DriverSwap;
 use App\Models\Trip;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -13,7 +14,7 @@ class TripResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        return [
+        $data = [
             'id' => $this->id,
             'driver_id' => $this->driver_id,
             'trip_code' => $this->trip_code,
@@ -56,6 +57,66 @@ class TripResource extends JsonResource
 
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
+        ];
+
+        $adjusted = $this->adjustedKmForDriver($request->user()?->id);
+        if ($adjusted !== null) {
+            $data['total_km'] = $adjusted['total_km'];
+            $data['total_km_loaded'] = $adjusted['total_km_loaded'];
+            $data['total_km_empty'] = $adjusted['total_km_empty'];
+        }
+
+        return $data;
+    }
+
+    private function adjustedKmForDriver(?int $driverId): ?array
+    {
+        if ($driverId === null) {
+            return null;
+        }
+
+        $swap = DriverSwap::where('trip_id', $this->id)
+            ->where('to_driver_id', $driverId)
+            ->first();
+
+        if ($swap === null) {
+            return null;
+        }
+
+        $handoverKm = (float) ($swap->handover_km ?? 0);
+
+        if ($handoverKm <= 0) {
+            $swapCheckpoint = $this->checkpoints()
+                ->reorder()
+                ->where('checkpoint_type', 'driver_swap')
+                ->whereNotNull('km_reading')
+                ->orderByDesc('occurred_at')
+                ->first();
+
+            $handoverKm = (float) ($swapCheckpoint?->km_reading ?? 0);
+        }
+
+        $shiftCheckpoints = $this->checkpoints()
+            ->reorder()
+            ->where('shift_id', $swap->to_shift_id)
+            ->whereNotNull('km_reading')
+            ->orderByDesc('occurred_at')
+            ->get();
+
+        $latestKm = $shiftCheckpoints->first()?->km_reading;
+        $totalKm = $latestKm !== null ? max(0, (float) $latestKm - $handoverKm) : 0;
+
+        $completedKm = $shiftCheckpoints
+            ->where('checkpoint_type', 'completed')
+            ->sortByDesc('occurred_at')
+            ->first()?->km_reading;
+
+        $loadedKm = $completedKm !== null ? max(0, (float) $completedKm - $handoverKm) : 0;
+
+        return [
+            'total_km' => $totalKm,
+            'total_km_loaded' => $loadedKm,
+            'total_km_empty' => max(0, $totalKm - $loadedKm),
         ];
     }
 }
