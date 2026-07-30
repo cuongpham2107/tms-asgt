@@ -39,6 +39,7 @@ class ShiftKmCalculatorService
 
                 if ($handoverKm <= 0) {
                     $swapCheckpoint = $trip->checkpoints()
+                        ->reorder()
                         ->where('checkpoint_type', 'driver_swap')
                         ->whereNotNull('km_reading')
                         ->orderByDesc('occurred_at')
@@ -48,6 +49,7 @@ class ShiftKmCalculatorService
                 }
 
                 $latestKm = $trip->checkpoints()
+                    ->reorder()
                     ->where('shift_id', $shift->id)
                     ->whereNotNull('km_reading')
                     ->orderByDesc('occurred_at')
