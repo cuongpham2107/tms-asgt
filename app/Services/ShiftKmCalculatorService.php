@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\DriverSwap;
 use App\Models\Order;
@@ -31,17 +30,22 @@ class ShiftKmCalculatorService
 
         foreach ($allTrips as $trip) {
             // Nếu trip được swap vào shift này → chỉ tính KM từ checkpoint của shift hiện tại
-            $isSwappedIn = $trip->status === TripStatus::DriverSwap
-                && DriverSwap::where('trip_id', $trip->id)
-                    ->where('to_shift_id', $shift->id)
-                    ->exists();
+            $swap = DriverSwap::where('trip_id', $trip->id)
+                ->where('to_shift_id', $shift->id)
+                ->first();
 
-            if ($isSwappedIn) {
-                $swap = DriverSwap::where('trip_id', $trip->id)
-                    ->where('to_shift_id', $shift->id)
-                    ->first();
-
+            if ($swap) {
                 $handoverKm = (float) ($swap->handover_km ?? 0);
+
+                if ($handoverKm <= 0) {
+                    $swapCheckpoint = $trip->checkpoints()
+                        ->where('checkpoint_type', 'driver_swap')
+                        ->whereNotNull('km_reading')
+                        ->orderByDesc('occurred_at')
+                        ->first();
+
+                    $handoverKm = (float) ($swapCheckpoint?->km_reading ?? 0);
+                }
 
                 $latestKm = $trip->checkpoints()
                     ->where('shift_id', $shift->id)
