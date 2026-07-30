@@ -1,16 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { useAuth } from "../../src/lib/auth";
+import { useLoading } from "../../src/lib/loading";
 import { api } from "../../src/lib/api";
 import { showAlert } from "../../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen() {
   const { logout, token, shift, setShift } = useAuth(); const router = useRouter();
+  const { showLoading, hideLoading } = useLoading();
   const [ending, setEnding] = useState(false);
+  const [localDriver, setLocalDriver] = useState<any>(shift?.driver || null);
 
-  const driver = shift?.driver;
+  useEffect(() => {
+    if (shift?.driver) setLocalDriver(shift.driver);
+  }, [shift?.driver]);
+
+  const driver = localDriver;
   const shiftTrips: any[] = shift?.trips || [];
   const activeTrips = shiftTrips.filter((t: any) => t.status !== "completed" && t.status !== "driver_swap");
 
@@ -30,7 +37,7 @@ export default function ProfileScreen() {
   };
 
   const doEnd = async () => {
-    setEnding(true);
+    setEnding(true); showLoading();
     try {
       let kmToUse = shift?.vehicle?.current_mileage;
       const fresh = await api.shifts.current(token!).catch(() => null);
@@ -40,12 +47,13 @@ export default function ProfileScreen() {
       if (kmToUse != null) {
         await api.shifts.endVehicle(String(shift.id), parseInt(kmToUse), token!);
       }
-      await api.shifts.end(token!);
-      setShift(null);
+      const res = await api.shifts.end(token!);
+      setShift(res?.shift || shift);
+      setLocalDriver(res?.shift?.driver || localDriver);
       showAlert("Thành công", "Đã kết thúc ca");
       router.replace("/");
     } catch (e: any) { showAlert("Lỗi", e.message); }
-    finally { setEnding(false); }
+    finally { setEnding(false); hideLoading(); }
   };
 
   const initials = driver?.name
@@ -125,6 +133,14 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Vào ca */}
+      {(!shift || shift.end_time) && (
+        <TouchableOpacity style={s.startShiftBtn} onPress={() => router.push("/shift")} activeOpacity={0.8}>
+          <Ionicons name="play-circle" size={24} color="#fff" />
+          <Text style={s.startShiftText}>Vào ca</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Menu */}
       <View style={s.menu}>
         <TouchableOpacity style={s.menuItem} onPress={() => router.push("/completed-trips")}>
@@ -181,6 +197,8 @@ const s = StyleSheet.create({
   infoValue: { fontSize: 14, fontWeight: "600", color: "#111827", flex: 1, marginLeft: 0, marginTop: 14 },
   endShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#EF4444", marginHorizontal: 16, marginTop: 20, padding: 16, borderRadius: 14, shadowColor: "#EF4444", shadowOpacity: 0.25, shadowRadius: 8, elevation: 3 },
   endShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  startShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#10B981", marginHorizontal: 16, marginTop: 20, padding: 16, borderRadius: 14, shadowColor: "#10B981", shadowOpacity: 0.25, shadowRadius: 8, elevation: 3 },
+  startShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   activeTripCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFF7ED", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#FED7AA", marginBottom: 8, gap: 12 },
   activeTripDot: { width: 10, height: 10, borderRadius: 5 },
   activeTripCode: { fontSize: 14, fontWeight: "700", color: "#111827" },

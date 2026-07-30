@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
+import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
 import { showAlert } from "../src/lib/alert";
 import * as ImagePicker from "expo-image-picker";
@@ -86,6 +87,7 @@ const localISO = (d: Date = new Date()) => {
 
 export default function OrderDetailScreen() {
     const { token, shift } = useAuth();
+    const { showLoading, hideLoading } = useLoading();
     const params = useLocalSearchParams<{ id: string; order: string }>();
     const order = params.order ? JSON.parse(params.order) : null;
     const isSwapped = order?.is_swapped || false;
@@ -335,7 +337,7 @@ export default function OrderDetailScreen() {
             body.new_delivery_location_id = selectedLoc.id;
         }
 
-        setLoading(true);
+        setLoading(true); showLoading();
         try {
             await api.trips.checkpoint(String(tripId), body, token);
             showAlert(
@@ -351,6 +353,7 @@ export default function OrderDetailScreen() {
             showAlert("Lỗi", e.message);
         } finally {
             setLoading(false);
+            hideLoading();
         }
     }
 

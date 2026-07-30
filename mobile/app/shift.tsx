@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, ScrollView } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
+import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -16,6 +17,7 @@ const INCOMPLETE_ORDER_STATUSES = ["sent", "in_transit", "assigned"];
 
 export default function ShiftScreen() {
   const { token, setAuth, shift, setShift } = useAuth();
+  const { showLoading, hideLoading } = useLoading();
   const [loading, setLoading] = useState(false);
   const [showEnd, setShowEnd] = useState(false);
   const [endKm, setEndKm] = useState("");
@@ -61,7 +63,7 @@ export default function ShiftScreen() {
   }, [token]));
 
   async function startShift(type: string) {
-    setLoading(true);
+    setLoading(true); showLoading();
     try {
       let gps = null;
       try {
@@ -80,6 +82,7 @@ export default function ShiftScreen() {
       Alert.alert("Lỗi", e.message);
     } finally {
       setLoading(false);
+      hideLoading();
     }
   }
 
@@ -88,7 +91,7 @@ export default function ShiftScreen() {
     if (!km || km <= 0) { Alert.alert("Thiếu", "Nhập số Km kết thúc"); return; }
     if (!shift?.id) return;
 
-    setEnding(true);
+    setEnding(true); showLoading();
     try {
       await api.shifts.endVehicle(String(shift.id), km, token!);
       const res = await api.shifts.end(token!);
@@ -99,6 +102,7 @@ export default function ShiftScreen() {
       Alert.alert("Chưa thể kết thúc ca", e.message);
     } finally {
       setEnding(false);
+      hideLoading();
     }
   }
 

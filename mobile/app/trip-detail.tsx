@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, Modal, KeyboardAvoidingView, Platform } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
+import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
 import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,6 +31,7 @@ const localISO = (d: Date = new Date()) => {
 
 export default function TripDetailScreen() {
   const { token, shift } = useAuth(); const router = useRouter();
+  const { showLoading, hideLoading } = useLoading();
   const params = useLocalSearchParams<{ id: string; trip: string }>();
   const trip = params.trip ? JSON.parse(params.trip) : null;
   const [detail, setDetail] = useState<any>(null); const [loading, setLoading] = useState(true);
@@ -83,7 +85,7 @@ export default function TripDetailScreen() {
 
   const handleStart = async () => {
     if (!trip?.id || !token) return;
-    setStarting(true);
+    setStarting(true); showLoading();
     try {
       const gps = await getGps();
       const body: any = { checkpoint_type: "started", occurred_at: localISO() };
@@ -98,7 +100,7 @@ export default function TripDetailScreen() {
         if (match) router.push({ pathname: "/trip-detail", params: { id: match[1] } });
       });
     }
-    finally { setStarting(false); }
+    finally { setStarting(false); hideLoading(); }
   };
 
   const handleStartReturn = async () => {
@@ -120,7 +122,7 @@ export default function TripDetailScreen() {
       showAlert("Thành công", "Đã ghi nhận Km bắt đầu");
       await load();
     } catch (e: any) { showAlert("Lỗi", e.message); }
-    finally { setStarting(false); }
+    finally { setStarting(false); hideLoading(); }
   };
 
   const handleCompleteReturn = async () => {
@@ -128,7 +130,7 @@ export default function TripDetailScreen() {
     if (!eKm) { showAlert("Thiếu", "Nhập Km kết thúc"); return; }
     if (!trip?.id || !token) return;
     showDestructiveConfirm("Kết thúc chuyến quay đầu", "Bạn có chắc chắn muốn kết thúc chuyến quay đầu?", async () => {
-      setCompleting(true);
+      setCompleting(true); showLoading();
       try {
         const cps = detail?.checkpoints || [];
         const endCp = cps.find((cp: any) => cp.checkpoint_type === "end");
@@ -143,13 +145,13 @@ export default function TripDetailScreen() {
         showAlert("Thành công", "Đã kết thúc chuyến quay đầu");
         await load();
       } catch (e: any) { showAlert("Lỗi", e.message); }
-      finally { setCompleting(false); }
+      finally { setCompleting(false); hideLoading(); }
     });
   };
 
   const doComplete = async (km: number) => {
     if (!trip?.id || !token) return;
-    setCompleting(true);
+    setCompleting(true); showLoading();
     try {
       const gps = await getGps();
       await api.trips.complete(String(trip.id), km, token, gps ?? undefined);
@@ -158,7 +160,7 @@ export default function TripDetailScreen() {
       setShowCompleteModal(false);
       await load();
     } catch (e: any) { showAlert("Lỗi", e.message); }
-    finally { setCompleting(false); }
+    finally { setCompleting(false); hideLoading(); }
   };
 
   // Show loading while fetching trip data

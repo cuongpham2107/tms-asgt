@@ -1,18 +1,20 @@
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "../src/lib/auth";
+import { useLoading } from "../src/lib/loading";
 import { login, api } from "../src/lib/api";
 
 export default function LoginScreen() {
   const { setAuth } = useAuth();
+  const { showLoading, hideLoading } = useLoading();
   const [email, setEmail] = useState("cvt2307b@tms.local");
   const [password, setPassword] = useState("66668888");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleLogin() {
-    setLoading(true); setError("");
+    setLoading(true); setError(""); showLoading();
     try {
       const res = await login(email, password);
       if (!res.token) return setError("Sai tài khoản hoặc mật khẩu");
@@ -26,25 +28,35 @@ export default function LoginScreen() {
       setError(e instanceof Error ? e.message : "Không thể kết nối đến máy chủ");
     } finally {
       setLoading(false);
+      hideLoading();
     }
   }
 
   return (
-    <View style={s.container}>
-      <Image source={require("../assets/icon.png")} style={s.logo} />
-      <Text style={s.subtitle}>Đăng nhập tài xế</Text>
-      {error ? <Text style={s.error}>{error}</Text> : null}
-      <TextInput style={s.input} placeholder="Email" placeholderTextColor="#9CA3AF" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-      <TextInput style={s.input} placeholder="Mật khẩu" placeholderTextColor="#9CA3AF" value={password} onChangeText={setPassword} secureTextEntry />
-      <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleLogin} disabled={loading}>
-        <Text style={s.btnText}>{loading ? "Đang đăng nhập..." : "Đăng nhập"}</Text>
-      </TouchableOpacity>
-    </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "android" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "android" ? 88 : 0}
+    >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 24 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Image source={require("../assets/icon.png")} style={s.logo} />
+        <Text style={s.subtitle}>Đăng nhập tài xế</Text>
+        {error ? <Text style={s.error}>{error}</Text> : null}
+        <TextInput style={s.input} placeholder="Email" placeholderTextColor="#9CA3AF" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+        <TextInput style={s.input} placeholder="Mật khẩu" placeholderTextColor="#9CA3AF" value={password} onChangeText={setPassword} secureTextEntry />
+        <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleLogin} disabled={loading}>
+          <Text style={s.btnText}>{loading ? "Đang đăng nhập..." : "Đăng nhập"}</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#F9FAFB" },
+  container: { backgroundColor: "#F9FAFB" },
   logo: { width: 120, height: 120, alignSelf: "center", marginBottom: 16, resizeMode: "contain" },
   subtitle: { fontSize: 14, color: "#6B7280", textAlign: "center", marginBottom: 32 },
   input: { backgroundColor: "#fff", padding: 14, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: "#E5E7EB", marginBottom: 12, color: "#111827" },
