@@ -48,15 +48,22 @@ class ShiftKmCalculatorService
                     $handoverKm = (float) ($swapCheckpoint?->km_reading ?? 0);
                 }
 
-                $latestKm = $trip->checkpoints()
+                $shiftCheckpoints = $trip->checkpoints()
                     ->reorder()
                     ->where('shift_id', $shift->id)
                     ->whereNotNull('km_reading')
                     ->orderByDesc('occurred_at')
-                    ->value('km_reading');
+                    ->get();
 
+                $latestKm = $shiftCheckpoints->first()?->km_reading;
                 $tripTotalKm = $latestKm !== null ? max(0, (float) $latestKm - $handoverKm) : 0;
-                $tripLoadedKm = 0;
+
+                $completedKm = $shiftCheckpoints
+                    ->where('checkpoint_type', 'completed')
+                    ->sortByDesc('occurred_at')
+                    ->first()?->km_reading;
+
+                $tripLoadedKm = $completedKm !== null ? max(0, (float) $completedKm - $handoverKm) : 0;
             } else {
                 $tripTotalKm = (float) ($trip->total_km ?? 0);
                 $tripLoadedKm = (float) ($trip->total_km_loaded ?? 0);
