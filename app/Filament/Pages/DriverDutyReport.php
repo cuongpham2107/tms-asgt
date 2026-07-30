@@ -9,7 +9,6 @@ use App\Models\DriverShift;
 use App\Models\User;
 use App\Models\Vehicle;
 use BackedEnum;
-use Carbon\Carbon;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -37,9 +36,6 @@ class DriverDutyReport extends Page implements HasTable
     protected string $view = 'filament.pages.driver-duty-report';
 
     protected static ?int $navigationSort = 4;
-
-    #[Url]
-    public string $activeDateFilter = 'today';
 
     #[Url]
     public string $activeStationFilter = 'all';
@@ -82,23 +78,11 @@ class DriverDutyReport extends Page implements HasTable
                 TextColumn::make('shift_type')
                     ->label('Ca')
                     ->alignCenter()
-                    ->formatStateUsing(function ($state, $record) {
-                        $full = (int) ($record->full_count ?? 0);
-                        $morning = (int) ($record->morning_half_count ?? 0);
-                        $night = (int) ($record->night_half_count ?? 0);
-
-                        $parts = [];
-                        for ($i = 0; $i < $full; $i++) {
-                            $parts[] = 'X';
-                        }
-                        for ($i = 0; $i < $morning; $i++) {
-                            $parts[] = 'X/2';
-                        }
-                        for ($i = 0; $i < $night; $i++) {
-                            $parts[] = 'Y/2';
-                        }
-
-                        return $parts !== [] ? implode(', ', $parts) : '—';
+                    ->formatStateUsing(fn ($state) => match ($state) {
+                        ShiftType::Full => 'X',
+                        ShiftType::MorningHalf => 'X/2',
+                        ShiftType::NightHalf => 'Y/2',
+                        default => '—',
                     }),
                 TextColumn::make('trip_count')
                     ->label('Số chuyến')
@@ -142,15 +126,6 @@ class DriverDutyReport extends Page implements HasTable
     {
         return $form
             ->components([
-                PillFilter::make('activeDateFilter')
-                    ->options([
-                        'today' => 'Hôm nay',
-                        'week' => 'Tuần này',
-                        'month' => 'Tháng này',
-                    ])
-                    ->activeValue(fn () => $this->activeDateFilter)
-                    ->clickAction('filterDate'),
-
                 PillFilter::make('activeStationFilter')
                     ->options(fn (): array => collect(OnDutyLocation::cases())
                         ->mapWithKeys(fn ($station) => [$station->value => $station->getLabel()])
@@ -162,13 +137,6 @@ class DriverDutyReport extends Page implements HasTable
             ]);
     }
 
-    public function filterDate(string $value): void
-    {
-        $this->activeDateFilter = $value;
-
-        $this->resetPage();
-    }
-
     public function filterStation(string $value): void
     {
         $this->activeStationFilter = $value;
@@ -176,30 +144,8 @@ class DriverDutyReport extends Page implements HasTable
         $this->resetPage();
     }
 
-    /**
-     * @return array{0: Carbon, 1: Carbon}
-     */
-    protected function dateRange(): array
-    {
-        return match ($this->activeDateFilter) {
-            'week' => [
-                Carbon::now()->startOfWeek()->setHour(8),
-                Carbon::now()->endOfWeek()->addDay()->setHour(8),
-            ],
-            'month' => [
-                Carbon::now()->startOfMonth()->setHour(8),
-                Carbon::now()->startOfMonth()->addMonth()->setHour(8),
-            ],
-            default => [
-                Carbon::today()->setHour(8),
-                Carbon::tomorrow()->setHour(8),
-            ],
-        };
-    }
-
     protected function getSummaryData(): array
     {
-        [$from, $to] = $this->dateRange();
         $drivers = User::role('driver')->where('is_active', true)->get();
 
         $stations = [];
@@ -223,22 +169,18 @@ class DriverDutyReport extends Page implements HasTable
             $workingDriverIds = [];
 
             foreach ($stationDrivers as $driver) {
-                $shifts = DriverShift::where('driver_id', $driver->id)
-                    ->where(function ($q) use ($from, $to) {
-                        $q->whereBetween('start_time', [$from, $to])
-                            ->orWhereNull('end_time');
-                    })->get();
+                $shift = DriverShift::where('driver_id', $driver->id)
+                    ->whereNull('end_time')
+                    ->first();
 
-                if ($shifts->isNotEmpty()) {
+                if ($shift) {
                     $workingDriverIds[] = $driver->id;
 
-                    foreach ($shifts as $shift) {
-                        match ($shift->shift_type) {
-                            ShiftType::Full => $full++,
-                            ShiftType::MorningHalf => $morningHalf++,
-                            ShiftType::NightHalf => $nightHalf++,
-                        };
-                    }
+                    match ($shift->shift_type) {
+                        ShiftType::Full => $full++,
+                        ShiftType::MorningHalf => $morningHalf++,
+                        ShiftType::NightHalf => $nightHalf++,
+                    };
                 }
             }
 
@@ -280,60 +222,42 @@ class DriverDutyReport extends Page implements HasTable
 
     protected function buildQuery(): Builder
     {
-        [$from, $to] = $this->dateRange();
-
-        // Get all active drivers
         return User::query()
             ->role('driver')
-            ->whereHas('driverShifts', function ($q) use ($from, $to) {
-                $q->whereBetween('start_time', [$from, $to])
-                    ->orWhereNull('end_time');
-            })
+            ->whereHas('driverShifts', fn ($q) => $q->whereNull('end_time'))
             ->where('is_active', true)
             ->when($this->activeStationFilter !== 'all', fn ($q) => $q->where('station', $this->activeStationFilter))
             ->select('users.*')
-            ->selectSub(function ($q) use ($from, $to) {
+            ->selectSub(function ($q) {
                 $q->selectRaw('COALESCE(s.total_km_loaded, 0)')
                     ->from('driver_shifts', 's')
                     ->whereColumn('s.driver_id', 'users.id')
-                    ->where(function ($q2) use ($from, $to) {
-                        $q2->whereBetween('s.start_time', [$from, $to])
-                            ->orWhereNull('s.end_time');
-                    })
+                    ->whereNull('s.end_time')
                     ->orderByDesc('s.start_time')
                     ->limit(1);
             }, 'km_loaded')
-            ->selectSub(function ($q) use ($from, $to) {
+            ->selectSub(function ($q) {
                 $q->selectRaw('COALESCE(s.total_km_empty, 0)')
                     ->from('driver_shifts', 's')
                     ->whereColumn('s.driver_id', 'users.id')
-                    ->where(function ($q2) use ($from, $to) {
-                        $q2->whereBetween('s.start_time', [$from, $to])
-                            ->orWhereNull('s.end_time');
-                    })
+                    ->whereNull('s.end_time')
                     ->orderByDesc('s.start_time')
                     ->limit(1);
             }, 'km_empty')
-            ->selectSub(function ($q) use ($from, $to) {
+            ->selectSub(function ($q) {
                 $q->selectRaw('COALESCE(s.total_km, 0)')
                     ->from('driver_shifts', 's')
                     ->whereColumn('s.driver_id', 'users.id')
-                    ->where(function ($q2) use ($from, $to) {
-                        $q2->whereBetween('s.start_time', [$from, $to])
-                            ->orWhereNull('s.end_time');
-                    })
+                    ->whereNull('s.end_time')
                     ->orderByDesc('s.start_time')
                     ->limit(1);
             }, 'total_km')
-            ->selectSub(function ($q) use ($from, $to) {
+            ->selectSub(function ($q) {
                 $q->selectRaw('COUNT(t.id)')
                     ->from('trips', 't')
                     ->join('driver_shifts as s2', 's2.id', '=', 't.shift_id')
                     ->whereColumn('s2.driver_id', 'users.id')
-                    ->where(function ($q2) use ($from, $to) {
-                        $q2->whereBetween('s2.start_time', [$from, $to])
-                            ->orWhereNull('s2.end_time');
-                    });
+                    ->whereNull('s2.end_time');
             }, 'trip_count')
             ->withCasts([
                 'km_loaded' => 'decimal:1',
@@ -345,31 +269,13 @@ class DriverDutyReport extends Page implements HasTable
 
     protected function paginateTableQuery(Builder $query): Paginator
     {
-        [$from, $to] = $this->dateRange();
-
         $drivers = $query->get();
 
-        $rows = $drivers->map(function (User $driver) use ($from, $to) {
-            $shifts = DriverShift::where('driver_id', $driver->id)
-                ->where(function ($q) use ($from, $to) {
-                    $q->whereBetween('start_time', [$from, $to])
-                        ->orWhereNull('end_time');
-                })
+        $rows = $drivers->map(function (User $driver) {
+            $shift = DriverShift::where('driver_id', $driver->id)
+                ->whereNull('end_time')
                 ->orderByDesc('start_time')
-                ->get();
-
-            // Keep the first shift for vehicle/trip lookup (existing logic)
-            $shift = $shifts->first();
-
-            // Count by type for display
-            $fullCount = $shifts->where('shift_type', ShiftType::Full)->count();
-            $morningHalfCount = $shifts->where('shift_type', ShiftType::MorningHalf)->count();
-            $nightHalfCount = $shifts->where('shift_type', ShiftType::NightHalf)->count();
-
-            // Attach counts to driver object
-            $driver->full_count = $fullCount;
-            $driver->morning_half_count = $morningHalfCount;
-            $driver->night_half_count = $nightHalfCount;
+                ->first();
 
             // Lấy xe: ưu tiên current_driver_id, fallback qua trip
             $vehicle = Vehicle::where('current_driver_id', $driver->id)->first();
@@ -387,13 +293,11 @@ class DriverDutyReport extends Page implements HasTable
             $hasSwap = $swapTrip !== null;
             $plate = $vehicle?->plate_number;
 
-            // Lấy station trực tiếp từ model (đã có enum cast)
             $driver->station_display = $driver->station?->getLabel() ?? '—';
-
             $driver->plate = $plate;
             $driver->swap_note = $hasSwap ? 'đảo lái' : null;
             $driver->shift_type = $shift?->shift_type;
-            $driver->has_active_shift = $shift !== null && $shift->end_time === null;
+            $driver->has_active_shift = $shift !== null;
             $driver->trip_count = (int) ($driver->trip_count ?? 0);
             $driver->km_loaded = (float) ($driver->km_loaded ?? 0);
             $driver->km_empty = (float) ($driver->km_empty ?? 0);

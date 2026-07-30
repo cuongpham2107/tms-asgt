@@ -47,7 +47,7 @@ export default function DashboardScreen() {
   const sortedTrips = [...activeTrips].sort((a, b) => (isCurrentTrip(b) ? 1 : 0) - (isCurrentTrip(a) ? 1 : 0));
 
   const tripsInShift: any[] = shift?.trips || [];
-  const activeInShift = (trips || []).filter((t: any) => t.shift_id === shift?.id && t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap");
+  const activeInShift = (trips || []).filter((t: any) => (t.shift_id === shift?.id || t.shift_id === null) && t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap");
   const mergedTrips = [...tripsInShift];
   activeInShift.forEach((t: any) => { if (!mergedTrips.find((m: any) => m.id === t.id)) mergedTrips.push(t); });
   const shiftAssigned = mergedTrips.filter((t: any) => t.status === "pending").length;
