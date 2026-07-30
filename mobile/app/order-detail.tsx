@@ -567,11 +567,6 @@ export default function OrderDetailScreen() {
                                 d.vehicle_plate_number ||
                                 "-",
                         },
-                        {
-                            icon: "speedometer",
-                            label: "Km có hàng",
-                            value: d.loaded_km ? `${d.loaded_km} km` : "-",
-                        },
                     ].map((t, i) => (
                         <View key={i} style={s.tile}>
                             <Ionicons
