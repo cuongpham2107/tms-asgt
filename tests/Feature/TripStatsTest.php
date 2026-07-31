@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Models\Trip;
 use App\Models\User;

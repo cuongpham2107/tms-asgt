@@ -200,7 +200,7 @@ class TripForm
                                     ->required()
                                     ->displayFormat('H:i d/m/Y')
                                     ->seconds(false)
-                                    ->live(onBlur:true)
+                                    ->live(onBlur: true)
                                     ->afterStateUpdated(function ($state, $set, $get) {
                                         if ($get('checkpoint_type') === CheckpointType::Completed) {
                                             $set('../../completed_at', $state);

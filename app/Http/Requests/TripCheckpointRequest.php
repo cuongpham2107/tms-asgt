@@ -91,7 +91,37 @@ class TripCheckpointRequest extends FormRequest
             },
 
             function (\Illuminate\Validation\Validator $validator) {
-                if ($this->input('km_reading') === null || $this->input('order_id') === null) {
+                if ($this->input('km_reading') === null) {
+                    return;
+                }
+
+                $trip = $this->route('trip');
+
+                if ($trip instanceof Trip && $trip->vehicle?->current_mileage !== null) {
+                    if ((float) $this->input('km_reading') < (float) $trip->vehicle->current_mileage) {
+                        $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn số km hiện tại của xe ('.number_format((float) $trip->vehicle->current_mileage, 1).' km)');
+                    }
+                }
+
+                if ($trip instanceof Trip && $trip->start_km !== null) {
+                    if ((float) $this->input('km_reading') < (float) $trip->start_km) {
+                        $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn km bắt đầu chuyến ('.number_format((float) $trip->start_km, 1).' km)');
+                    }
+                }
+
+                if ($trip instanceof Trip) {
+                    $lastTripKm = TripCheckpoint::where('trip_id', $trip->id)
+                        ->whereNotNull('km_reading')
+                        ->orderByDesc('occurred_at')
+                        ->orderByDesc('id')
+                        ->value('km_reading');
+
+                    if ($lastTripKm !== null && (float) $this->input('km_reading') < (float) $lastTripKm) {
+                        $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn km gần nhất của chuyến ('.number_format((float) $lastTripKm, 1).' km)');
+                    }
+                }
+
+                if ($this->input('order_id') === null) {
                     return;
                 }
 
@@ -103,13 +133,6 @@ class TripCheckpointRequest extends FormRequest
 
                 if ($lastOrderKm !== null && (float) $this->input('km_reading') < (float) $lastOrderKm) {
                     $validator->errors()->add('km_reading', 'Số km phải lớn hơn hoặc bằng km gần nhất của đơn hàng này ('.number_format((float) $lastOrderKm, 1).' km)');
-                }
-
-                $trip = $this->route('trip');
-                if ($trip instanceof Trip && $trip->start_km !== null) {
-                    if ((float) $this->input('km_reading') < (float) $trip->start_km) {
-                        $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn km bắt đầu chuyến ('.number_format((float) $trip->start_km, 1).' km)');
-                    }
                 }
             },
 

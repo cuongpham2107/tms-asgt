@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Locations\Schemas;
 
 use App\Enums\LocationType;
+use App\Models\Area;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
@@ -26,8 +27,11 @@ class LocationForm
             ->components([
                 Select::make('area_id')
                     ->label('Khu vực')
-                    ->relationship('area', 'code')
-                    ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->code} - {$record->type->getLabel()}")
+                    ->options(fn (): array => Area::query()
+                        ->get(['id', 'code', 'type'])
+                        ->mapWithKeys(fn (Area $area): array => [$area->id => "{$area->code} - {$area->type->getLabel()}"])
+                        ->toArray()
+                    )
                     ->searchable()
                     ->preload()
                     ->native(false),

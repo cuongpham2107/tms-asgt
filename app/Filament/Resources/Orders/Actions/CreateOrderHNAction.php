@@ -47,6 +47,13 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                                 ->pluck('code', 'id')
                                 ->toArray();
                         })
+                        ->default(function () {
+                            return Area::query()
+                                ->where('is_active', true)
+                                ->where('type', 'external')
+                                ->orderBy('sort_order', 'asc')
+                                ->value('id');
+                        })
                         ->live()
                         ->inline()
                         ->columnSpanFull(),
@@ -73,7 +80,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->label('Điểm nhận hàng')
                         ->options(function (Get $get): array {
                             return Location::query()
-                                ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                // ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
                                 ->pluck('name', 'id')
                                 ->toArray();
                         })

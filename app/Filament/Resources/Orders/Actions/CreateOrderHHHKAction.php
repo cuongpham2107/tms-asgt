@@ -56,7 +56,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->label('Điểm nhận hàng')
                         ->options(function (Get $get): array {
                             return Location::query()
-                                ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                // ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
                                 ->pluck('name', 'id')
                                 ->toArray();
                         })

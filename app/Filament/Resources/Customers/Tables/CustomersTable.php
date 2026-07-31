@@ -2,72 +2,53 @@
 
 namespace App\Filament\Resources\Customers\Tables;
 
-use Filament\Actions\BulkActionGroup;
+use App\Filament\BaseTable;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Tables\Columns\Layout\Stack;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\ViewColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class CustomersTable
+class CustomersTable extends BaseTable
 {
     public static function configure(Table $table): Table
     {
-        return $table
+        return parent::applyDefaults($table)
             ->modifyQueryUsing(fn (Builder $query) => $query->withCount('orders'))
             ->columns([
-                Stack::make([
-                    ViewColumn::make('customer_card')
-                        ->view('filament.resources.customers.columns.customer-card'),
-
-                    // Hidden searchable columns
-                    TextColumn::make('name')
-                        ->searchable()
-                        ->hidden(),
-                    TextColumn::make('phone')
-                        ->searchable()
-                        ->hidden(),
-                    TextColumn::make('email')
-                        ->searchable()
-                        ->hidden(),
-                    TextColumn::make('address')
-                        ->searchable()
-                        ->hidden(),
-                ])->extraAttributes([
-                    'class' => '[&_.fi-ta-col]:block',
-                ]),
-            ])
-            ->contentGrid([
-                'md' => 2,
-                'xl' => 3,
+                TextColumn::make('code')
+                    ->label('Mã KH')
+                    ->searchable()
+                    ->weight('bold'),
+                TextColumn::make('name')
+                    ->label('Tên khách hàng')
+                    ->searchable()
+                    ->wrap(),
+                TextColumn::make('phone')
+                    ->label('Điện thoại')
+                    ->searchable(),
+                TextColumn::make('email')
+                    ->label('Email')
+                    ->searchable(),
+                TextColumn::make('orders_count')
+                    ->label('Số đơn')
+                    ->alignCenter()
+                    ->sortable(),
+                IconColumn::make('is_active')
+                    ->label('Hoạt động')
+                    ->alignCenter()
+                    ->boolean(),
             ])
             ->recordActions([
                 ViewAction::make('view')
-                    ->label('Chi tiết khách hàng')
-                    ->button()
+                    ->label('')
                     ->color('gray')
-                    ->size('md')
-                    ->modalDescription('Xem chi tiết thông tin khách hàng')
-                    ->extraAttributes([
-                        'class' => 'flex-1 ',
-                    ]),
+                    ->modalDescription('Xem chi tiết thông tin khách hàng'),
                 EditAction::make()
-                    ->button()
-                    ->label('Tạo đơn')
-                    ->size('md')
-                    ->icon('heroicon-o-plus')
-                    ->tooltip('Tạo đơn')
-
-                    ->extraAttributes([
-                        'class' => 'text-white font-bold [&_.fi-icon]:text-white! flex-1 bg-[#f97316] cursor-pointer hover:bg-[#ea6c0a] transition-colors',
-                    ]),
-            ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    // DeleteBulkAction::make(),
-                ]),
-            ]);
+                    ->label('')
+                    ->tooltip('Sửa'),
+            ], position: RecordActionsPosition::BeforeColumns);
     }
 }

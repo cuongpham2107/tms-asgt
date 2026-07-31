@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Tables;
 
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
@@ -348,9 +349,9 @@ class OrdersTable extends BaseTable
                 ]),
             ], position: RecordActionsPosition::BeforeColumns)
             ->groups([
-                Group::make('area.code')
-                    ->label('Loại khu vực')
-                    ->getTitleFromRecordUsing(fn (Order $record): string => $record->area?->code ?? 'Chưa xác định')
+                Group::make('area_id')
+                    ->label('Khu vực')
+                    ->getTitleFromRecordUsing(fn (Order $record): string => $record->area ? $record->area->code.' ('.($record->area->type === OrderType::Hhhk ? 'HHHK' : 'Hàng ngoài').')' : 'Chưa xác định')
                     ->collapsible(),
                 Group::make('trip_id')
                     ->label('Chuyến đi')

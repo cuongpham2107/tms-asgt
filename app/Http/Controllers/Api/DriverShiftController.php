@@ -12,6 +12,7 @@ use App\Http\Requests\StartShiftRequest;
 use App\Http\Requests\SwitchVehicleRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
+use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
@@ -66,6 +67,32 @@ class DriverShiftController extends Controller
                 'start_gps_lat' => $payload['start_gps_lat'] ?? null,
                 'start_gps_lng' => $payload['start_gps_lng'] ?? null,
             ]);
+
+            // Gán to_shift_id cho DriverSwap đang chờ của tài xế này
+            DriverSwap::where('to_driver_id', $user->id)
+                ->whereNull('to_shift_id')
+                ->update(['to_shift_id' => $shift->id]);
+
+            // Fallback start_km từ swap nếu không có vehicle
+            if ($startKm <= 0) {
+                $pendingSwap = DriverSwap::where('to_driver_id', $user->id)
+                    ->where('to_shift_id', $shift->id)
+                    ->first();
+
+                if ($pendingSwap) {
+                    $handoverKm = (float) ($pendingSwap->handover_km ?? 0);
+                    if ($handoverKm <= 0) {
+                        $handoverKm = (float) TripCheckpoint::where('trip_id', $pendingSwap->trip_id)
+                            ->where('checkpoint_type', 'driver_swap')
+                            ->whereNotNull('km_reading')
+                            ->value('km_reading') ?? 0;
+                    }
+                    if ($handoverKm > 0) {
+                        $shift->start_km = $handoverKm;
+                        $shift->save();
+                    }
+                }
+            }
 
             DB::commit();
 

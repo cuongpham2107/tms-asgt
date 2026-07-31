@@ -646,19 +646,7 @@ abstract class CreatesOrderTransportCards
                                 now()->addSeconds(60),
                                 function () use ($get): array {
                                     return Location::query()
-                                        ->when($get('../../area_id'), function ($q, $areaId) {
-                                            $area = Area::find($areaId);
-                                            if ($area === null) {
-                                                return $q;
-                                            }
-
-                                            $areaLocations = (clone $q)->whereRelation('area', 'id', $area->id)->pluck('id');
-                                            if ($areaLocations->isNotEmpty()) {
-                                                return $q->whereRelation('area', 'id', $area->id);
-                                            }
-
-                                            return $q;
-                                        })
+                                        ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
                                         ->pluck('code', 'id')
                                         ->toArray();
                                 }

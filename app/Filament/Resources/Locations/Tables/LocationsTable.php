@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\Locations\Tables;
 
+use App\Enums\OrderType;
 use App\Filament\BaseTable;
+use App\Models\Location;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -55,11 +57,12 @@ class LocationsTable extends BaseTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->groups([
-                Group::make('area.code')
+                Group::make('area_id')
                     ->label('Khu vực')
+                    ->getTitleFromRecordUsing(fn (Location $record): string => $record->area ? $record->area->code.' ('.($record->area->type === OrderType::Hhhk ? 'HHHK' : 'Hàng ngoài').')' : 'Chưa xác định')
                     ->collapsible(),
             ])
-            ->defaultGroup('area.code')
+            ->defaultGroup('area_id')
             ->groupingSettingsHidden()
             ->recordActions([
                 EditAction::make()

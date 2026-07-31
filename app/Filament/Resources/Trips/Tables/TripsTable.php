@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources\Trips\Tables;
 
+use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
-use App\Enums\OrderStatus;
 use App\Enums\VehicleOwnerType;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Trips\Actions\DriverSwapAction;
