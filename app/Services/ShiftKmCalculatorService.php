@@ -60,8 +60,13 @@ class ShiftKmCalculatorService
             $tripHandoverKm = (float) ($driverSwapCp?->km_reading ?? 0);
 
             // ——— attempt 1: swapped-IN explicit (DriverSwap có to_shift_id) ———
+            // Bỏ qua swap vô nghĩa (self-swap: cùng tài xế + cùng ca)
             $swap = DriverSwap::where('trip_id', $trip->id)
                 ->where('to_shift_id', $shift->id)
+                ->where(function ($q) {
+                    $q->whereColumn('from_shift_id', '!=', 'to_shift_id')
+                        ->orWhereColumn('from_driver_id', '!=', 'to_driver_id');
+                })
                 ->first();
 
             if ($swap) {
@@ -98,8 +103,13 @@ class ShiftKmCalculatorService
                 ->exists();
 
             // ——— attempt 2: swapped-OUT (trip bị swap ra khỏi ca này) ———
+            // Bỏ qua self-swap (cùng tài xế + cùng ca)
             $swapOut = DriverSwap::where('trip_id', $trip->id)
                 ->where('from_shift_id', $shift->id)
+                ->where(function ($q) {
+                    $q->whereColumn('from_shift_id', '!=', 'to_shift_id')
+                        ->orWhereColumn('from_driver_id', '!=', 'to_driver_id');
+                })
                 ->first();
 
             if ($swapOut && $hasShiftCheckpoints) {
@@ -130,7 +140,7 @@ class ShiftKmCalculatorService
                 ->where('occurred_at', '>', $driverSwapCp->occurred_at)
                 ->exists();
 
-            if ($driverSwapCp && $hasAfterSwap && $trip->shift_id == $shift->id) {
+            if ($driverSwapCp && $hasAfterSwap && $trip->shift_id == $shift->id && $driverSwapCp->shift_id !== $shift->id) {
                 $shiftCheckpoints = $trip->checkpoints()
                     ->reorder()
                     ->where('shift_id', $shift->id)
