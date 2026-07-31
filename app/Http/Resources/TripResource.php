@@ -75,8 +75,13 @@ class TripResource extends JsonResource
             return null;
         }
 
+        // Bỏ qua self-swap (cùng tài xế + cùng ca) — swap vô nghĩa, không điều chỉnh KM
         $swap = DriverSwap::where('trip_id', $this->id)
             ->where('to_driver_id', $driverId)
+            ->where(function ($q) {
+                $q->whereColumn('from_shift_id', '!=', 'to_shift_id')
+                    ->orWhereColumn('from_driver_id', '!=', 'to_driver_id');
+            })
             ->first();
 
         if ($swap === null) {
