@@ -13,10 +13,10 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -63,17 +63,21 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             ->cards(fn (): array => self::resolveDriverCards())
                             ->searchPlaceholder('Tìm tên, email...'),
                     ]),
-                Toggle::make('assign_only')
-                    ->label('Chỉ gán, chưa gửi')
-                    ->helperText('Bật nếu chưa muốn gửi ngay cho tài xế')
-                    ->default(false),
-
             ])
-            ->modalSubmitActionLabel('Tạo và Gửi')
+            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
+            ->extraModalFooterActions(fn (): array => [
+                Action::make('create_and_send')
+                    ->label('Tạo và Gửi')
+                    ->color('primary')
+                    ->action(function (Order $record, Schema $schema): void {
+                        $data = $schema->getState();
+                        self::createTripForOrder($record, $data, OrderStatus::Sent);
+                    })
+                    ->close(),
+            ])
             ->action(function (Order $record, array $data): void {
                 $isRent = Vehicle::query()->find($data['vehicle_id'])?->type === VehicleOwnerType::Rent;
-                $assignOnly = ! empty($data['assign_only']);
-                $status = ($isRent || ! $assignOnly) ? OrderStatus::Sent : OrderStatus::Assigned;
+                $status = $isRent ? OrderStatus::Sent : OrderStatus::Assigned;
                 self::createTripForOrder($record, $data, $status);
             });
     }
