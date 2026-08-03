@@ -13,7 +13,6 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Tabs;
@@ -151,11 +150,6 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->live()
                         ->cards(fn (): array => self::resolveDriverCards())
                         ->searchPlaceholder('Tìm tên, email...'),
-                    Toggle::make('send_immediately')
-                        ->label('Gửi chuyến ngay cho tài xế')
-                        ->helperText('Bật để chuyển trạng thái đơn hàng thành Đã gửi')
-                        ->default(false)
-                        ->columnSpanFull(),
                 ]);
         }
 
@@ -167,6 +161,11 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                 'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors ',
             ])
             ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
+            ->extraModalFooterActions(fn (Action $action): array => [
+                $action->makeModalSubmitAction('createAndSend', arguments: ['send_immediately' => true])
+                    ->label('Tạo và Gửi')
+                    ->color('primary'),
+            ])
             // ->slideOver()
             ->modal()
             ->modalWidth(Width::MaxContent)
@@ -177,7 +176,10 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                 Tabs::make('Tabs')
                     ->tabs($tabs),
             ])
-            ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided) {
+            ->action(function (array $data, Schema $schema, array $arguments) use ($forceAssignedWhenTransportProvided) {
+                if ($arguments['send_immediately'] ?? false) {
+                    $data['send_immediately'] = true;
+                }
                 try {
                     self::createSingleOrder($data, $schema, 'HHHK', $forceAssignedWhenTransportProvided);
 
