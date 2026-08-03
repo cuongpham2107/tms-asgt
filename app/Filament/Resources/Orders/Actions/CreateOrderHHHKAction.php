@@ -164,9 +164,16 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->extraModalFooterActions(fn (): array => [
                 Action::make('create_and_send')
                     ->label('Tạo và Gửi')
-                    ->visible(fn (Get $get): bool => filled($get('vehicle_id')))
                     ->color('primary')
                     ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
+                        if (empty($data['vehicle_id'])) {
+                            Notification::make()
+                                ->title('Vui lòng chọn xe')
+                                ->warning()
+                                ->send();
+
+                            return;
+                        }
                         $data['send_immediately'] = true;
                         try {
                             self::createSingleOrder($data, $schema, 'HHHK', $forceAssignedWhenTransportProvided);
