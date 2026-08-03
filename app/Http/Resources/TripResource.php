@@ -75,8 +75,8 @@ class TripResource extends JsonResource
             return null;
         }
 
-        // Bỏ qua self-swap (cùng tài xế + cùng ca) — swap vô nghĩa, không điều chỉnh KM
-        $swap = DriverSwap::where('trip_id', $this->id)
+        // ——— Nhánh A: tài xế NHẬN chuyến (to_driver) → tính từ handover → end ———
+        $toSwap = DriverSwap::where('trip_id', $this->id)
             ->where('to_driver_id', $driverId)
             ->where(function ($q) {
                 $q->whereColumn('from_shift_id', '!=', 'to_shift_id')
@@ -84,21 +84,37 @@ class TripResource extends JsonResource
             })
             ->first();
 
-        if ($swap === null) {
-            return null;
+        if ($toSwap) {
+            return $this->adjustedForSwapIn($toSwap);
         }
 
+        // ——— Nhánh B: tài xế BÀN GIAO (from_driver) → tính từ start → handover ———
+        $fromSwap = DriverSwap::where('trip_id', $this->id)
+            ->where('from_driver_id', $driverId)
+            ->where(function ($q) {
+                $q->whereColumn('from_shift_id', '!=', 'to_shift_id')
+                    ->orWhereColumn('from_driver_id', '!=', 'to_driver_id');
+            })
+            ->first();
+
+        if ($fromSwap) {
+            return $this->adjustedForSwapOut($fromSwap);
+        }
+
+        return null;
+    }
+
+    private function adjustedForSwapIn(DriverSwap $swap): array
+    {
         $handoverKm = (float) ($swap->handover_km ?? 0);
 
         if ($handoverKm <= 0) {
-            $swapCheckpoint = $this->checkpoints()
+            $handoverKm = (float) $this->checkpoints()
                 ->reorder()
                 ->where('checkpoint_type', 'driver_swap')
                 ->whereNotNull('km_reading')
                 ->orderByDesc('occurred_at')
-                ->first();
-
-            $handoverKm = (float) ($swapCheckpoint?->km_reading ?? 0);
+                ->first()?->km_reading ?? 0;
         }
 
         $shiftCheckpoints = $this->checkpoints()
@@ -117,6 +133,54 @@ class TripResource extends JsonResource
             ->first()?->km_reading;
 
         $loadedKm = $completedKm !== null ? max(0, (float) $completedKm - $handoverKm) : 0;
+
+        return [
+            'total_km' => $totalKm,
+            'total_km_loaded' => $loadedKm,
+            'total_km_empty' => max(0, $totalKm - $loadedKm),
+        ];
+    }
+
+    private function adjustedForSwapOut(DriverSwap $swap): array
+    {
+        $handoverKm = (float) ($swap->handover_km ?? 0);
+
+        if ($handoverKm <= 0) {
+            $handoverKm = (float) $this->checkpoints()
+                ->reorder()
+                ->where('checkpoint_type', 'driver_swap')
+                ->whereNotNull('km_reading')
+                ->orderByDesc('occurred_at')
+                ->first()?->km_reading ?? 0;
+        }
+
+        $totalKm = $handoverKm > 0 && $this->start_km > 0
+            ? max(0, $handoverKm - (float) $this->start_km)
+            : 0;
+
+        $shiftCheckpoints = $this->checkpoints()
+            ->reorder()
+            ->where('shift_id', $swap->from_shift_id)
+            ->whereNotNull('km_reading')
+            ->orderBy('km_reading')
+            ->get();
+
+        $arrivedPickupKm = $shiftCheckpoints
+            ->where('checkpoint_type', 'arrived_pickup')
+            ->first()?->km_reading;
+
+        $completedKm = $shiftCheckpoints
+            ->where('checkpoint_type', 'completed')
+            ->sortByDesc('km_reading')
+            ->first()?->km_reading;
+
+        if ($completedKm !== null && $arrivedPickupKm !== null) {
+            $loadedKm = max(0, (float) $completedKm - (float) $arrivedPickupKm);
+        } elseif ($arrivedPickupKm !== null) {
+            $loadedKm = max(0, $handoverKm - (float) $arrivedPickupKm);
+        } else {
+            $loadedKm = 0;
+        }
 
         return [
             'total_km' => $totalKm,
