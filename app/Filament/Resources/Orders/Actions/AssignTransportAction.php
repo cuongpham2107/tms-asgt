@@ -13,7 +13,6 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
@@ -63,17 +62,20 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             ->cards(fn (): array => self::resolveDriverCards())
                             ->searchPlaceholder('Tìm tên, email...'),
                     ]),
-                Toggle::make('send_immediately')
-                    ->label('Gửi chuyến ngay cho tài xế')
-                    ->helperText('Bật để chuyển trạng thái đơn hàng thành Đã gửi')
-                    ->default(false),
-
             ])
-            ->modalSubmitActionLabel('Tạo')
+            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
+            ->extraModalFooterActions(fn (Action $action): array => [
+                Action::make('create_and_send')
+                    ->label('Tạo và Gửi')
+                    ->color('primary')
+                    ->action(function (Order $record, array $data): void {
+                        self::createTripForOrder($record, $data, OrderStatus::Sent);
+                    })
+                    ->close(),
+            ])
             ->action(function (Order $record, array $data): void {
-                $vehicle = Vehicle::query()->find($data['vehicle_id']);
-                $isRent = $vehicle?->type === VehicleOwnerType::Rent;
-                $status = $isRent || ! empty($data['send_immediately']) ? OrderStatus::Sent : OrderStatus::Assigned;
+                $isRent = Vehicle::query()->find($data['vehicle_id'])?->type === VehicleOwnerType::Rent;
+                $status = $isRent ? OrderStatus::Sent : OrderStatus::Assigned;
                 self::createTripForOrder($record, $data, $status);
             });
     }
