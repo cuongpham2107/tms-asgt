@@ -67,7 +67,7 @@ export default function TripDetailScreen() {
   const isReturnTrip = currentStatus === "return_trip";
   const isSwapped = detail && userId && detail.driver_id !== userId;
   const canStart = currentStatus === "pending" && !isReturnTrip && !isSwapped && !!shift;
-  const canComplete = (!["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed")) && !isSwapped;
+  const canComplete = (!["pending", "completed", "driver_swap", "cancelled"].includes(currentStatus) || (isReturnTrip && currentStatus !== "completed")) && !isSwapped && !!shift;
   const isEmptyRun = (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true || currentStatus === "return_trip";
   const hasStarted = (detail?.start_km != null || trip?.start_km != null);
   const orders: any[] = detail?.orders || trip?.orders || [];
@@ -295,16 +295,22 @@ export default function TripDetailScreen() {
                      </View>
                      <TextInput style={[s.kmInput, { marginTop: 12 }]} placeholder="Km kết thúc" placeholderTextColor="#D1D5DB" keyboardType="numeric" value={completeKm} onChangeText={setCompleteKm} />
                    </>
-                 ) : (
-                   <>
-                     <Text style={s.infoDesc}>Bước 1: Nhập Km bắt đầu</Text>
-                     <TextInput style={[s.kmInput, { marginTop: 12, marginBottom: 12 }]} placeholder="Km bắt đầu" placeholderTextColor="#D1D5DB" keyboardType="numeric" value={startKmInput} onChangeText={setStartKmInput} />
-                     <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#10B981", marginTop: 4 }]} onPress={handleStartReturn} disabled={starting}>
-                       <Ionicons name="play-circle" size={20} color="#fff" />
-                       <Text style={s.actionBtnText}>{starting ? "Đang xử lý..." : "Bắt đầu chuyến"}</Text>
-                     </TouchableOpacity>
-                   </>
-                 )}
+                  ) : (
+                    <>
+                      <Text style={s.infoDesc}>Bước 1: Nhập Km bắt đầu</Text>
+                      <TextInput style={[s.kmInput, { marginTop: 12, marginBottom: 12 }]} placeholder="Km bắt đầu" placeholderTextColor="#D1D5DB" keyboardType="numeric" value={startKmInput} onChangeText={setStartKmInput} />
+                      {!!shift ? (
+                        <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#10B981", marginTop: 4 }]} onPress={handleStartReturn} disabled={starting}>
+                          <Ionicons name="play-circle" size={20} color="#fff" />
+                          <Text style={s.actionBtnText}>{starting ? "Đang xử lý..." : "Bắt đầu chuyến"}</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={s.warnBox}>
+                          <Text style={s.warnText}>Bạn cần vào ca trước khi bắt đầu chuyến.</Text>
+                        </View>
+                      )}
+                    </>
+                  )}
               </>
             )}
           </View>

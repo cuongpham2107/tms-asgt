@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TripCheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
+use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Services\Trip\TripCheckpointService;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,14 @@ class TripCheckpointController extends Controller
 
         if ($trip->driver_id !== $user->id) {
             return response()->json(['message' => 'Bạn không phải tài xế được gán cho chuyến này'], 403);
+        }
+
+        $activeShift = DriverShift::where('driver_id', $user->id)
+            ->whereNull('end_time')
+            ->first();
+
+        if (! $activeShift) {
+            return response()->json(['message' => 'Bạn cần vào ca trước khi cập nhật chuyến'], 422);
         }
 
         $photos = $request->file('photos');

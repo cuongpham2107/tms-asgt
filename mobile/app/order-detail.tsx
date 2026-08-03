@@ -254,19 +254,19 @@ export default function OrderDetailScreen() {
 
     // Can do actions on the SELECTED DP (not necessarily next pending)
     const canArrivePickup =
-        (d.status === "assigned" || d.status === "sent") && !hasArrivedPickup;
+        (d.status === "assigned" || d.status === "sent") && !hasArrivedPickup && !!shift;
     const canLeftPickup =
-        d.status === "sent" && hasArrivedPickup && !hasLeftPickup;
+        d.status === "sent" && hasArrivedPickup && !hasLeftPickup && !!shift;
     const canArriveDelivery =
         d.status === "in_transit" &&
         (!!activeDpId || !!selectedLoc) &&
-        !hasArrivedDelivery;
+        !hasArrivedDelivery && !!shift;
     const canComplete =
         d.status === "in_transit" &&
         (!!activeDpId || !!selectedLoc) &&
         hasArrivedDelivery &&
-        !hasCompleted;
-    const canEnd = d.status === "completed" && !hasEndCheckpoint;
+        !hasCompleted && !!shift;
+    const canEnd = d.status === "completed" && !hasEndCheckpoint && !!shift;
 
     async function pickImage() {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();

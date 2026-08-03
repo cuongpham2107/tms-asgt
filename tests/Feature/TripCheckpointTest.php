@@ -49,6 +49,12 @@ beforeEach(function () {
     $this->driver = User::factory()->create(['name' => 'Driver']);
     $this->driver->assignRole($this->driverRole);
     $this->vehicle->update(['current_driver_id' => $this->driver->id]);
+    $this->driverShift = DriverShift::create([
+        'driver_id' => $this->driver->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now(),
+        'start_km' => 50000,
+    ]);
 
     $this->pickupLocation = Location::create([
         'code' => 'PICKUP',
@@ -134,19 +140,13 @@ test('started creates checkpoints for all orders in trip', function () {
 });
 
 test('started updates trip.shift_id from driver active shift', function () {
-    $shift = DriverShift::create([
-        'driver_id' => $this->driver->id,
-        'shift_type' => ShiftType::Full,
-        'start_time' => now(),
-    ]);
-
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'started',
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
     $this->trip->refresh();
-    expect((int) $this->trip->shift_id)->toBe($shift->id);
+    expect((int) $this->trip->shift_id)->toBe($this->driverShift->id);
 });
 
 test('started with km_reading succeeds', function () {
