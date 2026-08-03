@@ -149,7 +149,6 @@ class TripForm
                             ->prefixIcon(Heroicon::OutlinedClock)
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
-                            ->readOnly()
                             ->native(true),
                     ]),
                 Section::make('Các mốc hành trình')

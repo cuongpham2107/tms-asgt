@@ -128,6 +128,11 @@ export default function TripDetailScreen() {
   const handleCompleteReturn = async () => {
     const eKm = parseFloat(completeKm);
     if (!eKm) { showAlert("Thiếu", "Nhập Km kết thúc"); return; }
+    const sKm = detail?.start_km ?? trip?.start_km;
+    if (sKm != null && eKm < sKm) {
+      showAlert("Lỗi", `Km kết thúc (${eKm}) phải >= Km bắt đầu (${sKm})`);
+      return;
+    }
     if (!trip?.id || !token) return;
     showDestructiveConfirm("Kết thúc chuyến quay đầu", "Bạn có chắc chắn muốn kết thúc chuyến quay đầu?", async () => {
       setCompleting(true); showLoading();
@@ -436,6 +441,11 @@ export default function TripDetailScreen() {
               <TouchableOpacity style={[s.modalBtn, { backgroundColor: "#DC2626" }]} onPress={() => {
                 const km = parseFloat(completeKm);
                 if (!km) { showAlert("Thiếu", "Vui lòng nhập Km"); return; }
+                const startKm = detail?.start_km ?? trip?.start_km;
+                if (startKm != null && km < startKm) {
+                  showAlert("Lỗi", `Km kết thúc (${km}) phải >= Km bắt đầu (${startKm})`);
+                  return;
+                }
                 doComplete(km);
               }} disabled={completing}>
                 <Text style={[s.modalBtnText, { color: "#fff" }]}>{completing ? "Đang xử lý..." : "Kết thúc"}</Text>

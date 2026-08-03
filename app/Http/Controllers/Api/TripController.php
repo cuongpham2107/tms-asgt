@@ -236,11 +236,17 @@ class TripController extends Controller
         }
 
         $validated = $request->validate([
-            'end_km' => 'required|numeric|min:0',
+            'end_km' => ['required', 'numeric', 'min:0'],
             'completed_at' => 'nullable|date',
             'gps_lat' => 'nullable|numeric',
             'gps_lng' => 'nullable|numeric',
         ]);
+
+        if ($trip->start_km !== null && (float) $validated['end_km'] < (float) $trip->start_km) {
+            return response()->json(['message' => [
+                'end_km' => ['Km kết thúc ('.$validated['end_km'].') phải lớn hơn hoặc bằng Km bắt đầu ('.$trip->start_km.')'],
+            ]], 422);
+        }
 
         $endKm = (float) $validated['end_km'];
         $completedAt = $validated['completed_at'] ?? null;

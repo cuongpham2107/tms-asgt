@@ -215,7 +215,7 @@ class TripsTable extends BaseTable
                             return $record;
                         }),
 
-                    DriverSwapAction::make(),
+                    // DriverSwapAction::make(),
                     ReassignDriverAction::make(),
                     DeleteAction::make(),
                 ]),
