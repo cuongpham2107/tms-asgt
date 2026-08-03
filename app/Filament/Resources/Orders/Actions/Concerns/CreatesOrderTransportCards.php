@@ -660,7 +660,13 @@ abstract class CreatesOrderTransportCards
 
                                 return $type === 'HHHK' ? 'full' : 2;
                             })
-                            ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents()),
+                            ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents())
+                            ->createOptionUsing(function (array $data): int {
+                                return Location::create(array_merge($data, [
+                                    'loc_type' => 'delivery',
+                                    'is_active' => true,
+                                ]))->getKey();
+                            }),
                         TextInput::make('contact_person')
                             ->label('Người nhận')
                             ->placeholder('Họ tên')
