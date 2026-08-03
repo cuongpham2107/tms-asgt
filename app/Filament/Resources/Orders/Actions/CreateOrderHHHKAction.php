@@ -160,8 +160,26 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->extraAttributes([
                 'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors ',
             ])
-            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
-            ->extraModalFooterActions(fn (): array => [
+            ->registerModalActions([
+                Action::make('create')
+                    ->label('Tạo')
+                    ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
+                        try {
+                            self::createSingleOrder($data, $schema, 'HHHK', $forceAssignedWhenTransportProvided);
+                            Notification::make()
+                                ->title('Đơn hàng đã được tạo')
+                                ->body('Đơn hàng không đã được tạo thành công.')
+                                ->success()
+                                ->send();
+                        } catch (Throwable $e) {
+                            Notification::make()
+                                ->title('Lỗi khi tạo đơn hàng')
+                                ->body('Đã xảy ra lỗi khi tạo đơn hàng: '.$e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    })
+                    ->close(),
                 Action::make('create_and_send')
                     ->label('Tạo và Gửi')
                     ->color('primary')
@@ -201,22 +219,15 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                 Tabs::make('Tabs')
                     ->tabs($tabs),
             ])
-            ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided) {
-                try {
-                    self::createSingleOrder($data, $schema, 'HHHK', $forceAssignedWhenTransportProvided);
-
-                    Notification::make()
-                        ->title('Đơn hàng đã được tạo')
-                        ->body('Đơn hàng không đã được tạo thành công.')
-                        ->success()
-                        ->send();
-                } catch (Throwable $e) {
-                    Notification::make()
-                        ->title('Lỗi khi tạo đơn hàng')
-                        ->body('Đã xảy ra lỗi khi tạo đơn hàng: '.$e->getMessage())
-                        ->danger()
-                        ->send();
-                }
-            });
+            // ->slideOver()
+            ->modal()
+            ->modalWidth(Width::MaxContent)
+            ->modalHeading('Tạo đơn hàng không')
+            ->modalDescription('Tạo đơn hàng không cho khách hàng HHHK')
+            ->stickyModalFooter()
+            ->schema([
+                Tabs::make('Tabs')
+                    ->tabs($tabs),
+            ]);
     }
 }

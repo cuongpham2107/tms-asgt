@@ -16,7 +16,6 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
-use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -64,22 +63,23 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             ->searchPlaceholder('Tìm tên, email...'),
                     ]),
             ])
-            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
-            ->extraModalFooterActions(fn (): array => [
+            ->registerModalActions([
+                Action::make('create')
+                    ->label('Tạo')
+                    ->action(function (Order $record, array $data): void {
+                        $isRent = Vehicle::query()->find($data['vehicle_id'])?->type === VehicleOwnerType::Rent;
+                        $status = $isRent ? OrderStatus::Sent : OrderStatus::Assigned;
+                        self::createTripForOrder($record, $data, $status);
+                    })
+                    ->close(),
                 Action::make('create_and_send')
                     ->label('Tạo và Gửi')
                     ->color('primary')
-                    ->action(function (Order $record, Schema $schema): void {
-                        $data = $schema->getState();
+                    ->action(function (Order $record, array $data): void {
                         self::createTripForOrder($record, $data, OrderStatus::Sent);
                     })
                     ->close(),
-            ])
-            ->action(function (Order $record, array $data): void {
-                $isRent = Vehicle::query()->find($data['vehicle_id'])?->type === VehicleOwnerType::Rent;
-                $status = $isRent ? OrderStatus::Sent : OrderStatus::Assigned;
-                self::createTripForOrder($record, $data, $status);
-            });
+            ]);
     }
 
     private static function createTripForOrder(Order $record, array $data, OrderStatus $orderStatus): void

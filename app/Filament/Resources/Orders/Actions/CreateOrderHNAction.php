@@ -164,8 +164,26 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
             ->label('Tạo đơn hàng ngoài')
             ->size('lg')
             ->icon('heroicon-o-truck')
-            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
-            ->extraModalFooterActions(fn (): array => [
+            ->registerModalActions([
+                Action::make('create')
+                    ->label('Tạo')
+                    ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
+                        try {
+                            self::createSingleOrder($data, $schema, 'external', $forceAssignedWhenTransportProvided);
+                            Notification::make()
+                                ->title('Đơn hàng đã được tạo')
+                                ->body('Đơn hàng ngoài đã được tạo thành công.')
+                                ->success()
+                                ->send();
+                        } catch (Throwable $e) {
+                            Notification::make()
+                                ->title('Lỗi khi tạo đơn hàng')
+                                ->body('Đã xảy ra lỗi khi tạo đơn hàng: '.$e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    })
+                    ->close(),
                 Action::make('create_and_send')
                     ->label('Tạo và Gửi')
                     ->color('primary')
@@ -208,24 +226,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                 Tabs::make('Tabs')
                     ->tabs($tabs),
 
-            ])
-            ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
-                try {
-                    self::createSingleOrder($data, $schema, 'external', $forceAssignedWhenTransportProvided);
-
-                    Notification::make()
-                        ->title('Đơn hàng đã được tạo')
-                        ->body('Đơn hàng ngoài đã được tạo thành công.')
-                        ->success()
-                        ->send();
-                } catch (Throwable $e) {
-                    Notification::make()
-                        ->title('Lỗi khi tạo đơn hàng')
-                        ->body('Đã xảy ra lỗi khi tạo đơn hàng: '.$e->getMessage())
-                        ->danger()
-                        ->send();
-                }
-            });
+            ]);
 
     }
 }
