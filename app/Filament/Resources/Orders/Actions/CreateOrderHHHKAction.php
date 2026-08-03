@@ -13,6 +13,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Tabs;
@@ -150,6 +151,11 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->live()
                         ->cards(fn (): array => self::resolveDriverCards())
                         ->searchPlaceholder('Tìm tên, email...'),
+                    Toggle::make('send_immediately')
+                        ->label('Gửi chuyến ngay cho tài xế')
+                        ->helperText('Bật để chuyển trạng thái đơn hàng thành Đã gửi')
+                        ->default(false)
+                        ->columnSpanFull(),
                 ]);
         }
 
@@ -160,74 +166,33 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->extraAttributes([
                 'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors ',
             ])
-            ->registerModalActions([
-                Action::make('create')
-                    ->label('Tạo')
-                    ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
-                        try {
-                            self::createSingleOrder($data, $schema, 'HHHK', $forceAssignedWhenTransportProvided);
-                            Notification::make()
-                                ->title('Đơn hàng đã được tạo')
-                                ->body('Đơn hàng không đã được tạo thành công.')
-                                ->success()
-                                ->send();
-                        } catch (Throwable $e) {
-                            Notification::make()
-                                ->title('Lỗi khi tạo đơn hàng')
-                                ->body('Đã xảy ra lỗi khi tạo đơn hàng: '.$e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    })
-                    ->close(),
-                Action::make('create_and_send')
-                    ->label('Tạo và Gửi')
-                    ->color('primary')
-                    ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
-                        if (empty($data['vehicle_id'])) {
-                            Notification::make()
-                                ->title('Vui lòng chọn xe')
-                                ->warning()
-                                ->send();
+            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
+            // ->slideOver()
+            ->modal()
+            ->modalWidth(Width::MaxContent)
+            ->modalHeading('Tạo đơn hàng không')
+            ->modalDescription('Tạo đơn hàng không cho khách hàng HHHK')
+            ->stickyModalFooter()
+            ->schema([
+                Tabs::make('Tabs')
+                    ->tabs($tabs),
+            ])
+            ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided) {
+                try {
+                    self::createSingleOrder($data, $schema, 'HHHK', $forceAssignedWhenTransportProvided);
 
-                            return;
-                        }
-                        $data['send_immediately'] = true;
-                        try {
-                            self::createSingleOrder($data, $schema, 'HHHK', $forceAssignedWhenTransportProvided);
-                            Notification::make()
-                                ->title('Đơn hàng đã được tạo và gửi')
-                                ->success()
-                                ->send();
-                        } catch (Throwable $e) {
-                            Notification::make()
-                                ->title('Lỗi khi tạo đơn hàng')
-                                ->body('Đã xảy ra lỗi khi tạo đơn hàng: '.$e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    })
-                    ->close(),
-            ])
-            // ->slideOver()
-            ->modal()
-            ->modalWidth(Width::MaxContent)
-            ->modalHeading('Tạo đơn hàng không')
-            ->modalDescription('Tạo đơn hàng không cho khách hàng HHHK')
-            ->stickyModalFooter()
-            ->schema([
-                Tabs::make('Tabs')
-                    ->tabs($tabs),
-            ])
-            // ->slideOver()
-            ->modal()
-            ->modalWidth(Width::MaxContent)
-            ->modalHeading('Tạo đơn hàng không')
-            ->modalDescription('Tạo đơn hàng không cho khách hàng HHHK')
-            ->stickyModalFooter()
-            ->schema([
-                Tabs::make('Tabs')
-                    ->tabs($tabs),
-            ]);
+                    Notification::make()
+                        ->title('Đơn hàng đã được tạo')
+                        ->body('Đơn hàng không đã được tạo thành công.')
+                        ->success()
+                        ->send();
+                } catch (Throwable $e) {
+                    Notification::make()
+                        ->title('Lỗi khi tạo đơn hàng')
+                        ->body('Đã xảy ra lỗi khi tạo đơn hàng: '.$e->getMessage())
+                        ->danger()
+                        ->send();
+                }
+            });
     }
 }
