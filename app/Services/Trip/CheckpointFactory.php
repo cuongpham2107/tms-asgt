@@ -37,11 +37,16 @@ class CheckpointFactory
     private function createForAllOrders(Trip $trip, array $payload, CheckpointType $type): Collection
     {
         return $trip->orders
-            ->reject(fn ($order) => TripCheckpoint::where('trip_id', $trip->id)
-                ->where('order_id', $order->id)
-                ->where('checkpoint_type', $type->value)
-                ->exists()
-            )
+            ->reject(function ($order) use ($trip, $type) {
+                if ($type === CheckpointType::DriverSwap) {
+                    return false;
+                }
+
+                return TripCheckpoint::where('trip_id', $trip->id)
+                    ->where('order_id', $order->id)
+                    ->where('checkpoint_type', $type->value)
+                    ->exists();
+            })
             ->map(fn ($order) => TripCheckpoint::create(
                 $this->buildData($trip, $payload, $type, $order->id, $payload['delivery_point_id'] ?? null)
             ));

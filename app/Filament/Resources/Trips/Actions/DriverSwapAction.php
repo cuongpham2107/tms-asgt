@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\Trips\Actions;
 
+use App\Enums\CheckpointType;
 use App\Enums\DriverSwapReason;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\User;
+use App\Services\Trip\CheckpointFactory;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -104,17 +106,38 @@ class DriverSwapAction
                 }
 
                 $toDriverId = $data['to_driver_id'];
+                $handoverKm = (float) $data['handover_km'];
+
+                if ($handoverKm <= 0) {
+                    Notification::make()
+                        ->title('Vui lòng nhập km chuyển giao hợp lệ')
+                        ->body('Km chuyển giao phải lớn hơn 0.')
+                        ->danger()
+                        ->send();
+
+                    $this->halt();
+
+                    return;
+                }
 
                 DriverSwap::create([
                     'trip_id' => $record->id,
                     'from_driver_id' => $record->driver_id,
                     'to_driver_id' => $toDriverId,
                     'from_shift_id' => $record->shift_id,
-                    'handover_km' => $data['handover_km'],
+                    'handover_km' => $handoverKm,
                     'reason' => $data['reason'],
                     'note' => $data['note'] ?? null,
                     'created_by' => Auth::id(),
                 ]);
+
+                $record->vehicle->update(['current_mileage' => $handoverKm]);
+
+                app(CheckpointFactory::class)->create(
+                    $record,
+                    ['occurred_at' => now(), 'km_reading' => $handoverKm],
+                    CheckpointType::DriverSwap,
+                );
 
                 $record->update([
                     'driver_id' => $toDriverId,
