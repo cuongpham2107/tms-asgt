@@ -133,6 +133,13 @@ class TripResource extends JsonResource
             ->first()?->km_reading;
 
         $loadedKm = $completedKm !== null ? max(0, (float) $completedKm - $handoverKm) : 0;
+        if ($completedKm === null) {
+            $wasLoadedBefore = $this->checkpoints()
+                ->where('checkpoint_type', 'arrived_pickup')
+                ->where('km_reading', '<=', $handoverKm)
+                ->exists();
+            $loadedKm = $wasLoadedBefore ? $totalKm : 0;
+        }
 
         return [
             'total_km' => $totalKm,

@@ -91,6 +91,13 @@ class ShiftKmCalculatorService
                     ->first()?->km_reading;
 
                 $tripLoadedKm = $completedKm !== null ? max(0, (float) $completedKm - $handoverKm) : 0;
+                if ($completedKm === null) {
+                    $wasLoadedBefore = TripCheckpoint::where('trip_id', $trip->id)
+                        ->where('checkpoint_type', 'arrived_pickup')
+                        ->where('km_reading', '<=', $handoverKm)
+                        ->exists();
+                    $tripLoadedKm = $wasLoadedBefore ? $tripTotalKm : 0;
+                }
 
                 $totalKm += max(0, $tripTotalKm);
                 $totalLoaded += $tripLoadedKm;
@@ -157,6 +164,13 @@ class ShiftKmCalculatorService
                     ->first()?->km_reading;
 
                 $tripLoadedKm = $completedKm !== null ? max(0, (float) $completedKm - $tripHandoverKm) : 0;
+                if ($completedKm === null) {
+                    $wasLoadedBefore = TripCheckpoint::where('trip_id', $trip->id)
+                        ->where('checkpoint_type', 'arrived_pickup')
+                        ->where('km_reading', '<=', $tripHandoverKm)
+                        ->exists();
+                    $tripLoadedKm = $wasLoadedBefore ? $tripTotalKm : 0;
+                }
 
                 $totalKm += max(0, $tripTotalKm);
                 $totalLoaded += $tripLoadedKm;
