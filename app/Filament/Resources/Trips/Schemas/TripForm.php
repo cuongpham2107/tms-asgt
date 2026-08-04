@@ -159,11 +159,13 @@ class TripForm
                             ->relationship('checkpoints')
                             ->label('Danh sách mốc hành trình')
                             ->table([
-                                TableColumn::make('Loại')->width('180px'),
-                                TableColumn::make('Đơn hàng')->width('120px'),
-                                TableColumn::make('Km')->width('120px'),
-                                TableColumn::make('Giờ')->width('180px'),
-                                TableColumn::make('Điểm giao')->width('120px'),
+                                TableColumn::make('Loại')->width('160px'),
+                                TableColumn::make('Đơn hàng')->width('110px'),
+                                TableColumn::make('driver.name')->label('Tài xế')->width('160px'),
+                                TableColumn::make('shift_label')->label('Ca')->width('80px'),
+                                TableColumn::make('Km')->width('100px'),
+                                TableColumn::make('Giờ')->width('160px'),
+                                TableColumn::make('Điểm giao')->width('110px'),
                             ])
                             ->orderColumn('created_at')
                             ->compact()
@@ -187,6 +189,16 @@ class TripForm
                                     })
                                     ->searchable()
                                     ->native(false),
+                                Select::make('driver_id')
+                                    ->label('Tài xế')
+                                    ->options(fn () => User::query()
+                                        ->where('is_active', true)
+                                        ->orderBy('name')
+                                        ->pluck('name', 'id')
+                                        ->toArray())
+                                    ->searchable()
+                                    ->native(false)
+                                    ->nullable(),
                                 TextInput::make('km_reading')
                                     ->label('Km')
                                     ->mask(RawJs::make('$money($input)'))

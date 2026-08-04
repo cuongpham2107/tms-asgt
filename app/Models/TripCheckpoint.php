@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CheckpointType;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -66,5 +67,12 @@ class TripCheckpoint extends Model
     public function shift(): BelongsTo
     {
         return $this->belongsTo(DriverShift::class, 'shift_id');
+    }
+
+    protected function shiftLabel(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->shift?->shift_type?->getLabel(),
+        );
     }
 }
