@@ -112,8 +112,8 @@ class TripResource extends JsonResource
             $handoverKm = (float) $this->checkpoints()
                 ->reorder()
                 ->where('checkpoint_type', 'driver_swap')
+                ->where('shift_id', $swap->from_shift_id)
                 ->whereNotNull('km_reading')
-                ->orderByDesc('occurred_at')
                 ->first()?->km_reading ?? 0;
         }
 
@@ -149,8 +149,8 @@ class TripResource extends JsonResource
             $handoverKm = (float) $this->checkpoints()
                 ->reorder()
                 ->where('checkpoint_type', 'driver_swap')
+                ->where('shift_id', $swap->from_shift_id)
                 ->whereNotNull('km_reading')
-                ->orderByDesc('occurred_at')
                 ->first()?->km_reading ?? 0;
         }
 
