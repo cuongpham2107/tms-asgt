@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
     View,
     Text,
@@ -194,7 +194,7 @@ export default function OrderDetailScreen() {
             );
             setSelectedDpId(next?.id || null);
         }
-    }, [deliveryPoints]);
+    }, [deliveryPoints, selectedDpId, dpStatusMap]);
     const activeDp = deliveryPoints.find((dp: any) => dp.id === activeDpId);
     const checkpoints = d.trip_checkpoints || [];
     // Map DP id to location code for timeline display
@@ -229,24 +229,28 @@ export default function OrderDetailScreen() {
     const hasCompleted = activeDpHasCp("completed");
 
     // Compute per-DP checkpoint status
-    const dpStatusMap: Record<
-        number,
-        { arrived: boolean; completed: boolean }
-    > = {};
-    deliveryPoints.forEach((dp: any) => {
-        dpStatusMap[dp.id] = {
-            arrived: checkpoints.some(
-                (cp: any) =>
-                    cp.checkpoint_type === "arrived_delivery" &&
-                    cp.delivery_point_id === dp.id,
-            ),
-            completed: checkpoints.some(
-                (cp: any) =>
-                    cp.checkpoint_type === "completed" &&
-                    cp.delivery_point_id === dp.id,
-            ),
-        };
-    });
+    const dpStatusMap = useMemo(() => {
+        const map: Record<
+            number,
+            { arrived: boolean; completed: boolean }
+        > = {};
+        deliveryPoints.forEach((dp: any) => {
+            map[dp.id] = {
+                arrived: checkpoints.some(
+                    (cp: any) =>
+                        cp.checkpoint_type === "arrived_delivery" &&
+                        cp.delivery_point_id === dp.id,
+                ),
+                completed: checkpoints.some(
+                    (cp: any) =>
+                        cp.checkpoint_type === "completed" &&
+                        cp.delivery_point_id === dp.id,
+                ),
+            };
+        });
+
+        return map;
+    }, [deliveryPoints, checkpoints]);
 
     // Mid-delivery: đã đến DP nhưng chưa giao xong → lock, không chọn được DP khác
     const isMidDelivery = hasArrivedDelivery && !hasCompleted;
