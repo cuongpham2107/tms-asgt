@@ -161,8 +161,7 @@ class TripForm
                             ->table([
                                 TableColumn::make('Loại')->width('160px'),
                                 TableColumn::make('Đơn hàng')->width('110px'),
-                                TableColumn::make('driver.name')->label('Tài xế')->width('160px'),
-                                TableColumn::make('shift_label')->label('Ca')->width('80px'),
+                                TableColumn::make('Tài xế')->width('160px'),
                                 TableColumn::make('Km')->width('100px'),
                                 TableColumn::make('Giờ')->width('160px'),
                                 TableColumn::make('Điểm giao')->width('110px'),
