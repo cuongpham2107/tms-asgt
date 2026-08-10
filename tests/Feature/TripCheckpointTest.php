@@ -642,15 +642,14 @@ test('cannot auto-start trip via arrived_pickup when driver has active trip', fu
         'created_by' => $this->driver->id,
     ]);
 
-    // Gửi arrived_pickup cho chuyến mới → auto-start bị từ chối vì driver đang có chuyến active
+    // Gửi arrived_pickup cho chuyến mới → auto-start bị từ chối vì xe đang có chuyến active
     $this->postJson("/api/driver/trips/{$otherTrip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_pickup',
         'km_reading' => 50050,
         'occurred_at' => now()->toIso8601String(),
     ])->assertStatus(422)
         ->assertJsonPath('errors.checkpoint_type.0', function ($msg) {
-            return str_contains($msg, 'Tài xế đang có chuyến')
-                && str_contains($msg, 'chưa hoàn thành');
+            return str_contains($msg, 'Xe đang chạy chuyến');
         });
 
     // Chuyến mới vẫn pending

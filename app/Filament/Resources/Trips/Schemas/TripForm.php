@@ -252,13 +252,6 @@ class TripForm
 
                                 return $data;
                             })
-                            ->mutateRelationshipDataBeforeSaveUsing(function (array $data, $get): array {
-                                $data['driver_id'] = $get('../../driver_id');
-                                $data['shift_id'] = $get('../../shift_id');
-                                $data['vehicle_id'] = $get('../../vehicle_id');
-
-                                return $data;
-                            })
                             ->columnSpanFull(),
                     ]),
             ]);

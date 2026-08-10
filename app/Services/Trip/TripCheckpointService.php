@@ -62,6 +62,7 @@ class TripCheckpointService
 
         $this->validateOrderBelongsToTrip($trip, $payload, $checkpointType);
         $this->validateNoActiveTrip($trip, $checkpointType);
+        $this->validateVehicleNotBusy($trip);
 
         return DB::transaction(function () use ($trip, $payload, $photos, $checkpointType) {
             // Auto-start trip if driver submits a non-started checkpoint on a pending trip.
@@ -137,6 +138,39 @@ class TripCheckpointService
         ]);
     }
 
+    /**
+     * Khi bắt đầu chuyến mới, kiểm tra xe không có chuyến nào khác đang chạy.
+     * Ngăn trường hợp điều hành gán order vào xe đang chạy chuyến cũ.
+     *
+     * @throws ValidationException
+     */
+    private function validateVehicleNotBusy(Trip $trip): void
+    {
+        if (! $trip->isPending() || $trip->vehicle_id === null) {
+            return;
+        }
+
+        $activeTrip = Trip::where('vehicle_id', $trip->vehicle_id)
+            ->where('id', '!=', $trip->id)
+            ->whereIn('status', array_filter(
+                TripStatus::activeStatuses(),
+                fn (TripStatus $s) => ! in_array($s, [TripStatus::Pending, TripStatus::DriverSwap]),
+            ))
+            ->first();
+
+        if ($activeTrip === null) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'checkpoint_type' => sprintf(
+                'Xe đang chạy chuyến #%s (trạng thái: %s). Vui lòng đợi chuyến hiện tại hoàn tất.',
+                $activeTrip->id,
+                $activeTrip->status->label(),
+            ),
+        ]);
+    }
+
     private function validateOrderBelongsToTrip(Trip $trip, array $payload, CheckpointType $type): void
     {
         if (! in_array($type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed], true)) {
@@ -184,6 +218,7 @@ class TripCheckpointService
     private function autoStartTrip(Trip $trip, array $payload): Collection
     {
         $this->validateNoActiveTrip($trip, CheckpointType::Started);
+        $this->validateVehicleNotBusy($trip);
 
         $vehicleKm = $trip->vehicle?->current_mileage;
         $occurredAt = $payload['occurred_at'] ?? now();

@@ -72,7 +72,11 @@ class ShiftKmCalculatorService
             if ($swap) {
                 $handoverKm = (float) ($swap->handover_km ?? 0);
                 if ($handoverKm <= 0) {
-                    $handoverKm = $tripHandoverKm;
+                    $handoverKm = (float) TripCheckpoint::where('trip_id', $trip->id)
+                        ->where('checkpoint_type', 'driver_swap')
+                        ->where('shift_id', $swap->from_shift_id)
+                        ->whereNotNull('km_reading')
+                        ->value('km_reading') ?? $tripHandoverKm;
                 }
 
                 $shiftCheckpoints = $trip->checkpoints()
@@ -122,7 +126,11 @@ class ShiftKmCalculatorService
             if ($swapOut && $hasShiftCheckpoints) {
                 $handoverKm = (float) ($swapOut->handover_km ?? 0);
                 if ($handoverKm <= 0) {
-                    $handoverKm = $tripHandoverKm;
+                    $handoverKm = (float) TripCheckpoint::where('trip_id', $trip->id)
+                        ->where('checkpoint_type', 'driver_swap')
+                        ->where('shift_id', $swapOut->from_shift_id)
+                        ->whereNotNull('km_reading')
+                        ->value('km_reading') ?? $tripHandoverKm;
                 }
 
                 $tripTotalKm = $handoverKm > 0 && $trip->start_km > 0

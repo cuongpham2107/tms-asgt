@@ -248,6 +248,19 @@ class TripController extends Controller
             ]], 422);
         }
 
+        if ($trip->vehicle?->current_mileage !== null && (float) $validated['end_km'] < (float) $trip->vehicle->current_mileage) {
+            return response()->json(['message' => [
+                'end_km' => ['Km kết thúc phải >= km hiện tại của xe ('.number_format((float) $trip->vehicle->current_mileage, 1).' km)'],
+            ]], 422);
+        }
+
+        $maxCheckpointKm = $trip->checkpoints()->whereNotNull('km_reading')->max('km_reading');
+        if ($maxCheckpointKm !== null && (float) $validated['end_km'] < (float) $maxCheckpointKm) {
+            return response()->json(['message' => [
+                'end_km' => ['Km kết thúc phải >= km cao nhất của chuyến ('.number_format((float) $maxCheckpointKm, 1).' km)'],
+            ]], 422);
+        }
+
         $endKm = (float) $validated['end_km'];
         $completedAt = $validated['completed_at'] ?? null;
 
