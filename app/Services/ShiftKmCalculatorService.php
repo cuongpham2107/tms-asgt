@@ -69,6 +69,125 @@ class ShiftKmCalculatorService
                 })
                 ->first();
 
+            // Check swap-OUT for same trip/shift (for both IN + OUT combination)
+            $swapOutForBoth = DriverSwap::where('trip_id', $trip->id)
+                ->where('from_shift_id', $shift->id)
+                ->where(function ($q) {
+                    $q->whereColumn('from_shift_id', '!=', 'to_shift_id')
+                        ->orWhereColumn('from_driver_id', '!=', 'to_driver_id');
+                })
+                ->first();
+
+            $hasShiftCheckpoints = TripCheckpoint::where('trip_id', $trip->id)
+                ->where('shift_id', $shift->id)
+                ->exists();
+
+            // Both swap-IN and swap-OUT for same shift → km nằm giữa 2 điểm handover
+            if ($swap && $swapOutForBoth && $hasShiftCheckpoints) {
+                $inHandoverKm = (float) ($swap->handover_km ?? 0);
+                if ($inHandoverKm <= 0) {
+                    $inHandoverKm = (float) TripCheckpoint::where('trip_id', $trip->id)
+                        ->where('checkpoint_type', 'driver_swap')
+                        ->where('shift_id', $swap->from_shift_id)
+                        ->whereNotNull('km_reading')
+                        ->value('km_reading') ?? $tripHandoverKm;
+                }
+
+                $outHandoverKm = (float) ($swapOutForBoth->handover_km ?? 0);
+                if ($outHandoverKm <= 0) {
+                    $outHandoverKm = (float) TripCheckpoint::where('trip_id', $trip->id)
+                        ->where('checkpoint_type', 'driver_swap')
+                        ->where('shift_id', $swapOutForBoth->from_shift_id)
+                        ->whereNotNull('km_reading')
+                        ->value('km_reading') ?? $tripHandoverKm;
+                }
+
+                // Case A: OUT first then IN → (OUT - start_km) + (latest - IN)
+                // Case B: IN first then OUT → OUT - IN
+                if ($swapOutForBoth->created_at->lt($swap->created_at)) {
+                    // Case A: OUT→IN
+                    $outTotal = $outHandoverKm > 0 && $trip->start_km > 0
+                        ? max(0, $outHandoverKm - (float) $trip->start_km) : 0;
+
+                    $inShiftCheckpoints = $trip->checkpoints()
+                        ->reorder()
+                        ->where('shift_id', $shift->id)
+                        ->whereNotNull('km_reading')
+                        ->orderByDesc('occurred_at')
+                        ->get();
+                    $inLatest = $inShiftCheckpoints->first()?->km_reading;
+                    $inTotal = $inLatest !== null ? max(0, (float) $inLatest - $inHandoverKm) : 0;
+                    $tripTotalKm = $outTotal + $inTotal;
+
+                    $inCompletedKm = $inShiftCheckpoints
+                        ->where('checkpoint_type', 'completed')
+                        ->sortByDesc('occurred_at')
+                        ->first()?->km_reading;
+                    $inLoaded = $inCompletedKm !== null ? max(0, (float) $inCompletedKm - $inHandoverKm) : 0;
+                    if ($inCompletedKm === null) {
+                        $wasLoaded = TripCheckpoint::where('trip_id', $trip->id)
+                            ->where('checkpoint_type', 'arrived_pickup')
+                            ->where('km_reading', '<=', $inHandoverKm)
+                            ->exists();
+                        $inLoaded = $wasLoaded ? $inTotal : 0;
+                    }
+
+                    $outShiftCheckpoints = $trip->checkpoints()
+                        ->reorder()
+                        ->where('shift_id', $shift->id)
+                        ->whereNotNull('km_reading')
+                        ->orderBy('km_reading')
+                        ->get();
+                    $outArrived = $outShiftCheckpoints->where('checkpoint_type', 'arrived_pickup')->first()?->km_reading;
+                    $outCompleted = $outShiftCheckpoints->where('checkpoint_type', 'completed')
+                        ->where('km_reading', '<=', $outHandoverKm)
+                        ->sortByDesc('km_reading')->first()?->km_reading;
+                    if ($outCompleted !== null && $outArrived !== null) {
+                        $outLoaded = max(0, (float) $outCompleted - (float) $outArrived);
+                    } elseif ($outArrived !== null) {
+                        $outLoaded = max(0, $outHandoverKm - (float) $outArrived);
+                    } else {
+                        $outLoaded = 0;
+                    }
+                    $tripLoadedKm = $outLoaded + $inLoaded;
+                } else {
+                    // Case B: IN→OUT
+                    $tripTotalKm = $outHandoverKm > 0 && $inHandoverKm > 0
+                        ? max(0, $outHandoverKm - $inHandoverKm) : 0;
+
+                    $shiftCheckpoints = $trip->checkpoints()
+                        ->reorder()
+                        ->where('shift_id', $shift->id)
+                        ->whereNotNull('km_reading')
+                        ->orderByDesc('occurred_at')
+                        ->get();
+
+                    $completedKm = $shiftCheckpoints
+                        ->where('checkpoint_type', 'completed')
+                        ->where('km_reading', '<=', $outHandoverKm)
+                        ->where('km_reading', '>=', $inHandoverKm)
+                        ->sortByDesc('km_reading')
+                        ->first()?->km_reading;
+
+                    $arrivedPickupKm = $shiftCheckpoints
+                        ->where('checkpoint_type', 'arrived_pickup')
+                        ->first()?->km_reading;
+
+                    if ($completedKm !== null && $arrivedPickupKm !== null) {
+                        $tripLoadedKm = max(0, (float) $completedKm - (float) $arrivedPickupKm);
+                    } elseif ($arrivedPickupKm !== null) {
+                        $tripLoadedKm = max(0, $outHandoverKm - (float) $arrivedPickupKm);
+                    } else {
+                        $tripLoadedKm = 0;
+                    }
+                }
+
+                $totalKm += max(0, $tripTotalKm);
+                $totalLoaded += $tripLoadedKm;
+
+                continue;
+            }
+
             if ($swap) {
                 $handoverKm = (float) ($swap->handover_km ?? 0);
                 if ($handoverKm <= 0) {
@@ -108,10 +227,6 @@ class ShiftKmCalculatorService
 
                 continue;
             }
-
-            $hasShiftCheckpoints = TripCheckpoint::where('trip_id', $trip->id)
-                ->where('shift_id', $shift->id)
-                ->exists();
 
             // ——— attempt 2: swapped-OUT (trip bị swap ra khỏi ca này) ———
             // Bỏ qua self-swap (cùng tài xế + cùng ca)
