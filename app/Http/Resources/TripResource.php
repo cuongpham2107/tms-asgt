@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\DriverSwap;
 use App\Models\Trip;
+use App\Services\HandoverKmResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -95,8 +96,8 @@ class TripResource extends JsonResource
 
         // Both swap-OUT and swap-IN → km nằm giữa 2 điểm handover
         if ($toSwap && $fromSwap) {
-            $inHandoverKm = $this->getHandoverKm($toSwap);
-            $outHandoverKm = $this->getHandoverKm($fromSwap);
+            $inHandoverKm = HandoverKmResolver::resolve($this->resource, $toSwap);
+            $outHandoverKm = HandoverKmResolver::resolve($this->resource, $fromSwap);
 
             // Case A: OUT first then IN (driver handed over, then received back)
             // Case B: IN first then OUT (driver received, then handed over)
@@ -198,17 +199,7 @@ class TripResource extends JsonResource
 
     private function adjustedForSwapIn(DriverSwap $swap): array
     {
-        $handoverKm = (float) ($swap->handover_km ?? 0);
-
-        if ($handoverKm <= 0) {
-            $handoverKm = (float) $this->checkpoints()
-                ->reorder()
-                ->where('checkpoint_type', 'driver_swap')
-                ->where('shift_id', $swap->from_shift_id)
-                ->whereNotNull('km_reading')
-                ->orderByDesc('occurred_at')
-                ->first()?->km_reading ?? 0;
-        }
+        $handoverKm = HandoverKmResolver::resolve($this->resource, $swap);
 
         $shiftCheckpoints = $this->checkpoints()
             ->reorder()
@@ -243,17 +234,7 @@ class TripResource extends JsonResource
 
     private function adjustedForSwapOut(DriverSwap $swap): array
     {
-        $handoverKm = (float) ($swap->handover_km ?? 0);
-
-        if ($handoverKm <= 0) {
-            $handoverKm = (float) $this->checkpoints()
-                ->reorder()
-                ->where('checkpoint_type', 'driver_swap')
-                ->where('shift_id', $swap->from_shift_id)
-                ->whereNotNull('km_reading')
-                ->orderByDesc('occurred_at')
-                ->first()?->km_reading ?? 0;
-        }
+        $handoverKm = HandoverKmResolver::resolve($this->resource, $swap);
 
         $totalKm = $handoverKm > 0 && $this->start_km > 0
             ? max(0, $handoverKm - (float) $this->start_km)
@@ -281,22 +262,5 @@ class TripResource extends JsonResource
             'total_km_loaded' => $loadedKm,
             'total_km_empty' => max(0, $totalKm - $loadedKm),
         ];
-    }
-
-    private function getHandoverKm(DriverSwap $swap): float
-    {
-        $handoverKm = (float) ($swap->handover_km ?? 0);
-
-        if ($handoverKm <= 0) {
-            $handoverKm = (float) $this->checkpoints()
-                ->reorder()
-                ->where('checkpoint_type', 'driver_swap')
-                ->where('shift_id', $swap->from_shift_id)
-                ->whereNotNull('km_reading')
-                ->orderByDesc('occurred_at')
-                ->first()?->km_reading ?? 0;
-        }
-
-        return $handoverKm;
     }
 }

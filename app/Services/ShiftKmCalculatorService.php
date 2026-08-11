@@ -50,15 +50,6 @@ class ShiftKmCalculatorService
         $totalLoaded = 0;
 
         foreach ($allTrips as $trip) {
-            // Determine handover KM from a driver_swap checkpoint on this trip (if any)
-            $driverSwapCp = TripCheckpoint::where('trip_id', $trip->id)
-                ->where('checkpoint_type', 'driver_swap')
-                ->whereNotNull('km_reading')
-                ->orderByDesc('occurred_at')
-                ->first();
-
-            $tripHandoverKm = (float) ($driverSwapCp?->km_reading ?? 0);
-
             // ——— attempt 1: swapped-IN explicit (DriverSwap có to_shift_id) ———
             // Bỏ qua swap vô nghĩa (self-swap: cùng tài xế + cùng ca)
             $swap = DriverSwap::where('trip_id', $trip->id)
@@ -84,25 +75,8 @@ class ShiftKmCalculatorService
 
             // Both swap-IN and swap-OUT for same shift → km nằm giữa 2 điểm handover
             if ($swap && $swapOutForBoth && $hasShiftCheckpoints) {
-                $inHandoverKm = (float) ($swap->handover_km ?? 0);
-                if ($inHandoverKm <= 0) {
-                    $inHandoverKm = (float) TripCheckpoint::where('trip_id', $trip->id)
-                        ->where('checkpoint_type', 'driver_swap')
-                        ->where('shift_id', $swap->from_shift_id)
-                        ->whereNotNull('km_reading')
-                        ->orderByDesc('occurred_at')
-                        ->value('km_reading') ?? $tripHandoverKm;
-                }
-
-                $outHandoverKm = (float) ($swapOutForBoth->handover_km ?? 0);
-                if ($outHandoverKm <= 0) {
-                    $outHandoverKm = (float) TripCheckpoint::where('trip_id', $trip->id)
-                        ->where('checkpoint_type', 'driver_swap')
-                        ->where('shift_id', $swapOutForBoth->from_shift_id)
-                        ->whereNotNull('km_reading')
-                        ->orderByDesc('occurred_at')
-                        ->value('km_reading') ?? $tripHandoverKm;
-                }
+                $inHandoverKm = HandoverKmResolver::resolve($trip, $swap, useTripFallback: true);
+                $outHandoverKm = HandoverKmResolver::resolve($trip, $swapOutForBoth, useTripFallback: true);
 
                 // Case A: OUT first then IN → (OUT - start_km) + (latest - IN)
                 // Case B: IN first then OUT → OUT - IN
@@ -190,15 +164,7 @@ class ShiftKmCalculatorService
             }
 
             if ($swap) {
-                $handoverKm = (float) ($swap->handover_km ?? 0);
-                if ($handoverKm <= 0) {
-                    $handoverKm = (float) TripCheckpoint::where('trip_id', $trip->id)
-                        ->where('checkpoint_type', 'driver_swap')
-                        ->where('shift_id', $swap->from_shift_id)
-                        ->whereNotNull('km_reading')
-                        ->orderByDesc('occurred_at')
-                        ->value('km_reading') ?? $tripHandoverKm;
-                }
+                $handoverKm = HandoverKmResolver::resolve($trip, $swap, useTripFallback: true);
 
                 $shiftCheckpoints = $trip->checkpoints()
                     ->reorder()
@@ -241,15 +207,7 @@ class ShiftKmCalculatorService
                 ->first();
 
             if ($swapOut && $hasShiftCheckpoints) {
-                $handoverKm = (float) ($swapOut->handover_km ?? 0);
-                if ($handoverKm <= 0) {
-                    $handoverKm = (float) TripCheckpoint::where('trip_id', $trip->id)
-                        ->where('checkpoint_type', 'driver_swap')
-                        ->where('shift_id', $swapOut->from_shift_id)
-                        ->whereNotNull('km_reading')
-                        ->orderByDesc('occurred_at')
-                        ->value('km_reading') ?? $tripHandoverKm;
-                }
+                $handoverKm = HandoverKmResolver::resolve($trip, $swapOut, useTripFallback: true);
 
                 $tripTotalKm = $handoverKm > 0 && $trip->start_km > 0
                     ? max(0, $handoverKm - (float) $trip->start_km)
@@ -276,6 +234,14 @@ class ShiftKmCalculatorService
             // Chỉ tính swapped-IN nếu shift này có checkpoint SAU driver_swap
             // (tài xế nhận chuyến sau điểm bàn giao). Nếu driver_swap là checkpoint
             // cuối → tài xế này swap RA (bàn giao cho người khác), không phải swapped-IN.
+            $driverSwapCp = TripCheckpoint::where('trip_id', $trip->id)
+                ->where('checkpoint_type', 'driver_swap')
+                ->whereNotNull('km_reading')
+                ->orderByDesc('occurred_at')
+                ->first();
+
+            $tripHandoverKm = (float) ($driverSwapCp?->km_reading ?? 0);
+
             $hasAfterSwap = $driverSwapCp && TripCheckpoint::where('trip_id', $trip->id)
                 ->where('shift_id', $shift->id)
                 ->where('occurred_at', '>', $driverSwapCp->occurred_at)
