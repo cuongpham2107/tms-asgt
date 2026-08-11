@@ -170,7 +170,11 @@ class TripResource extends JsonResource
                 } elseif ($arrivedPickupKm !== null) {
                     $loadedKm = max(0, $outHandoverKm - (float) $arrivedPickupKm);
                 } else {
-                    $loadedKm = 0;
+                    $wasLoaded = $this->checkpoints()
+                        ->where('checkpoint_type', 'arrived_pickup')
+                        ->where('km_reading', '<=', $inHandoverKm)
+                        ->exists();
+                    $loadedKm = $wasLoaded ? $totalKm : 0;
                 }
             }
 

@@ -173,7 +173,11 @@ class ShiftKmCalculatorService
                     } elseif ($arrivedPickupKm !== null) {
                         $tripLoadedKm = max(0, $outHandoverKm - (float) $arrivedPickupKm);
                     } else {
-                        $tripLoadedKm = 0;
+                        $wasLoaded = TripCheckpoint::where('trip_id', $trip->id)
+                            ->where('checkpoint_type', 'arrived_pickup')
+                            ->where('km_reading', '<=', $inHandoverKm)
+                            ->exists();
+                        $tripLoadedKm = $wasLoaded ? $tripTotalKm : 0;
                     }
                 }
 
