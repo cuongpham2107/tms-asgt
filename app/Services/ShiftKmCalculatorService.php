@@ -90,6 +90,7 @@ class ShiftKmCalculatorService
                         ->where('checkpoint_type', 'driver_swap')
                         ->where('shift_id', $swap->from_shift_id)
                         ->whereNotNull('km_reading')
+                        ->orderByDesc('occurred_at')
                         ->value('km_reading') ?? $tripHandoverKm;
                 }
 
@@ -99,12 +100,13 @@ class ShiftKmCalculatorService
                         ->where('checkpoint_type', 'driver_swap')
                         ->where('shift_id', $swapOutForBoth->from_shift_id)
                         ->whereNotNull('km_reading')
+                        ->orderByDesc('occurred_at')
                         ->value('km_reading') ?? $tripHandoverKm;
                 }
 
                 // Case A: OUT first then IN → (OUT - start_km) + (latest - IN)
                 // Case B: IN first then OUT → OUT - IN
-                if ($swapOutForBoth->created_at->lt($swap->created_at)) {
+                if ($swapOutForBoth->id < $swap->id) {
                     // Case A: OUT→IN
                     $outTotal = $outHandoverKm > 0 && $trip->start_km > 0
                         ? max(0, $outHandoverKm - (float) $trip->start_km) : 0;
@@ -194,6 +196,7 @@ class ShiftKmCalculatorService
                         ->where('checkpoint_type', 'driver_swap')
                         ->where('shift_id', $swap->from_shift_id)
                         ->whereNotNull('km_reading')
+                        ->orderByDesc('occurred_at')
                         ->value('km_reading') ?? $tripHandoverKm;
                 }
 
@@ -244,6 +247,7 @@ class ShiftKmCalculatorService
                         ->where('checkpoint_type', 'driver_swap')
                         ->where('shift_id', $swapOut->from_shift_id)
                         ->whereNotNull('km_reading')
+                        ->orderByDesc('occurred_at')
                         ->value('km_reading') ?? $tripHandoverKm;
                 }
 

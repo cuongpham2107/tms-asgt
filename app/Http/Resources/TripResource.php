@@ -100,7 +100,7 @@ class TripResource extends JsonResource
 
             // Case A: OUT first then IN (driver handed over, then received back)
             // Case B: IN first then OUT (driver received, then handed over)
-            if ($fromSwap->created_at->lt($toSwap->created_at)) {
+            if ($fromSwap->id < $toSwap->id) {
                 // Case A: OUT→IN → (OUT - start_km) + (latest - IN)
                 $outTotal = $outHandoverKm > 0 && $this->start_km > 0
                     ? max(0, $outHandoverKm - (float) $this->start_km) : 0;
@@ -206,6 +206,7 @@ class TripResource extends JsonResource
                 ->where('checkpoint_type', 'driver_swap')
                 ->where('shift_id', $swap->from_shift_id)
                 ->whereNotNull('km_reading')
+                ->orderByDesc('occurred_at')
                 ->first()?->km_reading ?? 0;
         }
 
@@ -250,6 +251,7 @@ class TripResource extends JsonResource
                 ->where('checkpoint_type', 'driver_swap')
                 ->where('shift_id', $swap->from_shift_id)
                 ->whereNotNull('km_reading')
+                ->orderByDesc('occurred_at')
                 ->first()?->km_reading ?? 0;
         }
 
@@ -291,6 +293,7 @@ class TripResource extends JsonResource
                 ->where('checkpoint_type', 'driver_swap')
                 ->where('shift_id', $swap->from_shift_id)
                 ->whereNotNull('km_reading')
+                ->orderByDesc('occurred_at')
                 ->first()?->km_reading ?? 0;
         }
 
