@@ -22,6 +22,20 @@ class ListLocations extends ListRecords
     #[Url]
     public string $orderType = 'HHHK';
 
+    #[Url]
+    public string $areaFilter = 'all';
+
+    public function getAreaFilters(): array
+    {
+        $areas = ['all' => ['label' => 'Tất cả KV', 'color' => 'bg-gray-900']];
+
+        foreach (Area::select('code')->distinct()->orderBy('id')->pluck('code') as $code) {
+            $areas[$code] = ['label' => $code, 'color' => 'bg-green-500'];
+        }
+
+        return $areas;
+    }
+
     public array $orderTypeFilters = [
         'HHHK' => ['label' => 'HHHK', 'color' => 'bg-blue-500'],
         'external' => ['label' => 'Hàng ngoài', 'color' => 'bg-amber-500'],
@@ -55,12 +69,22 @@ class ListLocations extends ListRecords
                     ->options($this->orderTypeFilters)
                     ->activeValue(fn ($livewire) => $livewire->orderType)
                     ->clickAction('filterOrderType'),
+                PillFilter::make('areaFilter')
+                    ->options($this->getAreaFilters())
+                    ->activeValue(fn ($livewire) => $livewire->areaFilter)
+                    ->clickAction('filterArea'),
             ]);
     }
 
     public function filterOrderType(string $value): void
     {
         $this->orderType = $value;
+        $this->resetPage();
+    }
+
+    public function filterArea(string $value): void
+    {
+        $this->areaFilter = $value;
         $this->resetPage();
     }
 
@@ -74,9 +98,14 @@ class ListLocations extends ListRecords
 
     protected function applyActiveFilters(Builder $query): Builder
     {
-        return $query->when(
-            $this->orderType !== 'all',
-            fn (Builder $q) => $q->whereHas('area', fn ($q) => $q->where('type', $this->orderType)),
-        );
+        return $query
+            ->when(
+                $this->orderType !== 'all',
+                fn (Builder $q) => $q->whereHas('area', fn ($q) => $q->where('type', $this->orderType)),
+            )
+            ->when(
+                $this->areaFilter !== 'all',
+                fn (Builder $q) => $q->whereHas('area', fn ($q) => $q->where('code', $this->areaFilter)),
+            );
     }
 }
