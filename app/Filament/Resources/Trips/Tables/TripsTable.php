@@ -11,13 +11,17 @@ use App\Filament\Resources\Trips\Actions\DriverSwapAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
+use App\Models\DriverShift;
 use App\Models\Trip;
+use App\Services\ShiftKmCalculatorService;
+use App\Services\TripKmCalculatorService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
@@ -212,7 +216,21 @@ class TripsTable extends BaseTable
                             }
                             $record->update($data);
 
+                            self::recalculateKm($record);
+
                             return $record;
+                        }),
+
+                    Action::make('recalculate_km')
+                        ->label('Tính lại Km')
+                        ->icon('heroicon-o-calculator')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->modalHeading('Tính lại số km?')
+                        ->modalDescription('Sẽ tính lại total_km, loaded, empty cho trip, cập nhật km xe, và tính lại km cho tất cả ca liên quan.')
+                        ->action(function (Trip $record) {
+                            self::recalculateKm($record);
+                            Notification::make()->success()->title('Đã tính lại km')->send();
                         }),
 
                     // DriverSwapAction::make(),
@@ -423,5 +441,32 @@ class TripsTable extends BaseTable
             'customStyles' => '',
             'customScripts' => '',
         ];
+    }
+
+    private static function recalculateKm(Trip $record): void
+    {
+        app(TripKmCalculatorService::class)->calculate($record);
+        $record->refresh();
+
+        if ($record->end_km > 0 && $record->vehicle) {
+            $record->vehicle->update(['current_mileage' => $record->end_km]);
+        }
+
+        if ($record->shift_id) {
+            app(ShiftKmCalculatorService::class)->calculate($record->shift);
+        }
+
+        $swapShiftIds = $record->driverSwaps()
+            ->pluck('from_shift_id')
+            ->merge($record->driverSwaps()->pluck('to_shift_id'))
+            ->filter()
+            ->unique();
+
+        foreach ($swapShiftIds as $shiftId) {
+            $shift = DriverShift::find($shiftId);
+            if ($shift) {
+                app(ShiftKmCalculatorService::class)->calculate($shift);
+            }
+        }
     }
 }

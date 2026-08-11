@@ -3,6 +3,7 @@
 namespace App\Services\Trip;
 
 use App\Enums\CheckpointType;
+use App\Models\DriverShift;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -146,7 +147,8 @@ class CheckpointFactory
             'order_id' => $orderId,
             'delivery_point_id' => $deliveryPointId,
             'driver_id' => $trip->driver_id,
-            'shift_id' => $trip->shift_id,
+            'shift_id' => $trip->shift_id
+                ?? DriverShift::where('driver_id', $trip->driver_id)->whereNull('end_time')->value('id'),
             'vehicle_id' => $trip->vehicle_id,
             'checkpoint_type' => $type->value,
             'occurred_at' => $payload['occurred_at'] ?? now(),

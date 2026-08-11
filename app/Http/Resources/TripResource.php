@@ -136,12 +136,7 @@ class TripResource extends JsonResource
                     ->orderBy('km_reading')
                     ->get();
                 $outArrived = $outShiftCheckpoints->where('checkpoint_type', 'arrived_pickup')->first()?->km_reading;
-                $outCompleted = $outShiftCheckpoints->where('checkpoint_type', 'completed')
-                    ->where('km_reading', '<=', $outHandoverKm)
-                    ->sortByDesc('km_reading')->first()?->km_reading;
-                if ($outCompleted !== null && $outArrived !== null) {
-                    $outLoaded = max(0, (float) $outCompleted - (float) $outArrived);
-                } elseif ($outArrived !== null) {
+                if ($outArrived !== null) {
                     $outLoaded = max(0, $outHandoverKm - (float) $outArrived);
                 } else {
                     $outLoaded = 0;
@@ -269,15 +264,7 @@ class TripResource extends JsonResource
             ->where('checkpoint_type', 'arrived_pickup')
             ->first()?->km_reading;
 
-        $completedKm = $shiftCheckpoints
-            ->where('checkpoint_type', 'completed')
-            ->where('km_reading', '<=', $handoverKm)
-            ->sortByDesc('km_reading')
-            ->first()?->km_reading;
-
-        if ($completedKm !== null && $arrivedPickupKm !== null) {
-            $loadedKm = max(0, (float) $completedKm - (float) $arrivedPickupKm);
-        } elseif ($arrivedPickupKm !== null) {
+        if ($arrivedPickupKm !== null) {
             $loadedKm = max(0, $handoverKm - (float) $arrivedPickupKm);
         } else {
             $loadedKm = 0;

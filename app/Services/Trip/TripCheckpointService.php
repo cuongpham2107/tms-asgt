@@ -65,14 +65,14 @@ class TripCheckpointService
         $this->validateVehicleNotBusy($trip);
 
         return DB::transaction(function () use ($trip, $payload, $photos, $checkpointType) {
+            $this->shiftResolver->resolveForTrip($trip);
+
             // Auto-start trip if driver submits a non-started checkpoint on a pending trip.
             // The started checkpoint gets vehicle's current mileage; the actual checkpoint gets the driver's entered km.
             $startedCheckpoints = collect();
             if ($checkpointType !== CheckpointType::Started && $trip->isPending()) {
                 $startedCheckpoints = $this->autoStartTrip($trip, $payload);
             }
-
-            $this->shiftResolver->resolveForTrip($trip);
 
             $this->deliveryPointResolver->resolve($payload);
 

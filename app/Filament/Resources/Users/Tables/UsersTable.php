@@ -10,6 +10,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class UsersTable
 {
@@ -20,7 +21,9 @@ class UsersTable
                 TextColumn::make('name')
                     ->label('Họ và tên')
                     ->weight('bold')
-                    ->searchable(),
+                    ->searchable(query: function (Builder $query, string $search) {
+                        $query->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($search).'%']);
+                    }),
                 TextColumn::make('email')
                     ->label('Email')
                     ->searchable(),

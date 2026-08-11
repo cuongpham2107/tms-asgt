@@ -45,9 +45,21 @@ class DriverShiftForm
                             ->prefixIcon(Heroicon::OutlinedCalendarDays),
                     ]),
                 Section::make('Thông tin km')
-                    ->columns(3)
+                    ->columns(5)
                     ->columnSpanFull()
                     ->schema([
+                        TextInput::make('start_km')
+                            ->label('Km bắt đầu')
+                            ->prefixIcon(Heroicon::OutlinedPlayCircle)
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
+                            ->numeric(),
+                        TextInput::make('end_km')
+                            ->label('Km kết thúc')
+                            ->prefixIcon(Heroicon::OutlinedStopCircle)
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
+                            ->numeric(),
                         TextInput::make('total_km')
                             ->label('Tổng km')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)

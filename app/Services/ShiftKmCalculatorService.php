@@ -139,12 +139,7 @@ class ShiftKmCalculatorService
                         ->orderBy('km_reading')
                         ->get();
                     $outArrived = $outShiftCheckpoints->where('checkpoint_type', 'arrived_pickup')->first()?->km_reading;
-                    $outCompleted = $outShiftCheckpoints->where('checkpoint_type', 'completed')
-                        ->where('km_reading', '<=', $outHandoverKm)
-                        ->sortByDesc('km_reading')->first()?->km_reading;
-                    if ($outCompleted !== null && $outArrived !== null) {
-                        $outLoaded = max(0, (float) $outCompleted - (float) $outArrived);
-                    } elseif ($outArrived !== null) {
+                    if ($outArrived !== null) {
                         $outLoaded = max(0, $outHandoverKm - (float) $outArrived);
                     } else {
                         $outLoaded = 0;
@@ -252,8 +247,16 @@ class ShiftKmCalculatorService
                     ? max(0, $handoverKm - (float) $trip->start_km)
                     : 0;
 
-                // Swap ra: không có completed checkpoint trong ca này
-                $tripLoadedKm = 0;
+                // Swap ra: loaded = handover - arrived_pickup (hàng trên xe đến lúc bàn giao)
+                $shiftCheckpointsOut = TripCheckpoint::where('trip_id', $trip->id)
+                    ->where('shift_id', $shift->id)
+                    ->whereNotNull('km_reading')
+                    ->orderBy('km_reading')
+                    ->get();
+                $arrivedPickup = $shiftCheckpointsOut->where('checkpoint_type', 'arrived_pickup')->first()?->km_reading;
+                $tripLoadedKm = $arrivedPickup !== null
+                    ? max(0, $handoverKm - (float) $arrivedPickup)
+                    : 0;
 
                 $totalKm += max(0, $tripTotalKm);
                 $totalLoaded += $tripLoadedKm;

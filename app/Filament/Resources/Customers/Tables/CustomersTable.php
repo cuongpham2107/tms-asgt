@@ -24,7 +24,9 @@ class CustomersTable extends BaseTable
                     ->weight('bold'),
                 TextColumn::make('name')
                     ->label('Tên khách hàng')
-                    ->searchable()
+                    ->searchable(query: function (Builder $query, string $search) {
+                        $query->where('name', 'like', "%{$search}%");
+                    })
                     ->wrap(),
                 TextColumn::make('phone')
                     ->label('Điện thoại')

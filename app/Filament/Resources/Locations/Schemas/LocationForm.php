@@ -27,11 +27,14 @@ class LocationForm
             ->components([
                 Select::make('area_id')
                     ->label('Khu vực')
-                    ->options(fn (): array => Area::query()
-                        ->get(['id', 'code', 'type'])
-                        ->mapWithKeys(fn (Area $area): array => [$area->id => "{$area->code} - {$area->type->getLabel()}"])
-                        ->toArray()
-                    )
+                    ->options(function (): array {
+                        return Area::query()
+                            ->select('code')
+                            ->distinct()
+                            ->orderBy('code')
+                            ->pluck('code', 'code')
+                            ->toArray();
+                    })
                     ->searchable()
                     ->preload()
                     ->native(false),
