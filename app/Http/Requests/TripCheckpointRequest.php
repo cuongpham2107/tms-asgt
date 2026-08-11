@@ -101,6 +101,11 @@ class TripCheckpointRequest extends FormRequest
                     if ((float) $this->input('km_reading') < (float) $trip->vehicle->current_mileage) {
                         $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn số km hiện tại của xe ('.number_format((float) $trip->vehicle->current_mileage, 1).' km)');
                     }
+
+                    $max = (float) $trip->vehicle->current_mileage + 600;
+                    if ((float) $this->input('km_reading') > $max) {
+                        $validator->errors()->add('km_reading', 'Số km không được lớn hơn '.number_format($max, 1).' km (tối đa +600 km so với km hiện tại của xe)');
+                    }
                 }
 
                 if ($trip instanceof Trip && $trip->start_km !== null) {
