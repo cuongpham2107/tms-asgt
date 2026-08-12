@@ -62,8 +62,29 @@ class CustomerForm
                             )
                             ->searchable()
                             ->preload()
-                            ->formatStateUsing(fn ($state) => Location::query()->where('address', $state)->first()?->id)
-                            ->dehydrateStateUsing(fn ($state) => Location::query()->find($state)?->address)
+                            ->live()
+                            ->afterStateHydrated(function (Select $component, $state): void {
+                                if (blank($state)) {
+                                    return;
+                                }
+
+                                $location = Location::query()->where('address', $state)->first();
+                                if ($location !== null) {
+                                    $component->state($location->id);
+                                }
+                            })
+                            ->dehydrateStateUsing(function ($state) {
+                                if (blank($state)) {
+                                    return null;
+                                }
+
+                                if (is_numeric($state)) {
+                                    return Location::query()->find($state)?->address;
+                                }
+
+                                // $state might already be the address string
+                                return $state;
+                            })
                             ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents())
                             ->createOptionUsing(function (array $data): int {
                                 $location = Location::create($data);

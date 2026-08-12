@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -26,6 +27,21 @@ class Customer extends Model
         return [
             'is_active' => 'boolean',
         ];
+    }
+
+    protected function address(): Attribute
+    {
+        return Attribute::set(function ($value) {
+            if (blank($value)) {
+                return $value;
+            }
+
+            if (! is_numeric($value)) {
+                return $value;
+            }
+
+            return Location::query()->find($value)?->address ?? $value;
+        });
     }
 
     public function orders(): HasMany
