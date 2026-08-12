@@ -58,7 +58,7 @@ class EndVehicleRequest extends FormRequest
 
                 $activeTrip = Trip::where('vehicle_id', $vehicle->id)
                     ->where('shift_id', $shift->id)
-                    ->whereNotIn('status', [TripStatus::Completed, TripStatus::DriverSwap])
+                    ->whereNotIn('status', [TripStatus::Completed, TripStatus::DriverSwap, TripStatus::Cancelled])
                     ->first();
 
                 if ($activeTrip === null) {

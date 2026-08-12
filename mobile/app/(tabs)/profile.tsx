@@ -19,7 +19,7 @@ export default function ProfileScreen() {
 
   const driver = localDriver;
   const shiftTrips: any[] = shift?.trips || [];
-  const activeTrips = shiftTrips.filter((t: any) => t.status !== "completed" && t.status !== "driver_swap");
+  const activeTrips = shiftTrips.filter((t: any) => t.status !== "completed" && t.status !== "driver_swap" && t.status !== "cancelled");
 
   const handleEndShift = () => {
     if (!shift?.id) { showAlert("Không có ca", "Bạn chưa vào ca"); return; }
@@ -116,7 +116,7 @@ export default function ProfileScreen() {
               })}>
               <View style={[s.activeTripDot, { backgroundColor: t.status === "pending" ? "#6B7280" : "#F59E0B" }]} />
               <View style={{ flex: 1 }}>
-                <Text style={s.activeTripCode}>{t.trip_code}</Text>
+                {/*<Text style={s.activeTripCode}>{t.trip_code}</Text>*/}
                 <Text style={s.activeTripPlate}>{t.vehicle?.plate_number || "Chưa gán xe"}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />

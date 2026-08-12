@@ -15,6 +15,7 @@ const statusConfig: Record<string, { icon: string; bg: string; text: string; lab
   completed: { icon: "checkmark-circle", bg: "#D1FAE5", text: "#059669", label: "Hoàn thành" },
   driver_swap: { icon: "swap-horizontal", bg: "#E0E7FF", text: "#4F46E5", label: "Đảo lái" },
   return_trip: { icon: "arrow-undo", bg: "#FEE2E2", text: "#DC2626", label: "Quay đầu" },
+  cancelled: { icon: "close-circle", bg: "#FEE2E2", text: "#DC2626", label: "Huỷ" },
 };
 
 const tabs = [
@@ -24,6 +25,7 @@ const tabs = [
   { key: "delivered", label: "Đã giao", color: "#059669" },
   { key: "completed", label: "Hoàn thành", color: "#059669" },
   { key: "driver_swap", label: "Đảo lái", color: "#4F46E5" },
+  { key: "cancelled", label: "Huỷ", color: "#DC2626" },
 ];
 
 const periods = [
@@ -173,7 +175,7 @@ export default function TripsScreen() {
             {item.orders?.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} contentContainerStyle={{ gap: 6 }}>
                 {item.orders.map((o: any) => {
-                  const oColor = o.status === "completed" ? "#059669" : o.status === "in_transit" ? "#D97706" : o.status === "driver_swap" ? "#8B5CF6" : "#6B7280";
+                  const oColor = o.status === "completed" ? "#059669" : o.status === "in_transit" ? "#D97706" : o.status === "driver_swap" ? "#8B5CF6" : o.status === "cancelled" ? "#DC2626" : "#6B7280";
                   return (
                     <View key={o.id} style={{ flexDirection: "row", alignItems: "center", backgroundColor: oColor + "10", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, gap: 4 }}>
                       <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: oColor }} />

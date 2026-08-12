@@ -18,10 +18,11 @@ const statusConfig: Record<string, { icon: string; bg: string; text: string; lab
   completed: { icon: "checkmark-circle", bg: "#D1FAE5", text: "#059669", label: "Hoàn thành" },
   driver_swap: { icon: "swap-horizontal", bg: "#E0E7FF", text: "#4F46E5", label: "Đảo lái" },
   return_trip: { icon: "arrow-undo", bg: "#FEE2E2", text: "#DC2626", label: "Quay đầu" },
+  cancelled: { icon: "close-circle", bg: "#FEE2E2", text: "#DC2626", label: "Đã huỷ" },
 };
 
 const orderStatusLabel: Record<string, string> = {
-  assigned: "Đã gán", sent: "Chờ lấy", in_transit: "Đang giao", completed: "Xong", driver_swap: "Đảo lái",
+  assigned: "Đã gán", sent: "Chờ lấy", in_transit: "Đang giao", completed: "Xong", driver_swap: "Đảo lái", cancelled: "Huỷ",
 };
 
 const localISO = (d: Date = new Date()) => {

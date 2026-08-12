@@ -7,6 +7,7 @@ use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Filament\BaseTable;
+use App\Filament\Resources\Trips\Actions\CancelTripAction;
 use App\Filament\Resources\Trips\Actions\DriverSwapAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Schemas\TripForm;
@@ -235,6 +236,7 @@ class TripsTable extends BaseTable
 
                     // DriverSwapAction::make(),
                     ReassignDriverAction::make(),
+                    CancelTripAction::make(),
                     DeleteAction::make(),
                 ]),
             ], position: RecordActionsPosition::BeforeColumns);

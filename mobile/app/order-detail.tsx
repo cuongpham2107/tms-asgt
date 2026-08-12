@@ -56,6 +56,12 @@ const statusConfig: Record<
         text: "#8B5CF6",
         label: "Đảo lái",
     },
+    cancelled: {
+        icon: "close-circle",
+        bg: "#FEE2E2",
+        text: "#DC2626",
+        label: "Huỷ",
+    },
 };
 
 const cpInfo: Record<string, { icon: string; color: string; label: string }> = {
@@ -78,6 +84,7 @@ const cpInfo: Record<string, { icon: string; color: string; label: string }> = {
         label: "Đảo lái",
     },
     end: { icon: "close-circle", color: "#EF4444", label: "Kết thúc đơn hàng" },
+    cancelled: { icon: "close-circle", color: "#DC2626", label: "Huỷ chuyến" },
 };
 
 const localISO = (d: Date = new Date()) => {
@@ -179,6 +186,32 @@ export default function OrderDetailScreen() {
         selectedDpId ||
         nextPendingDp?.id ||
         deliveryPoints[deliveryPoints.length - 1]?.id;
+    const checkpoints = d.trip_checkpoints || [];
+
+    // Compute per-DP checkpoint status
+    const dpStatusMap = useMemo(() => {
+        const map: Record<
+            number,
+            { arrived: boolean; completed: boolean }
+        > = {};
+        deliveryPoints.forEach((dp: any) => {
+            map[dp.id] = {
+                arrived: checkpoints.some(
+                    (cp: any) =>
+                        cp.checkpoint_type === "arrived_delivery" &&
+                        cp.delivery_point_id === dp.id,
+                ),
+                completed: checkpoints.some(
+                    (cp: any) =>
+                        cp.checkpoint_type === "completed" &&
+                        cp.delivery_point_id === dp.id,
+                ),
+            };
+        });
+
+        return map;
+    }, [deliveryPoints, checkpoints]);
+
     // Auto-select only DP for single-DP orders; reset on complete
     useEffect(() => {
         if (deliveryPoints.length === 1 && !selectedDpId) {
@@ -196,7 +229,6 @@ export default function OrderDetailScreen() {
         }
     }, [deliveryPoints, selectedDpId, dpStatusMap]);
     const activeDp = deliveryPoints.find((dp: any) => dp.id === activeDpId);
-    const checkpoints = d.trip_checkpoints || [];
     // Map DP id to location code for timeline display
     const dpCodeMap: Record<string, string> = {};
     deliveryPoints.forEach((dp: any) => {
@@ -228,29 +260,6 @@ export default function OrderDetailScreen() {
     const hasArrivedDelivery = activeDpHasCp("arrived_delivery");
     const hasCompleted = activeDpHasCp("completed");
 
-    // Compute per-DP checkpoint status
-    const dpStatusMap = useMemo(() => {
-        const map: Record<
-            number,
-            { arrived: boolean; completed: boolean }
-        > = {};
-        deliveryPoints.forEach((dp: any) => {
-            map[dp.id] = {
-                arrived: checkpoints.some(
-                    (cp: any) =>
-                        cp.checkpoint_type === "arrived_delivery" &&
-                        cp.delivery_point_id === dp.id,
-                ),
-                completed: checkpoints.some(
-                    (cp: any) =>
-                        cp.checkpoint_type === "completed" &&
-                        cp.delivery_point_id === dp.id,
-                ),
-            };
-        });
-
-        return map;
-    }, [deliveryPoints, checkpoints]);
 
     // Mid-delivery: đã đến DP nhưng chưa giao xong → lock, không chọn được DP khác
     const isMidDelivery = hasArrivedDelivery && !hasCompleted;

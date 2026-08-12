@@ -16,12 +16,24 @@ class HandoverKmResolver
         $handoverKm = (float) ($swap->handover_km ?? 0);
 
         if ($handoverKm <= 0 && $swap->from_shift_id !== null) {
-            $handoverKm = (float) TripCheckpoint::where('trip_id', $trip->id)
+            // Lấy tất cả driver_swap checkpoint của shift này, sắp xếp theo thời gian.
+            // Khi có nhiều swap từ cùng 1 shift, mỗi swap tương ứng với 1 checkpoint
+            // theo đúng thứ tự thời gian. Dùng ordinal position để match chính xác.
+            $shiftCheckpoints = TripCheckpoint::where('trip_id', $trip->id)
                 ->where('checkpoint_type', 'driver_swap')
                 ->where('shift_id', $swap->from_shift_id)
                 ->whereNotNull('km_reading')
-                ->orderByDesc('occurred_at')
-                ->value('km_reading') ?? 0;
+                ->orderBy('occurred_at')
+                ->pluck('km_reading');
+
+            $swapIndex = DriverSwap::where('trip_id', $trip->id)
+                ->where('from_shift_id', $swap->from_shift_id)
+                ->where('id', '<', $swap->id)
+                ->count();
+
+            if (isset($shiftCheckpoints[$swapIndex])) {
+                $handoverKm = (float) $shiftCheckpoints[$swapIndex];
+            }
         }
 
         if ($handoverKm <= 0 && $useTripFallback) {

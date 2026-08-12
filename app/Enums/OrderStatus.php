@@ -58,7 +58,7 @@ enum OrderStatus: string implements HasColor, HasLabel
 
     public function canCancel(): bool
     {
-        return in_array($this, [self::Draft, self::Assigned, self::Sent]);
+        return in_array($this, [self::Draft, self::Assigned, self::Sent, self::InTransit, self::DriverSwap]);
     }
 
     public function canEdit(): bool

@@ -162,7 +162,7 @@ class TripController extends Controller
     {
         $user = $request->user();
 
-        $validStatuses = [TripStatus::Completed, TripStatus::DriverSwap];
+        $validStatuses = [TripStatus::Completed, TripStatus::DriverSwap, TripStatus::Cancelled];
 
         $request->validate([
             'status' => ['nullable', 'string', Rule::in(array_map(fn ($s) => $s->value, $validStatuses))],
