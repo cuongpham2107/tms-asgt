@@ -42,9 +42,9 @@ class VehicleForm
                             ->label('Biển số xe')
                             ->prefixIcon(Heroicon::OutlinedTruck)
                             ->required()
-                            ->maxLength(20)
+                            ->maxLength(8)
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn (Set $set, string $state): mixed => $set('plate_number', str_replace(' ', '', $state)))
+                            ->afterStateUpdated(fn (Set $set, string $state): mixed => $set('plate_number', preg_replace('/[\s\-\.]+/', '', $state)))
                             ->unique(ignoreRecord: true),
 
                         Select::make('vehicle_type')
@@ -123,6 +123,7 @@ class VehicleForm
                                 ->where('owner', '!=', '')
                                 ->pluck('owner')
                                 ->toArray())
+                            ->required()
                             ->maxLength(255),
                         Select::make('current_driver_id')
                             ->label('Lái xe hiện tại')
