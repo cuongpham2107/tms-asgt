@@ -32,7 +32,7 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
 // ─── Auth ────────────────────────────────────────────────────────────
 
 export function login(email: string, password: string) {
-  return fetchApi<{ token: string }>("/login", undefined, {
+  return fetchApi<{ token: string; shift?: any }>("/login", undefined, {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
@@ -28,7 +28,36 @@ export default function DashboardScreen() {
   const [shift, setShiftState] = useState<any>(authShift);
   const userId = shift?.driver?.id;
 
-  const load = async () => {
+  useEffect(() => {
+    if (authShift) setShiftState(authShift);
+  }, [authShift]);
+
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      const shiftRes = await api.shifts.current(token).catch(() => null);
+      if (shiftRes?.shift) {
+        setShiftState(shiftRes.shift);
+        setShift(shiftRes.shift);
+      }
+    })();
+  }, [token]);
+
+  useFocusEffect(useCallback(() => {
+    if (!token) return;
+    (async () => {
+      const [tRes, shiftRes] = await Promise.all([
+        api.trips.active(token).catch(() => ({ data: [] })),
+        api.shifts.current(token).catch(() => null),
+      ]);
+      setTrips(tRes.data || []);
+      if (shiftRes?.shift) {
+        setShiftState(shiftRes.shift);
+        setShift(shiftRes.shift);
+      }
+    })();
+  }, [token]));
+  const refresh = async () => {
     if (!token) return;
     const [tRes, shiftRes] = await Promise.all([
       api.trips.active(token).catch(() => ({ data: [] })),
@@ -38,14 +67,9 @@ export default function DashboardScreen() {
     if (shiftRes?.shift) {
       setShiftState(shiftRes.shift);
       setShift(shiftRes.shift);
-    } else {
-      setShiftState(null);
-      setShift(null);
     }
   };
-
-  useFocusEffect(useCallback(() => { load(); }, [token]));
-  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+  const onRefresh = async () => { setRefreshing(true); await refresh(); setRefreshing(false); };
 
   const activeTrips = trips.filter((t) => t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap" && t.driver_id === userId);
   // Sort: current/active trips first, then pending
