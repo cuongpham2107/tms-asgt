@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
@@ -28,18 +28,48 @@ export default function DashboardScreen() {
   const [shift, setShiftState] = useState<any>(authShift);
   const userId = shift?.driver?.id;
 
-  const load = async () => {
+  useEffect(() => {
+    if (authShift) setShiftState(authShift);
+  }, [authShift]);
+
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      const shiftRes = await api.shifts.current(token).catch(() => null);
+      if (shiftRes?.shift) {
+        setShiftState(shiftRes.shift);
+        setShift(shiftRes.shift);
+      }
+    })();
+  }, [token]);
+
+  useFocusEffect(useCallback(() => {
+    if (!token) return;
+    (async () => {
+      const [tRes, shiftRes] = await Promise.all([
+        api.trips.active(token).catch(() => ({ data: [] })),
+        api.shifts.current(token).catch(() => null),
+      ]);
+      setTrips(tRes.data || []);
+      if (shiftRes?.shift) {
+        setShiftState(shiftRes.shift);
+        setShift(shiftRes.shift);
+      }
+    })();
+  }, [token]));
+  const refresh = async () => {
     if (!token) return;
     const [tRes, shiftRes] = await Promise.all([
       api.trips.active(token).catch(() => ({ data: [] })),
       api.shifts.current(token).catch(() => null),
     ]);
     setTrips(tRes.data || []);
-    if (shiftRes?.shift) { setShiftState(shiftRes.shift); setShift(shiftRes.shift); }
+    if (shiftRes?.shift) {
+      setShiftState(shiftRes.shift);
+      setShift(shiftRes.shift);
+    }
   };
-
-  useFocusEffect(useCallback(() => { load(); }, [token]));
-  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+  const onRefresh = async () => { setRefreshing(true); await refresh(); setRefreshing(false); };
 
   const activeTrips = trips.filter((t) => t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap" && t.driver_id === userId);
   // Sort: current/active trips first, then pending
@@ -51,7 +81,7 @@ export default function DashboardScreen() {
   const mergedTrips = [...tripsInShift];
   activeInShift.forEach((t: any) => { if (!mergedTrips.find((m: any) => m.id === t.id)) mergedTrips.push(t); });
   const shiftAssigned = mergedTrips.filter((t: any) => t.status === "pending").length;
-  const shiftInProgress = mergedTrips.filter((t: any) => ["started", "arrived_pickup", "delivering", "arrived_delivery", "delivered", "return_trip"].includes(t.status)).length;
+  const shiftInProgress = activeTrips.filter((t: any) => ["started", "arrived_pickup", "delivering", "arrived_delivery", "delivered", "return_trip"].includes(t.status)).length;
   const shiftCompleted = mergedTrips.filter((t: any) => t.status === "completed").length;
   const shiftTotalKm = shift?.total_km != null ? parseFloat(shift.total_km) : null;
   const shiftLoaded = shift?.total_km_loaded != null ? parseFloat(shift.total_km_loaded) : null;
@@ -77,7 +107,7 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {shift && (
+      {shift && !shift.end_time && (
         <View style={st.shiftCard}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -242,6 +272,6 @@ const st = StyleSheet.create({
   loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   linkBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 4, padding: 16 },
   linkText: { color: "#4F46E5", fontWeight: "600", fontSize: 14 },
-  startShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4F46E5", paddingVertical: 14, borderRadius: 12, marginHorizontal: 16, marginTop: 12, marginBottom: 12 },
+  startShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4F46E5", paddingVertical: 14, borderRadius: 12, marginHorizontal: 16, marginTop: 8, marginBottom:8 },
   startShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });

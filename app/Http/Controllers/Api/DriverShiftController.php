@@ -292,7 +292,7 @@ class DriverShiftController extends Controller
         //     }
         // }
 
-        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled'), 'vehicle'])) : null]);
+        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')])) : null]);
     }
 
     /**

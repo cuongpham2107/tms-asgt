@@ -3,9 +3,9 @@ import { Platform } from "react-native";
 // ─── Cấu hình API Laravel ───────────────────────────────────────────
 // Thay IP này thành IP máy chạy Laravel backend
 const API = Platform.select({
-  ios: "https://tms.asgl.net.vn/api/driver",
-  android: "https://tms.asgl.net.vn/api/driver",
-  default: "https://tms.asgl.net.vn/api/driver",
+  ios: "http://tms.asgl.net.vn/api/driver",
+  android: "http://tms.asgl.net.vn/api/driver",
+  default: "http://tms.asgl.net.vn/api/driver",
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
 // ─── Auth ────────────────────────────────────────────────────────────
 
 export function login(email: string, password: string) {
-  return fetchApi<{ token: string }>("/login", undefined, {
+  return fetchApi<{ token: string; shift?: any }>("/login", undefined, {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });

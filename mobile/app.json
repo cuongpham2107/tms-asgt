@@ -8,6 +8,7 @@
     "userInterfaceStyle": "light",
     "scheme": "tms-driver",
     "plugins": [
+      "./plugins/withAndroidManifest.mjs",
       "expo-router",
       "expo-image-picker",
       [
@@ -34,6 +35,7 @@
       "bundleIdentifier": "com.anonymous.tmsmobile"
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

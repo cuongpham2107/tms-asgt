@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView,
 import { router } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
-import { login, api } from "../src/lib/api";
+import { login } from "../src/lib/api";
 
 export default function LoginScreen() {
   const { setAuth } = useAuth();
@@ -19,9 +19,7 @@ export default function LoginScreen() {
       const res = await login(email, password);
       if (!res.token) return setError("Sai tài khoản hoặc mật khẩu");
 
-      // Lấy shift đang active (nếu có)
-      const shiftRes = await api.shifts.current(res.token).catch(() => null);
-      const shift = shiftRes?.shift;
+      const shift = res.shift;
       setAuth(res.token, shift?.id ? String(shift.id) : undefined, shift);
       router.replace("/");
     } catch (e) {
