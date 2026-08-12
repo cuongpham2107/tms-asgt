@@ -85,10 +85,10 @@ class DriverShiftsTable extends BaseTable
                         ->modalDescription('Xem thông tin chi tiết về ca lái xe, bao gồm lái xe, loại ca, thời gian bắt đầu và kết thúc, cũng như các chuyến đi liên quan.')
                         ->modalWidth(Width::SevenExtraLarge)
                         ->slideOver(),
-                    // EditAction::make()
-                    //     ->label('Sửa ca lái')
-                    //     ->modalWidth(Width::SevenExtraLarge)
-                    //     ->slideOver(),
+                    EditAction::make()
+                        ->label('Sửa ca lái')
+                        ->modalWidth(Width::SevenExtraLarge)
+                        ->slideOver(),
                     EndShiftAction::make(),
                     DeleteAction::make(),
                 ]),

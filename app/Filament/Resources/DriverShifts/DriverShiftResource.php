@@ -58,8 +58,8 @@ class DriverShiftResource extends BaseResource
     public static function getPages(): array
     {
         return [
-            'index' => CalendarDriverShifts::route('/'),
-            'table' => ListDriverShifts::route('/table'),
+            'index' => ListDriverShifts::route('/'),
+            'table' => CalendarDriverShifts::route('/table'),
             // 'create' => CreateDriverShift::route('/create'),
             // 'edit' => EditDriverShift::route('/{record}/edit'),
         ];

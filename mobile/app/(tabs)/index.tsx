@@ -242,6 +242,6 @@ const st = StyleSheet.create({
   loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   linkBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 4, padding: 16 },
   linkText: { color: "#4F46E5", fontWeight: "600", fontSize: 14 },
-  startShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4F46E5", paddingVertical: 14, borderRadius: 12, marginHorizontal: 16, marginTop: 12 },
+  startShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4F46E5", paddingVertical: 14, borderRadius: 12, marginHorizontal: 16, marginTop: 12, marginBottom: 12 },
   startShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });

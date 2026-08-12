@@ -70,7 +70,7 @@ enum TripStatus: string implements HasColor, HasLabel
             self::ArrivedDelivery => 'warning',
             self::Delivered => 'success',
             self::Completed => 'success',
-            self::DriverSwap => 'primary',
+            self::DriverSwap => 'danger',
             self::Cancelled => 'danger',
             self::ReturnTrip => 'warning',
         };
