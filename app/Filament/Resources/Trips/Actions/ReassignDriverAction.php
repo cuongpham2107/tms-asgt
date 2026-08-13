@@ -18,7 +18,9 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Support\RawJs;
 
 class ReassignDriverAction
 {
@@ -34,8 +36,9 @@ class ReassignDriverAction
             ->form([
                 Select::make('new_driver_id')
                     ->label('Tài xế mới')
-                    ->options(fn (): array => User::query()
+                    ->options(fn (Trip $record): array => User::query()
                         ->where('is_active', true)
+                        ->where('id', '!=', $record->driver_id)
                         ->with([
                             'vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng'),
                             'driverShifts' => fn ($q) => $q->whereNull('end_time'),
@@ -79,6 +82,13 @@ class ReassignDriverAction
                         ->all())
                     ->searchable()
                     ->required(),
+                TextInput::make('handover_km')
+                    ->label('Km chuyển giao')
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
+                    ->numeric()
+                    ->required()
+                    ->helperText('Nhập số km hiện tại của xe tại thời điểm chuyển giao'),
                 Select::make('reason')
                     ->label('Lý do')
                     ->options(DriverSwapReason::class)
@@ -159,6 +169,27 @@ class ReassignDriverAction
                     return;
                 }
 
+                if ($data['new_driver_id'] == $record->driver_id) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Không thể gán lại tài xế')
+                        ->body('Tài xế mới phải khác tài xế hiện tại của chuyến.')
+                        ->send();
+
+                    return;
+                }
+
+                $handoverKm = (float) $data['handover_km'];
+                if ($handoverKm <= 0) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Km chuyển giao không hợp lệ')
+                        ->body('Vui lòng nhập km chuyển giao lớn hơn 0.')
+                        ->send();
+
+                    return;
+                }
+
                 $oldShift = DriverShift::query()->where('driver_id', $oldDriver->id)
                     ->latest('start_time')
                     ->first();
@@ -173,9 +204,14 @@ class ReassignDriverAction
                     'to_driver_id' => $data['new_driver_id'],
                     'from_shift_id' => $oldShift?->id,
                     'to_shift_id' => $newShift?->id,
+                    'handover_km' => $handoverKm,
                     'reason' => $data['reason'],
                     'created_by' => auth()->id(),
                 ]);
+
+                if ($record->vehicle) {
+                    $record->vehicle->update(['current_mileage' => $handoverKm]);
+                }
 
                 $lastCheckpoint = TripCheckpoint::query()
                     ->where('trip_id', $record->id)
