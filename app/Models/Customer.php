@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -18,6 +18,7 @@ class Customer extends Model
         'phone',
         'email',
         'address',
+        'location_id',
         'contact_person',
         'is_active',
     ];
@@ -29,24 +30,14 @@ class Customer extends Model
         ];
     }
 
-    protected function address(): Attribute
-    {
-        return Attribute::set(function ($value) {
-            if (blank($value)) {
-                return $value;
-            }
-
-            if (! is_numeric($value)) {
-                return $value;
-            }
-
-            return Location::query()->find($value)?->address ?? $value;
-        });
-    }
-
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
     }
 
     public function locations(): BelongsToMany

@@ -19,7 +19,7 @@ class CancelOrderAction
             ->label('Huỷ đơn')
             ->icon('heroicon-o-x-circle')
             ->color('danger')
-            ->hidden(fn (Order $record): bool => ! $record->status->canCancel())
+            ->hidden(fn (Order $record): bool => $record->status !== OrderStatus::Draft)
             ->requiresConfirmation()
             ->modalHeading('Xác nhận huỷ chuyến')
             ->modalDescription('Bạn chắc chắn muốn huỷ chuyến hàng này không?')

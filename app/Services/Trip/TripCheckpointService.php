@@ -131,8 +131,8 @@ class TripCheckpointService
 
         throw ValidationException::withMessages([
             'checkpoint_type' => sprintf(
-                'Tài xế đang có chuyến #%s chưa hoàn thành (trạng thái: %s). Vui lòng hoàn tất chuyến hiện tại trước khi bắt đầu chuyến mới.',
-                $activeTrip->id,
+                'Tài xế đang có chuyến với xe biển số %s chưa hoàn thành (trạng thái: %s). Vui lòng hoàn tất chuyến hiện tại trước khi bắt đầu chuyến mới.',
+                $activeTrip->vehicle?->plate_number ?? ('#'.$activeTrip->id),
                 $activeTrip->status->label(),
             ),
         ]);
@@ -164,8 +164,8 @@ class TripCheckpointService
 
         throw ValidationException::withMessages([
             'checkpoint_type' => sprintf(
-                'Xe đang chạy chuyến #%s (trạng thái: %s). Vui lòng đợi chuyến hiện tại hoàn tất.',
-                $activeTrip->id,
+                'Xe biển số %s đang chạy chuyến (trạng thái: %s). Vui lòng đợi chuyến hiện tại hoàn tất.',
+                $activeTrip->vehicle?->plate_number ?? ('#'.$activeTrip->id),
                 $activeTrip->status->label(),
             ),
         ]);

@@ -25,14 +25,14 @@ class TripCheckpointRequest extends FormRequest
     {
         $type = $this->input('checkpoint_type');
 
-        $orderIdRules = ['nullable', Rule::exists('orders', 'id')->whereNull('deleted_at')];
+        $orderIdRules = ['nullable', Rule::exists('orders', 'id')];
         $deliveryPointIdRules = ['nullable', 'exists:order_delivery_points,id'];
 
         if (in_array($type, ['arrived_delivery', 'completed'], true)) {
             $trip = $this->route('trip');
             // Chỉ bắt buộc order_id nếu trip có orders (return trip không có)
             if ($trip instanceof Trip && $trip->orders()->exists()) {
-                $orderIdRules = ['required', Rule::exists('orders', 'id')->whereNull('deleted_at')];
+                $orderIdRules = ['required', Rule::exists('orders', 'id')];
             }
         }
 

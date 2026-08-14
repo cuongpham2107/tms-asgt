@@ -46,7 +46,7 @@ class TripController extends Controller
                 'startLocation',
                 'endLocation',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
+                'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',
@@ -84,7 +84,7 @@ class TripController extends Controller
                 'startLocation',
                 'endLocation',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
+                'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',
@@ -130,7 +130,7 @@ class TripController extends Controller
             'startLocation',
             'endLocation',
             'driverSwaps.toDriver',
-            'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
+            'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                 'customer',
                 'pickupLocation',
                 'deliveryPoints.location',
@@ -184,7 +184,7 @@ class TripController extends Controller
                 'shift',
                 'driver',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
+                'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',
@@ -315,7 +315,7 @@ class TripController extends Controller
 
         $trip->load([
             'vehicle',
-            'orders' => fn ($q) => $q->whereNull('deleted_at'),
+            'orders',
             'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
         ]);
 

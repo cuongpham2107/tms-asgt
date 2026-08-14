@@ -53,6 +53,10 @@ class TripsTable extends BaseTable
                     'orders.deliveryPoints.location',
                     'orders.area',
                 ])
+                ->where(fn (Builder $q) => $q
+                    ->whereDoesntHave('orders')
+                    ->orWhereHas('orders', fn (Builder $sub) => $sub->where('status', '!=', OrderStatus::Assigned->value))
+                )
             )
             ->columns([
                 TextColumn::make('vehicle.plate_number')

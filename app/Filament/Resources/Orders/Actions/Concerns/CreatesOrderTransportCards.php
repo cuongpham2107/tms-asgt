@@ -457,7 +457,6 @@ abstract class CreatesOrderTransportCards
         $prefix = 'ASG-';
 
         $latestOrderCode = Order::query()
-            ->withTrashed()
             ->where('order_code', 'like', $prefix.'%')
             ->orderByRaw('CAST(REPLACE(order_code, ?, \'\') AS INTEGER) DESC', [$prefix])
             ->value('order_code');

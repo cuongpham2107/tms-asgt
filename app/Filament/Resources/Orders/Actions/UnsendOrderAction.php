@@ -16,7 +16,7 @@ class UnsendOrderAction
             ->label('Thu hồi lệnh')
             ->icon('heroicon-o-arrow-uturn-left')
             ->color('warning')
-            ->hidden(fn (Order $record): bool => ! $record->status->canRecall())
+            ->hidden(fn (Order $record): bool => $record->status !== OrderStatus::Draft)
             ->requiresConfirmation()
             ->modalHeading('Xác nhận thu hồi lệnh')
             ->modalDescription('Bạn chắc chắn muốn thu hồi lệnh cho đơn hàng này không?')

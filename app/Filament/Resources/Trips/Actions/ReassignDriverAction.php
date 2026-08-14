@@ -88,7 +88,10 @@ class ReassignDriverAction
                     ->stripCharacters(',')
                     ->numeric()
                     ->required()
-                    ->helperText('Nhập số km hiện tại của xe tại thời điểm chuyển giao'),
+                    ->hidden()
+                    ->dehydratedWhenHidden()
+                    ->default(fn (Trip $record): ?float => $record->vehicle?->current_mileage !== null ? (float) $record->vehicle->current_mileage : null)
+                    ->helperText('Mặc định lấy km hiện tại của xe, có thể sửa lại nếu cần'),
                 Select::make('reason')
                     ->label('Lý do')
                     ->options(DriverSwapReason::class)

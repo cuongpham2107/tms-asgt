@@ -8,6 +8,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 
@@ -48,42 +49,27 @@ class CustomerForm
                             ->prefixIcon(Heroicon::OutlinedIdentification)
                             ->maxLength(255)
                             ->columnSpanFull(),
-                        Select::make('address')
-                            ->label('Địa chỉ đầy đủ')
+                        Select::make('location_id')
+                            ->label('Địa điểm')
                             ->prefixIcon(Heroicon::OutlinedMapPin)
                             ->options(fn (): array => Location::query()
-                                ->whereNotNull('address')
-                                ->where('address', '!=', '')
-                                ->get(['id', 'name', 'address'])
+                                ->orderBy('code')
+                                ->get(['id', 'code', 'name', 'address'])
                                 ->mapWithKeys(fn (Location $location): array => [
-                                    $location->id => "{$location->name} - {$location->address}",
+                                    $location->id => trim(implode(' - ', array_filter([
+                                        $location->code,
+                                        $location->name !== $location->code ? $location->name : null,
+                                        $location->address,
+                                    ])), ' -'),
                                 ])
                                 ->toArray()
                             )
                             ->searchable()
                             ->preload()
                             ->live()
-                            ->afterStateHydrated(function (Select $component, $state): void {
-                                if (blank($state)) {
-                                    return;
-                                }
-
-                                $location = Location::query()->where('address', $state)->first();
-                                if ($location !== null) {
-                                    $component->state($location->id);
-                                }
-                            })
-                            ->dehydrateStateUsing(function ($state) {
-                                if (blank($state)) {
-                                    return null;
-                                }
-
-                                if (is_numeric($state)) {
-                                    return Location::query()->find($state)?->address;
-                                }
-
-                                // $state might already be the address string
-                                return $state;
+                            ->afterStateUpdated(function ($state, Set $set): void {
+                                $location = $state ? Location::find($state) : null;
+                                $set('address', $location?->address);
                             })
                             ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents())
                             ->createOptionUsing(function (array $data): int {
@@ -91,6 +77,10 @@ class CustomerForm
 
                                 return $location->id;
                             })
+                            ->columnSpanFull(),
+                        TextInput::make('address')
+                            ->label('Địa chỉ đầy đủ')
+                            ->prefixIcon(Heroicon::OutlinedMapPin)
                             ->columnSpanFull(),
                         Toggle::make('is_active')
                             ->label('Trạng thái hoạt động')

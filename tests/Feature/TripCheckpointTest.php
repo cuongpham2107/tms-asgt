@@ -649,7 +649,8 @@ test('cannot auto-start trip via arrived_pickup when driver has active trip', fu
         'occurred_at' => now()->toIso8601String(),
     ])->assertStatus(422)
         ->assertJsonPath('errors.checkpoint_type.0', function ($msg) {
-            return str_contains($msg, 'Xe đang chạy chuyến');
+            return str_contains($msg, 'Xe biển số TEST-001')
+                && str_contains($msg, 'đang chạy chuyến');
         });
 
     // Chuyến mới vẫn pending
