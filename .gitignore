@@ -27,3 +27,5 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 database/database_backup_*
+.mimocode/
+.omo/

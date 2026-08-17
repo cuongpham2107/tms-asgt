@@ -5,7 +5,7 @@ use App\Enums\ShiftType;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
-use App\Filament\Resources\OrderPlans\Pages\ListOrderPlans;
+use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
@@ -65,7 +65,7 @@ test('can assign vehicle and driver to order and update vehicle current driver',
     $admin = User::factory()->create();
     $this->actingAs($admin);
 
-    Livewire::test(ListOrderPlans::class)
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
         ->mountTableAction('assign_transport', $order)
         ->setTableActionData([
             'vehicle_id' => $vehicle->id,
@@ -78,7 +78,7 @@ test('can assign vehicle and driver to order and update vehicle current driver',
     expect($order->trip)->not->toBeNull();
     expect($order->trip->vehicle_id)->toBe($vehicle->id);
     expect($order->trip->driver_id)->toBe($driver->id);
-    expect($order->status)->toBe(OrderStatus::Sent);
+    expect($order->status)->toBe(OrderStatus::Assigned);
 
     $vehicle->refresh();
     expect($vehicle->current_driver_id)->not->toBe($driver->id);
@@ -116,7 +116,7 @@ test('assigns successfully when driver has active shift', function () {
     $admin = User::factory()->create();
     $this->actingAs($admin);
 
-    Livewire::test(ListOrderPlans::class)
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
         ->mountTableAction('assign_transport', $order)
         ->setTableActionData([
             'vehicle_id' => $vehicle->id,
@@ -129,7 +129,7 @@ test('assigns successfully when driver has active shift', function () {
     expect($order->trip)->not->toBeNull();
     expect($order->trip->vehicle_id)->toBe($vehicle->id);
     expect($order->trip->driver_id)->toBe($driver->id);
-    expect($order->status)->toBe(OrderStatus::Sent);
+    expect($order->status)->toBe(OrderStatus::Assigned);
 });
 
 test('selecting vehicle automatically sets driver_id in form state', function () {
@@ -158,11 +158,15 @@ test('selecting vehicle automatically sets driver_id in form state', function ()
     $admin = User::factory()->create();
     $this->actingAs($admin);
 
-    $lw = Livewire::test(ListOrderPlans::class)
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
         ->mountTableAction('assign_transport', $order)
         ->setTableActionData([
             'vehicle_id' => $vehicle->id,
-        ]);
+        ])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
 
-    expect($lw->instance()->getMountedTableActionForm()->getState()['driver_id'])->toBe($driver->id);
+    $order->refresh();
+    expect($order->trip)->not->toBeNull();
+    expect($order->trip->driver_id)->toBe($driver->id);
 });

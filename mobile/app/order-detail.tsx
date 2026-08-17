@@ -96,7 +96,13 @@ export default function OrderDetailScreen() {
     const { token, shift } = useAuth();
     const { showLoading, hideLoading } = useLoading();
     const params = useLocalSearchParams<{ id: string; order: string }>();
-    const order = params.order ? JSON.parse(params.order) : null;
+    const order = useMemo(() => {
+        try {
+            return params.order ? JSON.parse(params.order) : null;
+        } catch {
+            return null;
+        }
+    }, [params.order]);
     const isSwapped = order?.is_swapped || false;
     const [km, setKm] = useState("");
     const [note, setNote] = useState("");
@@ -215,7 +221,10 @@ export default function OrderDetailScreen() {
     // Auto-select only DP for single-DP orders; reset on complete
     useEffect(() => {
         if (deliveryPoints.length === 1 && !selectedDpId) {
-            setSelectedDpId(deliveryPoints[0].id);
+            const onlyDp = deliveryPoints[0];
+            if (!dpStatusMap[onlyDp.id]?.completed) {
+                setSelectedDpId(onlyDp.id);
+            }
         }
         // If selected DP is now completed, auto-advance to next pending
         if (selectedDpId && dpStatusMap[selectedDpId]?.completed) {
@@ -225,7 +234,9 @@ export default function OrderDetailScreen() {
                     !dpStatusMap[dp.id]?.completed &&
                     dp.status !== "delivered",
             );
-            setSelectedDpId(next?.id || null);
+            if (next) {
+                setSelectedDpId(next.id);
+            }
         }
     }, [deliveryPoints, selectedDpId, dpStatusMap]);
     const activeDp = deliveryPoints.find((dp: any) => dp.id === activeDpId);

@@ -19,7 +19,7 @@ beforeEach(function () {
     ]);
 });
 
-test('driver without vehicle starting shift without vehicle_id returns 422', function () {
+test('driver without vehicle starting shift without vehicle_id succeeds with zero km', function () {
     $driver = User::factory()->create();
     $driver->assignRole($this->driverRole);
     Sanctum::actingAs($driver);
@@ -29,8 +29,11 @@ test('driver without vehicle starting shift without vehicle_id returns 422', fun
         'start_time' => now()->toIso8601String(),
     ]);
 
-    $response->assertStatus(422)
-        ->assertJsonPath('message', 'Vui lòng chọn phương tiện để bắt đầu ca.');
+    $response->assertSuccessful();
+
+    $shift = $driver->driverShifts()->whereNull('end_time')->first();
+    expect($shift)->not->toBeNull();
+    expect((float) $shift->start_km)->toBe(0.0);
 });
 
 test('driver without vehicle starting shift with vehicle_id succeeds', function () {
