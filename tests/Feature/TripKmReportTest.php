@@ -147,6 +147,7 @@ test('admin can resolve report via TripKmAdjustmentService and recalculate casca
     app(TripKmAdjustmentService::class)->resolveReport(
         $report,
         100085.0,
+        null,
         'Đã đối soát ảnh taplo và chấp nhận sửa về 100.085',
         $this->admin->id
     );
@@ -190,4 +191,40 @@ test('admin can reject report via TripKmAdjustmentService', function () {
     expect($report->status)->toBe(TripKmReportStatus::Rejected)
         ->and($report->resolved_by)->toBe($this->admin->id)
         ->and($report->admin_note)->toBe('Ảnh taplo mờ không rõ số, từ chối');
+});
+
+test('admin can resolve report with specific targetCheckpointId', function () {
+    $cp2 = TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'km_reading' => 108050,
+        'occurred_at' => now()->addHour(),
+    ]);
+
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'checkpoint_id' => $cp2->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 100150,
+        'system_km' => 108050,
+        'note' => 'Nhầm ở bước kết thúc',
+        'status' => 'pending',
+    ]);
+
+    app(TripKmAdjustmentService::class)->resolveReport(
+        $report,
+        100150.0,
+        $cp2->id,
+        'Sửa mốc kết thúc',
+        $this->admin->id
+    );
+
+    $cp2->refresh();
+    expect((float) $cp2->km_reading)->toBe(100150.0);
+    $firstCp = $this->trip->checkpoints()->first();
+    // First checkpoint was NOT touched
+    expect((float) $firstCp->km_reading)->toBe(108000.0);
 });

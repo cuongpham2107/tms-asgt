@@ -23,6 +23,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -315,12 +316,42 @@ class TripsTable extends BaseTable
                             HTML);
                         })
                         ->form([
+                            Select::make('target_checkpoint_id')
+                                ->label('Mốc hành trình điều chỉnh')
+                                ->options(function (?Trip $record) {
+                                    if ($record === null) {
+                                        return [];
+                                    }
+
+                                    return $record->checkpoints()
+                                        ->with('driver')
+                                        ->orderByDesc('occurred_at')
+                                        ->orderByDesc('id')
+                                        ->get()
+                                        ->mapWithKeys(function ($cp) {
+                                            $typeLabel = $cp->checkpoint_type?->getLabel() ?? $cp->checkpoint_type->value;
+                                            $driverName = $cp->driver?->name ?? '—';
+                                            $kmStr = $cp->km_reading !== null ? number_format((float) $cp->km_reading, 1, ',', '.').' km' : 'chưa có km';
+                                            $timeStr = $cp->occurred_at ? $cp->occurred_at->format('H:i d/m') : '';
+
+                                            return [$cp->id => "[{$timeStr}] {$typeLabel} ({$kmStr}) — TX: {$driverName}"];
+                                        })
+                                        ->toArray();
+                                })
+                                ->default(function (?Trip $record) {
+                                    return $record?->latestPendingKmReport?->checkpoint_id
+                                        ?? $record?->checkpoints()->orderByDesc('occurred_at')->orderByDesc('id')->first()?->id;
+                                })
+                                ->required()
+                                ->helperText('Chọn đúng mốc hành trình có số km cần sửa.'),
+
                             TextInput::make('corrected_km')
                                 ->label('Số km điều chỉnh')
                                 ->numeric()
                                 ->required()
                                 ->default(fn (?Trip $record) => $record?->latestPendingKmReport?->reported_km)
                                 ->helperText('Nhập số km thực tế (mặc định lấy số lái xe báo).'),
+
                             Textarea::make('admin_note')
                                 ->label('Ghi chú xử lý')
                                 ->rows(2),
@@ -334,6 +365,7 @@ class TripsTable extends BaseTable
                             app(TripKmAdjustmentService::class)->resolveReport(
                                 $report,
                                 (float) $data['corrected_km'],
+                                isset($data['target_checkpoint_id']) ? (int) $data['target_checkpoint_id'] : null,
                                 $data['admin_note'] ?? null,
                                 auth()->id(),
                             );

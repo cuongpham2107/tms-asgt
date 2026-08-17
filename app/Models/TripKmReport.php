@@ -10,6 +10,7 @@ class TripKmReport extends Model
 {
     protected $fillable = [
         'trip_id',
+        'checkpoint_id',
         'driver_id',
         'vehicle_id',
         'reported_km',
@@ -35,6 +36,11 @@ class TripKmReport extends Model
     public function trip(): BelongsTo
     {
         return $this->belongsTo(Trip::class);
+    }
+
+    public function checkpoint(): BelongsTo
+    {
+        return $this->belongsTo(TripCheckpoint::class, 'checkpoint_id');
     }
 
     public function driver(): BelongsTo

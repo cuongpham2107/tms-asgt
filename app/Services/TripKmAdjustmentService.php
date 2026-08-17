@@ -11,35 +11,68 @@ use App\Models\TripKmReport;
 class TripKmAdjustmentService
 {
     /**
-     * Xử lý báo cáo sai km: điều chỉnh checkpoint/trip và tính lại toàn bộ chuỗi.
+     * Xử lý báo cáo sai km: điều chỉnh checkpoint chỉ định/gắn liền và tính lại toàn bộ chuỗi.
      *
      * @param  float  $correctedKm  Số km thực tế được admin xác nhận
+     * @param  int|null  $targetCheckpointId  Checkpoint cụ thể được chọn điều chỉnh
      */
-    public function resolveReport(TripKmReport $report, float $correctedKm, ?string $adminNote, int $adminId): void
-    {
+    public function resolveReport(
+        TripKmReport $report,
+        float $correctedKm,
+        ?int $targetCheckpointId = null,
+        ?string $adminNote = null,
+        ?int $adminId = null
+    ): void {
         $trip = $report->trip;
-        $systemKm = (float) ($report->system_km ?? 0);
-        $delta = $correctedKm - $systemKm;
 
-        // 1. Tìm và điều chỉnh checkpoint có km_reading gần nhất với system_km
-        $this->adjustCheckpoints($trip, $systemKm, $correctedKm);
+        // 1. Xác định checkpoint mục tiêu (từ Admin chọn, hoặc lưu sẵn trong report, hoặc mới nhất)
+        $targetCp = null;
+        if ($targetCheckpointId) {
+            $targetCp = TripCheckpoint::where('trip_id', $trip->id)->find($targetCheckpointId);
+        }
+        if (! $targetCp && $report->checkpoint_id) {
+            $targetCp = $report->checkpoint;
+        }
+        if (! $targetCp) {
+            $targetCp = TripCheckpoint::where('trip_id', $trip->id)
+                ->whereNotNull('km_reading')
+                ->orderByDesc('occurred_at')
+                ->orderByDesc('id')
+                ->first();
+        }
 
-        // 2. Cập nhật start_km / end_km của trip nếu cần
-        $this->adjustTripBoundary($trip, $systemKm, $correctedKm);
+        if ($targetCp) {
+            $oldKm = (float) $targetCp->km_reading;
 
-        // 3. Tính lại km chuyến
+            // Cập nhật checkpoint mục tiêu
+            $targetCp->update(['km_reading' => $correctedKm]);
+
+            // Cập nhật các checkpoint đồng hành cùng mốc thời gian và cùng số km cũ
+            TripCheckpoint::where('trip_id', $trip->id)
+                ->where('id', '!=', $targetCp->id)
+                ->whereNotNull('km_reading')
+                ->where('km_reading', $oldKm)
+                ->where('occurred_at', $targetCp->occurred_at)
+                ->update(['km_reading' => $correctedKm]);
+
+            // Cập nhật start_km / end_km của trip nếu checkpoint nằm ở mốc biên
+            $this->syncTripBoundary($trip, $targetCp, $correctedKm);
+        }
+
+        // 2. Tính lại km chuyến
         app(TripKmCalculatorService::class)->calculate($trip);
         $trip->refresh();
 
-        // 4. Tính lại tất cả ca liên quan
+        // 3. Tính lại tất cả ca liên quan
         $this->recalculateAllShifts($trip);
 
-        // 5. Đồng bộ vehicle.current_mileage an toàn
+        // 4. Đồng bộ vehicle.current_mileage an toàn
         $this->syncVehicleMileage($trip);
 
-        // 6. Đánh dấu report đã xử lý
+        // 5. Đánh dấu report đã xử lý
         $report->update([
             'status' => TripKmReportStatus::Resolved,
+            'checkpoint_id' => $targetCp?->id ?? $report->checkpoint_id,
             'admin_note' => $adminNote,
             'resolved_by' => $adminId,
             'resolved_at' => now(),
@@ -49,7 +82,7 @@ class TripKmAdjustmentService
     /**
      * Từ chối báo cáo sai km.
      */
-    public function rejectReport(TripKmReport $report, ?string $adminNote, int $adminId): void
+    public function rejectReport(TripKmReport $report, ?string $adminNote, ?int $adminId = null): void
     {
         $report->update([
             'status' => TripKmReportStatus::Rejected,
@@ -60,40 +93,30 @@ class TripKmAdjustmentService
     }
 
     /**
-     * Điều chỉnh checkpoint có km_reading khớp với system_km.
+     * Cập nhật start_km / end_km của trip tương ứng với checkpoint được chỉnh sửa.
      */
-    private function adjustCheckpoints(Trip $trip, float $systemKm, float $correctedKm): void
+    private function syncTripBoundary(Trip $trip, TripCheckpoint $checkpoint, float $correctedKm): void
     {
-        if ($systemKm <= 0) {
-            return;
-        }
-
-        // Tìm checkpoint gần nhất với system_km (tolerance ±0.5)
-        $checkpoint = TripCheckpoint::where('trip_id', $trip->id)
+        $firstCp = TripCheckpoint::where('trip_id', $trip->id)
             ->whereNotNull('km_reading')
-            ->orderByRaw('ABS(km_reading - ?) ASC', [$systemKm])
+            ->orderBy('occurred_at')
+            ->orderBy('id')
             ->first();
 
-        if ($checkpoint !== null && abs((float) $checkpoint->km_reading - $systemKm) < 1.0) {
-            $checkpoint->update(['km_reading' => $correctedKm]);
-        }
-    }
-
-    /**
-     * Cập nhật start_km / end_km nếu mốc bị sửa là mốc đầu/cuối.
-     */
-    private function adjustTripBoundary(Trip $trip, float $systemKm, float $correctedKm): void
-    {
-        if ($systemKm <= 0) {
-            return;
-        }
-
-        if (abs((float) $trip->start_km - $systemKm) < 1.0) {
+        if ($firstCp && $firstCp->id === $checkpoint->id) {
             $trip->update(['start_km' => $correctedKm]);
         }
 
-        if ($trip->end_km !== null && abs((float) $trip->end_km - $systemKm) < 1.0) {
-            $trip->update(['end_km' => $correctedKm]);
+        $lastCp = TripCheckpoint::where('trip_id', $trip->id)
+            ->whereNotNull('km_reading')
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($lastCp && $lastCp->id === $checkpoint->id) {
+            if ($trip->end_km !== null) {
+                $trip->update(['end_km' => $correctedKm]);
+            }
         }
     }
 
@@ -117,7 +140,7 @@ class TripKmAdjustmentService
     }
 
     /**
-     * Đồng bộ vehicle.current_mileage = max km của tất cả checkpoint gần nhất.
+     * Đồng bộ vehicle.current_mileage = max km an toàn từ các trip/checkpoints.
      */
     private function syncVehicleMileage(Trip $trip): void
     {
@@ -126,12 +149,10 @@ class TripKmAdjustmentService
             return;
         }
 
-        // Lấy end_km cao nhất từ các trip đã xong của xe
         $maxTripEndKm = Trip::where('vehicle_id', $vehicle->id)
             ->whereNotNull('end_km')
             ->max('end_km');
 
-        // Lấy max km_reading từ tất cả checkpoints của xe (qua trips)
         $maxCheckpointKm = TripCheckpoint::whereHas('trip', fn ($q) => $q->where('vehicle_id', $vehicle->id))
             ->whereNotNull('km_reading')
             ->max('km_reading');

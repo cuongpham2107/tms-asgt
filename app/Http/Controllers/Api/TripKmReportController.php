@@ -34,10 +34,22 @@ class TripKmReportController extends Controller
             $photoPath = $request->file('photo')->store('km_reports', 'public');
         }
 
+        $checkpointId = $request->validated('checkpoint_id');
+        if (! $checkpointId) {
+            $latestCp = $trip->checkpoints()
+                ->where('driver_id', $user->id)
+                ->orderByDesc('occurred_at')
+                ->orderByDesc('id')
+                ->first()
+                ?? $trip->checkpoints()->orderByDesc('occurred_at')->orderByDesc('id')->first();
+            $checkpointId = $latestCp?->id;
+        }
+
         $systemKm = $trip->vehicle?->current_mileage;
 
         $report = TripKmReport::create([
             'trip_id' => $trip->id,
+            'checkpoint_id' => $checkpointId,
             'driver_id' => $user->id,
             'vehicle_id' => $trip->vehicle_id,
             'reported_km' => $request->validated('reported_km'),

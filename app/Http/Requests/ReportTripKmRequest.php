@@ -20,6 +20,7 @@ class ReportTripKmRequest extends FormRequest
     {
         return [
             'reported_km' => ['required', 'numeric', 'min:0'],
+            'checkpoint_id' => ['nullable', 'integer', 'exists:trip_checkpoints,id'],
             'photo' => ['nullable', 'image', 'max:10240'],
             'note' => ['nullable', 'string', 'max:500'],
         ];
