@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\ShiftStatusController;
 use App\Http\Controllers\Api\TripCheckpointController;
 use App\Http\Controllers\Api\TripController;
+use App\Http\Controllers\Api\TripKmReportController;
 use App\Http\Controllers\Api\VehicleSearchController;
 use App\Http\Middleware\EnsureRoleVehicle;
 use Illuminate\Support\Facades\Route;
@@ -52,6 +53,7 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::get('/trips/{trip}', [TripController::class, 'show']);
     Route::post('/trips/{trip}/checkpoints', [TripCheckpointController::class, 'checkpoint']);
     Route::post('/trips/{trip}/complete', [TripController::class, 'complete']);
+    Route::post('/trips/{trip}/report-km-issue', [TripKmReportController::class, 'store']);
 
     // Locations (danh sách địa điểm có search và limit)
     Route::get('/locations', [LocationController::class, 'index']);

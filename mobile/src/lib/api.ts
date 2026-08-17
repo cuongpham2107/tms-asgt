@@ -92,6 +92,23 @@ export const api = {
       }
       return fetchApi<any>(`/trips/${tripId}/checkpoints`, t, { method: "POST", body: JSON.stringify(body) });
     },
+    reportKmIssue: async (tripId: string, body: { reported_km: number; note?: string; photo?: string }, t: string) => {
+      if (body.photo) {
+        const fd = new FormData();
+        const res = await fetch(body.photo);
+        const blob = await res.blob();
+        fd.append("photo", blob, "km_report.jpg");
+        fd.append("reported_km", String(body.reported_km));
+        if (body.note) {
+          fd.append("note", body.note);
+        }
+        return fetchApi<any>(`/trips/${tripId}/report-km-issue`, t, { method: "POST", body: fd });
+      }
+      return fetchApi<any>(`/trips/${tripId}/report-km-issue`, t, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    },
   },
 
   // Orders

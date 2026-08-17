@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Trips\Pages;
 
+use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Filament\Forms\Components\OrderDateRangePicker;
 use App\Filament\Forms\Components\PillFilter;
@@ -58,7 +59,7 @@ class ListTrips extends ListRecords
         'arrived_delivery' => ['label' => 'Đến giao hàng', 'color' => 'bg-amber-500'],
         'delivered' => ['label' => 'Đã giao', 'color' => 'bg-teal-500'],
         'completed' => ['label' => 'Hoàn thành', 'color' => 'bg-emerald-500'],
-        'return_trip' => ['label' => 'Chuyến quay đầu', 'color' => 'bg-violet-500'],
+        'return_trip' => ['label' => 'Chuyến không hàng', 'color' => 'bg-violet-500'],
         'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
         'cancelled' => ['label' => 'Đã huỷ', 'color' => 'bg-red-500'],
     ];
@@ -157,6 +158,10 @@ class ListTrips extends ListRecords
     private function applyActiveFilters(Builder $query, string $except = ''): Builder
     {
         return $query
+            ->where(fn (Builder $q) => $q
+                ->whereDoesntHave('orders')
+                ->orWhereHas('orders', fn (Builder $sub) => $sub->where('status', '!=', OrderStatus::Assigned->value))
+            )
             ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
                 if (filled($this->dateFrom) && filled($this->dateTo)) {
                     return $query->whereBetween('started_at', [
@@ -237,7 +242,8 @@ class ListTrips extends ListRecords
             TripStatus::Delivered->value => 5,
             TripStatus::DriverSwap->value => 6,
             TripStatus::ReturnTrip->value => 7,
-            TripStatus::Cancelled->value => 8,
+            TripStatus::Completed->value => 8,
+            TripStatus::Cancelled->value => 9,
         ];
 
         $caseSql = 'CASE trips.status '

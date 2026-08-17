@@ -26,6 +26,18 @@ class TripKmCalculatorService
             }
         }
 
+        if ($endKmValue <= 0) {
+            $lastCheckpoint = TripCheckpoint::where('trip_id', $trip->id)
+                ->whereNotNull('km_reading')
+                ->orderByDesc('occurred_at')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($lastCheckpoint !== null && (float) $lastCheckpoint->km_reading > 0) {
+                $endKmValue = (float) $lastCheckpoint->km_reading;
+            }
+        }
+
         if ($startKm <= 0 || $endKmValue <= 0) {
             return;
         }
@@ -108,7 +120,9 @@ class TripKmCalculatorService
         $trip->total_km = $totalKm;
         $trip->total_km_loaded = $totalLoadedKm;
         $trip->total_km_empty = max(0, $totalKm - $totalLoadedKm);
-        $trip->end_km = $endKm ?? $trip->end_km;
+        if ($endKm !== null) {
+            $trip->end_km = $endKm;
+        }
         $trip->save();
     }
 }

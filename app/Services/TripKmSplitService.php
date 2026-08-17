@@ -27,12 +27,7 @@ class TripKmSplitService
 
         $startKm = (float) ($trip->start_km ?? 0);
 
-        $endKm = (float) ($trip->end_km ?? 0);
-        $lastCheckpointKm = TripCheckpoint::where('trip_id', $trip->id)
-            ->whereNotNull('km_reading')
-            ->orderByDesc('occurred_at')
-            ->value('km_reading');
-        $tripEndKm = $endKm > 0 ? $endKm : (float) ($lastCheckpointKm ?? $startKm);
+        $tripEndKm = self::effectiveEndKm($trip, $startKm);
 
         // Ca/tài xế nắm chuyến lúc bắt đầu: của checkpoint đầu tiên
         $firstCheckpoint = TripCheckpoint::where('trip_id', $trip->id)
@@ -89,12 +84,8 @@ class TripKmSplitService
     public static function loadedRanges(Trip $trip): array
     {
         $startKm = (float) ($trip->start_km ?? 0);
-        $endKm = (float) ($trip->end_km ?? 0);
-        $lastCheckpointKm = TripCheckpoint::where('trip_id', $trip->id)
-            ->whereNotNull('km_reading')
-            ->orderByDesc('occurred_at')
-            ->value('km_reading');
-        $tripEndKm = $endKm > 0 ? $endKm : (float) ($lastCheckpointKm ?? $startKm);
+
+        $tripEndKm = self::effectiveEndKm($trip, $startKm);
 
         $events = TripCheckpoint::where('trip_id', $trip->id)
             ->whereIn('checkpoint_type', ['arrived_pickup', 'completed'])
@@ -148,5 +139,21 @@ class TripKmSplitService
         }
 
         return $ranges;
+    }
+
+    /**
+     * Km kết thúc hiệu dụng của chuyến. Lấy giá trị lớn nhất giữa end_km và
+     * km_reading của checkpoint cuối để end_km lỗi thời (chưa gửi checkpoint
+     * 'end') không làm mất km của tài xế cuối.
+     */
+    private static function effectiveEndKm(Trip $trip, float $startKm): float
+    {
+        $endKm = (float) ($trip->end_km ?? 0);
+        $lastCheckpointKm = (float) (TripCheckpoint::where('trip_id', $trip->id)
+            ->whereNotNull('km_reading')
+            ->orderByDesc('occurred_at')
+            ->value('km_reading') ?? 0);
+
+        return max($startKm, $endKm, $lastCheckpointKm);
     }
 }

@@ -606,8 +606,8 @@ test('cannot start new trip when driver has active trip', function () {
         'occurred_at' => now()->toIso8601String(),
     ])->assertStatus(422)
         ->assertJsonPath('errors.checkpoint_type.0', function ($msg) {
-            return str_contains($msg, 'Tài xế đang có chuyến')
-                && str_contains($msg, 'chưa hoàn thành');
+            return str_contains($msg, 'chưa hoàn thiện chuyến')
+                && str_contains($msg, 'bắt đầu chuyến mới');
         });
 
     // Chuyến mới vẫn pending

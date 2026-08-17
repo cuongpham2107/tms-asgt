@@ -92,7 +92,7 @@ class ListVehicles extends ListRecords
 
         $this->placeVehicleCurrent = Area::query()
             ->orderBy('sort_order')
-            ->pluck('name', 'code')
+            ->pluck('code', 'code')
             ->toArray();
     }
 

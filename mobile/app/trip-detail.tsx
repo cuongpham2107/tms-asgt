@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput, Modal, KeyboardAvoidingView, Platform, Image } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
@@ -7,6 +7,7 @@ import { api } from "../src/lib/api";
 import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 
 const statusConfig: Record<string, { icon: string; bg: string; text: string; label: string }> = {
   pending: { icon: "time-outline", bg: "#F3F4F6", text: "#6B7280", label: "Chờ" },
@@ -43,10 +44,81 @@ export default function TripDetailScreen() {
   const [startKmInput, setStartKmInput] = useState("");
   const [returnStarted, setReturnStarted] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportKm, setReportKm] = useState("");
+  const [reportNote, setReportNote] = useState("");
+  const [reportPhoto, setReportPhoto] = useState<string | null>(null);
+  const [submittingReport, setSubmittingReport] = useState(false);
   const userId = shift?.driver?.id;
 
   // Format: bỏ .0, hiển thị số nguyên
   const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
+
+  const handlePickReportPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      showAlert("Quyền truy cập", "Cần cấp quyền truy cập thư viện ảnh");
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!res.canceled && res.assets?.[0]?.uri) {
+      setReportPhoto(res.assets[0].uri);
+    }
+  };
+
+  const handleTakeReportPhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      showAlert("Quyền truy cập", "Cần cấp quyền chụp ảnh");
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!res.canceled && res.assets?.[0]?.uri) {
+      setReportPhoto(res.assets[0].uri);
+    }
+  };
+
+  const handleSubmitReport = async () => {
+    const km = parseFloat(reportKm);
+    if (!km || km < 0) {
+      showAlert("Thiếu thông tin", "Vui lòng nhập số km thực tế trên taplo");
+      return;
+    }
+    const tripId = trip?.id || params.id;
+    if (!tripId || !token) return;
+
+    setSubmittingReport(true);
+    showLoading();
+    try {
+      await api.trips.reportKmIssue(
+        String(tripId),
+        {
+          reported_km: km,
+          note: reportNote || undefined,
+          photo: reportPhoto || undefined,
+        },
+        token
+      );
+      showAlert("Đã gửi báo cáo", "Điều hành sẽ kiểm tra và cập nhật lại số km cho bạn.");
+      setShowReportModal(false);
+      setReportKm("");
+      setReportNote("");
+      setReportPhoto(null);
+      await load();
+    } catch (e: any) {
+      showAlert("Lỗi gửi báo cáo", e.message);
+    } finally {
+      setSubmittingReport(false);
+      hideLoading();
+    }
+  };
 
   const getGps = async () => {
     try {
@@ -256,6 +328,20 @@ export default function TripDetailScreen() {
           </View>
         )}
 
+        {/* Nút báo sai lệch số Km */}
+        {!isSwapped && !!shift && (
+          <TouchableOpacity
+            style={s.reportKmBtn}
+            onPress={() => {
+              setReportKm(vehicleKm != null ? String(Math.round(vehicleKm)) : "");
+              setShowReportModal(true);
+            }}
+          >
+            <Ionicons name="warning-outline" size={15} color="#D97706" />
+            <Text style={s.reportKmBtnText}>Báo sai lệch Km đồng hồ</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Thời gian */}
         {detail?.started_at && (
           <View style={s.timeCard}>
@@ -396,7 +482,69 @@ export default function TripDetailScreen() {
           )}
         </View>
       )}
-      {/* Modal kết thúc chuyến */}
+      {/* Modal Báo sai lệch số Km */}
+      <Modal visible={showReportModal} transparent animationType="fade" onRequestClose={() => setShowReportModal(false)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalCard, { maxWidth: 380 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Ionicons name="warning" size={22} color="#D97706" />
+              <Text style={[s.modalTitle, { marginBottom: 0, textAlign: "left", flex: 1 }]}>Báo sai lệch số Km</Text>
+            </View>
+
+            <Text style={s.modalSectionLabel}>Số Km thực tế trên Taplo xe *</Text>
+            <TextInput
+              style={[s.modalKmInput, { marginBottom: 12 }]}
+              value={reportKm}
+              onChangeText={setReportKm}
+              placeholder="VD: 100085"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+            />
+
+            <Text style={s.modalSectionLabel}>Ảnh chụp đồng hồ Taplo xe</Text>
+            {reportPhoto ? (
+              <View style={{ marginBottom: 12, alignItems: "center" }}>
+                <Image source={{ uri: reportPhoto }} style={{ width: "100%", height: 140, borderRadius: 10 }} resizeMode="cover" />
+                <TouchableOpacity onPress={() => setReportPhoto(null)} style={{ marginTop: 6 }}>
+                  <Text style={{ color: "#DC2626", fontSize: 13, fontWeight: "600" }}>Xoá ảnh</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                <TouchableOpacity style={s.photoPickerBtn} onPress={handleTakeReportPhoto}>
+                  <Ionicons name="camera" size={18} color="#4F46E5" />
+                  <Text style={s.photoPickerBtnText}>Chụp ảnh</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.photoPickerBtn} onPress={handlePickReportPhoto}>
+                  <Ionicons name="images" size={18} color="#4F46E5" />
+                  <Text style={s.photoPickerBtnText}>Thư viện</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <Text style={s.modalSectionLabel}>Ghi chú thêm</Text>
+            <TextInput
+              style={[s.stickyInput, { marginBottom: 16, height: 60 }]}
+              value={reportNote}
+              onChangeText={setReportNote}
+              placeholder="Lý do sai lệch, xe trước bàn giao sai..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+            />
+
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity style={[s.modalBtn, { backgroundColor: "#F3F4F6" }]} onPress={() => setShowReportModal(false)}>
+                <Text style={[s.modalBtnText, { color: "#6B7280" }]}>Huỷ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.modalBtn, { backgroundColor: "#D97706" }]} onPress={handleSubmitReport} disabled={submittingReport}>
+                <Text style={[s.modalBtnText, { color: "#fff" }]}>{submittingReport ? "Đang gửi..." : "Gửi báo cáo"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Complete Modal */}
       <Modal visible={showCompleteModal} animationType="fade" transparent onRequestClose={() => setShowCompleteModal(false)}>
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
@@ -509,4 +657,10 @@ const s = StyleSheet.create({
   modalKmInput: { backgroundColor: "#F9FAFB", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", fontSize: 20, fontWeight: "700", color: "#111827", textAlign: "center" },
   modalBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   modalBtnText: { fontSize: 15, fontWeight: "700" },
+  warnBox: { backgroundColor: "#FFFBEB", padding: 10, borderRadius: 8, marginTop: 8, borderWidth: 1, borderColor: "#FDE68A" },
+  warnText: { color: "#92400E", fontSize: 12, fontWeight: "600", textAlign: "center" },
+  reportKmBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginHorizontal: 16, marginBottom: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#FFFBEB", borderRadius: 10, borderWidth: 1, borderColor: "#FDE68A" },
+  reportKmBtnText: { fontSize: 12, fontWeight: "700", color: "#B45309" },
+  photoPickerBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, backgroundColor: "#EEF2FF", borderRadius: 10, borderWidth: 1, borderColor: "#C7D2FE" },
+  photoPickerBtnText: { fontSize: 13, fontWeight: "600", color: "#4F46E5" },
 });

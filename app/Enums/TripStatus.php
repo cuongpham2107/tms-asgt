@@ -30,7 +30,7 @@ enum TripStatus: string implements HasColor, HasLabel
             self::Completed => 'Hoàn thành',
             self::DriverSwap => 'Đảo lái',
             self::Cancelled => 'Đã huỷ',
-            self::ReturnTrip => 'Chuyến quay đầu',
+            self::ReturnTrip => 'Chuyến không hàng',
         };
     }
 
@@ -71,7 +71,7 @@ enum TripStatus: string implements HasColor, HasLabel
             self::Delivered => 'success',
             self::Completed => 'success',
             self::DriverSwap => 'danger',
-            self::Cancelled => 'danger',
+            self::Cancelled => 'gray',
             self::ReturnTrip => 'warning',
         };
     }

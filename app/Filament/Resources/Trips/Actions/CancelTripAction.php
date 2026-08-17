@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Trips\Actions;
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
+use App\Enums\VehicleStatus;
 use App\Models\Trip;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\TripKmCalculatorService;
@@ -85,9 +86,10 @@ class CancelTripAction
                         $record->cancelled_at = now();
                         $record->save();
 
-                        // Cập nhật km xe
+                        // Cập nhật km xe và đưa xe về trạng thái sẵn sàng
                         if ($record->vehicle) {
                             $record->vehicle->current_mileage = $kmReading;
+                            $record->vehicle->status = VehicleStatus::On;
                             $record->vehicle->save();
                         }
 

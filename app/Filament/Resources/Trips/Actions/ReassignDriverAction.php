@@ -38,7 +38,7 @@ class ReassignDriverAction
                     ->label('Tài xế mới')
                     ->options(fn (Trip $record): array => User::query()
                         ->where('is_active', true)
-                        ->where('id', '!=', $record->driver_id)
+                        // ->where('id', '!=', $record->driver_id)
                         ->with([
                             'vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng'),
                             'driverShifts' => fn ($q) => $q->whereNull('end_time'),
@@ -99,6 +99,7 @@ class ReassignDriverAction
                 Checkbox::make('create_return_trip')
                     ->label('Tạo chuyến không hàng (quay đầu)')
                     ->helperText('Tạo chuyến đi rỗng cho tài xế mới để nhập km')
+                    ->hidden()
                     ->live(),
                 Select::make('return_vehicle_id')
                     ->label('Xe cho chuyến quay đầu')
@@ -172,15 +173,15 @@ class ReassignDriverAction
                     return;
                 }
 
-                if ($data['new_driver_id'] == $record->driver_id) {
-                    Notification::make()
-                        ->danger()
-                        ->title('Không thể gán lại tài xế')
-                        ->body('Tài xế mới phải khác tài xế hiện tại của chuyến.')
-                        ->send();
+                // if ($data['new_driver_id'] == $record->driver_id) {
+                //     Notification::make()
+                //         ->danger()
+                //         ->title('Không thể gán lại tài xế')
+                //         ->body('Tài xế mới phải khác tài xế hiện tại của chuyến.')
+                //         ->send();
 
-                    return;
-                }
+                //     return;
+                // }
 
                 $handoverKm = (float) $data['handover_km'];
                 if ($handoverKm <= 0) {

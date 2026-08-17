@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 /** @use HasFactory<TripFactory> */
@@ -112,6 +113,16 @@ class Trip extends Model
     public function driverSwapCheckpoints(): HasMany
     {
         return $this->hasMany(TripCheckpoint::class)->where('checkpoint_type', 'driver_swap');
+    }
+
+    public function kmReports(): HasMany
+    {
+        return $this->hasMany(TripKmReport::class);
+    }
+
+    public function latestPendingKmReport(): HasOne
+    {
+        return $this->hasOne(TripKmReport::class)->where('status', 'pending')->latestOfMany();
     }
 
     public function getStatusLabel(): string

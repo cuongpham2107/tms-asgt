@@ -15,6 +15,7 @@ use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Services\ShiftKmCalculatorService;
+use App\Services\TripKmAdjustmentService;
 use App\Services\TripKmCalculatorService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
@@ -22,6 +23,8 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
@@ -32,6 +35,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 
 class TripsTable extends BaseTable
@@ -52,6 +56,7 @@ class TripsTable extends BaseTable
                     'orders.pickupLocation',
                     'orders.deliveryPoints.location',
                     'orders.area',
+                    'latestPendingKmReport',
                 ])
                 ->where(fn (Builder $q) => $q
                     ->whereDoesntHave('orders')
@@ -110,7 +115,17 @@ class TripsTable extends BaseTable
                 TextColumn::make('km')
                     ->label('KM')
                     ->state(fn (Trip $record): string => self::getKmDisplay($record)),
-
+                TextColumn::make('km_report_status')
+                    ->label('Báo sai Km')
+                    ->badge()
+                    ->color(fn (?Trip $record): ?string => $record?->latestPendingKmReport ? 'warning' : null)
+                    ->icon(fn (?Trip $record): ?string => $record?->latestPendingKmReport ? 'heroicon-o-exclamation-triangle' : null)
+                    ->placeholder('—')
+                    ->state(fn (?Trip $record): ?string => $record?->latestPendingKmReport
+                        ? number_format((float) $record->latestPendingKmReport->reported_km, 1, ',', '.').' km'
+                        : null
+                    )
+                    ->toggleable(),
                 TextColumn::make('gps_speed')
                     ->label('Tốc độ')
                     ->state(fn (Trip $record): string => $record->vehicle?->gps_speed !== null
@@ -236,6 +251,129 @@ class TripsTable extends BaseTable
                         ->action(function (Trip $record) {
                             self::recalculateKm($record);
                             Notification::make()->success()->title('Đã tính lại km')->send();
+                        }),
+
+                    Action::make('resolve_km_report')
+                        ->label('Xử lý báo sai Km')
+                        ->icon('heroicon-o-exclamation-triangle')
+                        ->color('warning')
+                        ->visible(fn (?Trip $record): bool => $record?->latestPendingKmReport !== null)
+                        ->modal()
+                        ->modalWidth(Width::ExtraLarge)
+                        ->modalHeading(fn (?Trip $record): string => 'Xử lý báo sai Km — '.($record?->trip_code ?? ''))
+                        ->modalContent(function (Trip $record): HtmlString {
+                            $report = $record->latestPendingKmReport;
+                            if ($report === null) {
+                                return new HtmlString('<p>Không có báo cáo nào.</p>');
+                            }
+
+                            $photoHtml = '';
+                            if ($report->photo_path) {
+                                $photoUrl = Storage::disk('public')->url($report->photo_path);
+                                $photoHtml = '<div class="mt-3"><img src="'.e($photoUrl).'" class="max-w-full max-h-80 rounded-lg border" alt="Ảnh taplo"></div>';
+                            }
+
+                            $delta = (float) $report->reported_km - (float) ($report->system_km ?? 0);
+                            $deltaFormatted = ($delta >= 0 ? '+' : '').number_format($delta, 1, ',', '.');
+                            $deltaColor = $delta < 0 ? 'text-red-600' : 'text-green-600';
+                            $driverName = e($report->driver?->name ?? '—');
+                            $createdAt = $report->created_at ? $report->created_at->format('H:i d/m/Y') : '—';
+                            $reportedKmStr = number_format((float) $report->reported_km, 1, ',', '.');
+                            $systemKmStr = $report->system_km !== null ? number_format((float) $report->system_km, 1, ',', '.') : '—';
+                            $noteStr = e($report->note ?? '—');
+
+                            return new HtmlString(<<<HTML
+                                <div class="space-y-3">
+                                    <div class="grid grid-cols-2 gap-4 rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+                                        <div>
+                                            <span class="text-xs text-gray-500">Tài xế báo cáo</span>
+                                            <p class="font-semibold">{$driverName}</p>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-gray-500">Thời gian</span>
+                                            <p class="font-semibold">{$createdAt}</p>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-gray-500">Km lái xe báo (taplo)</span>
+                                            <p class="text-lg font-bold text-amber-600">{$reportedKmStr} km</p>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-gray-500">Km hệ thống</span>
+                                            <p class="text-lg font-bold">{$systemKmStr} km</p>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-gray-500">Độ lệch</span>
+                                            <p class="text-lg font-bold {$deltaColor}">{$deltaFormatted} km</p>
+                                        </div>
+                                    </div>
+                                    {$photoHtml}
+                                    <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                                        <span class="text-xs text-gray-500">Ghi chú lái xe</span>
+                                        <p class="mt-1 text-sm">{$noteStr}</p>
+                                    </div>
+                                </div>
+                            HTML);
+                        })
+                        ->form([
+                            TextInput::make('corrected_km')
+                                ->label('Số km điều chỉnh')
+                                ->numeric()
+                                ->required()
+                                ->default(fn (?Trip $record) => $record?->latestPendingKmReport?->reported_km)
+                                ->helperText('Nhập số km thực tế (mặc định lấy số lái xe báo).'),
+                            Textarea::make('admin_note')
+                                ->label('Ghi chú xử lý')
+                                ->rows(2),
+                        ])
+                        ->action(function (Trip $record, array $data) {
+                            $report = $record->latestPendingKmReport;
+                            if ($report === null) {
+                                return;
+                            }
+
+                            app(TripKmAdjustmentService::class)->resolveReport(
+                                $report,
+                                (float) $data['corrected_km'],
+                                $data['admin_note'] ?? null,
+                                auth()->id(),
+                            );
+
+                            Notification::make()
+                                ->success()
+                                ->title('Đã điều chỉnh km và tính lại toàn bộ chuỗi')
+                                ->send();
+                        })
+                        ->modalSubmitActionLabel('Chấp nhận & Điều chỉnh Km'),
+
+                    Action::make('reject_km_report')
+                        ->label('Từ chối báo sai Km')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->visible(fn (?Trip $record): bool => $record?->latestPendingKmReport !== null)
+                        ->requiresConfirmation()
+                        ->modalHeading('Từ chối báo sai Km?')
+                        ->form([
+                            Textarea::make('admin_note')
+                                ->label('Lý do từ chối')
+                                ->required()
+                                ->rows(2),
+                        ])
+                        ->action(function (Trip $record, array $data) {
+                            $report = $record->latestPendingKmReport;
+                            if ($report === null) {
+                                return;
+                            }
+
+                            app(TripKmAdjustmentService::class)->rejectReport(
+                                $report,
+                                $data['admin_note'],
+                                auth()->id(),
+                            );
+
+                            Notification::make()
+                                ->success()
+                                ->title('Đã từ chối báo cáo sai km')
+                                ->send();
                         }),
 
                     // DriverSwapAction::make(),

@@ -13,6 +13,7 @@ use App\Services\Trip\Handlers\CheckpointEndHandler;
 use App\Services\Trip\Handlers\CompletedHandler;
 use App\Services\Trip\Handlers\LeftPickupHandler;
 use App\Services\Trip\Handlers\StartedHandler;
+use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -86,9 +87,11 @@ class TripCheckpointService
 
             $this->dispatchHandler($checkpointType, $trip, $payload, $checkpoints);
 
-            // Recalculate shift km so dashboard shows up-to-date totals
+            // Recalculate trip & shift km so dashboard shows up-to-date totals
             // including in-progress trips using latest checkpoint km
             $trip->refresh();
+            app(TripKmCalculatorService::class)->calculate($trip);
+
             if ($trip->shift_id) {
                 app(ShiftKmCalculatorService::class)->calculate($trip->shift);
             }
@@ -131,9 +134,10 @@ class TripCheckpointService
 
         throw ValidationException::withMessages([
             'checkpoint_type' => sprintf(
-                'Tài xế đang có chuyến với xe biển số %s chưa hoàn thành (trạng thái: %s). Vui lòng hoàn tất chuyến hiện tại trước khi bắt đầu chuyến mới.',
+                'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi bắt đầu chuyến mới.',
                 $activeTrip->vehicle?->plate_number ?? ('#'.$activeTrip->id),
-                $activeTrip->status->label(),
+                $activeTrip->orders()->pluck('order_code')->filter()->join(', '),
+                $activeTrip->driver?->name ?? 'Không xác định',
             ),
         ]);
     }

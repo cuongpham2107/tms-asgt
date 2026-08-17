@@ -197,7 +197,7 @@ test('trips list shows pending trip when no date filter applied', function () {
         'started_at' => null,
     ]);
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])
         ->assertStatus(200)
         ->assertHasNoErrors()
         ->assertSee('51P-123.45');
