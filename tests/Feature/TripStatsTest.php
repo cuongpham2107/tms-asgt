@@ -31,6 +31,9 @@ it('returns correct stats counts including completed trips with draft orders', f
         'completed_at' => now()->subDay(),
         'start_km' => 15000,
         'end_km' => 15400,
+        'total_km' => 400,
+        'total_km_loaded' => 300,
+        'total_km_empty' => 100,
     ]);
 
     $trip2 = Trip::factory()->create([
@@ -41,6 +44,9 @@ it('returns correct stats counts including completed trips with draft orders', f
         'completed_at' => now()->subHours(5),
         'start_km' => 15400,
         'end_km' => 15800,
+        'total_km' => 400,
+        'total_km_loaded' => 200,
+        'total_km_empty' => 200,
     ]);
 
     $response = $this->getJson('/api/driver/trips/stats');
@@ -48,7 +54,10 @@ it('returns correct stats counts including completed trips with draft orders', f
     $response->assertSuccessful()
         ->assertJsonPath('data.completed', 2)
         ->assertJsonPath('data.assigned', 0)
-        ->assertJsonPath('data.in_progress', 0);
+        ->assertJsonPath('data.in_progress', 0)
+        ->assertJsonPath('data.total_km', 800)
+        ->assertJsonPath('data.total_km_loaded', 500)
+        ->assertJsonPath('data.total_km_empty', 300);
 });
 
 it('counts return trips as in_progress', function () {

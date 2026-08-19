@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
@@ -16,10 +16,14 @@ const periods = [
 
 export default function StatsScreen() {
   const { token } = useAuth();
-  const [data, setData] = useState<any>(null); const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [activePeriod, setActivePeriod] = useState("all");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const getPeriodDates = (period: string) => {
     const now = new Date();
@@ -49,23 +53,77 @@ export default function StatsScreen() {
 
   const load = async () => {
     if (!token) return;
+    const { from, to } = getPeriodDates(activePeriod);
+    setPage(1);
     const [statsRes, histRes] = await Promise.all([
       api.stats(activePeriod, token).catch(() => null),
-      api.trips.history({ per_page: 20, status: "completed" }, token).catch(() => ({ data: [] })),
+      api.trips.history({
+        page: 1,
+        per_page: 15,
+        status: "completed",
+        from_date: from,
+        to_date: to,
+      }, token).catch(() => ({ data: [], meta: {} })),
     ]);
     if (statsRes?.data) setData(statsRes.data);
-    setHistory(histRes.data || []);
+    const list = histRes.data || [];
+    setHistory(list);
+    const currentPage = histRes.meta?.current_page ?? 1;
+    const lastPage = histRes.meta?.last_page ?? 1;
+    setHasMore(currentPage < lastPage);
     setLoading(false);
   };
   useFocusEffect(useCallback(() => { load(); }, [token, activePeriod]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
-  const histTotalKm = filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.total_km) || 0), 0);
-  const histLoadedKm = filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
-  const histEmptyKm = histTotalKm != null && histLoadedKm != null ? histTotalKm - histLoadedKm : null;
+  const loadMore = async () => {
+    if (loading || loadingMore || !hasMore || !token) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const { from, to } = getPeriodDates(activePeriod);
+    const histRes = await api.trips.history({
+      page: nextPage,
+      per_page: 15,
+      status: "completed",
+      from_date: from,
+      to_date: to,
+    }, token).catch(() => null);
+
+    if (histRes?.data && histRes.data.length > 0) {
+      setHistory((prev) => {
+        const existingIds = new Set(prev.map((t) => t.id));
+        const newItems = histRes.data.filter((t: any) => !existingIds.has(t.id));
+        return [...prev, ...newItems];
+      });
+      setPage(nextPage);
+      const currentPage = histRes.meta?.current_page ?? nextPage;
+      const lastPage = histRes.meta?.last_page ?? nextPage;
+      setHasMore(currentPage < lastPage);
+    } else {
+      setHasMore(false);
+    }
+    setLoadingMore(false);
+  };
+
+  const handleScroll = ({ nativeEvent }: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+    const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 60;
+    if (isCloseToBottom && hasMore && !loadingMore && !loading) {
+      loadMore();
+    }
+  };
+
+  const histTotalKm = data?.total_km !== undefined ? data.total_km : filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.total_km) || 0), 0);
+  const histLoadedKm = data?.total_km_loaded !== undefined ? data.total_km_loaded : filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
+  const histEmptyKm = data?.total_km_empty !== undefined ? data.total_km_empty : (histTotalKm != null && histLoadedKm != null ? histTotalKm - histLoadedKm : null);
 
   return (
-    <ScrollView style={s.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}>
+    <ScrollView
+      style={s.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}
+      onScroll={handleScroll}
+      scrollEventThrottle={200}
+    >
       {loading ? <Text style={s.loading}>Đang tải...</Text> : data ? (<>
         {/* Trip counts */}
         <Text style={s.sectionTitle}>📊 Tổng quan chuyến</Text>
@@ -76,7 +134,7 @@ export default function StatsScreen() {
         </View>
 
         {/* KM đã thực hiện (theo period) */}
-        {filteredHistory.length > 0 && (
+        {(histTotalKm > 0 || filteredHistory.length > 0) && (
           <>
             <Text style={s.sectionTitle}>🚛 KM đã thực hiện</Text>
             <View style={s.kmCard}>
@@ -107,45 +165,62 @@ export default function StatsScreen() {
         </View>
 
         {/* Completed trips history */}
-        <Text style={s.sectionTitle}>📋 Chuyến đã hoàn thành ({filteredHistory.length})</Text>
+        <Text style={s.sectionTitle}>📋 Chuyến đã hoàn thành ({data?.completed ?? filteredHistory.length})</Text>
         {filteredHistory.length === 0 ? (
           <View style={s.empty}><Text style={s.emptyText}>Chưa có chuyến hoàn thành</Text></View>
-        ) : filteredHistory.slice(0, 10).map((t: any) => (
-          <View key={t.id} style={[s.tripCard, { borderColor: "#A7F3D0" }]}>
-            <View style={{ flex: 1 }}>
-              {(() => {
-                const codes: string[] = [];
-                (t.orders || []).forEach((o: any) => {
-                  if (o.pickup_location?.code) codes.push(o.pickup_location.code);
-                  (o.delivery_points || []).forEach((dp: any) => {
-                    if (dp.location?.code) codes.push(dp.location.code);
-                  });
-                });
-                if (codes.length === 0 && t.route) {
-                  codes.push(...t.route.split(' → '));
-                }
-                const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
-                if (deduped.length > 0) return (
-                  <View style={s.routeWrap}>
-                    <Ionicons name="navigate" size={11} color="#4F46E5" />
-                    <Text style={s.routeText} numberOfLines={1}>{deduped.join("  →  ")}</Text>
-                  </View>
-                );
-                return null;
-              })()}
-              <Text style={s.tripCode}>{t.vehicle?.plate_number || "-"}</Text>
-              {(() => {
-                const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
-                if (loadingTimes.length === 0) return null;
-                return <Text style={s.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
-              })()}
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={s.tripKm}>{fmt(t.total_km)} km</Text>
-              <Text style={s.tripDate}>{t.completed_at ? new Date(t.completed_at).toLocaleDateString("vi-VN") : "-"}</Text>
-            </View>
-          </View>
-        ))}
+        ) : (
+          <>
+            {filteredHistory.map((t: any) => (
+              <View key={t.id} style={[s.tripCard, { borderColor: "#A7F3D0" }]}>
+                <View style={{ flex: 1 }}>
+                  {(() => {
+                    const codes: string[] = [];
+                    (t.orders || []).forEach((o: any) => {
+                      if (o.pickup_location?.code) codes.push(o.pickup_location.code);
+                      (o.delivery_points || []).forEach((dp: any) => {
+                        if (dp.location?.code) codes.push(dp.location.code);
+                      });
+                    });
+                    if (codes.length === 0 && t.route) {
+                      codes.push(...t.route.split(' → '));
+                    }
+                    const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
+                    if (deduped.length > 0) return (
+                      <View style={s.routeWrap}>
+                        <Ionicons name="navigate" size={11} color="#4F46E5" />
+                        <Text style={s.routeText} numberOfLines={1}>{deduped.join("  →  ")}</Text>
+                      </View>
+                    );
+                    return null;
+                  })()}
+                  <Text style={s.tripCode}>{t.vehicle?.plate_number || "-"}</Text>
+                  {(() => {
+                    const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
+                    if (loadingTimes.length === 0) return null;
+                    return <Text style={s.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
+                  })()}
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={s.tripKm}>{fmt(t.total_km)} km</Text>
+                  <Text style={s.tripDate}>{t.completed_at ? new Date(t.completed_at).toLocaleDateString("vi-VN") : "-"}</Text>
+                </View>
+              </View>
+            ))}
+
+            {loadingMore && (
+              <View style={{ paddingVertical: 14, alignItems: "center" }}>
+                <ActivityIndicator size="small" color="#4F46E5" />
+                <Text style={{ color: "#6B7280", fontSize: 12, marginTop: 4 }}>Đang tải thêm...</Text>
+              </View>
+            )}
+
+            {!hasMore && filteredHistory.length > 0 && (
+              <View style={{ paddingVertical: 12, alignItems: "center" }}>
+                <Text style={{ color: "#9CA3AF", fontSize: 12 }}>Đã hiển thị tất cả ({filteredHistory.length}) chuyến</Text>
+              </View>
+            )}
+          </>
+        )}
 
         {histTotalKm > 0 && (
           <View style={[s.totalCard, { borderColor: "#C7D2FE" }]}>

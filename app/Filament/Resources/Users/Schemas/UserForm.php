@@ -33,6 +33,7 @@ class UserForm
                             ->required(),
                         TextInput::make('password')
                             ->label('Mật khẩu')
+                            ->revealable()
                             ->password()
                             ->dehydrateStateUsing(fn (string $state): string => Hash::make($state))
                             ->saved(fn (?string $state): bool => filled($state))

@@ -20,6 +20,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Tabs;
@@ -252,7 +253,13 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->seconds(false)
                                     ->native(true)
                                     ->required()
-                                    ->columnSpanFull(),
+                                    ->columnSpan(fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2),
+                                Toggle::make('is_return_trip')
+                                    ->label('Chuyến quay đầu')
+                                    ->default(false)
+                                    ->inline(false)
+                                    ->visible(fn (Get $get): bool => self::isExternalOrder($get))
+                                    ->columnSpan(1),
                                 TextInput::make('total_packages')
                                     ->label('Số kiện')
                                     ->mask(RawJs::make('$money($input)'))

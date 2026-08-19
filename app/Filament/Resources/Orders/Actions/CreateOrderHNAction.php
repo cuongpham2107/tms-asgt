@@ -14,6 +14,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Tabs;
@@ -102,7 +103,13 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->default(now())
                         ->required()
                         ->prefixIcon(Heroicon::OutlinedCalendarDays)
-                        ->columnSpanFull(),
+                        ->columnSpan(3),
+                    Toggle::make('is_return_trip')
+                        ->label('Chuyến quay đầu')
+                        ->helperText('Đánh dấu đơn hàng là chuyến quay đầu')
+                        ->default(false)
+                        ->inline(false)
+                        ->columnSpan(1),
                     self::getDeliveryPointsRepeaterField('external'),
 
                     TextInput::make('cargo_name')

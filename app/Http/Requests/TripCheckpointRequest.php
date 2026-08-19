@@ -7,6 +7,7 @@ use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Services\Trip\TripKmLimitService;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -96,48 +97,30 @@ class TripCheckpointRequest extends FormRequest
                 }
 
                 $trip = $this->route('trip');
-
-                if ($trip instanceof Trip && $trip->vehicle?->current_mileage !== null) {
-                    if ((float) $this->input('km_reading') < (float) $trip->vehicle->current_mileage) {
-                        $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn số km hiện tại của xe ('.number_format((float) $trip->vehicle->current_mileage, 1).' km)');
-                    }
-
-                    $max = (float) $trip->vehicle->current_mileage + 600;
-                    if ((float) $this->input('km_reading') > $max) {
-                        $validator->errors()->add('km_reading', 'Số km không được lớn hơn '.number_format($max, 1).' km (tối đa +600 km so với km hiện tại của xe)');
-                    }
+                if (! $trip instanceof Trip) {
+                    return;
                 }
 
-                if ($trip instanceof Trip && $trip->start_km !== null) {
-                    if ((float) $this->input('km_reading') < (float) $trip->start_km) {
-                        $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn km bắt đầu chuyến ('.number_format((float) $trip->start_km, 1).' km)');
-                    }
+                $kmReading = (float) $this->input('km_reading');
+                $type = (string) $this->input('checkpoint_type');
+                $orderId = $this->input('order_id') ? (int) $this->input('order_id') : null;
+
+                $validationResult = app(TripKmLimitService::class)->validate($trip, $kmReading, $type, $orderId);
+
+                if (! $validationResult['is_valid']) {
+                    $validator->errors()->add('km_reading', $validationResult['message']);
                 }
 
-                if ($trip instanceof Trip) {
-                    $lastTripKm = TripCheckpoint::where('trip_id', $trip->id)
+                if ($orderId !== null) {
+                    $lastOrderKm = TripCheckpoint::where('order_id', $orderId)
                         ->whereNotNull('km_reading')
                         ->orderByDesc('occurred_at')
                         ->orderByDesc('id')
                         ->value('km_reading');
 
-                    if ($lastTripKm !== null && (float) $this->input('km_reading') < (float) $lastTripKm) {
-                        $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn km gần nhất của chuyến ('.number_format((float) $lastTripKm, 1).' km)');
+                    if ($lastOrderKm !== null && $kmReading < (float) $lastOrderKm) {
+                        $validator->errors()->add('km_reading', 'Số km phải lớn hơn hoặc bằng km gần nhất của đơn hàng này ('.number_format((float) $lastOrderKm, 1).' km)');
                     }
-                }
-
-                if ($this->input('order_id') === null) {
-                    return;
-                }
-
-                $lastOrderKm = TripCheckpoint::where('order_id', $this->input('order_id'))
-                    ->whereNotNull('km_reading')
-                    ->orderByDesc('occurred_at')
-                    ->orderByDesc('id')
-                    ->value('km_reading');
-
-                if ($lastOrderKm !== null && (float) $this->input('km_reading') < (float) $lastOrderKm) {
-                    $validator->errors()->add('km_reading', 'Số km phải lớn hơn hoặc bằng km gần nhất của đơn hàng này ('.number_format((float) $lastOrderKm, 1).' km)');
                 }
             },
 
@@ -148,6 +131,7 @@ class TripCheckpointRequest extends FormRequest
 
                 $leftPickupKm = TripCheckpoint::where('order_id', $this->input('order_id'))
                     ->where('checkpoint_type', 'left_pickup')
+                    ->whereNotNull('km_reading')
                     ->value('km_reading');
 
                 if ($leftPickupKm !== null && (float) $this->input('km_reading') <= (float) $leftPickupKm) {

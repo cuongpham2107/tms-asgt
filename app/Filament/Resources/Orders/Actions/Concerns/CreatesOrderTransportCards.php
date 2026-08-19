@@ -738,6 +738,7 @@ abstract class CreatesOrderTransportCards
                             ? OrderStatus::Assigned->value
                             : OrderStatus::Draft->value,
                         'priority' => $data['priority'] ?? Priority::Medium->value,
+                        'is_return_trip' => (bool) ($data['is_return_trip'] ?? false),
                         'created_by' => $createdBy,
                         'notes' => $data['notes'] ?? null,
                     ]);

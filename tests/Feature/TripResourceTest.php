@@ -202,3 +202,55 @@ test('trips list shows pending trip when no date filter applied', function () {
         ->assertHasNoErrors()
         ->assertSee('51P-123.45');
 });
+
+test('trips list hides completed and cancelled trips by default and only shows them when status filter is selected', function () {
+    $vehicle = Vehicle::create([
+        'plate_number' => '51P-999.99',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $pendingTrip = Trip::create([
+        'trip_code' => 'TRIP-PENDING-ACTIVE',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Pending,
+        'started_at' => null,
+    ]);
+
+    $completedTrip = Trip::create([
+        'trip_code' => 'TRIP-COMPLETED-HIDDEN',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subHours(2),
+    ]);
+
+    $cancelledTrip = Trip::create([
+        'trip_code' => 'TRIP-CANCELLED-HIDDEN',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Cancelled,
+        'started_at' => now()->subHours(3),
+    ]);
+
+    // Default view: shows pending, hides completed & cancelled
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])
+        ->assertStatus(200)
+        ->assertCanSeeTableRecords([$pendingTrip])
+        ->assertCanNotSeeTableRecords([$completedTrip, $cancelledTrip]);
+
+    // Filter by completed: shows completed, hides pending & cancelled
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])
+        ->call('filterStatus', 'completed')
+        ->assertStatus(200)
+        ->assertCanSeeTableRecords([$completedTrip])
+        ->assertCanNotSeeTableRecords([$pendingTrip, $cancelledTrip]);
+
+    // Filter by cancelled: shows cancelled, hides pending & completed
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])
+        ->call('filterStatus', 'cancelled')
+        ->assertStatus(200)
+        ->assertCanSeeTableRecords([$cancelledTrip])
+        ->assertCanNotSeeTableRecords([$pendingTrip, $completedTrip]);
+});

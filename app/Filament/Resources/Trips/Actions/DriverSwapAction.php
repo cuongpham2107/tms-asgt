@@ -10,6 +10,7 @@ use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\User;
 use App\Services\Trip\CheckpointFactory;
+use App\Services\Trip\TripKmLimitService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -84,7 +85,7 @@ class DriverSwapAction
                     ->label('Ghi chú')
                     ->rows(2),
             ])
-            ->action(function (Trip $record, array $data): void {
+            ->action(function (Trip $record, array $data, Action $action): void {
                 if (! $record->status->canSwapDriver()) {
                     Notification::make()
                         ->title('Không thể đảo lái')
@@ -115,7 +116,25 @@ class DriverSwapAction
                         ->danger()
                         ->send();
 
-                    $this->halt();
+                    $action->halt();
+
+                    return;
+                }
+
+                $validationResult = app(TripKmLimitService::class)->validate(
+                    $record,
+                    $handoverKm,
+                    CheckpointType::DriverSwap->value,
+                );
+
+                if (! $validationResult['is_valid']) {
+                    Notification::make()
+                        ->title('Km chuyển giao không hợp lệ')
+                        ->body($validationResult['message'])
+                        ->danger()
+                        ->send();
+
+                    $action->halt();
 
                     return;
                 }

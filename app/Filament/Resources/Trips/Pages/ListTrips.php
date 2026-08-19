@@ -141,6 +141,7 @@ class ListTrips extends ListRecords
             ->when(
                 $key !== 'all',
                 fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $key),
+                fn (Builder $query): Builder => $query->whereNotIn('status', [TripStatus::Completed->value, TripStatus::Cancelled->value]),
             )
             ->count();
     }
@@ -177,6 +178,7 @@ class ListTrips extends ListRecords
                 return $query->where('started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
             })
             ->when($except !== 'status' && $this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
+            ->when($except !== 'status' && $this->activeStatusFilter === 'all', fn (Builder $query): Builder => $query->whereNotIn('status', [TripStatus::Completed->value, TripStatus::Cancelled->value]))
             ->when($except !== 'vehicleOwner' && $this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
             ->when($except !== 'orderType' && $this->orderType !== 'all', fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q) => $q->where('type', $this->orderType)));
     }
@@ -262,7 +264,11 @@ class ListTrips extends ListRecords
                 'orders.deliveryPoints.location',
                 'orders.tripCheckpoints.deliveryPoint.location',
             ])
-            ->when($this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
+            ->when(
+                $this->activeStatusFilter !== 'all',
+                fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter),
+                fn (Builder $query): Builder => $query->whereNotIn('trips.status', [TripStatus::Completed->value, TripStatus::Cancelled->value]),
+            )
             ->when($this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
             ->when($this->orderType !== 'all', fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q) => $q->where('type', $this->orderType)))
             ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {

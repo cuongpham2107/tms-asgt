@@ -10,6 +10,7 @@ use App\Http\Resources\TripResource;
 use App\Models\Trip;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
+use App\Services\Trip\TripKmLimitService;
 use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
@@ -32,7 +33,7 @@ class TripController extends Controller
     {
         $user = $request->user();
 
-        $trip = Trip::where(function ($q) use ($user) {
+        $trip = Trip::query()->where(function ($q) use ($user) {
             $q->where('driver_id', $user->id)
                 ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
         })
@@ -261,6 +262,18 @@ class TripController extends Controller
             ]], 422);
         }
 
+        $validationResult = app(TripKmLimitService::class)->validate(
+            $trip,
+            (float) $validated['end_km'],
+            CheckpointType::End->value,
+        );
+
+        if (! $validationResult['is_valid']) {
+            return response()->json(['message' => [
+                'end_km' => [$validationResult['message']],
+            ]], 422);
+        }
+
         $endKm = (float) $validated['end_km'];
         $completedAt = $validated['completed_at'] ?? null;
 
@@ -350,7 +363,10 @@ class TripController extends Controller
         $counts = $query->selectRaw('
                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as assigned,
                 SUM(CASE WHEN status IN (?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as in_progress,
-                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
+                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed,
+                COALESCE(SUM(CASE WHEN status = ? THEN total_km ELSE 0 END), 0) as total_km,
+                COALESCE(SUM(CASE WHEN status = ? THEN total_km_loaded ELSE 0 END), 0) as total_km_loaded,
+                COALESCE(SUM(CASE WHEN status = ? THEN total_km_empty ELSE 0 END), 0) as total_km_empty
             ', [
             TripStatus::Pending->value,
             TripStatus::Started->value,
@@ -360,6 +376,9 @@ class TripController extends Controller
             TripStatus::Delivered->value,
             TripStatus::ReturnTrip->value,
             TripStatus::Completed->value,
+            TripStatus::Completed->value,
+            TripStatus::Completed->value,
+            TripStatus::Completed->value,
         ])
             ->first();
 
@@ -368,6 +387,9 @@ class TripController extends Controller
                 'assigned' => (int) ($counts->assigned ?? 0),
                 'in_progress' => (int) ($counts->in_progress ?? 0),
                 'completed' => (int) ($counts->completed ?? 0),
+                'total_km' => round((float) ($counts->total_km ?? 0), 1),
+                'total_km_loaded' => round((float) ($counts->total_km_loaded ?? 0), 1),
+                'total_km_empty' => round((float) ($counts->total_km_empty ?? 0), 1),
             ],
         ]);
     }

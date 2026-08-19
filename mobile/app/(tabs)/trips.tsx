@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
     RefreshControl,
     ScrollView,
+    ActivityIndicator,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
@@ -80,10 +81,18 @@ const statusConfig: Record<
     },
 };
 
+const IN_PROGRESS_STATUSES = [
+    "started",
+    "arrived_pickup",
+    "delivering",
+    "arrived_delivery",
+    "return_trip",
+];
+
 const tabs = [
     { key: "all", label: "Tất cả" },
     { key: "started", label: "Đang chạy", color: "#D97706" },
-    { key: "pending", label: "Chờ", color: "#6B7280" },
+    { key: "pending", label: "Chờ chạy", color: "#6B7280" },
     { key: "delivered", label: "Đã giao", color: "#059669" },
     { key: "completed", label: "Hoàn thành", color: "#059669" },
     { key: "driver_swap", label: "Đảo lái", color: "#4F46E5" },
@@ -102,12 +111,17 @@ const fmt = (v: any) => (v != null ? parseInt(v).toLocaleString("vi-VN") : "-");
 export default function TripsScreen() {
     const { token, shift } = useAuth();
     const router = useRouter();
+    const [activeTrips, setActiveTrips] = useState<any[]>([]);
+    const [historyTrips, setHistoryTrips] = useState<any[]>([]);
     const [trips, setTrips] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [activeTab, setActiveTab] = useState("all");
     const [activePeriod, setActivePeriod] = useState("all");
     const [search, setSearch] = useState("");
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const userId = shift?.driver?.id;
 
     const getPeriodDates = (period: string) => {
@@ -126,48 +140,110 @@ export default function TripsScreen() {
         return {};
     };
 
-    const load = async () => {
+    const mergeTrips = (active: any[], history: any[]) => {
+        const map = new Map<string, any>();
+        active.forEach((t) => map.set(String(t.id), t));
+        history.forEach((t) => map.set(String(t.id), t));
+        return Array.from(map.values());
+    };
+
+    const load = async (period = activePeriod) => {
         if (!token) return;
         try {
+            const { from, to } = getPeriodDates(period);
+            setPage(1);
             const [activeRes, historyRes] = await Promise.all([
                 api.trips.active(token).catch(() => ({ data: [] })),
                 api.trips
-                    .history({ per_page: 50 }, token)
-                    .catch(() => ({ data: [] })),
+                    .history(
+                        {
+                            page: 1,
+                            per_page: 20,
+                            from_date: from,
+                            to_date: to,
+                        },
+                        token,
+                    )
+                    .catch(() => ({ data: [], meta: {} })),
             ]);
-            // Merge active + history, dedupe by id
-            const map = new Map<string, any>();
-            (activeRes.data || []).forEach((t: any) =>
-                map.set(String(t.id), t),
-            );
-            (historyRes.data || []).forEach((t: any) =>
-                map.set(String(t.id), t),
-            );
-            setTrips(Array.from(map.values()));
+            const act = activeRes.data || [];
+            const hist = historyRes.data || [];
+            setActiveTrips(act);
+            setHistoryTrips(hist);
+            setTrips(mergeTrips(act, hist));
+            const currentPage = historyRes.meta?.current_page ?? 1;
+            const lastPage = historyRes.meta?.last_page ?? 1;
+            setHasMore(currentPage < lastPage);
         } finally {
             setLoading(false);
         }
     };
+
     useFocusEffect(
         useCallback(() => {
-            load();
-        }, [token]),
+            load(activePeriod);
+        }, [token, activePeriod]),
     );
+
     const onRefresh = async () => {
         setRefreshing(true);
-        await load();
+        await load(activePeriod);
         setRefreshing(false);
     };
 
+    const loadMore = async () => {
+        if (loading || loadingMore || !hasMore || !token) return;
+        setLoadingMore(true);
+        const nextPage = page + 1;
+        const { from, to } = getPeriodDates(activePeriod);
+        const historyRes = await api.trips
+            .history(
+                {
+                    page: nextPage,
+                    per_page: 20,
+                    from_date: from,
+                    to_date: to,
+                },
+                token,
+            )
+            .catch(() => null);
+
+        if (historyRes?.data && historyRes.data.length > 0) {
+            const newHist = historyRes.data;
+            setHistoryTrips((prev) => {
+                const existingIds = new Set(prev.map((t) => t.id));
+                const filteredNew = newHist.filter(
+                    (t: any) => !existingIds.has(t.id),
+                );
+                const updated = [...prev, ...filteredNew];
+                setTrips(mergeTrips(activeTrips, updated));
+                return updated;
+            });
+            setPage(nextPage);
+            const currentPage = historyRes.meta?.current_page ?? nextPage;
+            const lastPage = historyRes.meta?.last_page ?? nextPage;
+            setHasMore(currentPage < lastPage);
+        } else {
+            setHasMore(false);
+        }
+        setLoadingMore(false);
+    };
+
     const filtered = useMemo(() => {
-        let result =
-            activeTab === "all"
-                ? trips
-                : trips.filter((t) => t.status === activeTab);
+        let result = trips;
+        if (activeTab !== "all") {
+            if (activeTab === "started") {
+                result = result.filter((t) =>
+                    IN_PROGRESS_STATUSES.includes(t.status),
+                );
+            } else {
+                result = result.filter((t) => t.status === activeTab);
+            }
+        }
         // Period filter
         if (activePeriod !== "all") {
             const { from, to } = getPeriodDates(activePeriod);
-            if (from) {
+            if (from && to) {
                 result = result.filter((t) => {
                     const d = t.started_at || t.created_at;
                     if (!d) return true;
@@ -184,25 +260,44 @@ export default function TripsScreen() {
                     (t.vehicle?.plate_number || "").toLowerCase().includes(q),
             );
         }
-        // Sort: current/active trips first, then pending
+        // Sort: current/active trips first, then by date descending
         const isCurrent = (t: any) =>
-            t.status !== "pending" &&
-            t.status !== "driver_swap" &&
             t.status !== "completed" &&
-            t.status !== "cancelled";
-        return result.sort(
-            (a: any, b: any) => (isCurrent(b) ? 1 : 0) - (isCurrent(a) ? 1 : 0),
-        );
+            t.status !== "cancelled" &&
+            t.status !== "driver_swap";
+        return result.sort((a: any, b: any) => {
+            const curA = isCurrent(a) ? 1 : 0;
+            const curB = isCurrent(b) ? 1 : 0;
+            if (curA !== curB) return curB - curA;
+            const timeA = new Date(a.started_at || a.created_at || 0).getTime();
+            const timeB = new Date(b.started_at || b.created_at || 0).getTime();
+            return timeB - timeA;
+        });
     }, [trips, activeTab, activePeriod, search]);
 
     const counts = useMemo(() => {
-        const c: Record<string, number> = { all: trips.length };
-        trips.forEach((t) => {
-            const k = t.status || "?";
-            c[k] = (c[k] || 0) + 1;
+        let periodTrips = trips;
+        if (activePeriod !== "all") {
+            const { from, to } = getPeriodDates(activePeriod);
+            if (from && to) {
+                periodTrips = periodTrips.filter((t) => {
+                    const d = t.started_at || t.created_at;
+                    if (!d) return true;
+                    const date = new Date(d).toISOString().slice(0, 10);
+                    return date >= from && date <= to;
+                });
+            }
+        }
+        const c: Record<string, number> = { all: periodTrips.length };
+        periodTrips.forEach((t) => {
+            const s = t.status || "?";
+            if (IN_PROGRESS_STATUSES.includes(s)) {
+                c["started"] = (c["started"] || 0) + 1;
+            }
+            c[s] = (c[s] || 0) + 1;
         });
         return c;
-    }, [trips]);
+    }, [trips, activePeriod]);
 
     return (
         <View style={s.container}>
@@ -253,6 +348,8 @@ export default function TripsScreen() {
             <FlatList
                 data={filtered}
                 keyExtractor={(t) => String(t.id)}
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.3}
                 ListHeaderComponent={
                     <View style={{ marginBottom: 6 }}>
                         <ScrollView
@@ -287,6 +384,49 @@ export default function TripsScreen() {
                             })}
                         </ScrollView>
                     </View>
+                }
+                ListFooterComponent={
+                    <>
+                        {loadingMore && (
+                            <View
+                                style={{
+                                    paddingVertical: 14,
+                                    alignItems: "center",
+                                }}
+                            >
+                                <ActivityIndicator
+                                    size="small"
+                                    color="#4F46E5"
+                                />
+                                <Text
+                                    style={{
+                                        color: "#6B7280",
+                                        fontSize: 12,
+                                        marginTop: 4,
+                                    }}
+                                >
+                                    Đang tải thêm chuyến...
+                                </Text>
+                            </View>
+                        )}
+                        {!hasMore && filtered.length > 0 && (
+                            <View
+                                style={{
+                                    paddingVertical: 12,
+                                    alignItems: "center",
+                                }}
+                            >
+                                <Text
+                                    style={{
+                                        color: "#9CA3AF",
+                                        fontSize: 12,
+                                    }}
+                                >
+                                    Đã hiển thị tất cả ({filtered.length}) chuyến
+                                </Text>
+                            </View>
+                        )}
+                    </>
                 }
                 refreshControl={
                     <RefreshControl

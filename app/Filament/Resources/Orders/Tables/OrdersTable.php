@@ -38,6 +38,7 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
@@ -132,6 +133,8 @@ class OrdersTable extends BaseTable
                 TextColumn::make('notes')
                     ->label('Ghi chú')
                     ->limit(50),
+                ToggleColumn::make('is_return_trip')
+                    ->label('Chuyến quay đầu'),
                 TextColumn::make('created_at')
                     ->label('Ngày tạo')
                     ->dateTime('d/m/Y')

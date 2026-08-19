@@ -59,7 +59,7 @@ export const api = {
   // Trips
   trips: {
     active: (t: string) => fetchApi<{ data: any[] }>("/trips/active", t),
-    history: (params: { per_page?: number; from_date?: string; to_date?: string; status?: string; vehicle_id?: number }, t: string) => {
+    history: (params: { page?: number; per_page?: number; from_date?: string; to_date?: string; status?: string; vehicle_id?: number }, t: string) => {
       const qs = new URLSearchParams();
       Object.entries(params).forEach(([k, v]) => { if (v !== undefined) qs.set(k, String(v)); });
       return fetchApi<{ data: any[]; meta: any }>(`/trips/history?${qs}`, t);

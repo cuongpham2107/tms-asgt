@@ -2,11 +2,12 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\DriverShift;
 use App\Models\Trip;
-use App\Models\TripCheckpoint;
+use App\Services\Trip\TripKmLimitService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -52,27 +53,38 @@ class EndVehicleRequest extends FormRequest
 
                 $kmReading = (float) $this->input('km_reading');
 
-                if ($kmReading < (float) $vehicle->current_mileage) {
-                    $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn số km hiện tại của xe ('.number_format((float) $vehicle->current_mileage, 1).' km)');
-                }
-
                 $activeTrip = Trip::where('vehicle_id', $vehicle->id)
                     ->where('shift_id', $shift->id)
                     ->whereNotIn('status', [TripStatus::Completed, TripStatus::DriverSwap, TripStatus::Cancelled])
                     ->first();
 
-                if ($activeTrip === null) {
+                if ($activeTrip !== null) {
+                    $validationResult = app(TripKmLimitService::class)->validate(
+                        $activeTrip,
+                        $kmReading,
+                        CheckpointType::DriverSwap->value,
+                    );
+
+                    if (! $validationResult['is_valid']) {
+                        $validator->errors()->add('km_reading', $validationResult['message']);
+                    }
+
                     return;
                 }
 
-                $lastTripKm = TripCheckpoint::where('trip_id', $activeTrip->id)
-                    ->whereNotNull('km_reading')
-                    ->orderByDesc('occurred_at')
-                    ->orderByDesc('id')
-                    ->value('km_reading');
+                if ($kmReading < (float) $vehicle->current_mileage) {
+                    $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn số km hiện tại của xe ('.number_format((float) $vehicle->current_mileage, 1).' km)');
+                }
 
-                if ($lastTripKm !== null && $kmReading < (float) $lastTripKm) {
-                    $validator->errors()->add('km_reading', 'Số km không được nhỏ hơn km gần nhất của chuyến ('.number_format((float) $lastTripKm, 1).' km)');
+                $maxAllowed = (float) $vehicle->current_mileage + TripKmLimitService::DELTA_LONG;
+                if ($kmReading > $maxAllowed) {
+                    $validator->errors()->add('km_reading', sprintf(
+                        'Số km nhập vào (%.1f km) vượt quá giới hạn cho phép (+%.0f km) so với km hiện tại của xe (%.1f km). Tối đa cho phép: %.1f km.',
+                        $kmReading,
+                        TripKmLimitService::DELTA_LONG,
+                        (float) $vehicle->current_mileage,
+                        $maxAllowed
+                    ));
                 }
             },
         ];
