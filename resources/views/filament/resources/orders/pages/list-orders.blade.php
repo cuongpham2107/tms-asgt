@@ -1,4 +1,18 @@
 <x-filament-panels::page>
+    <style>
+        html.dark .collapsible-filter-bar {
+            background-color: rgb(15 23 42 / 0.75) !important;
+            border-color: rgb(30 41 59 / 0.8) !important;
+        }
+        html.dark .toolbar-toggle-btn {
+            background-color: rgb(30 41 59 / 0.85) !important;
+            border-color: rgb(51 65 85 / 0.8) !important;
+            color: rgb(226 232 240) !important;
+        }
+        html.dark .toolbar-toggle-btn:hover {
+            background-color: rgb(51 65 85 / 0.95) !important;
+        }
+    </style>
     <div
         x-data="{
             isFiltersOpen: localStorage.getItem('list_orders_filters_open') !== 'false'
@@ -12,7 +26,7 @@
                 <button
                     type="button"
                     x-on:click="isFiltersOpen = !isFiltersOpen"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 cursor-pointer"
+                    class="toolbar-toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-xs transition cursor-pointer"
                 >
                     <x-filament::icon icon="heroicon-o-funnel" class="h-4 w-4 text-primary-500" />
                     <span>Bộ lọc</span>
@@ -55,7 +69,7 @@
             x-show="isFiltersOpen"
             x-collapse
             x-cloak
-            class="rounded-xl flex flex-col divide-y divide-gray-100 dark:divide-gray-800 p-2 border border-gray-200 bg-white/70 dark:border-gray-800 dark:bg-gray-900/60 shadow-2xs"
+            class="collapsible-filter-bar rounded-xl flex flex-col divide-y divide-gray-100 dark:divide-gray-800 p-2 shadow-2xs"
         >
             {{ $this->filtersForm }}
         </div>

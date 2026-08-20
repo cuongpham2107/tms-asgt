@@ -1,3 +1,44 @@
 .fi-page-content {
     row-gap: calc(var(--spacing) * 4);
 }
+
+/* Custom Stats Bar Cards */
+.trip-stat-card {
+    background-color: #ffffff;
+    border: 1px solid rgb(229 231 235);
+    transition: all 150ms ease-in-out;
+}
+
+html.dark .trip-stat-card {
+    background-color: rgb(15 23 42 / 0.85) !important;
+    border-color: rgb(30 41 59 / 0.9) !important;
+}
+
+/* Collapsible Filter Bar */
+.collapsible-filter-bar {
+    background-color: rgb(255 255 255 / 0.7);
+    border: 1px solid rgb(229 231 235);
+}
+
+html.dark .collapsible-filter-bar {
+    background-color: rgb(15 23 42 / 0.75) !important;
+    border-color: rgb(30 41 59 / 0.8) !important;
+}
+
+/* Toolbar Buttons */
+.toolbar-toggle-btn {
+    border: 1px solid rgb(229 231 235);
+    background-color: #ffffff;
+    color: rgb(55 65 81);
+}
+
+html.dark .toolbar-toggle-btn {
+    background-color: rgb(30 41 59 / 0.85) !important;
+    border-color: rgb(51 65 85 / 0.8) !important;
+    color: rgb(226 232 240) !important;
+}
+
+html.dark .toolbar-toggle-btn:hover {
+    background-color: rgb(51 65 85 / 0.9) !important;
+    border-color: rgb(71 85 105) !important;
+}

@@ -1,5 +1,11 @@
 <x-filament-panels::page>
-    <div class="rounded-xl flex flex-col divide-y divide-gray-100 dark:divide-gray-800 p-2 border border-gray-200 bg-white/70 dark:border-gray-800 dark:bg-gray-900/60 shadow-2xs">
+    <style>
+        html.dark .collapsible-filter-bar {
+            background-color: rgb(15 23 42 / 0.75) !important;
+            border-color: rgb(30 41 59 / 0.8) !important;
+        }
+    </style>
+    <div class="collapsible-filter-bar rounded-xl flex flex-col divide-y divide-gray-100 dark:divide-gray-800 p-2 shadow-2xs">
         {{ $this->filtersForm }}
     </div>
 

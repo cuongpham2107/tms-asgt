@@ -4,13 +4,31 @@
 @source '../../../../resources/views/**/*';
 @source '../../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
 
-@import "./partials/_variables.css";
-@import "./partials/_layout.css";
-@import "./partials/_groups.css";
-@import "./partials/_sidebar.css";
-@import "./partials/_page.css";
-@import "./partials/_table.css";
-@import "./partials/_forms.css";
+/* ==========================================================================
+   1. VARIABLES & BASE TYPOGRAPHY
+   ========================================================================== */
+:root {
+    --font-size-base: 14px;
+    --sidebar-bg: #0f1623;
+    --sidebar-item-hover: rgba(255, 255, 255, 0.08);
+    --sidebar-item-active: #008fd5;
+}
+
+html.dark {
+    --sidebar-bg: #1a2940;
+    --sidebar-item-hover: rgba(255, 255, 255, 0.12);
+    --sidebar-item-active: #0099e6;
+}
+
+html {
+    font-size: 11px !important;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 12px !important;
+    }
+}
 
 [style] {
     --cols-default: repeat(1, minmax(0, 1fr));
@@ -28,4 +46,295 @@
         font-size: var(--text-sm);
         line-height: var(--tw-leading, var(--text-sm--line-height));
     }
+}
+
+/* ==========================================================================
+   2. LAYOUT & DARK MODE CONTAINERS
+   ========================================================================== */
+.fi-logo {
+    color: #ffffff;
+    height: 2.5rem !important;
+}
+.fi-topbar-start img.fi-logo {
+    display: none !important;
+}
+.fi-main {
+    background-color: rgb(245 246 250 / var(--tw-bg-opacity, 1));
+}
+
+html.dark .fi-main {
+    background-color: rgb(9 14 25 / var(--tw-bg-opacity, 1));
+}
+
+html.dark .fi-main .fi-section,
+html.dark .fi-main .fi-section-content,
+html.dark .fi-main .fi-stats-overview-stat,
+html.dark .fi-main .fi-table,
+html.dark .fi-main .fi-infolist,
+html.dark .fi-main .fi-form {
+    background-color: rgb(15 23 42 / 0.82);
+}
+
+.fi-sidebar {
+    background: var(--sidebar-bg);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.fi-sidebar .fi-sidebar-header-ctn,
+.fi-sidebar .fi-sidebar-footer {
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.fi-sidebar-nav {
+    padding-inline: calc(var(--spacing) * 2.5);
+    padding-block: calc(var(--spacing) * 3);
+    scrollbar-gutter: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.fi-sidebar-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.fi-topbar {
+    background-color: #0f1623;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+html.dark .fi-topbar {
+    background-color: #090e19;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ==========================================================================
+   3. SIDEBAR ITEMS & GROUPS
+   ========================================================================== */
+.fi-sidebar-nav-groups {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 2.5);
+}
+
+.fi-sidebar-group-btn {
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 1.5);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.fi-sidebar-group-items {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 0.5);
+    padding-inline: calc(var(--spacing) * 2);
+}
+
+.fi-sidebar-item-btn,
+.fi-sidebar-group-dropdown-trigger-btn {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    border-radius: 0.5rem;
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    color: rgba(255, 255, 255, 0.6);
+    transition: all 150ms;
+    cursor: pointer;
+}
+
+.fi-sidebar-item-btn:hover,
+.fi-sidebar-group-dropdown-trigger-btn:hover {
+    background-color: var(--sidebar-item-hover);
+    color: #ffffff;
+}
+
+.fi-sidebar-item-btn > .fi-sidebar-item-label,
+.fi-sidebar-group-btn > .fi-sidebar-group-label {
+    flex: 1 1 0%;
+    white-space: nowrap;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 700;
+    color: inherit;
+}
+
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn {
+    background-color: var(--sidebar-item-active) !important;
+    color: #ffffff;
+}
+
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label,
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-icon,
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-icon {
+    color: #ffffff;
+}
+
+/* ==========================================================================
+   4. TABLE STYLES & ROW STATUS COLORS
+   ========================================================================== */
+.fi-ta-table > thead > tr {
+    background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));
+}
+
+.fi-ta-header-cell {
+    color: white;
+    border-left: 1px solid rgb(241 245 249 / var(--tw-border-opacity, 1));
+}
+
+.fi-ta-cell {
+    border-left: 1px solid rgb(241 245 249 / var(--tw-border-opacity, 1));
+}
+
+.fi-ta-cell .fi-ta-actions,
+.fi-ta-actions-cell .fi-ta-actions {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+}
+
+.fi-ta-cell .fi-ta-actions > .fi-btn {
+    width: 100%;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+html.dark .fi-ta-table > thead > tr {
+    background-color: rgb(2 6 23 / var(--tw-bg-opacity, 1));
+}
+
+html.dark .fi-ta-header-cell {
+    color: white;
+    border-left: 1px solid rgb(241 245 249 / var(--tw-border-opacity, 0.06));
+}
+
+html.dark .fi-ta-cell {
+    border-left: 1px solid rgb(241 245 249 / var(--tw-border-opacity, 0.06));
+}
+
+tr.draft-order-table-row > td { background-color: #f8fafc; }
+tr.assigned-order-table-row > td { background-color: #eff6ff; }
+tr.sent-order-table-row > td,
+tr.started-order-table-row > td,
+tr.delivering-order-table-row > td,
+tr.driver-swap-order-table-row > td { background-color: #ecfeff; }
+tr.arrived-pickup-order-table-row > td,
+tr.arrived-delivery-order-table-row > td { background-color: #fffbeb; }
+tr.delivered-order-table-row > td,
+tr.completed-order-table-row > td { background-color: #f0fdf4; }
+tr.cancelled-order-table-row > td,
+tr.trashed-order-table-row > td { background-color: #fef2f2; }
+
+html.dark tr.draft-order-table-row > td { background-color: #1f2937; }
+html.dark tr.assigned-order-table-row > td { background-color: #172554; }
+html.dark tr.sent-order-table-row > td,
+html.dark tr.started-order-table-row > td,
+html.dark tr.delivering-order-table-row > td,
+html.dark tr.driver-swap-order-table-row > td { background-color: #083344; }
+html.dark tr.arrived-pickup-order-table-row > td,
+html.dark tr.arrived-delivery-order-table-row > td { background-color: #422006; }
+html.dark tr.delivered-order-table-row > td,
+html.dark tr.completed-order-table-row > td { background-color: #14532d; }
+html.dark tr.cancelled-order-table-row > td,
+html.dark tr.trashed-order-table-row > td { background-color: #450a0a; }
+
+/* ==========================================================================
+   5. CUSTOM STATS CARDS & FILTER BARS (LIGHT & DARK)
+   ========================================================================== */
+.trip-stat-card {
+    background-color: #ffffff;
+    border: 1px solid rgb(229 231 235);
+    transition: all 150ms ease-in-out;
+}
+
+html.dark .trip-stat-card {
+    background-color: rgb(15 23 42 / 0.9) !important;
+    border-color: rgb(30 41 59 / 0.9) !important;
+}
+
+.collapsible-filter-bar {
+    background-color: rgb(255 255 255 / 0.85);
+    border: 1px solid rgb(229 231 235);
+}
+
+html.dark .collapsible-filter-bar {
+    background-color: rgb(15 23 42 / 0.8) !important;
+    border-color: rgb(30 41 59 / 0.85) !important;
+}
+
+.toolbar-toggle-btn {
+    border: 1px solid rgb(229 231 235);
+    background-color: #ffffff;
+    color: rgb(55 65 81);
+}
+
+html.dark .toolbar-toggle-btn {
+    background-color: rgb(30 41 59 / 0.9) !important;
+    border-color: rgb(51 65 85 / 0.8) !important;
+    color: rgb(226 232 240) !important;
+}
+
+html.dark .toolbar-toggle-btn:hover {
+    background-color: rgb(51 65 85 / 0.95) !important;
+    border-color: rgb(71 85 105) !important;
+}
+
+/* ==========================================================================
+   6. PILL FILTER BUTTONS & BADGES (LIGHT & DARK)
+   ========================================================================== */
+.pill-filter-btn:not(.is-active) {
+    border: 1px solid rgb(229 231 235);
+    background-color: #ffffff;
+    color: rgb(75 85 99);
+}
+
+.pill-filter-btn:not(.is-active):hover {
+    background-color: rgb(249 250 251);
+}
+
+html.dark .pill-filter-btn:not(.is-active) {
+    background-color: rgb(30 41 59 / 0.9) !important;
+    border-color: rgb(51 65 85 / 0.8) !important;
+    color: rgb(203 213 225) !important;
+}
+
+html.dark .pill-filter-btn:not(.is-active):hover {
+    background-color: rgb(51 65 85 / 0.95) !important;
+    border-color: rgb(71 85 105) !important;
+    color: #ffffff !important;
+}
+
+html.dark .pill-filter-btn:not(.is-active) .pill-count-badge {
+    background-color: rgb(51 65 85 / 0.9) !important;
+    color: rgb(148 163 184) !important;
+}
+
+/* ==========================================================================
+   7. CARD PICKER & CUSTOM SCROLLBAR
+   ========================================================================== */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(209 213 219 / 0.5) transparent;
+}
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgb(209 213 219 / 0.5);
+    border-radius: 9999px;
+}
+
+:is(.dark) .custom-scrollbar {
+    scrollbar-color: rgb(75 85 99 / 0.5) transparent;
+}
+:is(.dark) .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgb(75 85 99 / 0.5);
 }

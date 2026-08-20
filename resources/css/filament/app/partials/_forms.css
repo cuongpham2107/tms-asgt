@@ -13,6 +13,30 @@
     }
 }
 
+/* Pill Filter Styles */
+.pill-filter-btn {
+    border: 1px solid rgb(229 231 235);
+    background-color: #ffffff;
+    color: rgb(75 85 99);
+}
+
+html.dark .pill-filter-btn:not(.is-active) {
+    background-color: rgb(30 41 59 / 0.85) !important;
+    border-color: rgb(51 65 85 / 0.8) !important;
+    color: rgb(203 213 225) !important;
+}
+
+html.dark .pill-filter-btn:not(.is-active):hover {
+    background-color: rgb(51 65 85 / 0.95) !important;
+    border-color: rgb(71 85 105) !important;
+    color: rgb(241 245 249) !important;
+}
+
+html.dark .pill-filter-btn:not(.is-active) .pill-count-badge {
+    background-color: rgb(51 65 85 / 0.9) !important;
+    color: rgb(148 163 184) !important;
+}
+
 /* Card picker scrollbar */
 .custom-scrollbar {
     scrollbar-width: thin;

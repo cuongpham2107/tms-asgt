@@ -10,6 +10,41 @@
             display: flex;
             gap: calc(var(--spacing) * 2) !important;
         }
+        .pill-filter-btn:not(.is-active) {
+            background-color: #ffffff;
+            border: 1px solid rgb(229 231 235);
+            color: rgb(55 65 81);
+        }
+        .pill-filter-btn:not(.is-active):hover {
+            background-color: rgb(249 250 251);
+        }
+        html.dark .pill-filter-wrapper .pill-filter-btn:not(.is-active) {
+            background-color: rgb(30 41 59 / 0.9) !important;
+            border-color: rgb(51 65 85 / 0.8) !important;
+            color: rgb(226 232 240) !important;
+        }
+        html.dark .pill-filter-wrapper .pill-filter-btn:not(.is-active):hover {
+            background-color: rgb(51 65 85 / 0.95) !important;
+            border-color: rgb(71 85 105) !important;
+            color: #ffffff !important;
+        }
+        html.dark .pill-filter-wrapper .pill-filter-btn:not(.is-active) .pill-count-badge {
+            background-color: rgb(51 65 85 / 0.9) !important;
+            color: rgb(148 163 184) !important;
+        }
+
+        /* Color classes for active pill filters */
+        .pill-filter-btn.is-active {
+            color: #ffffff !important;
+            border-color: transparent !important;
+        }
+        .pill-filter-btn.is-active.bg-blue-600 { background-color: #2563eb !important; }
+        .pill-filter-btn.is-active.bg-amber-500 { background-color: #f59e0b !important; }
+        .pill-filter-btn.is-active.bg-emerald-500 { background-color: #10b981 !important; }
+        .pill-filter-btn.is-active.bg-sky-500 { background-color: #0ea5e9 !important; }
+        .pill-filter-btn.is-active.bg-orange-400 { background-color: #fb923c !important; }
+        .pill-filter-btn.is-active.bg-red-500, .pill-filter-btn.is-active.bg-red-600 { background-color: #ef4444 !important; }
+        .pill-filter-btn.is-active.bg-gray-400, .pill-filter-btn.is-active.bg-gray-500 { background-color: #6b7280 !important; }
     </style>
     <div class="flex items-center overflow-x-auto scrollbar-none">
         @if ($prefix = $getLabelPrefix())
@@ -33,9 +68,8 @@
                     type="button"
                     wire:click="{{ $clickAction }}('{{ $keyStr }}')"
                     @class([
-                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 whitespace-nowrap cursor-pointer',
-                        $color . ' border-transparent text-white shadow-xs dark:shadow-none' => $isActive,
-                        'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-gray-700' => !$isActive,
+                        'pill-filter-btn inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-150 whitespace-nowrap cursor-pointer',
+                        'is-active ' . $color . ' border-transparent text-white shadow-xs dark:shadow-none' => $isActive,
                     ])
                 >
                     @if ($icon)
@@ -52,9 +86,9 @@
 
                     @if ($count !== null)
                         <span @class([
-                            'text-[10px] font-bold rounded-full px-1.5 py-0.5',
+                            'pill-count-badge text-[10px] font-bold rounded-full px-1.5 py-0.5',
                             'bg-white/20 text-white dark:bg-white/25' => $isActive,
-                            'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300' => !$isActive,
+                            'bg-gray-100 text-gray-500' => !$isActive,
                         ])>
                             {{ $count }}
                         </span>
