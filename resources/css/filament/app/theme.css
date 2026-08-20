@@ -204,6 +204,52 @@ html.dark .fi-topbar {
     white-space: nowrap;
 }
 
+/* Light mode primary button in table action */
+.fi-ta-cell .fi-ta-actions > .fi-btn.fi-color-primary,
+.fi-ta-cell .fi-ta-actions > .fi-btn[style*="--c-400"] {
+    background-color: rgb(239 246 255);
+    border: 1px solid rgb(191 219 254);
+    color: rgb(37 99 235);
+}
+.fi-ta-cell .fi-ta-actions > .fi-btn.fi-color-primary:hover,
+.fi-ta-cell .fi-ta-actions > .fi-btn[style*="--c-400"]:hover {
+    background-color: rgb(219 234 254);
+}
+
+/* Dark mode primary button in table action */
+html.dark .fi-ta-cell .fi-ta-actions > .fi-btn.fi-color-primary,
+html.dark .fi-ta-cell .fi-ta-actions > .fi-btn[style*="--c-400"] {
+    background-color: rgb(30 58 138 / 0.4) !important;
+    border: 1px solid rgb(30 58 138 / 0.8) !important;
+    color: rgb(147 197 253) !important;
+}
+html.dark .fi-ta-cell .fi-ta-actions > .fi-btn.fi-color-primary:hover,
+html.dark .fi-ta-cell .fi-ta-actions > .fi-btn[style*="--c-400"]:hover {
+    background-color: rgb(30 58 138 / 0.6) !important;
+    color: #ffffff !important;
+}
+
+/* Dark mode gray action group button in table */
+html.dark .fi-ta-cell .fi-ta-actions > .fi-btn:not(.fi-color-primary):not([style*="--c-400"]) {
+    background-color: rgb(30 41 59 / 0.85) !important;
+    border: 1px solid rgb(51 65 85 / 0.8) !important;
+    color: rgb(226 232 240) !important;
+}
+html.dark .fi-ta-cell .fi-ta-actions > .fi-btn:not(.fi-color-primary):not([style*="--c-400"]):hover {
+    background-color: rgb(51 65 85 / 0.95) !important;
+    color: #ffffff !important;
+}
+
+html.dark .toolbar-mine-btn {
+    background-color: rgb(30 41 59 / 0.85) !important;
+    border: 1px solid rgb(51 65 85 / 0.8) !important;
+    color: rgb(226 232 240) !important;
+}
+html.dark .toolbar-mine-btn:hover {
+    background-color: rgb(51 65 85 / 0.95) !important;
+    color: #ffffff !important;
+}
+
 html.dark .fi-ta-table > thead > tr {
     background-color: rgb(2 6 23 / var(--tw-bg-opacity, 1));
 }

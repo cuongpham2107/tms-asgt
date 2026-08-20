@@ -173,14 +173,12 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
             ->label('Tạo đơn hàng ngoài')
             ->size('lg')
             ->icon('heroicon-o-truck')
+            ->color('success')
             ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
             ->extraModalFooterActions(fn (Action $action): array => [
                 $action->makeModalSubmitAction('createAndSend', arguments: ['send_immediately' => true])
                     ->label('Tạo và Gửi')
                     ->color('primary'),
-            ])
-            ->extraAttributes([
-                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 cursor-pointer transition-colors shadow-xs',
             ])
             // ->slideOver()
             ->modal()
