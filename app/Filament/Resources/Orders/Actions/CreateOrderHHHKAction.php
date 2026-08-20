@@ -160,7 +160,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->size('lg')
             ->icon('heroicon-o-globe-asia-australia')
             ->extraAttributes([
-                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors ',
+                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 cursor-pointer transition-colors shadow-xs',
             ])
             ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
             ->extraModalFooterActions(fn (Action $action): array => [

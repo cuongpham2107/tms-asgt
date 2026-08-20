@@ -180,7 +180,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                     ->color('primary'),
             ])
             ->extraAttributes([
-                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#4CAF50] cursor-pointer hover:bg-[#45a049] transition-colors',
+                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 cursor-pointer transition-colors shadow-xs',
             ])
             // ->slideOver()
             ->modal()

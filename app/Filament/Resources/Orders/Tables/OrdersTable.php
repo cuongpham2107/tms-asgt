@@ -400,7 +400,7 @@ class OrdersTable extends BaseTable
         }
 
         $arrowIcon = <<<'SVG'
-                        <svg  xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                        <svg class="text-gray-400 dark:text-gray-500" xmlns="http://www.w3.org/2000/svg" width="18" height="18"
                             fill="currentColor" viewBox="0 0 24 24" >
                             <path d="M6 13h8.09l-3.3 3.29 1.42 1.42 5.7-5.71-5.7-5.71-1.42 1.42 3.3 3.29H6z"></path>
                         </svg>
@@ -411,7 +411,7 @@ class OrdersTable extends BaseTable
                 $isLast = $index === $locations->count() - 1;
 
                 return '
-                    <div class="flex items-center gap-1">
+                    <div class="flex items-center gap-1 text-gray-900 dark:text-gray-100">
                         <div class="
                             text-sm
                             whitespace-nowrap
@@ -441,14 +441,17 @@ class OrdersTable extends BaseTable
 
         $trip = $record->trip;
         if ($trip?->vehicle && $trip->vehicle->type === VehicleOwnerType::Rent) {
+            $owner = e($trip->vehicle->owner ?? '—');
+            $typeLabel = e($trip->vehicle->vehicle_type?->getLabel() ?? '—');
+
             return new HtmlString(
                 <<<HTML
                     <div class="flex flex-col items-center gap-1.5 leading-tight text-center">
-                        <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-semibold text-gray-700 dark:text-gray-200">
-                            <span class="font-bold text-sm text-black">{$trip?->vehicle->owner}</span>
+                        <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-semibold">
+                            <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{$owner}</span>
                         </div>
-                        <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-300">
-                            <span class="whitespace-nowrap">{$trip?->vehicle->vehicle_type?->getLabel()}</span>
+                        <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+                            <span class="whitespace-nowrap">{$typeLabel}</span>
                         </div>
                     </div>
                 HTML
@@ -459,10 +462,10 @@ class OrdersTable extends BaseTable
 
         return new HtmlString(<<<HTML
             <div class="flex flex-col items-center gap-1.5 leading-tight text-center">
-                <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-semibold text-gray-700 dark:text-gray-200">
-                    <span class="font-bold text-sm text-black">{$vehiclePlate}</span>
+                <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-semibold">
+                    <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{$vehiclePlate}</span>
                 </div>
-                <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-300">
+                <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">
                     <span class="whitespace-nowrap">{$driverName}</span>
                 </div>
             </div>

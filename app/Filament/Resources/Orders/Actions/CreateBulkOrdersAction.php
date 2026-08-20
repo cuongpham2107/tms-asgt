@@ -42,7 +42,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
             ->modalHeading('Tạo/Phân tách nhiều đơn hàng cùng tuyến')
             ->modalDescription('Khai báo thông tin lộ trình chung, sau đó phân chia hàng hóa cho từng xe vận chuyển tương ứng.')
             ->extraAttributes([
-                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-gray-500 cursor-pointer hover:bg-gray-600 transition-colors',
+                'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-slate-600 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 cursor-pointer transition-colors shadow-xs',
             ])
             ->stickyModalFooter()
             ->schema([

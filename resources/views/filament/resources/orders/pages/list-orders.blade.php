@@ -55,7 +55,7 @@
             x-show="isFiltersOpen"
             x-collapse
             x-cloak
-            class="rounded-xl flex flex-col divide-y divide-gray-100 dark:divide-gray-800 bg-white/40 p-2 border border-gray-100 dark:border-gray-800 dark:bg-gray-900/30"
+            class="rounded-xl flex flex-col divide-y divide-gray-100 dark:divide-gray-800 p-2 border border-gray-200 bg-white/70 dark:border-gray-800 dark:bg-gray-900/60 shadow-2xs"
         >
             {{ $this->filtersForm }}
         </div>
@@ -65,19 +65,19 @@
             <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span>Đang lọc:</span>
                 @if ($activeOrderTypeFilter !== 'all')
-                    <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                    <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 dark:border dark:border-blue-800/50">
                         {{ $orderTypeFilters[$activeOrderTypeFilter]['label'] ?? $activeOrderTypeFilter }}
                         <button wire:click="filterOrderType('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
                     </span>
                 @endif
                 @if ($activeStatusFilter !== 'all')
-                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 dark:border dark:border-amber-800/50">
                         {{ $orderStatusFilters[$activeStatusFilter]['label'] ?? $activeStatusFilter }}
                         <button wire:click="filterStatus('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
                     </span>
                 @endif
                 @if ($activePlaceFilter !== 'all')
-                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-amber-300">
+                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border dark:border-emerald-800/50">
                         {{ $activePlaceFilter ? ($orderPlaceFilters[(string) $activePlaceFilter] ?? $activePlaceFilter) : '' }}
                         <button wire:click="filterPlace('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
                     </span>

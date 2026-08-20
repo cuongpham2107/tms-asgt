@@ -34,8 +34,8 @@
                     wire:click="{{ $clickAction }}('{{ $keyStr }}')"
                     @class([
                         'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 whitespace-nowrap cursor-pointer',
-                        $color . ' border-transparent text-white shadow-sm' => $isActive,
-                        'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700' => !$isActive,
+                        $color . ' border-transparent text-white shadow-xs dark:shadow-none' => $isActive,
+                        'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-gray-700' => !$isActive,
                     ])
                 >
                     @if ($icon)
@@ -53,8 +53,8 @@
                     @if ($count !== null)
                         <span @class([
                             'text-[10px] font-bold rounded-full px-1.5 py-0.5',
-                            'bg-white/20 text-white' => $isActive,
-                            'bg-gray-100 text-gray-500 dark:bg-gray-600 dark:text-gray-400' => !$isActive,
+                            'bg-white/20 text-white dark:bg-white/25' => $isActive,
+                            'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300' => !$isActive,
                         ])>
                             {{ $count }}
                         </span>

@@ -17,6 +17,12 @@ abstract class TestCase extends BaseTestCase
 
         $app->make(Kernel::class)->bootstrap();
 
+        $testViewPath = sys_get_temp_dir().'/laravel_test_views';
+        if (! is_dir($testViewPath)) {
+            @mkdir($testViewPath, 0777, true);
+        }
+        config(['view.compiled' => $testViewPath]);
+
         return $app;
     }
 }
