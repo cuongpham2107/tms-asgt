@@ -44,7 +44,7 @@ class ListTrips extends ListRecords
     public string $orderType = 'HHHK';
 
     #[Url]
-    public ?string $activePlaceFilter = 'all';
+    public ?string $activePlaceFilter = 'NBA';
 
     /**
      * @var array<string, string>

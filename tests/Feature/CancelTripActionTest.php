@@ -45,6 +45,7 @@ beforeEach(function () {
 test('cancelling a trip resets the vehicle status to ready', function () {
     Livewire::test(ListTrips::class)
         ->set('orderType', 'all')
+        ->set('activePlaceFilter', 'all')
         ->mountTableAction('cancel_trip', $this->trip)
         ->setTableActionData([
             'km_reading' => 250,
