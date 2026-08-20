@@ -28,7 +28,7 @@ class CancelTripAction
             ->modalHeading('Huỷ chuyến')
             ->modalDescription('Chuyến sẽ bị huỷ, tất cả đơn hàng đang chạy sẽ chuyển sang trạng thái Huỷ. KM sẽ được tính theo số km hiện tại.')
             ->modalSubmitActionLabel('Xác nhận huỷ')
-            ->form([
+            ->schema([
                 TextInput::make('km_reading')
                     ->label('Số km hiện tại')
                     ->numeric()

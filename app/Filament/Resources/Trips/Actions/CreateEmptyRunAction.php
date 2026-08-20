@@ -23,10 +23,10 @@ class CreateEmptyRunAction
         return Action::make('create_empty_run')
             ->label('Tạo chuyến không hàng')
             ->icon('heroicon-o-truck')
-            ->color('success')
+            ->color('primary')
             ->modalHeading('Tạo chuyến không hàng')
             ->modalDescription('Tạo chuyến đi rỗng (chuyến không hàng) cho tài xế.')
-            ->form([
+            ->schema([
                 Select::make('vehicle_id')
                     ->label('Xe')
                     ->options(fn (): array => Vehicle::query()

@@ -159,7 +159,9 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->label('Tạo đơn hàng không')
             ->size('lg')
             ->icon('heroicon-o-globe-asia-australia')
-            ->color('primary')
+            ->extraAttributes([
+                'class' => 'header-action-hhhk font-bold',
+            ])
             ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
             ->extraModalFooterActions(fn (Action $action): array => [
                 $action->makeModalSubmitAction('createAndSend', arguments: ['send_immediately' => true])
