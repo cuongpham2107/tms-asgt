@@ -30,14 +30,6 @@
                 >
                     <x-filament::icon icon="heroicon-o-funnel" class="h-4 w-4 text-primary-500" />
                     <span>Bộ lọc</span>
-                    @php
-                        $activeCount = ($activeOrderTypeFilter !== 'all' ? 1 : 0) + ($activeStatusFilter !== 'all' ? 1 : 0) + ($activePlaceFilter !== 'all' ? 1 : 0);
-                    @endphp
-                    @if ($activeCount > 0)
-                        <span class="rounded-full bg-primary-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                            {{ $activeCount }}
-                        </span>
-                    @endif
                     <x-filament::icon
                         icon="heroicon-m-chevron-down"
                         class="h-3.5 w-3.5 text-gray-400 transition-transform duration-200"

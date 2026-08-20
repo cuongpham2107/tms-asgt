@@ -254,3 +254,83 @@ test('trips list hides completed and cancelled trips by default and only shows t
         ->assertCanSeeTableRecords([$cancelledTrip])
         ->assertCanNotSeeTableRecords([$pendingTrip, $completedTrip]);
 });
+
+test('trips list filters by order area place correctly', function () {
+    $vehicle = Vehicle::create([
+        'plate_number' => '29C-888.88',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $driver = User::factory()->create();
+
+    $areaNba = Area::create([
+        'code' => 'NBA',
+        'name' => 'Nội Bài',
+    ]);
+
+    $areaHni = Area::create([
+        'code' => 'HNI',
+        'name' => 'Hà Nội',
+    ]);
+
+    $customer = Customer::create([
+        'code' => 'CUST-AREA',
+        'name' => 'Customer Area',
+    ]);
+
+    $tripNba = Trip::create([
+        'trip_code' => 'TRIP-NBA-1',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Pending,
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-NBA-1',
+        'trip_id' => $tripNba->id,
+        'area_id' => $areaNba->id,
+        'customer_id' => $customer->id,
+        'created_by' => $driver->id,
+        'pickup_address' => 'Nội Bài Airport',
+        'status' => OrderStatus::Assigned,
+    ]);
+
+    $tripHni = Trip::create([
+        'trip_code' => 'TRIP-HNI-1',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Pending,
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-HNI-1',
+        'trip_id' => $tripHni->id,
+        'area_id' => $areaHni->id,
+        'customer_id' => $customer->id,
+        'created_by' => $driver->id,
+        'pickup_address' => 'Hà Nội Center',
+        'status' => OrderStatus::Assigned,
+    ]);
+
+    // When filtering by NBA
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])
+        ->call('filterPlace', 'NBA')
+        ->assertStatus(200)
+        ->assertCanSeeTableRecords([$tripNba])
+        ->assertCanNotSeeTableRecords([$tripHni]);
+
+    // When filtering by HNI
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])
+        ->call('filterPlace', 'HNI')
+        ->assertStatus(200)
+        ->assertCanSeeTableRecords([$tripHni])
+        ->assertCanNotSeeTableRecords([$tripNba]);
+
+    // When filtering by all
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])
+        ->call('filterPlace', 'all')
+        ->assertStatus(200)
+        ->assertCanSeeTableRecords([$tripNba, $tripHni]);
+});

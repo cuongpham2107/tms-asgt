@@ -8,6 +8,7 @@ use App\Filament\Forms\Components\OrderDateRangePicker;
 use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\Trips\Actions\CreateEmptyRunAction;
 use App\Filament\Resources\Trips\TripResource;
+use App\Models\Area;
 use App\Models\Trip;
 use Carbon\Carbon;
 use Filament\Forms\Components\TextInput;
@@ -41,6 +42,14 @@ class ListTrips extends ListRecords
 
     #[Url]
     public string $orderType = 'HHHK';
+
+    #[Url]
+    public ?string $activePlaceFilter = 'all';
+
+    /**
+     * @var array<string, string>
+     */
+    public array $orderPlaceFilters = [];
 
     public array $orderTypeFilters = [
 
@@ -78,6 +87,12 @@ class ListTrips extends ListRecords
         ];
 
         parent::mount();
+
+        $this->orderPlaceFilters = Area::query()
+            ->orderBy('sort_order', 'asc')
+            ->pluck('code', 'code')
+            ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
+            ->toArray();
     }
 
     protected function getHeaderActions(): array
@@ -203,6 +218,13 @@ class ListTrips extends ListRecords
         $this->resetPage();
     }
 
+    public function filterPlace(string $place): void
+    {
+        $this->activePlaceFilter = $place;
+
+        $this->resetPage();
+    }
+
     public function getOrderTypeCount(string $key): int
     {
         return $this->applyActiveFilters(Trip::query(), except: 'orderType')
@@ -237,6 +259,19 @@ class ListTrips extends ListRecords
             ->count();
     }
 
+    public function getOrderPlaceCount(string $place): int
+    {
+        return $this->applyActiveFilters(Trip::query(), except: 'place')
+            ->when(
+                $place !== 'all',
+                fn (Builder $query): Builder => $query->whereHas(
+                    'orders.area',
+                    fn (Builder $aq) => $aq->where('code', $place),
+                ),
+            )
+            ->count();
+    }
+
     private function applyActiveFilters(Builder $query, string $except = ''): Builder
     {
         return $query
@@ -257,7 +292,8 @@ class ListTrips extends ListRecords
             ->when($except !== 'status' && $this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
             ->when($except !== 'status' && $this->activeStatusFilter === 'all', fn (Builder $query): Builder => $query->whereNotIn('status', [TripStatus::Completed->value, TripStatus::Cancelled->value]))
             ->when($except !== 'vehicleOwner' && $this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
-            ->when($except !== 'orderType' && $this->orderType !== 'all', fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q) => $q->where('type', $this->orderType)));
+            ->when($except !== 'orderType' && $this->orderType !== 'all', fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q) => $q->where('type', $this->orderType)))
+            ->when($except !== 'place' && $this->activePlaceFilter !== 'all', fn (Builder $query): Builder => $query->whereHas('orders.area', fn (Builder $q) => $q->where('code', $this->activePlaceFilter)));
     }
 
     public function filtersForm(Schema $form): Schema
@@ -279,6 +315,19 @@ class ListTrips extends ListRecords
                     ->countCallback(fn ($key) => $this->getVehicleOwnerCount($key))
                     ->activeValue(fn ($livewire) => $livewire->vehicleOwner)
                     ->clickAction('filterVehicleOwner'),
+                PillFilter::make('activePlaceFilter')
+                    ->options(fn (): array => Area::query()
+                        ->when(
+                            $this->orderType !== 'all',
+                            fn ($query) => $query->where('type', $this->orderType)
+                        )
+                        ->orderBy('sort_order', 'asc')
+                        ->pluck('code', 'code')
+                        ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
+                        ->toArray() + ['all' => 'Tất cả'])
+                    ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
+                    ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
+                    ->clickAction('filterPlace'),
 
             ]);
     }
@@ -348,6 +397,10 @@ class ListTrips extends ListRecords
             )
             ->when($this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
             ->when($this->orderType !== 'all', fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q) => $q->where('type', $this->orderType)))
+            ->when(
+                $this->activePlaceFilter !== 'all',
+                fn (Builder $query): Builder => $query->whereHas('orders.area', fn (Builder $aq) => $aq->where('code', $this->activePlaceFilter)),
+            )
             ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
                 if (filled($this->dateFrom) && filled($this->dateTo)) {
                     return $query->whereBetween('started_at', [

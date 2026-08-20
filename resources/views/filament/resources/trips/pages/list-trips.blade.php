@@ -65,14 +65,6 @@
                 >
                     <x-filament::icon icon="heroicon-o-funnel" class="h-4 w-4 text-primary-500" />
                     <span>Bộ lọc</span>
-                    @php
-                        $activeCount = ($activeStatusFilter !== 'all' ? 1 : 0) + ($vehicleOwner !== 'all' ? 1 : 0) + ($orderType !== 'all' ? 1 : 0);
-                    @endphp
-                    @if ($activeCount > 0)
-                        <span class="rounded-full bg-primary-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                            {{ $activeCount }}
-                        </span>
-                    @endif
                     <x-filament::icon
                         icon="heroicon-m-chevron-down"
                         class="h-3.5 w-3.5 text-gray-400 transition-transform duration-200"
@@ -101,7 +93,7 @@
         </div>
 
         {{-- Active filter summary --}}
-        @if ($activeStatusFilter !== 'all' || $vehicleOwner !== 'all' || $orderType !== 'all')
+        @if ($activeStatusFilter !== 'all' || $vehicleOwner !== 'all' || $orderType !== 'all' || $activePlaceFilter !== 'all')
             <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span>Đang lọc:</span>
                 @if ($activeStatusFilter !== 'all')
@@ -120,6 +112,12 @@
                 <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-700 dark:border dark:border-blue-800/50">
                     {{ $orderTypeFilters[$orderType]['label'] ?? $orderType }}
                     <button wire:click="filterOrderType('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
+                </span>
+                @endif
+                @if ($activePlaceFilter !== 'all')
+                <span class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 font-medium text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 dark:border dark:border-purple-800/50">
+                    Khu vực: {{ $activePlaceFilter ? ($orderPlaceFilters[(string) $activePlaceFilter] ?? $activePlaceFilter) : '' }}
+                    <button wire:click="filterPlace('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
                 </span>
                 @endif
             </div>
