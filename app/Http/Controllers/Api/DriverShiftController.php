@@ -129,7 +129,8 @@ class DriverShiftController extends Controller
         // may still be in the same vehicle after all trips are done)
         $vehicle = $shift->trips()
             ->latest('started_at')
-            ->first()?->vehicle;
+            ->first()?->vehicle
+            ?? $user->vehiclesAsDriver()->first();
 
         if ($vehicle === null) {
             return response()->json(['message' => 'Không tìm thấy xe đang hoạt động trong ca này'], 404);
@@ -192,13 +193,24 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Cần nhập km kết thúc trước khi kết thúc ca.'], 422);
         }
 
-        // Gate: không cho kết thúc ca nếu còn trip đang chạy với đơn hàng chưa hoàn thành
+        // Gate: không cho kết thúc ca nếu còn trip đang chạy với đơn hàng chưa hoàn thành (Sent, InTransit)
         $incompleteTrips = Trip::where('driver_id', $user->id)
-            ->whereHas('orders', function ($q) {
-                $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value]);
+            ->where(function ($query) {
+                $query->whereHas('orders', function ($q) {
+                    $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value]);
+                })->orWhere(function ($q) {
+                    $q->where('is_empty_run', true)
+                        ->whereIn('status', [
+                            TripStatus::Started,
+                            TripStatus::ArrivedPickup,
+                            TripStatus::Delivering,
+                            TripStatus::ArrivedDelivery,
+                            TripStatus::Delivered,
+                            TripStatus::ReturnTrip,
+                        ]);
+                });
             })
             ->whereIn('status', [
-                TripStatus::Pending,
                 TripStatus::Started,
                 TripStatus::ArrivedPickup,
                 TripStatus::Delivering,
@@ -209,10 +221,10 @@ class DriverShiftController extends Controller
             ->get();
 
         if ($incompleteTrips->isNotEmpty()) {
-            $codes = $incompleteTrips->pluck('trip_code')->implode(', ');
+            $codes = $incompleteTrips->pluck('trip_code')->filter()->implode(', ');
             $orderCount = $incompleteTrips->sum(function (Trip $trip) {
                 return $trip->orders()
-                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value])
+                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
                     ->count();
             });
 
@@ -284,13 +296,9 @@ class DriverShiftController extends Controller
             ->latest('start_time')
             ->first();
 
-        // only return the active shift if it started today
-        // if ($shift) {
-        //     $start = $shift->start_time ? Carbon::parse($shift->start_time) : null;
-        //     if (! $start || ! $start->isToday()) {
-        //         return response()->json(['shift' => null]);
-        //     }
-        // }
+        if ($shift) {
+            app(ShiftKmCalculatorService::class)->calculate($shift);
+        }
 
         return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')])) : null]);
     }

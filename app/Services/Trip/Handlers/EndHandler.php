@@ -31,18 +31,16 @@ class EndHandler implements CheckpointHandlerInterface
                 // Trip chưa hoàn thành — driver_swap giữa chừng
                 app(TripKmCalculatorService::class)->calculate($activeTrip, endKm: $kmReading);
                 $activeTrip->refresh();
-
-                if ($activeTrip->shift) {
-                    app(ShiftKmCalculatorService::class)->calculate($activeTrip->shift);
-                }
+                app(ShiftKmCalculatorService::class)->calculateForTrip($activeTrip);
 
                 $activeTrip->end_km = $kmReading;
                 $activeTrip->status = TripStatus::DriverSwap;
                 $activeTrip->save();
 
-                $activeTrip->orders()
-                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
-                    ->update(['status' => OrderStatus::DriverSwap->value]);
+                foreach ($activeTrip->orders()->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])->get() as $order) {
+                    $order->status = OrderStatus::DriverSwap;
+                    $order->save();
+                }
 
                 $activeTripId = $activeTrip->id;
             }

@@ -9,6 +9,7 @@ use App\Enums\TripStatus;
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\User;
+use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
 use App\Services\Trip\TripKmLimitService;
 use Filament\Actions\Action;
@@ -167,6 +168,8 @@ class DriverSwapAction
                 $record->orders()
                     ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
                     ->update(['status' => OrderStatus::DriverSwap->value]);
+
+                app(ShiftKmCalculatorService::class)->calculateForTrip($record);
 
                 Notification::make()
                     ->title('Đảo lái thành công')

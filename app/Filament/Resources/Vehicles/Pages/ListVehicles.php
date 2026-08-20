@@ -42,7 +42,7 @@ class ListVehicles extends ListRecords
 
     public array $vehicleStatusFilters = [
         'all' => [
-            'color' => 'bg-gray-900',
+            'color' => 'bg-blue-600',
             'icon' => 'heroicon-o-squares-2x2',
             'label' => 'Tất cả',
         ],
@@ -70,17 +70,17 @@ class ListVehicles extends ListRecords
 
     public array $vehicleTypes = [
         'all' => [
-            'color' => 'bg-black',
+            'color' => 'bg-blue-600',
             'icon' => '',
             'label' => 'Tất cả',
         ],
         'company' => [
-            'color' => 'bg-green-500',
+            'color' => 'bg-blue-500',
             'icon' => 'heroicon-o-home-modern',
             'label' => 'Xe công ty',
         ],
         'rent' => [
-            'color' => 'bg-yellow-500',
+            'color' => 'bg-amber-500',
             'icon' => 'heroicon-o-currency-dollar',
             'label' => 'Xe thuê',
         ],

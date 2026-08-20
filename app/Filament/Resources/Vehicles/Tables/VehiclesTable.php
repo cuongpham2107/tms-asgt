@@ -7,8 +7,10 @@ use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Vehicle;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class VehiclesTable extends BaseTable
 {
@@ -65,6 +67,13 @@ class VehiclesTable extends BaseTable
                     ->label('Trạng thái')
                     ->badge()
                     ->sortable(),
+                TextColumn::make('dangerous_goods_permit_expiry_date')
+                    ->label('Hạn GP Hàng nguy hiểm')
+                    ->badge()
+                    ->color(fn (?Vehicle $record): string => $record?->getDangerousGoodsPermitStatus()['color'] ?? 'gray')
+                    ->state(fn (?Vehicle $record): string => $record?->getDangerousGoodsPermitStatus()['formatted_date'] ?? '—')
+                    ->description(fn (?Vehicle $record): ?string => $record?->dangerous_goods_permit_expiry_date ? $record->getDangerousGoodsPermitStatus()['label'] : null)
+                    ->sortable(),
                 TextColumn::make('make')
                     ->label('Hiệu xe')
                     ->searchable()
@@ -86,6 +95,15 @@ class VehiclesTable extends BaseTable
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                Filter::make('expired_dg_permit')
+                    ->label('Có GP Hàng nguy hiểm đã hết hạn')
+                    ->query(fn (Builder $query): Builder => $query->whereNotNull('dangerous_goods_permit_expiry_date')->where('dangerous_goods_permit_expiry_date', '<', now()->toDateString())),
+
+                Filter::make('expiring_soon_dg_permit')
+                    ->label('GP Hàng nguy hiểm sắp hết hạn (30 ngày)')
+                    ->query(fn (Builder $query): Builder => $query->whereBetween('dangerous_goods_permit_expiry_date', [now()->toDateString(), now()->addDays(30)->toDateString()])),
             ]);
     }
 }

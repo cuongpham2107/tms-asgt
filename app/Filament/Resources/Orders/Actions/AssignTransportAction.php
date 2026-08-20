@@ -15,6 +15,7 @@ use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,8 @@ class AssignTransportAction extends CreatesOrderTransportCards
             ->label('Gán lái, xe')
             ->icon('heroicon-o-truck')
             ->color('primary')
+            ->button()
+            ->size('xs')
             ->hidden(fn (Order $record): bool => ! $record->status->canAssign())
             ->modal()
             ->modalHeading('Gán lái, xe')
@@ -40,10 +43,12 @@ class AssignTransportAction extends CreatesOrderTransportCards
                         VehiclePicker::make('vehicle_id')
                             ->label('Phương tiện')
                             ->live()
-                            ->afterStateUpdated(function (Set $set, $state): void {
+                            ->afterStateUpdated(function (Set $set, Get $get, $state): void {
                                 if ($state) {
-                                    $vehicle = Vehicle::find($state);
-                                    $set('driver_id', $vehicle?->current_driver_id ?? null);
+                                    $vehicle = Vehicle::query()->find($state);
+                                    if (blank($get('driver_id'))) {
+                                        $set('driver_id', $vehicle?->current_driver_id ?? null);
+                                    }
                                 } else {
                                     $set('driver_id', null);
                                 }

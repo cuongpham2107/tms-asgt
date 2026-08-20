@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Vehicles\Schemas;
 
 use App\Models\Vehicle;
 use CodeWithDennis\FilamentAdvancedChoice\Filament\Forms\Components\RadioCard;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -152,6 +154,31 @@ class VehicleForm
                             ->maxLength(1000)
                             ->columnSpanFull(),
                     ])->columnSpanFull()->columns(2),
+
+                Section::make('Giấy phép Vận chuyển Hàng nguy hiểm')
+                    ->icon('heroicon-o-shield-exclamation')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->collapsible()
+                    ->schema([
+                        TextInput::make('dangerous_goods_permit_number')
+                            ->label('Số giấy phép Hàng nguy hiểm'),
+                        DatePicker::make('dangerous_goods_permit_issue_date')
+                            ->label('Ngày cấp giấy phép'),
+                        DatePicker::make('dangerous_goods_permit_expiry_date')
+                            ->label('Ngày hết hạn giấy phép')
+                            ->helperText(fn (?Vehicle $record): ?string => $record?->getDangerousGoodsPermitStatus()['label']),
+                        FileUpload::make('dangerous_goods_permit_image')
+                            ->label('Ảnh / File giấy phép')
+                            ->image()
+                            ->imageEditor()
+                            ->directory('permits/dangerous_goods')
+                            ->openable()
+                            ->downloadable()
+                            ->disk('public')
+                            ->previewable()
+                            ->columnSpanFull(),
+                    ]),
             ]);
     }
 }

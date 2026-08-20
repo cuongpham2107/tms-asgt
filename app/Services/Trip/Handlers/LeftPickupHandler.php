@@ -13,8 +13,9 @@ class LeftPickupHandler implements CheckpointHandlerInterface
         $trip->status = TripStatus::Delivering;
         $trip->save();
 
-        $trip->orders()
-            ->where('status', OrderStatus::Sent->value)
-            ->update(['status' => OrderStatus::InTransit->value]);
+        foreach ($trip->orders()->where('status', OrderStatus::Sent->value)->get() as $order) {
+            $order->status = OrderStatus::InTransit;
+            $order->save();
+        }
     }
 }

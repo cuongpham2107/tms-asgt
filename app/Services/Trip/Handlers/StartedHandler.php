@@ -34,19 +34,22 @@ class StartedHandler implements CheckpointHandlerInterface
         $occurredAt = $payload['occurred_at'] ?? now();
 
         // Chuyển Assigned → Sent khi trip bắt đầu lần đầu
-        $trip->orders()
-            ->where('status', OrderStatus::Assigned)
-            ->update(['status' => OrderStatus::Sent->value, 'sent_at' => $occurredAt]);
+        foreach ($trip->orders()->where('status', OrderStatus::Assigned)->get() as $order) {
+            $order->status = OrderStatus::Sent;
+            $order->sent_at = $occurredAt;
+            $order->save();
+        }
 
         // Khi trip được restart sau DriverSwap, khôi phục orders về Sent
-        $trip->orders()
-            ->where('status', OrderStatus::DriverSwap)
-            ->update(['status' => OrderStatus::Sent->value]);
+        foreach ($trip->orders()->where('status', OrderStatus::DriverSwap)->get() as $order) {
+            $order->status = OrderStatus::Sent;
+            $order->save();
+        }
 
         // Set sent_at cho orders đã Sent nhưng chưa có sent_at
-        $trip->orders()
-            ->where('status', OrderStatus::Sent)
-            ->whereNull('sent_at')
-            ->update(['sent_at' => $occurredAt]);
+        foreach ($trip->orders()->where('status', OrderStatus::Sent)->whereNull('sent_at')->get() as $order) {
+            $order->sent_at = $occurredAt;
+            $order->save();
+        }
     }
 }

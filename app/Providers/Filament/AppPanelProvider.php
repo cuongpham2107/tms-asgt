@@ -11,6 +11,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
@@ -20,7 +21,9 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Openplain\FilamentShadcnTheme\Color;
+// use Openplain\FilamentShadcnTheme\Color;
+
+use RmsRamos\Activitylog\ActivitylogPlugin;
 use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
 use WatheqAlshowaiter\FilamentStickyTableHeader\StickyTableHeaderPlugin;
 
@@ -37,7 +40,7 @@ class AppPanelProvider extends PanelProvider
             ->favicon(asset('favicon.ico'))
             ->login()
             ->colors([
-                'primary' => Color::Default,
+                'primary' => Color::Blue,
             ])
             ->sidebarWidth('220px')
             ->sidebarCollapsibleOnDesktop()
@@ -48,6 +51,7 @@ class AppPanelProvider extends PanelProvider
                 'Tổng quan',
                 'Vận hành',
                 'Quản lý',
+                'Quản lý danh mục',
                 'Hoạt động',
                 'Cấu hình',
                 'Bảo dưỡng',
@@ -82,7 +86,16 @@ class AppPanelProvider extends PanelProvider
                 FilamentFullCalendarPlugin::make()
                     ->selectable()
                     ->editable(),
-                // StickyTableHeaderPlugin::make(),
+                ActivitylogPlugin::make()
+                    ->navigationGroup('Quản lý danh mục')
+                    ->navigationCountBadge(true)
+                    ->label('Nhật ký hoạt động')
+                    ->pluralLabel('Nhật ký hoạt động')
+                    ->translateSubject(fn ($label) => __('models.'.$label))
+                    ->navigationSort(6)
+                    ->navigationIcon('heroicon-o-book-open')
+                    ->authorize(fn () => auth()->user()?->can('view_any_activitylog')),
+                StickyTableHeaderPlugin::make(),
             ])
             ->authMiddleware([
                 Authenticate::class,

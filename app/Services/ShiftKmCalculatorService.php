@@ -10,6 +10,26 @@ use App\Models\TripCheckpoint;
 
 class ShiftKmCalculatorService
 {
+    /**
+     * Tính lại KM cho tất cả các ca liên quan đến chuyến đi (ca hiện tại, ca đảo lái, ca có checkpoint).
+     */
+    public function calculateForTrip(Trip $trip): void
+    {
+        $shiftIds = collect([$trip->shift_id])
+            ->merge($trip->driverSwaps()->pluck('from_shift_id'))
+            ->merge($trip->driverSwaps()->pluck('to_shift_id'))
+            ->merge($trip->checkpoints()->whereNotNull('shift_id')->pluck('shift_id'))
+            ->filter()
+            ->unique();
+
+        foreach ($shiftIds as $shiftId) {
+            $shift = DriverShift::query()->find($shiftId);
+            if ($shift instanceof DriverShift) {
+                $this->calculate($shift);
+            }
+        }
+    }
+
     public function calculate(DriverShift $shift): void
     {
         $shift->refresh();

@@ -6,13 +6,14 @@ use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
+use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Trips\Actions\CancelTripAction;
-use App\Filament\Resources\Trips\Actions\DriverSwapAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
+use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
+use App\Filament\Resources\Trips\Actions\SendTripAction;
 use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
-use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\TripKmAdjustmentService;
@@ -59,10 +60,6 @@ class TripsTable extends BaseTable
                     'orders.area',
                     'latestPendingKmReport',
                 ])
-                ->where(fn (Builder $q) => $q
-                    ->whereDoesntHave('orders')
-                    ->orWhereHas('orders', fn (Builder $sub) => $sub->where('status', '!=', OrderStatus::Assigned->value))
-                )
             )
             ->columns([
                 TextColumn::make('vehicle.plate_number')
@@ -200,8 +197,10 @@ class TripsTable extends BaseTable
             ->searchable(false)
 
             ->paginated([10, 25, 50, 100])
-            ->defaultPaginationPageOption(25)
+            ->defaultPaginationPageOption(50)
             ->recordActions([
+                SendTripAction::make(),
+                ReassignTransportAction::make(),
                 ActionGroup::make([
                     Action::make('view_timeline')
                         ->label('Hành trình')
@@ -315,7 +314,7 @@ class TripsTable extends BaseTable
                                 </div>
                             HTML);
                         })
-                        ->form([
+                        ->schema([
                             Select::make('target_checkpoint_id')
                                 ->label('Mốc hành trình điều chỉnh')
                                 ->options(function (?Trip $record) {
@@ -384,7 +383,7 @@ class TripsTable extends BaseTable
                         ->visible(fn (?Trip $record): bool => $record?->latestPendingKmReport !== null)
                         ->requiresConfirmation()
                         ->modalHeading('Từ chối báo sai Km?')
-                        ->form([
+                        ->schema([
                             Textarea::make('admin_note')
                                 ->label('Lý do từ chối')
                                 ->required()
@@ -407,12 +406,28 @@ class TripsTable extends BaseTable
                                 ->title('Đã từ chối báo cáo sai km')
                                 ->send();
                         }),
-
-                    // DriverSwapAction::make(),
                     ReassignDriverAction::make(),
                     CancelTripAction::make(),
                     DeleteAction::make(),
-                ]),
+                    ActivityLogTimelineTableAction::make('Activities')
+                        ->hidden(fn () => ! auth()->user()->hasRole('super_admin'))
+                        ->label('Lịch sử')
+                        ->icon('heroicon-m-clock')
+                        ->color('info')
+                        ->timelineIcons([
+                            'created' => 'heroicon-m-check-badge',
+                            'updated' => 'heroicon-m-pencil-square',
+                            'deleted' => 'heroicon-m-trash',
+                        ])
+                        ->timelineIconColors([
+                            'created' => 'success',
+                            'updated' => 'warning',
+                            'deleted' => 'danger',
+                        ]),
+                ])->button()
+                    ->color('gray')
+                    ->size('xs'),
+
             ], position: RecordActionsPosition::BeforeColumns);
     }
 
@@ -628,21 +643,6 @@ class TripsTable extends BaseTable
             $record->vehicle->update(['current_mileage' => $record->end_km]);
         }
 
-        if ($record->shift_id) {
-            app(ShiftKmCalculatorService::class)->calculate($record->shift);
-        }
-
-        $swapShiftIds = $record->driverSwaps()
-            ->pluck('from_shift_id')
-            ->merge($record->driverSwaps()->pluck('to_shift_id'))
-            ->filter()
-            ->unique();
-
-        foreach ($swapShiftIds as $shiftId) {
-            $shift = DriverShift::find($shiftId);
-            if ($shift) {
-                app(ShiftKmCalculatorService::class)->calculate($shift);
-            }
-        }
+        app(ShiftKmCalculatorService::class)->calculateForTrip($record);
     }
 }

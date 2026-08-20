@@ -289,10 +289,7 @@ class TripController extends Controller
             DB::transaction(function () use ($trip, $endKm, $completedAt) {
                 app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
                 $trip->refresh();
-
-                if ($trip->shift) {
-                    app(ShiftKmCalculatorService::class)->calculate($trip->shift);
-                }
+                app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
 
                 $trip->end_km = $endKm;
                 $trip->status = TripStatus::DriverSwap;

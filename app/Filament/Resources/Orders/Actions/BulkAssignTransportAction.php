@@ -15,6 +15,7 @@ use Filament\Actions\BulkAction;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Collection;
@@ -40,10 +41,12 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                         VehiclePicker::make('vehicle_id')
                             ->label('Phương tiện')
                             ->live()
-                            ->afterStateUpdated(function (Set $set, $state): void {
+                            ->afterStateUpdated(function (Set $set, Get $get, $state): void {
                                 if ($state) {
-                                    $vehicle = Vehicle::find($state);
-                                    $set('driver_id', $vehicle?->current_driver_id ?? null);
+                                    $vehicle = Vehicle::query()->find($state);
+                                    if (blank($get('driver_id'))) {
+                                        $set('driver_id', $vehicle?->current_driver_id ?? null);
+                                    }
                                 } else {
                                     $set('driver_id', null);
                                 }

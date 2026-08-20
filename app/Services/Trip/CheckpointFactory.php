@@ -43,10 +43,18 @@ class CheckpointFactory
                     return false;
                 }
 
-                return TripCheckpoint::where('trip_id', $trip->id)
+                $existing = TripCheckpoint::where('trip_id', $trip->id)
                     ->where('order_id', $order->id)
                     ->where('checkpoint_type', $type->value)
-                    ->exists();
+                    ->first();
+
+                if ($existing && $existing->driver_id !== $trip->driver_id && $existing->km_reading === null) {
+                    $existing->delete();
+
+                    return false;
+                }
+
+                return $existing !== null;
             })
             ->map(fn ($order) => TripCheckpoint::create(
                 $this->buildData($trip, $payload, $type, $order->id, $payload['delivery_point_id'] ?? null)
@@ -65,13 +73,18 @@ class CheckpointFactory
         $created = collect();
 
         foreach ($deliveryPoints as $dp) {
-            $alreadyExists = TripCheckpoint::where('trip_id', $trip->id)
+            $existing = TripCheckpoint::where('trip_id', $trip->id)
                 ->where('order_id', $dp->order_id)
                 ->where('checkpoint_type', $type->value)
                 ->where('delivery_point_id', $dp->id)
-                ->exists();
+                ->first();
 
-            if ($alreadyExists) {
+            if ($existing && $existing->driver_id !== $trip->driver_id && $existing->km_reading === null) {
+                $existing->delete();
+                $existing = null;
+            }
+
+            if ($existing !== null) {
                 continue;
             }
 

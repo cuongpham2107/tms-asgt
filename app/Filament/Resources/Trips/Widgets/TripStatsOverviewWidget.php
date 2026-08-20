@@ -55,28 +55,23 @@ class TripStatsOverviewWidget extends StatsOverviewWidget
 
         return [
             Stat::make('Tổng chuyến', $total)
-                ->description('Tất cả chuyến đi')
-                ->descriptionIcon('heroicon-m-truck')
+                ->icon('heroicon-o-truck')
                 ->color('primary'),
 
             Stat::make('Đang chạy', $running)
-                ->description('Đang vận chuyển')
-                ->descriptionIcon('heroicon-m-play-circle')
+                ->icon('heroicon-o-play-circle')
                 ->color('info'),
 
             Stat::make('Chờ chạy', $pending)
-                ->description('Chưa khởi hành')
-                ->descriptionIcon('heroicon-m-calendar-days')
+                ->icon('heroicon-o-clock')
                 ->color('warning'),
 
             Stat::make('Hoàn thành', $completed)
-                ->description('Đã kết thúc')
-                ->descriptionIcon('heroicon-m-check-badge')
+                ->icon('heroicon-o-check-circle')
                 ->color('success'),
 
             Stat::make('Trễ giờ', $delayed)
-                ->description('Quá thời gian dự kiến')
-                ->descriptionIcon('heroicon-m-exclamation-triangle')
+                ->icon('heroicon-o-exclamation-triangle')
                 ->color('danger'),
         ];
     }

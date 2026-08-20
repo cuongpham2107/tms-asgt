@@ -10,9 +10,30 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Relaticle\ActivityLog\Concerns\InteractsWithTimeline;
+use Relaticle\ActivityLog\Contracts\HasTimeline;
+use Relaticle\ActivityLog\Timeline\TimelineBuilder;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
-class Order extends Model
+class Order extends Model implements HasTimeline
 {
+    use InteractsWithTimeline;
+    use LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
+
+    public function timeline(): TimelineBuilder
+    {
+        return TimelineBuilder::make($this)->fromActivityLog();
+    }
+
     protected $fillable = [
         'order_code',
         'type',

@@ -1,9 +1,7 @@
 @import "../../../../vendor/filament/filament/resources/css/theme.css";
 
 @source '../../../../app/Filament/**/*';
-@source '../../../../resources/views/filament/resources/*/**';
-@source '../../../../resources/views/filament/pages/*/**';
-@source '../../../../resources/views/filament/forms/*/**';
+@source '../../../../resources/views/**/*';
 @source '../../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
 
 @import "./partials/_variables.css";

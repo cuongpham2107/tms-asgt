@@ -14,6 +14,7 @@ use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripPhoto;
+use App\Services\ShiftKmCalculatorService;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
@@ -125,6 +126,8 @@ class DriverSwapController extends Controller
             $trip->orders()
                 ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
                 ->update(['status' => OrderStatus::DriverSwap->value]);
+
+            app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
 
             DB::commit();
 

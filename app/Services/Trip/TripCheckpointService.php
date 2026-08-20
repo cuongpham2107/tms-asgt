@@ -91,10 +91,7 @@ class TripCheckpointService
             // including in-progress trips using latest checkpoint km
             $trip->refresh();
             app(TripKmCalculatorService::class)->calculate($trip);
-
-            if ($trip->shift_id) {
-                app(ShiftKmCalculatorService::class)->calculate($trip->shift);
-            }
+            app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
 
             $checkpoints->each->load('photos');
             $startedCheckpoints->each->load('photos');

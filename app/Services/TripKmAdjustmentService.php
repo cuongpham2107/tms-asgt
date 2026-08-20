@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\TripKmReportStatus;
-use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
@@ -125,18 +124,7 @@ class TripKmAdjustmentService
      */
     private function recalculateAllShifts(Trip $trip): void
     {
-        $shiftIds = collect([$trip->shift_id])
-            ->merge($trip->driverSwaps()->pluck('from_shift_id'))
-            ->merge($trip->driverSwaps()->pluck('to_shift_id'))
-            ->filter()
-            ->unique();
-
-        foreach ($shiftIds as $shiftId) {
-            $shift = DriverShift::find($shiftId);
-            if ($shift !== null) {
-                app(ShiftKmCalculatorService::class)->calculate($shift);
-            }
-        }
+        app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
     }
 
     /**

@@ -207,3 +207,129 @@ test('trip detail API returns driver-adjusted km for back-and-forth swaps', func
     expect((float) $response->json('data.total_km_loaded'))->toBe(30.0);
     expect((float) $response->json('data.total_km_empty'))->toBe(0.0);
 });
+
+test('trip completion recalculates all participating shifts and active shift API returns fresh km', function () {
+    $trip = Trip::create([
+        'trip_code' => 'SKC-TEST-COMP-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $this->shiftA->id,
+        'status' => TripStatus::Pending,
+        'start_km' => 100000,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'SKC-ORD-COMP-01',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::InTransit,
+        'created_by' => $this->driverA->id,
+    ]);
+
+    // Driver A: started (100000) -> pickup (100050) -> delivery point 1 completed (100100) -> swap to B (100150)
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $this->shiftA->id,
+        'checkpoint_type' => 'started',
+        'occurred_at' => now()->subMinutes(50),
+        'km_reading' => 100000,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $this->shiftA->id,
+        'checkpoint_type' => 'arrived_pickup',
+        'occurred_at' => now()->subMinutes(45),
+        'km_reading' => 100050,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $this->shiftA->id,
+        'checkpoint_type' => 'completed',
+        'occurred_at' => now()->subMinutes(40),
+        'km_reading' => 100100,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $this->shiftA->id,
+        'checkpoint_type' => 'driver_swap',
+        'occurred_at' => now()->subMinutes(30),
+        'km_reading' => 100150,
+    ]);
+
+    DriverSwap::create([
+        'trip_id' => $trip->id,
+        'from_driver_id' => $this->driverA->id,
+        'to_driver_id' => $this->driverB->id,
+        'from_shift_id' => $this->shiftA->id,
+        'to_shift_id' => $this->shiftB->id,
+        'handover_km' => 100150,
+        'reason' => DriverSwapReason::ShiftHandover,
+        'created_by' => $this->driverA->id,
+        'created_at' => now()->subMinutes(30),
+    ]);
+
+    $trip->update([
+        'driver_id' => $this->driverB->id,
+        'shift_id' => $this->shiftB->id,
+    ]);
+
+    // Driver B: completes delivery point 2 at 100180 -> end at 100200
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $this->driverB->id,
+        'shift_id' => $this->shiftB->id,
+        'checkpoint_type' => 'completed',
+        'occurred_at' => now()->subMinutes(20),
+        'km_reading' => 100180,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $this->driverB->id,
+        'shift_id' => $this->shiftB->id,
+        'checkpoint_type' => 'end',
+        'occurred_at' => now()->subMinutes(10),
+        'km_reading' => 100200,
+    ]);
+
+    $trip->complete(endKm: 100200);
+
+    // Ca của Driver A phải được tự động tính toán lại với đủ 100 km có hàng (100050 -> 100150)
+    $this->shiftA->refresh();
+    expect((float) $this->shiftA->total_km)->toBe(150.0);
+    expect((float) $this->shiftA->total_km_loaded)->toBe(100.0);
+    expect((float) $this->shiftA->total_km_empty)->toBe(50.0);
+
+    // Ca của Driver B
+    $this->shiftB->refresh();
+    expect((float) $this->shiftB->total_km)->toBe(50.0);
+    expect((float) $this->shiftB->total_km_loaded)->toBe(30.0);
+    expect((float) $this->shiftB->total_km_empty)->toBe(20.0);
+
+    // API shifts/active & shifts/current trả về đúng số liệu
+    Sanctum::actingAs($this->driverA);
+    $activeRes = $this->getJson('/api/driver/shifts/active')->assertSuccessful();
+    expect((float) $activeRes->json('active_shift.total_km'))->toBe(150.0);
+    expect((float) $activeRes->json('active_shift.total_km_loaded'))->toBe(100.0);
+    expect((float) $activeRes->json('active_shift.total_km_empty'))->toBe(50.0);
+
+    $currentRes = $this->getJson('/api/driver/shifts/current')->assertSuccessful();
+    expect((float) $currentRes->json('shift.total_km'))->toBe(150.0);
+    expect((float) $currentRes->json('shift.total_km_loaded'))->toBe(100.0);
+    expect((float) $currentRes->json('shift.total_km_empty'))->toBe(50.0);
+});

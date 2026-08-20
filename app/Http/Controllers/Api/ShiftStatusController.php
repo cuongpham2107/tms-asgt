@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
+use App\Services\ShiftKmCalculatorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,6 +29,10 @@ class ShiftStatusController extends Controller
             ->where('driver_id', $user->id)
             ->whereNull('end_time')
             ->first();
+
+        if ($activeShift) {
+            app(ShiftKmCalculatorService::class)->calculate($activeShift);
+        }
 
         $lastKm = DriverShift::query()
             ->where('driver_id', $user->id)

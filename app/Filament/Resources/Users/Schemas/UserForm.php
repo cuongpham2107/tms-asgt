@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Users\Schemas;
 
 use App\Enums\OnDutyLocation;
+use App\Models\User;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
@@ -76,19 +77,30 @@ class UserForm
                             ->options(OnDutyLocation::class),
                     ]),
 
-                Section::make('Giấy tờ & Bằng lái')
+                Section::make('Căn cước công dân & Định danh')
                     ->columns(2)
                     ->schema([
                         TextInput::make('cccd')
                             ->label('Số CCCD'),
                         DatePicker::make('cccd_issue_date')
                             ->label('Ngày cấp CCCD'),
+                    ]),
+
+                Section::make('Giấy phép lái xe (GPLX)')
+                    ->icon('heroicon-o-identification')
+                    ->columns(2)
+                    ->collapsible()
+                    ->schema([
                         TextInput::make('license_class')
-                            ->label('Hạng bằng lái'),
+                            ->label('Hạng bằng lái')
+                            ->placeholder('B2, C, FC, E...'),
                         TextInput::make('license_number')
                             ->label('Số bằng lái'),
+                        DatePicker::make('license_issue_date')
+                            ->label('Ngày cấp GPLX'),
                         DatePicker::make('license_expiry_date')
-                            ->label('Ngày hết hạn'),
+                            ->label('Ngày hết hạn GPLX')
+                            ->helperText(fn (?User $record): ?string => $record?->getLicenseExpiryStatus()['label']),
                         FileUpload::make('license_image')
                             ->label('Ảnh bằng lái')
                             ->image()
@@ -97,15 +109,64 @@ class UserForm
                             ->openable()
                             ->downloadable()
                             ->disk('public')
-                            ->previewable(),
+                            ->previewable()
+                            ->columnSpanFull(),
+                    ]),
+
+                Section::make('Chứng chỉ An ninh Hàng không (ANHK)')
+                    ->icon('heroicon-o-shield-check')
+                    ->columns(2)
+                    ->collapsible()
+                    ->schema([
+                        TextInput::make('aviation_security_cert_number')
+                            ->label('Số chứng chỉ ANHK'),
+                        DatePicker::make('aviation_security_cert_issue_date')
+                            ->label('Ngày cấp ANHK'),
+                        DatePicker::make('aviation_security_cert_expiry_date')
+                            ->label('Ngày hết hạn ANHK')
+                            ->helperText(fn (?User $record): ?string => $record?->getAviationSecurityCertStatus()['label']),
+                        FileUpload::make('aviation_security_cert_image')
+                            ->label('Ảnh chứng chỉ ANHK')
+                            ->image()
+                            ->imageEditor()
+                            ->directory('certificates/aviation_security')
+                            ->openable()
+                            ->downloadable()
+                            ->disk('public')
+                            ->previewable()
+                            ->columnSpanFull(),
+                    ]),
+
+                Section::make('Chứng chỉ Vận chuyển Hàng nguy hiểm (DG)')
+                    ->icon('heroicon-o-exclamation-triangle')
+                    ->columns(2)
+                    ->collapsible()
+                    ->schema([
+                        TextInput::make('dangerous_goods_cert_number')
+                            ->label('Số chứng chỉ Hàng nguy hiểm'),
+                        DatePicker::make('dangerous_goods_cert_issue_date')
+                            ->label('Ngày cấp chứng chỉ'),
+                        DatePicker::make('dangerous_goods_cert_expiry_date')
+                            ->label('Ngày hết hạn chứng chỉ')
+                            ->helperText(fn (?User $record): ?string => $record?->getDangerousGoodsCertStatus()['label']),
+                        FileUpload::make('dangerous_goods_cert_image')
+                            ->label('Ảnh chứng chỉ Hàng nguy hiểm')
+                            ->image()
+                            ->imageEditor()
+                            ->directory('certificates/dangerous_goods')
+                            ->openable()
+                            ->downloadable()
+                            ->disk('public')
+                            ->previewable()
+                            ->columnSpanFull(),
                     ]),
 
                 Grid::make()
                     ->columns(2)
                     ->schema([
                         Textarea::make('certificates')
-                            ->label('Chứng chỉ')
-                            ->placeholder('Nhập thông tin chứng chỉ (nếu có)')
+                            ->label('Ghi chú chứng chỉ khác')
+                            ->placeholder('Nhập thông tin chứng chỉ bổ sung khác (nếu có)')
                             ->columnSpanFull(),
                         Select::make('roles')
                             ->label('Vai trò')

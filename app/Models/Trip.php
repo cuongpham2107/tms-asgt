@@ -13,11 +13,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 /** @use HasFactory<TripFactory> */
 class Trip extends Model
 {
     use HasFactory;
+    use LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
 
     // protected static function booted(): void
     // {
@@ -127,11 +138,31 @@ class Trip extends Model
 
     public function getStatusLabel(): string
     {
+        if ($this->status === TripStatus::Pending) {
+            $orders = $this->relationLoaded('orders') ? $this->orders : $this->orders()->get();
+
+            if ($orders->isNotEmpty() && $orders->contains(fn ($o) => in_array($o->status, [OrderStatus::Assigned, OrderStatus::Draft]))) {
+                return 'Chưa gửi lệnh';
+            }
+
+            return 'Chờ chạy';
+        }
+
         return $this->status?->getLabel() ?? 'Không xác định';
     }
 
     public function getStatusColor(): string
     {
+        if ($this->status === TripStatus::Pending) {
+            $orders = $this->relationLoaded('orders') ? $this->orders : $this->orders()->get();
+
+            if ($orders->isNotEmpty() && $orders->contains(fn ($o) => in_array($o->status, [OrderStatus::Assigned, OrderStatus::Draft]))) {
+                return 'warning';
+            }
+
+            return 'gray';
+        }
+
         return $this->status?->getColor() ?? 'gray';
     }
 
@@ -172,10 +203,7 @@ class Trip extends Model
             }
 
             app(TripKmCalculatorService::class)->calculate($this);
-
-            if ($this->shift) {
-                app(ShiftKmCalculatorService::class)->calculate($this->shift);
-            }
+            app(ShiftKmCalculatorService::class)->calculateForTrip($this);
 
             $this->createMissingEndCheckpoints($endKmValue, $this->completed_at);
         });

@@ -49,6 +49,11 @@ abstract class CreatesOrderTransportCards
                     'email',
                     'license_class',
                     'license_number',
+                    'license_expiry_date',
+                    'aviation_security_cert_number',
+                    'aviation_security_cert_expiry_date',
+                    'dangerous_goods_cert_number',
+                    'dangerous_goods_cert_expiry_date',
                 ])
                 ->selectSub(
                     Order::selectRaw('COUNT(*)')
@@ -73,6 +78,11 @@ abstract class CreatesOrderTransportCards
                     $activeOrders = (int) $driver->active_orders_count;
                     $isAvailable = $activeOrders === 0;
 
+                    $licenseStatus = $driver->getLicenseExpiryStatus();
+                    $anhkStatus = $driver->getAviationSecurityCertStatus();
+                    $dgStatus = $driver->getDangerousGoodsCertStatus();
+                    $hasExpired = $driver->hasExpiredCertificates();
+
                     $driverLocation = null;
                     if ($assignedVehicle?->gps_lat && $assignedVehicle?->gps_lng) {
                         $driverLocation = self::findNearestLocation(
@@ -81,18 +91,33 @@ abstract class CreatesOrderTransportCards
                         );
                     }
 
+                    $badgeText = $hasExpired
+                        ? '⛔ Giấy tờ hết hạn'
+                        : ($isAvailable ? 'Sẵn sàng' : 'Đang chạy ('.$activeOrders.')');
+
+                    $badgeClasses = $hasExpired
+                        ? 'border border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200'
+                        : ($isAvailable
+                            ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
+                            : 'border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200');
+
+                    $statusDot = $hasExpired ? 'danger' : ($isAvailable ? 'success' : 'warning');
+
+                    $isSuggested = ! $hasExpired && $isAvailable && $hasActiveShift;
+                    $suggestionScore = ! $hasExpired && $isAvailable ? ($hasActiveShift ? 1000 : 500) : 0;
+
                     return [
                         'value' => $driver->id,
                         'leading' => '👤',
                         'title' => $driver->name,
                         'subtitle' => $driver->phone ?: ($driver->email ?? ''),
-                        'badge' => $isAvailable ? 'Sẵn sàng' : 'Đang chạy ('.$activeOrders.')',
-                        'badgeClasses' => $isAvailable
-                            ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
-                            : 'border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200',
-                        'statusDot' => $isAvailable ? 'success' : 'warning',
+                        'badge' => $badgeText,
+                        'badgeClasses' => $badgeClasses,
+                        'statusDot' => $statusDot,
                         'details' => array_values(array_filter([
-                            ['icon' => 'heroicon-m-identification', 'label' => 'GPLX', 'value' => $driver->license_class ? ($driver->license_class.($driver->license_number ? ' · '.$driver->license_number : '')) : 'Chưa cập nhật'],
+                            ['icon' => 'heroicon-m-identification', 'label' => 'GPLX', 'value' => $driver->license_class ? ($driver->license_class.($driver->license_number ? ' · '.$driver->license_number : '').' ('.$licenseStatus['label'].')') : 'Chưa cập nhật'],
+                            ['icon' => 'heroicon-m-shield-check', 'label' => 'ANHK', 'value' => $anhkStatus['label']],
+                            ['icon' => 'heroicon-m-exclamation-triangle', 'label' => 'Hàng nguy hiểm', 'value' => $dgStatus['label']],
                             ['icon' => 'heroicon-m-truck', 'label' => 'Xe gán', 'value' => $assignedVehicle?->plate_number ?? 'Chưa gán xe'],
                             ['icon' => 'heroicon-m-clock', 'label' => 'Ca trực', 'value' => $hasActiveShift ? ('Đang '.$latestShift->shift_type?->getLabel()) : ($latestShift?->shift_type?->getLabel() ?? 'Chưa có ca')],
                             ['icon' => 'heroicon-m-map-pin', 'label' => 'Vị trí', 'value' => $driverLocation['name'] ?? 'Chưa xác định'],
@@ -100,10 +125,13 @@ abstract class CreatesOrderTransportCards
                         ])),
                         'meta' => [
                             $driver->license_class ?? '',
+                            $driver->license_number ?? '',
+                            $driver->aviation_security_cert_number ?? '',
+                            $driver->dangerous_goods_cert_number ?? '',
                             $assignedVehicle?->plate_number ?? '',
                         ],
-                        'isSuggested' => $isAvailable && $hasActiveShift,
-                        'suggestionScore' => $isAvailable ? ($hasActiveShift ? 1000 : 500) : 0,
+                        'isSuggested' => $isSuggested,
+                        'suggestionScore' => $suggestionScore,
                         'suggestedBadge' => 'Gợi ý',
                         'suggestedBadgeClasses' => 'border border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800/40 dark:bg-primary-900/30 dark:text-primary-200',
                     ];
@@ -129,7 +157,9 @@ abstract class CreatesOrderTransportCards
      */
     private static function resolveVehicleCardsBase(?int $selectedVehicleId = null): array
     {
-        return Cache::remember('resolve-vehicle-cards-base', now()->addSeconds(30), function () use ($selectedVehicleId): array {
+        $cacheKey = 'resolve-vehicle-cards-base'.($selectedVehicleId ? "-{$selectedVehicleId}" : '');
+
+        return Cache::remember($cacheKey, now()->addSeconds(30), function () use ($selectedVehicleId): array {
             $vehicles = Vehicle::query()
                 ->select([
                     'id',
@@ -143,6 +173,8 @@ abstract class CreatesOrderTransportCards
                     'type',
                     'gps_lat',
                     'gps_lng',
+                    'dangerous_goods_permit_number',
+                    'dangerous_goods_permit_expiry_date',
                 ])
                 ->where(function ($query) use ($selectedVehicleId): void {
                     $query->whereIn('status', ['on', 'running']);
@@ -189,6 +221,7 @@ abstract class CreatesOrderTransportCards
                         'has_driver' => $vehicle->current_driver_id !== null,
                         'has_active_shift' => $vehicle->driver?->driverShifts->isNotEmpty() ?? false,
                         'orders_in_shift' => (int) ($vehicle->driver?->driverShifts->first()?->orders_in_shift ?? 0),
+                        'dg_permit_status' => $vehicle->getDangerousGoodsPermitStatus(),
                     ];
                 })
                 ->all();
@@ -217,6 +250,8 @@ abstract class CreatesOrderTransportCards
             ? number_format((float) $card['current_mileage'], 0, ',', '.').' km'
             : 'N/A';
 
+        $dgStatus = $card['dg_permit_status'] ?? ['status' => 'missing', 'label' => 'Chưa cập nhật'];
+
         return [
             'value' => $card['id'],
             'leading' => '🚚',
@@ -229,6 +264,7 @@ abstract class CreatesOrderTransportCards
                 ['icon' => 'heroicon-m-scale', 'label' => 'Tải trọng', 'value' => $loadCapacity.' tấn'.($requiredWeight > 0 ? ($isCapacityMatch ? ' ✓' : ' ✗') : '')],
                 ['icon' => 'heroicon-m-user', 'label' => 'Lái xe', 'value' => $card['driver_name']],
                 ['icon' => 'heroicon-m-map-pin', 'label' => 'Vị trí', 'value' => $card['current_location_name'] ?? 'Chưa xác định'],
+                ['icon' => 'heroicon-m-shield-exclamation', 'label' => 'GP Hàng nguy hiểm', 'value' => $dgStatus['label']],
                 ['icon' => 'heroicon-m-cog-6-tooth', 'label' => 'ODO', 'value' => $mileage],
                 $card['active_orders_count'] > 0 ? ['icon' => 'heroicon-m-document-text', 'label' => 'Đơn đang chạy', 'value' => (string) $card['active_orders_count']] : null,
                 ['icon' => 'heroicon-m-document-text', 'label' => 'Đơn trong ca', 'value' => (string) $card['orders_in_shift']],

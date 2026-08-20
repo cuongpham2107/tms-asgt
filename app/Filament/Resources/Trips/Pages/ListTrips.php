@@ -8,7 +8,6 @@ use App\Filament\Forms\Components\OrderDateRangePicker;
 use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\Trips\Actions\CreateEmptyRunAction;
 use App\Filament\Resources\Trips\TripResource;
-use App\Filament\Resources\Trips\Widgets\TripStatsOverviewWidget;
 use App\Models\Trip;
 use Carbon\Carbon;
 use Filament\Forms\Components\TextInput;
@@ -47,12 +46,13 @@ class ListTrips extends ListRecords
 
         'HHHK' => ['label' => 'HHHK', 'color' => 'bg-blue-500'],
         'external' => ['label' => 'Hàng ngoài', 'color' => 'bg-amber-500'],
-        'all' => ['label' => 'Tất cả', 'color' => 'bg-gray-900'],
+        'all' => ['label' => 'Tất cả', 'color' => 'bg-blue-600'],
     ];
 
     public array $tripStatusFilters = [
-        'all' => ['label' => 'Tất cả', 'color' => 'bg-gray-900'],
-        'pending' => ['label' => 'Chờ chạy', 'color' => 'bg-gray-500'],
+        'all' => ['label' => 'Tất cả', 'color' => 'bg-blue-600'],
+        'unsent' => ['label' => 'Chưa gửi lệnh', 'color' => 'bg-amber-500'],
+        'pending' => ['label' => 'Chờ chạy', 'color' => 'bg-sky-500'],
         'started' => ['label' => 'Đã bắt đầu', 'color' => 'bg-blue-500'],
         'arrived_pickup' => ['label' => 'Đến lấy hàng', 'color' => 'bg-orange-500'],
         'delivering' => ['label' => 'Đang giao', 'color' => 'bg-sky-500'],
@@ -65,7 +65,7 @@ class ListTrips extends ListRecords
     ];
 
     public array $vehicleOwnerFilters = [
-        'all' => ['label' => 'Tất cả', 'color' => 'bg-gray-900'],
+        'all' => ['label' => 'Tất cả', 'color' => 'bg-blue-600'],
         'company' => ['label' => 'Xe công ty', 'color' => 'bg-blue-500'],
         'rent' => ['label' => 'Xe thuê ngoài', 'color' => 'bg-amber-500'],
     ];
@@ -91,14 +91,95 @@ class ListTrips extends ListRecords
 
     protected function getHeaderWidgets(): array
     {
-        return [
-            TripStatsOverviewWidget::class,
-        ];
+        return [];
     }
 
-    public function getHeaderWidgetsColumns(): int|array
+    /**
+     * @return array<int, array{key: string, label: string, value: int, icon: string, color: string, bg: string, border: string, filter: ?string}>
+     */
+    public function getTripStats(): array
     {
-        return 5;
+        $baseQuery = $this->applyActiveFilters(Trip::query(), except: 'status');
+
+        $total = (clone $baseQuery)->count();
+
+        $activeStatuses = TripStatus::activeStatuses();
+
+        $running = (clone $baseQuery)
+            ->whereIn('status', array_map(fn ($s) => $s->value, $activeStatuses))
+            ->count();
+
+        $pending = (clone $baseQuery)
+            ->where('status', TripStatus::Pending->value)
+            ->count();
+
+        $completed = (clone $baseQuery)
+            ->where('status', TripStatus::Completed->value)
+            ->count();
+
+        $delayed = (clone $baseQuery)
+            ->whereIn('status', [
+                TripStatus::Started->value,
+                TripStatus::ArrivedPickup->value,
+                TripStatus::Delivering->value,
+                TripStatus::ArrivedDelivery->value,
+            ])
+            ->whereHas('orders', fn (Builder $q) => $q
+                ->where('planned_loading_at', '<', now())
+            )->count();
+
+        return [
+            [
+                'key' => 'all',
+                'label' => 'Tổng chuyến',
+                'value' => $total,
+                'icon' => 'heroicon-o-truck',
+                'color' => 'text-blue-600 dark:text-blue-400',
+                'bg' => 'bg-blue-50 dark:bg-blue-950/40',
+                'border' => 'border-blue-100 dark:border-blue-900/40',
+                'filter' => 'all',
+            ],
+            [
+                'key' => 'running',
+                'label' => 'Đang chạy',
+                'value' => $running,
+                'icon' => 'heroicon-o-play-circle',
+                'color' => 'text-sky-600 dark:text-sky-400',
+                'bg' => 'bg-sky-50 dark:bg-sky-950/40',
+                'border' => 'border-sky-100 dark:border-sky-900/40',
+                'filter' => 'started',
+            ],
+            [
+                'key' => 'pending',
+                'label' => 'Chờ chạy',
+                'value' => $pending,
+                'icon' => 'heroicon-o-clock',
+                'color' => 'text-amber-600 dark:text-amber-400',
+                'bg' => 'bg-amber-50 dark:bg-amber-950/40',
+                'border' => 'border-amber-100 dark:border-amber-900/40',
+                'filter' => 'pending',
+            ],
+            [
+                'key' => 'completed',
+                'label' => 'Hoàn thành',
+                'value' => $completed,
+                'icon' => 'heroicon-o-check-circle',
+                'color' => 'text-emerald-600 dark:text-emerald-400',
+                'bg' => 'bg-emerald-50 dark:bg-emerald-950/40',
+                'border' => 'border-emerald-100 dark:border-emerald-900/40',
+                'filter' => 'completed',
+            ],
+            [
+                'key' => 'delayed',
+                'label' => 'Trễ giờ',
+                'value' => $delayed,
+                'icon' => 'heroicon-o-exclamation-triangle',
+                'color' => 'text-rose-600 dark:text-rose-400',
+                'bg' => 'bg-rose-50 dark:bg-rose-950/40',
+                'border' => 'border-rose-100 dark:border-rose-900/40',
+                'filter' => null,
+            ],
+        ];
     }
 
     public function filterStatus(string $status): void
@@ -159,10 +240,6 @@ class ListTrips extends ListRecords
     private function applyActiveFilters(Builder $query, string $except = ''): Builder
     {
         return $query
-            ->where(fn (Builder $q) => $q
-                ->whereDoesntHave('orders')
-                ->orWhereHas('orders', fn (Builder $sub) => $sub->where('status', '!=', OrderStatus::Assigned->value))
-            )
             ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
                 if (filled($this->dateFrom) && filled($this->dateTo)) {
                     return $query->whereBetween('started_at', [
@@ -305,7 +382,13 @@ class ListTrips extends ListRecords
     private function applyStatusFilterByKey(Builder $query, string $key): Builder
     {
         return match ($key) {
-            'pending' => $query->where('status', TripStatus::Pending->value),
+            'unsent' => $query->where('status', TripStatus::Pending->value)
+                ->whereHas('orders', fn (Builder $q) => $q->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Draft->value])),
+            'pending' => $query->where('status', TripStatus::Pending->value)
+                ->where(fn (Builder $q) => $q
+                    ->where('is_empty_run', true)
+                    ->orWhereDoesntHave('orders', fn (Builder $sq) => $sq->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Draft->value]))
+                ),
             'started' => $query->where('status', TripStatus::Started->value),
             'arrived_pickup' => $query->where('status', TripStatus::ArrivedPickup->value),
             'delivering' => $query->where('status', TripStatus::Delivering->value),

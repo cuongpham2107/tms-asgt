@@ -278,16 +278,18 @@ class OrderForm extends CreatesOrderTransportCards
 
                         Tab::make('Phân xe')
                             ->icon('heroicon-o-truck')
-                            ->hidden(fn (?Model $record): bool => $record?->status === OrderStatus::DriverSwap)
+                            ->hidden(fn (?Model $record): bool => $record?->trip_id !== null || $record?->status === OrderStatus::Draft)
                             ->columns(2)
                             ->schema([
                                 VehiclePicker::make('vehicle_id')
                                     ->label('Phương tiện')
                                     ->live()
-                                    ->afterStateUpdated(function (Set $set, $state): void {
+                                    ->afterStateUpdated(function (Set $set, Get $get, $state): void {
                                         if ($state) {
                                             $vehicle = Vehicle::query()->find($state);
-                                            $set('driver_id', $vehicle?->current_driver_id ?? null);
+                                            if (blank($get('driver_id'))) {
+                                                $set('driver_id', $vehicle?->current_driver_id ?? null);
+                                            }
                                         } else {
                                             $set('driver_id', null);
                                         }

@@ -57,23 +57,28 @@ class CompletedHandler implements CheckpointHandlerInterface
                 ->exists();
 
             if (! $hasUndeliveredPoints) {
-                Order::where('id', $orderId)->update(['status' => OrderStatus::Completed]);
+                $order = Order::find($orderId);
+                if ($order) {
+                    $order->status = OrderStatus::Completed;
 
-                // Record per-order loaded_km
-                $pickupCheckpoint = TripCheckpoint::where('order_id', $orderId)
-                    ->where('checkpoint_type', 'arrived_pickup')
-                    ->whereNotNull('km_reading')
-                    ->first();
+                    // Record per-order loaded_km
+                    $pickupCheckpoint = TripCheckpoint::where('order_id', $orderId)
+                        ->where('checkpoint_type', 'arrived_pickup')
+                        ->whereNotNull('km_reading')
+                        ->first();
 
-                $completeCheckpoint = TripCheckpoint::where('order_id', $orderId)
-                    ->where('checkpoint_type', 'completed')
-                    ->whereNotNull('km_reading')
-                    ->orderBy('km_reading', 'desc')
-                    ->first();
+                    $completeCheckpoint = TripCheckpoint::where('order_id', $orderId)
+                        ->where('checkpoint_type', 'completed')
+                        ->whereNotNull('km_reading')
+                        ->orderBy('km_reading', 'desc')
+                        ->first();
 
-                if ($pickupCheckpoint && $completeCheckpoint) {
-                    $loadedKm = max(0, (float) $completeCheckpoint->km_reading - (float) $pickupCheckpoint->km_reading);
-                    Order::where('id', $orderId)->update(['loaded_km' => $loadedKm]);
+                    if ($pickupCheckpoint && $completeCheckpoint) {
+                        $loadedKm = max(0, (float) $completeCheckpoint->km_reading - (float) $pickupCheckpoint->km_reading);
+                        $order->loaded_km = $loadedKm;
+                    }
+
+                    $order->save();
                 }
             }
         }

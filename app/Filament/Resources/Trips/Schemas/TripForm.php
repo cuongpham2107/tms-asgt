@@ -44,6 +44,7 @@ class TripForm
                             ->label('Phương tiện')
                             ->relationship('vehicle', 'plate_number')
                             ->prefixIcon(Heroicon::OutlinedTruck)
+                            ->disabled()
                             ->searchable()
                             ->native(false),
                         Select::make('driver_id')
@@ -55,6 +56,7 @@ class TripForm
                                 ->toArray()
                             )
                             ->prefixIcon(Heroicon::OutlinedUser)
+                            ->disabled()
                             ->searchable()
                             ->native(false),
                     ]),

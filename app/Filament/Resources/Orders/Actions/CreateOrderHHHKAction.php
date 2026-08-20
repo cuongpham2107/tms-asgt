@@ -132,10 +132,12 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                     VehiclePicker::make('vehicle_id')
                         ->label('Phương tiện')
                         ->live()
-                        ->afterStateUpdated(function (Set $set, $state): void {
+                        ->afterStateUpdated(function (Set $set, Get $get, $state): void {
                             if ($state) {
-                                $vehicle = Vehicle::find($state);
-                                $set('driver_id', $vehicle?->current_driver_id ?? null);
+                                $vehicle = Vehicle::query()->find($state);
+                                if (blank($get('driver_id'))) {
+                                    $set('driver_id', $vehicle?->current_driver_id ?? null);
+                                }
                             } else {
                                 $set('driver_id', null);
                             }

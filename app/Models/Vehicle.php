@@ -50,6 +50,10 @@ class Vehicle extends Model
         'off_reason',
         'type',
         'notes',
+        'dangerous_goods_permit_number',
+        'dangerous_goods_permit_issue_date',
+        'dangerous_goods_permit_expiry_date',
+        'dangerous_goods_permit_image',
     ];
 
     protected function casts(): array
@@ -72,7 +76,27 @@ class Vehicle extends Model
             'vehicle_type' => VehicleType::class,
             'status' => VehicleStatus::class,
             'type' => VehicleOwnerType::class,
+            'dangerous_goods_permit_issue_date' => 'date',
+            'dangerous_goods_permit_expiry_date' => 'date',
         ];
+    }
+
+    /**
+     * @return array{status: 'valid'|'expiring_soon'|'expired'|'missing', label: string, color: string, days_remaining: ?int, formatted_date: ?string}
+     */
+    public function getDangerousGoodsPermitStatus(): array
+    {
+        return User::calculateExpiryStatus($this->dangerous_goods_permit_expiry_date, 'GP Hàng nguy hiểm');
+    }
+
+    public function hasExpiredDangerousGoodsPermit(): bool
+    {
+        return $this->getDangerousGoodsPermitStatus()['status'] === 'expired';
+    }
+
+    public function hasExpiringSoonDangerousGoodsPermit(): bool
+    {
+        return $this->getDangerousGoodsPermitStatus()['status'] === 'expiring_soon';
     }
 
     public function driver(): BelongsTo

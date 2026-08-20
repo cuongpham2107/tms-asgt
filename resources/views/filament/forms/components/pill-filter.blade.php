@@ -23,7 +23,7 @@
                 @php
                     $keyStr = (string) $key;
                     $label = is_array($option) ? ($option['label'] ?? '') : $option;
-                    $color = is_array($option) ? ($option['color'] ?? 'bg-[#008fd5]') : 'bg-[#008fd5]';
+                    $color = is_array($option) ? ($option['color'] ?? 'bg-blue-600') : 'bg-blue-600';
                     $icon = is_array($option) ? ($option['icon'] ?? null) : null;
                     $isActive = $activeValue === $keyStr;
                     $count = $getCount($keyStr);

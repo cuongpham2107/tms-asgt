@@ -55,11 +55,22 @@ class EndShiftAction
 
                     // Auto driver_swap: chuyển trip đang active có đơn hàng chưa hoàn thành sang driver_swap
                     $incompleteTrips = Trip::where('driver_id', $record->driver_id)
-                        ->whereHas('orders', function ($q) {
-                            $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value]);
+                        ->where(function ($query) {
+                            $query->whereHas('orders', function ($q) {
+                                $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value]);
+                            })->orWhere(function ($q) {
+                                $q->where('is_empty_run', true)
+                                    ->whereIn('status', [
+                                        TripStatus::Started,
+                                        TripStatus::ArrivedPickup,
+                                        TripStatus::Delivering,
+                                        TripStatus::ArrivedDelivery,
+                                        TripStatus::Delivered,
+                                        TripStatus::ReturnTrip,
+                                    ]);
+                            });
                         })
                         ->whereIn('status', [
-                            TripStatus::Pending,
                             TripStatus::Started,
                             TripStatus::ArrivedPickup,
                             TripStatus::Delivering,
@@ -80,7 +91,7 @@ class EndShiftAction
                         $trip->save();
 
                         $trip->orders()
-                            ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value, OrderStatus::Assigned->value])
+                            ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
                             ->update(['status' => OrderStatus::DriverSwap->value]);
 
                         TripCheckpoint::create([

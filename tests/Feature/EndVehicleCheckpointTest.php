@@ -311,3 +311,121 @@ test('end vehicle with km less than current mileage is rejected', function () {
 
     $response->assertStatus(422);
 });
+
+// === TEST 8: End shift succeeds when driver has pending trips with assigned orders ===
+test('end shift succeeds when driver has pending trips with assigned orders', function () {
+    $shift = endMakeShift($this->driver);
+    $trip1 = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $order1 = endMakeOrder($trip1, $this->driver, $this->area, $this->customer);
+    $trip1->update(['status' => TripStatus::Completed]);
+    $order1->update(['status' => OrderStatus::Completed]);
+
+    // Checkpoint 'end' for the shift
+    TripCheckpoint::create([
+        'shift_id' => $shift->id,
+        'driver_id' => $this->driver->id,
+        'checkpoint_type' => CheckpointType::End->value,
+        'km_reading' => 10050,
+        'occurred_at' => now(),
+    ]);
+
+    // Another trip in Pending status with only Assigned order
+    $trip2 = Trip::create([
+        'trip_code' => 'TRIP-PENDING-1',
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'status' => TripStatus::Pending,
+        'shift_id' => null,
+    ]);
+    Order::create([
+        'order_code' => 'ASG-PENDING-1',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Assigned,
+        'trip_id' => $trip2->id,
+        'created_by' => $this->driver->id,
+    ]);
+
+    $response = $this->postJson('/api/driver/shifts/end', []);
+
+    $response->assertSuccessful();
+    $shift->refresh();
+    expect($shift->end_time)->not->toBeNull();
+    expect((float) $shift->end_km)->toBe(10050.0);
+    // Trip 2 should remain pending and not be touched
+    expect($trip2->fresh()->status)->toBe(TripStatus::Pending);
+});
+
+// === TEST 9: End shift is rejected when driver has in-progress trip with sent orders ===
+test('end shift is rejected when driver has in-progress trip with sent orders', function () {
+    $shift = endMakeShift($this->driver);
+    $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
+    $trip->update(['status' => TripStatus::Started]);
+    $order->update(['status' => OrderStatus::Sent]);
+
+    TripCheckpoint::create([
+        'shift_id' => $shift->id,
+        'driver_id' => $this->driver->id,
+        'checkpoint_type' => CheckpointType::End->value,
+        'km_reading' => 10050,
+        'occurred_at' => now(),
+    ]);
+
+    $response = $this->postJson('/api/driver/shifts/end', []);
+
+    $response->assertStatus(422);
+    $response->assertJsonPath('message', fn ($msg) => str_contains($msg, 'chuyến đang hoạt động'));
+});
+
+// === TEST 10: Driver can start a new trip when having another pending trip ===
+test('driver can start a new trip when having another pending trip', function () {
+    $shift = endMakeShift($this->driver);
+
+    // Trip 1: Pending with Assigned order
+    $pendingTrip = Trip::create([
+        'trip_code' => 'TRIP-PENDING-2',
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'status' => TripStatus::Pending,
+        'shift_id' => null,
+    ]);
+    Order::create([
+        'order_code' => 'ASG-PENDING-2',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Assigned,
+        'trip_id' => $pendingTrip->id,
+        'created_by' => $this->driver->id,
+    ]);
+
+    // Trip 2: Pending with Sent order to be started
+    $activeTrip = Trip::create([
+        'trip_code' => 'TRIP-ACTIVE-1',
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle2->id,
+        'status' => TripStatus::Pending,
+        'shift_id' => null,
+    ]);
+    $order2 = Order::create([
+        'order_code' => 'ASG-ACTIVE-1',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Sent,
+        'trip_id' => $activeTrip->id,
+        'created_by' => $this->driver->id,
+    ]);
+
+    $response = $this->postJson("/api/driver/trips/{$activeTrip->id}/checkpoints", [
+        'checkpoint_type' => CheckpointType::Started->value,
+        'km_reading' => 50000,
+        'occurred_at' => now()->toIso8601String(),
+    ]);
+
+    $response->assertSuccessful();
+    expect($activeTrip->fresh()->status)->toBe(TripStatus::Started);
+    expect($pendingTrip->fresh()->status)->toBe(TripStatus::Pending);
+});

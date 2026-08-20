@@ -73,15 +73,15 @@ class ListOrders extends ListRecords
     public array $orderTypeFilters = [
         'HHHK' => [
             'label' => 'Hàng hóa hàng không',
-            'color' => 'bg-[#008fd5]',
+            'color' => 'bg-blue-600',
         ],
         'external' => [
             'label' => 'Hàng ngoài',
-            'color' => 'bg-[#008fd5]',
+            'color' => 'bg-amber-500',
         ],
         'all' => [
             'label' => 'Tất cả',
-            'color' => 'bg-[#008fd5]',
+            'color' => 'bg-blue-600',
         ],
     ];
 
@@ -91,7 +91,7 @@ class ListOrders extends ListRecords
     public array $orderStatusFilters = [
         'all' => [
             'label' => 'Tất cả trạng thái',
-            'color' => 'bg-gray-900',
+            'color' => 'bg-blue-600',
         ],
         'draft' => [
             'label' => 'Nháp',
@@ -268,7 +268,7 @@ class ListOrders extends ListRecords
             ->when(
                 ! in_array('status', $excludeFilters) && $this->activeStatusFilter === 'all',
                 fn (Builder $q): Builder => $q
-                    ->where('status', '!=', OrderStatus::Completed->value),
+                    ->whereNotIn('status', [OrderStatus::Completed->value, OrderStatus::Cancelled->value]),
             )
             ->when(
                 ! in_array('type', $excludeFilters) && $this->activeOrderTypeFilter !== 'all',
@@ -315,6 +315,7 @@ class ListOrders extends ListRecords
             ->when(
                 $status !== 'all',
                 fn (Builder $query): Builder => $query->whereIn('status', $this->resolveStatusValues($status)),
+                fn (Builder $query): Builder => $query->whereNotIn('status', [OrderStatus::Completed->value, OrderStatus::Cancelled->value]),
             )
             ->count();
     }
@@ -344,8 +345,6 @@ class ListOrders extends ListRecords
             OrderStatus::Cancelled->value => 6,
         ];
 
-        $completedExcluded = true;
-
         $caseSql = 'CASE orders.status '
             .collect($statusOrder)->map(fn ($ord, $status) => "WHEN '{$status}' THEN {$ord}")->implode(' ')
             .' END';
@@ -363,14 +362,15 @@ class ListOrders extends ListRecords
                 'trip.vehicle',
                 'trip.driver',
             ])
-            ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('created_by', Auth::id()))
+            ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('orders.created_by', Auth::id()))
             ->when(
                 $this->activeOrderTypeFilter !== 'all',
                 fn (Builder $query): Builder => $query->where('orders.type', $this->activeOrderTypeFilter),
             )
             ->when(
                 $this->activeStatusFilter !== 'all',
-                fn (Builder $query): Builder => $query->whereIn('status', $this->resolveStatusValues($this->activeStatusFilter)),
+                fn (Builder $query): Builder => $query->whereIn('orders.status', $this->resolveStatusValues($this->activeStatusFilter)),
+                fn (Builder $query): Builder => $query->whereNotIn('orders.status', [OrderStatus::Completed->value, OrderStatus::Cancelled->value]),
             )
             ->when(
                 $this->activePlaceFilter !== 'all',
@@ -378,11 +378,6 @@ class ListOrders extends ListRecords
                     'area',
                     fn (Builder $categoryQuery): Builder => $categoryQuery->where('code', $this->activePlaceFilter),
                 ),
-            )
-            ->when(
-                $this->activeStatusFilter === 'all',
-                fn (Builder $query): Builder => $query
-                    ->where('orders.status', '!=', OrderStatus::Completed->value),
             )
             ->when(filled($this->orderSearch), function (Builder $query): Builder {
                 $search = trim((string) $this->orderSearch);

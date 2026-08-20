@@ -27,10 +27,10 @@ class ListLocations extends ListRecords
 
     public function getAreaFilters(): array
     {
-        $areas = ['all' => ['label' => 'Tất cả KV', 'color' => 'bg-gray-900']];
+        $areas = ['all' => ['label' => 'Tất cả KV', 'color' => 'bg-blue-600']];
 
         foreach (Area::select('code')->distinct()->orderBy('id')->pluck('code') as $code) {
-            $areas[$code] = ['label' => $code, 'color' => 'bg-green-500'];
+            $areas[$code] = ['label' => $code, 'color' => 'bg-blue-500'];
         }
 
         return $areas;
@@ -39,7 +39,7 @@ class ListLocations extends ListRecords
     public array $orderTypeFilters = [
         'HHHK' => ['label' => 'HHHK', 'color' => 'bg-blue-500'],
         'external' => ['label' => 'Hàng ngoài', 'color' => 'bg-amber-500'],
-        'all' => ['label' => 'Tất cả', 'color' => 'bg-gray-900'],
+        'all' => ['label' => 'Tất cả', 'color' => 'bg-blue-600'],
     ];
 
     protected function getHeaderActions(): array

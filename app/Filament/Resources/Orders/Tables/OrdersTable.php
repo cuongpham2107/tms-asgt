@@ -7,6 +7,7 @@ use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
+use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
 use App\Filament\Resources\Orders\Actions\BulkAssignTransportAction;
@@ -15,8 +16,6 @@ use App\Filament\Resources\Orders\Actions\CancelOrderAction;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
-use App\Filament\Resources\Orders\Actions\SendOrderAction;
-use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Order;
 use App\Models\Trip;
@@ -237,7 +236,6 @@ class OrdersTable extends BaseTable
             ->searchable(false)
             ->recordActions([
                 AssignTransportAction::make(),
-                SendOrderAction::make(),
                 ActionGroup::make([
                     EditAction::make()
                         // ->slideOver()
@@ -258,31 +256,24 @@ class OrdersTable extends BaseTable
 
                             $record->update($data);
 
-                            if (filled($vehicleId)) {
-                                if ($record->trip) {
-                                    $record->trip->update([
-                                        'vehicle_id' => $vehicleId,
-                                        'driver_id' => $driverId,
-                                    ]);
-                                } else {
-                                    $trip = Trip::create([
-                                        'trip_code' => Trip::generateTripCode(),
-                                        'vehicle_id' => $vehicleId,
-                                        'driver_id' => $driverId,
-                                        'status' => TripStatus::Pending,
-                                        'start_location_id' => $record->pickup_location_id,
-                                        'end_location_id' => $record->deliveryPoints()
-                                            ->orderBy('sequence', 'desc')
-                                            ->first()?->location_id,
-                                    ]);
+                            if (filled($vehicleId) && ! $record->trip) {
+                                $trip = Trip::create([
+                                    'trip_code' => Trip::generateTripCode(),
+                                    'vehicle_id' => $vehicleId,
+                                    'driver_id' => $driverId,
+                                    'status' => TripStatus::Pending,
+                                    'start_location_id' => $record->pickup_location_id,
+                                    'end_location_id' => $record->deliveryPoints()
+                                        ->orderBy('sequence', 'desc')
+                                        ->first()?->location_id,
+                                ]);
 
-                                    $record->update([
-                                        'trip_id' => $trip->id,
-                                        'status' => OrderStatus::Assigned,
-                                    ]);
+                                $record->update([
+                                    'trip_id' => $trip->id,
+                                    'status' => OrderStatus::Assigned,
+                                ]);
 
-                                    CreatesOrderTransportCards::createCheckpointsForExternalVehicle($trip, collect([$record]));
-                                }
+                                CreatesOrderTransportCards::createCheckpointsForExternalVehicle($trip, collect([$record]));
 
                                 $vehicle = Vehicle::query()->find($vehicleId);
                                 if ($vehicle !== null) {
@@ -349,7 +340,24 @@ class OrdersTable extends BaseTable
                         })
                         ->successNotificationTitle('Đã sao chép đơn hàng'),
                     CopyTransportInfoAction::make(),
-                ]),
+                    ActivityLogTimelineTableAction::make('Activities')
+                        ->hidden(fn () => ! auth()->user()->hasRole('super_admin'))
+                        ->label('Lịch sử')
+                        ->icon('heroicon-m-clock')
+                        ->color('info')
+                        ->timelineIcons([
+                            'created' => 'heroicon-m-check-badge',
+                            'updated' => 'heroicon-m-pencil-square',
+                            'deleted' => 'heroicon-m-trash',
+                        ])
+                        ->timelineIconColors([
+                            'created' => 'success',
+                            'updated' => 'warning',
+                            'deleted' => 'danger',
+                        ]),
+                ])->button()
+                    ->color('gray')
+                    ->size('xs'),
             ], position: RecordActionsPosition::BeforeColumns)
             ->groups([
                 Group::make('area_id')
@@ -361,6 +369,7 @@ class OrdersTable extends BaseTable
                     ->getTitleFromRecordUsing(fn (Order $record): string => $record->trip?->trip_code ?? 'Chưa có chuyến đi')
                     ->collapsible(),
             ])
+            ->defaultPaginationPageOption(50)
             // ->defaultGroup('area.code')
             ->toolbarActions([
                 BulkActionGroup::make([

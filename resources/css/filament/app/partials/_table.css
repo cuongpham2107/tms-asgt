@@ -13,6 +13,21 @@
 .fi-ta-cell {
     border-left: 1px solid rgb(241 245 249 / var(--tw-border-opacity, 1));
 }
+
+.fi-ta-cell .fi-ta-actions,
+.fi-ta-actions-cell .fi-ta-actions {
+    display: flex;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+}
+
+.fi-ta-cell .fi-ta-actions > .fi-btn {
+    width: 100%;
+    justify-content: center;
+    white-space: nowrap;
+}
 html.dark .fi-ta-table {
     & > thead {
         & > tr {

@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Filament\Actions\ActivityLogTimelineTableAction;
+use App\Filament\Plugins\ActivitylogPlugin;
 use App\Models\Order;
 use App\Observers\OrderObserver;
 use Dedoc\Scramble\Scramble;
@@ -17,7 +19,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        if (! class_exists('RmsRamos\Activitylog\ActivitylogPlugin', false)) {
+            class_alias(ActivitylogPlugin::class, 'RmsRamos\Activitylog\ActivitylogPlugin');
+        }
+
+        if (! class_exists('RmsRamos\Activitylog\Actions\ActivityLogTimelineTableAction', false)) {
+            class_alias(ActivityLogTimelineTableAction::class, 'RmsRamos\Activitylog\Actions\ActivityLogTimelineTableAction');
+        }
     }
 
     /**
