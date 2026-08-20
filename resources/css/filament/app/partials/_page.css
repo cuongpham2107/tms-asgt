@@ -1,5 +1,5 @@
 .fi-page-content {
-    row-gap: calc(var(--spacing) * 4);
+    row-gap: calc(var(--spacing) * 4) !important;
 }
 
 /* Custom Stats Bar Cards */
@@ -41,4 +41,63 @@ html.dark .toolbar-toggle-btn {
 html.dark .toolbar-toggle-btn:hover {
     background-color: rgb(51 65 85 / 0.9) !important;
     border-color: rgb(71 85 105) !important;
+}
+
+html.dark .toolbar-mine-btn {
+    background-color: rgb(30 41 59 / 0.85) !important;
+    border: 1px solid rgb(51 65 85 / 0.8) !important;
+    color: rgb(226 232 240) !important;
+}
+
+html.dark .toolbar-mine-btn:hover {
+    background-color: rgb(51 65 85 / 0.95) !important;
+    color: #ffffff !important;
+}
+
+/* Header Actions (Call-to-Action) */
+@layer utilities {
+    .header-action-hhhk,
+    .fi-page-header .fi-ac-action.header-action-hhhk {
+        background-color: #008fd5 !important;
+        color: #ffffff !important;
+        border: none !important;
+    }
+}
+.header-action-hhhk:hover {
+    background-color: #0077b3 !important;
+}
+.header-action-hhhk *,
+.header-action-hhhk .fi-icon,
+.header-action-hhhk .fi-btn-label {
+    color: #ffffff !important;
+}
+
+.header-action-hn,
+.fi-page-header .fi-ac-action.header-action-hn {
+    background-color: #10b981 !important;
+    color: #ffffff !important;
+    border: none !important;
+}
+.header-action-hn:hover {
+    background-color: #059669 !important;
+}
+.header-action-hn *,
+.header-action-hn .fi-icon,
+.header-action-hn .fi-btn-label {
+    color: #ffffff !important;
+}
+
+.header-action-bulk,
+.fi-page-header .fi-ac-action.header-action-bulk {
+    background-color: #475569 !important;
+    color: #ffffff !important;
+    border: none !important;
+}
+.header-action-bulk:hover {
+    background-color: #334155 !important;
+}
+.header-action-bulk *,
+.header-action-bulk .fi-icon,
+.header-action-bulk .fi-btn-label {
+    color: #ffffff !important;
 }

@@ -20,3 +20,21 @@ html {
         font-size: 12px !important;
     }
 }
+
+[style] {
+    --cols-default: repeat(1, minmax(0, 1fr));
+}
+
+@layer components {
+    .fi-grid:not(.fi-grid-direction-col) {
+        grid-template-columns: var(--cols-default);
+        display: grid;
+    }
+    .fi-sc.fi-sc-has-gap {
+        gap: calc(var(--spacing) * 2);
+    }
+    .fi-sc {
+        font-size: var(--text-sm);
+        line-height: var(--tw-leading, var(--text-sm--line-height));
+    }
+}

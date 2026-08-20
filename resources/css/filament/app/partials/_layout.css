@@ -39,7 +39,6 @@ html.dark .fi-main .fi-form {
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
-
 .fi-sidebar-nav::-webkit-scrollbar {
     display: none;
 }
@@ -54,9 +53,14 @@ html.dark .fi-sidebar .fi-sidebar-footer {
     border-color: rgba(255, 255, 255, 0.1);
 }
 
+.fi-topbar {
+    background-color: #0f1623;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 html.dark .fi-topbar {
-    background-color: rgb(15 23 42 / var(--tw-bg-opacity, 1));
-    border-color: rgb(30 41 59 / var(--tw-border-opacity, 1));
+    background-color: #090e19;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 html.dark .fi-topbar-start,
