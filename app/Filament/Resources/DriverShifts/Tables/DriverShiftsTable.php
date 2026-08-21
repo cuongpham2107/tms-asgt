@@ -75,7 +75,10 @@ class DriverShiftsTable extends BaseTable
                             ->default(now()),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when($data['date'], fn (Builder $query, $date): Builder => $query->whereDate('start_time', $date))),
+                        ->when($data['date'], fn (Builder $query, $date): Builder => $query->where(function (Builder $q) use ($date) {
+                            $q->whereDate('start_time', $date)
+                                ->orWhereDate('end_time', $date);
+                        }))),
             ])
             ->recordActions([
                 ActionGroup::make([

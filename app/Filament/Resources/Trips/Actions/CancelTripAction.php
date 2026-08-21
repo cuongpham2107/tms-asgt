@@ -37,7 +37,7 @@ class CancelTripAction
                     ->helperText('Km đồng hồ tại thời điểm huỷ chuyến. Mặc định là km hiện tại của xe.'),
                 Textarea::make('cancel_reason')
                     ->label('Lý do huỷ')
-                    ->required()
+                    // ->required()
                     ->rows(2),
             ])
             ->action(function (Trip $record, array $data): void {
@@ -102,7 +102,7 @@ class CancelTripAction
                             ->update([
                                 'status' => OrderStatus::Cancelled->value,
                                 'cancelled_at' => now(),
-                                'cancel_reason' => $data['cancel_reason'],
+                                'cancel_reason' => $data['cancel_reason'] ?? '',
                             ]);
 
                         // Tạo checkpoint huỷ chuyến

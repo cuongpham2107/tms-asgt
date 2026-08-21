@@ -95,6 +95,7 @@ class ReassignDriverAction
                 Select::make('reason')
                     ->label('Lý do')
                     ->options(DriverSwapReason::class)
+                    ->default(DriverSwapReason::CargoNotUnloaded)
                     ->required(),
                 Checkbox::make('create_return_trip')
                     ->label('Tạo chuyến không hàng (quay đầu)')
