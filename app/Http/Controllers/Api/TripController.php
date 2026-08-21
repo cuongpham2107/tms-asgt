@@ -12,6 +12,7 @@ use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
 use App\Services\Trip\TripKmLimitService;
 use App\Services\TripKmCalculatorService;
+use App\Services\TripKmSplitService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
@@ -335,12 +336,12 @@ class TripController extends Controller
     }
 
     /**
-     * Thống kê số lượng đơn hàng theo nhóm trạng thái của lái xe.
+     * Thống kê số lượng chuyến theo nhóm trạng thái và tổng số KM của lái xe.
      *
      * @query from_date string|null YYYY-MM-DD
      * @query to_date string|null YYYY-MM-DD
      *
-     * @response array{data: array{assigned: int, in_progress: int, completed: int}}
+     * @response array{data: array{assigned: int, in_progress: int, completed: int, total_km: float, total_km_loaded: float, total_km_empty: float}}
      */
     public function stats(Request $request): JsonResponse
     {
@@ -348,45 +349,58 @@ class TripController extends Controller
         $from = $request->query('from_date');
         $to = $request->query('to_date');
 
-        $query = Trip::where('driver_id', $user->id);
+        $trips = Trip::query()
+            ->where(function ($q) use ($user) {
+                $q->where('driver_id', $user->id)
+                    ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id)->orWhere('to_driver_id', $user->id));
+            })
+            ->when($from, fn ($q) => $q->where(fn ($sq) => $sq->whereDate('started_at', '>=', $from)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->whereDate('created_at', '>=', $from))))
+            ->when($to, fn ($q) => $q->where(fn ($sq) => $sq->whereDate('started_at', '<=', $to)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->whereDate('created_at', '<=', $to))))
+            ->get();
 
-        if ($from) {
-            $query->whereDate('created_at', '>=', $from);
-        }
-        if ($to) {
-            $query->whereDate('created_at', '<=', $to);
+        $assigned = 0;
+        $inProgress = 0;
+        $completed = 0;
+        $totalKm = 0.0;
+        $totalLoaded = 0.0;
+
+        $inProgressStatuses = [
+            TripStatus::Started,
+            TripStatus::ArrivedPickup,
+            TripStatus::Delivering,
+            TripStatus::ArrivedDelivery,
+            TripStatus::Delivered,
+            TripStatus::ReturnTrip,
+        ];
+
+        foreach ($trips as $trip) {
+            if ((int) $trip->driver_id === (int) $user->id) {
+                if ($trip->status === TripStatus::Pending) {
+                    $assigned++;
+                } elseif (in_array($trip->status, $inProgressStatuses, true)) {
+                    $inProgress++;
+                }
+            }
+
+            if ($trip->status === TripStatus::Completed) {
+                $completed++;
+            }
+
+            $driverKm = TripKmSplitService::driverKm($trip, (int) $user->id);
+            $totalKm += $driverKm['total_km'];
+            $totalLoaded += $driverKm['total_km_loaded'];
         }
 
-        $counts = $query->selectRaw('
-                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as assigned,
-                SUM(CASE WHEN status IN (?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as in_progress,
-                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed,
-                COALESCE(SUM(CASE WHEN status = ? THEN total_km ELSE 0 END), 0) as total_km,
-                COALESCE(SUM(CASE WHEN status = ? THEN total_km_loaded ELSE 0 END), 0) as total_km_loaded,
-                COALESCE(SUM(CASE WHEN status = ? THEN total_km_empty ELSE 0 END), 0) as total_km_empty
-            ', [
-            TripStatus::Pending->value,
-            TripStatus::Started->value,
-            TripStatus::ArrivedPickup->value,
-            TripStatus::Delivering->value,
-            TripStatus::ArrivedDelivery->value,
-            TripStatus::Delivered->value,
-            TripStatus::ReturnTrip->value,
-            TripStatus::Completed->value,
-            TripStatus::Completed->value,
-            TripStatus::Completed->value,
-            TripStatus::Completed->value,
-        ])
-            ->first();
+        $totalEmpty = max(0.0, $totalKm - $totalLoaded);
 
         return response()->json([
             'data' => [
-                'assigned' => (int) ($counts->assigned ?? 0),
-                'in_progress' => (int) ($counts->in_progress ?? 0),
-                'completed' => (int) ($counts->completed ?? 0),
-                'total_km' => round((float) ($counts->total_km ?? 0), 1),
-                'total_km_loaded' => round((float) ($counts->total_km_loaded ?? 0), 1),
-                'total_km_empty' => round((float) ($counts->total_km_empty ?? 0), 1),
+                'assigned' => $assigned,
+                'in_progress' => $inProgress,
+                'completed' => $completed,
+                'total_km' => round($totalKm, 1),
+                'total_km_loaded' => round($totalLoaded, 1),
+                'total_km_empty' => round($totalEmpty, 1),
             ],
         ]);
     }

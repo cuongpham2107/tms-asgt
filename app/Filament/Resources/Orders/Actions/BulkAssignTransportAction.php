@@ -15,7 +15,6 @@ use Filament\Actions\BulkAction;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Collection;
@@ -41,16 +40,7 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                         VehiclePicker::make('vehicle_id')
                             ->label('Phương tiện')
                             ->live()
-                            ->afterStateUpdated(function (Set $set, Get $get, $state): void {
-                                if ($state) {
-                                    $vehicle = Vehicle::query()->find($state);
-                                    if (blank($get('driver_id'))) {
-                                        $set('driver_id', $vehicle?->current_driver_id ?? null);
-                                    }
-                                } else {
-                                    $set('driver_id', null);
-                                }
-                            })
+                            ->afterStateUpdated(fn (Set $set, $state) => self::handleVehicleStateUpdated($set, $state))
                             ->cards(fn (): array => self::resolveVehicleCards(null, null, null))
                             ->searchPlaceholder('Tìm biển số, loại xe...')
                             ->required(),
@@ -58,6 +48,7 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                         DriverPicker::make('driver_id')
                             ->label('Lái xe')
                             ->live()
+                            ->afterStateUpdated(fn (Set $set, $state) => self::handleDriverStateUpdated($set, $state))
                             ->cards(fn (): array => self::resolveDriverCards())
                             ->searchPlaceholder('Tìm tên, email...'),
                     ]),

@@ -29,7 +29,7 @@ class ListLocations extends ListRecords
     {
         $areas = ['all' => ['label' => 'Tất cả KV', 'color' => 'bg-blue-600']];
 
-        foreach (Area::select('code')->distinct()->orderBy('id')->pluck('code') as $code) {
+        foreach (Area::query()->select('code')->distinct()->orderBy('id', 'asc')->pluck('code') as $code) {
             $areas[$code] = ['label' => $code, 'color' => 'bg-blue-500'];
         }
 
@@ -48,15 +48,12 @@ class ListLocations extends ListRecords
             CreateAction::make()
                 ->label('Tạo địa điểm')
                 ->using(function (array $data): Location {
-                    $first = null;
-                    $areas = Area::where('code', $data['area_id'])->get();
-
-                    foreach ($areas as $area) {
-                        $record = Location::create(array_merge($data, ['area_id' => $area->id]));
-                        $first ??= $record;
+                    if (! empty($data['area_id']) && ! is_numeric($data['area_id'])) {
+                        $area = Area::query()->where('code', $data['area_id'])->first();
+                        $data['area_id'] = $area?->id;
                     }
 
-                    return $first ?? Location::create($data);
+                    return Location::create($data);
                 }),
         ];
     }

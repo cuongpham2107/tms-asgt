@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Locations\Schemas;
 
 use App\Enums\LocationType;
+use App\Enums\OrderType;
 use App\Models\Area;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\Http;
 
 class LocationForm
 {
-    public static function configure(Schema $schema): Schema
+    public static function configure(Schema $schema, mixed $defaultAreaId = null): Schema
     {
         return $schema
             ->components([
@@ -29,11 +30,23 @@ class LocationForm
                     ->label('Khu vực')
                     ->options(function (): array {
                         return Area::query()
-                            ->select('code')
-                            ->distinct()
-                            ->orderBy('code')
-                            ->pluck('code', 'code')
+                            ->where('is_active', true)
+                            ->orderBy('type', 'asc')
+                            ->orderBy('sort_order', 'asc')
+                            ->get()
+                            ->mapWithKeys(fn (Area $area, $key): array => [
+                                $area->id => "{$area->code} - {$area->name} (".($area->type === OrderType::Hhhk ? 'HHHK' : 'Hàng ngoài').')',
+                            ])
                             ->toArray();
+                    })
+                    ->default(function () use ($defaultAreaId) {
+                        $val = value($defaultAreaId);
+
+                        if (is_string($val) && ! is_numeric($val)) {
+                            return Area::query()->where('code', $val)->first()?->id;
+                        }
+
+                        return $val ? (int) $val : null;
                     })
                     ->searchable()
                     ->preload()

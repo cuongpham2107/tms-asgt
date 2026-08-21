@@ -2,13 +2,13 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
+use App\Enums\LocationType;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
 use App\Models\Location;
-use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -79,15 +79,40 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->live(onBlur: true)
                         ->label('Điểm nhận hàng')
                         ->options(function (Get $get): array {
+                            $areaId = $get('area_id');
+                            $currentId = $get('pickup_location_id');
+
                             return Location::query()
-                                // ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                ->where('is_active', true)
+                                ->when($areaId, function ($q, $areaId) {
+                                    $q->where(function ($sub) use ($areaId) {
+                                        $sub->where('area_id', $areaId)
+                                            ->orWhereNull('area_id');
+                                    });
+                                })
+                                ->when($currentId, fn ($q) => $q->orWhere('id', $currentId))
+                                ->orderBy('name', 'asc')
                                 ->pluck('name', 'id')
                                 ->toArray();
                         })
                         ->searchable()
+                        ->preload()
                         ->native(false)
                         ->required()
-                        ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents())
+                        ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
+                        ->createOptionUsing(function (array $data, Get $get): int {
+                            $areaId = $data['area_id'] ?? $get('area_id');
+                            if (is_string($areaId) && ! is_numeric($areaId)) {
+                                $area = Area::query()->where('code', $areaId)->first();
+                                $areaId = $area?->id;
+                            }
+
+                            return Location::create(array_merge($data, [
+                                'area_id' => $areaId ? (int) $areaId : null,
+                                'loc_type' => $data['loc_type'] ?? LocationType::Pickup->value,
+                                'is_active' => true,
+                            ]))->getKey();
+                        })
                         ->columnSpan(2),
                     TextInput::make('pickup_contact')
                         ->label('Người liên hệ nhận hàng')
@@ -146,16 +171,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                     VehiclePicker::make('vehicle_id')
                         ->label('Phương tiện')
                         ->live()
-                        ->afterStateUpdated(function (Set $set, Get $get, $state): void {
-                            if ($state) {
-                                $vehicle = Vehicle::query()->find($state);
-                                if (blank($get('driver_id'))) {
-                                    $set('driver_id', $vehicle?->current_driver_id ?? null);
-                                }
-                            } else {
-                                $set('driver_id', null);
-                            }
-                        })
+                        ->afterStateUpdated(fn (Set $set, $state) => self::handleVehicleStateUpdated($set, $state))
                         ->cards(fn (Get $get): array => self::resolveVehicleCards(
                             self::normalizeDecimal($get('total_weight')),
                             self::normalizeInteger($get('pickup_location_id')),
@@ -164,6 +180,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                     DriverPicker::make('driver_id')
                         ->label('Lái xe')
                         ->live()
+                        ->afterStateUpdated(fn (Set $set, $state) => self::handleDriverStateUpdated($set, $state))
                         ->cards(fn (): array => self::resolveDriverCards())
                         ->searchPlaceholder('Tìm tên, email...'),
                 ]);

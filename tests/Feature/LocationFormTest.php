@@ -1,6 +1,8 @@
 <?php
 
+use App\Enums\OrderType;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
+use App\Models\Area;
 use App\Models\Location;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
 use Filament\Schemas\Schema;
@@ -42,4 +44,55 @@ test('location form is configured correctly with map picker', function () {
     expect($coordinatesComponent)->not->toBeNull();
     expect($coordinatesComponent)->toBeInstanceOf(MapPicker::class);
     expect($coordinatesComponent->getLabel())->toBe('Chọn vị trí trên bản đồ');
+});
+
+test('location form area_id options use area ID as key and include formatted label', function () {
+    $area = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'NBO',
+        'name' => 'Nội bộ TN',
+        'is_active' => true,
+    ]);
+
+    $schema = Schema::make();
+    $configuredSchema = LocationForm::configure($schema);
+    $components = $configuredSchema->getComponents();
+
+    $areaComponent = collect($components)
+        ->first(fn ($component) => $component->getName() === 'area_id');
+
+    expect($areaComponent)->not->toBeNull();
+    $options = $areaComponent->getOptions();
+    expect($options)->toHaveKey($area->id);
+    expect($options[$area->id])->toContain('NBO - Nội bộ TN (HHHK)');
+});
+
+test('location form area_id pre-selects default area when defaultAreaId is provided', function () {
+    $area = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'NBO',
+        'name' => 'Nội bộ TN',
+        'is_active' => true,
+    ]);
+
+    // Test with integer ID
+    $schema1 = Schema::make();
+    $components1 = LocationForm::configure($schema1, $area->id)->getComponents();
+    $areaComponent1 = collect($components1)->first(fn ($c) => $c->getName() === 'area_id');
+    $default1 = $areaComponent1->getDefaultState();
+    expect($default1)->toBe($area->id);
+
+    // Test with string code
+    $schema2 = Schema::make();
+    $components2 = LocationForm::configure($schema2, 'NBO')->getComponents();
+    $areaComponent2 = collect($components2)->first(fn ($c) => $c->getName() === 'area_id');
+    $default2 = $areaComponent2->getDefaultState();
+    expect($default2)->toBe($area->id);
+
+    // Test with Closure
+    $schema3 = Schema::make();
+    $components3 = LocationForm::configure($schema3, fn () => $area->id)->getComponents();
+    $areaComponent3 = collect($components3)->first(fn ($c) => $c->getName() === 'area_id');
+    $default3 = $areaComponent3->getDefaultState();
+    expect($default3)->toBe($area->id);
 });

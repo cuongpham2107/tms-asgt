@@ -88,33 +88,6 @@ class TripResource extends JsonResource
             return null;
         }
 
-        $loadedRanges = TripKmSplitService::loadedRanges($this->resource);
-
-        $totalKm = 0.0;
-        $loadedKm = 0.0;
-        $found = false;
-
-        foreach ($segments as [$segStart, $segEnd, $segShiftId, $segDriverId]) {
-            if ((int) $segDriverId !== (int) $driverId) {
-                continue;
-            }
-
-            $found = true;
-            $totalKm += max(0.0, (float) $segEnd - (float) $segStart);
-
-            foreach ($loadedRanges as [$loadStart, $loadEnd]) {
-                $loadedKm += max(0.0, min((float) $segEnd, (float) $loadEnd) - max((float) $segStart, (float) $loadStart));
-            }
-        }
-
-        if (! $found) {
-            return null;
-        }
-
-        return [
-            'total_km' => $totalKm,
-            'total_km_loaded' => $loadedKm,
-            'total_km_empty' => max(0.0, $totalKm - $loadedKm),
-        ];
+        return TripKmSplitService::driverKm($this->resource, $driverId);
     }
 }

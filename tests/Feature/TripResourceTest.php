@@ -334,3 +334,119 @@ test('trips list filters by order area place correctly', function () {
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$tripNba, $tripHni]);
 });
+
+test('trip stat cards calculate correct metrics and filter by status properly', function () {
+    $vehicle = Vehicle::create([
+        'plate_number' => '29C-999.99',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $driver = User::factory()->create();
+    $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài']);
+    $customer = Customer::create(['code' => 'CUST-STAT', 'name' => 'Customer Stat']);
+
+    // 1. Unsent trip (Pending with Assigned order)
+    $unsentTrip = Trip::create([
+        'trip_code' => 'TRIP-STAT-UNSENT',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Pending,
+        'started_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-STAT-UNSENT',
+        'trip_id' => $unsentTrip->id,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'created_by' => $driver->id,
+        'status' => OrderStatus::Assigned,
+    ]);
+
+    // 2. Running trip (Started)
+    $runningTrip = Trip::create([
+        'trip_code' => 'TRIP-STAT-RUNNING',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Started,
+        'started_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-STAT-RUNNING',
+        'trip_id' => $runningTrip->id,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'created_by' => $driver->id,
+        'status' => OrderStatus::InTransit,
+    ]);
+
+    // 3. Completed trip
+    $completedTrip = Trip::create([
+        'trip_code' => 'TRIP-STAT-COMPLETED',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subHours(2),
+        'completed_at' => now()->subHour(),
+    ]);
+
+    // 4. Delayed trip (Started with planned_loading_at in past)
+    $delayedTrip = Trip::create([
+        'trip_code' => 'TRIP-STAT-DELAYED',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-STAT-DELAYED',
+        'trip_id' => $delayedTrip->id,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'created_by' => $driver->id,
+        'status' => OrderStatus::InTransit,
+        'planned_loading_at' => now()->subHours(3),
+    ]);
+
+    $component = Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all']);
+
+    /** @var ListTrips $instance */
+    $instance = $component->instance();
+    $stats = $instance->getTripStats();
+
+    $statsByKey = collect($stats)->keyBy('key');
+
+    expect($statsByKey->has('all'))->toBeTrue();
+    expect($statsByKey->get('all')['label'])->toBe('Tổng chuyến');
+    expect($statsByKey->get('all')['value'])->toBe(4);
+
+    expect($statsByKey->has('unsent'))->toBeTrue();
+    expect($statsByKey->get('unsent')['label'])->toBe('Chưa gửi');
+    expect($statsByKey->get('unsent')['value'])->toBe(1);
+
+    expect($statsByKey->has('running'))->toBeTrue();
+    expect($statsByKey->get('running')['label'])->toBe('Đang chạy');
+    expect($statsByKey->get('running')['value'])->toBe(2); // runningTrip + delayedTrip
+
+    expect($statsByKey->has('completed'))->toBeTrue();
+    expect($statsByKey->get('completed')['label'])->toBe('Hoàn thành');
+    expect($statsByKey->get('completed')['value'])->toBe(1);
+
+    expect($statsByKey->has('delayed'))->toBeTrue();
+    expect($statsByKey->get('delayed')['label'])->toBe('Trễ giờ');
+    expect($statsByKey->get('delayed')['value'])->toBe(1);
+
+    // Test filtering by 'unsent'
+    $component->call('filterStatus', 'unsent')
+        ->assertCanSeeTableRecords([$unsentTrip])
+        ->assertCanNotSeeTableRecords([$runningTrip, $completedTrip, $delayedTrip]);
+
+    // Test filtering by 'running'
+    $component->call('filterStatus', 'running')
+        ->assertCanSeeTableRecords([$runningTrip, $delayedTrip])
+        ->assertCanNotSeeTableRecords([$unsentTrip, $completedTrip]);
+
+    // Test filtering by 'delayed'
+    $component->call('filterStatus', 'delayed')
+        ->assertCanSeeTableRecords([$delayedTrip])
+        ->assertCanNotSeeTableRecords([$unsentTrip, $runningTrip, $completedTrip]);
+});

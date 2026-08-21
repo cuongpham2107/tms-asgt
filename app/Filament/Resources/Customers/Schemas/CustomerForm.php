@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Customers\Schemas;
 
 use App\Filament\Resources\Locations\Schemas\LocationForm;
+use App\Models\Area;
 use App\Models\Location;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -53,9 +54,9 @@ class CustomerForm
                             ->label('Địa điểm')
                             ->prefixIcon(Heroicon::OutlinedMapPin)
                             ->options(fn (): array => Location::query()
-                                ->orderBy('code')
+                                ->orderBy('code', 'asc')
                                 ->get(['id', 'code', 'name', 'address'])
-                                ->mapWithKeys(fn (Location $location): array => [
+                                ->mapWithKeys(fn (Location $location, $key): array => [
                                     $location->id => trim(implode(' - ', array_filter([
                                         $location->code,
                                         $location->name !== $location->code ? $location->name : null,
@@ -68,11 +69,15 @@ class CustomerForm
                             ->preload()
                             ->live()
                             ->afterStateUpdated(function ($state, Set $set): void {
-                                $location = $state ? Location::find($state) : null;
+                                $location = $state ? Location::query()->find($state) : null;
                                 $set('address', $location?->address);
                             })
                             ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents())
                             ->createOptionUsing(function (array $data): int {
+                                if (! empty($data['area_id']) && ! is_numeric($data['area_id'])) {
+                                    $area = Area::query()->where('code', $data['area_id'])->first();
+                                    $data['area_id'] = $area?->id;
+                                }
                                 $location = Location::create($data);
 
                                 return $location->id;

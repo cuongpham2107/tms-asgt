@@ -7,6 +7,12 @@ import { Ionicons } from "@expo/vector-icons";
 
 const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
 
+const statusBadge: Record<string, { label: string; bg: string; color: string; border: string }> = {
+  completed: { label: "Hoàn thành", bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },
+  cancelled: { label: "Đã huỷ", bg: "#FEF2F2", color: "#DC2626", border: "#FECACA" },
+  driver_swap: { label: "Đảo lái", bg: "#FFFBEB", color: "#D97706", border: "#FDE68A" },
+};
+
 const periods = [
   { key: "all", label: "Tất cả" },
   { key: "today", label: "Hôm nay" },
@@ -44,7 +50,7 @@ export default function StatsScreen() {
     if (activePeriod === "all" || !history.length) return history;
     const { from, to } = getPeriodDates(activePeriod);
     return history.filter((t: any) => {
-      const d = t.completed_at || t.started_at;
+      const d = t.completed_at || t.started_at || t.created_at;
       if (!d) return true;
       const date = new Date(d).toISOString().slice(0, 10);
       return date >= from! && date <= to!;
@@ -60,7 +66,6 @@ export default function StatsScreen() {
       api.trips.history({
         page: 1,
         per_page: 15,
-        status: "completed",
         from_date: from,
         to_date: to,
       }, token).catch(() => ({ data: [], meta: {} })),
@@ -84,7 +89,6 @@ export default function StatsScreen() {
     const histRes = await api.trips.history({
       page: nextPage,
       per_page: 15,
-      status: "completed",
       from_date: from,
       to_date: to,
     }, token).catch(() => null);
@@ -164,48 +168,58 @@ export default function StatsScreen() {
           })}
         </View>
 
-        {/* Completed trips history */}
-        <Text style={s.sectionTitle}>📋 Chuyến đã hoàn thành ({data?.completed ?? filteredHistory.length})</Text>
+        {/* Trips history */}
+        <Text style={s.sectionTitle}>📋 Lịch sử chuyến đi ({filteredHistory.length})</Text>
         {filteredHistory.length === 0 ? (
-          <View style={s.empty}><Text style={s.emptyText}>Chưa có chuyến hoàn thành</Text></View>
+          <View style={s.empty}><Text style={s.emptyText}>Chưa có chuyến đi</Text></View>
         ) : (
           <>
-            {filteredHistory.map((t: any) => (
-              <View key={t.id} style={[s.tripCard, { borderColor: "#A7F3D0" }]}>
-                <View style={{ flex: 1 }}>
-                  {(() => {
-                    const codes: string[] = [];
-                    (t.orders || []).forEach((o: any) => {
-                      if (o.pickup_location?.code) codes.push(o.pickup_location.code);
-                      (o.delivery_points || []).forEach((dp: any) => {
-                        if (dp.location?.code) codes.push(dp.location.code);
+            {filteredHistory.map((t: any) => {
+              const statusInfo = statusBadge[t.status] || statusBadge.completed;
+              return (
+                <View key={t.id} style={[s.tripCard, { borderColor: statusInfo.border }]}>
+                  <View style={{ flex: 1 }}>
+                    {(() => {
+                      const codes: string[] = [];
+                      (t.orders || []).forEach((o: any) => {
+                        if (o.pickup_location?.code) codes.push(o.pickup_location.code);
+                        (o.delivery_points || []).forEach((dp: any) => {
+                          if (dp.location?.code) codes.push(dp.location.code);
+                        });
                       });
-                    });
-                    if (codes.length === 0 && t.route) {
-                      codes.push(...t.route.split(' → '));
-                    }
-                    const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
-                    if (deduped.length > 0) return (
-                      <View style={s.routeWrap}>
-                        <Ionicons name="navigate" size={11} color="#4F46E5" />
-                        <Text style={s.routeText} numberOfLines={1}>{deduped.join("  →  ")}</Text>
+                      if (codes.length === 0 && t.route) {
+                        codes.push(...t.route.split(' → '));
+                      }
+                      const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
+                      if (deduped.length > 0) return (
+                        <View style={s.routeWrap}>
+                          <Ionicons name="navigate" size={11} color="#4F46E5" />
+                          <Text style={s.routeText} numberOfLines={1}>{deduped.join("  →  ")}</Text>
+                        </View>
+                      );
+                      return null;
+                    })()}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={s.tripCode}>{t.vehicle?.plate_number || "-"}</Text>
+                      <View style={[s.badge, { backgroundColor: statusInfo.bg }]}>
+                        <Text style={[s.badgeText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
                       </View>
-                    );
-                    return null;
-                  })()}
-                  <Text style={s.tripCode}>{t.vehicle?.plate_number || "-"}</Text>
-                  {(() => {
-                    const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
-                    if (loadingTimes.length === 0) return null;
-                    return <Text style={s.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
-                  })()}
+                    </View>
+                    {(() => {
+                      const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
+                      if (loadingTimes.length === 0) return null;
+                      return <Text style={s.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
+                    })()}
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={s.tripKm}>{fmt(t.total_km)} km</Text>
+                    <Text style={s.tripDate}>
+                      {t.completed_at ? new Date(t.completed_at).toLocaleDateString("vi-VN") : (t.started_at ? new Date(t.started_at).toLocaleDateString("vi-VN") : "-")}
+                    </Text>
+                  </View>
                 </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={s.tripKm}>{fmt(t.total_km)} km</Text>
-                  <Text style={s.tripDate}>{t.completed_at ? new Date(t.completed_at).toLocaleDateString("vi-VN") : "-"}</Text>
-                </View>
-              </View>
-            ))}
+              );
+            })}
 
             {loadingMore && (
               <View style={{ paddingVertical: 14, alignItems: "center" }}>
@@ -250,6 +264,8 @@ const s = StyleSheet.create({
   routeWrap: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 },
   routeText: { fontSize: 11, color: "#4F46E5", fontWeight: "600", flex: 1 },
   loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 2 },
+  badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  badgeText: { fontSize: 10, fontWeight: "700" },
   totalCard: { backgroundColor: "#EEF2FF", marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12, alignItems: "center", borderWidth: 1, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   totalText: { fontSize: 15, fontWeight: "700", color: "#4F46E5" },
   // Period filter

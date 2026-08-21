@@ -142,6 +142,57 @@ class TripKmSplitService
     }
 
     /**
+     * Tính km của chuyến thuộc về một tài xế cụ thể (bao gồm cả khi có đảo lái).
+     *
+     * @return array{total_km: float, total_km_loaded: float, total_km_empty: float}
+     */
+    public static function driverKm(Trip $trip, int $driverId): array
+    {
+        $segments = self::segments($trip);
+
+        if (empty($segments)) {
+            if ((int) $trip->driver_id !== $driverId || $trip->total_km === null) {
+                return [
+                    'total_km' => 0.0,
+                    'total_km_loaded' => 0.0,
+                    'total_km_empty' => 0.0,
+                ];
+            }
+
+            $totalKm = (float) $trip->total_km;
+            $loadedKm = (float) ($trip->total_km_loaded ?? 0);
+
+            return [
+                'total_km' => $totalKm,
+                'total_km_loaded' => $loadedKm,
+                'total_km_empty' => max(0.0, $totalKm - $loadedKm),
+            ];
+        }
+
+        $loadedRanges = self::loadedRanges($trip);
+        $totalKm = 0.0;
+        $loadedKm = 0.0;
+
+        foreach ($segments as [$segStart, $segEnd, $segShiftId, $segDriverId]) {
+            if ((int) $segDriverId !== $driverId) {
+                continue;
+            }
+
+            $totalKm += max(0.0, (float) $segEnd - (float) $segStart);
+
+            foreach ($loadedRanges as [$loadStart, $loadEnd]) {
+                $loadedKm += max(0.0, min((float) $segEnd, (float) $loadEnd) - max((float) $segStart, (float) $loadStart));
+            }
+        }
+
+        return [
+            'total_km' => $totalKm,
+            'total_km_loaded' => $loadedKm,
+            'total_km_empty' => max(0.0, $totalKm - $loadedKm),
+        ];
+    }
+
+    /**
      * Km kết thúc hiệu dụng của chuyến. Lấy giá trị lớn nhất giữa end_km và
      * km_reading của checkpoint cuối để end_km lỗi thời (chưa gửi checkpoint
      * 'end') không làm mất km của tài xế cuối.

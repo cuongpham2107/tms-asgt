@@ -15,7 +15,6 @@ use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\DB;
@@ -43,16 +42,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
                         VehiclePicker::make('vehicle_id')
                             ->label('Phương tiện')
                             ->live()
-                            ->afterStateUpdated(function (Set $set, Get $get, $state): void {
-                                if ($state) {
-                                    $vehicle = Vehicle::query()->find($state);
-                                    if (blank($get('driver_id'))) {
-                                        $set('driver_id', $vehicle?->current_driver_id ?? null);
-                                    }
-                                } else {
-                                    $set('driver_id', null);
-                                }
-                            })
+                            ->afterStateUpdated(fn (Set $set, $state) => self::handleVehicleStateUpdated($set, $state))
                             ->cards(fn (Order $record): array => self::resolveVehicleCards(
                                 self::normalizeDecimal($record->total_weight ?? 0),
                                 null,
@@ -64,6 +54,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
                         DriverPicker::make('driver_id')
                             ->label('Lái xe')
                             ->live()
+                            ->afterStateUpdated(fn (Set $set, $state) => self::handleDriverStateUpdated($set, $state))
                             ->cards(fn (): array => self::resolveDriverCards())
                             ->searchPlaceholder('Tìm tên, email...'),
                     ]),

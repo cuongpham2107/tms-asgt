@@ -2,9 +2,11 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
+use App\Enums\LocationType;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
+use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
 use App\Models\Location;
@@ -92,14 +94,42 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                         // Pickup location for HHHK
                                         Select::make('pickup_location_id')
                                             ->label('Điểm nhận hàng (HHHK)')
-                                            ->options(fn (Get $get): array => Location::query()
-                                                // ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
-                                                ->pluck('name', 'id')
-                                                ->toArray()
-                                            )->searchable()->preload()
+                                            ->options(function (Get $get): array {
+                                                $areaId = $get('area_id');
+                                                $currentId = $get('pickup_location_id');
+
+                                                return Location::query()
+                                                    ->where('is_active', true)
+                                                    ->when($areaId, function ($q, $areaId) {
+                                                        $q->where(function ($sub) use ($areaId) {
+                                                            $sub->where('area_id', $areaId)
+                                                                ->orWhereNull('area_id');
+                                                        });
+                                                    })
+                                                    ->when($currentId, fn ($q) => $q->orWhere('id', $currentId))
+                                                    ->orderBy('name', 'asc')
+                                                    ->pluck('name', 'id')
+                                                    ->toArray();
+                                            })
+                                            ->searchable()
+                                            ->preload()
                                             ->native(false)
                                             ->visible(fn (Get $get): bool => $get('order_type_code') === 'HHHK')
-                                            ->required(false),
+                                            ->required(false)
+                                            ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
+                                            ->createOptionUsing(function (array $data, Get $get): int {
+                                                $areaId = $data['area_id'] ?? $get('area_id');
+                                                if (is_string($areaId) && ! is_numeric($areaId)) {
+                                                    $area = Area::query()->where('code', $areaId)->first();
+                                                    $areaId = $area?->id;
+                                                }
+
+                                                return Location::create(array_merge($data, [
+                                                    'area_id' => $areaId ? (int) $areaId : null,
+                                                    'loc_type' => $data['loc_type'] ?? LocationType::Pickup->value,
+                                                    'is_active' => true,
+                                                ]))->getKey();
+                                            }),
                                         DateTimePicker::make('planned_loading_at')
                                             ->label('Thời gian dự kiến đóng hàng')
                                             ->seconds(false)

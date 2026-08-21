@@ -48,7 +48,7 @@ beforeEach(function () {
 
     $this->area = Area::create([
         'type' => 'HHHK',
-        'code' => 'NORTH',
+        'code' => 'NBA',
         'name' => 'North Area',
     ]);
 

@@ -13,7 +13,6 @@ use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\DB;
@@ -43,16 +42,7 @@ class ReassignTransportAction extends CreatesOrderTransportCards
                             ->label('Phương tiện')
                             ->live()
                             ->default(fn (Trip $record): ?int => $record->vehicle_id)
-                            ->afterStateUpdated(function (Set $set, Get $get, $state): void {
-                                if ($state) {
-                                    $vehicle = Vehicle::query()->find($state);
-                                    if (blank($get('driver_id'))) {
-                                        $set('driver_id', $vehicle?->current_driver_id ?? null);
-                                    }
-                                } else {
-                                    $set('driver_id', null);
-                                }
-                            })
+                            ->afterStateUpdated(fn (Set $set, $state) => self::handleVehicleStateUpdated($set, $state))
                             ->cards(fn (Trip $record): array => self::resolveVehicleCards(
                                 self::normalizeDecimal($record->orders->sum('total_weight')),
                                 self::normalizeInteger($record->start_location_id ?? $record->orders->first()?->pickup_location_id),
@@ -65,6 +55,7 @@ class ReassignTransportAction extends CreatesOrderTransportCards
                             ->label('Lái xe')
                             ->live()
                             ->default(fn (Trip $record): ?int => $record->driver_id)
+                            ->afterStateUpdated(fn (Set $set, $state) => self::handleDriverStateUpdated($set, $state))
                             ->cards(fn (): array => self::resolveDriverCards())
                             ->searchPlaceholder('Tìm tên, email...'),
                     ]),

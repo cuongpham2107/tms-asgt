@@ -170,3 +170,43 @@ test('selecting vehicle automatically sets driver_id in form state', function ()
     expect($order->trip)->not->toBeNull();
     expect($order->trip->driver_id)->toBe($driver->id);
 });
+
+test('selecting driver automatically sets vehicle_id in form state', function () {
+    $driver = User::factory()->create();
+    $driver->assignRole($this->driverRole);
+
+    $vehicle = Vehicle::create([
+        'plate_number' => '51C-999.99',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-AUTO-002',
+        'type' => 'HHHK',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Draft,
+        'created_by' => User::factory()->create()->id,
+    ]);
+
+    $admin = User::factory()->create();
+    $this->actingAs($admin);
+
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
+        ->mountTableAction('assign_transport', $order)
+        ->setTableActionData([
+            'driver_id' => $driver->id,
+        ])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    $order->refresh();
+    expect($order->trip)->not->toBeNull();
+    expect($order->trip->vehicle_id)->toBe($vehicle->id);
+    expect($order->trip->driver_id)->toBe($driver->id);
+});

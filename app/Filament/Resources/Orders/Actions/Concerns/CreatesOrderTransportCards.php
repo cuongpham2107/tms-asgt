@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Actions\Concerns;
 
 use App\Enums\CheckpointType;
+use App\Enums\LocationType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Enums\TripStatus;
@@ -34,6 +35,28 @@ use Throwable;
 
 abstract class CreatesOrderTransportCards
 {
+    public static function handleVehicleStateUpdated(Set $set, mixed $state): void
+    {
+        if ($state) {
+            $vehicle = Vehicle::query()->find($state);
+            $set('driver_id', $vehicle?->current_driver_id ?? null);
+        } else {
+            $set('driver_id', null);
+        }
+    }
+
+    public static function handleDriverStateUpdated(Set $set, mixed $state): void
+    {
+        if ($state) {
+            $vehicle = Vehicle::query()->where('current_driver_id', $state)->first();
+            if ($vehicle) {
+                $set('vehicle_id', $vehicle->id);
+            }
+        } else {
+            $set('vehicle_id', null);
+        }
+    }
+
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -603,16 +626,18 @@ abstract class CreatesOrderTransportCards
     {
         return Select::make('customer_id')
             ->label('Khách hàng')
-            ->options(fn (Get $get): array => Cache::remember('customer-options', now()->addSeconds(60), fn (): array => Customer::query()
+            ->options(fn (): array => Customer::query()
+                ->where('is_active', true)
                 ->get(['id', 'code', 'name'])
-                ->mapWithKeys(fn (Customer $customer): array => [
+                ->mapWithKeys(fn (Customer $customer, $key): array => [
                     $customer->id => "{$customer->code} - {$customer->name}",
                 ])
                 ->toArray()
-            ))
+            )
             ->native(false)
             ->required()
             ->searchable()
+            ->preload()
             ->columnSpanFull()
             ->live()
             ->afterStateUpdated(function ($state, Set $set): void {
@@ -628,7 +653,12 @@ abstract class CreatesOrderTransportCards
                     }
                 }
             })
-            ->createOptionForm(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents());
+            ->createOptionForm(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents())
+            ->createOptionUsing(function (array $data): int {
+                $customer = Customer::create($data);
+
+                return $customer->getKey();
+            });
     }
 
     public static function getDeliveryPointsRepeaterField(string|Closure $orderType = 'normal'): Repeater
@@ -676,17 +706,25 @@ abstract class CreatesOrderTransportCards
                     ->schema([
                         Select::make('location_id')
                             ->label('Điểm giao hàng')
-                            ->options(fn (Get $get): array => Cache::remember(
-                                'delivery-location-options-'.($get('../../area_id') ?? 'all'),
-                                now()->addSeconds(60),
-                                function () use ($get): array {
-                                    return Location::query()
-                                        ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
-                                        ->pluck('code', 'id')
-                                        ->toArray();
-                                }
-                            ))
+                            ->options(function (Get $get): array {
+                                $areaId = $get('../../area_id') ?? $get('area_id');
+                                $currentId = $get('location_id');
+
+                                return Location::query()
+                                    ->where('is_active', true)
+                                    ->when($areaId, function ($q, $areaId) {
+                                        $q->where(function ($sub) use ($areaId) {
+                                            $sub->where('area_id', $areaId)
+                                                ->orWhereNull('area_id');
+                                        });
+                                    })
+                                    ->when($currentId, fn ($q) => $q->orWhere('id', $currentId))
+                                    ->orderBy('name', 'asc')
+                                    ->pluck('name', 'id')
+                                    ->toArray();
+                            })
                             ->searchable()
+                            ->preload()
                             ->native(false)
                             ->required()
                             ->live(onBlur: true)
@@ -695,10 +733,17 @@ abstract class CreatesOrderTransportCards
 
                                 return $type === 'HHHK' ? 'full' : 2;
                             })
-                            ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents())
-                            ->createOptionUsing(function (array $data): int {
+                            ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('../../area_id') ?? $get('area_id'))->getComponents())
+                            ->createOptionUsing(function (array $data, Get $get): int {
+                                $areaId = $data['area_id'] ?? $get('../../area_id') ?? $get('area_id');
+                                if (is_string($areaId) && ! is_numeric($areaId)) {
+                                    $area = Area::query()->where('code', $areaId)->first();
+                                    $areaId = $area?->id;
+                                }
+
                                 return Location::create(array_merge($data, [
-                                    'loc_type' => 'delivery',
+                                    'area_id' => $areaId ? (int) $areaId : null,
+                                    'loc_type' => $data['loc_type'] ?? LocationType::Delivery->value,
                                     'is_active' => true,
                                 ]))->getKey();
                             }),

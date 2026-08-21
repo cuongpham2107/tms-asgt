@@ -10,10 +10,18 @@
         cards: @js($cards),
         init() {
             if (this.state) {
-                this.activeTab = 'all';
+                if (!this.scopedCards().some(c => String(c.value) === String(this.state))) {
+                    this.activeTab = 'all';
+                }
             } else if (this.hasSuggestionTab()) {
                 this.activeTab = 'suggested';
             }
+
+            this.$watch('state', (val) => {
+                if (val && !this.scopedCards().some(c => String(c.value) === String(val))) {
+                    this.activeTab = 'all';
+                }
+            });
 
             this.$watch('search', (val) => {
                 if (val.length === 0 && this.hasSuggestionTab()) {
@@ -50,34 +58,19 @@
                 .slice(0, 3);
         },
         scopedCards() {
-            let list = [];
             if (this.search) {
-                list = this.cards;
-            } else if (this.hasSuggestionTab() && this.activeTab === 'suggested') {
-                list = this.suggestedCards();
-            } else if (this.activeTab === 'company') {
-                list = this.cards.filter(card => card.type === 'company');
-            } else if (this.activeTab === 'rent') {
-                list = this.cards.filter(card => card.type === 'rent');
-            } else {
-                list = this.cards;
+                return this.cards;
             }
-
-            if (this.state && !this.search) {
-                const selectedIndex = list.findIndex(card => String(card.value ?? '') === String(this.state ?? ''));
-                if (selectedIndex !== -1) {
-                    const selected = list[selectedIndex];
-                    const rest = list.filter((_, idx) => idx !== selectedIndex);
-                    return [selected, ...rest];
-                } else {
-                    const selectedInAll = this.cards.find(card => String(card.value ?? '') === String(this.state ?? ''));
-                    if (selectedInAll) {
-                        return [selectedInAll, ...list];
-                    }
-                }
+            if (this.hasSuggestionTab() && this.activeTab === 'suggested') {
+                return this.suggestedCards();
             }
-
-            return list;
+            if (this.activeTab === 'company') {
+                return this.cards.filter(card => card.type === 'company');
+            }
+            if (this.activeTab === 'rent') {
+                return this.cards.filter(card => card.type === 'rent');
+            }
+            return this.cards;
         },
         matches(card) {
             if (!this.search) {
@@ -188,6 +181,7 @@
             <template x-for="card in visibleCards()" :key="card.value">
                 <div x-show="matches(card)" x-cloak class="h-full">
                     <button type="button" x-on:click="select(card.value)"
+                        x-effect="if (isSelected(card.value)) { $nextTick(function() { $el.scrollIntoView({ behavior: 'smooth', block: 'center' }) }) }"
                         class="group relative flex h-full w-full flex-col rounded-xl border-2 bg-white text-left transition-all duration-200"
                         :class="isSelected(card.value) ?
                             'border-primary-500 bg-primary-50/50 shadow-md shadow-primary-500/10 dark:border-primary-400 dark:bg-primary-950/20' :

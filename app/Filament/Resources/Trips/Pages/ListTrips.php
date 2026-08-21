@@ -60,8 +60,9 @@ class ListTrips extends ListRecords
 
     public array $tripStatusFilters = [
         'all' => ['label' => 'Tất cả', 'color' => 'bg-blue-600'],
-        'unsent' => ['label' => 'Chưa gửi lệnh', 'color' => 'bg-amber-500'],
+        'unsent' => ['label' => 'Chưa gửi', 'color' => 'bg-amber-500'],
         'pending' => ['label' => 'Chờ chạy', 'color' => 'bg-sky-500'],
+        'running' => ['label' => 'Đang chạy', 'color' => 'bg-sky-500'],
         'started' => ['label' => 'Đã bắt đầu', 'color' => 'bg-blue-500'],
         'arrived_pickup' => ['label' => 'Đến lấy hàng', 'color' => 'bg-orange-500'],
         'delivering' => ['label' => 'Đang giao', 'color' => 'bg-sky-500'],
@@ -70,6 +71,7 @@ class ListTrips extends ListRecords
         'completed' => ['label' => 'Hoàn thành', 'color' => 'bg-emerald-500'],
         'return_trip' => ['label' => 'Chuyến không hàng', 'color' => 'bg-violet-500'],
         'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
+        'delayed' => ['label' => 'Trễ giờ', 'color' => 'bg-rose-500'],
         'cancelled' => ['label' => 'Đã huỷ', 'color' => 'bg-red-500'],
     ];
 
@@ -118,14 +120,23 @@ class ListTrips extends ListRecords
 
         $total = (clone $baseQuery)->count();
 
-        $activeStatuses = TripStatus::activeStatuses();
-
-        $running = (clone $baseQuery)
-            ->whereIn('status', array_map(fn ($s) => $s->value, $activeStatuses))
+        $unsent = (clone $baseQuery)
+            ->where('status', TripStatus::Pending->value)
+            ->whereHas('orders', fn (Builder $q) => $q->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Draft->value]))
             ->count();
 
-        $pending = (clone $baseQuery)
-            ->where('status', TripStatus::Pending->value)
+        $runningStatuses = [
+            TripStatus::Started->value,
+            TripStatus::ArrivedPickup->value,
+            TripStatus::Delivering->value,
+            TripStatus::ArrivedDelivery->value,
+            TripStatus::Delivered->value,
+            TripStatus::DriverSwap->value,
+            TripStatus::ReturnTrip->value,
+        ];
+
+        $running = (clone $baseQuery)
+            ->whereIn('status', $runningStatuses)
             ->count();
 
         $completed = (clone $baseQuery)
@@ -155,6 +166,16 @@ class ListTrips extends ListRecords
                 'filter' => 'all',
             ],
             [
+                'key' => 'unsent',
+                'label' => 'Chưa gửi',
+                'value' => $unsent,
+                'icon' => 'heroicon-o-paper-airplane',
+                'color' => 'text-amber-600 dark:text-amber-400',
+                'bg' => 'bg-amber-50 dark:bg-amber-950/40',
+                'border' => 'border-amber-100 dark:border-amber-900/40',
+                'filter' => 'unsent',
+            ],
+            [
                 'key' => 'running',
                 'label' => 'Đang chạy',
                 'value' => $running,
@@ -162,17 +183,7 @@ class ListTrips extends ListRecords
                 'color' => 'text-sky-600 dark:text-sky-400',
                 'bg' => 'bg-sky-50 dark:bg-sky-950/40',
                 'border' => 'border-sky-100 dark:border-sky-900/40',
-                'filter' => 'started',
-            ],
-            [
-                'key' => 'pending',
-                'label' => 'Chờ chạy',
-                'value' => $pending,
-                'icon' => 'heroicon-o-clock',
-                'color' => 'text-amber-600 dark:text-amber-400',
-                'bg' => 'bg-amber-50 dark:bg-amber-950/40',
-                'border' => 'border-amber-100 dark:border-amber-900/40',
-                'filter' => 'pending',
+                'filter' => 'running',
             ],
             [
                 'key' => 'completed',
@@ -192,7 +203,7 @@ class ListTrips extends ListRecords
                 'color' => 'text-rose-600 dark:text-rose-400',
                 'bg' => 'bg-rose-50 dark:bg-rose-950/40',
                 'border' => 'border-rose-100 dark:border-rose-900/40',
-                'filter' => null,
+                'filter' => 'delayed',
             ],
         ];
     }
@@ -442,6 +453,15 @@ class ListTrips extends ListRecords
                     ->where('is_empty_run', true)
                     ->orWhereDoesntHave('orders', fn (Builder $sq) => $sq->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Draft->value]))
                 ),
+            'running' => $query->whereIn('status', [
+                TripStatus::Started->value,
+                TripStatus::ArrivedPickup->value,
+                TripStatus::Delivering->value,
+                TripStatus::ArrivedDelivery->value,
+                TripStatus::Delivered->value,
+                TripStatus::DriverSwap->value,
+                TripStatus::ReturnTrip->value,
+            ]),
             'started' => $query->where('status', TripStatus::Started->value),
             'arrived_pickup' => $query->where('status', TripStatus::ArrivedPickup->value),
             'delivering' => $query->where('status', TripStatus::Delivering->value),
@@ -451,6 +471,12 @@ class ListTrips extends ListRecords
             'return_trip' => $query->where('status', TripStatus::ReturnTrip->value),
             'completed' => $query->where('status', TripStatus::Completed->value),
             'cancelled' => $query->where('status', TripStatus::Cancelled->value),
+            'delayed' => $query->whereIn('status', [
+                TripStatus::Started->value,
+                TripStatus::ArrivedPickup->value,
+                TripStatus::Delivering->value,
+                TripStatus::ArrivedDelivery->value,
+            ])->whereHas('orders', fn (Builder $q) => $q->where('planned_loading_at', '<', now())),
             default => $query,
         };
     }
