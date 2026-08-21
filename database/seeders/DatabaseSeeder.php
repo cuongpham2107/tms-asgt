@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AreaSeeder::class,
             VehicleImportSeeder::class,
+            RentedVehicleSeeder::class,
             DriverImportSeeder::class,
             CustomerLocationSeeder::class,
         ]);

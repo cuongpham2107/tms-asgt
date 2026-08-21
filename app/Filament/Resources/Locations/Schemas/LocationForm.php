@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Locations\Schemas;
 
 use App\Enums\LocationType;
-use App\Enums\OrderType;
 use App\Models\Area;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
@@ -31,26 +30,41 @@ class LocationForm
                     ->options(function (): array {
                         return Area::query()
                             ->where('is_active', true)
-                            ->orderBy('type', 'asc')
-                            ->orderBy('sort_order', 'asc')
+                            ->select(['code', 'name'])
                             ->get()
-                            ->mapWithKeys(fn (Area $area, $key): array => [
-                                $area->id => "{$area->code} - {$area->name} (".($area->type === OrderType::Hhhk ? 'HHHK' : 'Hàng ngoài').')',
+                            ->unique('code')
+                            ->mapWithKeys(fn (Area $area): array => [
+                                $area->code => "{$area->code} - {$area->name}",
                             ])
                             ->toArray();
+                    })
+                    ->formatStateUsing(function ($state) {
+                        if (is_numeric($state)) {
+                            return Area::query()->find($state)?->code;
+                        }
+
+                        return $state;
+                    })
+                    ->dehydrateStateUsing(function ($state) {
+                        if (is_string($state) && ! is_numeric($state)) {
+                            return Area::query()->where('code', $state)->first()?->id;
+                        }
+
+                        return $state;
                     })
                     ->default(function () use ($defaultAreaId) {
                         $val = value($defaultAreaId);
 
-                        if (is_string($val) && ! is_numeric($val)) {
-                            return Area::query()->where('code', $val)->first()?->id;
+                        if (is_numeric($val)) {
+                            return Area::query()->find($val)?->code;
                         }
 
-                        return $val ? (int) $val : null;
+                        return $val;
                     })
                     ->searchable()
                     ->preload()
-                    ->native(false),
+                    ->native(false)
+                    ->required(),
                 TextInput::make('code')
                     ->label('Mã')
                     ->prefixIcon(Heroicon::OutlinedHashtag)
@@ -169,6 +183,7 @@ class LocationForm
                     '),
                 Toggle::make('is_active')
                     ->label('Đang hoạt động')
+                    ->default(true)
                     ->required(),
             ]);
     }

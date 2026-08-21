@@ -46,30 +46,25 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                                 ->pluck('code', 'id')
                                 ->toArray();
                         })
+                        ->default(function () {
+                            return Area::query()
+                                ->where('is_active', true)
+                                ->where('type', 'HHHK')
+                                ->orderBy('sort_order', 'asc')
+                                ->value('id');
+                        })
                         ->live()
                         ->inline()
                         ->columnSpanFull(),
                     self::getCustomerIdFormField(false),
                     //     ->columnSpanFull(),
                     Select::make('pickup_location_id')
-                        ->live(onBlur: true)
                         ->label('Điểm nhận hàng')
                         ->options(function (Get $get): array {
                             $areaId = $get('area_id');
                             $currentId = $get('pickup_location_id');
 
-                            return Location::query()
-                                ->where('is_active', true)
-                                ->when($areaId, function ($q, $areaId) {
-                                    $q->where(function ($sub) use ($areaId) {
-                                        $sub->where('area_id', $areaId)
-                                            ->orWhereNull('area_id');
-                                    });
-                                })
-                                ->when($currentId, fn ($q) => $q->orWhere('id', $currentId))
-                                ->orderBy('name', 'asc')
-                                ->pluck('name', 'id')
-                                ->toArray();
+                            return self::getLocationOptions('HHHK', $areaId, $currentId);
                         })
                         ->searchable()
                         ->preload()

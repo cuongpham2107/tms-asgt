@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\Priority;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
+use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Location;
@@ -47,6 +48,8 @@ test('delivery points repeater location_id options are dynamic and include creat
     ]);
 
     $repeater = CreatesOrderTransportCards::getDeliveryPointsRepeaterField('HHHK');
+    $container = Schema::make(Livewire\Livewire::new(ListOrders::class));
+    $repeater->container($container);
     expect($repeater)->toBeInstanceOf(Repeater::class);
 
     // Find location_id select in repeater schema
@@ -68,8 +71,7 @@ test('delivery points repeater location_id options are dynamic and include creat
     };
 
     // First check options before creating new location
-    $optionsClosure = $locationSelect->getOptions();
-    $options = $optionsClosure instanceof Closure ? $optionsClosure(new Get($getMock)) : $optionsClosure;
+    $options = CreatesOrderTransportCards::getLocationOptions('HHHK', $this->area->id);
     expect($options)->toHaveKey($existingLocation->id);
 
     // Now create a new location via createOptionUsing callback
@@ -81,7 +83,7 @@ test('delivery points repeater location_id options are dynamic and include creat
         'name' => 'SHINSUNG',
         'address' => 'Địa chỉ Shinsung',
         'area_id' => $this->area->id,
-    ], new Get($getMock));
+    ], new Get($locationSelect));
 
     expect($newLocationId)->toBeInt();
 
@@ -91,8 +93,8 @@ test('delivery points repeater location_id options are dynamic and include creat
     expect($createdLocation->area_id)->toBe($this->area->id);
     expect($createdLocation->loc_type)->toBe(LocationType::Delivery);
 
-    // Call options again immediately — must NOT return stale cached data
-    $updatedOptions = $optionsClosure(new Get($getMock));
+    // Call options again immediately — must include the newly created location
+    $updatedOptions = CreatesOrderTransportCards::getLocationOptions('HHHK', $this->area->id);
     expect($updatedOptions)->toHaveKey($newLocationId);
     expect($updatedOptions[$newLocationId])->toBe('SHINSUNG');
 });

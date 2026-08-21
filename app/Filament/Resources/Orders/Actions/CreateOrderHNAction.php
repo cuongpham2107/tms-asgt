@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
-use App\Enums\LocationType;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
@@ -76,24 +75,12 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->inline()
                         ->columnSpanFull(),
                     Select::make('pickup_location_id')
-                        ->live(onBlur: true)
                         ->label('Điểm nhận hàng')
                         ->options(function (Get $get): array {
                             $areaId = $get('area_id');
                             $currentId = $get('pickup_location_id');
 
-                            return Location::query()
-                                ->where('is_active', true)
-                                ->when($areaId, function ($q, $areaId) {
-                                    $q->where(function ($sub) use ($areaId) {
-                                        $sub->where('area_id', $areaId)
-                                            ->orWhereNull('area_id');
-                                    });
-                                })
-                                ->when($currentId, fn ($q) => $q->orWhere('id', $currentId))
-                                ->orderBy('name', 'asc')
-                                ->pluck('name', 'id')
-                                ->toArray();
+                            return self::getLocationOptions('external', $areaId, $currentId);
                         })
                         ->searchable()
                         ->preload()
@@ -108,8 +95,6 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                             }
 
                             return Location::create(array_merge($data, [
-                                'area_id' => $areaId ? (int) $areaId : null,
-                                'loc_type' => $data['loc_type'] ?? LocationType::Pickup->value,
                                 'is_active' => true,
                             ]))->getKey();
                         })
@@ -157,6 +142,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->mask(RawJs::make('$money($input)'))
                         ->stripCharacters(',')
                         ->numeric()
+                        ->required()
                         ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14]),
                     Textarea::make('notes')
                         ->label('Ghi chú')

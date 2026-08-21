@@ -46,7 +46,7 @@ test('location form is configured correctly with map picker', function () {
     expect($coordinatesComponent->getLabel())->toBe('Chọn vị trí trên bản đồ');
 });
 
-test('location form area_id options use area ID as key and include formatted label', function () {
+test('location form area_id options use area code as key and include formatted label', function () {
     $area = Area::create([
         'type' => OrderType::Hhhk,
         'code' => 'NBO',
@@ -63,11 +63,11 @@ test('location form area_id options use area ID as key and include formatted lab
 
     expect($areaComponent)->not->toBeNull();
     $options = $areaComponent->getOptions();
-    expect($options)->toHaveKey($area->id);
-    expect($options[$area->id])->toContain('NBO - Nội bộ TN (HHHK)');
+    expect($options)->toHaveKey('NBO');
+    expect($options['NBO'])->toBe('NBO - Nội bộ TN');
 });
 
-test('location form area_id pre-selects default area when defaultAreaId is provided', function () {
+test('location form area_id pre-selects default area code when defaultAreaId is provided', function () {
     $area = Area::create([
         'type' => OrderType::Hhhk,
         'code' => 'NBO',
@@ -80,19 +80,54 @@ test('location form area_id pre-selects default area when defaultAreaId is provi
     $components1 = LocationForm::configure($schema1, $area->id)->getComponents();
     $areaComponent1 = collect($components1)->first(fn ($c) => $c->getName() === 'area_id');
     $default1 = $areaComponent1->getDefaultState();
-    expect($default1)->toBe($area->id);
+    expect($default1)->toBe('NBO');
 
     // Test with string code
     $schema2 = Schema::make();
     $components2 = LocationForm::configure($schema2, 'NBO')->getComponents();
     $areaComponent2 = collect($components2)->first(fn ($c) => $c->getName() === 'area_id');
     $default2 = $areaComponent2->getDefaultState();
-    expect($default2)->toBe($area->id);
+    expect($default2)->toBe('NBO');
 
     // Test with Closure
     $schema3 = Schema::make();
     $components3 = LocationForm::configure($schema3, fn () => $area->id)->getComponents();
     $areaComponent3 = collect($components3)->first(fn ($c) => $c->getName() === 'area_id');
     $default3 = $areaComponent3->getDefaultState();
-    expect($default3)->toBe($area->id);
+    expect($default3)->toBe('NBO');
+});
+
+test('creating location with area code creates records for both HHHK and external areas', function () {
+    $hhhkArea = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'NBA',
+        'name' => 'Hàng đến NBA',
+        'is_active' => true,
+    ]);
+
+    $externalArea = Area::create([
+        'type' => OrderType::External,
+        'code' => 'NBA',
+        'name' => 'Hàng đến NBA',
+        'is_active' => true,
+    ]);
+
+    // Create via Location::create with area_id = HHHK Area ID
+    $location = Location::create([
+        'area_id' => $hhhkArea->id,
+        'code' => 'KHO-NBA-01',
+        'name' => 'Kho Nội Bài 01',
+        'loc_type' => 'warehouse',
+        'is_active' => true,
+    ]);
+
+    expect(Location::where('code', 'KHO-NBA-01')->count())->toBe(2);
+    expect(Location::where('code', 'KHO-NBA-01')->where('area_id', $hhhkArea->id)->exists())->toBeTrue();
+    expect(Location::where('code', 'KHO-NBA-01')->where('area_id', $externalArea->id)->exists())->toBeTrue();
+
+    // Test update synchronization
+    $location->update(['name' => 'Kho Nội Bài 01 Updated']);
+    $sibling = Location::where('code', 'KHO-NBA-01')->where('area_id', $externalArea->id)->first();
+    expect($sibling)->not->toBeNull();
+    expect($sibling->name)->toBe('Kho Nội Bài 01 Updated');
 });

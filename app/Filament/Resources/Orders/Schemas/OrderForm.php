@@ -109,6 +109,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->mask(RawJs::make('$money($input)'))
                                     ->stripCharacters(',')
                                     ->numeric()
+                                    ->required()
                                     ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
                                     ->columnSpan(1),

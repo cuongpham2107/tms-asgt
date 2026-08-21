@@ -48,9 +48,25 @@ class ListLocations extends ListRecords
             CreateAction::make()
                 ->label('Tạo địa điểm')
                 ->using(function (array $data): Location {
-                    if (! empty($data['area_id']) && ! is_numeric($data['area_id'])) {
-                        $area = Area::query()->where('code', $data['area_id'])->first();
-                        $data['area_id'] = $area?->id;
+                    $areaCode = $data['area_id'] ?? null;
+
+                    if (is_numeric($areaCode)) {
+                        $areaCode = Area::query()->find($areaCode)?->code;
+                    }
+
+                    $areas = Area::query()->where('code', $areaCode)->get();
+
+                    if ($areas->isNotEmpty()) {
+                        $first = null;
+                        foreach ($areas as $area) {
+                            $record = Location::updateOrCreate(
+                                ['code' => $data['code'], 'area_id' => $area->id],
+                                array_merge($data, ['area_id' => $area->id])
+                            );
+                            $first ??= $record;
+                        }
+
+                        return $first;
                     }
 
                     return Location::create($data);

@@ -98,7 +98,6 @@ class VehicleForm
                             ->minValue(0)
                             ->step(0.1)
                             ->dataList(['1.25', '1.5', '2.5', '3.5', '5', '7', '8', '10', '14'])
-                            ->required()
                             ->suffix(' tấn'),
                         // Select::make('fuel_type')
                         //     ->label('Loại nhiên liệu')

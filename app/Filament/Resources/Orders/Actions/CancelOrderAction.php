@@ -28,7 +28,7 @@ class CancelOrderAction
             ->form([
                 Textarea::make('cancel_reason')
                     ->label('Lý do huỷ')
-                    ->required()
+                    // ->required()
                     ->rows(3),
             ])
             ->action(function (Order $record, array $data): void {
@@ -46,7 +46,7 @@ class CancelOrderAction
                     Order::query()->whereKey($record->id)->update([
                         'status' => OrderStatus::Cancelled->value,
                         'cancelled_at' => now(),
-                        'cancel_reason' => $data['cancel_reason'],
+                        'cancel_reason' => $data['cancel_reason'] ?? null,
                     ]);
 
                     if ($record->trip_id !== null) {

@@ -95,4 +95,78 @@ class Location extends Model
     {
         return $this->belongsTo(Area::class, 'area_id');
     }
+
+    protected static function booted(): void
+    {
+        static::saving(function (Location $location) {
+            if (! empty($location->area_id) && ! is_numeric($location->area_id)) {
+                $area = Area::query()->where('code', $location->area_id)->first();
+                $location->area_id = $area?->id;
+            }
+        });
+
+        static::created(function (Location $location) {
+            $location->loadMissing('area');
+
+            if (! $location->area) {
+                return;
+            }
+
+            $siblingAreas = Area::query()
+                ->where('code', $location->area->code)
+                ->where('id', '!=', $location->area_id)
+                ->get();
+
+            foreach ($siblingAreas as $siblingArea) {
+                static::withoutEvents(function () use ($location, $siblingArea) {
+                    Location::firstOrCreate(
+                        [
+                            'code' => $location->code,
+                            'area_id' => $siblingArea->id,
+                        ],
+                        [
+                            'name' => $location->name,
+                            'address' => $location->address,
+                            'lat' => $location->lat,
+                            'lng' => $location->lng,
+                            'loc_type' => $location->loc_type,
+                            'is_active' => $location->is_active,
+                        ]
+                    );
+                });
+            }
+        });
+
+        static::updated(function (Location $location) {
+            $location->loadMissing('area');
+
+            if (! $location->area) {
+                return;
+            }
+
+            $siblingAreaIds = Area::query()
+                ->where('code', $location->area->code)
+                ->where('id', '!=', $location->area_id)
+                ->pluck('id');
+
+            if ($siblingAreaIds->isNotEmpty()) {
+                $originalCode = $location->getOriginal('code') ?? $location->code;
+
+                static::withoutEvents(function () use ($location, $siblingAreaIds, $originalCode) {
+                    Location::query()
+                        ->whereIn('area_id', $siblingAreaIds)
+                        ->where('code', $originalCode)
+                        ->update([
+                            'code' => $location->code,
+                            'name' => $location->name,
+                            'address' => $location->address,
+                            'lat' => $location->lat,
+                            'lng' => $location->lng,
+                            'loc_type' => $location->loc_type?->value ?? $location->loc_type,
+                            'is_active' => $location->is_active,
+                        ]);
+                });
+            }
+        });
+    }
 }

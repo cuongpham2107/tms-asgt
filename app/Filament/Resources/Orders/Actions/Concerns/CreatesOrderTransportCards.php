@@ -328,14 +328,14 @@ abstract class CreatesOrderTransportCards
         $ordersByVehicle = collect();
         if ($tripIds !== []) {
             $ordersByVehicle = Order::query()
-                ->select('orders.*', 'trips.vehicle_id')
+                ->select('orders.id', 'orders.pickup_location_id', 'trips.vehicle_id', 'orders.created_at')
                 ->join('trips', 'orders.trip_id', '=', 'trips.id')
                 ->whereIn('trips.vehicle_id', $vehicleIds)
                 ->whereIn('orders.status', [
                     OrderStatus::Assigned->value,
                     OrderStatus::Sent->value,
                 ])
-                ->with('pickupLocation')
+                ->with(['pickupLocation' => fn ($q) => $q->select('id', 'name')])
                 ->orderBy('orders.created_at', 'desc')
                 ->get()
                 ->groupBy('vehicle_id')
@@ -348,8 +348,12 @@ abstract class CreatesOrderTransportCards
         $checkpoints = collect();
         if ($orderIds !== []) {
             $checkpoints = TripCheckpoint::query()
+                ->select('id', 'order_id', 'delivery_point_id', 'occurred_at')
                 ->whereIn('order_id', $orderIds)
-                ->with('deliveryPoint.location')
+                ->with([
+                    'deliveryPoint' => fn ($q) => $q->select('id', 'location_id'),
+                    'deliveryPoint.location' => fn ($q) => $q->select('id', 'name'),
+                ])
                 ->orderBy('occurred_at', 'desc')
                 ->get()
                 ->groupBy('order_id')
@@ -358,6 +362,7 @@ abstract class CreatesOrderTransportCards
         }
 
         $locations = [];
+        $vehiclesById = $vehicles->keyBy('id');
 
         foreach ($vehicleIds as $vehicleId) {
             $order = $ordersByVehicle[$vehicleId] ?? null;
@@ -376,7 +381,7 @@ abstract class CreatesOrderTransportCards
                     ];
                 }
             } else {
-                $vehicle = $vehicles->firstWhere('id', $vehicleId);
+                $vehicle = $vehiclesById->get($vehicleId);
 
                 $locations[$vehicleId] = $vehicle !== null
                     ? self::resolveVehicleGpsLocation($vehicle)
@@ -394,18 +399,23 @@ abstract class CreatesOrderTransportCards
     {
         /** @var Order|null $activeOrder */
         $activeOrder = Order::query()
+            ->select('id', 'pickup_location_id', 'created_at')
             ->whereHas('trip', fn ($q) => $q->where('vehicle_id', $vehicle->id))
             ->whereIn('status', [
                 OrderStatus::Assigned->value,
                 OrderStatus::Sent->value,
             ])
-            ->with('pickupLocation')
+            ->with(['pickupLocation' => fn ($q) => $q->select('id', 'name')])
             ->latest('created_at')
             ->first();
 
         if ($activeOrder) {
             $latestCheckpoint = $activeOrder->tripCheckpoints()
-                ->with('deliveryPoint.location')
+                ->select('id', 'order_id', 'delivery_point_id', 'occurred_at')
+                ->with([
+                    'deliveryPoint' => fn ($q) => $q->select('id', 'location_id'),
+                    'deliveryPoint.location' => fn ($q) => $q->select('id', 'name'),
+                ])
                 ->latest('occurred_at')
                 ->first();
 
@@ -555,7 +565,7 @@ abstract class CreatesOrderTransportCards
      */
     public static function getProvinceOptions(): array
     {
-        return Cache::remember('open-api-v1-provinces', now()->addDay(), function (): array {
+        return Cache::remember('open-api-v1-provinces', now()->addDays(30), function (): array {
             try {
                 $response = Http::acceptJson()
                     ->timeout(10)
@@ -584,7 +594,7 @@ abstract class CreatesOrderTransportCards
             return [];
         }
 
-        return Cache::remember("open-api-v2-wards-{$provinceCode}", now()->addDay(), function () use ($provinceCode): array {
+        return Cache::remember("open-api-v2-wards-{$provinceCode}", now()->addDays(30), function () use ($provinceCode): array {
             try {
                 $response = Http::acceptJson()
                     ->timeout(10)
@@ -602,6 +612,41 @@ abstract class CreatesOrderTransportCards
                 return [];
             }
         });
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function getLocationOptions(string|Closure|null $type, mixed $areaId = null, mixed $currentId = null): array
+    {
+        $resolvedType = $type instanceof Closure ? $type() : $type;
+        $resolvedAreaId = is_numeric($areaId) ? (int) $areaId : null;
+        $resolvedCurrentId = is_numeric($currentId) ? (int) $currentId : null;
+
+        return Location::query()
+            ->where('is_active', true)
+            ->when($resolvedType, fn ($q) => $q->whereHas('area', fn ($sq) => $sq->where('type', $resolvedType)))
+            ->when($resolvedAreaId, fn ($q) => $q->where('area_id', $resolvedAreaId))
+            ->when($resolvedCurrentId, fn ($q) => $q->orWhere('id', $resolvedCurrentId))
+            ->orderBy('code', 'asc')
+            ->pluck('code', 'id')
+            ->toArray();
+    }
+
+    public static function resolveLocationName(mixed $locationId): ?string
+    {
+        if (blank($locationId)) {
+            return null;
+        }
+
+        static $nameCache = [];
+        $id = (int) $locationId;
+
+        if (isset($nameCache[$id])) {
+            return $nameCache[$id];
+        }
+
+        return $nameCache[$id] = Location::query()->where('id', $id)->value('name');
     }
 
     public static function resolveProvinceName(int|string|null $provinceCode): ?string
@@ -648,7 +693,8 @@ abstract class CreatesOrderTransportCards
                 $customer = Customer::query()->find($state);
                 if ($customer !== null) {
                     $firstLocation = $customer->locations()->first();
-                    if ($firstLocation !== null) {
+                    if ($firstLocation) {
+                        $set('area_id', $firstLocation->area_id);
                         $set('pickup_location_id', $firstLocation->id);
                     }
                 }
@@ -687,8 +733,8 @@ abstract class CreatesOrderTransportCards
             ->itemLabel(function (array $state): ?string {
                 $parts = [];
 
-                if (isset($state['location_id']) && $location = Location::query()->find($state['location_id'])) {
-                    $parts[] = $location->name;
+                if (isset($state['location_id']) && $name = self::resolveLocationName($state['location_id'])) {
+                    $parts[] = $name;
                 }
                 if (! empty($state['contact_person'])) {
                     $parts[] = $state['contact_person'];
@@ -706,28 +752,17 @@ abstract class CreatesOrderTransportCards
                     ->schema([
                         Select::make('location_id')
                             ->label('Điểm giao hàng')
-                            ->options(function (Get $get): array {
+                            ->options(function (Get $get) use ($orderType): array {
                                 $areaId = $get('../../area_id') ?? $get('area_id');
                                 $currentId = $get('location_id');
+                                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
 
-                                return Location::query()
-                                    ->where('is_active', true)
-                                    ->when($areaId, function ($q, $areaId) {
-                                        $q->where(function ($sub) use ($areaId) {
-                                            $sub->where('area_id', $areaId)
-                                                ->orWhereNull('area_id');
-                                        });
-                                    })
-                                    ->when($currentId, fn ($q) => $q->orWhere('id', $currentId))
-                                    ->orderBy('name', 'asc')
-                                    ->pluck('name', 'id')
-                                    ->toArray();
+                                return self::getLocationOptions($type, $areaId, $currentId);
                             })
                             ->searchable()
                             ->preload()
                             ->native(false)
                             ->required()
-                            ->live(onBlur: true)
                             ->columnSpan(function (Get $get) use ($orderType): string|int {
                                 $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
 

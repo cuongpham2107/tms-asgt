@@ -17,6 +17,7 @@ class CustomersTable extends BaseTable
     {
         return parent::applyDefaults($table)
             ->modifyQueryUsing(fn (Builder $query) => $query->withCount('orders'))
+            ->defaultPaginationPageOption(25)
             ->columns([
                 TextColumn::make('code')
                     ->label('Mã KH')
@@ -44,10 +45,10 @@ class CustomersTable extends BaseTable
                     ->boolean(),
             ])
             ->recordActions([
-                ViewAction::make('view')
-                    ->label('')
-                    ->color('gray')
-                    ->modalDescription('Xem chi tiết thông tin khách hàng'),
+                // ViewAction::make('view')
+                //     ->label('')
+                //     ->color('gray')
+                //     ->modalDescription('Xem chi tiết thông tin khách hàng'),
                 EditAction::make()
                     ->label('')
                     ->tooltip('Sửa'),

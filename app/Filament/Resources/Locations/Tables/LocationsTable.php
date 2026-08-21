@@ -62,6 +62,7 @@ class LocationsTable extends BaseTable
                     ->getTitleFromRecordUsing(fn (Location $record): string => $record->area ? $record->area->code.' ('.($record->area->type === OrderType::Hhhk ? 'HHHK' : 'Hàng ngoài').')' : 'Chưa xác định')
                     ->collapsible(),
             ])
+            ->defaultPaginationPageOption(50)
             ->defaultGroup('area_id')
             ->groupingSettingsHidden()
             ->recordActions([

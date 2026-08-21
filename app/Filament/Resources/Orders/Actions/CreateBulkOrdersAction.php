@@ -69,6 +69,14 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->default('HHHK')
                                             ->inline()
                                             ->live()
+                                            ->afterStateUpdated(function (Set $set, $state) {
+                                                $firstAreaId = Area::query()
+                                                    ->where('is_active', true)
+                                                    ->when($state, fn ($q) => $q->where('type', $state))
+                                                    ->orderBy('sort_order', 'asc')
+                                                    ->value('id');
+                                                $set('area_id', $firstAreaId);
+                                            })
                                             ->required(),
                                         ToggleButtons::make('area_id')
                                             ->label('Khu vực')
@@ -81,6 +89,16 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                                 ->orderBy('sort_order', 'asc')
                                                 ->pluck('code', 'id')
                                                 ->toArray())
+                                            ->default(function (Get $get) {
+                                                return Area::query()
+                                                    ->where('is_active', true)
+                                                    ->when(
+                                                        $get('order_type_code'),
+                                                        fn ($query, $type) => $query->where('type', $type)
+                                                    )
+                                                    ->orderBy('sort_order', 'asc')
+                                                    ->value('id');
+                                            })
                                             ->inline()
                                             ->live()
                                             ->required(),
@@ -97,19 +115,9 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->options(function (Get $get): array {
                                                 $areaId = $get('area_id');
                                                 $currentId = $get('pickup_location_id');
+                                                $orderType = $get('order_type_code') ?? 'HHHK';
 
-                                                return Location::query()
-                                                    ->where('is_active', true)
-                                                    ->when($areaId, function ($q, $areaId) {
-                                                        $q->where(function ($sub) use ($areaId) {
-                                                            $sub->where('area_id', $areaId)
-                                                                ->orWhereNull('area_id');
-                                                        });
-                                                    })
-                                                    ->when($currentId, fn ($q) => $q->orWhere('id', $currentId))
-                                                    ->orderBy('name', 'asc')
-                                                    ->pluck('name', 'id')
-                                                    ->toArray();
+                                                return self::getLocationOptions($orderType, $areaId, $currentId);
                                             })
                                             ->searchable()
                                             ->preload()
@@ -193,6 +201,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                     ->mask(RawJs::make('$money($input)'))
                                     ->stripCharacters(',')
                                     ->numeric()
+                                    ->required()
                                     ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
                                     ->visible(fn (Get $get): bool => $get('order_type_code') === 'external'),
                             ]),
