@@ -71,7 +71,7 @@ test('delivery points repeater location_id options are dynamic and include creat
     };
 
     // First check options before creating new location
-    $options = CreatesOrderTransportCards::getLocationOptions('HHHK', $this->area->id);
+    $options = CreatesOrderTransportCards::getLocationOptions('HHHK');
     expect($options)->toHaveKey($existingLocation->id);
 
     // Now create a new location via createOptionUsing callback
@@ -94,7 +94,7 @@ test('delivery points repeater location_id options are dynamic and include creat
     expect($createdLocation->loc_type)->toBe(LocationType::Delivery);
 
     // Call options again immediately — must include the newly created location
-    $updatedOptions = CreatesOrderTransportCards::getLocationOptions('HHHK', $this->area->id);
+    $updatedOptions = CreatesOrderTransportCards::getLocationOptions('HHHK');
     expect($updatedOptions)->toHaveKey($newLocationId);
     expect($updatedOptions[$newLocationId])->toBe('SHINSUNG');
 });

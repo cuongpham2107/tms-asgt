@@ -112,13 +112,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                         // Pickup location for HHHK
                                         Select::make('pickup_location_id')
                                             ->label('Điểm nhận hàng (HHHK)')
-                                            ->options(function (Get $get): array {
-                                                $areaId = $get('area_id');
-                                                $currentId = $get('pickup_location_id');
-                                                $orderType = $get('order_type_code') ?? 'HHHK';
-
-                                                return self::getLocationOptions($orderType, $areaId, $currentId);
-                                            })
+                                            ->options(fn (Get $get): array => self::getLocationOptions($get('order_type_code') ?? 'HHHK'))
                                             ->searchable()
                                             ->preload()
                                             ->native(false)

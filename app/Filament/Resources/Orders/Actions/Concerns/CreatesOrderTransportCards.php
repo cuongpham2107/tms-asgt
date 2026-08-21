@@ -617,19 +617,19 @@ abstract class CreatesOrderTransportCards
     /**
      * @return array<int, string>
      */
-    public static function getLocationOptions(string|Closure|null $type, mixed $areaId = null, mixed $currentId = null): array
+    public static function getLocationOptions(string|Closure|null $type): array
     {
         $resolvedType = $type instanceof Closure ? $type() : $type;
-        $resolvedAreaId = is_numeric($areaId) ? (int) $areaId : null;
-        $resolvedCurrentId = is_numeric($currentId) ? (int) $currentId : null;
 
         return Location::query()
-            ->where('is_active', true)
-            ->when($resolvedType, fn ($q) => $q->whereHas('area', fn ($sq) => $sq->where('type', $resolvedType)))
-            ->when($resolvedAreaId, fn ($q) => $q->where('area_id', $resolvedAreaId))
-            ->when($resolvedCurrentId, fn ($q) => $q->orWhere('id', $resolvedCurrentId))
-            ->orderBy('code', 'asc')
-            ->pluck('code', 'id')
+            ->select(['locations.id', 'locations.code'])
+            ->where('locations.is_active', true)
+            ->when($resolvedType, function ($query, $type): void {
+                $query->join('areas', 'locations.area_id', '=', 'areas.id')
+                    ->where('areas.type', $type);
+            })
+            ->orderBy('locations.code', 'asc')
+            ->pluck('locations.code', 'locations.id')
             ->toArray();
     }
 
@@ -672,9 +672,11 @@ abstract class CreatesOrderTransportCards
         return Select::make('customer_id')
             ->label('Khách hàng')
             ->options(fn (): array => Customer::query()
+                ->select(['id', 'code', 'name'])
                 ->where('is_active', true)
-                ->get(['id', 'code', 'name'])
-                ->mapWithKeys(fn (Customer $customer, $key): array => [
+                ->orderBy('code', 'asc')
+                ->get()
+                ->mapWithKeys(fn (Customer $customer): array => [
                     $customer->id => "{$customer->code} - {$customer->name}",
                 ])
                 ->toArray()
@@ -690,13 +692,16 @@ abstract class CreatesOrderTransportCards
                     return;
                 }
 
-                $customer = Customer::query()->find($state);
-                if ($customer !== null) {
-                    $firstLocation = $customer->locations()->first();
-                    if ($firstLocation) {
-                        $set('area_id', $firstLocation->area_id);
-                        $set('pickup_location_id', $firstLocation->id);
-                    }
+                $firstLocation = DB::table('customer_location')
+                    ->join('locations', 'customer_location.location_id', '=', 'locations.id')
+                    ->where('customer_location.customer_id', $state)
+                    ->where('locations.is_active', true)
+                    ->select(['locations.id', 'locations.area_id'])
+                    ->first();
+
+                if ($firstLocation) {
+                    $set('area_id', $firstLocation->area_id);
+                    $set('pickup_location_id', $firstLocation->id);
                 }
             })
             ->createOptionForm(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents())
@@ -753,11 +758,9 @@ abstract class CreatesOrderTransportCards
                         Select::make('location_id')
                             ->label('Điểm giao hàng')
                             ->options(function (Get $get) use ($orderType): array {
-                                $areaId = $get('../../area_id') ?? $get('area_id');
-                                $currentId = $get('location_id');
                                 $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
 
-                                return self::getLocationOptions($type, $areaId, $currentId);
+                                return self::getLocationOptions($type);
                             })
                             ->searchable()
                             ->preload()

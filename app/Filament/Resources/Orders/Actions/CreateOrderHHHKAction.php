@@ -60,12 +60,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                     //     ->columnSpanFull(),
                     Select::make('pickup_location_id')
                         ->label('Điểm nhận hàng')
-                        ->options(function (Get $get): array {
-                            $areaId = $get('area_id');
-                            $currentId = $get('pickup_location_id');
-
-                            return self::getLocationOptions('HHHK', $areaId, $currentId);
-                        })
+                        ->options(fn (): array => self::getLocationOptions('HHHK'))
                         ->searchable()
                         ->preload()
                         ->native(false)
