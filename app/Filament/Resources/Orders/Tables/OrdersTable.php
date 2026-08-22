@@ -385,7 +385,7 @@ class OrdersTable extends BaseTable
 
     private static function renderRouteTimeline(Order $record): HtmlString
     {
-        $pickupLocationName = $record->pickupLocation?->name ?: $record->pickup_address ?: 'Chưa có điểm lấy';
+        $pickupLocationName = $record->pickupLocation?->code ?: $record->pickup_address ?: 'Chưa có điểm lấy';
         $deliveryPoints = $record->deliveryPoints->sortBy('sequence');
         $locations = collect([e($pickupLocationName)]);
 

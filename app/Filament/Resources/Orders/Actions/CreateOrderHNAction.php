@@ -78,7 +78,6 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->label('Điểm nhận hàng')
                         ->options(fn (): array => self::getLocationOptions('external'))
                         ->searchable()
-                        ->preload()
                         ->native(false)
                         ->required()
                         ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())

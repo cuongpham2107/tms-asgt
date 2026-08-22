@@ -13,7 +13,6 @@ use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
 use App\Models\Customer;
-use App\Models\Location;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -31,6 +30,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class OrderForm extends CreatesOrderTransportCards
 {
@@ -80,12 +80,15 @@ class OrderForm extends CreatesOrderTransportCards
                                             return;
                                         }
 
-                                        $customer = Customer::query()->find($state);
-                                        if ($customer !== null) {
-                                            $firstLocation = $customer->locations()->first();
-                                            if ($firstLocation !== null) {
-                                                $set('pickup_location_id', $firstLocation->id);
-                                            }
+                                        $firstLocation = DB::table('customer_location')
+                                            ->join('locations', 'customer_location.location_id', '=', 'locations.id')
+                                            ->where('customer_location.customer_id', $state)
+                                            ->where('locations.is_active', true)
+                                            ->select(['locations.id', 'locations.area_id'])
+                                            ->first();
+
+                                        if ($firstLocation) {
+                                            $set('pickup_location_id', $firstLocation->id);
                                         }
                                     })
                                     ->createOptionForm(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents()),
@@ -132,16 +135,17 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->columnSpan(1),
 
                                 Select::make('pickup_location_id')
-                                    ->live(onBlur: true)
                                     ->label('Điểm nhận hàng')
                                     ->relationship(
                                         name: 'pickupLocation',
-                                        titleAttribute: 'name',
+                                        titleAttribute: 'code',
                                         modifyQueryUsing: fn (Builder $query, Get $get) => $query
+                                            ->where('is_active', true)
                                             ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
                                             ->when($get('pickup_location_id'), fn ($q, $id) => $q->orWhere('id', $id))
                                     )
-                                    ->searchable()->preload()
+                                    ->searchable()
+                                    ->preload()
                                     ->native(false)
                                     ->required(fn (Get $get): bool => self::isHhhkOrder($get))
                                     ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
@@ -169,10 +173,12 @@ class OrderForm extends CreatesOrderTransportCards
                                 Repeater::make('deliveryPoints')
                                     ->label(fn (Get $get): string => self::isExternalOrder($get) ? 'Địa chỉ giao hàng' : 'Điểm đến')
                                     ->helperText(function (Get $get): string {
-                                        $area = Area::query()->find($get('area_id'));
-
-                                        if ($area !== null) {
-                                            return 'Chưa có điểm đến phụ. Mặc định đến: '.$area->code;
+                                        $areaId = $get('area_id');
+                                        if ($areaId) {
+                                            $areaCode = Area::query()->where('id', $areaId)->value('code');
+                                            if ($areaCode !== null) {
+                                                return 'Chưa có điểm đến phụ. Mặc định đến: '.$areaCode;
+                                            }
                                         }
 
                                         return 'Thêm một hoặc nhiều điểm đến cho đơn hàng';
@@ -181,8 +187,8 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->itemLabel(function (array $state): ?string {
                                         $parts = [];
 
-                                        if (isset($state['location_id']) && $location = Location::query()->find($state['location_id'])) {
-                                            $parts[] = $location->name;
+                                        if (isset($state['location_id']) && $name = self::resolveLocationName($state['location_id'])) {
+                                            $parts[] = $name;
                                         }
 
                                         if (! empty($state['address'])) {
@@ -203,13 +209,17 @@ class OrderForm extends CreatesOrderTransportCards
                                                         name: 'location',
                                                         titleAttribute: 'code',
                                                         modifyQueryUsing: fn (Builder $query, Get $get) => $query
-                                                            ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                                            ->where(function (Builder $q) use ($get) {
+                                                                $q->where('is_active', true)
+                                                                    ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
+                                                                    ->whereIn('loc_type', $get('../../type') === 'HHHK'
+                                                                        ? [LocationType::Pickup, LocationType::Warehouse, LocationType::Delivery]
+                                                                        : [LocationType::Other, LocationType::Delivery]);
+                                                            })
                                                             ->when($get('location_id'), fn ($q, $id) => $q->orWhere('id', $id))
-                                                            ->whereIn('loc_type', $get('../../type') === 'HHHK'
-                                                                ? [LocationType::Pickup, LocationType::Warehouse, LocationType::Delivery]
-                                                                : [LocationType::Other, LocationType::Delivery])
                                                     )
-                                                    ->searchable()->preload()
+                                                    ->searchable()
+                                                    ->preload()
                                                     ->prefixIcon(Heroicon::OutlinedMapPin)
                                                     ->native(false)
                                                     ->required()

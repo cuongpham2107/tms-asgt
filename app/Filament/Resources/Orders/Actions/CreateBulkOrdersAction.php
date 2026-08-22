@@ -114,7 +114,6 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->label('Điểm nhận hàng (HHHK)')
                                             ->options(fn (Get $get): array => self::getLocationOptions($get('order_type_code') ?? 'HHHK'))
                                             ->searchable()
-                                            ->preload()
                                             ->native(false)
                                             ->visible(fn (Get $get): bool => $get('order_type_code') === 'HHHK')
                                             ->required(false)
@@ -158,7 +157,6 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                                 ->options(fn (Get $get): array => self::getWardOptions($get('pickup_province_code')))
                                                 ->searchable()
                                                 ->native(false)
-                                                ->preload()
                                                 ->live()
                                                 ->disabled(fn (Get $get): bool => blank($get('pickup_province_code')))
                                                 ->required(fn (Get $get): bool => $get('order_type_code') === 'external'),

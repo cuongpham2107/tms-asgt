@@ -482,12 +482,12 @@ class TripsTable extends BaseTable
         $orders = $record->orders->sortBy('planned_loading_at');
 
         if ($orders->isEmpty()) {
-            return $record->startLocation?->name ?? '—';
+            return $record->startLocation?->code ?? '—';
         }
 
         $pickups = [];
         foreach ($orders as $order) {
-            $pickups[] = $order->pickupLocation?->name ?? $order->pickup_address;
+            $pickups[] = $order->pickupLocation?->code ?? $order->pickup_address;
         }
 
         $pickups = array_filter(array_unique($pickups));

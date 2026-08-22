@@ -62,7 +62,7 @@ abstract class CreatesOrderTransportCards
      */
     protected static function resolveDriverCards(): array
     {
-        return Cache::remember('resolve-driver-cards', now()->addSeconds(30), function (): array {
+        return Cache::remember('resolve-driver-cards', now()->addMinutes(5), function (): array {
             return User::query()
                 ->role('driver')
                 ->select([
@@ -182,7 +182,7 @@ abstract class CreatesOrderTransportCards
     {
         $cacheKey = 'resolve-vehicle-cards-base'.($selectedVehicleId ? "-{$selectedVehicleId}" : '');
 
-        return Cache::remember($cacheKey, now()->addSeconds(30), function () use ($selectedVehicleId): array {
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($selectedVehicleId): array {
             $vehicles = Vehicle::query()
                 ->select([
                     'id',
@@ -620,17 +620,20 @@ abstract class CreatesOrderTransportCards
     public static function getLocationOptions(string|Closure|null $type): array
     {
         $resolvedType = $type instanceof Closure ? $type() : $type;
+        $cacheKey = 'location-options-'.($resolvedType ?? 'all');
 
-        return Location::query()
-            ->select(['locations.id', 'locations.code'])
-            ->where('locations.is_active', true)
-            ->when($resolvedType, function ($query, $type): void {
-                $query->join('areas', 'locations.area_id', '=', 'areas.id')
-                    ->where('areas.type', $type);
-            })
-            ->orderBy('locations.code', 'asc')
-            ->pluck('locations.code', 'locations.id')
-            ->toArray();
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($resolvedType): array {
+            return Location::query()
+                ->select(['locations.id', 'locations.code'])
+                ->where('locations.is_active', true)
+                ->when($resolvedType, function ($query, $type): void {
+                    $query->join('areas', 'locations.area_id', '=', 'areas.id')
+                        ->where('areas.type', $type);
+                })
+                ->orderBy('locations.code', 'asc')
+                ->pluck('locations.code', 'locations.id')
+                ->toArray();
+        });
     }
 
     public static function resolveLocationName(mixed $locationId): ?string
@@ -763,7 +766,6 @@ abstract class CreatesOrderTransportCards
                                 return self::getLocationOptions($type);
                             })
                             ->searchable()
-                            ->preload()
                             ->native(false)
                             ->required()
                             ->columnSpan(function (Get $get) use ($orderType): string|int {

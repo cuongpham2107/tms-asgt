@@ -8,6 +8,8 @@
         activeTab: 'all',
         search: '',
         cards: @js($cards),
+        displayLimit: 24,
+        batchSize: 24,
         init() {
             if (this.state) {
                 if (!this.scopedCards().some(c => String(c.value) === String(this.state))) {
@@ -24,9 +26,14 @@
             });
 
             this.$watch('search', (val) => {
+                this.displayLimit = this.batchSize;
                 if (val.length === 0 && this.hasSuggestionTab()) {
                     this.activeTab = 'suggested';
                 }
+            });
+
+            this.$watch('activeTab', () => {
+                this.displayLimit = this.batchSize;
             });
         },
         getNestedValue(obj, path) {
@@ -97,8 +104,17 @@
                 .toLowerCase()
                 .includes(this.search.toLowerCase());
         },
-        visibleCards() {
+        allFilteredCards() {
             return this.scopedCards().filter(card => this.matches(card));
+        },
+        visibleCards() {
+            return this.allFilteredCards().slice(0, this.displayLimit);
+        },
+        hasMoreCards() {
+            return this.allFilteredCards().length > this.displayLimit;
+        },
+        loadMore() {
+            this.displayLimit += this.batchSize;
         },
         select(value) {
             this.state = value;
@@ -275,10 +291,21 @@
                     </button>
                 </div>
             </template>
+
+            {{-- Load more sentinel --}}
+            <div x-show="hasMoreCards()" x-intersect.margin.200px="loadMore()" class="col-span-full flex items-center justify-center py-4">
+                <div class="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
+                    <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <span x-text="'Đang tải thêm... (' + visibleCards().length + '/' + allFilteredCards().length + ')'"></span>
+                </div>
+            </div>
         </div>
 
         {{-- Empty state --}}
-        <div x-show="visibleCards().length === 0" x-cloak
+        <div x-show="allFilteredCards().length === 0" x-cloak
             class="flex flex-col items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-6 py-8 dark:border-gray-700 dark:bg-gray-900/50">
             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
                 <x-filament::icon icon="heroicon-o-magnifying-glass" class="h-5 w-5 text-gray-400" />
@@ -287,4 +314,5 @@
             <p class="text-xs text-gray-400 dark:text-gray-500">Thử từ khóa khác hoặc chuyển sang tab "Tất cả"</p>
         </div>
     </div>
+
 </x-dynamic-component>
