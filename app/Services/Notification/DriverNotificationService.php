@@ -208,29 +208,16 @@ class DriverNotificationService
                 ->withData($stringData)
                 ->withAndroidConfig(AndroidConfig::fromArray([
                     'priority' => 'high',
-                    'ttl' => '0s',
                     'notification' => [
                         'sound' => 'default',
                         'channel_id' => 'orders',
-                        'priority' => 'max',
-                        'default_vibrate_timings' => true,
-                        'default_sound' => true,
                     ],
                 ]))
                 ->withApnsConfig(ApnsConfig::fromArray([
-                    'headers' => [
-                        'apns-priority' => '10',
-                        'apns-push-type' => 'alert',
-                    ],
                     'payload' => [
                         'aps' => [
-                            'alert' => [
-                                'title' => $title,
-                                'body' => $body,
-                            ],
                             'sound' => 'default',
                             'badge' => 1,
-                            'content-available' => 1,
                         ],
                     ],
                 ]));
