@@ -3,9 +3,9 @@ import { Platform } from "react-native";
 // ─── Cấu hình API Laravel ───────────────────────────────────────────
 // Thay IP này thành IP máy chạy Laravel backend
 const API = Platform.select({
-  ios: "http://tms.asgl.net.vn/api/driver",
-  android: "http://tms.asgl.net.vn/api/driver",
-  default: "http://tms.asgl.net.vn/api/driver",
+  ios: "https://tms.asgl.net.vn/api/driver",
+  android: "https://tms.asgl.net.vn/api/driver",
+  default: "https://tms.asgl.net.vn/api/driver",
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────
