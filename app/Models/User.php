@@ -43,6 +43,8 @@ use Spatie\Permission\Traits\HasRoles;
     'dangerous_goods_cert_image',
     'is_active',
     'email_verified_at',
+    'fcm_token',
+    'fcm_token_updated_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -71,6 +73,7 @@ class User extends Authenticatable
             'aviation_security_cert_expiry_date' => 'date',
             'dangerous_goods_cert_issue_date' => 'date',
             'dangerous_goods_cert_expiry_date' => 'date',
+            'fcm_token_updated_at' => 'datetime',
         ];
     }
 

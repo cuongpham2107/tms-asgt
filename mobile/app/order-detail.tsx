@@ -12,6 +12,7 @@ import {
     Image,
     KeyboardAvoidingView,
     Platform,
+    Linking,
 } from "react-native";
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
@@ -176,6 +177,78 @@ export default function OrderDetailScreen() {
     const vehicleKm =
         d.vehicle?.current_mileage ?? d.vehicle?.km_reading ?? null;
 
+    // Format tel URI
+    const formatTelUri = (rawPhone: string) => {
+        const digits = rawPhone.replace(/\D/g, "");
+        if (digits.startsWith("84")) {
+            return `tel:+${digits}`;
+        }
+        return `tel:${digits}`;
+    };
+
+    // Safely open phone dialer with simulator fallback handling
+    const handlePressPhone = async (rawPhone: string) => {
+        const url = formatTelUri(rawPhone);
+        try {
+            const supported = await Linking.canOpenURL(url);
+            if (supported) {
+                await Linking.openURL(url);
+            } else {
+                showAlert(
+                    "Thông báo",
+                    `Trình giả lập (Simulator) hoặc thiết bị không hỗ trợ ứng dụng gọi điện trực tiếp số: ${rawPhone}`,
+                );
+            }
+        } catch {
+            showAlert(
+                "Thông báo",
+                `Không thể mở ứng dụng cuộc gọi cho số: ${rawPhone}`,
+            );
+        }
+    };
+
+    // Detect and render notes text with clickable inline phone numbers
+    const renderedNotesText = useMemo(() => {
+        if (!d?.notes) return null;
+        const text = d.notes;
+        const regex = /(?:\+?84[\s.-]*|0)[\d\s.-]{8,15}\d/g;
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+        let match: RegExpExecArray | null;
+
+        regex.lastIndex = 0;
+        while ((match = regex.exec(text)) !== null) {
+            const fullMatch = match[0];
+            const digits = fullMatch.replace(/\D/g, "");
+
+            if (digits.length >= 9 && digits.length <= 12) {
+                if (match.index > lastIndex) {
+                    parts.push(text.substring(lastIndex, match.index));
+                }
+                parts.push(
+                    <Text
+                        key={match.index}
+                        style={{
+                            color: "#2563EB",
+                            fontWeight: "700",
+                            textDecorationLine: "underline",
+                        }}
+                        onPress={() => handlePressPhone(fullMatch)}
+                    >
+                        {fullMatch}
+                    </Text>,
+                );
+                lastIndex = match.index + fullMatch.length;
+            }
+        }
+
+        if (lastIndex < text.length) {
+            parts.push(text.substring(lastIndex));
+        }
+
+        return parts.length > 0 ? parts : text;
+    }, [d?.notes]);
+
     // Auto-fill KM from vehicle's current mileage (re-fill sau mỗi lần loadDetail)
     useEffect(() => {
         if (vehicleKm != null && !km) {
@@ -196,10 +269,8 @@ export default function OrderDetailScreen() {
 
     // Compute per-DP checkpoint status
     const dpStatusMap = useMemo(() => {
-        const map: Record<
-            number,
-            { arrived: boolean; completed: boolean }
-        > = {};
+        const map: Record<number, { arrived: boolean; completed: boolean }> =
+            {};
         deliveryPoints.forEach((dp: any) => {
             map[dp.id] = {
                 arrived: checkpoints.some(
@@ -271,25 +342,28 @@ export default function OrderDetailScreen() {
     const hasArrivedDelivery = activeDpHasCp("arrived_delivery");
     const hasCompleted = activeDpHasCp("completed");
 
-
     // Mid-delivery: đã đến DP nhưng chưa giao xong → lock, không chọn được DP khác
     const isMidDelivery = hasArrivedDelivery && !hasCompleted;
     const canSelectDp = !isMidDelivery;
 
     // Can do actions on the SELECTED DP (not necessarily next pending)
     const canArrivePickup =
-        (d.status === "assigned" || d.status === "sent") && !hasArrivedPickup && !!shift;
+        (d.status === "assigned" || d.status === "sent") &&
+        !hasArrivedPickup &&
+        !!shift;
     const canLeftPickup =
         d.status === "sent" && hasArrivedPickup && !hasLeftPickup && !!shift;
     const canArriveDelivery =
         d.status === "in_transit" &&
         (!!activeDpId || !!selectedLoc) &&
-        !hasArrivedDelivery && !!shift;
+        !hasArrivedDelivery &&
+        !!shift;
     const canComplete =
         d.status === "in_transit" &&
         (!!activeDpId || !!selectedLoc) &&
         hasArrivedDelivery &&
-        !hasCompleted && !!shift;
+        !hasCompleted &&
+        !!shift;
     const canEnd = d.status === "completed" && !hasEndCheckpoint && !!shift;
 
     async function pickImage() {
@@ -361,7 +435,8 @@ export default function OrderDetailScreen() {
             body.new_delivery_location_id = selectedLoc.id;
         }
 
-        setLoading(true); showLoading();
+        setLoading(true);
+        showLoading();
         try {
             await api.trips.checkpoint(String(tripId), body, token);
             showAlert(
@@ -420,7 +495,7 @@ export default function OrderDetailScreen() {
                                 </Text>
                                 {(d.pickup_location?.address ||
                                     d.pickup_address) && (
-                                    <Text style={s.routeAddr} numberOfLines={1}>
+                                    <Text style={s.routeAddr}>
                                         {d.pickup_location?.address ||
                                             d.pickup_address}
                                     </Text>
@@ -457,10 +532,7 @@ export default function OrderDetailScreen() {
                                         </Text>
                                         {(dp.address ||
                                             dp.location?.address) && (
-                                            <Text
-                                                style={s.routeAddr}
-                                                numberOfLines={1}
-                                            >
+                                            <Text style={s.routeAddr}>
                                                 {dp.address ||
                                                     dp.location?.address}
                                             </Text>
@@ -553,7 +625,9 @@ export default function OrderDetailScreen() {
                                 Ghi chú
                             </Text>
                         </View>
-                        <Text style={s.notesText}>{d.notes}</Text>
+                        <Text style={s.notesText} selectable={true}>
+                            {renderedNotesText}
+                        </Text>
                     </View>
                 ) : null}
 
@@ -595,7 +669,10 @@ export default function OrderDetailScreen() {
                                 "-",
                         },
                     ].map((t, i) => (
-                        <View key={i} style={[s.tile, i >= 3 && { width: '48%' }]}>
+                        <View
+                            key={i}
+                            style={[s.tile, i >= 3 && { width: "48%" }]}
+                        >
                             <Ionicons
                                 name={t.icon as any}
                                 size={18}

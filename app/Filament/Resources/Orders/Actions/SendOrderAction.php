@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
 use App\Models\Order;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Throwable;
@@ -38,6 +39,12 @@ class SendOrderAction
                         'status' => OrderStatus::Sent->value,
                         'sent_at' => now(),
                     ]);
+
+                    try {
+                        app(DriverNotificationService::class)->sendOrderAssigned($record);
+                    } catch (Throwable) {
+                        // Không ngắt luồng UI nếu push notification gặp lỗi
+                    }
 
                     Notification::make()
                         ->title('Gửi lệnh thành công')

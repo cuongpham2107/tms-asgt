@@ -12,6 +12,7 @@ use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\BulkAction;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Toggle;
@@ -131,11 +132,17 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
 
                 $sequence = 0;
                 foreach ($draftOrders as $order) {
-                    $updated = $order->update([
+                    $orderUpdates = [
                         'trip_id' => $trip->id,
                         'trip_sequence' => $sequence++,
                         'status' => $orderStatus,
-                    ]);
+                    ];
+
+                    if ($orderStatus === OrderStatus::Sent) {
+                        $orderUpdates['sent_at'] = now();
+                    }
+
+                    $updated = $order->update($orderUpdates);
 
                     if (! $updated) {
                         throw new \RuntimeException("Không thể gán đơn hàng {$order->order_code} vào chuyến.");
@@ -143,6 +150,14 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                 }
 
                 static::createCheckpointsForExternalVehicle($trip, $draftOrders);
+
+                if ($orderStatus === OrderStatus::Sent) {
+                    try {
+                        app(DriverNotificationService::class)->sendTripDispatched($trip, $draftOrders->count());
+                    } catch (Throwable) {
+                        // Không ngắt luồng nếu push notification gặp lỗi
+                    }
+                }
 
                 if (filled($data['vehicle_id'] ?? null)) {
                     $vehicle = Vehicle::query()->find($data['vehicle_id']);

@@ -1,64 +1,77 @@
 {
-  "expo": {
-    "name": "ASGL Vận Tải",
-    "slug": "asgt",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "scheme": "tms-driver",
-    "plugins": [
-      "./plugins/withAndroidManifest.mjs",
-      "expo-router",
-      "expo-image-picker",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Cần GPS để ghi nhận vị trí chốt chặng"
-        }
-      ],
-      "expo-status-bar",
-      "expo-font"
-    ],
-    "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSCameraUsageDescription": "Cần camera để chụp ảnh chốt chặng",
-        "NSPhotoLibraryUsageDescription": "Cần thư viện ảnh để chọn ảnh",
-        "NSLocationWhenInUseUsageDescription": "Cần GPS để ghi nhận vị trí chốt chặng",
-        "UIDesignRequiresCompatibility": true,
-        "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
+    "expo": {
+        "name": "ASGL Vận Tải",
+        "slug": "asgt",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/icon.png",
+        "userInterfaceStyle": "light",
+        "scheme": "tms-driver",
+        "plugins": [
+            "./plugins/withAndroidManifest.mjs",
+            "expo-router",
+            "expo-image-picker",
+            [
+                "expo-location",
+                {
+                    "locationAlwaysAndWhenInUsePermission": "Cần GPS để ghi nhận vị trí chốt chặng"
+                }
+            ],
+            "expo-status-bar",
+            "expo-font",
+            [
+                "expo-notifications",
+                {
+                    "icon": "./assets/icon.png",
+                    "color": "#4F46E5",
+                    "sounds": []
+                }
+            ]
+        ],
+        "ios": {
+            "supportsTablet": true,
+            "bundleIdentifier": "com.anonymous.tmsmobile",
+            "googleServicesFile": "./GoogleService-Info.plist",
+            "entitlements": {
+                "aps-environment": "production"
+            },
+            "infoPlist": {
+                "NSCameraUsageDescription": "Cần camera để chụp ảnh chốt chặng",
+                "NSPhotoLibraryUsageDescription": "Cần thư viện ảnh để chọn ảnh",
+                "NSLocationWhenInUseUsageDescription": "Cần GPS để ghi nhận vị trí chốt chặng",
+                "UIDesignRequiresCompatibility": true,
+                "NSAppTransportSecurity": {
+                    "NSAllowsLocalNetworking": true
+                },
+                "ITSAppUsesNonExemptEncryption": false
+            }
         },
-        "ITSAppUsesNonExemptEncryption": false
-      },
-      "bundleIdentifier": "com.anonymous.tmsmobile"
-    },
-    "android": {
-      "usesCleartextTraffic": true,
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
-      ],
-      "package": "com.anonymous.tmsmobile"
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "6f998364-07b3-4def-867b-e074dcd6373d"
-      }
-    },
-    "owner": "asgl"
-  }
+        "android": {
+            "googleServicesFile": "./google-services.json",
+            "usesCleartextTraffic": true,
+            "adaptiveIcon": {
+                "backgroundColor": "#E6F4FE",
+                "foregroundImage": "./assets/android-icon-foreground.png",
+                "backgroundImage": "./assets/android-icon-background.png",
+                "monochromeImage": "./assets/android-icon-monochrome.png"
+            },
+            "predictiveBackGestureEnabled": false,
+            "permissions": [
+                "android.permission.RECORD_AUDIO",
+                "android.permission.ACCESS_COARSE_LOCATION",
+                "android.permission.ACCESS_FINE_LOCATION",
+                "android.permission.POST_NOTIFICATIONS"
+            ],
+            "package": "com.anonymous.tmsmobile"
+        },
+        "web": {
+            "favicon": "./assets/favicon.png"
+        },
+        "extra": {
+            "router": {},
+            "eas": {
+                "projectId": "ae85c2f6-7bd4-4ab1-ac6a-b9efbccae670"
+            }
+        }
+    }
 }

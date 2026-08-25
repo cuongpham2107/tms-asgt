@@ -29,3 +29,12 @@ Thumbs.db
 database/database_backup_*
 .mimocode/
 .omo/
+*firebase-credentials*.json
+/storage/firebase/
+/storage/app/firebase/
+google-services.json
+GoogleService-Info.plist
+/.claude/
+*.xlsx
+
+

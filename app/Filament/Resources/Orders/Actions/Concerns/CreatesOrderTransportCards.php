@@ -19,6 +19,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Notification\DriverNotificationService;
 use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -948,16 +949,30 @@ abstract class CreatesOrderTransportCards
 
                 $status = ! empty($data['send_immediately']) ? OrderStatus::Sent->value : OrderStatus::Assigned->value;
 
-                $updated = $order->update([
+                $orderUpdates = [
                     'trip_id' => $trip->id,
                     'status' => $status,
-                ]);
+                ];
+
+                if (! empty($data['send_immediately'])) {
+                    $orderUpdates['sent_at'] = now();
+                }
+
+                $updated = $order->update($orderUpdates);
 
                 if (! $updated) {
                     throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
                 }
 
                 static::createCheckpointsForExternalVehicle($trip, collect([$order]));
+
+                if (! empty($data['send_immediately'])) {
+                    try {
+                        app(DriverNotificationService::class)->sendOrderAssigned($order, $trip);
+                    } catch (Throwable) {
+                        // Không ngắt luồng tạo đơn nếu push notification gặp lỗi
+                    }
+                }
 
                 $vehicle = Vehicle::query()->find($data['vehicle_id']);
 

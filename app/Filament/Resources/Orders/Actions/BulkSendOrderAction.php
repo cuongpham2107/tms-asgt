@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
 use App\Models\Order;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
@@ -40,6 +41,14 @@ class BulkSendOrderAction
                         'status' => OrderStatus::Sent->value,
                         'sent_at' => now(),
                     ]);
+
+                    foreach ($assignOrders as $order) {
+                        try {
+                            app(DriverNotificationService::class)->sendOrderAssigned($order);
+                        } catch (Throwable) {
+                            // Không ngắt luồng nếu push notification gặp lỗi
+                        }
+                    }
 
                     Notification::make()
                         ->title('Gửi lệnh hàng loạt thành công')

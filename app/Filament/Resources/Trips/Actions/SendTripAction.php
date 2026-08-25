@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Trips\Actions;
 
 use App\Enums\OrderStatus;
 use App\Models\Trip;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Throwable;
@@ -41,6 +42,13 @@ class SendTripAction
                             ->send();
 
                         return;
+                    }
+
+                    // Gửi push notification qua Firebase cho lái xe
+                    try {
+                        app(DriverNotificationService::class)->sendTripDispatched($record, $count);
+                    } catch (Throwable) {
+                        // Không làm gián đoạn UI nếu gửi push thất bại
                     }
 
                     Notification::make()

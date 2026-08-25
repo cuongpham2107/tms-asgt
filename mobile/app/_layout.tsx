@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "../src/lib/auth";
 import { LoadingProvider, useLoading } from "../src/lib/loading";
+import { usePushNotifications } from "../src/lib/notifications";
 import LoadingOverlay from "../src/components/LoadingOverlay";
 
 function AuthGuard() {
@@ -25,6 +26,12 @@ function AuthGuard() {
   return null;
 }
 
+function NotificationManager() {
+  const { token } = useAuth();
+  usePushNotifications(token);
+  return null;
+}
+
 function LoadingLayer() {
   const { visible } = useLoading();
   return <LoadingOverlay visible={visible} />;
@@ -36,6 +43,7 @@ export default function RootLayout() {
       <LoadingProvider>
         <StatusBar style="light" />
         <AuthGuard />
+        <NotificationManager />
         <LoadingLayer />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="login" />

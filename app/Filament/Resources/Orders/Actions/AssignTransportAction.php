@@ -13,6 +13,7 @@ use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
@@ -126,6 +127,10 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     'status' => $orderStatus,
                 ];
 
+                if ($orderStatus === OrderStatus::Sent) {
+                    $orderUpdates['sent_at'] = now();
+                }
+
                 if ($record->type === OrderType::External && isset($data['chargeable_weight']) && filled($data['chargeable_weight'])) {
                     $orderUpdates['chargeable_weight'] = $data['chargeable_weight'];
                 }
@@ -137,6 +142,14 @@ class AssignTransportAction extends CreatesOrderTransportCards
                 }
 
                 static::createCheckpointsForExternalVehicle($trip, collect([$record]));
+
+                if ($orderStatus === OrderStatus::Sent) {
+                    try {
+                        app(DriverNotificationService::class)->sendOrderAssigned($record, $trip);
+                    } catch (Throwable) {
+                        // Không ngắt luồng nếu push notification gặp lỗi
+                    }
+                }
 
                 if (filled($data['vehicle_id'] ?? null)) {
                     $vehicle = Vehicle::query()->find($data['vehicle_id']);

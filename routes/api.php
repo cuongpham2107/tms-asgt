@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DriverFcmTokenController;
 use App\Http\Controllers\Api\DriverShiftController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\OrderController;
@@ -20,6 +21,7 @@ Route::post('/route', [RouteController::class, 'route']);
 
 Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/fcm-token', [DriverFcmTokenController::class, 'update']);
 
     // Shift status (trạng thái ca hiện tại + km gần nhất)
     Route::get('/shifts/active', [ShiftStatusController::class, 'active']);

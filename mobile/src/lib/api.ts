@@ -159,6 +159,13 @@ export const api = {
     if (params.area_id) qs.set("area_id", String(params.area_id));
     return fetchApi<{ data: any[] }>(`/locations?${qs}`, t);
   },
+
+  // FCM Push Token
+  updateFcmToken: (fcmToken: string, t: string) =>
+    fetchApi<{ success: boolean; message: string }>("/fcm-token", t, {
+      method: "POST",
+      body: JSON.stringify({ fcm_token: fcmToken }),
+    }),
 };
 
 // ─── Type helpers ────────────────────────────────────────────────────
