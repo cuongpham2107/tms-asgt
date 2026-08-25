@@ -154,7 +154,7 @@ class DriverNotificationService
     {
         try {
             $response = Http::acceptJson()
-                ->timeout(5)
+                ->timeout(10)
                 ->post('https://exp.host/--/api/v2/push/send', [
                     'to' => $token,
                     'title' => $title,
@@ -163,8 +163,6 @@ class DriverNotificationService
                     'sound' => 'default',
                     'channelId' => 'orders',
                     'priority' => 'high',
-                    'ttl' => 0,
-                    '_displayInForeground' => true,
                 ]);
 
             if ($response->successful()) {
