@@ -18,20 +18,33 @@ use Throwable;
 
 class DriverNotificationService
 {
-    public function __construct(
-        protected ?Messaging $messaging = null
-    ) {
-        if ($this->messaging === null) {
-            try {
-                if (app()->bound(Messaging::class)) {
-                    $this->messaging = app(Messaging::class);
-                } elseif (app()->bound('firebase.messaging')) {
-                    $this->messaging = app('firebase.messaging');
-                }
-            } catch (Throwable $e) {
-                Log::debug('Firebase Messaging not initialized: '.$e->getMessage());
-            }
+    protected ?Messaging $messaging = null;
+
+    public function __construct(?Messaging $messaging = null)
+    {
+        $this->messaging = $messaging;
+    }
+
+    /**
+     * Lấy instance Firebase Messaging khi cần thiết (Lazy Loading).
+     */
+    protected function getMessaging(): ?Messaging
+    {
+        if ($this->messaging !== null) {
+            return $this->messaging;
         }
+
+        try {
+            if (app()->bound(Messaging::class)) {
+                $this->messaging = app(Messaging::class);
+            } elseif (app()->bound('firebase.messaging')) {
+                $this->messaging = app('firebase.messaging');
+            }
+        } catch (Throwable $e) {
+            Log::debug('Firebase Messaging not initialized: '.$e->getMessage());
+        }
+
+        return $this->messaging;
     }
 
     /**
@@ -166,14 +179,12 @@ class DriverNotificationService
      */
     protected function sendViaFcm(User $driver, string $token, string $title, string $body, array $data = []): bool
     {
-        if ($this->messaging === null) {
-            try {
-                $this->messaging = app(Messaging::class);
-            } catch (Throwable $e) {
-                Log::warning('DriverNotification: Không thể kết nối Firebase Messaging. '.$e->getMessage());
+        $messaging = $this->getMessaging();
 
-                return false;
-            }
+        if ($messaging === null) {
+            Log::warning("DriverNotification: Không thể kết nối Firebase Messaging để gửi cho {$driver->name} (Vui lòng cấu hình FIREBASE_CREDENTIALS).");
+
+            return false;
         }
 
         try {
@@ -202,7 +213,7 @@ class DriverNotificationService
                     ],
                 ]));
 
-            $this->messaging->send($message);
+            $messaging->send($message);
 
             Log::info("DriverNotification: Đã gửi thông báo tới lái xe {$driver->name} ({$title})");
 
