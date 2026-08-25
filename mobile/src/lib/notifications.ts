@@ -54,7 +54,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     const projectId =
         Constants?.expoConfig?.extra?.eas?.projectId ??
         Constants?.easConfig?.projectId ??
-        "ae85c2f6-7bd4-4ab1-ac6a-b9efbccae670";
+        "4a73c5d5-0135-4373-a36e-8e0b2009c779";
 
     // Khi chạy trên Simulator: ưu tiên lấy Expo Push Token để nhận notification qua Expo Server
     if (!Device.isDevice) {
