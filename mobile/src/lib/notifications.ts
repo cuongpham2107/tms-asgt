@@ -108,9 +108,13 @@ export function usePushNotifications(authToken: string | null) {
       .then((fcmToken) => {
         if (fcmToken) {
           console.log("FCM Token obtained:", fcmToken);
-          api.updateFcmToken(fcmToken, authToken).catch((err) => {
-            console.log("Failed to sync FCM token to server:", err);
-          });
+          api.updateFcmToken(fcmToken, authToken)
+            .then(() => {
+              console.log("Successfully synced FCM token to server!");
+            })
+            .catch((err) => {
+              console.log("Failed to sync FCM token to server:", err);
+            });
         }
       })
       .catch((err) => {

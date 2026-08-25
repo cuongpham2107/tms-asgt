@@ -7,6 +7,7 @@ use App\Models\Trip;
 use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class SendTripAction
@@ -47,8 +48,8 @@ class SendTripAction
                     // Gửi push notification qua Firebase cho lái xe
                     try {
                         app(DriverNotificationService::class)->sendTripDispatched($record, $count);
-                    } catch (Throwable) {
-                        // Không làm gián đoạn UI nếu gửi push thất bại
+                    } catch (Throwable $e) {
+                        Log::warning('Lỗi gửi push notification khi gửi lệnh chuyến: '.$e->getMessage(), ['exception' => $e]);
                     }
 
                     Notification::make()

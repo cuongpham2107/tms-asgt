@@ -6,6 +6,7 @@ use App\Models\DriverShift;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Kreait\Firebase\Contract\Messaging;
@@ -72,6 +73,10 @@ class DriverNotificationService
         $driver = null;
         if ($trip !== null) {
             $driver = $this->resolveDriverForTrip($trip);
+        }
+
+        if ($driver === null && $order->driver_id !== null) {
+            $driver = User::query()->find($order->driver_id);
         }
 
         if ($driver === null) {
@@ -248,6 +253,13 @@ class DriverNotificationService
 
         if ($trip->vehicle !== null && $trip->vehicle->current_driver_id !== null) {
             return User::query()->find($trip->vehicle->current_driver_id);
+        }
+
+        if ($trip->vehicle_id !== null) {
+            $vehicle = Vehicle::query()->find($trip->vehicle_id);
+            if ($vehicle?->current_driver_id !== null) {
+                return User::query()->find($vehicle->current_driver_id);
+            }
         }
 
         return null;

@@ -32,6 +32,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 abstract class CreatesOrderTransportCards
@@ -969,8 +970,8 @@ abstract class CreatesOrderTransportCards
                 if (! empty($data['send_immediately'])) {
                     try {
                         app(DriverNotificationService::class)->sendOrderAssigned($order, $trip);
-                    } catch (Throwable) {
-                        // Không ngắt luồng tạo đơn nếu push notification gặp lỗi
+                    } catch (Throwable $e) {
+                        Log::warning('Lỗi gửi push notification khi tạo đơn: '.$e->getMessage(), ['exception' => $e]);
                     }
                 }
 
