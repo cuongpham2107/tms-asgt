@@ -20,9 +20,18 @@ class DriverNotificationService
 {
     protected ?Messaging $messaging = null;
 
-    public function __construct(?Messaging $messaging = null)
+    public function __construct(mixed $messaging = null)
+    {
+        if ($messaging instanceof Messaging) {
+            $this->messaging = $messaging;
+        }
+    }
+
+    public function setMessaging(?Messaging $messaging): self
     {
         $this->messaging = $messaging;
+
+        return $this;
     }
 
     /**
