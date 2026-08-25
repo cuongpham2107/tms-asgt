@@ -41,6 +41,7 @@
                 "NSLocationWhenInUseUsageDescription": "Cần GPS để ghi nhận vị trí chốt chặng",
                 "UIDesignRequiresCompatibility": true,
                 "NSAppTransportSecurity": {
+                    "NSAllowsArbitraryLoads": true,
                     "NSAllowsLocalNetworking": true
                 },
                 "ITSAppUsesNonExemptEncryption": false
