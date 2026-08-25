@@ -97,37 +97,24 @@ test('location form area_id pre-selects default area code when defaultAreaId is 
     expect($default3)->toBe('NBO');
 });
 
-test('creating location with area code creates records for both HHHK and external areas', function () {
-    $hhhkArea = Area::create([
-        'type' => OrderType::Hhhk,
+test('creating location with area creates single unique record', function () {
+    $area = Area::create([
         'code' => 'NBA',
         'name' => 'Hàng đến NBA',
         'is_active' => true,
     ]);
 
-    $externalArea = Area::create([
-        'type' => OrderType::External,
-        'code' => 'NBA',
-        'name' => 'Hàng đến NBA',
-        'is_active' => true,
-    ]);
-
-    // Create via Location::create with area_id = HHHK Area ID
     $location = Location::create([
-        'area_id' => $hhhkArea->id,
+        'area_id' => $area->id,
         'code' => 'KHO-NBA-01',
         'name' => 'Kho Nội Bài 01',
         'loc_type' => 'warehouse',
         'is_active' => true,
     ]);
 
-    expect(Location::where('code', 'KHO-NBA-01')->count())->toBe(2);
-    expect(Location::where('code', 'KHO-NBA-01')->where('area_id', $hhhkArea->id)->exists())->toBeTrue();
-    expect(Location::where('code', 'KHO-NBA-01')->where('area_id', $externalArea->id)->exists())->toBeTrue();
+    expect(Location::where('code', 'KHO-NBA-01')->count())->toBe(1);
+    expect($location->area_id)->toBe($area->id);
 
-    // Test update synchronization
     $location->update(['name' => 'Kho Nội Bài 01 Updated']);
-    $sibling = Location::where('code', 'KHO-NBA-01')->where('area_id', $externalArea->id)->first();
-    expect($sibling)->not->toBeNull();
-    expect($sibling->name)->toBe('Kho Nội Bài 01 Updated');
+    expect($location->refresh()->name)->toBe('Kho Nội Bài 01 Updated');
 });

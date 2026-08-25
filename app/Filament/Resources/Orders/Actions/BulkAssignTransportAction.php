@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Filament\Forms\Components\DriverPicker;
@@ -12,6 +13,7 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
 use Filament\Actions\BulkAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
@@ -19,6 +21,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 use Throwable;
 
 class BulkAssignTransportAction extends CreatesOrderTransportCards
@@ -35,6 +38,20 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
             ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
             ->schema([
+                Placeholder::make('missing_weight_warning')
+                    ->label('')
+                    ->content(function (Collection $records) {
+                        $missing = $records->filter(
+                            fn (Order $o): bool => $o->type === OrderType::External && ($o->chargeable_weight === null || $o->chargeable_weight === '')
+                        );
+                        if ($missing->isEmpty()) {
+                            return null;
+                        }
+                        $codes = $missing->pluck('order_code')->implode(', ');
+
+                        return new HtmlString("<div class='p-3 bg-amber-50 border border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300 rounded-lg text-sm mb-2'>⚠️ <strong>Cảnh báo:</strong> Đơn hàng ngoài (<strong>{$codes}</strong>) chưa có trọng tải tính cước! Vui lòng cập nhật trọng tải trước khi gán chuyến.</div>");
+                    }),
+
                 Grid::make(2)
                     ->schema([
                         VehiclePicker::make('vehicle_id')
@@ -75,6 +92,21 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                 ->title('Không có đơn hàng nào hợp lệ')
                 ->body('Chỉ các đơn hàng ở trạng thái Nháp mới có thể tạo chuyến.')
                 ->warning()
+                ->send();
+
+            return;
+        }
+
+        $missingWeightOrders = $draftOrders->filter(
+            fn (Order $order): bool => $order->type === OrderType::External && ($order->chargeable_weight === null || $order->chargeable_weight === '')
+        );
+
+        if ($missingWeightOrders->isNotEmpty()) {
+            $codes = $missingWeightOrders->pluck('order_code')->implode(', ');
+            Notification::make()
+                ->title('Chưa nhập trọng tải tính cước')
+                ->body("Đơn hàng ngoài ({$codes}) chưa có Trọng tải tính cước. Vui lòng cập nhật trước khi gán xe.")
+                ->danger()
                 ->send();
 
             return;

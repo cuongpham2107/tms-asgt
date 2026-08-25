@@ -13,15 +13,10 @@ class AreasTable extends BaseTable
     {
         return parent::applyDefaults($table)
             ->columns([
-                TextColumn::make('type')
-                    ->label('Loại đơn')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state?->getLabel() ?? '-')
-                    ->color(fn ($state) => $state?->getColor() ?? 'gray')
-                    ->searchable(),
                 TextColumn::make('code')
                     ->label('Mã')
-                    ->searchable(),
+                    ->searchable()
+                    ->weight('bold'),
                 TextColumn::make('name')
                     ->label('Tên khu vực')
                     ->searchable(),

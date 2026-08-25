@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class Location extends Model
 {
@@ -105,68 +106,20 @@ class Location extends Model
             }
         });
 
-        static::created(function (Location $location) {
-            $location->loadMissing('area');
-
-            if (! $location->area) {
-                return;
+        static::saved(function (Location $location) {
+            Cache::forget('location-options-all');
+            if ($location->area_id) {
+                Cache::forget('location-options-'.$location->area_id);
             }
-
-            $siblingAreas = Area::query()
-                ->where('code', $location->area->code)
-                ->where('id', '!=', $location->area_id)
-                ->get();
-
-            foreach ($siblingAreas as $siblingArea) {
-                static::withoutEvents(function () use ($location, $siblingArea) {
-                    Location::firstOrCreate(
-                        [
-                            'code' => $location->code,
-                            'area_id' => $siblingArea->id,
-                        ],
-                        [
-                            'name' => $location->name,
-                            'address' => $location->address,
-                            'lat' => $location->lat,
-                            'lng' => $location->lng,
-                            'loc_type' => $location->loc_type,
-                            'is_active' => $location->is_active,
-                        ]
-                    );
-                });
-            }
+            Cache::forget('active-locations-with-coords-v2');
         });
 
-        static::updated(function (Location $location) {
-            $location->loadMissing('area');
-
-            if (! $location->area) {
-                return;
+        static::deleted(function (Location $location) {
+            Cache::forget('location-options-all');
+            if ($location->area_id) {
+                Cache::forget('location-options-'.$location->area_id);
             }
-
-            $siblingAreaIds = Area::query()
-                ->where('code', $location->area->code)
-                ->where('id', '!=', $location->area_id)
-                ->pluck('id');
-
-            if ($siblingAreaIds->isNotEmpty()) {
-                $originalCode = $location->getOriginal('code') ?? $location->code;
-
-                static::withoutEvents(function () use ($location, $siblingAreaIds, $originalCode) {
-                    Location::query()
-                        ->whereIn('area_id', $siblingAreaIds)
-                        ->where('code', $originalCode)
-                        ->update([
-                            'code' => $location->code,
-                            'name' => $location->name,
-                            'address' => $location->address,
-                            'lat' => $location->lat,
-                            'lng' => $location->lng,
-                            'loc_type' => $location->loc_type?->value ?? $location->loc_type,
-                            'is_active' => $location->is_active,
-                        ]);
-                });
-            }
+            Cache::forget('active-locations-with-coords-v2');
         });
     }
 }

@@ -328,10 +328,7 @@ class ListTrips extends ListRecords
                     ->clickAction('filterVehicleOwner'),
                 PillFilter::make('activePlaceFilter')
                     ->options(fn (): array => Area::query()
-                        ->when(
-                            $this->orderType !== 'all',
-                            fn ($query) => $query->where('type', $this->orderType)
-                        )
+                        ->where('is_active', true)
                         ->orderBy('sort_order', 'asc')
                         ->pluck('code', 'code')
                         ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)

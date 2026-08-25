@@ -227,10 +227,7 @@ class ListOrders extends ListRecords
                 PillFilter::make('activePlaceFilter')
                     // ->labelPrefix('Khu vực')
                     ->options(fn (): array => Area::query()
-                        ->when(
-                            $this->activeOrderTypeFilter !== 'all',
-                            fn ($query) => $query->where('type', $this->activeOrderTypeFilter)
-                        )
+                        ->where('is_active', true)
                         ->orderBy('sort_order', 'asc')
                         ->pluck('code', 'code')
                         ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)

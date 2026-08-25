@@ -47,14 +47,7 @@ abstract class CreatesOrderTransportCards
 
     public static function handleDriverStateUpdated(Set $set, mixed $state): void
     {
-        if ($state) {
-            $vehicle = Vehicle::query()->where('current_driver_id', $state)->first();
-            if ($vehicle) {
-                $set('vehicle_id', $vehicle->id);
-            }
-        } else {
-            $set('vehicle_id', null);
-        }
+        // Không tự động chọn lại xe khi chọn lái xe
     }
 
     /**
@@ -617,19 +610,20 @@ abstract class CreatesOrderTransportCards
     /**
      * @return array<int, string>
      */
-    public static function getLocationOptions(string|Closure|null $type): array
+    public static function getLocationOptions(int|string|Closure|null $areaId = null): array
     {
-        $resolvedType = $type instanceof Closure ? $type() : $type;
-        $cacheKey = 'location-options-'.($resolvedType ?? 'all');
+        $resolvedAreaId = $areaId instanceof Closure ? $areaId() : $areaId;
+        if (is_string($resolvedAreaId) && ! is_numeric($resolvedAreaId) && filled($resolvedAreaId)) {
+            $resolvedAreaId = Area::query()->where('code', $resolvedAreaId)->value('id');
+        }
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($resolvedType): array {
+        $cacheKey = 'location-options-'.($resolvedAreaId ? (int) $resolvedAreaId : 'all');
+
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($resolvedAreaId): array {
             return Location::query()
                 ->select(['locations.id', 'locations.code'])
                 ->where('locations.is_active', true)
-                ->when($resolvedType, function ($query, $type): void {
-                    $query->join('areas', 'locations.area_id', '=', 'areas.id')
-                        ->where('areas.type', $type);
-                })
+                ->when($resolvedAreaId, fn ($query, $id) => $query->where('locations.area_id', $id))
                 ->orderBy('locations.code', 'asc')
                 ->pluck('locations.code', 'locations.id')
                 ->toArray();
@@ -690,21 +684,52 @@ abstract class CreatesOrderTransportCards
             ->preload()
             ->columnSpanFull()
             ->live()
-            ->afterStateUpdated(function ($state, Set $set): void {
+            ->afterStateUpdated(function ($state, Set $set, Get $get) use ($setAreaId): void {
                 if (blank($state)) {
+                    $set('pickup_location_id', null);
+
                     return;
                 }
 
-                $firstLocation = DB::table('customer_location')
-                    ->join('locations', 'customer_location.location_id', '=', 'locations.id')
-                    ->where('customer_location.customer_id', $state)
-                    ->where('locations.is_active', true)
-                    ->select(['locations.id', 'locations.area_id'])
-                    ->first();
+                $customer = Customer::query()->with('location')->find($state);
+                if (! $customer) {
+                    $set('pickup_location_id', null);
 
-                if ($firstLocation) {
-                    $set('area_id', $firstLocation->area_id);
-                    $set('pickup_location_id', $firstLocation->id);
+                    return;
+                }
+
+                $currentAreaId = $get('area_id');
+                $location = null;
+
+                // 1. Ưu tiên địa điểm mặc định trực tiếp của khách hàng (ví dụ ALSB -> ALSB)
+                if ($customer->location && $customer->location->is_active) {
+                    $location = $customer->location;
+                }
+
+                // 2. Nếu khách hàng không có địa điểm trực tiếp, tìm trong bảng pivot customer_location
+                if (! $location) {
+                    $query = DB::table('customer_location')
+                        ->join('locations', 'customer_location.location_id', '=', 'locations.id')
+                        ->where('customer_location.customer_id', $state)
+                        ->where('locations.is_active', true);
+
+                    if (filled($currentAreaId)) {
+                        $location = (clone $query)
+                            ->where('locations.area_id', $currentAreaId)
+                            ->select(['locations.id', 'locations.area_id'])
+                            ->first();
+                    }
+
+                    $location ??= $query->select(['locations.id', 'locations.area_id'])->first();
+                }
+
+                if ($location) {
+                    $set('pickup_location_id', $location->id);
+                    if ($setAreaId && filled($location->area_id)) {
+                        $set('area_id', $location->area_id);
+                    }
+                } else {
+                    $set('pickup_location_id', null);
                 }
             })
             ->createOptionForm(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents())
@@ -756,14 +781,22 @@ abstract class CreatesOrderTransportCards
             })
             ->reorderableWithDragAndDrop()
             ->schema([
-                Grid::make(4)
+                Grid::make(2)
                     ->schema([
                         Select::make('location_id')
                             ->label('Điểm giao hàng')
-                            ->options(function (Get $get) use ($orderType): array {
-                                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
+                            ->options(function (Get $get): array {
+                                $areaId = $get('../../area_id') ?? $get('area_id');
+                                $options = self::getLocationOptions($areaId);
+                                $selectedId = $get('location_id');
+                                if ($selectedId && ! isset($options[$selectedId])) {
+                                    $code = Location::query()->where('id', $selectedId)->value('code');
+                                    if ($code) {
+                                        $options[$selectedId] = $code;
+                                    }
+                                }
 
-                                return self::getLocationOptions($type);
+                                return $options;
                             })
                             ->searchable()
                             ->native(false)
@@ -787,25 +820,25 @@ abstract class CreatesOrderTransportCards
                                     'is_active' => true,
                                 ]))->getKey();
                             }),
-                        TextInput::make('contact_person')
-                            ->label('Người nhận')
-                            ->placeholder('Họ tên')
-                            ->live(onBlur: true)
-                            ->visible(function (Get $get) use ($orderType): bool {
-                                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
+                        // TextInput::make('contact_person')
+                        //     ->label('Người nhận')
+                        //     ->placeholder('Họ tên')
+                        //     ->live(onBlur: true)
+                        //     ->visible(function (Get $get) use ($orderType): bool {
+                        //         $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
 
-                                return $type !== 'HHHK';
-                            }),
-                        TextInput::make('contact_phone')
-                            ->label('SĐT nhận')
-                            ->placeholder('Số điện thoại')
-                            ->tel()
-                            ->live(onBlur: true)
-                            ->visible(function (Get $get) use ($orderType): bool {
-                                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
+                        //         return $type !== 'HHHK';
+                        //     }),
+                        // TextInput::make('contact_phone')
+                        //     ->label('SĐT nhận')
+                        //     ->placeholder('Số điện thoại')
+                        //     ->tel()
+                        //     ->live(onBlur: true)
+                        //     ->visible(function (Get $get) use ($orderType): bool {
+                        //         $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
 
-                                return $type !== 'HHHK';
-                            }),
+                        //         return $type !== 'HHHK';
+                        //     }),
                     ]),
             ])
             ->columnSpanFull();
@@ -852,6 +885,7 @@ abstract class CreatesOrderTransportCards
                         'total_weight' => $data['total_weight'] ?? null,
                         'pickup_location_id' => $data['pickup_location_id'] ?? null,
                         'pickup_address' => $pickupAddress,
+                        'chargeable_weight' => $data['chargeable_weight'] ?? null,
                         'pickup_contact' => $data['pickup_contact'] ?? null,
                         'pickup_phone' => $data['pickup_phone'] ?? null,
                         'planned_loading_at' => $data['planned_loading_at'] ?? null,
@@ -964,7 +998,7 @@ abstract class CreatesOrderTransportCards
                 'shift_id' => $shiftId,
             ]);
 
-            $offset++;
+            $offset += 15;
 
             TripCheckpoint::create([
                 'trip_id' => $trip->id,
@@ -976,7 +1010,7 @@ abstract class CreatesOrderTransportCards
                 'shift_id' => $shiftId,
             ]);
 
-            $offset++;
+            $offset += 15;
 
             TripCheckpoint::create([
                 'trip_id' => $trip->id,
@@ -988,7 +1022,7 @@ abstract class CreatesOrderTransportCards
                 'shift_id' => $shiftId,
             ]);
 
-            $offset++;
+            $offset += 15;
 
             $deliveryPoints = $order->deliveryPoints;
 
@@ -999,26 +1033,26 @@ abstract class CreatesOrderTransportCards
                         'order_id' => $order->id,
                         'delivery_point_id' => $dp->id,
                         'checkpoint_type' => CheckpointType::ArrivedDelivery,
-                        'occurred_at' => (clone $now)->addSeconds($offset),
+                        'occurred_at' => (clone $now)->addMinutes($offset),
                         'km_reading' => null,
                         'driver_id' => $driverId,
                         'shift_id' => $shiftId,
                     ]);
 
-                    $offset++;
+                    $offset += 15;
 
                     TripCheckpoint::create([
                         'trip_id' => $trip->id,
                         'order_id' => $order->id,
                         'delivery_point_id' => $dp->id,
                         'checkpoint_type' => CheckpointType::Completed,
-                        'occurred_at' => (clone $now)->addSeconds($offset),
+                        'occurred_at' => (clone $now)->addMinutes($offset),
                         'km_reading' => null,
                         'driver_id' => $driverId,
                         'shift_id' => $shiftId,
                     ]);
 
-                    $offset++;
+                    $offset += 15;
                 }
             } else {
                 TripCheckpoint::create([
@@ -1031,7 +1065,7 @@ abstract class CreatesOrderTransportCards
                     'shift_id' => $shiftId,
                 ]);
 
-                $offset++;
+                $offset += 15;
 
                 TripCheckpoint::create([
                     'trip_id' => $trip->id,
@@ -1043,7 +1077,7 @@ abstract class CreatesOrderTransportCards
                     'shift_id' => $shiftId,
                 ]);
 
-                $offset++;
+                $offset += 15;
             }
         }
     }

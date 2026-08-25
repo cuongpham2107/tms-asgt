@@ -4,6 +4,7 @@ namespace App\Filament\Resources\DriverShifts\Tables;
 
 use App\Filament\BaseTable;
 use App\Filament\Resources\DriverShifts\Actions\EndShiftAction;
+use App\Filament\Resources\DriverShifts\Filters\ListFilterDriverShifts;
 use App\Models\DriverShift;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -11,10 +12,9 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\DatePicker;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -23,15 +23,18 @@ class DriverShiftsTable extends BaseTable
     public static function configure(Table $table): Table
     {
         return parent::applyDefaults($table)
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['driver', 'trips.vehicle']))
+            ->modifyQueryUsing(fn (Builder $query) => $query
+                ->with(['driver', 'trips.vehicle'])
+                ->orderByRaw('CASE WHEN end_time IS NULL THEN 0 ELSE 1 END ASC')
+                ->orderBy('start_time', 'desc'))
             ->columns([
                 TextColumn::make('driver.name')
                     ->label('Tài xế')
                     ->searchable(),
-                TextColumn::make('vehicle_id')
-                    ->label('Xe')
-                    ->formatStateUsing(fn (DriverShift $record) => $record->trips()->first()?->vehicle?->plate_number ?? '-')
-                    ->searchable(),
+                // TextColumn::make('vehicle_id')
+                //     ->label('Xe')
+                //     ->formatStateUsing(fn (DriverShift $record) => $record->trips()->first()?->vehicle?->plate_number ?? '-')
+                //     ->searchable(),
                 TextColumn::make('shift_type')
                     ->label('Loại ca')
                     ->badge()
@@ -68,18 +71,11 @@ class DriverShiftsTable extends BaseTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                Filter::make('start_date')
-                    ->label('Ngày')
-                    ->schema([
-                        DatePicker::make('date')
-                            ->default(now()),
-                    ])
-                    ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when($data['date'], fn (Builder $query, $date): Builder => $query->where(function (Builder $q) use ($date) {
-                            $q->whereDate('start_time', $date)
-                                ->orWhereDate('end_time', $date);
-                        }))),
-            ])
+                ListFilterDriverShifts::make(),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns(1)
+            ->deferFilters(false)
+            ->deferLoading()
             ->recordActions([
                 ActionGroup::make([
                     ViewAction::make()

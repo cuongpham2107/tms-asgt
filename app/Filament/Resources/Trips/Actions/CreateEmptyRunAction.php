@@ -90,9 +90,9 @@ class CreateEmptyRunAction
                     ->label('Điểm đi')
                     ->options(fn (): array => Location::query()
                         ->where('is_active', true)
-                        ->select('id', 'name', 'address')
+                        ->select('id', 'code')
                         ->get()
-                        ->mapWithKeys(fn ($loc) => [$loc->id => "{$loc->name}".($loc->address ? " ({$loc->address})" : '')])
+                        ->mapWithKeys(fn ($loc) => [$loc->id => $loc->code])
                         ->all())
                     ->searchable()
                     ->required(),
@@ -101,9 +101,9 @@ class CreateEmptyRunAction
                     ->label('Điểm đến')
                     ->options(fn (): array => Location::query()
                         ->where('is_active', true)
-                        ->select('id', 'name', 'address')
+                        ->select('id', 'code')
                         ->get()
-                        ->mapWithKeys(fn ($loc) => [$loc->id => "{$loc->name}".($loc->address ? " ({$loc->address})" : '')])
+                        ->mapWithKeys(fn ($loc) => [$loc->id => $loc->code])
                         ->all())
                     ->searchable()
                     ->required(),

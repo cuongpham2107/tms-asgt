@@ -2,6 +2,8 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\VehicleOwnerType;
+use App\Enums\VehicleStatus;
 use App\Models\DriverShift;
 use App\Models\Order;
 use App\Models\Vehicle;
@@ -10,11 +12,54 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class OperationsStatsWidget extends BaseWidget
 {
+    protected int|string|array $columnSpan = 'full';
+
+    protected int|array|null $columns = [
+        'default' => 1,
+        'sm' => 2,
+        'md' => 2,
+        'lg' => 4,
+        'xl' => 4,
+        '2xl' => 8,
+    ];
+
     protected function getStats(): array
     {
         $today = now()->toDateString();
 
+        $companyOn = Vehicle::where('is_active', true)
+            ->where('type', VehicleOwnerType::Company)
+            ->where('status', VehicleStatus::On)
+            ->count();
+        $companyTotal = Vehicle::where('is_active', true)
+            ->where('type', VehicleOwnerType::Company)
+            ->count();
+
+        $rentWorkingToday = Vehicle::where('is_active', true)
+            ->where('type', VehicleOwnerType::Rent)
+            ->where(function ($query) use ($today) {
+                $query->whereHas('trips', function ($q) use ($today) {
+                    $q->whereDate('started_at', $today)
+                        ->orWhereDate('created_at', $today)
+                        ->orWhereHas('orders', fn ($oq) => $oq->whereDate('planned_loading_at', $today));
+                })
+                    ->orWhereHas('driver.driverShifts', fn ($q) => $q->whereNull('end_time'))
+                    ->orWhereHas('trips.shift', fn ($q) => $q->whereNull('end_time'));
+            })
+            ->count();
+
         return [
+            Stat::make('Xe công ty sẵn sàng', "{$companyOn} / {$companyTotal}")
+                ->description('Xe công ty ON / Tổng xe')
+                ->descriptionIcon('heroicon-m-truck')
+                ->color('info')
+                ->chart([10, 10, 9, 10, 11, 10, 12]),
+
+            Stat::make('Xe thuê làm việc', $rentWorkingToday)
+                ->description('Xe thuê hoạt động hôm nay')
+                ->descriptionIcon('heroicon-m-currency-dollar')
+                ->color('warning')
+                ->chart([10, 10, 9, 10, 11, 10, 12]),
             Stat::make('Tổng chuyến hôm nay', Order::whereDate('planned_loading_at', $today)->count())
                 ->description('Chuyến đi trong ngày')
                 ->descriptionIcon('heroicon-m-truck')
@@ -32,12 +77,6 @@ class OperationsStatsWidget extends BaseWidget
                 ->descriptionIcon('heroicon-m-check-circle')
                 ->color('success')
                 ->chart([0, 2, 4, 3, 5, 6, 7]),
-
-            Stat::make('Xe sẵn sàng', Vehicle::where('is_active', true)->where('status', 'on')->count().' / '.Vehicle::where('is_active', true)->count())
-                ->description('Xe ON / Tổng xe')
-                ->descriptionIcon('heroicon-m-squares-2x2')
-                ->color('info')
-                ->chart([10, 10, 9, 10, 11, 10, 12]),
 
             Stat::make('Đơn hàng nháp', Order::where('status', 'draft')->count())
                 ->description('Chờ phân xe & lái xe')

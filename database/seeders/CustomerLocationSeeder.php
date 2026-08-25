@@ -3,233 +3,310 @@
 namespace Database\Seeders;
 
 use App\Enums\LocationType;
+use App\Models\Area;
+use App\Models\Customer;
+use App\Models\Location;
+use Exception;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use ZipArchive;
 
 class CustomerLocationSeeder extends Seeder
 {
-    private const CSV_HHHK = 'customer-location-hhhk.csv';
-
-    private const CSV_HANGNGOAI = 'customer-location-hangngoai.csv';
+    private const EXCEL_FILE = 'Form Bản tổng hợp dữ liệu.xlsx';
 
     public function run(): void
     {
-        $files = [
-            'HHHK' => base_path(self::CSV_HHHK),
-            'external' => base_path(self::CSV_HANGNGOAI),
-        ];
+        $excelPath = base_path(self::EXCEL_FILE);
+        if (! file_exists($excelPath)) {
+            $this->command?->warn("File Excel not found at {$excelPath}. Skipping Excel import.");
 
-        foreach ($files as $file) {
-            if (! file_exists($file)) {
-                $this->command->error("File not found: {$file}");
+            return;
+        }
 
-                return;
+        $reader = new class($excelPath)
+        {
+            private ZipArchive $zip;
+
+            private array $sharedStrings = [];
+
+            private array $sheetMap = [];
+
+            public function __construct(string $filePath)
+            {
+                $this->zip = new ZipArchive;
+                if ($this->zip->open($filePath) !== true) {
+                    throw new Exception("Cannot open {$filePath}");
+                }
+                $this->loadSharedStrings();
+                $this->loadWorkbook();
+            }
+
+            private function loadSharedStrings(): void
+            {
+                $content = $this->zip->getFromName('xl/sharedStrings.xml');
+                if (! $content) {
+                    return;
+                }
+
+                $xml = simplexml_load_string($content);
+                foreach ($xml->si as $si) {
+                    if (isset($si->t)) {
+                        $this->sharedStrings[] = (string) $si->t;
+                    } elseif (isset($si->r)) {
+                        $text = '';
+                        foreach ($si->r as $r) {
+                            $text .= (string) $r->t;
+                        }
+                        $this->sharedStrings[] = $text;
+                    } else {
+                        $this->sharedStrings[] = '';
+                    }
+                }
+            }
+
+            private function loadWorkbook(): void
+            {
+                $content = $this->zip->getFromName('xl/workbook.xml');
+                $relsContent = $this->zip->getFromName('xl/_rels/workbook.xml.rels');
+                if (! $content || ! $relsContent) {
+                    return;
+                }
+
+                $xml = simplexml_load_string($content);
+                $relsXml = simplexml_load_string($relsContent);
+
+                $relMap = [];
+                foreach ($relsXml->Relationship as $rel) {
+                    $relMap[(string) $rel['Id']] = (string) $rel['Target'];
+                }
+
+                foreach ($xml->sheets->sheet as $sheet) {
+                    $name = (string) $sheet['name'];
+                    $rId = (string) $sheet->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships')['id'];
+                    $target = $relMap[$rId] ?? '';
+                    $sheetPath = 'xl/'.ltrim($target, '/');
+                    $this->sheetMap[$name] = $sheetPath;
+                }
+            }
+
+            public function getSheetRows(string $sheetName): array
+            {
+                $path = $this->sheetMap[$sheetName] ?? null;
+                if (! $path) {
+                    return [];
+                }
+
+                $content = $this->zip->getFromName($path);
+                if (! $content) {
+                    return [];
+                }
+
+                $xml = simplexml_load_string($content);
+                $rows = [];
+
+                foreach ($xml->sheetData->row as $row) {
+                    $rowData = [];
+                    foreach ($row->c as $cell) {
+                        $r = (string) $cell['r'];
+                        preg_match('/([A-Z]+)(\d+)/', $r, $matches);
+                        $col = $matches[1] ?? '';
+                        $colIdx = $this->colLetterToIndex($col);
+
+                        $val = '';
+                        $type = (string) $cell['t'];
+
+                        if ($type === 's') {
+                            $sIndex = (int) $cell->v;
+                            $val = $this->sharedStrings[$sIndex] ?? '';
+                        } elseif (isset($cell->v)) {
+                            $val = (string) $cell->v;
+                        }
+
+                        $rowData[$colIdx] = trim($val);
+                    }
+
+                    if (! empty($rowData)) {
+                        $maxCol = max(array_keys($rowData));
+                        $normalized = [];
+                        for ($c = 0; $c <= $maxCol; $c++) {
+                            $normalized[$c] = $rowData[$c] ?? '';
+                        }
+                        $rows[] = $normalized;
+                    }
+                }
+
+                return $rows;
+            }
+
+            private function colLetterToIndex(string $col): int
+            {
+                $index = 0;
+                $len = strlen($col);
+                for ($i = 0; $i < $len; $i++) {
+                    $index = $index * 26 + (ord($col[$i]) - ord('A') + 1);
+                }
+
+                return $index - 1;
+            }
+        };
+
+        $areaMap = Area::pluck('id', 'code')->toArray();
+
+        // 1. Locations
+        $allLocations = [];
+
+        $locHhhk = $reader->getSheetRows('DATA location HHHK');
+        for ($i = 1; $i < count($locHhhk); $i++) {
+            $row = $locHhhk[$i];
+            $areaCode = trim($row[1] ?? '');
+            $code = trim($row[2] ?? '');
+            $name = trim($row[3] ?? '');
+            $address = trim($row[4] ?? '');
+
+            if (empty($code)) {
+                continue;
+            }
+
+            if ($areaCode === 'Tỉnh lẻ' || $areaCode === 'Tỉnh lẻ ') {
+                $areaCode = 'PROVINCE';
+            }
+
+            $areaId = $areaMap[$areaCode] ?? null;
+
+            $allLocations[$code] = [
+                'code' => $code,
+                'name' => $name ?: $code,
+                'address' => $address,
+                'area_id' => $areaId,
+                'loc_type' => LocationType::Pickup->value,
+                'is_active' => true,
+            ];
+        }
+
+        $locHn = $reader->getSheetRows('Data locationHàng ngoài');
+        for ($i = 1; $i < count($locHn); $i++) {
+            $row = $locHn[$i];
+            $areaCode = trim($row[1] ?? '');
+            $factoryCode = trim($row[2] ?? '');
+            $locCode = trim($row[3] ?? '');
+            $company = trim($row[4] ?? '');
+            $address = trim($row[5] ?? '');
+            $ward = trim($row[6] ?? '');
+            $province = trim($row[7] ?? '');
+
+            $code = $locCode ?: $factoryCode;
+            if (empty($code)) {
+                continue;
+            }
+
+            if ($areaCode === 'Tỉnh lẻ' || $areaCode === 'Tỉnh lẻ ') {
+                $areaCode = 'PROVINCE';
+            }
+
+            $areaId = $areaMap[$areaCode] ?? null;
+
+            $fullAddress = $address;
+            if (! empty($ward) && ! str_contains($fullAddress, $ward)) {
+                $fullAddress .= ', '.$ward;
+            }
+            if (! empty($province) && ! str_contains($fullAddress, $province)) {
+                $fullAddress .= ', '.$province;
+            }
+
+            if (! isset($allLocations[$code])) {
+                $allLocations[$code] = [
+                    'code' => $code,
+                    'name' => $company ?: $code,
+                    'address' => $fullAddress,
+                    'area_id' => $areaId,
+                    'loc_type' => LocationType::Pickup->value,
+                    'is_active' => true,
+                ];
             }
         }
 
-        $areaMap = DB::table('areas')
-            ->get()
-            ->mapWithKeys(fn ($a) => ["{$a->type}|{$a->code}" => $a->id])
-            ->toArray();
-
-        $allCustomers = [];
-        $allPivotRows = [];
-
-        DB::transaction(function () use ($files, &$areaMap, &$allCustomers, &$allPivotRows): void {
-            DB::table('order_delivery_points')->delete();
-            DB::table('orders')->delete();
-            DB::table('customer_location')->delete();
-            DB::table('customers')->delete();
-            DB::table('locations')->delete();
-
-            // Process each CSV independently — locations are upserted per CSV type
-            // so that shared location codes (e.g. SEV) get distinct records
-            // with the correct area_id for HHHK vs external.
-            foreach ($files as $csvType => $file) {
-                $result = $this->parseCsv($csvType, $file, $areaMap);
-
-                if (! empty($result['locations'])) {
-                    DB::table('locations')->upsert(
-                        array_values($result['locations']),
-                        ['code', 'area_id'],
-                        ['name', 'address', 'loc_type', 'is_active', 'lat', 'lng']
-                    );
-                }
-
-                // Merge customers (shared across types — upserted once after loop)
-                foreach ($result['customers'] as $code => $data) {
-                    $allCustomers[$code] = $data;
-                }
-
-                // Collect pivot rows with CSV type for later area resolution
-                foreach ($result['pivotRows'] as $row) {
-                    $allPivotRows[] = $row + ['csv_type' => $csvType];
-                }
+        // 2. Customers
+        $custRows = $reader->getSheetRows('Khách hàng');
+        $newCustomers = [];
+        for ($i = 1; $i < count($custRows); $i++) {
+            $row = $custRows[$i];
+            $code = trim($row[1] ?? '');
+            $name = trim($row[2] ?? '');
+            if (empty($code)) {
+                continue;
             }
 
-            // Upsert all customers (deduplicated by code across both types)
-            if (! empty($allCustomers)) {
-                DB::table('customers')->upsert(
-                    array_values($allCustomers),
-                    'code',
-                    ['name', 'address', 'is_active']
+            $newCustomers[] = [
+                'code' => $code,
+                'name' => $name,
+                'address' => null,
+                'is_active' => true,
+            ];
+        }
+
+        DB::transaction(function () use ($allLocations, $newCustomers) {
+            foreach ($allLocations as $loc) {
+                Location::updateOrCreate(
+                    ['code' => $loc['code']],
+                    [
+                        'name' => $loc['name'],
+                        'address' => $loc['address'],
+                        'area_id' => $loc['area_id'],
+                        'loc_type' => $loc['loc_type'],
+                        'is_active' => $loc['is_active'],
+                    ]
                 );
             }
 
-            // Build location map keyed by "code|area_id"
-            $locationMap = DB::table('locations')
-                ->get(['id', 'code', 'area_id'])
-                ->mapWithKeys(fn ($l) => ["{$l->code}|{$l->area_id}" => $l->id])
-                ->toArray();
+            DB::table('customer_location')->delete();
 
-            $customerMap = DB::table('customers')->pluck('id', 'code')->toArray();
+            DB::statement('PRAGMA foreign_keys = OFF;');
+            DB::table('customers')->delete();
 
-            // Create customer-location pivot rows
-            $insertPivot = [];
-            $seen = [];
+            foreach ($newCustomers as $cust) {
+                Customer::create($cust);
+            }
+            DB::statement('PRAGMA foreign_keys = ON;');
 
-            foreach ($allPivotRows as $row) {
-                $customerCode = $row['customer_code'];
-                $locationCode = $row['location_code'];
-                $areaCode = $row['area_code'];
-                $csvType = $row['csv_type'];
+            $locationIds = Location::where('is_active', true)->pluck('id')->toArray();
+            $customers = Customer::all();
+            $locationsByCode = Location::pluck('id', 'code')->toArray();
 
-                $mappedAreaCode = ($areaCode === 'Tỉnh lẻ' || $areaCode === 'Tỉnh lẻ ')
-                    ? 'PROVINCE'
-                    : $areaCode;
+            $pivotRows = [];
+            foreach ($customers as $customer) {
+                $cleanCode = preg_replace('/\s*\(.*?\)/', '', $customer->code);
+                $matchedLocId = $locationsByCode[$customer->code] ?? $locationsByCode[$cleanCode] ?? null;
 
-                $areaId = $areaMap["{$csvType}|{$mappedAreaCode}"] ?? null;
-
-                $key = "{$customerCode}|{$locationCode}|{$areaId}";
-                if (isset($seen[$key])) {
-                    continue;
-                }
-                $seen[$key] = true;
-
-                $customerId = $customerMap[$customerCode] ?? null;
-                $locationId = $areaId !== null
-                    ? ($locationMap["{$locationCode}|{$areaId}"] ?? null)
-                    : null;
-
-                if ($customerId !== null && $locationId !== null) {
-                    $insertPivot[] = [
-                        'customer_id' => $customerId,
-                        'location_id' => $locationId,
+                if ($matchedLocId) {
+                    $customer->update(['location_id' => $matchedLocId]);
+                    $pivotRows[] = [
+                        'customer_id' => $customer->id,
+                        'location_id' => $matchedLocId,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
                 }
             }
 
-            if (! empty($insertPivot)) {
-                DB::table('customer_location')->insert($insertPivot);
+            if (! empty($pivotRows)) {
+                DB::table('customer_location')->insert($pivotRows);
+            }
+
+            $defaultCustomer = Customer::first();
+            if ($defaultCustomer) {
+                DB::table('orders')->update(['customer_id' => $defaultCustomer->id]);
             }
         });
 
-        $this->command->info(sprintf(
-            'Imported %d customers, locations, and customer-location links.',
-            count($allCustomers)
-        ));
-
         if ($this->command) {
-            $this->command->info('Running locations:geocode command...');
+            $this->command->info(sprintf(
+                'Imported %d locations and %d customers.',
+                count($allLocations),
+                count($newCustomers)
+            ));
             Artisan::call('locations:geocode', [], $this->command->getOutput());
-        } else {
-            Artisan::call('locations:geocode');
         }
-    }
-
-    /**
-     * Parse a single CSV file and return collected data.
-     *
-     * @return array{customers: array, locations: array, pivotRows: array}
-     */
-    private function parseCsv(string $csvType, string $file, array &$areaMap): array
-    {
-        $customers = [];
-        $locations = [];
-        $pivotRows = [];
-
-        $handle = fopen($file, 'r');
-        $header = fgetcsv($handle);
-
-        $colIdx = [
-            'customerCode' => array_search('Mã khách hàng', $header),
-            'locationCode' => array_search('Địa điểm viết tắt', $header),
-            'companyName' => array_search('Tên công ty chi tiết', $header) !== false
-                ? array_search('Tên công ty chi tiết', $header)
-                : array_search('Công ty', $header),
-            'address' => array_search('Địa chỉ', $header),
-            'areaCode' => array_search('Khu vực', $header),
-        ];
-
-        while (($row = fgetcsv($handle)) !== false) {
-            $customerCode = trim($row[$colIdx['customerCode']] ?? '');
-            $locationCode = trim($row[$colIdx['locationCode']] ?? '');
-            $companyName = trim($row[$colIdx['companyName']] ?? '');
-            $address = trim($row[$colIdx['address']] ?? '');
-            $areaCode = trim($row[$colIdx['areaCode']] ?? '');
-
-            if (empty($customerCode) && empty($locationCode)) {
-                continue;
-            }
-
-            $mappedAreaCode = $areaCode;
-            if ($areaCode === 'Tỉnh lẻ' || $areaCode === 'Tỉnh lẻ ') {
-                $mappedAreaCode = 'PROVINCE';
-            }
-
-            $areaId = $areaMap["{$csvType}|{$mappedAreaCode}"] ?? null;
-            if ($areaId === null && ! empty($areaCode)) {
-                $areaId = DB::table('areas')->insertGetId([
-                    'type' => $csvType,
-                    'code' => $mappedAreaCode,
-                    'name' => $areaCode,
-                    'sort_order' => 0,
-                    'is_active' => true,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-                $areaMap["{$csvType}|{$mappedAreaCode}"] = $areaId;
-            }
-
-            if (! empty($customerCode)) {
-                $customers[$customerCode] = [
-                    'code' => $customerCode,
-                    'name' => $companyName ?: $locationCode,
-                    'address' => $address,
-                    'is_active' => true,
-                ];
-            }
-
-            if (! empty($locationCode)) {
-                // Key by csvType|locationCode so the same code across HHHK/external
-                // yields two distinct location rows with the correct area_id.
-                $locKey = "{$csvType}|{$locationCode}";
-                if (! isset($locations[$locKey])) {
-                    $locations[$locKey] = [
-                        'code' => $locationCode,
-                        'name' => $locationCode,
-                        'address' => $address,
-                        'loc_type' => LocationType::Pickup->value,
-                        'is_active' => true,
-                        'area_id' => $areaId,
-                    ];
-                }
-            }
-
-            if (! empty($customerCode) && ! empty($locationCode)) {
-                $pivotRows[] = [
-                    'customer_code' => $customerCode,
-                    'location_code' => $locationCode,
-                    'area_code' => $areaCode,
-                ];
-            }
-        }
-
-        fclose($handle);
-
-        return compact('customers', 'locations', 'pivotRows');
     }
 }

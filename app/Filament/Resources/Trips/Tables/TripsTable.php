@@ -218,7 +218,7 @@ class TripsTable extends BaseTable
                     EditAction::make()
                         ->stickyModalFooter()
                         ->modal()
-                        ->modalWidth(Width::MaxContent)
+                        ->modalWidth(Width::SevenExtraLarge)
                         ->modalHeading(fn (Trip $record): string => 'Sửa chuyến — '.$record->trip_code)
                         ->mutateRecordDataUsing(function (array $data, Trip $record): array {
                             $record->loadMissing(['startLocation', 'endLocation']);
@@ -227,6 +227,12 @@ class TripsTable extends BaseTable
                         })
                         ->form(fn (Schema $schema): Schema => TripForm::configure($schema))
                         ->using(function (Model $record, array $data): Model {
+                            $record->loadMissing(['vehicle', 'orders']);
+
+                            if ($record->vehicle?->type === VehicleOwnerType::Rent && filled($data['completed_at'] ?? null)) {
+                                $data['status'] = TripStatus::Completed;
+                            }
+
                             $newStatus = $data['status'] ?? $record->status;
 
                             if ($newStatus === TripStatus::Completed && $record->vehicle?->type === VehicleOwnerType::Rent) {

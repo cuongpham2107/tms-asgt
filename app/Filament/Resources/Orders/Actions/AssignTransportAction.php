@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
@@ -13,11 +14,15 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
+use Filament\Support\RawJs;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 use Throwable;
 
 class AssignTransportAction extends CreatesOrderTransportCards
@@ -37,6 +42,21 @@ class AssignTransportAction extends CreatesOrderTransportCards
             ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
             ->schema([
+                Placeholder::make('chargeable_weight_warning')
+                    ->label('')
+                    ->content(new HtmlString('<div class="p-3 bg-amber-50 border border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300 rounded-lg text-sm flex items-center gap-2 mb-2">⚠️ <strong>Cảnh báo:</strong> Đơn hàng ngoài này chưa có trọng tải tính cước. Vui lòng nhập trước khi gán chuyến!</div>'))
+                    ->visible(fn (Order $record): bool => $record->type === OrderType::External && ($record->chargeable_weight === null || $record->chargeable_weight === '')),
+
+                TextInput::make('chargeable_weight')
+                    ->label('Trọng tải tính cước')
+                    ->suffix('tấn')
+                    ->mask(RawJs::make('$money($input)'))
+                    ->stripCharacters(',')
+                    ->numeric()
+                    ->default(fn (Order $record) => $record->chargeable_weight)
+                    ->required(fn (Order $record): bool => $record->type === OrderType::External)
+                    ->visible(fn (Order $record): bool => $record->type === OrderType::External),
+
                 Grid::make(2)
                     ->schema([
                         VehiclePicker::make('vehicle_id')
@@ -75,6 +95,19 @@ class AssignTransportAction extends CreatesOrderTransportCards
 
     private static function createTripForOrder(Order $record, array $data, OrderStatus $orderStatus): void
     {
+        if ($record->type === OrderType::External) {
+            $weight = $data['chargeable_weight'] ?? $record->chargeable_weight;
+            if (blank($weight)) {
+                Notification::make()
+                    ->title('Chưa nhập trọng tải tính cước')
+                    ->body('Đơn hàng ngoài bắt buộc phải có Trọng tải tính cước trước khi gán xe.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+        }
+
         try {
             DB::transaction(function () use ($record, $data, $orderStatus) {
                 $trip = Trip::create([
@@ -88,10 +121,16 @@ class AssignTransportAction extends CreatesOrderTransportCards
                         ->first()?->location_id,
                 ]);
 
-                $updated = $record->update([
+                $orderUpdates = [
                     'trip_id' => $trip->id,
                     'status' => $orderStatus,
-                ]);
+                ];
+
+                if ($record->type === OrderType::External && isset($data['chargeable_weight']) && filled($data['chargeable_weight'])) {
+                    $orderUpdates['chargeable_weight'] = $data['chargeable_weight'];
+                }
+
+                $updated = $record->update($orderUpdates);
 
                 if (! $updated) {
                     throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');

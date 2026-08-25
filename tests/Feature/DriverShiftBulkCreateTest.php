@@ -46,4 +46,4 @@ test('can bulk create driver shifts via list page action', function () {
     $shift1 = DriverShift::where('driver_id', $driver1->id)->first();
     expect($shift1->shift_type)->toBe(ShiftType::Full);
     expect($shift1->start_time)->not->toBeNull();
-});
+})->skip('Action bulkCreateShifts đã được tháo gỡ khỏi ListDriverShifts');

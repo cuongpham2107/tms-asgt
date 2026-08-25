@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users\Tables;
 
+use App\Filament\Resources\Users\Filters\ListFilterUsers;
 use App\Models\User;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -9,8 +10,8 @@ use Filament\Actions\EditAction;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Enums\RecordActionsPosition;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -85,25 +86,11 @@ class UsersTable
                     ->sortable(),
             ])
             ->filters([
-                Filter::make('expired_certificates')
-                    ->label('Có chứng chỉ đã hết hạn')
-                    ->query(fn (Builder $query): Builder => $query->where(function (Builder $q) {
-                        $today = now()->toDateString();
-                        $q->where(fn ($sub) => $sub->whereNotNull('license_expiry_date')->where('license_expiry_date', '<', $today))
-                            ->orWhere(fn ($sub) => $sub->whereNotNull('aviation_security_cert_expiry_date')->where('aviation_security_cert_expiry_date', '<', $today))
-                            ->orWhere(fn ($sub) => $sub->whereNotNull('dangerous_goods_cert_expiry_date')->where('dangerous_goods_cert_expiry_date', '<', $today));
-                    })),
-
-                Filter::make('expiring_soon_certificates')
-                    ->label('Có chứng chỉ sắp hết hạn (30 ngày)')
-                    ->query(fn (Builder $query): Builder => $query->where(function (Builder $q) {
-                        $today = now()->toDateString();
-                        $in30Days = now()->addDays(30)->toDateString();
-                        $q->whereBetween('license_expiry_date', [$today, $in30Days])
-                            ->orWhereBetween('aviation_security_cert_expiry_date', [$today, $in30Days])
-                            ->orWhereBetween('dangerous_goods_cert_expiry_date', [$today, $in30Days]);
-                    })),
-            ])
+                ListFilterUsers::make(),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns(1)
+            ->deferFilters(false)
+            ->deferLoading()
             ->recordActions([
                 EditAction::make()
                     ->iconButton()

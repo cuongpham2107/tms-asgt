@@ -33,7 +33,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
         $tabs = [
             Tab::make('Thông tin đơn hàng')
                 ->icon('heroicon-o-information-circle')
-                ->columns(4)
+                ->columns(['default' => 1, 'sm' => 2, 'md' => 4])
                 ->schema([
                     ToggleButtons::make('area_id')
                         ->label('Khu vực')
@@ -41,7 +41,6 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->options(function () {
                             return Area::query()
                                 ->where('is_active', true)
-                                ->where('type', 'external')
                                 ->orderBy('sort_order', 'asc')
                                 ->pluck('code', 'id')
                                 ->toArray();
@@ -49,9 +48,9 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->default(function () {
                             return Area::query()
                                 ->where('is_active', true)
-                                ->where('type', 'external')
-                                ->orderBy('sort_order', 'asc')
-                                ->value('id');
+                                ->where('code', 'PROVINCE')
+                                ->value('id')
+                                ?? Area::query()->where('is_active', true)->orderBy('sort_order', 'desc')->value('id');
                         })
                         ->live()
                         ->inline()
@@ -76,7 +75,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->columnSpanFull(),
                     Select::make('pickup_location_id')
                         ->label('Điểm nhận hàng')
-                        ->options(fn (): array => self::getLocationOptions('external'))
+                        ->options(fn (): array => self::getLocationOptions())
                         ->searchable()
                         ->native(false)
                         ->required()
@@ -92,14 +91,14 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                                 'is_active' => true,
                             ]))->getKey();
                         })
-                        ->columnSpan(2),
-                    TextInput::make('pickup_contact')
-                        ->label('Người liên hệ nhận hàng')
-                        ->columnSpan(1),
-                    TextInput::make('pickup_phone')
-                        ->label('Số điện thoại nhận hàng')
-                        ->tel()
-                        ->columnSpan(1),
+                        ->columnSpan(['default' => 1, 'sm' => 2, 'md' => 2]),
+                    // TextInput::make('pickup_contact')
+                    //     ->label('Người liên hệ nhận hàng')
+                    //     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
+                    // TextInput::make('pickup_phone')
+                    //     ->label('Số điện thoại nhận hàng')
+                    //     ->tel()
+                    //     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
                     DateTimePicker::make('planned_loading_at')
                         ->label('Thời gian dự kiến đóng hàng')
                         ->seconds(false)
@@ -107,13 +106,13 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->default(now())
                         ->required()
                         ->prefixIcon(Heroicon::OutlinedCalendarDays)
-                        ->columnSpan(3),
+                        ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
                     Toggle::make('is_return_trip')
                         ->label('Chuyến quay đầu')
                         ->helperText('Đánh dấu đơn hàng là chuyến quay đầu')
                         ->default(false)
                         ->inline(false)
-                        ->columnSpan(1),
+                        ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
                     self::getDeliveryPointsRepeaterField('external'),
 
                     TextInput::make('cargo_name')
@@ -146,7 +145,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
         if ($forceAssignedWhenTransportProvided) {
             $tabs[] = Tab::make('Phân xe và lái xe')
                 ->icon('heroicon-o-truck')
-                ->columns(2)
+                ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     VehiclePicker::make('vehicle_id')
                         ->label('Phương tiện')

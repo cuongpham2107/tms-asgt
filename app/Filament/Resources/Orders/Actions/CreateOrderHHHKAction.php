@@ -33,7 +33,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
         $tabs = [
             Tab::make('Thông tin đơn hàng')
                 ->icon('heroicon-o-information-circle')
-                ->columns(2)
+                ->columns(['default' => 1, 'sm' => 2])
                 ->schema([
                     ToggleButtons::make('area_id')
                         ->label('Khu vực')
@@ -41,7 +41,6 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->options(function () {
                             return Area::query()
                                 ->where('is_active', true)
-                                ->where('type', 'HHHK')
                                 ->orderBy('sort_order', 'asc')
                                 ->pluck('code', 'id')
                                 ->toArray();
@@ -49,18 +48,17 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->default(function () {
                             return Area::query()
                                 ->where('is_active', true)
-                                ->where('type', 'HHHK')
-                                ->orderBy('sort_order', 'asc')
-                                ->value('id');
+                                ->where('code', 'NBA')
+                                ->value('id')
+                                ?? Area::query()->where('is_active', true)->orderBy('sort_order', 'asc')->value('id');
                         })
                         ->live()
                         ->inline()
                         ->columnSpanFull(),
                     self::getCustomerIdFormField(false),
-                    //     ->columnSpanFull(),
                     Select::make('pickup_location_id')
                         ->label('Điểm nhận hàng')
-                        ->options(fn (): array => self::getLocationOptions('HHHK'))
+                        ->options(fn (): array => self::getLocationOptions())
                         ->searchable()
                         ->native(false)
                         ->required()
@@ -108,7 +106,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
         if ($forceAssignedWhenTransportProvided) {
             $tabs[] = Tab::make('Phân xe và lái xe')
                 ->icon('heroicon-o-truck')
-                ->columns(2)
+                ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     VehiclePicker::make('vehicle_id')
                         ->label('Phương tiện')

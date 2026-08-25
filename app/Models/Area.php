@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\OrderType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -22,7 +21,7 @@ class Area extends Model
     protected function casts(): array
     {
         return [
-            'type' => OrderType::class,
+            'is_active' => 'boolean',
         ];
     }
 

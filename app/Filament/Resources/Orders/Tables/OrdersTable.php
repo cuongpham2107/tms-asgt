@@ -128,7 +128,21 @@ class OrdersTable extends BaseTable
                     })
                     ->hidden(fn (): bool => $type === 'plan')
                     ->sortable(),
+                TextColumn::make('chargeable_weight')
+                    ->alignCenter()
+                    ->label('Trọng tải tính cước')
+                    ->state(function (Order $record): string {
+                        if ($record->type === OrderType::External && ($record->chargeable_weight === null || $record->chargeable_weight === '')) {
+                            return '⚠️ Chưa nhập';
+                        }
 
+                        return ($record->chargeable_weight !== null && $record->chargeable_weight !== '')
+                            ? number_format((float) $record->chargeable_weight, 2).' tấn'
+                            : '—';
+                    })
+                    ->badge(fn (Order $record): bool => $record->type === OrderType::External && ($record->chargeable_weight === null || $record->chargeable_weight === ''))
+                    ->color(fn (Order $record): ?string => ($record->type === OrderType::External && ($record->chargeable_weight === null || $record->chargeable_weight === '')) ? 'danger' : null)
+                    ->sortable(),
                 TextColumn::make('notes')
                     ->label('Ghi chú')
                     ->limit(50),
@@ -232,7 +246,7 @@ class OrdersTable extends BaseTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
-            ->stackedOnMobile()
+            ->stackedOnMobile(false)
             ->searchable(false)
             ->recordActions([
                 AssignTransportAction::make(),

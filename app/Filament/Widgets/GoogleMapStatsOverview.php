@@ -9,52 +9,60 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class GoogleMapStatsOverview extends BaseWidget
 {
-    protected static ?string $maxHeight = '140px';
-
     protected int|array|null $columns = 5;
 
     protected function getStats(): array
     {
-        $vehicles = Vehicle::where('is_active', true)->get();
+        $vehicles = Vehicle::query()->where('is_active', true)->get();
 
         $total = $vehicles->count();
-        $running = $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::Running)->count();
-        $on = $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::On)->count();
-        $bdsc = $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::Bdsc)->count();
-        $off = $vehicles->filter(fn (Vehicle $v) => $v->status === VehicleStatus::Off)->count();
+        $running = $vehicles->where('status', VehicleStatus::Running)->count();
+        $on = $vehicles->where('status', VehicleStatus::On)->count();
+        $bdsc = $vehicles->where('status', VehicleStatus::Bdsc)->count();
+        $off = $vehicles->where('status', VehicleStatus::Off)->count();
 
-        $pct = fn (int $count) => $total > 0 ? round($count / $total * 100) : 0;
+        $pct = function (int $count) use ($total): string {
+            if ($total === 0 || $count === 0) {
+                return '0%';
+            }
+
+            $raw = ($count / $total) * 100;
+            if ($raw >= 100.0) {
+                return '100%';
+            }
+
+            if ($raw < 1.0 || $raw > 99.0) {
+                return number_format($raw, 1, '.', '').'%';
+            }
+
+            return round($raw, 1).'%';
+        };
 
         return [
-            Stat::make('Tổng xe', number_format($total))
-                ->description('Tất cả xe đang hoạt động')
+            Stat::make('Tổng phương tiện', number_format($total))
+                ->description('Tất cả xe hoạt động')
                 ->descriptionIcon('heroicon-m-truck')
-                ->color('primary')
-                ->chart([5, 8, 4, 10, 11, 10, 12]),
+                ->color('primary'),
 
             Stat::make('Đang chạy', number_format($running))
-                ->description($pct($running).'% tổng xe')
+                ->description($pct($running).' tổng đội xe')
                 ->descriptionIcon('heroicon-m-play-circle')
-                ->color('warning')
-                ->chart([7, 2, 10, 3, 15, 4, 17]),
+                ->color('warning'),
 
             Stat::make('Sẵn sàng', number_format($on))
-                ->description($pct($on).'% tổng xe')
+                ->description($pct($on).' tổng đội xe')
                 ->descriptionIcon('heroicon-m-check-circle')
-                ->color('success')
-                ->chart([5, 4, 5, 8, 9, 8, 10]),
+                ->color('success'),
 
-            Stat::make('Bảo dưỡng', number_format($bdsc))
-                ->description($pct($bdsc).'% tổng xe')
+            Stat::make('Bảo dưỡng / SC', number_format($bdsc))
+                ->description($pct($bdsc).' tổng đội xe')
                 ->descriptionIcon('heroicon-m-wrench-screwdriver')
-                ->color('danger')
-                ->chart([1, 0, 2, 1, 0, 1, 2]),
+                ->color('danger'),
 
-            Stat::make('Tắt máy', number_format($off))
-                ->description($pct($off).'% tổng xe')
+            Stat::make('Tắt máy / Tạm dừng', number_format($off))
+                ->description($pct($off).' tổng đội xe')
                 ->descriptionIcon('heroicon-m-stop-circle')
-                ->color('gray')
-                ->chart([2, 3, 2, 4, 3, 2, 3]),
+                ->color('gray'),
         ];
     }
 }

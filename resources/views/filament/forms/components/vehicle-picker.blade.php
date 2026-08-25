@@ -19,10 +19,13 @@
                 this.activeTab = 'suggested';
             }
 
+            this.ensureSelectedCardVisible();
+
             this.$watch('state', (val) => {
                 if (val && !this.scopedCards().some(c => String(c.value) === String(val))) {
                     this.activeTab = 'all';
                 }
+                this.ensureSelectedCardVisible();
             });
 
             this.$watch('search', (val) => {
@@ -30,11 +33,27 @@
                 if (val.length === 0 && this.hasSuggestionTab()) {
                     this.activeTab = 'suggested';
                 }
+                this.ensureSelectedCardVisible();
             });
 
             this.$watch('activeTab', () => {
                 this.displayLimit = this.batchSize;
+                this.ensureSelectedCardVisible();
             });
+        },
+        ensureSelectedCardVisible() {
+            if (!this.state) return;
+
+            if (!this.scopedCards().some(c => String(c.value) === String(this.state))) {
+                this.activeTab = 'all';
+            }
+
+            const cards = this.allFilteredCards();
+            const index = cards.findIndex(c => String(c.value) === String(this.state));
+
+            if (index !== -1 && index >= this.displayLimit) {
+                this.displayLimit = Math.ceil((index + 1) / this.batchSize) * this.batchSize;
+            }
         },
         hasSuggestionTab() {
             return this.cards.some(card => card.isSuggested === true);
@@ -65,11 +84,8 @@
                 .slice(0, 3);
         },
         scopedCards() {
-            if (this.search) {
-                return this.cards;
-            }
             if (this.hasSuggestionTab() && this.activeTab === 'suggested') {
-                return this.suggestedCards();
+                return this.search ? this.cards : this.suggestedCards();
             }
             if (this.activeTab === 'company') {
                 return this.cards.filter(card => card.type === 'company');
@@ -143,17 +159,6 @@
                     </svg>
                     Gợi ý
                 </button>
-                <button type="button" x-on:click="setTab('all')"
-                    class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
-                    :class="activeTab === 'all'
-                        ?
-                        'bg-primary-500/10 text-primary-600 dark:text-primary-400' :
-                        'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'">
-                    Tất cả
-                    <span
-                        class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                        x-text="cards.length"></span>
-                </button>
                 <button type="button" x-show="hasVehicleTypeFilters()" x-cloak x-on:click="setTab('company')"
                     class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
                     :class="activeTab === 'company'
@@ -173,6 +178,17 @@
                     <span
                         class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
                         x-text="cards.filter(card => card.type === 'rent').length"></span>
+                </button>
+                <button type="button" x-on:click="setTab('all')"
+                    class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                    :class="activeTab === 'all'
+                        ?
+                        'bg-primary-500/10 text-primary-600 dark:text-primary-400' :
+                        'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'">
+                    Tất cả
+                    <span
+                        class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                        x-text="cards.length"></span>
                 </button>
             </div>
 

@@ -16,9 +16,42 @@ beforeEach(function () {
     $this->actingAs($admin);
 });
 
-test('operations stats widget renders successfully', function () {
+use App\Enums\VehicleOwnerType;
+use App\Enums\VehicleStatus;
+use App\Models\DriverShift;
+use App\Models\Vehicle;
+
+test('operations stats widget renders successfully with company and rented vehicle stats', function () {
+    Vehicle::factory()->create([
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+    Vehicle::factory()->create([
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::Off,
+        'is_active' => true,
+    ]);
+
+    $driver = User::factory()->create();
+    DriverShift::create([
+        'driver_id' => $driver->id,
+        'shift_type' => 'full',
+        'start_time' => now(),
+    ]);
+
+    Vehicle::factory()->create([
+        'type' => VehicleOwnerType::Rent,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+        'current_driver_id' => $driver->id,
+    ]);
+
     Livewire::test(OperationsStatsWidget::class)
         ->assertStatus(200)
+        ->assertSee('Xe công ty sẵn sàng')
+        ->assertSee('1 / 2')
+        ->assertSee('Xe thuê làm việc')
         ->assertHasNoErrors();
 });
 

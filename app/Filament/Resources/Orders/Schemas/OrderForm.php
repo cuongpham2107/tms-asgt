@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\CargoType;
-use App\Enums\LocationType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Filament\Forms\Components\DriverPicker;
@@ -42,13 +41,13 @@ class OrderForm extends CreatesOrderTransportCards
                     ->tabs([
                         Tab::make('Thông tin đơn hàng')
                             ->icon('heroicon-o-information-circle')
-                            ->columns(2)
+                            ->columns(['default' => 1, 'sm' => 2])
                             ->schema([
                                 ToggleButtons::make('area_id')
                                     ->label('Khu vực')
                                     ->required()
-                                    ->options(fn (Get $get): array => Area::query()
-                                        ->when($get('type'), fn ($q, $type) => $q->where('type', $type))
+                                    ->options(fn (): array => Area::query()
+                                        ->where('is_active', true)
                                         ->orderBy('sort_order', 'asc')
                                         ->pluck('code', 'id')
                                         ->toArray()
@@ -60,11 +59,11 @@ class OrderForm extends CreatesOrderTransportCards
                                 Select::make('customer_id')
                                     ->label('Khách hàng')
                                     ->relationship('customer', 'name')
-                                    ->options(fn (Get $get): array => Customer::query()
-                                        ->when($get('area_id'), function ($query, $areaId) {
-                                            $query->whereHas('locations', fn ($q) => $q->where('area_id', $areaId));
-                                        })
-                                        ->get(['id', 'code', 'name'])
+                                    ->options(fn (): array => Customer::query()
+                                        ->select(['id', 'code', 'name'])
+                                        ->where('is_active', true)
+                                        ->orderBy('code', 'asc')
+                                        ->get()
                                         ->mapWithKeys(fn (Customer $customer): array => [
                                             $customer->id => "{$customer->code} - {$customer->name}",
                                         ])
@@ -75,20 +74,49 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->searchable()
                                     ->columnSpanFull()
                                     ->live()
-                                    ->afterStateUpdated(function ($state, Set $set): void {
+                                    ->afterStateUpdated(function ($state, Set $set, Get $get): void {
                                         if (blank($state)) {
+                                            $set('pickup_location_id', null);
+
                                             return;
                                         }
 
-                                        $firstLocation = DB::table('customer_location')
-                                            ->join('locations', 'customer_location.location_id', '=', 'locations.id')
-                                            ->where('customer_location.customer_id', $state)
-                                            ->where('locations.is_active', true)
-                                            ->select(['locations.id', 'locations.area_id'])
-                                            ->first();
+                                        $customer = Customer::query()->with('location')->find($state);
+                                        if (! $customer) {
+                                            $set('pickup_location_id', null);
+
+                                            return;
+                                        }
+
+                                        $currentAreaId = $get('area_id');
+                                        $firstLocation = null;
+
+                                        // 1. Ưu tiên địa điểm mặc định trực tiếp của khách hàng (ví dụ ALSB -> ALSB)
+                                        if ($customer->location && $customer->location->is_active) {
+                                            $firstLocation = $customer->location;
+                                        }
+
+                                        // 2. Nếu khách hàng không có địa điểm trực tiếp, tìm trong bảng pivot customer_location
+                                        if (! $firstLocation) {
+                                            $query = DB::table('customer_location')
+                                                ->join('locations', 'customer_location.location_id', '=', 'locations.id')
+                                                ->where('customer_location.customer_id', $state)
+                                                ->where('locations.is_active', true);
+
+                                            if (filled($currentAreaId)) {
+                                                $firstLocation = (clone $query)
+                                                    ->where('locations.area_id', $currentAreaId)
+                                                    ->select(['locations.id', 'locations.area_id'])
+                                                    ->first();
+                                            }
+
+                                            $firstLocation ??= $query->select(['locations.id', 'locations.area_id'])->first();
+                                        }
 
                                         if ($firstLocation) {
                                             $set('pickup_location_id', $firstLocation->id);
+                                        } else {
+                                            $set('pickup_location_id', null);
                                         }
                                     })
                                     ->createOptionForm(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents()),
@@ -104,7 +132,7 @@ class OrderForm extends CreatesOrderTransportCards
                                 TextInput::make('cargo_name')
                                     ->label('Tên hàng hoá')
                                     ->placeholder('Ví dụ: Hàng gia dụng')
-                                    ->columnSpan(fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2),
+                                    ->columnSpan(['default' => 1, 'sm' => fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2]),
 
                                 TextInput::make('chargeable_weight')
                                     ->label('Tải trọng tính cước')
@@ -139,30 +167,27 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->relationship(
                                         name: 'pickupLocation',
                                         titleAttribute: 'code',
-                                        modifyQueryUsing: fn (Builder $query, Get $get) => $query
-                                            ->where('is_active', true)
-                                            ->when($get('area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
-                                            ->when($get('pickup_location_id'), fn ($q, $id) => $q->orWhere('id', $id))
+                                        modifyQueryUsing: fn (Builder $query) => $query->where('is_active', true)
                                     )
                                     ->searchable()
                                     ->preload()
                                     ->native(false)
                                     ->required(fn (Get $get): bool => self::isHhhkOrder($get))
                                     ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
-                                    ->columnSpan(fn (Get $get): int => self::isExternalOrder($get) ? 2 : 2),
+                                    ->columnSpan(['default' => 1, 'sm' => 2]),
 
                                 TextInput::make('pickup_contact')
                                     ->label('Người liên hệ nhận')
                                     ->placeholder('Người nhận hàng')
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(1),
+                                    ->columnSpan(['default' => 1, 'sm' => 1]),
 
                                 TextInput::make('pickup_phone')
                                     ->label('SĐT liên hệ nhận')
                                     ->placeholder('Số điện thoại')
                                     ->tel()
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(1),
+                                    ->columnSpan(['default' => 1, 'sm' => 1]),
 
                                 TextInput::make('pickup_address')
                                     ->label('Địa chỉ chi tiết nhận hàng (nếu có)')
@@ -201,7 +226,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->orderColumn('sequence')
                                     ->relationship('deliveryPoints')
                                     ->schema([
-                                        Grid::make(12)
+                                        Grid::make(['default' => 1, 'sm' => 6, 'md' => 12])
                                             ->schema([
                                                 Select::make('location_id')
                                                     ->label('Điểm giao hàng')
@@ -211,10 +236,7 @@ class OrderForm extends CreatesOrderTransportCards
                                                         modifyQueryUsing: fn (Builder $query, Get $get) => $query
                                                             ->where(function (Builder $q) use ($get) {
                                                                 $q->where('is_active', true)
-                                                                    ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId))
-                                                                    ->whereIn('loc_type', $get('../../type') === 'HHHK'
-                                                                        ? [LocationType::Pickup, LocationType::Warehouse, LocationType::Delivery]
-                                                                        : [LocationType::Other, LocationType::Delivery]);
+                                                                    ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId));
                                                             })
                                                             ->when($get('location_id'), fn ($q, $id) => $q->orWhere('id', $id))
                                                     )
@@ -224,37 +246,37 @@ class OrderForm extends CreatesOrderTransportCards
                                                     ->native(false)
                                                     ->required()
                                                     ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('../../area_id') ?? $get('area_id'))->getComponents())
-                                                    ->columnSpan(4),
+                                                    ->columnSpan(['default' => 1, 'sm' => 6, 'md' => 4]),
                                                 TextInput::make('address')
                                                     ->label('Số nhà, tên đường giao')
                                                     ->prefixIcon(Heroicon::OutlinedMap)
                                                     ->placeholder('Ví dụ: 34 Lê Lợi')
-                                                    ->columnSpan(8),
+                                                    ->columnSpan(['default' => 1, 'sm' => 6, 'md' => 8]),
                                                 TextInput::make('contact_person')
                                                     ->label('Người nhận')
                                                     ->prefixIcon(Heroicon::OutlinedUser)
                                                     ->placeholder('Ví dụ: Nguyễn Văn A')
-                                                    ->columnSpan(4),
+                                                    ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 4]),
                                                 TextInput::make('contact_phone')
                                                     ->label('Số điện thoại nhận')
                                                     ->prefixIcon(Heroicon::OutlinedPhone)
                                                     ->placeholder('Ví dụ: 0901234567')
                                                     ->tel()
-                                                    ->columnSpan(3),
+                                                    ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 3]),
                                                 TextInput::make('total_packages')
                                                     ->label('Số kiện')
                                                     ->prefixIcon(Heroicon::OutlinedSquares2x2)
                                                     ->mask(RawJs::make('$money($input)'))
                                                     ->stripCharacters(',')
                                                     ->numeric()
-                                                    ->columnSpan(2),
+                                                    ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 2]),
                                                 TextInput::make('total_weight')
                                                     ->label('Trọng lượng (tấn)')
                                                     ->prefixIcon(Heroicon::OutlinedScale)
                                                     ->mask(RawJs::make('$money($input)'))
                                                     ->stripCharacters(',')
                                                     ->numeric()
-                                                    ->columnSpan(3),
+                                                    ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 3]),
                                             ]),
                                     ])
                                     ->columnSpanFull(),
@@ -264,21 +286,22 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->seconds(false)
                                     ->native(true)
                                     ->required()
-                                    ->columnSpan(fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2),
+                                    ->columnSpan(['default' => 1, 'sm' => fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2]),
                                 Toggle::make('is_return_trip')
                                     ->label('Chuyến quay đầu')
                                     ->default(false)
                                     ->inline(false)
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(1),
-                                TextInput::make('total_packages')
-                                    ->label('Số kiện')
-                                    ->mask(RawJs::make('$money($input)'))
-                                    ->stripCharacters(',')
-                                    ->numeric(),
+                                    ->columnSpan(['default' => 1, 'sm' => 1]),
+
                                 TextInput::make('total_weight')
                                     ->label('Trọng lượng (tấn)')
                                     ->live(onBlur: true)
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
+                                    ->numeric(),
+                                TextInput::make('total_packages')
+                                    ->label('Số kiện')
                                     ->mask(RawJs::make('$money($input)'))
                                     ->stripCharacters(',')
                                     ->numeric(),
@@ -290,7 +313,7 @@ class OrderForm extends CreatesOrderTransportCards
                         Tab::make('Phân xe')
                             ->icon('heroicon-o-truck')
                             ->hidden(fn (?Model $record): bool => $record?->trip_id !== null || $record?->status === OrderStatus::Draft)
-                            ->columns(2)
+                            ->columns(['default' => 1, 'md' => 2])
                             ->schema([
                                 VehiclePicker::make('vehicle_id')
                                     ->label('Phương tiện')

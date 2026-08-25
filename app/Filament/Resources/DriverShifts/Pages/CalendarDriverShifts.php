@@ -22,7 +22,7 @@ class CalendarDriverShifts extends Page
                 ->label('Xem dạng bảng')
                 ->color('gray')
                 ->icon('heroicon-o-table-cells')
-                ->url(DriverShiftResource::getUrl('table')),
+                ->url(DriverShiftResource::getUrl('index')),
         ];
     }
 

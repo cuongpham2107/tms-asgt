@@ -2,9 +2,7 @@
 
 namespace App\Filament\Resources\Areas\Schemas;
 
-use App\Enums\OrderType;
 use Filament\Forms\Components\ColorPicker;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
@@ -23,20 +21,15 @@ class AreaForm
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Select::make('type')
-                            ->label('Loại đơn')
-                            ->options(OrderType::class)
-                            ->prefixIcon(Heroicon::OutlinedTag)
-                            ->required(),
                         TextInput::make('code')
                             ->label('Mã khu vực')
                             ->prefixIcon(Heroicon::OutlinedHashtag)
+                            ->unique(ignoreRecord: true)
                             ->required(),
                         TextInput::make('name')
                             ->label('Tên khu vực')
                             ->prefixIcon(Heroicon::OutlinedPencilSquare)
-                            ->required()
-                            ->columnSpanFull(),
+                            ->required(),
                         ColorPicker::make('color')
                             ->label('Màu sắc'),
                         TextInput::make('sort_order')

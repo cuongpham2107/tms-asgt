@@ -39,6 +39,10 @@ class CustomersTable extends BaseTable
                     ->label('Số đơn')
                     ->alignCenter()
                     ->sortable(),
+                TextColumn::make('location.code')
+                    ->label('Địa điểm')
+                    ->alignCenter()
+                    ->sortable(),
                 IconColumn::make('is_active')
                     ->label('Hoạt động')
                     ->alignCenter()

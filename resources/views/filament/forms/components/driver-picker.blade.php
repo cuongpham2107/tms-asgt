@@ -19,10 +19,13 @@
                 this.activeTab = 'suggested';
             }
 
+            this.ensureSelectedCardVisible();
+
             this.$watch('state', (val) => {
                 if (val && !this.scopedCards().some(c => String(c.value) === String(val))) {
                     this.activeTab = 'all';
                 }
+                this.ensureSelectedCardVisible();
             });
 
             this.$watch('search', (val) => {
@@ -30,11 +33,27 @@
                 if (val.length === 0 && this.hasSuggestionTab()) {
                     this.activeTab = 'suggested';
                 }
+                this.ensureSelectedCardVisible();
             });
 
             this.$watch('activeTab', () => {
                 this.displayLimit = this.batchSize;
+                this.ensureSelectedCardVisible();
             });
+        },
+        ensureSelectedCardVisible() {
+            if (!this.state) return;
+
+            if (!this.scopedCards().some(c => String(c.value) === String(this.state))) {
+                this.activeTab = 'all';
+            }
+
+            const cards = this.allFilteredCards();
+            const index = cards.findIndex(c => String(c.value) === String(this.state));
+
+            if (index !== -1 && index >= this.displayLimit) {
+                this.displayLimit = Math.ceil((index + 1) / this.batchSize) * this.batchSize;
+            }
         },
         getNestedValue(obj, path) {
             return path.split('.').reduce((acc, part) => {
@@ -69,11 +88,8 @@
                 .slice(0, 3);
         },
         scopedCards() {
-            if (this.search) {
-                return this.cards;
-            }
             if (this.hasSuggestionTab() && this.activeTab === 'suggested') {
-                return this.suggestedCards();
+                return this.search ? this.cards : this.suggestedCards();
             }
             return this.cards;
         },

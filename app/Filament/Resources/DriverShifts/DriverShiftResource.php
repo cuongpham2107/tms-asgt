@@ -59,7 +59,7 @@ class DriverShiftResource extends BaseResource
     {
         return [
             'index' => ListDriverShifts::route('/'),
-            'table' => CalendarDriverShifts::route('/table'),
+            'calendar' => CalendarDriverShifts::route('/calendar'),
             // 'create' => CreateDriverShift::route('/create'),
             // 'edit' => EditDriverShift::route('/{record}/edit'),
         ];

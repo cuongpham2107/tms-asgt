@@ -47,14 +47,14 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
             ->modalDescription('Khai báo thông tin lộ trình chung, sau đó phân chia hàng hóa cho từng xe vận chuyển tương ứng.')
             ->stickyModalFooter()
             ->schema([
-                Grid::make(12)
+                Grid::make(['default' => 1, 'lg' => 12])
                     ->schema([
                         // Phân vùng 1: Thông tin Tuyến đường & Hành trình chung (Chiếm 7 cột)
                         Section::make('Thông tin Tuyến đường & Hành trình chung')
                             ->description('Khai báo khách hàng, hành trình và các điểm đến của chuyến đi.')
                             ->columnSpanFull()
                             ->schema([
-                                Grid::make(2)
+                                Grid::make(['default' => 1, 'sm' => 2])
                                     ->schema([
                                         ToggleButtons::make('order_type_code')
                                             ->label('Loại đơn hàng')
@@ -70,34 +70,24 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->inline()
                                             ->live()
                                             ->afterStateUpdated(function (Set $set, $state) {
-                                                $firstAreaId = Area::query()
-                                                    ->where('is_active', true)
-                                                    ->when($state, fn ($q) => $q->where('type', $state))
-                                                    ->orderBy('sort_order', 'asc')
-                                                    ->value('id');
-                                                $set('area_id', $firstAreaId);
+                                                $code = $state === 'external' ? 'PROVINCE' : 'NBA';
+                                                $defaultAreaId = Area::query()->where('is_active', true)->where('code', $code)->value('id');
+                                                $set('area_id', $defaultAreaId ?? Area::query()->where('is_active', true)->orderBy('sort_order', 'asc')->value('id'));
                                             })
                                             ->required(),
                                         ToggleButtons::make('area_id')
                                             ->label('Khu vực')
-                                            ->options(fn (Get $get): array => Area::query()
+                                            ->options(fn (): array => Area::query()
                                                 ->where('is_active', true)
-                                                ->when(
-                                                    $get('order_type_code'),
-                                                    fn ($query, $type) => $query->where('type', $type)
-                                                )
                                                 ->orderBy('sort_order', 'asc')
                                                 ->pluck('code', 'id')
                                                 ->toArray())
                                             ->default(function (Get $get) {
-                                                return Area::query()
-                                                    ->where('is_active', true)
-                                                    ->when(
-                                                        $get('order_type_code'),
-                                                        fn ($query, $type) => $query->where('type', $type)
-                                                    )
-                                                    ->orderBy('sort_order', 'asc')
-                                                    ->value('id');
+                                                $type = $get('order_type_code');
+                                                $code = $type === 'external' ? 'PROVINCE' : 'NBA';
+
+                                                return Area::query()->where('is_active', true)->where('code', $code)->value('id')
+                                                    ?? Area::query()->where('is_active', true)->orderBy('sort_order', 'asc')->value('id');
                                             })
                                             ->inline()
                                             ->live()
@@ -107,12 +97,12 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                     ]),
 
                                 // Pickup Section
-                                Grid::make(2)
+                                Grid::make(['default' => 1, 'sm' => 2])
                                     ->schema([
                                         // Pickup location for HHHK
                                         Select::make('pickup_location_id')
                                             ->label('Điểm nhận hàng (HHHK)')
-                                            ->options(fn (Get $get): array => self::getLocationOptions($get('order_type_code') ?? 'HHHK'))
+                                            ->options(fn (): array => self::getLocationOptions())
                                             ->searchable()
                                             ->native(false)
                                             ->visible(fn (Get $get): bool => $get('order_type_code') === 'HHHK')
@@ -163,16 +153,17 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                         ])
                                             ->label('Điểm nhận hàng (Hàng ngoài)')
                                             ->visible(fn (Get $get): bool => $get('order_type_code') === 'external')
-                                            ->columns(3)
+                                            ->columns(['default' => 1, 'sm' => 3])
                                             ->columnSpanFull(),
                                     ]),
 
-                                Grid::make(2)
+                                Grid::make(['default' => 1, 'sm' => 2, 'md' => 3])
                                     ->schema([
                                         TextInput::make('cargo_name')
                                             ->label('Tên hàng hoá')
                                             ->placeholder('Ví dụ: Hàng gia dụng')
-                                            ->default(fn (Get $get): ?string => $get('order_type_code') === 'HHHK' ? 'Hàng HHHK' : 'Hàng ngoài'),
+                                            ->default(fn (Get $get): ?string => $get('order_type_code') === 'HHHK' ? 'Hàng HHHK' : 'Hàng ngoài')
+                                            ->columnSpan(['default' => 1, 'sm' => fn (Get $get): int => $get('order_type_code') === 'external' ? 1 : 2, 'md' => fn (Get $get): int => $get('order_type_code') === 'external' ? 1 : 2]),
                                         Select::make('cargo_type')
                                             ->label('Loại hàng')
                                             ->options([
@@ -181,21 +172,22 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ])
                                             ->default('GCR')
                                             ->native(false)
-                                            ->required(),
-
+                                            ->required()
+                                            ->columnSpan(1),
+                                        TextInput::make('chargeable_weight')
+                                            ->label('Tải trọng tính cước')
+                                            ->suffix('tấn')
+                                            ->mask(RawJs::make('$money($input)'))
+                                            ->stripCharacters(',')
+                                            ->numeric()
+                                            ->required(fn (Get $get): bool => $get('order_type_code') === 'external')
+                                            ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
+                                            ->visible(fn (Get $get): bool => $get('order_type_code') === 'external')
+                                            ->columnSpan(1),
                                     ]),
 
                                 // Delivery points repeater (Route)
                                 self::getDeliveryPointsRepeaterField(fn (Get $get): ?string => $get('../../order_type_code')),
-                                TextInput::make('chargeable_weight')
-                                    ->label('Tải trọng tính cước')
-                                    ->suffix('tấn')
-                                    ->mask(RawJs::make('$money($input)'))
-                                    ->stripCharacters(',')
-                                    ->numeric()
-                                    ->required()
-                                    ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
-                                    ->visible(fn (Get $get): bool => $get('order_type_code') === 'external'),
                             ]),
 
                         // Phân vùng 2: Số lượng bản ghi cần tạo (Chiếm 5 cột)

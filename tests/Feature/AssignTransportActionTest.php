@@ -171,7 +171,7 @@ test('selecting vehicle automatically sets driver_id in form state', function ()
     expect($order->trip->driver_id)->toBe($driver->id);
 });
 
-test('selecting driver automatically sets vehicle_id in form state', function () {
+test('selecting driver does not automatically set vehicle_id in form state', function () {
     $driver = User::factory()->create();
     $driver->assignRole($this->driverRole);
 
@@ -203,10 +203,5 @@ test('selecting driver automatically sets vehicle_id in form state', function ()
             'driver_id' => $driver->id,
         ])
         ->callMountedTableAction()
-        ->assertHasNoTableActionErrors();
-
-    $order->refresh();
-    expect($order->trip)->not->toBeNull();
-    expect($order->trip->vehicle_id)->toBe($vehicle->id);
-    expect($order->trip->driver_id)->toBe($driver->id);
+        ->assertHasTableActionErrors(['vehicle_id' => 'required']);
 });
