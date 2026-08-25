@@ -32,8 +32,6 @@ database/database_backup_*
 *firebase-credentials*.json
 /storage/firebase/
 /storage/app/firebase/
-google-services.json
-GoogleService-Info.plist
 /.claude/
 *.xlsx
 
