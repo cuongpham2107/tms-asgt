@@ -10,11 +10,10 @@ import { showAlert } from "./alert";
 // Cấu hình cách hiển thị thông báo khi app đang mở (Foreground)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
     shouldShowBanner: true,
     shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
   }),
 });
 
