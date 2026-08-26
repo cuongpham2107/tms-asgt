@@ -68,7 +68,7 @@ class GeocodeLocations extends Command
 
             $bar->advance();
 
-            if (! $this->option('dry-run')) {
+            if (! $this->option('dry-run') && ! app()->runningUnitTests()) {
                 usleep(self::RATE_LIMIT_US);
             }
         }

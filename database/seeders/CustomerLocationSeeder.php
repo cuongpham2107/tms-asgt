@@ -196,7 +196,7 @@ class CustomerLocationSeeder extends Seeder
             $ward = trim($row[6] ?? '');
             $province = trim($row[7] ?? '');
 
-            $code = $locCode ?: $factoryCode;
+            $code = $factoryCode ?: $locCode;
             if (empty($code)) {
                 continue;
             }
@@ -247,30 +247,27 @@ class CustomerLocationSeeder extends Seeder
         }
 
         DB::transaction(function () use ($allLocations, $newCustomers) {
-            foreach ($allLocations as $loc) {
-                Location::updateOrCreate(
-                    ['code' => $loc['code']],
-                    [
-                        'name' => $loc['name'],
-                        'address' => $loc['address'],
-                        'area_id' => $loc['area_id'],
-                        'loc_type' => $loc['loc_type'],
-                        'is_active' => $loc['is_active'],
-                    ]
-                );
-            }
-
-            DB::table('customer_location')->delete();
-
             DB::statement('PRAGMA foreign_keys = OFF;');
+            DB::table('customer_location')->delete();
             DB::table('customers')->delete();
+            DB::table('locations')->delete();
+
+            foreach ($allLocations as $loc) {
+                Location::create([
+                    'code' => $loc['code'],
+                    'name' => $loc['name'],
+                    'address' => $loc['address'],
+                    'area_id' => $loc['area_id'],
+                    'loc_type' => $loc['loc_type'],
+                    'is_active' => $loc['is_active'],
+                ]);
+            }
 
             foreach ($newCustomers as $cust) {
                 Customer::create($cust);
             }
             DB::statement('PRAGMA foreign_keys = ON;');
 
-            $locationIds = Location::where('is_active', true)->pluck('id')->toArray();
             $customers = Customer::all();
             $locationsByCode = Location::pluck('id', 'code')->toArray();
 
@@ -297,6 +294,14 @@ class CustomerLocationSeeder extends Seeder
             $defaultCustomer = Customer::first();
             if ($defaultCustomer) {
                 DB::table('orders')->update(['customer_id' => $defaultCustomer->id]);
+            }
+
+            $firstLocation = Location::first();
+            if ($firstLocation) {
+                DB::table('orders')->whereNotNull('pickup_location_id')->update(['pickup_location_id' => $firstLocation->id]);
+                DB::table('order_delivery_points')->update(['location_id' => $firstLocation->id]);
+                DB::table('trips')->whereNotNull('start_location_id')->update(['start_location_id' => $firstLocation->id]);
+                DB::table('trips')->whereNotNull('end_location_id')->update(['end_location_id' => $firstLocation->id]);
             }
         });
 

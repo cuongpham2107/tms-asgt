@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Locations\Tables;
 
-use App\Enums\OrderType;
 use App\Filament\BaseTable;
 use App\Models\Location;
 use Filament\Actions\BulkActionGroup;
@@ -59,7 +58,7 @@ class LocationsTable extends BaseTable
             ->groups([
                 Group::make('area_id')
                     ->label('Khu vực')
-                    ->getTitleFromRecordUsing(fn (Location $record): string => $record->area ? $record->area->code.' ('.($record->area->type === OrderType::Hhhk ? 'HHHK' : 'Hàng ngoài').')' : 'Chưa xác định')
+                    ->getTitleFromRecordUsing(fn (Location $record): string => $record->area ? $record->area->code : 'Chưa xác định')
                     ->collapsible(),
             ])
             ->defaultPaginationPageOption(50)
