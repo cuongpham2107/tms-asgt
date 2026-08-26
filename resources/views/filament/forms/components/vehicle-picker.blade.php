@@ -5,7 +5,7 @@
 <x-dynamic-component :component="$getFieldWrapperView()" :field="$field">
     <div x-data="{
         state: $wire.{{ $applyStateBindingModifiers("\$entangle('{$getStatePath()}')") }},
-        activeTab: 'all',
+        activeTab: 'company',
         search: '',
         cards: @js($cards),
         displayLimit: 24,
@@ -15,8 +15,12 @@
                 if (!this.scopedCards().some(c => String(c.value) === String(this.state))) {
                     this.activeTab = 'all';
                 }
+            } else if (this.cards.some(c => c.type === 'company')) {
+                this.activeTab = 'company';
             } else if (this.hasSuggestionTab()) {
                 this.activeTab = 'suggested';
+            } else {
+                this.activeTab = 'all';
             }
 
             this.ensureSelectedCardVisible();
@@ -30,9 +34,6 @@
 
             this.$watch('search', (val) => {
                 this.displayLimit = this.batchSize;
-                if (val.length === 0 && this.hasSuggestionTab()) {
-                    this.activeTab = 'suggested';
-                }
                 this.ensureSelectedCardVisible();
             });
 
