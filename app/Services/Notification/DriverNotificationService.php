@@ -115,8 +115,8 @@ class DriverNotificationService
             'type' => 'order_sent',
             'order_id' => (string) $order->id,
             'order_code' => (string) $order->order_code,
-            'trip_id' => (string) ($trip?->id ?? ''),
-            'trip_code' => (string) ($trip?->trip_code ?? ''),
+            'trip_id' => (string) ($trip?->id ?? $order->trip_id ?? ''),
+            'trip_code' => (string) ($trip?->trip_code ?? $order->trip?->trip_code ?? ''),
         ];
 
         return $this->sendToDriver($driver, $title, $body, $data);

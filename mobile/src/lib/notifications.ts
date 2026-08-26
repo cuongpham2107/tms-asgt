@@ -127,15 +127,15 @@ export function usePushNotifications(authToken: string | null) {
 
             if (!data) return;
 
-            if (data.order_id) {
-                router.push({
-                    pathname: "/order-detail",
-                    params: { orderId: String(data.order_id), tripId: String(data.trip_id ?? "") },
-                });
-            } else if (data.trip_id) {
+            if (data.trip_id) {
                 router.push({
                     pathname: "/trip-detail",
                     params: { id: String(data.trip_id) },
+                });
+            } else if (data.order_id) {
+                router.push({
+                    pathname: "/order-detail",
+                    params: { id: String(data.order_id) },
                 });
             } else {
                 router.push("/(tabs)/trips");
