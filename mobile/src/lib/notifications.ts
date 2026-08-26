@@ -56,29 +56,40 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         Constants?.easConfig?.projectId ??
         "4a73c5d5-0135-4373-a36e-8e0b2009c779";
 
-    // Ưu tiên lấy Expo Push Token (hoạt động tốt trên cả Expo Go, Dev Build và Standalone APK)
-    try {
-        const expoTokenData = await Notifications.getExpoPushTokenAsync({
-            projectId,
-        });
-        if (expoTokenData?.data) {
-            return expoTokenData.data;
+    // Khi chạy trên Simulator: ưu tiên lấy Expo Push Token để nhận notification qua Expo Server
+    if (!Device.isDevice) {
+        try {
+            const expoTokenData = await Notifications.getExpoPushTokenAsync({
+                projectId,
+            });
+            if (expoTokenData?.data) {
+                return expoTokenData.data;
+            }
+        } catch (error) {
+            console.log("Error getting Expo push token on simulator:", error);
         }
-    } catch (error) {
-        console.log("Expo push token not available, trying device native push token:", error);
     }
 
-    // Fallback sang Native Device Token (FCM / APNs)
+    // Khi chạy trên máy thật (Android / iOS): lấy Native Device Token (FCM / APNs)
     try {
         const deviceTokenData = await Notifications.getDevicePushTokenAsync();
         if (deviceTokenData?.data) {
             return deviceTokenData.data;
         }
     } catch (err) {
-        console.log("Failed to get native device push token:", err);
+        console.log("Failed to get native device push token, falling back to expo push token:", err);
     }
 
-    return null;
+    // Fallback sang Expo Push Token nếu không lấy được native token
+    try {
+        const expoTokenData = await Notifications.getExpoPushTokenAsync({
+            projectId,
+        });
+        return expoTokenData.data;
+    } catch (error) {
+        console.log("Error getting push token fallback:", error);
+        return null;
+    }
 }
 
 /**
@@ -120,22 +131,18 @@ export function usePushNotifications(authToken: string | null) {
             }
         });
 
-        // Lắng nghe khi người dùng bấm vào thông báo
+        // Lắng nghe khi người dùng bấm vào thông báo -> Mở thẳng vào Chi tiết chuyến đi
         responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
             console.log("Notification response received (tapped):", response);
             const data = response.notification.request.content.data as Record<string, any> | undefined;
 
             if (!data) return;
 
-            if (data.trip_id) {
+            const tripId = data.trip_id || data.tripId;
+            if (tripId) {
                 router.push({
                     pathname: "/trip-detail",
-                    params: { id: String(data.trip_id) },
-                });
-            } else if (data.order_id) {
-                router.push({
-                    pathname: "/order-detail",
-                    params: { id: String(data.order_id) },
+                    params: { id: String(tripId) },
                 });
             } else {
                 router.push("/(tabs)/trips");
