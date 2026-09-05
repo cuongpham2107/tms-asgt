@@ -84,6 +84,40 @@ class DriverNotificationService
     }
 
     /**
+     * Gửi push notification khi tạo chuyến không hàng (CreateEmptyRunAction).
+     */
+    public function sendEmptyRunDispatched(Trip $trip): bool
+    {
+        $driver = $this->resolveDriverForTrip($trip);
+
+        if ($driver === null) {
+            Log::info("DriverNotification: Chuyến không hàng #{$trip->trip_code} chưa có lái xe để gửi thông báo.");
+
+            return false;
+        }
+
+        $trip->loadMissing(['startLocation', 'endLocation']);
+        $route = '';
+        if ($trip->startLocation || $trip->endLocation) {
+            $from = $trip->startLocation?->code ?? '—';
+            $to = $trip->endLocation?->code ?? '—';
+            $route = " ({$from} → {$to})";
+        }
+
+        $title = "Chuyến không hàng mới: #{$trip->trip_code}";
+        $body = "Bạn có chuyến không hàng mới #{$trip->trip_code}{$route} cần thực hiện trong ca.";
+
+        $data = [
+            'type' => 'empty_run_dispatched',
+            'trip_id' => (string) $trip->id,
+            'trip_code' => (string) $trip->trip_code,
+            'is_empty_run' => 'true',
+        ];
+
+        return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
      * Gửi push notification khi một đơn hàng được gán và gửi ngay (createSingleOrder / send_immediately).
      */
     public function sendOrderAssigned(Order $order, ?Trip $trip = null): bool
@@ -117,6 +151,188 @@ class DriverNotificationService
             'order_code' => (string) $order->order_code,
             'trip_id' => (string) ($trip?->id ?? $order->trip_id ?? ''),
             'trip_code' => (string) ($trip?->trip_code ?? $order->trip?->trip_code ?? ''),
+        ];
+
+        return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification khi chuyến đi được bàn giao cho tài xế mới sau khi đảo lái (DriverSwapAction / ReassignDriverAction).
+     */
+    public function sendTripDriverSwapped(Trip $trip, User $newDriver, ?User $oldDriver = null, float $handoverKm = 0): bool
+    {
+        $orderCount = $trip->orders()->count();
+        $countText = $orderCount > 0 ? " với {$orderCount} đơn hàng" : '';
+        $fromText = $oldDriver ? " từ tài xế {$oldDriver->name}" : '';
+        $kmText = $handoverKm > 0 ? ' (Km bàn giao: '.number_format($handoverKm, 1, ',', '.').')' : '';
+
+        $title = "Bàn giao chuyến đi: #{$trip->trip_code}";
+        $body = "Bạn nhận bàn giao chuyến đi #{$trip->trip_code}{$fromText}{$countText}{$kmText}.";
+
+        $data = [
+            'type' => 'trip_driver_swapped',
+            'trip_id' => (string) $trip->id,
+            'trip_code' => (string) $trip->trip_code,
+            'order_count' => (string) $orderCount,
+            'handover_km' => (string) $handoverKm,
+            'from_driver_id' => (string) ($oldDriver?->id ?? ''),
+            'from_driver_name' => (string) ($oldDriver?->name ?? ''),
+        ];
+
+        return $this->sendToDriver($newDriver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification cho tài xế cũ khi chuyến đi đã được chuyển giao cho tài xế mới.
+     */
+    public function sendTripDriverSwapHandover(Trip $trip, User $oldDriver, ?User $newDriver = null): bool
+    {
+        $toText = $newDriver ? " cho tài xế {$newDriver->name}" : '';
+        $title = "Đã chuyển giao chuyến: #{$trip->trip_code}";
+        $body = "Chuyến đi #{$trip->trip_code} đã được chuyển giao{$toText}.";
+
+        $data = [
+            'type' => 'trip_driver_swap_handover',
+            'trip_id' => (string) $trip->id,
+            'trip_code' => (string) $trip->trip_code,
+            'to_driver_id' => (string) ($newDriver?->id ?? ''),
+            'to_driver_name' => (string) ($newDriver?->name ?? ''),
+        ];
+
+        return $this->sendToDriver($oldDriver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification khi chuyến đi được điều phối lại cho tài xế mới (ReassignTransportAction / TripsTable edit).
+     */
+    public function sendTripReassigned(Trip $trip, User $newDriver, ?User $oldDriver = null, int $orderCount = 0): bool
+    {
+        $count = $orderCount > 0 ? $orderCount : $trip->orders()->count();
+        $countText = $count > 0 ? " với {$count} đơn hàng" : '';
+        $title = "Điều phối chuyến đi: #{$trip->trip_code}";
+        $body = "Bạn được gán thực hiện chuyến đi #{$trip->trip_code}{$countText}.";
+
+        $data = [
+            'type' => 'trip_reassigned',
+            'trip_id' => (string) $trip->id,
+            'trip_code' => (string) $trip->trip_code,
+            'order_count' => (string) $count,
+        ];
+
+        return $this->sendToDriver($newDriver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification cho tài xế cũ khi chuyến đi bị huỷ gán / chuyển sang lái xe khác.
+     */
+    public function sendTripUnassigned(Trip $trip, User $oldDriver): bool
+    {
+        $title = "Hủy gán chuyến đi: #{$trip->trip_code}";
+        $body = "Chuyến đi #{$trip->trip_code} đã được điều phối lại cho phương tiện/lái xe khác.";
+
+        $data = [
+            'type' => 'trip_unassigned',
+            'trip_id' => (string) $trip->id,
+            'trip_code' => (string) $trip->trip_code,
+        ];
+
+        return $this->sendToDriver($oldDriver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification khi chuyến đi bị huỷ (CancelTripAction).
+     */
+    public function sendTripCancelled(Trip $trip, ?string $reason = null): bool
+    {
+        $driver = $this->resolveDriverForTrip($trip);
+
+        if ($driver === null) {
+            Log::info("DriverNotification: Chuyến #{$trip->trip_code} đã huỷ không có lái xe để gửi thông báo.");
+
+            return false;
+        }
+
+        $reasonText = filled($reason) ? " Lý do: {$reason}" : '';
+        $title = "Huỷ chuyến đi: #{$trip->trip_code}";
+        $body = "Chuyến đi #{$trip->trip_code} đã bị huỷ.{$reasonText}";
+
+        $data = [
+            'type' => 'trip_cancelled',
+            'trip_id' => (string) $trip->id,
+            'trip_code' => (string) $trip->trip_code,
+            'reason' => (string) ($reason ?? ''),
+        ];
+
+        return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification khi đơn hàng bị huỷ (CancelOrderAction).
+     */
+    public function sendOrderCancelled(Order $order, ?string $reason = null): bool
+    {
+        $trip = $order->trip_id ? ($order->trip ?? Trip::query()->find($order->trip_id)) : null;
+
+        $driver = null;
+        if ($trip !== null) {
+            $driver = $this->resolveDriverForTrip($trip);
+        }
+
+        if ($driver === null && $order->driver_id !== null) {
+            $driver = User::query()->find($order->driver_id);
+        }
+
+        if ($driver === null) {
+            Log::info("DriverNotification: Đơn hàng {$order->order_code} đã huỷ không có lái xe để gửi thông báo.");
+
+            return false;
+        }
+
+        $reasonText = filled($reason) ? " Lý do: {$reason}" : '';
+        $title = "Huỷ đơn hàng: {$order->order_code}";
+        $body = "Đơn hàng {$order->order_code} đã bị huỷ.{$reasonText}";
+
+        $data = [
+            'type' => 'order_cancelled',
+            'order_id' => (string) $order->id,
+            'order_code' => (string) $order->order_code,
+            'trip_id' => (string) ($trip?->id ?? $order->trip_id ?? ''),
+            'reason' => (string) ($reason ?? ''),
+        ];
+
+        return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification khi lệnh vận chuyển đơn hàng bị thu hồi (UnsendOrderAction).
+     */
+    public function sendOrderRecalled(Order $order): bool
+    {
+        $trip = $order->trip_id ? ($order->trip ?? Trip::query()->find($order->trip_id)) : null;
+
+        $driver = null;
+        if ($trip !== null) {
+            $driver = $this->resolveDriverForTrip($trip);
+        }
+
+        if ($driver === null && $order->driver_id !== null) {
+            $driver = User::query()->find($order->driver_id);
+        }
+
+        if ($driver === null) {
+            Log::info("DriverNotification: Đơn hàng {$order->order_code} đã thu hồi không có lái xe để gửi thông báo.");
+
+            return false;
+        }
+
+        $title = "Thu hồi lệnh đơn hàng: {$order->order_code}";
+        $body = "Lệnh vận chuyển cho đơn hàng {$order->order_code} đã được thu hồi.";
+
+        $data = [
+            'type' => 'order_recalled',
+            'order_id' => (string) $order->id,
+            'order_code' => (string) $order->order_code,
+            'trip_id' => (string) ($trip?->id ?? $order->trip_id ?? ''),
         ];
 
         return $this->sendToDriver($driver, $title, $body, $data);

@@ -656,3 +656,157 @@ test('cannot auto-start trip via arrived_pickup when driver has active trip', fu
     // Chuyến mới vẫn pending
     expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
 });
+
+test('arrived_delivery and completed handle order with repeated locations in route (A -> B -> A)', function () {
+    $locA = Location::create([
+        'code' => 'ACSV',
+        'name' => 'ACSV',
+        'lat' => 21.2188925,
+        'lng' => 105.8044596,
+        'loc_type' => 'delivery',
+        'is_active' => true,
+    ]);
+
+    $locB = Location::create([
+        'code' => 'ALSC',
+        'name' => 'ALSC',
+        'lat' => 21.2188925,
+        'lng' => 105.8044596,
+        'loc_type' => 'delivery',
+        'is_active' => true,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-ROUTE-ABA',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Pending,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-ABA',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $trip->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'pickup_address' => 'ALSB',
+        'status' => OrderStatus::Sent,
+        'created_by' => $this->driver->id,
+    ]);
+
+    $dp1 = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $locA->id,
+        'sequence' => 1,
+        'address' => 'ACSV Stop 1',
+        'status' => 'pending',
+    ]);
+
+    $dp2 = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $locB->id,
+        'sequence' => 2,
+        'address' => 'ALSC Stop 2',
+        'status' => 'pending',
+    ]);
+
+    $dp3 = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $locA->id,
+        'sequence' => 3,
+        'address' => 'ACSV Stop 3',
+        'status' => 'pending',
+    ]);
+
+    // 1. Started
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'km_reading' => 50010,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // 2. Arrived pickup
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'km_reading' => 50020,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // 3. Left pickup
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'left_pickup',
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    // 4. Arrived at Stop 1 (ACSV) -> Must update dp1, NOT dp3!
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_delivery',
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp1->id,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    expect($dp1->fresh()->status)->toBe(OrderDeliveryPointStatus::Arrived);
+    expect($dp2->fresh()->status)->toBe(OrderDeliveryPointStatus::Pending);
+    expect($dp3->fresh()->status)->toBe(OrderDeliveryPointStatus::Pending);
+
+    // 5. Complete Stop 1 (ACSV)
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'completed',
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp1->id,
+        'km_reading' => 50040,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    expect($dp1->fresh()->status)->toBe(OrderDeliveryPointStatus::Delivered);
+    expect($dp2->fresh()->status)->toBe(OrderDeliveryPointStatus::Pending);
+    expect($dp3->fresh()->status)->toBe(OrderDeliveryPointStatus::Pending);
+    expect($order->fresh()->status)->toBe(OrderStatus::InTransit);
+
+    // 6. Arrived at Stop 2 (ALSC)
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_delivery',
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp2->id,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    expect($dp2->fresh()->status)->toBe(OrderDeliveryPointStatus::Arrived);
+
+    // 7. Complete Stop 2 (ALSC)
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'completed',
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp2->id,
+        'km_reading' => 50050,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    expect($dp2->fresh()->status)->toBe(OrderDeliveryPointStatus::Delivered);
+    expect($dp3->fresh()->status)->toBe(OrderDeliveryPointStatus::Pending);
+    expect($order->fresh()->status)->toBe(OrderStatus::InTransit);
+
+    // 8. Arrived at Stop 3 (ACSV) -> Must update dp3!
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_delivery',
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp3->id,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    expect($dp3->fresh()->status)->toBe(OrderDeliveryPointStatus::Arrived);
+
+    // 9. Complete Stop 3 (ACSV) -> Order completed!
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'completed',
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp3->id,
+        'km_reading' => 50060,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    expect($dp3->fresh()->status)->toBe(OrderDeliveryPointStatus::Delivered);
+    expect($order->fresh()->status)->toBe(OrderStatus::Completed);
+});

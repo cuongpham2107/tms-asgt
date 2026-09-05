@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Models\Vehicle;
@@ -167,6 +168,7 @@ class GoogleMapSidebar extends Widget
                     ->with(['orders.customer', 'checkpoints']),
             ])
             ->where('is_active', true)
+            ->where('type', VehicleOwnerType::Company)
             ->orderByRaw("CASE status WHEN 'running' THEN 1 WHEN 'on' THEN 2 WHEN 'bdsc' THEN 3 ELSE 4 END")
             ->orderBy('plate_number')
             ->get();

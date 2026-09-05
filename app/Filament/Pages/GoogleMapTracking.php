@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Filament\Widgets\GoogleMapStatsOverview;
 use App\Models\Order;
@@ -52,21 +53,12 @@ class GoogleMapTracking extends Page
 
     public array $selectedVehicleIds = [];
 
-    // Playback / replay controls
-    public ?int $playbackTimestamp = null; // unix timestamp in seconds
-
-    public bool $playbackPlaying = false;
-
-    public int $playbackSpeed = 1000; // ms per step
-
     // Date range filters for historical tracking
     public ?string $filterDateFrom = null;
 
     public ?string $filterDateTo = null;
 
     private ?Collection $cachedVehicles = null;
-
-    private bool $playbackLightUpdate = false;
 
     private bool $filterDateLightUpdate = false;
 
@@ -102,7 +94,6 @@ class GoogleMapTracking extends Page
     {
         $this->lastUpdated = now();
         $this->selectedVehicleIds = [];
-        $this->playbackTimestamp = null;
         $this->cachedLayerData = null;
         $this->refreshMap();
     }
@@ -113,38 +104,6 @@ class GoogleMapTracking extends Page
         $this->cachedVehicles = null;
         $this->cachedLayerData = null;
         $this->lastUpdated = now();
-        $this->refreshMap();
-    }
-
-    public function togglePlayback(): void
-    {
-        $this->playbackPlaying = ! $this->playbackPlaying;
-    }
-
-    public function setPlaybackTimestamp(int $ts): void
-    {
-        $this->playbackTimestamp = $ts;
-        $this->cachedVehicles = null;
-        $this->cachedLayerData = null;
-        $this->refreshMap();
-    }
-
-    public function setPlaybackTimestampLight(int $ts): void
-    {
-        $this->playbackLightUpdate = true;
-        $this->playbackTimestamp = $ts;
-    }
-
-    public function updatedPlaybackTimestamp(): void
-    {
-        if ($this->playbackLightUpdate) {
-            $this->playbackLightUpdate = false;
-
-            return;
-        }
-
-        $this->cachedVehicles = null;
-        $this->cachedLayerData = null;
         $this->refreshMap();
     }
 
@@ -228,9 +187,8 @@ class GoogleMapTracking extends Page
     protected function getMarkers(): array
     {
         $vehicles = $this->getFilteredVehicles();
-        $isPlaybackMode = $this->playbackTimestamp !== null;
 
-        $allMarkers = $vehicles->map(function (Vehicle $vehicle) use ($isPlaybackMode): Marker {
+        $allMarkers = $vehicles->map(function (Vehicle $vehicle): Marker {
             $activeTrip = $vehicle->trips
                 ->first(fn (Trip $t) => in_array($t->status, TripStatus::activeStatuses(), true))
                 ?? $vehicle->trips->first();
@@ -244,24 +202,11 @@ class GoogleMapTracking extends Page
                 ->filter(fn (TripCheckpoint $c) => $c->gps_lat !== null && $c->gps_lng !== null)
                 ->sortBy('occurred_at');
 
-            if ($isPlaybackMode && $this->playbackTimestamp !== null) {
-                $asOf = Carbon::createFromTimestamp($this->playbackTimestamp);
-                $realCheckpoints = $realCheckpoints->filter(fn (TripCheckpoint $c) => $c->occurred_at <= $asOf);
-            }
-
             $latestCheckpoint = $realCheckpoints->last();
 
             // Latitude & Longitude Resolution
-            $lat = null;
-            $lng = null;
-
-            if ($isPlaybackMode) {
-                $lat = $latestCheckpoint?->gps_lat ?? $vehicle->gps_lat;
-                $lng = $latestCheckpoint?->gps_lng ?? $vehicle->gps_lng;
-            } else {
-                $lat = $vehicle->gps_lat ?? $latestCheckpoint?->gps_lat;
-                $lng = $vehicle->gps_lng ?? $latestCheckpoint?->gps_lng;
-            }
+            $lat = $vehicle->gps_lat ?? $latestCheckpoint?->gps_lat;
+            $lng = $vehicle->gps_lng ?? $latestCheckpoint?->gps_lng;
 
             // Fallback to order pickup location or hub
             if ($lat === null || $lng === null) {
@@ -292,7 +237,7 @@ class GoogleMapTracking extends Page
             $etaText = null;
             $distanceText = null;
             if ($vehicle->status === VehicleStatus::Running && $hasActiveTrip) {
-                $routePoints = $this->routePointsForTrip($activeTrip, $activeOrders, $this->playbackTimestamp, $vehicle);
+                $routePoints = $this->routePointsForTrip($activeTrip, $activeOrders, $vehicle);
                 if ($routePoints->count() >= 2) {
                     $origin = $routePoints->first();
                     $destination = $routePoints->last();
@@ -449,7 +394,7 @@ class GoogleMapTracking extends Page
 
                 $activeOrders = $trackingTrip?->orders ?? $vehicle->trips->flatMap->orders;
 
-                $routePoints = $this->routePointsForTrip($trackingTrip, $activeOrders, $this->playbackTimestamp, $vehicle);
+                $routePoints = $this->routePointsForTrip($trackingTrip, $activeOrders, $vehicle);
 
                 if ($routePoints->count() < 2) {
                     // Nếu chỉ có 1 điểm (vị trí hiện tại của xe), vẽ vòng tròn định vị nổi bật
@@ -556,7 +501,7 @@ class GoogleMapTracking extends Page
     /**
      * @return Collection<int, array{lat: float, lng: float, label: string}>
      */
-    private function routePointsForTrip(?Trip $trip, Collection $orders, ?int $asOfTimestamp = null, ?Vehicle $vehicle = null): Collection
+    private function routePointsForTrip(?Trip $trip, Collection $orders, ?Vehicle $vehicle = null): Collection
     {
         $points = collect();
 
@@ -566,11 +511,6 @@ class GoogleMapTracking extends Page
                 ->filter(fn (TripCheckpoint $c) => $c->gps_lat !== null && $c->gps_lng !== null)
                 ->sortBy('occurred_at')
                 ->values();
-
-            if ($asOfTimestamp !== null) {
-                $asOf = Carbon::createFromTimestamp($asOfTimestamp);
-                $tripCheckpoints = $tripCheckpoints->filter(fn (TripCheckpoint $c) => $c->occurred_at <= $asOf)->values();
-            }
 
             foreach ($tripCheckpoints as $cp) {
                 $points->push([
@@ -651,6 +591,7 @@ class GoogleMapTracking extends Page
                     ->with(['orders.customer', 'orders.pickupLocation', 'orders.deliveryPoints.location', 'checkpoints']),
             ])
             ->where('is_active', true)
+            ->where('type', VehicleOwnerType::Company)
             ->get();
     }
 
@@ -682,26 +623,5 @@ class GoogleMapTracking extends Page
         }
 
         return $vehicles;
-    }
-
-    public function getPlaybackBounds(): array
-    {
-        $min = null;
-        $max = null;
-
-        $vehicles = $this->getFilteredVehicles();
-        $vehicles->each(function (Vehicle $v) use (&$min, &$max) {
-            $v->trips->each(function (Trip $t) use (&$min, &$max) {
-                ($t->checkpoints ?? collect())->each(function (TripCheckpoint $c) use (&$min, &$max) {
-                    if ($c->occurred_at) {
-                        $ts = Carbon::parse($c->occurred_at)->timestamp;
-                        $min = $min === null ? $ts : min($min, $ts);
-                        $max = $max === null ? $ts : max($max, $ts);
-                    }
-                });
-            });
-        });
-
-        return [$min, $max];
     }
 }

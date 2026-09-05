@@ -169,7 +169,7 @@ class TripForm
                     ->columnSpanFull()
                     ->hidden(fn (?Model $record) => $record?->is_empty_run || $record?->checkpoints->isEmpty())
                     ->schema([
-                        // Repeater cho xe thuê ngoài (chỉ 3 cột: Loại, Đơn hàng, Giờ)
+                        // Repeater cho xe thuê ngoài (4 cột: Loại, Đơn hàng, Giờ, Điểm giao)
                         Repeater::make('checkpoints_rent')
                             ->relationship('checkpoints')
                             ->label('Danh sách mốc hành trình')
@@ -178,6 +178,7 @@ class TripForm
                                 TableColumn::make('Loại')->width('220px'),
                                 TableColumn::make('Đơn hàng')->width('180px'),
                                 TableColumn::make('Giờ')->width('220px'),
+                                TableColumn::make('Điểm giao')->width('110px'),
                             ])
                             ->orderColumn('created_at')
                             ->compact()
@@ -214,6 +215,29 @@ class TripForm
                                         }
                                     })
                                     ->native(true),
+                                Select::make('delivery_point_id')
+                                    ->label('Điểm giao')
+                                    ->options(function ($get): array {
+                                        $orderId = $get('order_id');
+                                        if (! $orderId) {
+                                            return [];
+                                        }
+
+                                        $areaId = Order::find($orderId)?->area_id;
+                                        if (! $areaId) {
+                                            return [];
+                                        }
+
+                                        return OrderDeliveryPoint::whereHas('order', fn ($q) => $q->where('area_id', $areaId))
+                                            ->with('location')
+                                            ->get()
+                                            ->mapWithKeys(fn ($dp) => [$dp->id => $dp->location?->code ?? 'DP#'.$dp->id])
+                                            ->toArray();
+                                    })
+                                    ->placeholder('Chọn điểm')
+                                    ->searchable()
+                                    ->native(false)
+                                    ->nullable(),
                             ])
                             ->addable()
                             ->deletable()

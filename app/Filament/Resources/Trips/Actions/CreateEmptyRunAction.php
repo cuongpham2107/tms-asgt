@@ -11,10 +11,13 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class CreateEmptyRunAction
 {
@@ -162,6 +165,13 @@ class CreateEmptyRunAction
                     'vehicle_id' => $data['vehicle_id'],
                     'order_id' => null,
                 ]);
+
+                // Gửi push notification qua Firebase cho lái xe
+                try {
+                    app(DriverNotificationService::class)->sendEmptyRunDispatched($trip);
+                } catch (Throwable $e) {
+                    Log::warning('Lỗi gửi push notification khi tạo chuyến không hàng: '.$e->getMessage(), ['exception' => $e]);
+                }
 
                 Notification::make()
                     ->success()

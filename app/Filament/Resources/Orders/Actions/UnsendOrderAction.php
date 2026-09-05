@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
 use App\Models\Order;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Throwable;
@@ -38,6 +39,11 @@ class UnsendOrderAction
                         'status' => OrderStatus::Assigned->value,
                         'sent_at' => null,
                     ]);
+
+                    try {
+                        app(DriverNotificationService::class)->sendOrderRecalled($record);
+                    } catch (Throwable) {
+                    }
 
                     Notification::make()
                         ->title('Thu hồi thành công')

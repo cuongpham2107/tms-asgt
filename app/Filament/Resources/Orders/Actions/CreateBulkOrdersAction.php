@@ -16,6 +16,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\FusedGroup;
@@ -24,6 +25,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -97,7 +99,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                     ]),
 
                                 // Pickup Section
-                                Grid::make(['default' => 1, 'sm' => 2])
+                                Grid::make(['default' => 1, 'sm' => 2, 'md' => 4])
                                     ->schema([
                                         // Pickup location for HHHK
                                         Select::make('pickup_location_id')
@@ -120,13 +122,27 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                                     'loc_type' => $data['loc_type'] ?? LocationType::Pickup->value,
                                                     'is_active' => true,
                                                 ]))->getKey();
-                                            }),
+                                            })
+                                            ->columnSpan(['default' => 1, 'sm' => 2, 'md' => 2]),
                                         DateTimePicker::make('planned_loading_at')
                                             ->label('Thời gian dự kiến đóng hàng')
                                             ->seconds(false)
                                             ->native(true)
                                             ->default(now())
-                                            ->required(),
+                                            ->prefixIcon(Heroicon::OutlinedCalendarDays)
+                                            ->required()
+                                            ->columnSpan([
+                                                'default' => 1,
+                                                'sm' => fn (Get $get): int => $get('order_type_code') === 'HHHK' ? 1 : 2,
+                                                'md' => fn (Get $get): int => $get('order_type_code') === 'HHHK' ? 1 : 4,
+                                            ]),
+                                        Toggle::make('is_return_trip')
+                                            ->label('Chuyến quay đầu')
+                                            ->helperText('Đánh dấu đơn hàng là chuyến quay đầu')
+                                            ->default(false)
+                                            ->inline(false)
+                                            ->visible(fn (Get $get): bool => $get('order_type_code') === 'HHHK')
+                                            ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
                                         // Pickup address for HN
                                         FusedGroup::make([
                                             TextInput::make('pickup_address_detail')
@@ -288,6 +304,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                 'planned_loading_at' => $data['planned_loading_at'] ?? null,
                                 'status' => OrderStatus::Draft->value,
                                 'priority' => Priority::Medium->value,
+                                'is_return_trip' => (bool) ($data['is_return_trip'] ?? false),
                                 'created_by' => $createdBy,
                                 'notes' => null,
                             ]);

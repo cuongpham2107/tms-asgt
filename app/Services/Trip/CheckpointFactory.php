@@ -3,6 +3,7 @@
 namespace App\Services\Trip;
 
 use App\Enums\CheckpointType;
+use App\Enums\OrderDeliveryPointStatus;
 use App\Models\DriverShift;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
@@ -98,6 +99,8 @@ class CheckpointFactory
 
     /**
      * Tìm tất cả OrderDeliveryPoints cùng location_id với điểm được chọn.
+     * Đối với order sở hữu điểm chọn, giữ nguyên điểm được chọn (tránh ghi đè khi 1 order có nhiều điểm trùng location).
+     * Đối với các order khác trong trip có cùng location_id, chọn điểm chưa giao tiếp theo.
      * Fallback về order đơn lẻ nếu không có location grouping.
      *
      * Luôn trả về Collection<int, OrderDeliveryPoint> — không dùng stdClass.
@@ -111,17 +114,23 @@ class CheckpointFactory
         if ($deliveryPointId !== null) {
             $point = OrderDeliveryPoint::find($deliveryPointId);
 
-            // Nếu điểm này thuộc một location cụ thể → group tất cả orders cùng location
-            if ($point?->location_id !== null) {
-                return OrderDeliveryPoint::where('location_id', $point->location_id)
-                    ->whereHas('order', fn ($q) => $q->where('trip_id', $trip->id))
-                    ->get()
-                    ->keyBy('order_id');
-            }
-
-            // Có delivery_point_id nhưng không có location_id → dùng model thật
             if ($point !== null) {
-                return collect([$point->order_id => $point]);
+                if ($point->location_id === null) {
+                    return collect([$point]);
+                }
+
+                $groupedPoints = collect([$point]);
+
+                $otherOrderPoints = OrderDeliveryPoint::where('location_id', $point->location_id)
+                    ->where('order_id', '!=', $point->order_id)
+                    ->whereHas('order', fn ($q) => $q->where('trip_id', $trip->id))
+                    ->where('status', '!=', OrderDeliveryPointStatus::Delivered->value)
+                    ->orderBy('sequence')
+                    ->get()
+                    ->groupBy('order_id')
+                    ->map(fn ($points) => $points->first());
+
+                return $groupedPoints->merge($otherOrderPoints->values());
             }
         }
 
@@ -136,7 +145,7 @@ class CheckpointFactory
         $stub->order_id = $orderId;
         $stub->id = null;
 
-        return collect([$orderId => $stub]);
+        return collect([$stub]);
     }
 
     /**

@@ -49,6 +49,14 @@ class TripCheckpointService
 
         // Return trip: no orders, just update existing checkpoint km_reading
         if ($trip->status === TripStatus::ReturnTrip && in_array($checkpointType, [CheckpointType::Started, CheckpointType::End], true)) {
+            $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id);
+            if ($activeCargoTrip !== null) {
+                $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);
+                throw ValidationException::withMessages([
+                    'checkpoint_type' => "Xe {$plateNumber} đang có chuyến hàng thực hiện. Vui lòng hoàn thành hoặc đảo lái trước khi thực hiện chuyến không hàng.",
+                ]);
+            }
+
             $existing = TripCheckpoint::where('trip_id', $trip->id)
                 ->where('checkpoint_type', $checkpointType->value)
                 ->first();
@@ -117,13 +125,30 @@ class TripCheckpointService
             return;
         }
 
-        $activeTrip = Trip::where('driver_id', $trip->driver_id)
+        // Nếu trip này là chuyến không hàng: kiểm tra tài xế có chuyến có hàng nào đang chạy không
+        if ($trip->is_empty_run) {
+            $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id);
+            if ($activeCargoTrip !== null) {
+                $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);
+                throw ValidationException::withMessages([
+                    'checkpoint_type' => "Xe {$plateNumber} đang có chuyến hàng thực hiện. Vui lòng hoàn thành hoặc đảo lái trước khi bắt đầu chuyến không hàng.",
+                ]);
+            }
+        }
+
+        // Nếu trip này là chuyến có hàng: chỉ kiểm tra các chuyến có hàng khác đang chạy (chuyến không hàng chưa chạy sẽ không chặn)
+        $activeTripQuery = Trip::where('driver_id', $trip->driver_id)
             ->where('id', '!=', $trip->id)
             ->whereIn('status', array_filter(
                 TripStatus::activeStatuses(),
                 fn (TripStatus $s) => ! in_array($s, [TripStatus::Pending, TripStatus::DriverSwap]),
-            ))
-            ->first();
+            ));
+
+        if (! $trip->is_empty_run) {
+            $activeTripQuery->where('is_empty_run', false);
+        }
+
+        $activeTrip = $activeTripQuery->first();
 
         if ($activeTrip === null) {
             return;
@@ -151,13 +176,18 @@ class TripCheckpointService
             return;
         }
 
-        $activeTrip = Trip::where('vehicle_id', $trip->vehicle_id)
+        $activeTripQuery = Trip::where('vehicle_id', $trip->vehicle_id)
             ->where('id', '!=', $trip->id)
             ->whereIn('status', array_filter(
                 TripStatus::activeStatuses(),
                 fn (TripStatus $s) => ! in_array($s, [TripStatus::Pending, TripStatus::DriverSwap]),
-            ))
-            ->first();
+            ));
+
+        if (! $trip->is_empty_run) {
+            $activeTripQuery->where('is_empty_run', false);
+        }
+
+        $activeTrip = $activeTripQuery->first();
 
         if ($activeTrip === null) {
             return;

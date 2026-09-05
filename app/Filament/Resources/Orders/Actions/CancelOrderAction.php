@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -64,6 +65,11 @@ class CancelOrderAction
                                 'status' => TripStatus::Cancelled->value,
                             ]);
                         }
+                    }
+
+                    try {
+                        app(DriverNotificationService::class)->sendOrderCancelled($record, $data['cancel_reason'] ?? null);
+                    } catch (Throwable) {
                     }
 
                     Notification::make()

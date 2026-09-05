@@ -47,6 +47,20 @@ class ListTrips extends ListRecords
     public ?string $activePlaceFilter = 'NBA';
 
     /**
+     * Catch layer clicks from the map widget inside the column-action modal.
+     * The action uses `<x-filament-leaflet::map widget>` which dispatches
+     * Livewire calls that would otherwise throw MethodNotFoundException.
+     */
+    public function handleLayerClick(string $layerId): void {}
+
+    public function handleMapClick(float $latitude, float $longitude): void {}
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function handleLayerUpdated(string $layerId, array $data): void {}
+
+    /**
      * @var array<string, string>
      */
     public array $orderPlaceFilters = [];

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
@@ -9,8 +10,10 @@ use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Filament\Resources\Trips\Pages\ViewTripTimeline;
 use App\Filament\Resources\Trips\Tables\TripsTable;
 use App\Filament\Resources\Trips\Widgets\TripStatsOverviewWidget;
+use App\Http\Resources\TripResource;
 use App\Models\Area;
 use App\Models\Customer;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\User;
@@ -178,6 +181,101 @@ test('trip resolves orders and lists pickups/deliveries correctly', function () 
 
     expect($pickups)->toBe('Pickup A → Pickup B → Pickup C');
     expect($deliveries)->toBe('Delivery A → Delivery B → Delivery C');
+});
+
+test('TripsTable and TripResource preserve repeated locations in route (ALSB -> ACSV -> ALSC -> ACSV)', function () {
+    $area = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'TEST-AREA-ABA',
+        'name' => 'Test Area ABA',
+    ]);
+
+    $vehicle = Vehicle::create([
+        'plate_number' => '51P-ABA.01',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $driver = User::factory()->create(['name' => 'Driver ABA']);
+
+    $locPickup = Location::create([
+        'code' => 'ALSB',
+        'name' => 'ALSB',
+        'loc_type' => 'pickup',
+        'is_active' => true,
+    ]);
+
+    $locACSV = Location::create([
+        'code' => 'ACSV',
+        'name' => 'ACSV',
+        'loc_type' => 'delivery',
+        'is_active' => true,
+    ]);
+
+    $locALSC = Location::create([
+        'code' => 'ALSC',
+        'name' => 'ALSC',
+        'loc_type' => 'delivery',
+        'is_active' => true,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-ABA-001',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Pending,
+        'start_location_id' => $locPickup->id,
+        'end_location_id' => $locACSV->id,
+    ]);
+
+    $customer = Customer::create([
+        'code' => 'CUST-ABA',
+        'name' => 'Customer ABA',
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-3',
+        'trip_id' => $trip->id,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'created_by' => $driver->id,
+        'planned_loading_at' => now(),
+        'pickup_location_id' => $locPickup->id,
+        'status' => OrderStatus::Sent,
+    ]);
+
+    $order->deliveryPoints()->createMany([
+        [
+            'location_id' => $locACSV->id,
+            'sequence' => 1,
+            'status' => 'pending',
+        ],
+        [
+            'location_id' => $locALSC->id,
+            'sequence' => 2,
+            'status' => 'pending',
+        ],
+        [
+            'location_id' => $locACSV->id,
+            'sequence' => 3,
+            'status' => 'pending',
+        ],
+    ]);
+
+    $trip->load(['orders.pickupLocation', 'orders.deliveryPoints.location', 'startLocation', 'endLocation']);
+
+    $pickups = TripsTable::getPickupLocations($trip);
+    $deliveries = TripsTable::getDeliveryDestination($trip);
+
+    expect($pickups)->toBe('ALSB');
+    expect($deliveries)->toBe('ACSV → ALSC → ACSV');
+
+    // Test API resource
+    $resource = TripResource::make($trip)->resolve();
+    expect($resource['route'])->toBe('ALSB → ACSV → ALSC → ACSV');
 });
 
 test('trips list shows pending trip when no date filter applied', function () {
@@ -449,4 +547,13 @@ test('trip stat cards calculate correct metrics and filter by status properly', 
     $component->call('filterStatus', 'delayed')
         ->assertCanSeeTableRecords([$delayedTrip])
         ->assertCanNotSeeTableRecords([$unsentTrip, $runningTrip, $completedTrip]);
+});
+
+test('trips list handles map click and layer events without throwing MethodNotFoundException', function () {
+    Livewire::test(ListTrips::class)
+        ->call('handleLayerClick', 'layer-123')
+        ->call('handleMapClick', 10.8231, 106.6297)
+        ->call('handleLayerUpdated', 'layer-123', ['lat' => 10.8231, 'lng' => 106.6297])
+        ->assertStatus(200)
+        ->assertHasNoErrors();
 });

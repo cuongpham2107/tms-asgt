@@ -41,7 +41,7 @@ class OrderForm extends CreatesOrderTransportCards
                     ->tabs([
                         Tab::make('Thông tin đơn hàng')
                             ->icon('heroicon-o-information-circle')
-                            ->columns(['default' => 1, 'sm' => 2])
+                            ->columns(['default' => 1, 'sm' => 2, 'md' => 4])
                             ->schema([
                                 ToggleButtons::make('area_id')
                                     ->label('Khu vực')
@@ -132,7 +132,7 @@ class OrderForm extends CreatesOrderTransportCards
                                 TextInput::make('cargo_name')
                                     ->label('Tên hàng hoá')
                                     ->placeholder('Ví dụ: Hàng gia dụng')
-                                    ->columnSpan(['default' => 1, 'sm' => fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2]),
+                                    ->columnSpan(['default' => 1, 'sm' => fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2, 'md' => fn (Get $get): int => self::isExternalOrder($get) ? 2 : 4]),
 
                                 TextInput::make('chargeable_weight')
                                     ->label('Tải trọng tính cước')
@@ -143,7 +143,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->required()
                                     ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(1),
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 
                                 ToggleButtons::make('cargo_type')
                                     ->label('Loại hàng')
@@ -160,7 +160,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->inline()
                                     ->required()
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(1),
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 
                                 Select::make('pickup_location_id')
                                     ->label('Điểm nhận hàng')
@@ -174,20 +174,35 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->native(false)
                                     ->required(fn (Get $get): bool => self::isHhhkOrder($get))
                                     ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
-                                    ->columnSpan(['default' => 1, 'sm' => 2]),
+                                    ->columnSpan(['default' => 1, 'sm' => 2, 'md' => 2]),
+
+                                DateTimePicker::make('planned_loading_at')
+                                    ->label('Thời gian dự kiến đóng hàng')
+                                    ->seconds(false)
+                                    ->native(true)
+                                    ->prefixIcon(Heroicon::OutlinedCalendarDays)
+                                    ->required()
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
+
+                                Toggle::make('is_return_trip')
+                                    ->label('Chuyến quay đầu')
+                                    ->helperText('Đánh dấu đơn hàng là chuyến quay đầu')
+                                    ->default(false)
+                                    ->inline(false)
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 
                                 TextInput::make('pickup_contact')
                                     ->label('Người liên hệ nhận')
                                     ->placeholder('Người nhận hàng')
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(['default' => 1, 'sm' => 1]),
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
 
                                 TextInput::make('pickup_phone')
                                     ->label('SĐT liên hệ nhận')
                                     ->placeholder('Số điện thoại')
                                     ->tel()
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(['default' => 1, 'sm' => 1]),
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
 
                                 TextInput::make('pickup_address')
                                     ->label('Địa chỉ chi tiết nhận hàng (nếu có)')
@@ -252,59 +267,48 @@ class OrderForm extends CreatesOrderTransportCards
                                                     ->prefixIcon(Heroicon::OutlinedMap)
                                                     ->placeholder('Ví dụ: 34 Lê Lợi')
                                                     ->columnSpan(['default' => 1, 'sm' => 6, 'md' => 8]),
-                                                TextInput::make('contact_person')
-                                                    ->label('Người nhận')
-                                                    ->prefixIcon(Heroicon::OutlinedUser)
-                                                    ->placeholder('Ví dụ: Nguyễn Văn A')
-                                                    ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 4]),
-                                                TextInput::make('contact_phone')
-                                                    ->label('Số điện thoại nhận')
-                                                    ->prefixIcon(Heroicon::OutlinedPhone)
-                                                    ->placeholder('Ví dụ: 0901234567')
-                                                    ->tel()
-                                                    ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 3]),
-                                                TextInput::make('total_packages')
-                                                    ->label('Số kiện')
-                                                    ->prefixIcon(Heroicon::OutlinedSquares2x2)
-                                                    ->mask(RawJs::make('$money($input)'))
-                                                    ->stripCharacters(',')
-                                                    ->numeric()
-                                                    ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 2]),
-                                                TextInput::make('total_weight')
-                                                    ->label('Trọng lượng (tấn)')
-                                                    ->prefixIcon(Heroicon::OutlinedScale)
-                                                    ->mask(RawJs::make('$money($input)'))
-                                                    ->stripCharacters(',')
-                                                    ->numeric()
-                                                    ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 3]),
+                                                // TextInput::make('contact_person')
+                                                //     ->label('Người nhận')
+                                                //     ->prefixIcon(Heroicon::OutlinedUser)
+                                                //     ->placeholder('Ví dụ: Nguyễn Văn A')
+                                                //     ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 4]),
+                                                // TextInput::make('contact_phone')
+                                                //     ->label('Số điện thoại nhận')
+                                                //     ->prefixIcon(Heroicon::OutlinedPhone)
+                                                //     ->placeholder('Ví dụ: 0901234567')
+                                                //     ->tel()
+                                                //     ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 3]),
+                                                // TextInput::make('total_packages')
+                                                //     ->label('Số kiện')
+                                                //     ->prefixIcon(Heroicon::OutlinedSquares2x2)
+                                                //     ->mask(RawJs::make('$money($input)'))
+                                                //     ->stripCharacters(',')
+                                                //     ->numeric()
+                                                //     ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 2]),
+                                                // TextInput::make('total_weight')
+                                                //     ->label('Trọng lượng (tấn)')
+                                                //     ->prefixIcon(Heroicon::OutlinedScale)
+                                                //     ->mask(RawJs::make('$money($input)'))
+                                                //     ->stripCharacters(',')
+                                                //     ->numeric()
+                                                //     ->columnSpan(['default' => 1, 'sm' => 3, 'md' => 3]),
                                             ]),
                                     ])
                                     ->columnSpanFull(),
 
-                                DateTimePicker::make('planned_loading_at')
-                                    ->label('Thời gian dự kiến đóng hàng')
-                                    ->seconds(false)
-                                    ->native(true)
-                                    ->required()
-                                    ->columnSpan(['default' => 1, 'sm' => fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2]),
-                                Toggle::make('is_return_trip')
-                                    ->label('Chuyến quay đầu')
-                                    ->default(false)
-                                    ->inline(false)
-                                    ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(['default' => 1, 'sm' => 1]),
-
+                                TextInput::make('total_packages')
+                                    ->label('Số kiện')
+                                    ->mask(RawJs::make('$money($input)'))
+                                    ->stripCharacters(',')
+                                    ->numeric()
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
                                 TextInput::make('total_weight')
                                     ->label('Trọng lượng (tấn)')
                                     ->live(onBlur: true)
                                     ->mask(RawJs::make('$money($input)'))
                                     ->stripCharacters(',')
-                                    ->numeric(),
-                                TextInput::make('total_packages')
-                                    ->label('Số kiện')
-                                    ->mask(RawJs::make('$money($input)'))
-                                    ->stripCharacters(',')
-                                    ->numeric(),
+                                    ->numeric()
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
                                 Textarea::make('notes')
                                     ->label('Ghi chú')
                                     ->columnSpanFull(),

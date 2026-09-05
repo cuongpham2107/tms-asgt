@@ -456,13 +456,15 @@ class OrdersTable extends BaseTable
         $trip = $record->trip;
         if ($trip?->vehicle && $trip->vehicle->type === VehicleOwnerType::Rent) {
             $owner = e($trip->vehicle->owner ?? '—');
+            $plate_number = e($trip->vehicle->plate_number ?? '—');
+
             $typeLabel = e($trip->vehicle->vehicle_type?->getLabel() ?? '—');
 
             return new HtmlString(
                 <<<HTML
                     <div class="flex flex-col items-center gap-1.5 leading-tight text-center">
                         <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-semibold">
-                            <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{$owner}</span>
+                            <span class="font-bold text-sm text-gray-900 dark:text-gray-100">{$plate_number} - {$owner}</span>
                         </div>
                         <div class="inline-flex items-center gap-2 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">
                             <span class="whitespace-nowrap">{$typeLabel}</span>

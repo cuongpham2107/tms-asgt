@@ -9,7 +9,9 @@ use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\DriverShift;
 use App\Models\Trip;
+use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
@@ -72,10 +74,12 @@ class ReassignTransportAction extends CreatesOrderTransportCards
                 }
 
                 try {
-                    DB::transaction(function () use ($record, $data) {
+                    $oldDriver = $record->driver ?? ($record->driver_id ? User::find($record->driver_id) : null);
+                    $newDriverId = $data['driver_id'] ?? null;
+
+                    DB::transaction(function () use ($record, $data, $newDriverId) {
                         $oldVehicleId = $record->vehicle_id;
                         $newVehicleId = $data['vehicle_id'];
-                        $newDriverId = $data['driver_id'] ?? null;
 
                         $newShift = null;
                         if ($newDriverId) {
@@ -120,6 +124,22 @@ class ReassignTransportAction extends CreatesOrderTransportCards
                             }
                         }
                     });
+
+                    $newDriver = $newDriverId ? User::find($newDriverId) : null;
+
+                    if ($newDriver !== null && ($oldDriver === null || $oldDriver->id !== $newDriver->id)) {
+                        try {
+                            app(DriverNotificationService::class)->sendTripReassigned($record, $newDriver, $oldDriver);
+                        } catch (Throwable) {
+                        }
+                    }
+
+                    if ($oldDriver !== null && ($newDriver === null || $oldDriver->id !== $newDriver->id)) {
+                        try {
+                            app(DriverNotificationService::class)->sendTripUnassigned($record, $oldDriver);
+                        } catch (Throwable) {
+                        }
+                    }
 
                     Notification::make()
                         ->title('Gán lại xe và tài xế thành công')

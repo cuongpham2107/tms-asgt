@@ -37,16 +37,7 @@ class TripResource extends JsonResource
                 'km_reading' => $this->vehicle->current_mileage,
             ]),
 
-            'route' => $this->whenLoaded('startLocation', function () {
-                $from = $this->startLocation?->code;
-                $to = $this->endLocation?->code;
-
-                if ($from && $to) {
-                    return "{$from} → {$to}";
-                }
-
-                return null;
-            }),
+            'route' => $this->buildRoute(),
 
             'shift' => $this->whenLoaded('shift', fn () => DriverShiftResource::make($this->shift)),
 
@@ -68,6 +59,54 @@ class TripResource extends JsonResource
         }
 
         return $data;
+    }
+
+    private function buildRoute(): ?string
+    {
+        if ($this->relationLoaded('orders') && $this->orders->isNotEmpty()) {
+            $codes = [];
+            $orders = $this->orders->sortBy('planned_loading_at');
+            foreach ($orders as $order) {
+                if ($order->relationLoaded('pickupLocation')) {
+                    $code = $order->pickupLocation?->code ?? $order->pickup_address;
+                    if ($code) {
+                        $codes[] = $code;
+                    }
+                }
+                if ($order->relationLoaded('deliveryPoints')) {
+                    foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
+                        $code = $dp->location?->code ?? $dp->address;
+                        if ($code) {
+                            $codes[] = $code;
+                        }
+                    }
+                }
+            }
+
+            if (! empty($codes)) {
+                $deduped = [];
+                foreach ($codes as $c) {
+                    if (empty($deduped) || end($deduped) !== $c) {
+                        $deduped[] = $c;
+                    }
+                }
+
+                return implode(' → ', $deduped);
+            }
+        }
+
+        if ($this->relationLoaded('startLocation') || $this->relationLoaded('endLocation')) {
+            $from = $this->startLocation?->code;
+            $to = $this->endLocation?->code;
+
+            if ($from && $to) {
+                return "{$from} → {$to}";
+            }
+
+            return $from ?? $to;
+        }
+
+        return null;
     }
 
     /**

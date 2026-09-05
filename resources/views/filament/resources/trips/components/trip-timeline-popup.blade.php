@@ -77,7 +77,7 @@
         $html .= '</p>';
         $html .= '<span class="shrink-0 text-xs text-gray-400 dark:text-gray-500">'.e($cp->occurred_at?->format('H:i d/m/Y') ?? '—').'</span>';
         $html .= '</div>';
-        $html .= '<p class="text-sm text-gray-500 dark:text-gray-400">'.e($cp->deliveryPoint?->address ?? $cp->deliveryPoint?->location?->name ?? '—').'</p>';
+        $html .= '<p class="text-sm text-gray-500 dark:text-gray-400">'.e($cp->deliveryPoint?->location?->code ?? $cp->deliveryPoint?->location?->code ?? '—').'</p>';
 
         $hasExtra = $cp->km_reading || ($cp->gps_lat && $cp->gps_lng) || $cp->voice_note;
         if ($hasExtra) {

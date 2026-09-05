@@ -15,6 +15,8 @@ use App\Filament\Resources\Trips\Actions\SendTripAction;
 use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
+use App\Models\User;
+use App\Services\Notification\DriverNotificationService;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\TripKmAdjustmentService;
 use App\Services\TripKmCalculatorService;
@@ -29,6 +31,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -85,6 +88,7 @@ class TripsTable extends BaseTable
                 TextColumn::make('order_count')
                     ->label('Số đơn')
                     ->html()
+                    ->weight(FontWeight::Bold)
                     ->alignCenter()
                     ->state(function (Trip $record): string {
                         $codes = $record->orders->pluck('order_code')->filter()->values();
@@ -92,7 +96,7 @@ class TripsTable extends BaseTable
                             return '—';
                         }
 
-                        $badges = $codes->map(fn ($c) => '<span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">'.e($c).'</span>')->implode(' ');
+                        $badges = $codes->map(fn ($c) => '<span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">'.e($c).'</span>')->implode(' ');
 
                         return '<div class="flex flex-wrap gap-1 justify-center">'.$badges.'</div>';
                     })
@@ -240,9 +244,32 @@ class TripsTable extends BaseTable
                                     $order->update(['status' => OrderStatus::Completed]);
                                 });
                             }
+
+                            $oldDriverId = $record->driver_id;
+                            $newDriverId = $data['driver_id'] ?? null;
+
                             $record->update($data);
 
                             self::recalculateKm($record);
+
+                            if ($newDriverId && (int) $oldDriverId !== (int) $newDriverId) {
+                                $oldDriver = $oldDriverId ? User::find($oldDriverId) : null;
+                                $newDriver = User::find($newDriverId);
+
+                                if ($newDriver !== null) {
+                                    try {
+                                        app(DriverNotificationService::class)->sendTripReassigned($record, $newDriver, $oldDriver);
+                                    } catch (\Throwable) {
+                                    }
+                                }
+
+                                if ($oldDriver !== null) {
+                                    try {
+                                        app(DriverNotificationService::class)->sendTripUnassigned($record, $oldDriver);
+                                    } catch (\Throwable) {
+                                    }
+                                }
+                            }
 
                             return $record;
                         }),
@@ -464,8 +491,8 @@ class TripsTable extends BaseTable
         $html = '<div class="flex flex-col">';
         if ($vehicle->type === VehicleOwnerType::Rent) {
             $html .= '<div class="mt-0.5 flex flex-col gap-0.5 leading-tight">';
-            if ($vehicle->owner) {
-                $html .= '<span class="text-sm font-semibold text-gray-900 dark:text-gray-100">'.e($vehicle->owner).'</span>';
+            if ($vehicle->plate_number) {
+                $html .= '<span class="text-sm font-semibold text-gray-900 dark:text-gray-100">'.e($vehicle->plate_number).' - '.e($vehicle->owner).'</span>';
             }
             if ($vehicle->vehicle_type) {
                 $html .= '<span class="text-xs font-medium text-gray-500 dark:text-gray-400">'.e($vehicle->vehicle_type->getLabel()).'</span>';
@@ -493,16 +520,24 @@ class TripsTable extends BaseTable
 
         $pickups = [];
         foreach ($orders as $order) {
-            $pickups[] = $order->pickupLocation?->code ?? $order->pickup_address;
+            $code = $order->pickupLocation?->code ?? $order->pickup_address;
+            if ($code) {
+                $pickups[] = $code;
+            }
         }
 
-        $pickups = array_filter(array_unique($pickups));
+        $deduped = [];
+        foreach ($pickups as $p) {
+            if (empty($deduped) || end($deduped) !== $p) {
+                $deduped[] = $p;
+            }
+        }
 
-        if (empty($pickups)) {
+        if (empty($deduped)) {
             return '—';
         }
 
-        return implode(' → ', $pickups);
+        return implode(' → ', $deduped);
     }
 
     public static function getDeliveryDestination(Trip $record): string
@@ -516,21 +551,25 @@ class TripsTable extends BaseTable
         $destinations = [];
         foreach ($orders as $order) {
             foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
-                $destinations[] = $dp->location?->code ?? $dp->address;
+                $code = $dp->location?->code ?? $dp->address;
+                if ($code) {
+                    $destinations[] = $code;
+                }
             }
         }
 
-        if ($record->endLocation) {
-            $destinations[] = $record->endLocation->code;
+        $deduped = [];
+        foreach ($destinations as $d) {
+            if (empty($deduped) || end($deduped) !== $d) {
+                $deduped[] = $d;
+            }
         }
 
-        $destinations = array_filter(array_unique($destinations));
-
-        if (empty($destinations)) {
-            return '—';
+        if (empty($deduped)) {
+            return $record->endLocation?->code ?? '—';
         }
 
-        return implode(' → ', $destinations);
+        return implode(' → ', $deduped);
     }
 
     private static function getDrivers(Trip $record): string

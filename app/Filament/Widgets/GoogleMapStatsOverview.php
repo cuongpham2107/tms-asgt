@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Models\Vehicle;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
@@ -13,7 +14,10 @@ class GoogleMapStatsOverview extends BaseWidget
 
     protected function getStats(): array
     {
-        $vehicles = Vehicle::query()->where('is_active', true)->get();
+        $vehicles = Vehicle::query()
+            ->where('is_active', true)
+            ->where('type', VehicleOwnerType::Company)
+            ->get();
 
         $total = $vehicles->count();
         $running = $vehicles->where('status', VehicleStatus::Running)->count();

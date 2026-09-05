@@ -14,6 +14,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
@@ -251,6 +252,13 @@ class ReassignDriverAction
                     ->where('status', OrderStatus::DriverSwap->value)
                     ->update(['status' => $restoredStatus->value]);
 
+                if ($newDriver !== null) {
+                    try {
+                        app(DriverNotificationService::class)->sendTripDriverSwapped($record, $newDriver, $oldDriver, $handoverKm);
+                    } catch (\Throwable) {
+                    }
+                }
+
                 Notification::make()
                     ->success()
                     ->title('Đã gán lại tài xế')
@@ -305,6 +313,11 @@ class ReassignDriverAction
                         'vehicle_id' => $data['return_vehicle_id'],
                         'order_id' => null,
                     ]);
+
+                    try {
+                        app(DriverNotificationService::class)->sendEmptyRunDispatched($returnTrip);
+                    } catch (\Throwable) {
+                    }
 
                     Notification::make()
                         ->success()

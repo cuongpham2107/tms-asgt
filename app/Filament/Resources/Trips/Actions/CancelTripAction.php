@@ -7,6 +7,7 @@ use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Models\Trip;
+use App\Services\Notification\DriverNotificationService;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\TripKmCalculatorService;
 use Filament\Actions\Action;
@@ -119,6 +120,11 @@ class CancelTripAction
                             app(ShiftKmCalculatorService::class)->calculate($record->shift);
                         }
                     });
+
+                    try {
+                        app(DriverNotificationService::class)->sendTripCancelled($record, $data['cancel_reason'] ?? null);
+                    } catch (Throwable) {
+                    }
 
                     Notification::make()
                         ->title('Huỷ chuyến thành công')

@@ -56,6 +56,8 @@ class TripController extends Controller
                 ]),
                 'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
+            ->orderByRaw('CASE WHEN is_empty_run = 0 THEN 0 ELSE 1 END')
+            ->orderByRaw("CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered') THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END")
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -94,6 +96,8 @@ class TripController extends Controller
                 ]),
                 'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
+            ->orderByRaw('CASE WHEN is_empty_run = 0 THEN 0 ELSE 1 END')
+            ->orderByRaw("CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered') THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END")
             ->orderBy('created_at', 'desc')
             ->first();
 
@@ -235,6 +239,17 @@ class TripController extends Controller
 
         if ($trip->isCompleted() || $trip->status === TripStatus::DriverSwap) {
             return response()->json(['message' => 'Chuyến đã kết thúc'], 422);
+        }
+
+        if ($trip->is_empty_run || $trip->status === TripStatus::ReturnTrip) {
+            $activeCargoTrip = Trip::getActiveCargoTripForDriver($user->id, $trip->id);
+            if ($activeCargoTrip !== null) {
+                $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);
+
+                return response()->json([
+                    'message' => "Xe {$plateNumber} đang có chuyến hàng thực hiện. Vui lòng hoàn thành hoặc đảo lái trước khi kết thúc chuyến không hàng.",
+                ], 422);
+            }
         }
 
         $validated = $request->validate([

@@ -1,7 +1,6 @@
 <x-filament-panels::page>
     @php
         $lastUpdated = $this->getLastUpdated();
-        [$playMin, $playMax] = $this->getPlaybackBounds();
     @endphp
 
     <style>
@@ -64,7 +63,7 @@
 
             {{-- Right Map Container --}}
             <div class="map-tracking-map-container overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-                <div wire:loading.delay.class="opacity-40" wire:target="refreshData,setPlaybackTimestamp,updateSelectedVehicles" class="h-full w-full transition-opacity duration-300">
+                <div wire:loading.delay.class="opacity-40" wire:target="refreshData,updateSelectedVehicles" class="h-full w-full transition-opacity duration-300">
                     <x-filament-leaflet::map
                         :config="$this->getMapData()"
                         widget
@@ -72,7 +71,7 @@
                 </div>
 
                 {{-- Loading Overlay --}}
-                <div wire:loading wire:target="refreshData,setPlaybackTimestamp,updateSelectedVehicles" class="absolute inset-0 z-50 flex items-center justify-center rounded-xl" style="background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(4px);">
+                <div wire:loading wire:target="refreshData,updateSelectedVehicles" class="absolute inset-0 z-50 flex items-center justify-center rounded-xl" style="background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(4px);">
                     <div class="flex items-center gap-3 rounded-xl bg-white px-6 py-4 shadow-xl ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
                         <x-filament::loading-indicator class="h-6 w-6 text-primary-600 dark:text-primary-400" />
                         <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">Đang cập nhật lộ trình xe...</span>
@@ -81,7 +80,7 @@
             </div>
         </div>
 
-        {{-- Bottom Mission Control Bar: Legend & Playback Toolbar --}}
+        {{-- Bottom Mission Control Bar: Legend & Actions --}}
         <div class="flex flex-col lg:flex-row flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-3.5 shadow-sm dark:border-gray-700 dark:bg-gray-900 shrink-0">
             {{-- Route Legend --}}
             <div class="flex flex-wrap items-center gap-4 text-xs">
@@ -108,97 +107,28 @@
                 </span>
             </div>
 
-            {{-- Playback / Replay Controls --}}
-            <div class="flex flex-wrap items-center gap-4 text-xs">
-                @if($playMin && $playMax && $playMin < $playMax)
-                    <div x-data="{
-                        playbackTimestamp: {{ json_encode($this->playbackTimestamp ?? $playMax) }},
-                        playbackPlaying: @entangle('playbackPlaying'),
-                        playbackSpeed: @entangle('playbackSpeed'),
-                        playMin: {{ $playMin }},
-                        playMax: {{ $playMax }},
-                        step: 60,
-                        timer: null,
-                        sendCounter: 0,
-                        sendStep: 2,
-                        start() {
-                            this.stop();
-                            this.timer = setInterval(() => {
-                                if (this.playbackTimestamp === null) this.playbackTimestamp = this.playMax;
-                                this.playbackTimestamp = Math.min(this.playMax, this.playbackTimestamp + this.step);
-                                this.sendCounter++;
-                                if (this.sendCounter % this.sendStep === 0) {
-                                    this.$wire.call('setPlaybackTimestampLight', this.playbackTimestamp);
-                                }
-                                if (this.playbackTimestamp >= this.playMax) {
-                                    this.playbackPlaying = false;
-                                    this.stop();
-                                }
-                            }, this.playbackSpeed || 1000);
-                        },
-                        stop() { if (this.timer) { clearInterval(this.timer); this.timer = null; this.sendCounter = 0; } },
-                    }"
-                    x-init="$watch('playbackPlaying', val => { if (val) start(); else stop(); })"
-                    class="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700"
-                    >
-                        <button
-                            @click="playbackPlaying = !playbackPlaying"
-                            type="button"
-                            class="flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-primary-500 transition-colors"
-                        >
-                            <template x-if="!playbackPlaying">
-                                <x-filament::icon icon="heroicon-s-play" class="h-3.5 w-3.5" />
-                            </template>
-                            <template x-if="playbackPlaying">
-                                <x-filament::icon icon="heroicon-s-pause" class="h-3.5 w-3.5" />
-                            </template>
-                            <span x-text="playbackPlaying ? 'Tạm dừng' : 'Phát lại'"></span>
-                        </button>
+            {{-- Live Indicator & Refresh --}}
+            <div class="flex items-center gap-3">
+                <button
+                    wire:click="refreshData"
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:text-primary-600 transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-primary-400"
+                    wire:loading.attr="disabled"
+                >
+                    <x-filament::icon icon="heroicon-o-arrow-path" class="h-3.5 w-3.5" wire:loading.class="animate-spin" wire:target="refreshData" />
+                    <span wire:loading.remove wire:target="refreshData">Làm mới</span>
+                    <span wire:loading wire:target="refreshData">Đang tải...</span>
+                </button>
 
-                        <div class="flex items-center gap-2">
-                            <input
-                                type="range"
-                                :min="playMin"
-                                :max="playMax"
-                                step="60"
-                                x-model.number="playbackTimestamp"
-                                @change="$wire.call('setPlaybackTimestamp', playbackTimestamp)"
-                                class="w-32 md:w-44 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600 dark:bg-gray-700"
-                            />
-                            <span class="font-mono text-[11px] font-medium text-gray-700 dark:text-gray-300 min-w-28" x-text="playbackTimestamp ? (new Date(playbackTimestamp * 1000).toLocaleString('vi-VN', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'})) : ''"></span>
-                        </div>
-
-                        <select x-model.number="playbackSpeed" class="rounded-md border-gray-200 bg-white px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                            <option :value="2000">0.5x</option>
-                            <option :value="1000">1.0x</option>
-                            <option :value="500">2.0x</option>
-                        </select>
-                    </div>
-                @endif
-
-                {{-- Live Indicator & Refresh --}}
-                <div class="flex items-center gap-3">
-                    <button
-                        wire:click="refreshData"
-                        type="button"
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:text-primary-600 transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-primary-400"
-                        wire:loading.attr="disabled"
-                    >
-                        <x-filament::icon icon="heroicon-o-arrow-path" class="h-3.5 w-3.5" wire:loading.class="animate-spin" wire:target="refreshData" />
-                        <span wire:loading.remove wire:target="refreshData">Làm mới</span>
-                        <span wire:loading wire:target="refreshData">Đang tải...</span>
-                    </button>
-
-                    @if ($lastUpdated)
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950 dark:text-emerald-300">
-                            <span class="relative flex h-2 w-2">
-                                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                                <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                            </span>
-                            {{ $lastUpdated->format('H:i:s') }}
+                @if ($lastUpdated)
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950 dark:text-emerald-300">
+                        <span class="relative flex h-2 w-2">
+                            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
                         </span>
-                    @endif
-                </div>
+                        {{ $lastUpdated->format('H:i:s') }}
+                    </span>
+                @endif
             </div>
         </div>
     </div>

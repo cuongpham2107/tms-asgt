@@ -9,6 +9,7 @@ use App\Enums\TripStatus;
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\User;
+use App\Services\Notification\DriverNotificationService;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
 use App\Services\Trip\TripKmLimitService;
@@ -159,6 +160,9 @@ class DriverSwapAction
                     CheckpointType::DriverSwap,
                 );
 
+                $oldDriver = $record->driver ?? User::query()->find($record->driver_id);
+                $newDriver = User::query()->find($toDriverId);
+
                 $record->update([
                     'driver_id' => $toDriverId,
                     'shift_id' => null,
@@ -170,6 +174,20 @@ class DriverSwapAction
                     ->update(['status' => OrderStatus::DriverSwap->value]);
 
                 app(ShiftKmCalculatorService::class)->calculateForTrip($record);
+
+                if ($newDriver !== null) {
+                    try {
+                        app(DriverNotificationService::class)->sendTripDriverSwapped($record, $newDriver, $oldDriver, $handoverKm);
+                    } catch (\Throwable) {
+                    }
+                }
+
+                if ($oldDriver !== null && ($newDriver === null || $oldDriver->id !== $newDriver->id)) {
+                    try {
+                        app(DriverNotificationService::class)->sendTripDriverSwapHandover($record, $oldDriver, $newDriver);
+                    } catch (\Throwable) {
+                    }
+                }
 
                 Notification::make()
                     ->title('Đảo lái thành công')

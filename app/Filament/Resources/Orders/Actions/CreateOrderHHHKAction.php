@@ -14,6 +14,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Tabs;
@@ -33,7 +34,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
         $tabs = [
             Tab::make('Thông tin đơn hàng')
                 ->icon('heroicon-o-information-circle')
-                ->columns(['default' => 1, 'sm' => 2])
+                ->columns(['default' => 1, 'sm' => 2, 'md' => 4])
                 ->schema([
                     ToggleButtons::make('area_id')
                         ->label('Khu vực')
@@ -75,7 +76,8 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                                 'loc_type' => $data['loc_type'] ?? LocationType::Pickup->value,
                                 'is_active' => true,
                             ]))->getKey();
-                        }),
+                        })
+                        ->columnSpan(['default' => 1, 'sm' => 2, 'md' => 2]),
                     DateTimePicker::make('planned_loading_at')
                         ->label('Thời gian dự kiến đóng hàng')
                         ->seconds(false)
@@ -83,20 +85,29 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         // ->hourMode(24)
                         ->default(now())
                         ->prefixIcon(Heroicon::OutlinedCalendarDays)
-                        ->required(),
+                        ->required()
+                        ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
+                    Toggle::make('is_return_trip')
+                        ->label('Chuyến quay đầu')
+                        ->helperText('Đánh dấu đơn hàng là chuyến quay đầu')
+                        ->default(false)
+                        ->inline(false)
+                        ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
                     self::getDeliveryPointsRepeaterField('HHHK'),
 
                     TextInput::make('total_packages')
                         ->label('Số kiện')
                         ->mask(RawJs::make('$money($input)'))
                         ->stripCharacters(',')
-                        ->numeric(),
+                        ->numeric()
+                        ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
                     TextInput::make('total_weight')
                         ->label('Trọng lượng (tấn)')
                         ->live(onBlur: true)
                         ->mask(RawJs::make('$money($input)'))
                         ->stripCharacters(',')
-                        ->numeric(),
+                        ->numeric()
+                        ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
                     Textarea::make('notes')
                         ->label('Ghi chú')
                         ->columnSpanFull(),
