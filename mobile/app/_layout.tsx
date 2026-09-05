@@ -84,6 +84,15 @@ export default function RootLayout() {
               headerTintColor: "#fff",
             }}
           />
+          <Stack.Screen
+            name="overtime-registration"
+            options={{
+              headerShown: true,
+              title: "Đăng ký tăng cường",
+              headerStyle: { backgroundColor: "#4F46E5" },
+              headerTintColor: "#fff",
+            }}
+          />
         </Stack>
       </LoadingProvider>
     </AuthProvider>

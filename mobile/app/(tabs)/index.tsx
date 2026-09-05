@@ -139,6 +139,21 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       )}
 
+      <TouchableOpacity
+        style={st.overtimeBanner}
+        onPress={() => router.push("/overtime-registration")}
+        activeOpacity={0.8}
+      >
+        <View style={st.overtimeIconWrap}>
+          <Ionicons name="calendar" size={20} color="#4F46E5" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={st.overtimeTitle}>Đăng ký lịch tăng cường</Text>
+          <Text style={st.overtimeSub}>Chọn ca & ngày làm việc tăng cường</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+      </TouchableOpacity>
+
       <View style={st.statRow}>
         <View style={[st.statCard, { backgroundColor: "#F3F4F6", borderColor: "#D1D5DB" }]}>
           <Ionicons name="time-outline" size={22} color="#6B7280" />
@@ -274,4 +289,39 @@ const st = StyleSheet.create({
   linkText: { color: "#4F46E5", fontWeight: "600", fontSize: 14 },
   startShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4F46E5", paddingVertical: 14, borderRadius: 12, marginHorizontal: 16, marginTop: 8, marginBottom:8 },
   startShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  overtimeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    gap: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  overtimeIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  overtimeTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  overtimeSub: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
 });

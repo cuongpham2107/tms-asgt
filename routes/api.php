@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\DriverFcmTokenController;
 use App\Http\Controllers\Api\DriverShiftController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\OvertimeRegistrationController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\ShiftStatusController;
 use App\Http\Controllers\Api\TripCheckpointController;
@@ -59,6 +60,11 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
 
     // Locations (danh sách địa điểm có search và limit)
     Route::get('/locations', [LocationController::class, 'index']);
+
+    // Đăng ký tăng cường (Overtime registrations)
+    Route::get('/overtime-registrations', [OvertimeRegistrationController::class, 'index']);
+    Route::post('/overtime-registrations', [OvertimeRegistrationController::class, 'store']);
+    Route::delete('/overtime-registrations/{overtimeRegistration}', [OvertimeRegistrationController::class, 'destroy']);
 
     // OSRM routing (dùng cho map mobile)
     Route::post('/route', [RouteController::class, 'route']);

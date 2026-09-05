@@ -14,6 +14,7 @@ class DriverShift extends Model
     protected $fillable = [
         'driver_id',
         'shift_type',
+        'is_overtime',
         'start_time',
         'end_time',
         'start_km',
@@ -42,6 +43,7 @@ class DriverShift extends Model
             'total_km_loaded' => 'decimal:1',
             'total_km_empty' => 'decimal:1',
             'shift_type' => ShiftType::class,
+            'is_overtime' => 'boolean',
         ];
     }
 

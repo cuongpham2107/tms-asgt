@@ -4,6 +4,7 @@ namespace App\Services\Notification;
 
 use App\Models\DriverShift;
 use App\Models\Order;
+use App\Models\OvertimeRegistration;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -333,6 +334,55 @@ class DriverNotificationService
             'order_id' => (string) $order->id,
             'order_code' => (string) $order->order_code,
             'trip_id' => (string) ($trip?->id ?? $order->trip_id ?? ''),
+        ];
+
+        return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification khi đăng ký tăng cường được xác nhận.
+     */
+    public function sendOvertimeConfirmed(OvertimeRegistration $registration): bool
+    {
+        $driver = $registration->driver;
+
+        if ($driver === null) {
+            return false;
+        }
+
+        $shiftLabel = $registration->shift_type?->getLabel() ?? $registration->shift_type;
+        $dateFormatted = $registration->overtime_date ? $registration->overtime_date->format('d/m/Y') : '';
+
+        $title = 'Xác nhận tăng cường';
+        $body = "Xác nhận {$driver->name} tăng cường {$shiftLabel} ngày {$dateFormatted}";
+
+        $data = [
+            'type' => 'overtime_confirmed',
+            'overtime_registration_id' => (string) $registration->id,
+            'shift_type' => (string) ($registration->shift_type?->value ?? $registration->shift_type),
+            'overtime_date' => $registration->overtime_date ? $registration->overtime_date->format('Y-m-d') : '',
+        ];
+
+        return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification khi đăng ký tăng cường bị từ chối.
+     */
+    public function sendOvertimeRejected(OvertimeRegistration $registration): bool
+    {
+        $driver = $registration->driver;
+
+        if ($driver === null) {
+            return false;
+        }
+
+        $title = 'Đăng ký tăng cường';
+        $body = 'Đăng ký không thành công, ca tăng cường đã đủ người';
+
+        $data = [
+            'type' => 'overtime_rejected',
+            'overtime_registration_id' => (string) $registration->id,
         ];
 
         return $this->sendToDriver($driver, $title, $body, $data);

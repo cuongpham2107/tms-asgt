@@ -3,7 +3,7 @@ import { Platform } from "react-native";
 // ─── Cấu hình API Laravel ───────────────────────────────────────────
 // Thay IP này thành IP máy chạy Laravel backend
 const API = Platform.select({
-    ios: "http://tms.asgl.net.vn/api/driver",
+    ios: "https://tms.asgl.net.vn/api/driver",
     android: "http://tms.asgl.net.vn/api/driver",
     default: "http://tms.asgl.net.vn/api/driver",
 });
@@ -166,9 +166,42 @@ export const api = {
             method: "POST",
             body: JSON.stringify({ fcm_token: fcmToken }),
         }),
+
+    // Overtime Registration (Đăng ký tăng cường)
+    overtime: {
+        list: (params: { month?: string } = {}, t: string) => {
+            const qs = new URLSearchParams();
+            if (params?.month) qs.set("month", params.month);
+            const queryStr = qs.toString() ? `?${qs.toString()}` : "";
+            return fetchApi<{ data: OvertimeRegistrationResource[] }>(`/overtime-registrations${queryStr}`, t);
+        },
+        register: (body: { shift_type: string; overtime_date: string; notes?: string }, t: string) =>
+            fetchApi<{ data: any; message: string }>("/overtime-registrations", t, {
+                method: "POST",
+                body: JSON.stringify(body),
+            }),
+        cancel: (id: number | string, t: string) =>
+            fetchApi<{ message: string }>(`/overtime-registrations/${id}`, t, {
+                method: "DELETE",
+            }),
+    },
 };
 
 // ─── Type helpers ────────────────────────────────────────────────────
+
+export interface OvertimeRegistrationResource {
+    id: number;
+    driver_id: number;
+    shift_type: string;
+    shift_type_label: string;
+    overtime_date: string;
+    status: "pending" | "confirmed" | "rejected";
+    status_label: string;
+    status_color?: string;
+    notes: string | null;
+    confirmed_at: string | null;
+    created_at: string;
+}
 
 export interface ShiftResource {
     id: number;

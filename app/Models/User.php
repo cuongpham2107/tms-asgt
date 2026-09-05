@@ -233,4 +233,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(OrderTemplate::class, 'created_by');
     }
+
+    public function overtimeRegistrations(): HasMany
+    {
+        return $this->hasMany(OvertimeRegistration::class, 'driver_id');
+    }
 }
