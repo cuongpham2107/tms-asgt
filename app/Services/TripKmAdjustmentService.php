@@ -56,6 +56,13 @@ class TripKmAdjustmentService
 
             // Cập nhật start_km / end_km của trip nếu checkpoint nằm ở mốc biên
             $this->syncTripBoundary($trip, $targetCp, $correctedKm);
+        } else {
+            if ($trip->start_km !== null) {
+                $trip->update(['start_km' => $correctedKm]);
+            }
+            if ($trip->vehicle) {
+                $trip->vehicle->update(['current_mileage' => $correctedKm]);
+            }
         }
 
         // 2. Tính lại km chuyến
@@ -104,6 +111,10 @@ class TripKmAdjustmentService
 
         if ($firstCp && $firstCp->id === $checkpoint->id) {
             $trip->update(['start_km' => $correctedKm]);
+
+            if ($trip->shift && $trip->shift->trips()->orderBy('id')->first()?->id === $trip->id) {
+                $trip->shift->update(['start_km' => $correctedKm]);
+            }
         }
 
         $lastCp = TripCheckpoint::where('trip_id', $trip->id)

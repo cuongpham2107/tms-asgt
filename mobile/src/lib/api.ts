@@ -92,13 +92,16 @@ export const api = {
             }
             return fetchApi<any>(`/trips/${tripId}/checkpoints`, t, { method: "POST", body: JSON.stringify(body) });
         },
-        reportKmIssue: async (tripId: string, body: { reported_km: number; note?: string; photo?: string }, t: string) => {
+        reportKmIssue: async (tripId: string, body: { reported_km: number; checkpoint_id?: number; note?: string; photo?: string }, t: string) => {
             if (body.photo) {
                 const fd = new FormData();
                 const res = await fetch(body.photo);
                 const blob = await res.blob();
                 fd.append("photo", blob, "km_report.jpg");
                 fd.append("reported_km", String(body.reported_km));
+                if (body.checkpoint_id) {
+                    fd.append("checkpoint_id", String(body.checkpoint_id));
+                }
                 if (body.note) {
                     fd.append("note", body.note);
                 }

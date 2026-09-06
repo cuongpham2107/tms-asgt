@@ -96,6 +96,13 @@ const orderStatusLabel: Record<string, string> = {
     cancelled: "Huỷ",
 };
 
+const KM_REASONS = [
+    "Gõ nhầm số km",
+    "Đồng hồ taplo lệch",
+    "Nhận ca trước bàn giao sai",
+    "Khác",
+];
+
 const localISO = (d: Date = new Date()) => {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -118,6 +125,7 @@ export default function TripDetailScreen() {
     const [showCompleteModal, setShowCompleteModal] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportKm, setReportKm] = useState("");
+    const [reportReason, setReportReason] = useState(KM_REASONS[0]);
     const [reportNote, setReportNote] = useState("");
     const [reportPhoto, setReportPhoto] = useState<string | null>(null);
     const [submittingReport, setSubmittingReport] = useState(false);
@@ -126,6 +134,48 @@ export default function TripDetailScreen() {
     // Format: bỏ .0, hiển thị số nguyên
     const fmt = (v: any) =>
         v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
+
+    const getCurrentStepInfo = () => {
+        const cps = detail?.checkpoints || [];
+        const driverCps = userId
+            ? cps.filter((c: any) => c.driver_id === userId)
+            : cps;
+        const latestCp = (driverCps.length > 0 ? driverCps : cps).slice(-1)[0];
+
+        const typeLabels: Record<string, string> = {
+            started: "Bắt đầu chuyến",
+            arrived_pickup: "Đến lấy hàng",
+            left_pickup: "Rời lấy hàng",
+            arrived_delivery: "Đến giao hàng",
+            completed: "Hoàn thành",
+            driver_swap: "Đảo lái",
+            end: "Kết thúc xe",
+            cancelled: "Huỷ chuyến",
+        };
+
+        if (!latestCp) {
+            return {
+                id: undefined,
+                name: "Bắt đầu chuyến",
+                km:
+                    detail?.start_km != null
+                        ? Number(detail.start_km)
+                        : null,
+            };
+        }
+
+        return {
+            id: latestCp.id,
+            name:
+                typeLabels[latestCp.checkpoint_type] ||
+                latestCp.checkpoint_type ||
+                "Mốc hiện tại",
+            km:
+                latestCp.km_reading != null
+                    ? Number(latestCp.km_reading)
+                    : null,
+        };
+    };
 
     const handlePickReportPhoto = async () => {
         const { status } =
@@ -136,7 +186,7 @@ export default function TripDetailScreen() {
         }
         const res = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
+            allowsEditing: false,
             quality: 0.8,
         });
         if (!res.canceled && res.assets?.[0]?.uri) {
@@ -151,7 +201,7 @@ export default function TripDetailScreen() {
             return;
         }
         const res = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
+            allowsEditing: false,
             quality: 0.8,
         });
         if (!res.canceled && res.assets?.[0]?.uri) {
@@ -171,6 +221,8 @@ export default function TripDetailScreen() {
         const tripId = trip?.id || params.id;
         if (!tripId || !token) return;
 
+        const currentStep = getCurrentStepInfo();
+
         setSubmittingReport(true);
         showLoading();
         try {
@@ -178,7 +230,8 @@ export default function TripDetailScreen() {
                 String(tripId),
                 {
                     reported_km: km,
-                    note: reportNote || undefined,
+                    checkpoint_id: currentStep.id,
+                    note: reportNote ? `${reportReason}: ${reportNote}` : reportReason,
                     photo: reportPhoto || undefined,
                 },
                 token,
@@ -189,6 +242,7 @@ export default function TripDetailScreen() {
             );
             setShowReportModal(false);
             setReportKm("");
+            setReportReason(KM_REASONS[0]);
             setReportNote("");
             setReportPhoto(null);
             await load();
@@ -1228,6 +1282,46 @@ export default function TripDetailScreen() {
                             </Text>
                         </View>
 
+                        {/* Hiển thị bước hiện tại */}
+                        {(() => {
+                            const step = getCurrentStepInfo();
+                            return (
+                                <View
+                                    style={{
+                                        backgroundColor: "#FEF3C7",
+                                        borderColor: "#FCD34D",
+                                        borderWidth: 1,
+                                        borderRadius: 8,
+                                        padding: 10,
+                                        marginBottom: 12,
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            fontSize: 12,
+                                            color: "#92400E",
+                                            fontWeight: "600",
+                                        }}
+                                    >
+                                        Mốc hành trình báo sai:
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            fontSize: 14,
+                                            color: "#78350F",
+                                            fontWeight: "700",
+                                            marginTop: 2,
+                                        }}
+                                    >
+                                        {step.name}{" "}
+                                        {step.km != null
+                                            ? `(Đang ghi nhận: ${step.km.toLocaleString("vi-VN")} km)`
+                                            : ""}
+                                    </Text>
+                                </View>
+                            );
+                        })()}
+
                         <Text style={s.modalSectionLabel}>
                             Số Km thực tế trên Taplo xe *
                         </Text>
@@ -1311,25 +1405,84 @@ export default function TripDetailScreen() {
                             </View>
                         )}
 
-                        <Text style={s.modalSectionLabel}>Ghi chú thêm</Text>
-                        <TextInput
-                            style={[
-                                s.stickyInput,
-                                {
-                                    marginBottom: 16,
-                                    minHeight: 90,
-                                    height: 90,
-                                    textAlignVertical: "top",
-                                    paddingTop: 10,
-                                },
-                            ]}
-                            value={reportNote}
-                            onChangeText={setReportNote}
-                            placeholder="Lý do sai lệch, xe trước bàn giao sai..."
-                            placeholderTextColor="#9CA3AF"
-                            multiline
-                            numberOfLines={4}
-                        />
+                        <Text style={s.modalSectionLabel}>
+                            Lý do báo sai lệch *
+                        </Text>
+                        <View
+                            style={{
+                                flexDirection: "row",
+                                flexWrap: "wrap",
+                                gap: 8,
+                                marginBottom: reportReason === "Khác" ? 10 : 16,
+                            }}
+                        >
+                            {KM_REASONS.map((r) => {
+                                const isSelected = reportReason === r;
+                                return (
+                                    <TouchableOpacity
+                                        key={r}
+                                        onPress={() => setReportReason(r)}
+                                        style={{
+                                            paddingHorizontal: 12,
+                                            paddingVertical: 8,
+                                            borderRadius: 8,
+                                            borderWidth: 1.5,
+                                            borderColor: isSelected
+                                                ? "#D97706"
+                                                : "#E5E7EB",
+                                            backgroundColor: isSelected
+                                                ? "#FFFBEB"
+                                                : "#F9FAFB",
+                                            flexDirection: "row",
+                                            alignItems: "center",
+                                            gap: 6,
+                                        }}
+                                    >
+                                        {isSelected && (
+                                            <Ionicons
+                                                name="checkmark-circle"
+                                                size={16}
+                                                color="#D97706"
+                                            />
+                                        )}
+                                        <Text
+                                            style={{
+                                                fontSize: 13,
+                                                fontWeight: isSelected
+                                                    ? "700"
+                                                    : "500",
+                                                color: isSelected
+                                                    ? "#B45309"
+                                                    : "#374151",
+                                            }}
+                                        >
+                                            {r}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        {reportReason === "Khác" && (
+                            <TextInput
+                                style={[
+                                    s.stickyInput,
+                                    {
+                                        marginBottom: 16,
+                                        minHeight: 60,
+                                        height: 60,
+                                        textAlignVertical: "top",
+                                        paddingTop: 8,
+                                    },
+                                ]}
+                                value={reportNote}
+                                onChangeText={setReportNote}
+                                placeholder="Nhập lý do cụ thể..."
+                                placeholderTextColor="#9CA3AF"
+                                multiline
+                                numberOfLines={2}
+                            />
+                        )}
 
                         <View style={{ flexDirection: "row", gap: 10 }}>
                             <TouchableOpacity

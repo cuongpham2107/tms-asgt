@@ -35,29 +35,47 @@ class TripKmReportController extends Controller
         }
 
         $checkpointId = $request->validated('checkpoint_id');
-        if (! $checkpointId) {
-            $latestCp = $trip->checkpoints()
+        $checkpoint = null;
+        if ($checkpointId) {
+            $checkpoint = $trip->checkpoints()->find($checkpointId);
+        }
+        if (! $checkpoint) {
+            $checkpoint = $trip->checkpoints()
                 ->where('driver_id', $user->id)
                 ->orderByDesc('occurred_at')
                 ->orderByDesc('id')
                 ->first()
                 ?? $trip->checkpoints()->orderByDesc('occurred_at')->orderByDesc('id')->first();
-            $checkpointId = $latestCp?->id;
+            $checkpointId = $checkpoint?->id;
         }
 
-        $systemKm = $trip->vehicle?->current_mileage;
+        $systemKm = $checkpoint?->km_reading ?? $trip->start_km ?? $trip->vehicle?->current_mileage;
 
-        $report = TripKmReport::create([
-            'trip_id' => $trip->id,
-            'checkpoint_id' => $checkpointId,
-            'driver_id' => $user->id,
-            'vehicle_id' => $trip->vehicle_id,
-            'reported_km' => $request->validated('reported_km'),
-            'system_km' => $systemKm,
-            'photo_path' => $photoPath,
-            'note' => $request->validated('note'),
-            'status' => 'pending',
-        ]);
+        $existingPending = $trip->kmReports()->where('status', 'pending')->first();
+        if ($existingPending) {
+            $existingPending->update([
+                'checkpoint_id' => $checkpointId,
+                'driver_id' => $user->id,
+                'vehicle_id' => $trip->vehicle_id,
+                'reported_km' => $request->validated('reported_km'),
+                'system_km' => $systemKm,
+                'photo_path' => $photoPath ?? $existingPending->photo_path,
+                'note' => $request->validated('note'),
+            ]);
+            $report = $existingPending;
+        } else {
+            $report = TripKmReport::create([
+                'trip_id' => $trip->id,
+                'checkpoint_id' => $checkpointId,
+                'driver_id' => $user->id,
+                'vehicle_id' => $trip->vehicle_id,
+                'reported_km' => $request->validated('reported_km'),
+                'system_km' => $systemKm,
+                'photo_path' => $photoPath,
+                'note' => $request->validated('note'),
+                'status' => 'pending',
+            ]);
+        }
 
         return response()->json([
             'data' => [

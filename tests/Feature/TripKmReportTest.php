@@ -228,3 +228,51 @@ test('admin can resolve report with specific targetCheckpointId', function () {
     // First checkpoint was NOT touched
     expect((float) $firstCp->km_reading)->toBe(108000.0);
 });
+
+test('driver submitting with checkpoint_id records correct checkpoint and system_km', function () {
+    Sanctum::actingAs($this->driver);
+
+    $cp = TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'km_reading' => 108020,
+        'occurred_at' => now(),
+    ]);
+
+    $response = $this->postJson("/api/driver/trips/{$this->trip->id}/report-km-issue", [
+        'checkpoint_id' => $cp->id,
+        'reported_km' => 100095,
+        'note' => 'Gõ nhầm số km',
+    ]);
+
+    $response->assertStatus(201)
+        ->assertJsonPath('data.reported_km', '100095.0')
+        ->assertJsonPath('data.system_km', '108020.0');
+
+    $report = TripKmReport::latest('id')->first();
+    expect($report->checkpoint_id)->toBe($cp->id)
+        ->and((float) $report->system_km)->toBe(108020.0);
+});
+
+test('submitting again while pending updates existing pending report', function () {
+    Sanctum::actingAs($this->driver);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/report-km-issue", [
+        'reported_km' => 100085,
+        'note' => 'Lần 1',
+    ]);
+
+    expect(TripKmReport::count())->toBe(1);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/report-km-issue", [
+        'reported_km' => 100090,
+        'note' => 'Lần 2 sửa lại',
+    ]);
+
+    expect(TripKmReport::count())->toBe(1);
+    $report = TripKmReport::first();
+    expect((float) $report->reported_km)->toBe(100090.0)
+        ->and($report->note)->toBe('Lần 2 sửa lại');
+});
