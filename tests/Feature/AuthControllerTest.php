@@ -88,3 +88,55 @@ test('login returns shift null when driver has no shifts', function () {
     $response->assertSuccessful()
         ->assertJsonPath('shift', null);
 });
+
+test('login returns active shift and prevents new shift when driver has an unended shift from yesterday', function () {
+    $driver = User::factory()->create([
+        'email' => 'driver4@example.com',
+        'password' => bcrypt('password123'),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    // Shift started yesterday and never ended
+    $yesterdayShift = DriverShift::create([
+        'driver_id' => $driver->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now()->subDay()->setTime(8, 0, 0),
+        'end_time' => null,
+    ]);
+
+    $response = $this->postJson('/api/driver/login', [
+        'email' => 'driver4@example.com',
+        'password' => 'password123',
+    ]);
+
+    $response->assertSuccessful()
+        ->assertJsonPath('shift.id', $yesterdayShift->id);
+
+    // Driver cannot start a new shift today while yesterday's shift is unended
+    $token = $response->json('token');
+    $startResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->postJson('/api/driver/shifts/start', [
+            'shift_type' => ShiftType::Full->value,
+            'start_time' => now()->toIso8601String(),
+        ]);
+
+    $startResponse->assertStatus(409)
+        ->assertJsonPath('message', 'Bạn đã có một ca làm việc đang hoạt động');
+
+    // Current shift endpoint also returns the yesterday shift
+    $currentResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->getJson('/api/driver/shifts/current');
+    $currentResponse->assertSuccessful()
+        ->assertJsonPath('shift.id', $yesterdayShift->id);
+
+    // Driver can end yesterday's shift today
+    $endResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->postJson('/api/driver/shifts/end', [
+            'end_time' => now()->toIso8601String(),
+            'end_km' => 100,
+        ]);
+    $endResponse->assertSuccessful();
+
+    $yesterdayShift->refresh();
+    expect($yesterdayShift->end_time)->not->toBeNull();
+});

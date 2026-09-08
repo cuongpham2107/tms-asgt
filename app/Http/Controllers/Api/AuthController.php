@@ -38,10 +38,10 @@ class AuthController extends Controller
 
         $token = $user->createToken('mobile')->plainTextToken;
 
-        // Lấy ca đang active của lái xe hôm nay (nếu có)
+        // Lấy ca đang active của lái xe (nếu có)
         $activeShift = DriverShift::query()
             ->where('driver_id', $user->id)
-            ->whereDate('start_time', now()->toDateString())
+            ->where('start_time', '<=', now())
             ->whereNull('end_time')
             ->latest('start_time')
             ->first();

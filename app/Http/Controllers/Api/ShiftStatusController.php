@@ -27,7 +27,7 @@ class ShiftStatusController extends Controller
 
         $activeShift = DriverShift::query()
             ->where('driver_id', $user->id)
-            ->whereDate('start_time', now()->toDateString())
+            ->where('start_time', '<=', now())
             ->whereNull('end_time')
             ->latest('start_time')
             ->first();
