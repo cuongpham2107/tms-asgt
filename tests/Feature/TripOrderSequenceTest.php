@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\DriverShift;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -353,4 +354,99 @@ test('api current and active endpoints prioritize cargo trip over empty run', fu
     $activeRes = $this->getJson('/api/driver/trips/active');
     $activeRes->assertSuccessful();
     expect($activeRes->json('data.0.id'))->toBe($cargoTrip->id);
+});
+
+test('empty run can be executed and completed when a cargo trip is still pending', function () {
+    $driver = User::factory()->create();
+    $driver->assignRole($this->driverRole);
+
+    $vehicle = Vehicle::create([
+        'plate_number' => '29C-666.66',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::Running,
+        'type' => VehicleOwnerType::Company,
+        'current_mileage' => 60000,
+    ]);
+
+    $shift = DriverShift::create([
+        'driver_id' => $driver->id,
+        'vehicle_id' => $vehicle->id,
+        'shift_type' => 'full',
+        'start_time' => now()->subHour(),
+        'start_km' => 60000,
+    ]);
+
+    // Chuyến có hàng vẫn đang chờ chạy (Pending)
+    $cargoTrip = Trip::create([
+        'trip_code' => 'TRIP-CARGO-06',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'shift_id' => $shift->id,
+        'status' => TripStatus::Pending,
+        'is_empty_run' => false,
+    ]);
+
+    $area = Area::create(['code' => 'AREA-06', 'name' => 'Khu vực 6']);
+    $customer = Customer::create(['name' => 'Khách Hàng 6', 'code' => 'CUST-06', 'is_active' => true]);
+
+    Order::create([
+        'order_code' => 'ORD-CARGO-06',
+        'status' => OrderStatus::Sent,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'trip_id' => $cargoTrip->id,
+        'created_by' => $driver->id,
+        'sent_at' => now(),
+    ]);
+
+    // Chuyến không hàng (ReturnTrip)
+    $emptyTrip = Trip::create([
+        'trip_code' => 'TRIP-EMPTY-06',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'shift_id' => $shift->id,
+        'status' => TripStatus::ReturnTrip,
+        'is_empty_run' => true,
+        'start_km' => 60000,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $emptyTrip->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'occurred_at' => now(),
+        'km_reading' => 60000,
+        'driver_id' => $driver->id,
+        'shift_id' => $shift->id,
+        'vehicle_id' => $vehicle->id,
+    ]);
+
+    Sanctum::actingAs($driver);
+
+    // 1. Tài xế có thể ghi nhận checkpoint Started cho chuyến không hàng mà không bị chặn
+    $response = $this->postJson("/api/driver/trips/{$emptyTrip->id}/checkpoints", [
+        'checkpoint_type' => CheckpointType::Started->value,
+        'km_reading' => 60000,
+        'occurred_at' => now()->toISOString(),
+    ]);
+    $response->assertSuccessful();
+
+    // 2. Tài xế hoàn thành chuyến không hàng trước
+    $response = $this->postJson("/api/driver/trips/{$emptyTrip->id}/complete", [
+        'end_km' => 60050,
+    ]);
+    $response->assertSuccessful();
+    $emptyTrip->refresh();
+    expect($emptyTrip->status)->toBe(TripStatus::Completed);
+
+    // 3. Sau khi hoàn thành chuyến không hàng, tài xế bắt đầu chuyến có hàng
+    $response = $this->postJson("/api/driver/trips/{$cargoTrip->id}/checkpoints", [
+        'checkpoint_type' => CheckpointType::Started->value,
+        'km_reading' => 60050,
+        'occurred_at' => now()->toISOString(),
+    ]);
+    $response->assertSuccessful();
+    $cargoTrip->refresh();
+    expect($cargoTrip->status)->toBe(TripStatus::Started);
 });
