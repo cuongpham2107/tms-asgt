@@ -3,10 +3,13 @@
 namespace App\Filament\Resources\OvertimeRegistrations;
 
 use App\Filament\BaseResource;
+use App\Filament\Resources\OvertimeRegistrations\Pages\EditOvertimeRegistration;
 use App\Filament\Resources\OvertimeRegistrations\Pages\ListOvertimeRegistrations;
+use App\Filament\Resources\OvertimeRegistrations\Schemas\OvertimeRegistrationForm;
 use App\Filament\Resources\OvertimeRegistrations\Tables\OvertimeRegistrationsTable;
 use App\Models\OvertimeRegistration;
 use BackedEnum;
+use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use UnitEnum;
@@ -29,6 +32,11 @@ class OvertimeRegistrationResource extends BaseResource
 
     protected static ?int $navigationSort = 2;
 
+    public static function form(Schema $schema): Schema
+    {
+        return OvertimeRegistrationForm::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return OvertimeRegistrationsTable::configure($table);
@@ -43,6 +51,7 @@ class OvertimeRegistrationResource extends BaseResource
     {
         return [
             'index' => ListOvertimeRegistrations::route('/'),
+            'edit' => EditOvertimeRegistration::route('/{record}/edit'),
         ];
     }
 }

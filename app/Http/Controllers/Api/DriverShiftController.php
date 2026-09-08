@@ -42,9 +42,10 @@ class DriverShiftController extends Controller
 
         $startTime = Carbon::now();
 
-        // Ensure driver does not have an open shift
+        // Ensure driver does not have an open shift today
         $existing = DriverShift::query()
             ->where('driver_id', $user->id)
+            ->whereDate('start_time', now()->toDateString())
             ->whereNull('end_time')
             ->first();
 
@@ -169,6 +170,7 @@ class DriverShiftController extends Controller
 
         $shift = DriverShift::query()
             ->where('driver_id', $user->id)
+            ->whereDate('start_time', now()->toDateString())
             ->whereNull('end_time')
             ->latest('start_time')
             ->first();
@@ -292,6 +294,7 @@ class DriverShiftController extends Controller
 
         $shift = DriverShift::query()
             ->where('driver_id', $user->id)
+            ->whereDate('start_time', now()->toDateString())
             ->whereNull('end_time')
             ->latest('start_time')
             ->first();
@@ -317,7 +320,9 @@ class DriverShiftController extends Controller
 
         $shift = DriverShift::query()
             ->where('driver_id', $user->id)
+            ->whereDate('start_time', now()->toDateString())
             ->whereNull('end_time')
+            ->latest('start_time')
             ->first();
 
         if (! $shift) {

@@ -63,13 +63,20 @@ class OvertimeRegistrationController extends Controller
                 'date',
                 'date_format:Y-m-d',
                 'after_or_equal:today',
-                function ($attribute, $value, $fail) use ($user) {
+                function ($attribute, $value, $fail) use ($user, $request) {
+                    $shiftType = $request->input('shift_type');
+
+                    if (! $shiftType) {
+                        return;
+                    }
+
                     $exists = OvertimeRegistration::where('driver_id', $user->id)
                         ->whereDate('overtime_date', $value)
+                        ->where('shift_type', $shiftType)
                         ->exists();
 
                     if ($exists) {
-                        $fail('Bạn đã đăng ký lịch tăng cường cho ngày này rồi.');
+                        $fail('Bạn đã đăng ký lịch tăng cường cho ca này trong ngày rồi.');
                     }
                 },
             ],

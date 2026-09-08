@@ -4,20 +4,21 @@ namespace App\Filament\Resources\OvertimeRegistrations\Tables;
 
 use App\Enums\OvertimeStatus;
 use App\Filament\BaseTable;
-use App\Models\DriverShift;
+use App\Filament\Resources\OvertimeRegistrations\Filters\ListFilterOvertimeRegistrations;
+use App\Filament\Resources\OvertimeRegistrations\OvertimeRegistrationResource;
 use App\Models\OvertimeRegistration;
 use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Forms\Components\DatePicker;
+use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class OvertimeRegistrationsTable extends BaseTable
 {
@@ -68,41 +69,15 @@ class OvertimeRegistrationsTable extends BaseTable
                     ->sortable(),
             ])
             ->filters([
-                SelectFilter::make('status')
-                    ->label('Trạng thái')
-                    ->options(OvertimeStatus::class),
-                SelectFilter::make('driver_id')
-                    ->label('Tài xế')
-                    ->relationship('driver', 'name')
-                    ->searchable()
-                    ->preload(),
-                Filter::make('overtime_date')
-                    ->label('Ngày tăng cường')
-                    ->form([
-                        DatePicker::make('from_date')->label('Từ ngày'),
-                        DatePicker::make('to_date')->label('Đến ngày'),
-                    ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when(
-                                $data['from_date'] ?? null,
-                                fn (Builder $q, $date) => $q->whereDate(
-                                    'overtime_date',
-                                    '>=',
-                                    $date,
-                                ),
-                            )
-                            ->when(
-                                $data['to_date'] ?? null,
-                                fn (Builder $q, $date) => $q->whereDate(
-                                    'overtime_date',
-                                    '<=',
-                                    $date,
-                                ),
-                            );
-                    }),
-            ])
+                ListFilterOvertimeRegistrations::make(),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns(1)
+            ->deferFilters(false)
             ->recordActions([
+                EditAction::make()
+                    ->label('Chi tiết')
+                    ->icon(Heroicon::OutlinedEye)
+                    ->color('gray'),
                 Action::make('confirm')
                     ->label('Xác nhận')
                     ->icon(Heroicon::OutlinedCheck)
@@ -115,7 +90,7 @@ class OvertimeRegistrationsTable extends BaseTable
                             OvertimeRegistration $record,
                         ) => "Bạn có chắc chắn muốn xác nhận ca tăng cường cho tài xế {$record->driver?->name} vào ngày {$record->overtime_date?->format(
                             'd/m/Y',
-                        )}? Hệ thống sẽ tự động tạo ca làm việc cho tài xế.",
+                        )}?",
                     )
                     ->visible(
                         fn (OvertimeRegistration $record) => $record->status ===
@@ -125,14 +100,7 @@ class OvertimeRegistrationsTable extends BaseTable
                         $record->update([
                             'status' => OvertimeStatus::Confirmed,
                             'confirmed_at' => now(),
-                            'confirmed_by' => auth()->id(),
-                        ]);
-
-                        DriverShift::create([
-                            'driver_id' => $record->driver_id,
-                            'shift_type' => $record->shift_type,
-                            'is_overtime' => true,
-                            'start_time' => $record->overtime_date->startOfDay(),
+                            'confirmed_by' => Auth::id(),
                         ]);
 
                         try {
@@ -170,7 +138,7 @@ class OvertimeRegistrationsTable extends BaseTable
                         $record->update([
                             'status' => OvertimeStatus::Rejected,
                             'confirmed_at' => now(),
-                            'confirmed_by' => auth()->id(),
+                            'confirmed_by' => Auth::id(),
                         ]);
 
                         try {
@@ -187,6 +155,9 @@ class OvertimeRegistrationsTable extends BaseTable
                             ->send();
                     }),
             ])
+            ->recordUrl(
+                fn (OvertimeRegistration $record): string => OvertimeRegistrationResource::getUrl('edit', ['record' => $record]),
+            )
             ->toolbarActions([
                 BulkActionGroup::make([DeleteBulkAction::make()]),
             ]);
