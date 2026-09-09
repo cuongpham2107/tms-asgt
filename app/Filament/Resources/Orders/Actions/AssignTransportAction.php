@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Orders\Actions;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
-use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
@@ -87,9 +86,8 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     ->color('primary'),
             ])
             ->action(function (Order $record, array $data, array $arguments): void {
-                $isRent = Vehicle::query()->find($data['vehicle_id'])?->type === VehicleOwnerType::Rent;
-                $sendImmediately = $arguments['send_immediately'] ?? false;
-                $status = ($isRent || $sendImmediately) ? OrderStatus::Sent : OrderStatus::Assigned;
+                $sendImmediately = (bool) ($arguments['send_immediately'] ?? false);
+                $status = $sendImmediately ? OrderStatus::Sent : OrderStatus::Assigned;
                 self::createTripForOrder($record, $data, $status);
             });
     }
