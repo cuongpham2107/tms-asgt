@@ -140,3 +140,30 @@ test('login returns active shift and prevents new shift when driver has an unend
     $yesterdayShift->refresh();
     expect($yesterdayShift->end_time)->not->toBeNull();
 });
+
+test('driver can request account deletion', function () {
+    $driver = User::factory()->create([
+        'email' => 'driver_delete@example.com',
+        'password' => bcrypt('password123'),
+        'fcm_token' => 'some_token_value',
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    $token = $driver->createToken('test')->plainTextToken;
+
+    $response = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->postJson('/api/driver/account/delete-request');
+
+    $response->assertSuccessful()
+        ->assertJsonStructure(['message']);
+
+    $driver->refresh();
+    expect($driver->fcm_token)->toBeNull();
+    expect($driver->tokens()->count())->toBe(0);
+});
+
+test('public can view privacy policy page', function () {
+    $response = $this->get('/privacy-policy');
+    $response->assertSuccessful()
+        ->assertSee('Chính sách quyền riêng tư');
+});

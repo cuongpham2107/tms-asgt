@@ -30,7 +30,7 @@
         ],
         "ios": {
             "supportsTablet": true,
-            "bundleIdentifier": "com.anonymous.tmsmobile",
+            "bundleIdentifier": "vn.asgt.tmsdriver",
             "googleServicesFile": "./GoogleService-Info.plist",
             "entitlements": {
                 "aps-environment": "production"
@@ -62,8 +62,7 @@
                 "android.permission.ACCESS_FINE_LOCATION",
                 "android.permission.POST_NOTIFICATIONS"
             ],
-            "package": "com.anonymous.tmsmobile",
-            "versionCode": 1
+            "package": "vn.asgt.tmsdriver"
         },
         "web": {
             "favicon": "./assets/favicon.png"

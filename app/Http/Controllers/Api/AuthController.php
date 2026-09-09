@@ -11,6 +11,7 @@ use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
@@ -69,5 +70,32 @@ class AuthController extends Controller
         }
 
         return response()->json(['message' => 'Đã đăng xuất thành công']);
+    }
+
+    /**
+     * Yêu cầu xóa tài khoản (Apple App Store Guideline 5.1.1v).
+     * Xóa token FCM, thu hồi toàn bộ token đăng nhập và ghi nhận yêu cầu.
+     *
+     * @response array{message: string}
+     */
+    public function requestDeleteAccount(Request $request): JsonResponse
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+
+        if ($user) {
+            $user->update([
+                'fcm_token' => null,
+                'fcm_token_updated_at' => null,
+            ]);
+
+            $user->tokens()->delete();
+
+            Log::info("Lái xe ID {$user->id} ({$user->name} - {$user->email}) đã gửi yêu cầu xóa tài khoản.");
+        }
+
+        return response()->json([
+            'message' => 'Yêu cầu xóa tài khoản đã được ghi nhận. Phiên làm việc của bạn đã được đăng xuất khỏi hệ thống.',
+        ]);
     }
 }
