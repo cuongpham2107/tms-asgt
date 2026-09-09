@@ -17,6 +17,7 @@ import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
 import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
+import { clearNotificationBadge } from "../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
@@ -281,6 +282,7 @@ export default function TripDetailScreen() {
     };
     useFocusEffect(
         useCallback(() => {
+            clearNotificationBadge();
             load();
         }, [token, trip?.id, params.id]),
     );

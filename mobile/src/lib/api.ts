@@ -188,7 +188,17 @@ export const api = {
                 method: "DELETE",
             }),
     },
+
+    // Account (Yêu cầu xóa tài khoản theo chuẩn Apple Guideline 5.1.1v)
+    account: {
+        requestDelete: (t: string) =>
+            fetchApi<{ message: string }>("/account/delete-request", t, {
+                method: "POST",
+            }),
+    },
 };
+
+export const PRIVACY_POLICY_URL = "https://tms.asgl.net.vn/privacy-policy";
 
 // ─── Type helpers ────────────────────────────────────────────────────
 

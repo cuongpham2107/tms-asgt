@@ -34,6 +34,7 @@ export function showDestructiveConfirm(
   message: string,
   onConfirm: () => void,
   onCancel?: () => void,
+  confirmText: string = "Vẫn kết thúc",
 ) {
   if (Platform.OS === "web") {
     if (window.confirm(`${title}\n\n${message}`)) {
@@ -44,7 +45,7 @@ export function showDestructiveConfirm(
   } else {
     Alert.alert(title, message, [
       { text: "Huỷ", style: "cancel", onPress: onCancel },
-      { text: "Vẫn kết thúc", style: "destructive", onPress: onConfirm },
+      { text: confirmText, style: "destructive", onPress: onConfirm },
     ]);
   }
 }

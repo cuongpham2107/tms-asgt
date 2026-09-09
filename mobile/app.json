@@ -22,7 +22,7 @@
             [
                 "expo-notifications",
                 {
-                    "icon": "./assets/icon.png",
+                    "icon": "./assets/android-icon-monochrome.png",
                     "color": "#4F46E5",
                     "sounds": []
                 }
@@ -36,9 +36,9 @@
                 "aps-environment": "production"
             },
             "infoPlist": {
-                "NSCameraUsageDescription": "Cần camera để chụp ảnh chốt chặng",
-                "NSPhotoLibraryUsageDescription": "Cần thư viện ảnh để chọn ảnh",
-                "NSLocationWhenInUseUsageDescription": "Cần GPS để ghi nhận vị trí chốt chặng",
+                "NSCameraUsageDescription": "Ứng dụng cần sử dụng camera để tài xế chụp ảnh hàng hóa và biên bản giao nhận tại các chốt kiểm tra.",
+                "NSPhotoLibraryUsageDescription": "Ứng dụng cần truy cập thư viện ảnh để tài xế tải lên hình ảnh biên bản giao nhận và chứng từ vận chuyển.",
+                "NSLocationWhenInUseUsageDescription": "Ứng dụng cần truy cập vị trí khi sử dụng để xác thực vị trí tài xế tại điểm lấy hàng, giao hàng và ghi nhận lộ trình chuyến đi.",
                 "UIDesignRequiresCompatibility": true,
                 "NSAppTransportSecurity": {
                     "NSAllowsArbitraryLoads": true,
@@ -51,19 +51,19 @@
             "googleServicesFile": "./google-services.json",
             "usesCleartextTraffic": true,
             "adaptiveIcon": {
-                "backgroundColor": "#E6F4FE",
+                "backgroundColor": "#FFFFFF",
                 "foregroundImage": "./assets/android-icon-foreground.png",
                 "backgroundImage": "./assets/android-icon-background.png",
                 "monochromeImage": "./assets/android-icon-monochrome.png"
             },
             "predictiveBackGestureEnabled": false,
             "permissions": [
-                "android.permission.RECORD_AUDIO",
                 "android.permission.ACCESS_COARSE_LOCATION",
                 "android.permission.ACCESS_FINE_LOCATION",
                 "android.permission.POST_NOTIFICATIONS"
             ],
-            "package": "com.anonymous.tmsmobile"
+            "package": "com.anonymous.tmsmobile",
+            "versionCode": 1
         },
         "web": {
             "favicon": "./assets/favicon.png"

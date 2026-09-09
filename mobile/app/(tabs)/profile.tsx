@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from "react-native";
 import { useAuth } from "../../src/lib/auth";
 import { useLoading } from "../../src/lib/loading";
-import { api } from "../../src/lib/api";
-import { showAlert } from "../../src/lib/alert";
+import { api, PRIVACY_POLICY_URL } from "../../src/lib/api";
+import { showAlert, showDestructiveConfirm } from "../../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen() {
@@ -59,6 +59,30 @@ export default function ProfileScreen() {
   const initials = driver?.name
     ? driver.name.split(" ").pop()?.charAt(0)?.toUpperCase() || "TX"
     : "TX";
+
+  const handleDeleteAccount = () => {
+    showDestructiveConfirm(
+      "Yêu cầu xóa tài khoản",
+      "Bạn có chắc chắn muốn yêu cầu xóa tài khoản? Khi xác nhận, phiên đăng nhập của bạn sẽ bị thu hồi ngay lập tức và ban quản trị sẽ xử lý thông tin tài khoản theo chính sách bảo mật.",
+      async () => {
+        showLoading();
+        try {
+          if (token) {
+            await api.account.requestDelete(token);
+          }
+          await logout();
+          showAlert("Thành công", "Yêu cầu xóa tài khoản của bạn đã được ghi nhận.");
+          router.replace("/login");
+        } catch (e: any) {
+          showAlert("Lỗi", e.message || "Không thể gửi yêu cầu xóa tài khoản");
+        } finally {
+          hideLoading();
+        }
+      },
+      undefined,
+      "Yêu cầu xóa",
+    );
+  };
 
   return (
     <ScrollView style={s.container}>
@@ -150,11 +174,31 @@ export default function ProfileScreen() {
           <Text style={s.menuText}>Chuyến đã hoàn thành</Text>
           <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
         </TouchableOpacity>
-        <TouchableOpacity style={s.menuItem} onPress={logout}>
-          <View style={[s.menuIcon, { backgroundColor: "#FEF2F2" }]}>
-            <Ionicons name="log-out" size={20} color="#EF4444" />
+
+        <TouchableOpacity
+          style={s.menuItem}
+          onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => showAlert("Lỗi", "Không thể mở trang Chính sách quyền riêng tư"))}
+        >
+          <View style={[s.menuIcon, { backgroundColor: "#F0FDF4" }]}>
+            <Ionicons name="shield-checkmark" size={20} color="#16A34A" />
           </View>
-          <Text style={[s.menuText, { color: "#EF4444" }]}>Đăng xuất</Text>
+          <Text style={s.menuText}>Chính sách quyền riêng tư</Text>
+          <Ionicons name="open-outline" size={18} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={s.menuItem} onPress={logout}>
+          <View style={[s.menuIcon, { backgroundColor: "#F3F4F6" }]}>
+            <Ionicons name="log-out" size={20} color="#4B5563" />
+          </View>
+          <Text style={[s.menuText, { color: "#374151" }]}>Đăng xuất</Text>
+          <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={s.menuItem} onPress={handleDeleteAccount}>
+          <View style={[s.menuIcon, { backgroundColor: "#FEF2F2" }]}>
+            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+          </View>
+          <Text style={[s.menuText, { color: "#EF4444" }]}>Yêu cầu xóa tài khoản</Text>
           <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
         </TouchableOpacity>
       </View>

@@ -38,7 +38,10 @@
         "web": "expo start --web",
         "postinstall": "node -e \"var fs=require('fs');['node_modules/expo-router/build/fork/getPathFromState.js','node_modules/expo-router/build/fork/getPathFromState-forks.js','node_modules/expo-router/build/fork/getStateFromPath-forks.js'].forEach(f=>{try{var c=fs.readFileSync(f,'utf8');c=c.replace(/baseUrl = process\\.env\\.EXPO_BASE_URL/g,\\\"baseUrl = '/mobile'\\\");fs.writeFileSync(f,c)}catch(e){}})\"",
         "build:web": "rm -rf ../public/mobile && npx expo export --platform web --output-dir ../public/mobile && sed -i.bak 's|href=\"/favicon.ico\"|href=\"/mobile/favicon.ico\"|' ../public/mobile/index.html && rm -f ../public/mobile/index.html.bak && sed -i.bak 's|href=\"/_expo/|href=\"/mobile/_expo/|g' ../public/mobile/index.html && rm -f ../public/mobile/index.html.bak && sed -i.bak 's|src=\"/_expo/|src=\"/mobile/_expo/|' ../public/mobile/index.html && rm -f ../public/mobile/index.html.bak && sed -i.bak 's|\"/assets/|\"/mobile/assets/|g' ../public/mobile/_expo/static/js/web/entry-*.js && rm -f ../public/mobile/_expo/static/js/web/entry-*.js.bak",
-        "build:android:apk": "npx eas-cli build --platform android --profile preview"
+        "build:android:apk": "npx eas-cli build --platform android --profile preview",
+        "build:prod": "npx eas-cli build --profile production",
+        "build:prod:android": "npx eas-cli build --platform android --profile production",
+        "build:prod:ios": "npx eas-cli build --platform ios --profile production"
     },
     "private": true
 }

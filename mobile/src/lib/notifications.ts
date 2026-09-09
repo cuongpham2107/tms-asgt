@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
@@ -12,11 +12,23 @@ Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowAlert: true,
         shouldPlaySound: true,
-        shouldSetBadge: true,
+        shouldSetBadge: false, // Khi app đang mở thì không cần giữ badge icon ngoài màn hình
         shouldShowBanner: true,
         shouldShowList: true,
     }),
 });
+
+/**
+ * Xóa số lượng thông báo (badge) trên biểu tượng ứng dụng ngoài màn hình chính.
+ */
+export async function clearNotificationBadge(): Promise<void> {
+    if (Platform.OS === "web") return;
+    try {
+        await Notifications.setBadgeCountAsync(0);
+    } catch (error) {
+        console.log("Failed to clear notification badge:", error);
+    }
+}
 
 /**
  * Đăng ký quyền và lấy Push Token của thiết bị (hỗ trợ cả máy thật & Simulator).
@@ -100,6 +112,23 @@ export function usePushNotifications(authToken: string | null) {
     const notificationListener = useRef<Notifications.Subscription | null>(null);
     const responseListener = useRef<Notifications.Subscription | null>(null);
 
+    // Xóa số thông báo (badge) trên icon khi mở app hoặc khi quay lại từ background
+    useEffect(() => {
+        if (Platform.OS === "web") return;
+
+        clearNotificationBadge();
+
+        const subscription = AppState.addEventListener("change", (nextAppState) => {
+            if (nextAppState === "active") {
+                clearNotificationBadge();
+            }
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
+
     useEffect(() => {
         if (!authToken || Platform.OS === "web") return;
 
@@ -131,9 +160,10 @@ export function usePushNotifications(authToken: string | null) {
             }
         });
 
-        // Lắng nghe khi người dùng bấm vào thông báo -> Mở thẳng vào Chi tiết chuyến đi
+        // Lắng nghe khi người dùng bấm vào thông báo -> Xóa badge và mở thẳng vào Chi tiết chuyến đi
         responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
             console.log("Notification response received (tapped):", response);
+            clearNotificationBadge();
             const data = response.notification.request.content.data as Record<string, any> | undefined;
 
             if (!data) return;
