@@ -75,6 +75,17 @@
                 <div class="w-[380px] sm:w-[420px]">
                     {{ $this->dateRangeForm }}
                 </div>
+
+                <x-filament::button
+                    wire:click="exportExcel"
+                    wire:loading.attr="disabled"
+                    color="gray"
+                    size="sm"
+                    icon="heroicon-o-arrow-down-tray"
+                    class="toolbar-toggle-btn"
+                >
+                    Xuất Excel
+                </x-filament::button>
             </div>
 
             <div class="flex-1 min-w-0 sm:max-w-md">

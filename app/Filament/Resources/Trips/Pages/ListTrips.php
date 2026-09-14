@@ -10,12 +10,15 @@ use App\Filament\Resources\Trips\Actions\CreateEmptyRunAction;
 use App\Filament\Resources\Trips\TripResource;
 use App\Models\Area;
 use App\Models\Trip;
+use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
+use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ListTrips extends ListRecords
 {
@@ -114,6 +117,11 @@ class ListTrips extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('exportExcel')
+                ->label('Xuất Excel')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('success')
+                ->action(fn (TripExcelExportService $exportService): StreamedResponse => $this->exportExcel($exportService)),
             CreateEmptyRunAction::make(),
             // CreateOrderHHHKAction::make(),
             // CreateOrderHNAction::make(),
@@ -354,9 +362,12 @@ class ListTrips extends ListRecords
             ]);
     }
 
-    public function exportExcel(): void
+    public function exportExcel(?TripExcelExportService $exportService = null): StreamedResponse
     {
-        // TODO: Implement Excel export for trips
+        $exportService ??= app(TripExcelExportService::class);
+        $query = $this->getTableQuery();
+
+        return $exportService->export($query);
     }
 
     public function searchForm(Schema $form): Schema

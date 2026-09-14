@@ -11,13 +11,16 @@ use App\Filament\Resources\Orders\Actions\CreateOrderHNAction;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Area;
 use App\Models\Order;
+use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
+use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ListOrders extends ListRecords
 {
@@ -142,11 +145,24 @@ class ListOrders extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('exportExcel')
+                ->label('Xuất Excel')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('success')
+                ->action(fn (TripExcelExportService $exportService): StreamedResponse => $this->exportExcel($exportService)),
             //  HHHK hoặc Hàng ngoài
             CreateOrderHHHKAction::make(),
             CreateOrderHNAction::make(),
             CreateBulkOrdersAction::make(),
         ];
+    }
+
+    public function exportExcel(?TripExcelExportService $exportService = null): StreamedResponse
+    {
+        $exportService ??= app(TripExcelExportService::class);
+        $query = $this->getTableQuery();
+
+        return $exportService->exportFromOrders($query);
     }
 
     public function getHeaderWidgetsColumns(): int|array

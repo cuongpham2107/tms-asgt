@@ -50,6 +50,17 @@
                 >
                     Đơn của tôi
                 </x-filament::button>
+
+                <x-filament::button
+                    wire:click="exportExcel"
+                    wire:loading.attr="disabled"
+                    color="gray"
+                    size="sm"
+                    icon="heroicon-o-arrow-down-tray"
+                    class="toolbar-mine-btn"
+                >
+                    Xuất Excel
+                </x-filament::button>
             </div>
 
             <div class="flex-1 min-w-0 sm:max-w-md">
