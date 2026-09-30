@@ -46,7 +46,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!email.trim() || !password) {
-      setError("Vui lòng nhập đầy đủ email và mật khẩu");
+      setError("Vui lòng nhập email hoặc số điện thoại và mật khẩu");
       return;
     }
 
@@ -96,12 +96,12 @@ export default function LoginScreen() {
 
         <TextInput
           style={s.input}
-          placeholder="Email hoặc Tên đăng nhập"
+          placeholder="Email hoặc Số điện thoại"
           placeholderTextColor="#9CA3AF"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
-          keyboardType="email-address"
+          keyboardType="default"
           autoCorrect={false}
         />
 

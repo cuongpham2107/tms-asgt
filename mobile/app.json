@@ -2,13 +2,14 @@
     "expo": {
         "name": "ASGT Vận Tải",
         "slug": "asgt",
-        "version": "1.0.0",
+        "owner": "cuongpham99s-team",
+        "version": "1.0.1",
         "orientation": "portrait",
         "icon": "./assets/icon.png",
         "userInterfaceStyle": "light",
         "scheme": "tms-driver",
         "plugins": [
-            "./plugins/withAndroidManifest.mjs",
+            "./plugins/withAndroidManifest.js",
             "expo-router",
             "expo-image-picker",
             [

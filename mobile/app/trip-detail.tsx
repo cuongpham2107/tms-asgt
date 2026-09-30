@@ -275,7 +275,9 @@ export default function TripDetailScreen() {
         if (!token || !tripId) return;
         try {
             const r = await api.trips.detail(String(tripId), token);
-            setDetail(r.data || r);
+            const data = r.data || r;
+            setDetail(data);
+            return data;
         } finally {
             setLoading(false);
         }
@@ -346,8 +348,25 @@ export default function TripDetailScreen() {
                 body.gps_lng = gps.gps_lng;
             }
             await api.trips.checkpoint(String(trip.id), body, token);
-            showAlert("Thành công", "Đã bắt đầu chuyến");
-            await load();
+            const updated = await load();
+            const currentOrders: any[] = updated?.orders || detail?.orders || trip?.orders || [];
+            const targetOrder = currentOrders.find((o: any) => o.status !== "completed") || currentOrders[0];
+            if (targetOrder) {
+                router.push({
+                    pathname: "/order-detail",
+                    params: {
+                        id: targetOrder.id,
+                        order: JSON.stringify({
+                            ...targetOrder,
+                            trip_id: trip?.id || params.id,
+                            vehicle: updated?.vehicle || detail?.vehicle || trip?.vehicle,
+                            is_swapped: isSwapped,
+                        }),
+                    },
+                });
+            } else {
+                showAlert("Thành công", "Đã bắt đầu chuyến");
+            }
         } catch (e: any) {
             const msg = e.message || "";
             const match = msg.match(/#(\d+)/);

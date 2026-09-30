@@ -35,14 +35,14 @@ const shiftOptions = [
   {
     key: "morning_half",
     label: "Nửa ca ngày (X/2)",
-    time: "06:00 - 18:00",
+    time: "08:00 - 20:00",
     description: "Ca ban ngày (12 tiếng)",
     icon: "partly-sunny-outline" as const,
   },
   {
     key: "night_half",
     label: "Nửa ca đêm (Y/2)",
-    time: "18:00 - 06:00",
+    time: "20:00 - 08:00",
     description: "Ca ban đêm (12 tiếng)",
     icon: "moon-outline" as const,
   },

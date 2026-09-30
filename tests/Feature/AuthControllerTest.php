@@ -4,6 +4,7 @@ use App\Enums\ShiftType;
 use App\Models\DriverShift;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -166,4 +167,65 @@ test('public can view privacy policy page', function () {
     $response = $this->get('/privacy-policy');
     $response->assertSuccessful()
         ->assertSee('Chính sách quyền riêng tư');
+});
+
+test('driver can login using phone number', function () {
+    $driver = User::factory()->create([
+        'email' => 'driver_phone@example.com',
+        'phone' => '0965455995',
+        'password' => bcrypt('password123'),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    $response = $this->postJson('/api/driver/login', [
+        'email' => '0965455995',
+        'password' => 'password123',
+    ]);
+
+    $response->assertSuccessful()
+        ->assertJsonPath('user.id', $driver->id)
+        ->assertJsonStructure(['user', 'token']);
+});
+
+test('driver can change password', function () {
+    $driver = User::factory()->create([
+        'email' => 'driver_cp@example.com',
+        'password' => bcrypt('oldPassword123'),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    $token = $driver->createToken('test')->plainTextToken;
+
+    // Fail: wrong current password
+    $resFail = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->postJson('/api/driver/change-password', [
+            'current_password' => 'wrongPassword',
+            'new_password' => 'newPassword456',
+            'new_password_confirmation' => 'newPassword456',
+        ]);
+    $resFail->assertStatus(422)
+        ->assertJsonPath('message', 'Mật khẩu hiện tại không chính xác');
+
+    // Fail: mismatch confirmation
+    $resMismatch = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->postJson('/api/driver/change-password', [
+            'current_password' => 'oldPassword123',
+            'new_password' => 'newPassword456',
+            'new_password_confirmation' => 'differentPassword',
+        ]);
+    $resMismatch->assertStatus(422);
+
+    // Success
+    $resSuccess = $this->withHeader('Authorization', 'Bearer '.$token)
+        ->postJson('/api/driver/change-password', [
+            'current_password' => 'oldPassword123',
+            'new_password' => 'newPassword456',
+            'new_password_confirmation' => 'newPassword456',
+        ]);
+    $resSuccess->assertSuccessful()
+        ->assertJsonPath('message', 'Đổi mật khẩu thành công');
+
+    // Verify login with new password succeeds
+    $driver->refresh();
+    expect(Hash::check('newPassword456', $driver->password))->toBeTrue();
 });

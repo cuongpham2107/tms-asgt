@@ -22,6 +22,7 @@ Route::post('/route', [RouteController::class, 'route']);
 
 Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/change-password', [AuthController::class, 'changePassword']);
     Route::post('/account/delete-request', [AuthController::class, 'requestDeleteAccount']);
     Route::post('/fcm-token', [DriverFcmTokenController::class, 'update']);
 

@@ -31,16 +31,32 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
 
 // ─── Auth ────────────────────────────────────────────────────────────
 
-export function login(email: string, password: string) {
+export function login(account: string, password: string) {
     return fetchApi<{ token: string; shift?: any }>("/login", undefined, {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: account, login: account, phone: account, password }),
+    });
+}
+
+export function changePassword(
+    body: { current_password: string; new_password: string; new_password_confirmation: string },
+    token: string,
+) {
+    return fetchApi<{ message: string }>("/change-password", token, {
+        method: "POST",
+        body: JSON.stringify(body),
     });
 }
 
 // ─── API endpoints ───────────────────────────────────────────────────
 
 export const api = {
+    auth: {
+        changePassword: (
+            body: { current_password: string; new_password: string; new_password_confirmation: string },
+            token: string,
+        ) => changePassword(body, token),
+    },
     // Shifts
     shifts: {
         current: (t: string) => fetchApi<{ shift: any }>("/shifts/current", t),

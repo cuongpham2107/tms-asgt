@@ -1,9 +1,6 @@
-import { withAndroidManifest, withDangerousMod } from "@expo/config-plugins";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const { withAndroidManifest, withDangerousMod } = require("@expo/config-plugins");
+const fs = require("fs");
+const path = require("path");
 
 const networkSecurityConfig = `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
@@ -68,8 +65,10 @@ function withAndroidConfig(config) {
   });
 }
 
-export default function withAllowBackupAndSecurity(config) {
+function withAllowBackupAndSecurity(config) {
   config = withNetworkSecurityConfig(config);
   config = withAndroidConfig(config);
   return config;
 }
+
+module.exports = withAllowBackupAndSecurity;

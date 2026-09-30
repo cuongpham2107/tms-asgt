@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Modal, TextInput, KeyboardAvoidingView, Platform } from "react-native";
 import { useAuth } from "../../src/lib/auth";
 import { useLoading } from "../../src/lib/loading";
 import { api, PRIVACY_POLICY_URL } from "../../src/lib/api";
@@ -12,6 +12,52 @@ export default function ProfileScreen() {
   const { showLoading, hideLoading } = useLoading();
   const [ending, setEnding] = useState(false);
   const [localDriver, setLocalDriver] = useState<any>(shift?.driver || null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!currentPassword) {
+      setPasswordError("Vui lòng nhập mật khẩu hiện tại");
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordError("Mật khẩu mới phải có ít nhất 6 ký tự");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Xác nhận mật khẩu mới không khớp");
+      return;
+    }
+
+    setChangingPassword(true);
+    setPasswordError("");
+    showLoading();
+    try {
+      if (!token) throw new Error("Chưa đăng nhập");
+      await api.auth.changePassword(
+        {
+          current_password: currentPassword,
+          new_password: newPassword,
+          new_password_confirmation: confirmPassword,
+        },
+        token,
+      );
+      setShowPasswordModal(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      showAlert("Thành công", "Đổi mật khẩu tài khoản thành công!");
+    } catch (e: any) {
+      setPasswordError(e.message || "Không thể đổi mật khẩu");
+    } finally {
+      setChangingPassword(false);
+      hideLoading();
+    }
+  };
 
   useEffect(() => {
     if (shift?.driver) setLocalDriver(shift.driver);
@@ -186,6 +232,14 @@ export default function ProfileScreen() {
           <Ionicons name="open-outline" size={18} color="#9CA3AF" />
         </TouchableOpacity>
 
+        <TouchableOpacity style={s.menuItem} onPress={() => { setPasswordError(""); setShowPasswordModal(true); }}>
+          <View style={[s.menuIcon, { backgroundColor: "#FFFBEB" }]}>
+            <Ionicons name="key-outline" size={20} color="#D97706" />
+          </View>
+          <Text style={s.menuText}>Đổi mật khẩu</Text>
+          <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
+        </TouchableOpacity>
+
         <TouchableOpacity style={s.menuItem} onPress={logout}>
           <View style={[s.menuIcon, { backgroundColor: "#F3F4F6" }]}>
             <Ionicons name="log-out" size={20} color="#4B5563" />
@@ -202,6 +256,70 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
         </TouchableOpacity>
       </View>
+
+      {/* Modal Đổi mật khẩu */}
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={s.modalOverlay}
+        >
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>Đổi mật khẩu</Text>
+
+            {passwordError ? <Text style={s.modalError}>{passwordError}</Text> : null}
+
+            <TextInput
+              style={s.modalInput}
+              placeholder="Mật khẩu hiện tại"
+              placeholderTextColor="#9CA3AF"
+              secureTextEntry
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+            />
+
+            <TextInput
+              style={s.modalInput}
+              placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
+              placeholderTextColor="#9CA3AF"
+              secureTextEntry
+              value={newPassword}
+              onChangeText={setNewPassword}
+            />
+
+            <TextInput
+              style={s.modalInput}
+              placeholder="Xác nhận mật khẩu mới"
+              placeholderTextColor="#9CA3AF"
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+            />
+
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={s.modalCancelBtn}
+                onPress={() => setShowPasswordModal(false)}
+                disabled={changingPassword}
+              >
+                <Text style={s.modalCancelText}>Hủy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[s.modalSubmitBtn, changingPassword && { opacity: 0.6 }]}
+                onPress={handleChangePassword}
+                disabled={changingPassword}
+              >
+                <Text style={s.modalSubmitText}>{changingPassword ? "Đang lưu..." : "Lưu thay đổi"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <View style={{ height: 60 }} />
     </ScrollView>
@@ -251,4 +369,14 @@ const s = StyleSheet.create({
   menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", padding: 16, borderRadius: 14, gap: 14 },
   menuIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   menuText: { fontSize: 15, fontWeight: "600", color: "#111827", flex: 1 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 20 },
+  modalContent: { backgroundColor: "#fff", borderRadius: 20, padding: 20, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  modalTitle: { fontSize: 18, fontWeight: "700", color: "#111827", marginBottom: 16, textAlign: "center" },
+  modalInput: { backgroundColor: "#F3F4F6", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#111827", marginBottom: 12, borderWidth: 1, borderColor: "#E5E7EB" },
+  modalError: { color: "#EF4444", fontSize: 13, marginBottom: 12, textAlign: "center" },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+  modalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: "#F3F4F6", alignItems: "center" },
+  modalCancelText: { fontSize: 15, fontWeight: "600", color: "#6B7280" },
+  modalSubmitBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: "#4F46E5", alignItems: "center" },
+  modalSubmitText: { fontSize: 15, fontWeight: "600", color: "#fff" },
 });
