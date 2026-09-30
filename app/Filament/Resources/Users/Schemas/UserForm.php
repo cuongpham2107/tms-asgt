@@ -31,7 +31,8 @@ class UserForm
                         TextInput::make('email')
                             ->label('Email')
                             ->email()
-                            ->required(),
+                            ->required()
+                            ->unique(ignoreRecord: true),
                         TextInput::make('password')
                             ->label('Mật khẩu')
                             ->revealable()

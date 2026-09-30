@@ -8,6 +8,7 @@ use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\Orders\Actions\CreateBulkOrdersAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHHHKAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHNAction;
+use App\Filament\Resources\Orders\Actions\ExportOrdersExcelAction;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Area;
 use App\Models\Order;
@@ -145,11 +146,7 @@ class ListOrders extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('exportExcel')
-                ->label('Xuất Excel')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('success')
-                ->action(fn (TripExcelExportService $exportService): StreamedResponse => $this->exportExcel($exportService)),
+            ExportOrdersExcelAction::make(),
             //  HHHK hoặc Hàng ngoài
             CreateOrderHHHKAction::make(),
             CreateOrderHNAction::make(),
@@ -157,12 +154,89 @@ class ListOrders extends ListRecords
         ];
     }
 
-    public function exportExcel(?TripExcelExportService $exportService = null): StreamedResponse
+    public function exportExcel(?TripExcelExportService $exportService = null, array $data = []): StreamedResponse
     {
         $exportService ??= app(TripExcelExportService::class);
-        $query = $this->getTableQuery();
+        $query = empty($data) ? $this->getTableQuery() : $this->getExportOrdersQuery($data);
 
         return $exportService->exportFromOrders($query);
+    }
+
+    public function getExportOrdersQuery(array $data): Builder
+    {
+        $status = $data['status'] ?? 'all';
+        $orderType = $data['order_type'] ?? 'all';
+        $place = $data['place'] ?? 'all';
+        $showMineOnly = (bool) ($data['show_mine_only'] ?? false);
+        $search = trim((string) ($data['search'] ?? ''));
+        $dateFrom = $data['date_from'] ?? null;
+        $dateTo = $data['date_to'] ?? null;
+        $customerId = $data['customer_id'] ?? null;
+
+        /** @var Builder $query */
+        $query = OrderResource::getEloquentQuery()
+            ->leftJoin('areas', 'orders.area_id', '=', 'areas.id')
+            ->select('orders.*')
+            ->with([
+                'customer',
+                'deliveryPoints.location',
+                'area',
+                'pickupLocation',
+                'trip.vehicle',
+                'trip.driver',
+            ])
+            ->when($showMineOnly, fn (Builder $query): Builder => $query->where('orders.created_by', Auth::id()))
+            ->when(
+                $orderType !== 'all',
+                fn (Builder $query): Builder => $query->where('orders.type', $orderType),
+            )
+            ->when(
+                $status === 'active',
+                fn (Builder $query): Builder => $query->whereNotIn('orders.status', [OrderStatus::Completed->value, OrderStatus::Cancelled->value]),
+            )
+            ->when(
+                $status !== 'all' && $status !== 'active',
+                fn (Builder $query): Builder => $query->whereIn('orders.status', $this->resolveStatusValues($status)),
+            )
+            ->when(
+                $place !== 'all',
+                fn (Builder $query): Builder => $query->whereHas(
+                    'area',
+                    fn (Builder $categoryQuery): Builder => $categoryQuery->where('code', $place),
+                ),
+            )
+            ->when(
+                filled($customerId),
+                fn (Builder $query): Builder => $query->where('orders.customer_id', $customerId),
+            )
+            ->when(filled($dateFrom) || filled($dateTo), function (Builder $query) use ($dateFrom, $dateTo): Builder {
+                if (filled($dateFrom) && filled($dateTo)) {
+                    return $query->whereBetween('orders.planned_loading_at', [
+                        Carbon::parse($dateFrom)->startOfDay(),
+                        Carbon::parse($dateTo)->endOfDay(),
+                    ]);
+                }
+
+                if (filled($dateFrom)) {
+                    return $query->where('orders.planned_loading_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+                }
+
+                return $query->where('orders.planned_loading_at', '<=', Carbon::parse($dateTo)->endOfDay());
+            })
+            ->when(filled($search), function (Builder $query) use ($search): Builder {
+                return $query->where(function (Builder $query) use ($search): void {
+                    $query
+                        ->where('orders.order_code', 'like', "%{$search}%")
+                        ->orWhere('orders.cargo_name', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn (Builder $qc) => $qc->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('trip.vehicle', fn (Builder $qv) => $qv->where('plate_number', 'like', "%{$search}%"))
+                        ->orWhereHas('trip.driver', fn (Builder $qd) => $qd->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->orderBy('orders.planned_loading_at', 'desc')
+            ->orderBy('orders.created_at', 'desc');
+
+        return $query;
     }
 
     public function getHeaderWidgetsColumns(): int|array
@@ -362,7 +436,8 @@ class ListOrders extends ListRecords
             .collect($statusOrder)->map(fn ($ord, $status) => "WHEN '{$status}' THEN {$ord}")->implode(' ')
             .' END';
 
-        return OrderResource::getEloquentQuery()
+        /** @var Builder $query */
+        $query = OrderResource::getEloquentQuery()
             ->leftJoin('areas', 'orders.area_id', '=', 'areas.id')
             ->orderByRaw($caseSql)
             ->orderBy('orders.created_at', 'desc')
@@ -421,6 +496,8 @@ class ListOrders extends ListRecords
 
                 return $query->where('planned_loading_at', '<=', Carbon::parse($this->endDate)->endOfDay());
             });
+
+        return $query;
     }
 
     /**

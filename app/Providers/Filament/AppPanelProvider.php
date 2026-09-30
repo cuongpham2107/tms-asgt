@@ -13,6 +13,7 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -44,9 +45,12 @@ class AppPanelProvider extends PanelProvider
             ])
             ->sidebarWidth('220px')
             ->sidebarCollapsibleOnDesktop()
+            ->globalSearch(false)
             // ->topbar(false)
             ->maxContentWidth(Width::Full)
             ->subNavigationPosition(SubNavigationPosition::Top)
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('30s')
             ->navigationGroups([
                 'Tổng quan',
                 'Vận hành',
@@ -109,7 +113,7 @@ class AppPanelProvider extends PanelProvider
                 fn (): string => '<script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>'
             )
             ->renderHook(
-                'panels::global-search.end',
+                PanelsRenderHook::GLOBAL_SEARCH_AFTER,
                 fn (): string => view('filament.components.gps-sync-button')->render()
             );
     }

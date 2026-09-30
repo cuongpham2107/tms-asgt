@@ -7,6 +7,7 @@ use App\Enums\TripStatus;
 use App\Filament\Forms\Components\OrderDateRangePicker;
 use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\Trips\Actions\CreateEmptyRunAction;
+use App\Filament\Resources\Trips\Actions\ExportTripsExcelAction;
 use App\Filament\Resources\Trips\TripResource;
 use App\Models\Area;
 use App\Models\Trip;
@@ -117,11 +118,7 @@ class ListTrips extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('exportExcel')
-                ->label('Xuất Excel')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('success')
-                ->action(fn (TripExcelExportService $exportService): StreamedResponse => $this->exportExcel($exportService)),
+            ExportTripsExcelAction::make(),
             CreateEmptyRunAction::make(),
             // CreateOrderHHHKAction::make(),
             // CreateOrderHNAction::make(),
@@ -362,12 +359,96 @@ class ListTrips extends ListRecords
             ]);
     }
 
-    public function exportExcel(?TripExcelExportService $exportService = null): StreamedResponse
+    public function exportExcel(?TripExcelExportService $exportService = null, array $data = []): StreamedResponse
     {
         $exportService ??= app(TripExcelExportService::class);
-        $query = $this->getTableQuery();
+        $query = empty($data) ? $this->getTableQuery() : $this->getExportTripsQuery($data);
 
         return $exportService->export($query);
+    }
+
+    public function getExportTripsQuery(array $data): Builder
+    {
+        $status = $data['status'] ?? 'all';
+        $orderType = $data['order_type'] ?? 'all';
+        $vehicleOwner = $data['vehicle_owner'] ?? 'all';
+        $place = $data['place'] ?? 'all';
+        $vehicleId = $data['vehicle_id'] ?? null;
+        $driverId = $data['driver_id'] ?? null;
+        $search = trim((string) ($data['search'] ?? ''));
+        $dateFrom = $data['date_from'] ?? null;
+        $dateTo = $data['date_to'] ?? null;
+
+        /** @var Builder $query */
+        $query = TripResource::getEloquentQuery()
+            ->with([
+                'vehicle',
+                'driver',
+                'orders.customer',
+                'orders.area',
+                'orders.pickupLocation',
+                'orders.deliveryPoints.location',
+                'orders.tripCheckpoints.deliveryPoint.location',
+            ])
+            ->when(
+                $status === 'active',
+                fn (Builder $query): Builder => $query->whereNotIn('trips.status', [TripStatus::Completed->value, TripStatus::Cancelled->value]),
+            )
+            ->when(
+                $status !== 'all' && $status !== 'active',
+                fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $status),
+            )
+            ->when(
+                $vehicleOwner !== 'all',
+                fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q): Builder => $q->where('type', $vehicleOwner)),
+            )
+            ->when(
+                $orderType !== 'all',
+                fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q): Builder => $q->where('type', $orderType)),
+            )
+            ->when(
+                $place !== 'all',
+                fn (Builder $query): Builder => $query->whereHas('orders.area', fn (Builder $aq): Builder => $aq->where('code', $place)),
+            )
+            ->when(
+                filled($vehicleId),
+                fn (Builder $query): Builder => $query->where('trips.vehicle_id', $vehicleId),
+            )
+            ->when(
+                filled($driverId),
+                fn (Builder $query): Builder => $query->where('trips.driver_id', $driverId),
+            )
+            ->when(filled($dateFrom) || filled($dateTo), function (Builder $query) use ($dateFrom, $dateTo): Builder {
+                if (filled($dateFrom) && filled($dateTo)) {
+                    return $query->whereBetween('started_at', [
+                        Carbon::parse($dateFrom)->startOfDay(),
+                        Carbon::parse($dateTo)->endOfDay(),
+                    ]);
+                }
+
+                if (filled($dateFrom)) {
+                    return $query->where('started_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+                }
+
+                return $query->where('started_at', '<=', Carbon::parse($dateTo)->endOfDay());
+            })
+            ->when(filled($search), function (Builder $query) use ($search): Builder {
+                return $query->where(function (Builder $query) use ($search): void {
+                    $query
+                        ->whereHas('vehicle', fn (Builder $q) => $q->where('plate_number', 'like', "%{$search}%"))
+                        ->orWhereHas('orders', fn (Builder $q) => $q
+                            ->where('order_code', 'like', "%{$search}%")
+                            ->orWhere('cargo_name', 'like', "%{$search}%")
+                            ->orWhereHas('trip.driver', fn (Builder $qd) => $qd->where('name', 'like', "%{$search}%"))
+                            ->orWhereHas('area', fn (Builder $qa) => $qa->where('code', 'like', "%{$search}%"))
+                            ->orWhereHas('customer', fn (Builder $qc) => $qc->where('name', 'like', "%{$search}%"))
+                        );
+                });
+            })
+            ->orderBy('trips.started_at', 'desc')
+            ->orderBy('trips.created_at', 'desc');
+
+        return $query;
     }
 
     public function searchForm(Schema $form): Schema

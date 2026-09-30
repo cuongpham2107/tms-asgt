@@ -71,6 +71,64 @@ class TripExcelExportService
     }
 
     /**
+     * Xuất file Excel chính xác theo các dòng đang lọc và hiển thị
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  Collection<int, Trip>|null  $trips
+     */
+    public function exportFromRows(Collection $rows, ?Collection $trips = null, ?string $filename = null): StreamedResponse
+    {
+        $spreadsheet = $this->buildSpreadsheetFromRows($rows, $trips);
+
+        $defaultFilename = 'Tong-hop-chuyen-phuc-vu-'.now()->format('Ymd-His').'.xlsx';
+        $finalFilename = $filename ?: $defaultFilename;
+
+        return response()->streamDownload(function () use ($spreadsheet): void {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+        }, $finalFilename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+        ]);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  Collection<int, Trip>|null  $trips
+     */
+    public function buildSpreadsheetFromRows(Collection $rows, ?Collection $trips = null): Spreadsheet
+    {
+        $spreadsheet = new Spreadsheet;
+
+        // Sheet 1: Bảng tổng hợp chuyến phục vụ
+        $sheet1 = $spreadsheet->getActiveSheet();
+        $sheet1->setTitle('Bảng tổng hợp chuyến phục vụ');
+        $this->buildTripSummarySheetFromRows($sheet1, $rows);
+
+        // Sheet 2: Bảng dữ liệu hàng ngoài (chỉ chứa các đơn tương ứng với các dòng hiển thị)
+        $sheet2 = $spreadsheet->createSheet();
+        $sheet2->setTitle('Bảng dữ liệu hàng ngoài');
+        if ($trips) {
+            $orderIds = $rows->pluck('order_id')->filter()->unique()->toArray();
+            $filteredTrips = $trips->map(function (Trip $trip) use ($orderIds): Trip {
+                $clonedTrip = clone $trip;
+                $clonedOrders = $trip->orders->filter(fn (Order $o) => in_array($o->id, $orderIds));
+                $clonedTrip->setRelation('orders', $clonedOrders);
+
+                return $clonedTrip;
+            })->filter(fn (Trip $t) => $t->orders->isNotEmpty());
+
+            $this->buildExternalCargoSheet($sheet2, $filteredTrips);
+        } else {
+            $this->buildExternalCargoSheet($sheet2, collect());
+        }
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        return $spreadsheet;
+    }
+
+    /**
      * @param  Builder|Collection<int, Order>  $orders
      */
     public function exportFromOrders(Builder|Collection $orders, ?string $filename = null): StreamedResponse
@@ -100,7 +158,7 @@ class TripExcelExportService
      * @param  Collection<int, Order>  $orders
      * @return Collection<int, Trip>
      */
-    protected function convertOrdersToTripsCollection(Collection $orders): Collection
+    public function convertOrdersToTripsCollection(Collection $orders): Collection
     {
         $tripMap = collect();
         $unassignedOrders = collect();
@@ -179,6 +237,15 @@ class TripExcelExportService
      */
     protected function buildTripSummarySheet(Worksheet $sheet, Collection $trips): void
     {
+        $rows = $this->getTripSummaryRows($trips);
+        $this->buildTripSummarySheetFromRows($sheet, $rows);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     */
+    public function buildTripSummarySheetFromRows(Worksheet $sheet, Collection $rows): void
+    {
         // 1. Tiêu đề lớn
         $sheet->mergeCells('A1:AA2');
         $sheet->setCellValue('A1', 'BẢNG THỐNG KÊ TỔNG HỢP CÁC CHUYẾN ĐÃ PHỤC VỤ');
@@ -239,8 +306,54 @@ class TripExcelExportService
         $sheet->getStyle('A4:AA4')->applyFromArray($headerStyle);
         $sheet->getRowDimension(4)->setRowHeight(35);
 
-        // 3. Đổ dữ liệu
+        // 3. Đổ dữ liệu từ các dòng đã lọc
         $row = 5;
+        foreach ($rows as $rowData) {
+            $this->writeTripSummaryRowFromData($sheet, $row, $rowData);
+            $row++;
+        }
+
+        // Định dạng viền và căn chỉnh toàn bộ bảng
+        $lastRow = max(5, $row - 1);
+        $dataRange = "A5:AA{$lastRow}";
+        $sheet->getStyle($dataRange)->applyFromArray([
+            'borders' => [
+                'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'E2E8F0']],
+            ],
+            'font' => ['size' => 9],
+            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+        ]);
+
+        // Auto width các cột
+        foreach (range('A', 'Z') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+        $sheet->getColumnDimension('AA')->setAutoSize(true);
+    }
+
+    /**
+     * @param  Builder|Collection<int, Trip>  $trips
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function getTripSummaryRows(Builder|Collection $trips): Collection
+    {
+        if ($trips instanceof Builder) {
+            $trips = $trips
+                ->with([
+                    'vehicle',
+                    'driver',
+                    'orders.customer',
+                    'orders.area',
+                    'orders.pickupLocation',
+                    'orders.deliveryPoints.location',
+                    'orders.tripCheckpoints',
+                    'checkpoints',
+                ])
+                ->get();
+        }
+
+        $rows = collect();
+
         foreach ($trips as $trip) {
             $vehicle = $trip->vehicle;
             $driver = $trip->driver;
@@ -256,11 +369,11 @@ class TripExcelExportService
 
                 $startLoc = $trip->startLocation?->code ?? '';
                 $endLoc = $trip->endLocation?->code ?? '';
-                $journey = trim("{$startLoc} {$endLoc}");
+                $journey = ($startLoc && $endLoc) ? "{$startLoc} -> {$endLoc}" : trim("{$startLoc}{$endLoc}");
 
-                $this->writeTripSummaryRow(
-                    $sheet,
-                    $row,
+                $rows->push($this->formatTripSummaryRowData(
+                    trip: $trip,
+                    order: null,
                     serviceType: 'Xe không hàng',
                     code: $trip->trip_code,
                     date: $trip->started_at,
@@ -283,8 +396,7 @@ class TripExcelExportService
                     gw: 0,
                     cargoType: '',
                     chargeableWeight: 0
-                );
-                $row++;
+                ));
 
                 continue;
             }
@@ -319,9 +431,9 @@ class TripExcelExportService
 
                 $serviceType = $order->type === OrderType::Hhhk ? 'HHHK' : 'Hàng ngoài';
 
-                $this->writeTripSummaryRow(
-                    $sheet,
-                    $row,
+                $rows->push($this->formatTripSummaryRowData(
+                    trip: $trip,
+                    order: $order,
                     serviceType: $serviceType,
                     code: $order->order_code ?: $trip->trip_code,
                     date: $trip->started_at ?? $order->planned_loading_at,
@@ -344,27 +456,177 @@ class TripExcelExportService
                     gw: (float) ($order->total_weight ?? 0),
                     cargoType: $order->cargo_type?->value ?? ($order->cargo_type instanceof CargoType ? $order->cargo_type->getLabel() : ''),
                     chargeableWeight: (float) ($order->chargeable_weight ?? 0)
-                );
-                $row++;
+                ));
             }
         }
 
-        // Định dạng viền và căn chỉnh toàn bộ bảng
-        $lastRow = max(5, $row - 1);
-        $dataRange = "A5:AA{$lastRow}";
-        $sheet->getStyle($dataRange)->applyFromArray([
-            'borders' => [
-                'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'E2E8F0']],
-            ],
-            'font' => ['size' => 9],
-            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-        ]);
+        return $rows;
+    }
 
-        // Auto width các cột
-        foreach (range('A', 'Z') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+    /**
+     * @param  Builder|Collection<int, Order>  $orders
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function getTripSummaryRowsFromOrders(Builder|Collection $orders): Collection
+    {
+        if ($orders instanceof Builder) {
+            $orders = $orders->with([
+                'customer',
+                'area',
+                'pickupLocation',
+                'deliveryPoints.location',
+                'trip.vehicle',
+                'trip.driver',
+                'trip.checkpoints',
+                'tripCheckpoints',
+            ])->get();
         }
-        $sheet->getColumnDimension('AA')->setAutoSize(true);
+
+        $trips = $this->convertOrdersToTripsCollection($orders);
+
+        return $this->getTripSummaryRows($trips);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function formatTripSummaryRowData(
+        Trip $trip,
+        ?Order $order,
+        string $serviceType,
+        string $code,
+        ?Carbon $date,
+        ?string $plateNumber,
+        string $journey,
+        ?Carbon $timeA,
+        ?Carbon $timeB,
+        ?Carbon $timeC,
+        ?Carbon $timeD,
+        string $customer,
+        string $warehouse,
+        string $vehicleOwner,
+        string $vehicleType,
+        string $note,
+        bool $isReturnTrip,
+        string $driverName,
+        float $kmLoaded,
+        float $kmEmpty,
+        int $pcs,
+        float $gw,
+        string $cargoType,
+        float $chargeableWeight
+    ): array {
+        // Tính toán các mốc thời gian phút
+        $time1 = ($timeA && $timeB) ? (int) abs($timeB->diffInMinutes($timeA)) : null;
+        $time2 = ($timeB && $timeC) ? (int) abs($timeC->diffInMinutes($timeB)) : null;
+        $time3 = ($timeC && $timeD) ? (int) abs($timeD->diffInMinutes($timeC)) : null;
+
+        // Thời gian cắt 22:00: Nếu thời gian hạ hàng D >= 22:00
+        $time4 = 0;
+        if ($timeC && $timeD && ($timeD->hour >= 22 || $timeD->isAfter($timeC->copy()->endOfDay()))) {
+            $cutoff22 = $timeC->copy()->setTime(22, 0, 0);
+            $waitTo22 = (int) abs($cutoff22->diffInMinutes($timeC));
+            $time4 = ($time1 ?? 0) + ($time2 ?? 0) + $waitTo22;
+        }
+
+        $time5 = ($time1 !== null || $time2 !== null || $time3 !== null)
+            ? (($time1 ?? 0) + ($time2 ?? 0) + ($time3 ?? 0))
+            : null;
+
+        $ownerLabel = match ($vehicleOwner) {
+            'company', VehicleOwnerType::Company->value => 'Xe công ty',
+            'rent', VehicleOwnerType::Rent->value => 'Xe thuê',
+            default => $vehicleOwner ?: 'Xe công ty',
+        };
+
+        $typeLabel = match ($vehicleType) {
+            'normal', VehicleType::Normal->value => 'Xe thường',
+            'cold', VehicleType::Cold->value => 'Xe lạnh',
+            'container', VehicleType::Container->value => 'Container',
+            default => $vehicleType ?: 'Xe thường',
+        };
+
+        return [
+            'trip_id' => $trip->id,
+            'order_id' => $order?->id,
+            'customer_id' => $order?->customer_id,
+            'service_type' => $serviceType,
+            'code' => $code,
+            'date' => $date,
+            'plate_number' => $plateNumber,
+            'journey' => $journey,
+            'time_a' => $timeA,
+            'time_b' => $timeB,
+            'time_c' => $timeC,
+            'time_d' => $timeD,
+            'time_loading' => $time1,
+            'time_travel' => $time2,
+            'time_unloading' => $time3,
+            'time_waiting_22h' => $time4,
+            'time_total_trip' => $time5,
+            'customer' => $customer,
+            'warehouse' => $warehouse,
+            'vehicle_owner' => $ownerLabel,
+            'vehicle_type' => $typeLabel,
+            'note' => $note,
+            'is_return_trip' => $isReturnTrip,
+            'driver_name' => $driverName,
+            'km_loaded' => $kmLoaded,
+            'km_empty' => $kmEmpty,
+            'pcs' => $pcs,
+            'gw' => $gw,
+            'cargo_type' => $cargoType,
+            'chargeable_weight' => $chargeableWeight,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function writeTripSummaryRowFromData(Worksheet $sheet, int $row, array $data): void
+    {
+        $date = $data['date'] instanceof Carbon ? $data['date'] : ($data['date'] ? Carbon::parse($data['date']) : null);
+        $timeA = $data['time_a'] instanceof Carbon ? $data['time_a'] : ($data['time_a'] ? Carbon::parse($data['time_a']) : null);
+        $timeB = $data['time_b'] instanceof Carbon ? $data['time_b'] : ($data['time_b'] ? Carbon::parse($data['time_b']) : null);
+        $timeC = $data['time_c'] instanceof Carbon ? $data['time_c'] : ($data['time_c'] ? Carbon::parse($data['time_c']) : null);
+        $timeD = $data['time_d'] instanceof Carbon ? $data['time_d'] : ($data['time_d'] ? Carbon::parse($data['time_d']) : null);
+
+        $sheet->setCellValue("A{$row}", $data['service_type'] ?? '');
+        $sheet->setCellValue("B{$row}", $data['code'] ?? '');
+        $sheet->setCellValue("C{$row}", $date ? $date->format('d/m/Y') : '');
+        $sheet->setCellValue("D{$row}", $data['plate_number'] ?? '');
+        $sheet->setCellValue("E{$row}", $data['journey'] ?? '');
+        $sheet->setCellValue("F{$row}", $timeA ? $timeA->format('d/m/Y H:i') : '');
+        $sheet->setCellValue("G{$row}", $timeB ? $timeB->format('d/m/Y H:i') : '');
+        $sheet->setCellValue("H{$row}", $timeC ? $timeC->format('d/m/Y H:i') : '');
+        $sheet->setCellValue("I{$row}", $timeD ? $timeD->format('d/m/Y H:i') : '');
+
+        $sheet->setCellValue("J{$row}", $data['time_loading'] ?? '');
+        $sheet->setCellValue("K{$row}", $data['time_travel'] ?? '');
+        $sheet->setCellValue("L{$row}", $data['time_unloading'] ?? '');
+        $sheet->setCellValue("M{$row}", ($data['time_waiting_22h'] ?? 0) > 0 ? $data['time_waiting_22h'] : 0);
+        $sheet->setCellValue("N{$row}", $data['time_total_trip'] ?? '');
+
+        $sheet->setCellValue("O{$row}", $data['customer'] ?? '');
+        $sheet->setCellValue("P{$row}", $data['warehouse'] ?? '');
+        $sheet->setCellValue("Q{$row}", $data['vehicle_owner'] ?? '');
+        $sheet->setCellValue("R{$row}", $data['vehicle_type'] ?? '');
+        $sheet->setCellValue("S{$row}", $data['note'] ?? '');
+        $sheet->setCellValue("T{$row}", ($data['is_return_trip'] ?? false) ? 'Hàng quay đầu' : '');
+        $sheet->setCellValue("U{$row}", $data['driver_name'] ?? '');
+        $sheet->setCellValue("V{$row}", ($data['km_loaded'] ?? 0) > 0 ? $data['km_loaded'] : '');
+        $sheet->setCellValue("W{$row}", ($data['km_empty'] ?? 0) > 0 ? $data['km_empty'] : '');
+        $sheet->setCellValue("X{$row}", ($data['pcs'] ?? 0) > 0 ? $data['pcs'] : '');
+        $sheet->setCellValue("Y{$row}", ($data['gw'] ?? 0) > 0 ? $data['gw'] : '');
+        $sheet->setCellValue("Z{$row}", $data['cargo_type'] ?? '');
+        $sheet->setCellValue("AA{$row}", ($data['chargeable_weight'] ?? 0) > 0 ? $data['chargeable_weight'] : '');
+
+        // Căn giữa các cột mã, ngày, BSX, thời gian
+        $sheet->getStyle("A{$row}:D{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("F{$row}:N{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("Q{$row}:R{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("T{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle("V{$row}:AA{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
     }
 
     protected function writeTripSummaryRow(
@@ -393,72 +655,34 @@ class TripExcelExportService
         string $cargoType,
         float $chargeableWeight
     ): void {
-        // Tính toán các mốc thời gian phút
-        $time1 = ($timeA && $timeB) ? (int) abs($timeB->diffInMinutes($timeA)) : null;
-        $time2 = ($timeB && $timeC) ? (int) abs($timeC->diffInMinutes($timeB)) : null;
-        $time3 = ($timeC && $timeD) ? (int) abs($timeD->diffInMinutes($timeC)) : null;
+        $data = $this->formatTripSummaryRowData(
+            trip: new Trip,
+            order: null,
+            serviceType: $serviceType,
+            code: $code,
+            date: $date,
+            plateNumber: $plateNumber,
+            journey: $journey,
+            timeA: $timeA,
+            timeB: $timeB,
+            timeC: $timeC,
+            timeD: $timeD,
+            customer: $customer,
+            warehouse: $warehouse,
+            vehicleOwner: $vehicleOwner,
+            vehicleType: $vehicleType,
+            note: $note,
+            isReturnTrip: $isReturnTrip,
+            driverName: $driverName,
+            kmLoaded: $kmLoaded,
+            kmEmpty: $kmEmpty,
+            pcs: $pcs,
+            gw: $gw,
+            cargoType: $cargoType,
+            chargeableWeight: $chargeableWeight
+        );
 
-        // Thời gian cắt 22:00: Nếu thời gian hạ hàng D >= 22:00
-        $time4 = 0;
-        if ($timeC && $timeD && ($timeD->hour >= 22 || $timeD->isAfter($timeC->copy()->endOfDay()))) {
-            $cutoff22 = $timeC->copy()->setTime(22, 0, 0);
-            $waitTo22 = (int) abs($cutoff22->diffInMinutes($timeC));
-            $time4 = ($time1 ?? 0) + ($time2 ?? 0) + $waitTo22;
-        }
-
-        $time5 = ($time1 !== null || $time2 !== null || $time3 !== null)
-            ? (($time1 ?? 0) + ($time2 ?? 0) + ($time3 ?? 0))
-            : null;
-
-        $ownerLabel = match ($vehicleOwner) {
-            'company', VehicleOwnerType::Company->value => 'Xe công ty',
-            'rent', VehicleOwnerType::Rent->value => 'Xe thuê',
-            default => $vehicleOwner,
-        };
-
-        $typeLabel = match ($vehicleType) {
-            'normal', VehicleType::Normal->value => 'Xe thường',
-            'cold', VehicleType::Cold->value => 'Xe lạnh',
-            'container', VehicleType::Container->value => 'Container',
-            default => $vehicleType ?: 'Xe thường',
-        };
-
-        $sheet->setCellValue("A{$row}", $serviceType);
-        $sheet->setCellValue("B{$row}", $code);
-        $sheet->setCellValue("C{$row}", $date ? $date->format('d/m/Y') : '');
-        $sheet->setCellValue("D{$row}", $plateNumber ?? '');
-        $sheet->setCellValue("E{$row}", $journey);
-        $sheet->setCellValue("F{$row}", $timeA ? $timeA->format('d/m/Y H:i') : '');
-        $sheet->setCellValue("G{$row}", $timeB ? $timeB->format('d/m/Y H:i') : '');
-        $sheet->setCellValue("H{$row}", $timeC ? $timeC->format('d/m/Y H:i') : '');
-        $sheet->setCellValue("I{$row}", $timeD ? $timeD->format('d/m/Y H:i') : '');
-
-        $sheet->setCellValue("J{$row}", $time1 ?? '');
-        $sheet->setCellValue("K{$row}", $time2 ?? '');
-        $sheet->setCellValue("L{$row}", $time3 ?? '');
-        $sheet->setCellValue("M{$row}", $time4 > 0 ? $time4 : 0);
-        $sheet->setCellValue("N{$row}", $time5 ?? '');
-
-        $sheet->setCellValue("O{$row}", $customer);
-        $sheet->setCellValue("P{$row}", $warehouse);
-        $sheet->setCellValue("Q{$row}", $ownerLabel);
-        $sheet->setCellValue("R{$row}", $typeLabel);
-        $sheet->setCellValue("S{$row}", $note);
-        $sheet->setCellValue("T{$row}", $isReturnTrip ? 'Hàng quay đầu' : '');
-        $sheet->setCellValue("U{$row}", $driverName);
-        $sheet->setCellValue("V{$row}", $kmLoaded > 0 ? $kmLoaded : '');
-        $sheet->setCellValue("W{$row}", $kmEmpty > 0 ? $kmEmpty : '');
-        $sheet->setCellValue("X{$row}", $pcs > 0 ? $pcs : '');
-        $sheet->setCellValue("Y{$row}", $gw > 0 ? $gw : '');
-        $sheet->setCellValue("Z{$row}", $cargoType);
-        $sheet->setCellValue("AA{$row}", $chargeableWeight > 0 ? $chargeableWeight : '');
-
-        // Căn giữa các cột mã, ngày, BSX, thời gian
-        $sheet->getStyle("A{$row}:D{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle("F{$row}:N{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle("Q{$row}:R{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle("T{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle("V{$row}:AA{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $this->writeTripSummaryRowFromData($sheet, $row, $data);
     }
 
     /**
@@ -720,14 +944,22 @@ class TripExcelExportService
             $dp = $deliveryPoints->first();
             $delivCode = $dp?->location?->code ?: $this->extractLocationShortName($dp?->address ?? '');
 
-            return trim("{$pickupCode} {$delivCode}");
+            if ($pickupCode && $delivCode) {
+                return "{$pickupCode} -> {$delivCode}";
+            }
+
+            return trim("{$pickupCode}{$delivCode}");
         }
 
         // Với đơn nhiều điểm: Ghép điểm đóng đầu tiên + điểm trả cuối cùng
         $lastDp = $deliveryPoints->sortBy('sequence')->last();
         $lastCode = $lastDp?->location?->code ?: $this->extractLocationShortName($lastDp?->address ?? '');
 
-        return trim("{$pickupCode} {$lastCode}");
+        if ($pickupCode && $lastCode) {
+            return "{$pickupCode} -> {$lastCode}";
+        }
+
+        return trim("{$pickupCode}{$lastCode}");
     }
 
     protected function extractLocationShortName(string $address): string

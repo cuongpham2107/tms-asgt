@@ -167,7 +167,7 @@ test('it exports trip summary sheet with hhhk order details and journey', functi
     expect($sheet1->getCell('A5')->getValue())->toBe('HHHK');
     expect($sheet1->getCell('B5')->getValue())->toBe('ORD-HHHK-01');
     expect($sheet1->getCell('D5')->getValue())->toBe('20C04357');
-    expect($sheet1->getCell('E5')->getValue())->toBe('ASG ALSC'); // Hành trình ghép
+    expect($sheet1->getCell('E5')->getValue())->toBe('ASG -> ALSC'); // Hành trình ghép
     expect($sheet1->getCell('J5')->getValue())->toBe(30); // 8:45 - 8:15 = 30 phút
     expect($sheet1->getCell('K5')->getValue())->toBe(30); // 9:15 - 8:45 = 30 phút
     expect($sheet1->getCell('L5')->getValue())->toBe(30); // 9:45 - 9:15 = 30 phút
@@ -318,8 +318,100 @@ test('livewire list trips can call exportExcel', function () {
         ->assertFileDownloaded();
 });
 
+test('livewire list trips can call exportExcel action with modal filter data', function () {
+    Livewire\Livewire::test(ListTrips::class)
+        ->callAction('exportExcel', [
+            'status' => 'all',
+            'order_type' => 'all',
+            'vehicle_owner' => 'all',
+            'place' => 'all',
+        ])
+        ->assertFileDownloaded();
+});
+
 test('livewire list orders can call exportExcel', function () {
     Livewire\Livewire::test(ListOrders::class)
         ->call('exportExcel')
         ->assertFileDownloaded();
+});
+
+test('livewire list orders can call exportExcel action with modal filter data', function () {
+    Livewire\Livewire::test(ListOrders::class)
+        ->callAction('exportExcel', [
+            'status' => 'all',
+            'order_type' => 'all',
+            'place' => 'all',
+            'show_mine_only' => false,
+        ])
+        ->assertFileDownloaded();
+});
+
+test('list orders getExportOrdersQuery filters correctly by status and type', function () {
+    Order::create([
+        'order_code' => 'ORD-COMPLETED',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'status' => OrderStatus::Completed,
+        'planned_loading_at' => now(),
+        'created_by' => $this->driver->id,
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-EXTERNAL',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'status' => OrderStatus::Draft,
+        'planned_loading_at' => now(),
+        'created_by' => $this->driver->id,
+    ]);
+
+    $listOrders = new ListOrders;
+
+    $queryCompleted = $listOrders->getExportOrdersQuery(['status' => 'completed', 'order_type' => 'all']);
+    expect($queryCompleted->pluck('order_code')->all())->toContain('ORD-COMPLETED')
+        ->not->toContain('ORD-EXTERNAL');
+
+    $queryExternal = $listOrders->getExportOrdersQuery(['status' => 'all', 'order_type' => 'external']);
+    expect($queryExternal->pluck('order_code')->all())->toContain('ORD-EXTERNAL')
+        ->not->toContain('ORD-COMPLETED');
+});
+
+test('list trips getExportTripsQuery filters correctly by status and vehicle owner', function () {
+    $trip1 = Trip::create([
+        'trip_code' => 'TRIP-COMPLETED',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now(),
+    ]);
+
+    $rentVehicle = Vehicle::create([
+        'plate_number' => '29C99999',
+        'owner' => 'THUE_NGOAI',
+        'type' => VehicleOwnerType::Rent,
+        'vehicle_type' => VehicleType::Normal,
+        'is_active' => true,
+    ]);
+
+    $trip2 = Trip::create([
+        'trip_code' => 'TRIP-RENT',
+        'vehicle_id' => $rentVehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Pending,
+        'started_at' => now(),
+    ]);
+
+    $listTrips = new ListTrips;
+
+    $queryCompany = $listTrips->getExportTripsQuery(['status' => 'all', 'vehicle_owner' => 'company']);
+    expect($queryCompany->pluck('trip_code')->all())->toContain('TRIP-COMPLETED')
+        ->not->toContain('TRIP-RENT');
+
+    $queryPending = $listTrips->getExportTripsQuery(['status' => 'pending', 'vehicle_owner' => 'all']);
+    expect($queryPending->pluck('trip_code')->all())->toContain('TRIP-RENT')
+        ->not->toContain('TRIP-COMPLETED');
 });

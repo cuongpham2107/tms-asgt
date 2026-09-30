@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -16,6 +17,7 @@ use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -83,11 +85,19 @@ test('trip view timeline page renders successfully', function () {
         'start_km' => 100,
     ]);
 
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'km_reading' => 150.5,
+        'occurred_at' => now(),
+    ]);
+
     Livewire::test(ViewTripTimeline::class, [
         'record' => $trip->getKey(),
     ])
         ->assertStatus(200)
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertSee('150,5 km');
 });
 
 test('trip stats overview widget renders successfully', function () {

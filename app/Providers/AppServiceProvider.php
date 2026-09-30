@@ -5,7 +5,9 @@ namespace App\Providers;
 use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\Plugins\ActivitylogPlugin;
 use App\Models\Order;
+use App\Models\Trip;
 use App\Observers\OrderObserver;
+use App\Observers\TripObserver;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
@@ -38,6 +40,7 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Order::observe(OrderObserver::class);
+        Trip::observe(TripObserver::class);
 
         Scramble::configure()
             ->withDocumentTransformers(function (OpenApi $openApi): void {
