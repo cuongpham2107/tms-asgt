@@ -13,6 +13,7 @@ use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
+use App\Models\OrderEditLog;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
@@ -246,6 +247,7 @@ test('trip statistics report calculates waiting 22h correctly when delivery exte
     $component = Livewire::test(TripStatisticsReport::class, [
         'startDate' => '2026-04-01',
         'endDate' => '2026-04-30',
+        'activeTab' => 'external',
     ]);
 
     $rows = $component->instance()->getAllRows();
@@ -513,4 +515,226 @@ test('trip statistics report only includes completed trips', function () {
         ->and($codes)->not->toContain('TRIP-PENDING')
         ->and($codes)->not->toContain('TRIP-DELIVERING')
         ->and($codes)->not->toContain('TRIP-CANCELLED');
+});
+
+test('trip statistics report formats duration from minutes to hours and minutes correctly', function () {
+    $component = Livewire::test(TripStatisticsReport::class);
+    $report = $component->instance();
+
+    // User's specific example: 11609 minutes = 193h 29p
+    expect($report->formatDuration(11609))->toBe('193h 29p');
+    expect($report->formatDurationTooltip(11609))->toBe('193 giờ 29 phút (11,609 phút)');
+
+    // Other cases
+    expect($report->formatDuration(40))->toBe('40p');
+    expect($report->formatDurationTooltip(40))->toBe('40 phút');
+
+    expect($report->formatDuration(60))->toBe('1h');
+    expect($report->formatDurationTooltip(60))->toBe('1 giờ (60 phút)');
+
+    expect($report->formatDuration(75))->toBe('1h 15p');
+    expect($report->formatDurationTooltip(75))->toBe('1 giờ 15 phút (75 phút)');
+
+    expect($report->formatDuration(0))->toBe('0p');
+    expect($report->formatDurationTooltip(0))->toBe('0 phút');
+
+    expect($report->formatDuration(null))->toBe('—');
+    expect($report->formatDurationTooltip(null))->toBe('Chưa có dữ liệu');
+});
+
+test('trip statistics report separates data into 3 tabs and updates counts', function () {
+    // 1. Chuyến HHHK
+    $tripHHHK = Trip::create([
+        'trip_code' => 'TRIP-TAB-HHHK',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 08:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 09:00:00'),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-TAB-HHHK',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'trip_id' => $tripHHHK->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    // 2. Chuyến Hàng ngoài
+    $tripExt = Trip::create([
+        'trip_code' => 'TRIP-TAB-EXT',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 10:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 11:00:00'),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-TAB-EXT',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer2->id,
+        'created_by' => $this->driver->id,
+        'trip_id' => $tripExt->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    // 3. Chuyến Xe không hàng (empty run - không có order)
+    $tripEmpty = Trip::create([
+        'trip_code' => 'TRIP-TAB-EMPTY',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 13:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 14:00:00'),
+        'total_km_empty' => 30,
+    ]);
+
+    $component = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+    ]);
+
+    // Kiểm tra tab counts
+    $tabCounts = $component->instance()->getTabCounts();
+    expect($tabCounts['HHHK'])->toBe(1);
+    expect($tabCounts['external'])->toBe(1);
+    expect($tabCounts['empty'])->toBe(1);
+
+    // Mặc định là Tab HHHK
+    expect($component->get('activeTab'))->toBe('HHHK');
+    $rowsHHHK = $component->instance()->getAllRows();
+    expect($rowsHHHK)->toHaveCount(1);
+    expect($rowsHHHK->first()['code'])->toBe('ORD-TAB-HHHK');
+    expect($rowsHHHK->first()['service_type'])->toBe('HHHK');
+
+    // Chuyển sang Tab Hàng ngoài
+    $component->call('setActiveTab', 'external');
+    expect($component->get('activeTab'))->toBe('external');
+    $rowsExt = $component->instance()->getAllRows();
+    expect($rowsExt)->toHaveCount(1);
+    expect($rowsExt->first()['code'])->toBe('ORD-TAB-EXT');
+    expect($rowsExt->first()['service_type'])->toBe('Hàng ngoài');
+
+    // Chuyển sang Tab Xe không hàng
+    $component->call('setActiveTab', 'empty');
+    expect($component->get('activeTab'))->toBe('empty');
+    $rowsEmpty = $component->instance()->getAllRows();
+    expect($rowsEmpty)->toHaveCount(1);
+    expect($rowsEmpty->first()['code'])->toBe('TRIP-TAB-EMPTY');
+    expect($rowsEmpty->first()['service_type'])->toBe('Xe không hàng');
+
+    // Kiểm tra các nhãn tab hiển thị trong HTML
+    $component->assertSee('HHHK (Hàng không)')
+        ->assertSee('Hàng ngoài')
+        ->assertSee('Xe không hàng');
+});
+
+test('can quick edit pcs and gw inline via updateOrderMetric', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-METRIC-1',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-10 08:00:00'),
+        'completed_at' => Carbon::parse('2026-04-10 10:00:00'),
+        'total_km_loaded' => 20,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-METRIC-1',
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'area_id' => $this->area->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::Completed,
+        'type' => OrderType::Hhhk,
+        'cargo_type' => CargoType::Gcr,
+        'total_packages' => 10,
+        'total_weight' => 100.5,
+        'chargeable_weight' => 1.5,
+    ]);
+
+    $component = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'HHHK',
+    ]);
+
+    // Kiểm tra ban đầu
+    $metrics = $component->instance()->getSummaryMetrics();
+    expect($metrics['total_pcs'])->toBe(10);
+    expect((float) $metrics['total_gw'])->toBe(100.5);
+
+    // Cập nhật PCS
+    $component->call('updateOrderMetric', $order->id, 'total_packages', 35);
+    $order->refresh();
+    expect($order->total_packages)->toBe(35);
+
+    // Metrics sau khi sửa PCS
+    $metricsAfterPcs = $component->instance()->getSummaryMetrics();
+    expect($metricsAfterPcs['total_pcs'])->toBe(35);
+
+    // Cập nhật GW
+    $component->call('updateOrderMetric', $order->id, 'total_weight', 250.75);
+    $order->refresh();
+    expect((float) $order->total_weight)->toBe(250.75);
+
+    // Metrics sau khi sửa GW
+    $metricsAfterGw = $component->instance()->getSummaryMetrics();
+    expect((float) $metricsAfterGw['total_gw'])->toBe(250.75);
+
+    // Kiểm tra OrderObserver đã tự động ghi log vào OrderEditLog
+    expect(OrderEditLog::where('order_id', $order->id)->where('field', 'total_packages')->exists())->toBeTrue();
+    expect(OrderEditLog::where('order_id', $order->id)->where('field', 'total_weight')->exists())->toBeTrue();
+});
+
+test('handles invalid fields and non-existent orders for updateOrderMetric cleanly', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-METRIC-2',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-12 08:00:00'),
+        'completed_at' => Carbon::parse('2026-04-12 10:00:00'),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-METRIC-2',
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'area_id' => $this->area->id,
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::Completed,
+        'type' => OrderType::Hhhk,
+        'total_packages' => 5,
+        'total_weight' => 50.0,
+    ]);
+
+    $component = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+    ]);
+
+    // Trường không hợp lệ (không cho phép sửa)
+    $component->call('updateOrderMetric', $order->id, 'status', 'cancelled');
+    $order->refresh();
+    expect($order->status)->toBe(OrderStatus::Completed);
+
+    // ID đơn hàng không tồn tại (xử lý an toàn không sập)
+    $component->call('updateOrderMetric', 999999, 'total_packages', 20);
+
+    // Cập nhật giá trị rỗng/null cho PCS và GW
+    $component->call('updateOrderMetric', $order->id, 'total_packages', '');
+    $order->refresh();
+    expect($order->total_packages)->toBeNull();
+
+    $component->call('updateOrderMetric', $order->id, 'total_weight', '');
+    $order->refresh();
+    expect($order->total_weight)->toBeNull();
 });
