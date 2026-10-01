@@ -68,40 +68,22 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         Constants?.easConfig?.projectId ??
         "4a73c5d5-0135-4373-a36e-8e0b2009c779";
 
-    // Khi chạy trên Simulator: ưu tiên lấy Expo Push Token để nhận notification qua Expo Server
-    if (!Device.isDevice) {
-        try {
-            const expoTokenData = await Notifications.getExpoPushTokenAsync({
-                projectId,
-            });
-            if (expoTokenData?.data) {
-                return expoTokenData.data;
-            }
-        } catch (error) {
-            console.log("Error getting Expo push token on simulator:", error);
-        }
-    }
-
-    // Khi chạy trên máy thật (Android / iOS): lấy Native Device Token (FCM / APNs)
-    try {
-        const deviceTokenData = await Notifications.getDevicePushTokenAsync();
-        if (deviceTokenData?.data) {
-            return deviceTokenData.data;
-        }
-    } catch (err) {
-        console.log("Failed to get native device push token, falling back to expo push token:", err);
-    }
-
-    // Fallback sang Expo Push Token nếu không lấy được native token
+    // Luôn dùng Expo Push Token cho cả Simulator và máy thật.
+    // Expo tự xử lý bridge APNs/FCM phía server, đảm bảo token luôn hợp lệ.
+    // KHÔNG dùng getDevicePushTokenAsync() vì trên iOS nó trả về raw APNs device token
+    // (hex 64 ký tự) — không phải FCM registration token, Firebase Admin SDK sẽ reject.
     try {
         const expoTokenData = await Notifications.getExpoPushTokenAsync({
             projectId,
         });
-        return expoTokenData.data;
+        if (expoTokenData?.data) {
+            return expoTokenData.data;
+        }
     } catch (error) {
-        console.log("Error getting push token fallback:", error);
-        return null;
+        console.log("Error getting Expo push token:", error);
     }
+
+    return null;
 }
 
 /**

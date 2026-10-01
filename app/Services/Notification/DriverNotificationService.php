@@ -403,9 +403,20 @@ class DriverNotificationService
             return false;
         }
 
-        // Hỗ trợ Expo Push Token khi test trên Simulator / Expo Go
+        // Hỗ trợ Expo Push Token (Simulator + máy thật qua Expo Push Server)
         if (str_starts_with($token, 'ExponentPushToken[') || str_starts_with($token, 'ExpoPushToken[')) {
             return $this->sendViaExpoPush($driver, $token, $title, $body, $data);
+        }
+
+        // Phát hiện APNs Device Token (hex 64 ký tự) — không hợp lệ cho FCM, xóa và cảnh báo
+        if (ctype_xdigit($token) && strlen($token) === 64) {
+            Log::warning("DriverNotification: Lái xe {$driver->name} (ID: {$driver->id}) đang dùng APNs Device Token thay vì FCM/Expo token. Token đã bị xóa, yêu cầu app cập nhật lại.");
+            $driver->update([
+                'fcm_token' => null,
+                'fcm_token_updated_at' => null,
+            ]);
+
+            return false;
         }
 
         return $this->sendViaFcm($driver, $token, $title, $body, $data);
@@ -499,7 +510,9 @@ class DriverNotificationService
             // Nếu token không hợp lệ hoặc đã hết hạn, xóa token cũ
             if (str_contains($e->getMessage(), 'Requested entity was not found') ||
                 str_contains($e->getMessage(), 'Unregistered') ||
-                str_contains($e->getMessage(), 'InvalidArgumentException')) {
+                str_contains($e->getMessage(), 'InvalidArgumentException') ||
+                str_contains($e->getMessage(), 'not a valid FCM registration token')) {
+                Log::info("DriverNotification: Đã xóa FCM token không hợp lệ của lái xe {$driver->name} (ID: {$driver->id}).");
                 $driver->update([
                     'fcm_token' => null,
                     'fcm_token_updated_at' => null,

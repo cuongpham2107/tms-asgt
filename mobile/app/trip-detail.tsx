@@ -11,6 +11,8 @@ import {
     KeyboardAvoidingView,
     Platform,
     Image,
+    Keyboard,
+    Pressable,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
@@ -1274,7 +1276,7 @@ export default function TripDetailScreen() {
                 animationType="fade"
                 onRequestClose={() => setShowReportModal(false)}
             >
-                <View style={s.modalOverlay}>
+                <Pressable style={s.modalOverlay} onPress={Keyboard.dismiss}>
                     <View style={[s.modalCard, { maxWidth: 420 }]}>
                         <View
                             style={{
@@ -1353,6 +1355,7 @@ export default function TripDetailScreen() {
                             placeholder="VD: 100085"
                             placeholderTextColor="#9CA3AF"
                             keyboardType="numeric"
+                            returnKeyType="done"
                         />
 
                         <Text style={s.modalSectionLabel}>
@@ -1540,7 +1543,7 @@ export default function TripDetailScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </Pressable>
             </Modal>
 
             {/* Complete Modal */}
@@ -1550,7 +1553,7 @@ export default function TripDetailScreen() {
                 transparent
                 onRequestClose={() => setShowCompleteModal(false)}
             >
-                <View style={s.modalOverlay}>
+                <Pressable style={s.modalOverlay} onPress={Keyboard.dismiss}>
                     <View style={s.modalCard}>
                         <Text style={s.modalTitle}>Kết thúc chuyến</Text>
 
@@ -1622,6 +1625,7 @@ export default function TripDetailScreen() {
                             placeholder="Km hiện tại"
                             placeholderTextColor="#D1D5DB"
                             keyboardType="numeric"
+                            returnKeyType="done"
                             value={completeKm}
                             onChangeText={setCompleteKm}
                             autoFocus
@@ -1732,7 +1736,7 @@ export default function TripDetailScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </Pressable>
             </Modal>
         </KeyboardAvoidingView>
     );
