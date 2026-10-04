@@ -18,7 +18,7 @@ class ShiftStatusController extends Controller
      * - Km kết thúc gần nhất (để pre-fill khi bắt đầu ca mới)
      * - Thông tin xe nếu đang trong ca
      *
-     * @response array{active_shift: ?DriverShiftResource, last_km: ?float}
+     * @response array{active_shift: ?DriverShiftResource, min_app_version: string}
      */
     public function active(Request $request): JsonResponse
     {
@@ -33,7 +33,7 @@ class ShiftStatusController extends Controller
 
         return response()->json([
             'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')])) : null,
-            'last_km' => null,
+            'min_app_version' => config('app.min_mobile_version'),
         ]);
     }
 }

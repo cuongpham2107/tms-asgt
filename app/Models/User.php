@@ -214,21 +214,6 @@ class User extends Authenticatable
         return $this->hasMany(VehicleMaintenanceSchedule::class, 'created_by');
     }
 
-    public function driverSwapsFrom(): HasMany
-    {
-        return $this->hasMany(DriverSwap::class, 'from_driver_id');
-    }
-
-    public function driverSwapsTo(): HasMany
-    {
-        return $this->hasMany(DriverSwap::class, 'to_driver_id');
-    }
-
-    public function driverSwapsCreated(): HasMany
-    {
-        return $this->hasMany(DriverSwap::class, 'created_by');
-    }
-
     public function orderTemplates(): HasMany
     {
         return $this->hasMany(OrderTemplate::class, 'created_by');

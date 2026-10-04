@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\DriverSwapReason;
+use App\Enums\AssignmentEndReason;
 use App\Enums\TripStatus;
-use App\Models\DriverSwap;
 use App\Models\Trip;
+use App\Models\TripDriverAssignment;
 use App\Models\User;
 use App\Models\Vehicle;
 use Carbon\Carbon;
@@ -152,7 +152,7 @@ it('includes km from cancelled trips that have driven km', function () {
         ->assertJsonPath('data.total_km_empty', 150);
 });
 
-it('calculates driver km for swapped trips from db', function () {
+it('includes swapped trips for both drivers via driver assignments', function () {
     $driverB = User::factory()->create();
     $driverB->assignRole('driver');
 
@@ -167,12 +167,19 @@ it('calculates driver km for swapped trips from db', function () {
         'total_km_empty' => 40,
     ]);
 
-    DriverSwap::create([
+    TripDriverAssignment::create([
         'trip_id' => $trip->id,
-        'from_driver_id' => $this->driver->id,
-        'to_driver_id' => $driverB->id,
-        'reason' => DriverSwapReason::ShiftHandover,
-        'created_by' => $this->driver->id,
+        'driver_id' => $this->driver->id,
+        'started_at' => now()->subHours(4),
+        'ended_at' => now()->subHours(2),
+        'end_reason' => AssignmentEndReason::ShiftHandover,
+    ]);
+    TripDriverAssignment::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $driverB->id,
+        'started_at' => now()->subHours(2),
+        'ended_at' => now()->subHours(1),
+        'end_reason' => AssignmentEndReason::TripFinished,
     ]);
 
     $response = $this->getJson('/api/driver/trips/stats');

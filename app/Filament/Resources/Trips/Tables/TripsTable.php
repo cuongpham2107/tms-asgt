@@ -7,8 +7,8 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
+use App\Filament\Resources\Trips\Actions\AssignDriverAction;
 use App\Filament\Resources\Trips\Actions\CancelTripAction;
-use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
 use App\Filament\Resources\Trips\Actions\SendTripAction;
 use App\Filament\Resources\Trips\Schemas\TripForm;
@@ -44,8 +44,7 @@ class TripsTable extends BaseTable
                 ->with([
                     'vehicle',
                     'driver',
-                    'driverSwaps.toDriver',
-                    'driverSwapCheckpoints' => fn ($q) => $q->where('checkpoint_type', 'driver_swap'),
+                    'driverAssignments.driver',
                     'shift',
                     'startLocation',
                     'endLocation',
@@ -237,7 +236,7 @@ class TripsTable extends BaseTable
                             return $record;
                         }),
 
-                    ReassignDriverAction::make(),
+                    AssignDriverAction::make(),
                     CancelTripAction::make(),
                     DeleteAction::make(),
                     ActivityLogTimelineTableAction::make('Activities')
@@ -372,42 +371,29 @@ class TripsTable extends BaseTable
 
     private static function getDrivers(Trip $record): string
     {
-        $names = [];
-        $swaps = $record->driverSwaps->sortBy('created_at');
+        $names = $record->driverAssignments
+            ->map(fn ($assignment) => $assignment->driver?->name)
+            ->filter()
+            ->values();
 
-        if ($swaps->isNotEmpty()) {
-            $firstSwap = $swaps->first();
-            if ($firstSwap->fromDriver) {
-                $names[] = $firstSwap->fromDriver->name;
-            }
-
-            foreach ($swaps as $swap) {
-                if ($swap->toDriver) {
-                    $names[] = $swap->toDriver->name;
-                }
-            }
-        } elseif ($record->driver) {
-            $names[] = $record->driver->name;
+        if ($names->isEmpty() && $record->driver) {
+            $names->push($record->driver->name);
         }
 
-        return ! empty($names) ? implode(' → ', $names) : '—';
+        $label = $names
+            ->reject(fn ($name, $index) => $index > 0 && $names[$index - 1] === $name)
+            ->implode(' → ');
+
+        if ($record->status === TripStatus::DriverSwap) {
+            $label .= ' → (chờ lái)';
+        }
+
+        return $label !== '' ? $label : '—';
     }
 
     private static function hasDriverSwap(Trip $record): bool
     {
-        if ($record->driverSwaps->isNotEmpty()) {
-            return true;
-        }
-
-        if ($record->relationLoaded('driverSwapCheckpoints') && $record->driverSwapCheckpoints->isNotEmpty()) {
-            return true;
-        }
-
-        if ($record->status === TripStatus::DriverSwap) {
-            return true;
-        }
-
-        return false;
+        return $record->status === TripStatus::DriverSwap || $record->driverAssignments->count() > 1;
     }
 
     private static function getKmDisplay(Trip $record): string

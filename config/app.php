@@ -16,6 +16,12 @@ return [
     'name' => env('APP_NAME', 'Laravel'),
 
     /*
+    | Phiên bản app tài xế tối thiểu; app cũ hơn bị chặn và yêu cầu cập nhật.
+    */
+
+    'min_mobile_version' => env('MIN_MOBILE_VERSION', '1.0.0'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------

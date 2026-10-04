@@ -247,11 +247,6 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
     // ============================================
     // 6. KẾT THÚC CA LÀM
     // ============================================
-    // Create 'end' checkpoint before ending shift
-    $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
-        'km_reading' => 15100,
-    ])->assertSuccessful();
-
     $this->postJson('/api/driver/shifts/end', [
         'end_time' => now()->toIso8601String(),
     ])->assertSuccessful();

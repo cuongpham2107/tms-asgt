@@ -121,16 +121,6 @@ class Trip extends Model
         return $this->hasOne(TripDriverAssignment::class)->whereNull('ended_at')->latestOfMany();
     }
 
-    public function driverSwaps(): HasMany
-    {
-        return $this->hasMany(DriverSwap::class);
-    }
-
-    public function driverSwapCheckpoints(): HasMany
-    {
-        return $this->hasMany(TripCheckpoint::class)->where('checkpoint_type', 'driver_swap');
-    }
-
     public function getStatusLabel(): string
     {
         if ($this->status === TripStatus::Pending) {

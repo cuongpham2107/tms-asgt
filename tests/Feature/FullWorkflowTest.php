@@ -19,6 +19,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Trip\TripDriverService;
 use App\Services\TripKmCalculatorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -109,22 +110,9 @@ function fwPostCheckpoint(
         ->assertSuccessful();
 }
 
-function fwEndShift(User $driver, int $endKm): void
+function fwEndShift(User $driver): void
 {
     Sanctum::actingAs($driver);
-
-    // Get the active shift to find vehicle for end-vehicle checkpoint
-    $shift = DriverShift::where('driver_id', $driver->id)
-        ->whereNull('end_time')
-        ->latest('start_time')
-        ->first();
-
-    if ($shift) {
-        // Create 'end' checkpoint first (required before ending shift)
-        postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
-            'km_reading' => $endKm,
-        ])->assertSuccessful();
-    }
 
     postJson('/api/driver/shifts/end', [
         'end_time' => now()->toIso8601String(),
@@ -227,7 +215,7 @@ test('scenario 1: HHHK order full lifecycle A to B', function () {
     fwCompleteTrip($driver, $trip, 50080);
 
     // End shift
-    fwEndShift($driver, 50080);
+    fwEndShift($driver);
 
     // Assert
     $order->refresh();
@@ -263,7 +251,7 @@ test('scenario 2: external order full lifecycle', function () {
 
     fwCompleteTrip($driver, $trip, 60055);
 
-    fwEndShift($driver, 60055);
+    fwEndShift($driver);
 
     $order->refresh();
     $trip->refresh();
@@ -316,7 +304,7 @@ test('scenario 3: two HHHK orders in same trip delivered sequentially', function
 
     fwCompleteTrip($driver, $trip, 70100);
 
-    fwEndShift($driver, 70100);
+    fwEndShift($driver);
 
     $order1->refresh();
     $order2->refresh();
@@ -348,15 +336,17 @@ test('scenario 4: driver swap mid-trip', function () {
     fwPostCheckpoint($driverA, $trip, CheckpointType::Started->value);
     fwPostCheckpoint($driverA, $trip, CheckpointType::ArrivedPickup->value, kmReading: 80010);
     fwPostCheckpoint($driverA, $trip, CheckpointType::LeftPickup->value);
-    fwEndShift($driverA, 80030); // Driver A ends, trip becomes DriverSwap
+    fwEndShift($driverA); // Driver A ends, trip becomes DriverSwap
 
     $trip->refresh();
     $order->refresh();
     expect($trip->status)->toBe(TripStatus::DriverSwap);
     expect($order->status)->toBe(OrderStatus::DriverSwap);
 
-    // Reassign to Driver B, resuming where Driver A left off (already left pickup)
-    $trip->update(['driver_id' => $driverB->id, 'status' => TripStatus::Delivering]);
+    // Điều hành gán Driver B: chuyến quay lại trạng thái trước đảo lái (đã rời điểm lấy)
+    $trip = app(TripDriverService::class)->assignDriver($trip, $driverB);
+    expect($trip->status)->toBe(TripStatus::Delivering);
+    expect($order->fresh()->status)->toBe(OrderStatus::InTransit);
 
     // Driver B: arrived_delivery → completed
     fwStartShift($driverB, $vehicle);
@@ -365,7 +355,7 @@ test('scenario 4: driver swap mid-trip', function () {
 
     fwCompleteTrip($driverB, $trip, 80100);
 
-    fwEndShift($driverB, 80100);
+    fwEndShift($driverB);
 
     $order->refresh();
     $trip->refresh();
@@ -421,7 +411,7 @@ test('scenario 5: return trip with empty KM after delivery', function () {
     $returnTrip->complete();
     app(TripKmCalculatorService::class)->calculate($returnTrip);
 
-    fwEndShift($driver, 90100);
+    fwEndShift($driver);
 
     $order->refresh();
     $returnTrip->refresh();
@@ -467,7 +457,7 @@ test('scenario 6: rented vehicle creates auto-checkpoints on trip creation', fun
 
     fwCompleteTrip($driver, $trip, 100080);
 
-    fwEndShift($driver, 100080);
+    fwEndShift($driver);
 
     $order->refresh();
     $trip->refresh();
@@ -507,7 +497,7 @@ test('scenario 7: shift KM summary matches actual driven distance', function () 
 
     fwCompleteTrip($driver, $trip, 20090);
 
-    fwEndShift($driver, 20090);
+    fwEndShift($driver);
 
     $shift->refresh();
     $order->refresh();

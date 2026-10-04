@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\AssignmentEndReason;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
 use App\Models\Trip;
+use App\Services\Trip\TripDriverService;
 use App\Services\Trip\TripStateMachine;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
@@ -30,7 +32,7 @@ class TripController extends Controller
 
         $trip = Trip::query()->where(function ($q) use ($user) {
             $q->where('driver_id', $user->id)
-                ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
+                ->orWhereHas('driverAssignments', fn ($q) => $q->where('driver_id', $user->id));
         })
             ->whereIn('status', TripStatus::driverActionableStatuses())
             ->where(function ($q) {
@@ -41,7 +43,7 @@ class TripController extends Controller
                 'vehicle',
                 'startLocation',
                 'endLocation',
-                'driverSwaps.toDriver',
+                'driverAssignments.driver',
                 'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
                     'pickupLocation',
@@ -81,7 +83,7 @@ class TripController extends Controller
                 'vehicle',
                 'startLocation',
                 'endLocation',
-                'driverSwaps.toDriver',
+                'driverAssignments.driver',
                 'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
                     'pickupLocation',
@@ -118,7 +120,7 @@ class TripController extends Controller
         $user = $request->user();
 
         $belongsToDriver = $trip->driver_id === $user->id
-            || $trip->driverSwaps()->where('from_driver_id', $user->id)->exists();
+            || $trip->driverAssignments()->where('driver_id', $user->id)->exists();
 
         if (! $belongsToDriver) {
             return response()->json(['message' => 'This trip is not assigned to you'], 403);
@@ -128,7 +130,7 @@ class TripController extends Controller
             'vehicle',
             'startLocation',
             'endLocation',
-            'driverSwaps.toDriver',
+            'driverAssignments.driver',
             'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                 'customer',
                 'pickupLocation',
@@ -147,7 +149,7 @@ class TripController extends Controller
      * Lịch sử các chuyến đã kết thúc của lái xe.
      *
      * Trả về danh sách trip có trạng thái Completed/DriverSwap,
-     * kèm orders, checkpoints, driverSwaps. Có phân trang và filter.
+     * kèm orders, checkpoints, lượt lái. Có phân trang và filter.
      *
      * @queryParam per_page int Số bản ghi mỗi trang (mặc định 15). Example: 10
      * @queryParam from_date string Lọc từ ngày (started_at >=, ISO date). Example: 2026-06-01
@@ -174,7 +176,7 @@ class TripController extends Controller
         $trips = Trip::query()
             ->where(function ($q) use ($user) {
                 $q->where('driver_id', $user->id)
-                    ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
+                    ->orWhereHas('driverAssignments', fn ($q) => $q->where('driver_id', $user->id));
             })
             ->with([
                 'vehicle',
@@ -182,7 +184,7 @@ class TripController extends Controller
                 'endLocation',
                 'shift',
                 'driver',
-                'driverSwaps.toDriver',
+                'driverAssignments.driver',
                 'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
                     'customer',
                     'pickupLocation',
@@ -212,15 +214,36 @@ class TripController extends Controller
     }
 
     /**
-     * Kết thúc chuyến (manual complete).
-     *
-     * Nếu tất cả orders đã Completed → trip.status = Completed.
-     * Nếu còn orders chưa hoàn thành → trip.status = DriverSwap,
-     *   tính partial km, orders chưa xong → DriverSwap.
+     * Lái xe xin đảo lái: chuyến chuyển sang Đảo lái và chờ điều hành gán lái mới.
      *
      * @response array{data: TripResource}
      */
-    #[BodyParameter('end_km', type: 'number', description: 'Số km đồng hồ lúc kết thúc chuyến.', required: true)]
+    #[BodyParameter('reason', type: 'string', description: 'Lý do: shift_handover, cargo_not_unloaded, other.', required: true, example: 'shift_handover')]
+    #[BodyParameter('note', type: 'string', description: 'Ghi chú thêm.')]
+    public function swap(Request $request, Trip $trip): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', Rule::enum(AssignmentEndReason::class)->only(AssignmentEndReason::driverSwapReasons())],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $trip = app(TripDriverService::class)->requestSwap(
+            $trip,
+            $request->user(),
+            AssignmentEndReason::from($validated['reason']),
+            $validated['note'] ?? null,
+        );
+
+        return response()->json([
+            'data' => TripResource::make($trip->load(['vehicle', 'orders'])),
+        ]);
+    }
+
+    /**
+     * Kết thúc chuyến khi mọi đơn đã giao xong (hoặc đã huỷ).
+     *
+     * @response array{data: TripResource}
+     */
     #[BodyParameter('completed_at', type: 'string', format: 'date-time', description: 'Thời điểm kết thúc chuyến.', example: '2026-07-09T17:30:00Z')]
     public function complete(Request $request, Trip $trip): JsonResponse
     {
@@ -295,7 +318,7 @@ class TripController extends Controller
         $trips = Trip::query()
             ->where(function ($q) use ($user) {
                 $q->where('driver_id', $user->id)
-                    ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id)->orWhere('to_driver_id', $user->id));
+                    ->orWhereHas('driverAssignments', fn ($q) => $q->where('driver_id', $user->id));
             })
             ->when($from, fn ($q) => $q->where(fn ($sq) => $sq->whereDate('started_at', '>=', $from)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->whereDate('created_at', '>=', $from))))
             ->when($to, fn ($q) => $q->where(fn ($sq) => $sq->whereDate('started_at', '<=', $to)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->whereDate('created_at', '<=', $to))))

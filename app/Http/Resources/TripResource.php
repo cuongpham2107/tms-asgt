@@ -44,7 +44,7 @@ class TripResource extends JsonResource
 
             'checkpoints' => TripCheckpointResource::collection($this->whenLoaded('checkpoints')),
 
-            'driver_swaps' => DriverSwapResource::collection($this->whenLoaded('driverSwaps')),
+            'driver_assignments' => TripDriverAssignmentResource::collection($this->whenLoaded('driverAssignments')),
 
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

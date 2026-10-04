@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\CheckpointType;
-use App\Enums\DriverSwapReason;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
@@ -13,12 +12,12 @@ use App\Enums\VehicleType;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
-use App\Models\DriverSwap;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Trip\TripDriverService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
@@ -190,11 +189,6 @@ test('full HHHK order lifecycle without swap calculates KM correctly', function 
         'end_km' => 10100,
     ])->assertSuccessful();
 
-    // 8. End shift
-    $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
-        'km_reading' => 10100,
-    ])->assertSuccessful();
-
     $this->postJson('/api/driver/shifts/end', [
         'end_time' => now()->toIso8601String(),
     ])->assertSuccessful();
@@ -204,7 +198,7 @@ test('full HHHK order lifecycle without swap calculates KM correctly', function 
 });
 
 /*
- * Flow: Driver A đi được 1 nửa → kết thúc ca → auto driver_swap → Operator gán Driver B → hoàn tất
+ * Flow: Driver A đi được 1 nửa → xin đảo lái → kết thúc ca → Operator gán Driver B → hoàn tất
  */
 test('driver swap mid-delivery hands trip over to second driver', function () {
     $driverA = User::factory()->create();
@@ -249,9 +243,9 @@ test('driver swap mid-delivery hands trip over to second driver', function () {
 
     expect($order->fresh()->trip->status)->toBe(TripStatus::Delivering);
 
-    // Driver A ends shift mid-delivery → auto driver_swap
-    $this->postJson("/api/driver/shifts/{$shiftA->id}/end-vehicle", [
-        'km_reading' => 10060,
+    // Driver A xin đảo lái giữa chặng giao rồi kết thúc ca
+    $this->postJson("/api/driver/trips/{$trip->id}/swap", [
+        'reason' => 'shift_handover',
     ])->assertSuccessful();
 
     $this->postJson('/api/driver/shifts/end', [
@@ -264,21 +258,10 @@ test('driver swap mid-delivery hands trip over to second driver', function () {
     // ============================================
     // PHASE 2: Operator reassigns Driver B
     // ============================================
-    // Resume where Driver A left off (already left pickup)
-    $trip->update([
-        'driver_id' => $driverB->id,
-        'status' => TripStatus::Delivering,
-    ]);
-
-    DriverSwap::create([
-        'trip_id' => $trip->id,
-        'from_driver_id' => $driverA->id,
-        'to_driver_id' => $driverB->id,
-        'from_shift_id' => $shiftA->id,
-        'to_shift_id' => null,
-        'reason' => DriverSwapReason::ShiftHandover,
-        'created_by' => $driverA->id,
-    ]);
+    // Chuyến quay lại trạng thái trước đảo lái (đã rời điểm lấy)
+    $trip = app(TripDriverService::class)->assignDriver($trip->fresh(), $driverB);
+    expect($trip->status)->toBe(TripStatus::Delivering);
+    expect($order->fresh()->status)->toBe(OrderStatus::InTransit);
 
     // ============================================
     // PHASE 3: Driver B completes delivery
@@ -315,11 +298,6 @@ test('driver swap mid-delivery hands trip over to second driver', function () {
         'end_km' => 10100,
     ])->assertSuccessful();
 
-    // Driver B ends shift
-    $this->postJson("/api/driver/shifts/{$shiftB->id}/end-vehicle", [
-        'km_reading' => 10100,
-    ])->assertSuccessful();
-
     $this->postJson('/api/driver/shifts/end', [
         'end_time' => now()->toIso8601String(),
     ])->assertSuccessful();
@@ -332,7 +310,7 @@ test('driver swap mid-delivery hands trip over to second driver', function () {
  * Flow: Driver A làm 2 đơn — hoàn tất đơn 1 → hết giờ, kết thúc ca → auto driver_swap cho chuyến còn lại
  *       → Điều hành swap Driver B → Driver B hoàn tất
  */
-test('driver with 2 orders runs out of shift time triggers swap via trip DriverSwapAction', function () {
+test('driver with 2 orders runs out of shift time is reassigned to second driver by operator', function () {
     $adminUser = User::factory()->create();
     $adminUser->assignRole('driver');
 
@@ -470,11 +448,6 @@ test('driver with 2 orders runs out of shift time triggers swap via trip DriverS
     ])->assertSuccessful();
     expect($order2->fresh()->trip->status)->toBe(TripStatus::Delivering);
 
-    // Driver A hết ca → end shift → auto DriverSwap on Trip 2
-    $this->postJson("/api/driver/shifts/{$shiftA->id}/end-vehicle", [
-        'km_reading' => 10060,
-    ])->assertSuccessful();
-
     $this->postJson('/api/driver/shifts/end', [
         'end_time' => now()->toIso8601String(),
     ])->assertSuccessful();
@@ -495,23 +468,10 @@ test('driver with 2 orders runs out of shift time triggers swap via trip DriverS
     ])->assertSuccessful();
     $shiftB = DriverShift::find($shiftBResponse->json('shift.id'));
 
-    // Simulate driver swap (same logic as Trips DriverSwapAction): tạo swap và gán lại driver cho trip
-    DriverSwap::create([
-        'trip_id' => $trip2->id,
-        'from_driver_id' => $driverA->id,
-        'to_driver_id' => $driverB->id,
-        'from_shift_id' => $shiftA->id,
-        'to_shift_id' => $shiftB->id,
-        'reason' => DriverSwapReason::ShiftHandover,
-        'note' => 'Hết ca, bàn giao cho tài xế B',
-        'created_by' => $adminUser->id,
-    ]);
-
-    $trip2->update([
-        'driver_id' => $driverB->id,
-        'shift_id' => $shiftB->id,
-        'status' => TripStatus::Delivering,
-    ]);
+    // Điều hành gán Driver B (đang trong ca) cho chuyến chờ lái
+    $trip2 = app(TripDriverService::class)->assignDriver($trip2->fresh(), $driverB, $adminUser);
+    expect($trip2->status)->toBe(TripStatus::Delivering);
+    expect($trip2->shift_id)->toBe($shiftB->id);
 
     // ============================================
     // PHASE 4: Driver B hoàn tất Order 2
@@ -540,11 +500,6 @@ test('driver with 2 orders runs out of shift time triggers swap via trip DriverS
     // Complete trip (manual) before ending shift
     $this->postJson("/api/driver/trips/{$trip2->id}/complete", [
         'end_km' => 10100,
-    ])->assertSuccessful();
-
-    // Driver B kết thúc ca
-    $this->postJson("/api/driver/shifts/{$shiftB->id}/end-vehicle", [
-        'km_reading' => 10100,
     ])->assertSuccessful();
 
     $this->postJson('/api/driver/shifts/end', [

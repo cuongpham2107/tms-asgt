@@ -6,7 +6,7 @@ use App\Enums\OnDutyLocation;
 use App\Enums\ShiftType;
 use App\Filament\Forms\Components\PillFilter;
 use App\Models\DriverShift;
-use App\Models\DriverSwap;
+use App\Models\TripDriverAssignment;
 use App\Models\User;
 use App\Models\Vehicle;
 use BackedEnum;
@@ -286,12 +286,11 @@ class DriverDutyReport extends Page implements HasTable
                     ->first()?->vehicle;
             }
 
-            $hasSwap = $shift ? DriverSwap::where(function ($q) use ($driver, $shift) {
-                $q->where('from_driver_id', $driver->id)
-                    ->orWhere('to_driver_id', $driver->id)
-                    ->orWhere('from_shift_id', $shift->id)
-                    ->orWhere('to_shift_id', $shift->id);
-            })->exists() : false;
+            // Ca có đảo lái: một chuyến tài xế giữ trong ca này có từ 2 lượt lái trở lên.
+            $hasSwap = $shift !== null && TripDriverAssignment::query()
+                ->where('shift_id', $shift->id)
+                ->whereIn('trip_id', TripDriverAssignment::select('trip_id')->groupBy('trip_id')->havingRaw('COUNT(*) > 1'))
+                ->exists();
             $plate = $vehicle?->plate_number;
 
             $driver->station_display = $driver->station?->getLabel() ?? '—';

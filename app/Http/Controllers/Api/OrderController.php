@@ -132,12 +132,12 @@ class OrderController extends Controller
                 'pickupLocation',
                 'deliveryPoints.location',
                 'trip.vehicle',
-                'trip.driverSwaps',
+                'trip.driverAssignments',
                 'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
             ->whereHas('trip', function ($q) use ($user) {
                 $q->where('driver_id', $user->id)
-                    ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
+                    ->orWhereHas('driverAssignments', fn ($q) => $q->where('driver_id', $user->id));
             })
             ->whereIn('status', [OrderStatus::Completed, OrderStatus::Cancelled])
             ->orderBy('updated_at', 'desc')

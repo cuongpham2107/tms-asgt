@@ -46,8 +46,6 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::post('/shifts/start', [DriverShiftController::class, 'start']);
     Route::post('/shifts/end', [DriverShiftController::class, 'end']);
     Route::get('/shifts/current', [DriverShiftController::class, 'current']);
-    Route::post('/shifts/switch-vehicle', [DriverShiftController::class, 'switchVehicle']);
-    Route::post('/shifts/{shift}/end-vehicle', [DriverShiftController::class, 'endVehicle']);
 
     // Trips
     Route::get('/trips/current', [TripController::class, 'current']);
@@ -57,6 +55,7 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::get('/trips/{trip}', [TripController::class, 'show']);
     Route::post('/trips/{trip}/checkpoints', [TripCheckpointController::class, 'checkpoint']);
     Route::post('/trips/{trip}/complete', [TripController::class, 'complete']);
+    Route::post('/trips/{trip}/swap', [TripController::class, 'swap']);
 
     // Locations (danh sách địa điểm có search và limit)
     Route::get('/locations', [LocationController::class, 'index']);

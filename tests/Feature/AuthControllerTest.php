@@ -229,3 +229,23 @@ test('driver can change password', function () {
     $driver->refresh();
     expect(Hash::check('newPassword456', $driver->password))->toBeTrue();
 });
+
+test('login and shift status return the minimum supported app version', function () {
+    config(['app.min_mobile_version' => '1.2.0']);
+
+    $driver = User::factory()->create([
+        'email' => 'driver-version@example.com',
+        'password' => bcrypt('password123'),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    $this->postJson('/api/driver/login', [
+        'email' => 'driver-version@example.com',
+        'password' => 'password123',
+    ])->assertSuccessful()->assertJsonPath('min_app_version', '1.2.0');
+
+    $this->actingAs($driver, 'sanctum')
+        ->getJson('/api/driver/shifts/active')
+        ->assertSuccessful()
+        ->assertJsonPath('min_app_version', '1.2.0');
+});

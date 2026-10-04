@@ -6,10 +6,28 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripDriverAssignment;
 use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    // driver_swaps đã bị drop sau khi backfill; dựng lại bảng tối thiểu để kiểm thử migration backfill.
+    Schema::create('driver_swaps', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('trip_id');
+        $table->foreignId('from_driver_id')->nullable();
+        $table->foreignId('to_driver_id')->nullable();
+        $table->foreignId('from_shift_id')->nullable();
+        $table->foreignId('to_shift_id')->nullable();
+        $table->string('reason')->nullable();
+        $table->text('note')->nullable();
+        $table->foreignId('created_by')->nullable();
+        $table->timestamp('created_at')->nullable();
+    });
+});
 
 function runAssignmentBackfill(): void
 {

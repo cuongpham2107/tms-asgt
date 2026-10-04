@@ -106,6 +106,24 @@ class TripInfolist
                                     ]),
                             ]),
 
+                        Tab::make('Lượt lái')
+                            ->icon(Heroicon::OutlinedUserGroup)
+                            ->schema([
+                                RepeatableEntry::make('driverAssignments')
+                                    ->label('Tài xế đã giữ chuyến')
+                                    ->schema([
+                                        TextEntry::make('driver.name')->label('Tài xế'),
+                                        TextEntry::make('shift.shift_type')->label('Ca')->placeholder('—'),
+                                        TextEntry::make('started_at')->label('Bắt đầu')->dateTime('H:i d/m/Y'),
+                                        TextEntry::make('ended_at')->label('Kết thúc')->dateTime('H:i d/m/Y')->placeholder('Đang giữ chuyến'),
+                                        TextEntry::make('end_reason')->label('Lý do')->badge()->placeholder('—'),
+                                        TextEntry::make('note')->label('Ghi chú')->placeholder('—'),
+                                        TextEntry::make('createdBy.name')->label('Người gán')->placeholder('—'),
+                                    ])
+                                    ->columns(7)
+                                    ->placeholder('Chưa có lượt lái nào'),
+                            ]),
+
                         Tab::make('Ảnh chuyến đi')
                             ->icon(Heroicon::OutlinedPhoto)
                             ->schema([

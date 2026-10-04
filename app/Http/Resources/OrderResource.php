@@ -120,11 +120,6 @@ class OrderResource extends JsonResource
                 $this->relationLoaded('tripCheckpoints') && $this->tripCheckpoints->isNotEmpty(),
                 fn () => $this->tripCheckpoints->max('occurred_at')?->toIso8601String()
             ),
-            // Driver swaps (only when loaded)
-            /** Danh sách các lần đổi lái (từ chuyến xe, nếu được load). */
-            'driver_swaps' => DriverSwapResource::collection(
-                $this->whenLoaded('trip.driverSwaps', fn () => $this->trip->driverSwaps)
-            ),
             // Timestamps
             /** Thời điểm gửi lệnh điều hành (ISO 8601). */
             'sent_at' => $this->sent_at?->toIso8601String(),

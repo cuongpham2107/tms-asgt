@@ -48,7 +48,6 @@ class DriverShift extends Model
         static::deleting(function (DriverShift $shift) {
             $shift->trips()->update(['shift_id' => null]);
             $shift->tripCheckpoints()->delete();
-            $shift->driverSwaps()->delete();
         });
     }
 
@@ -65,11 +64,6 @@ class DriverShift extends Model
     public function tripCheckpoints(): HasMany
     {
         return $this->hasMany(TripCheckpoint::class, 'shift_id');
-    }
-
-    public function driverSwaps(): HasMany
-    {
-        return $this->hasMany(DriverSwap::class, 'from_shift_id');
     }
 
     public function getActivityTimelineAttribute(): Collection

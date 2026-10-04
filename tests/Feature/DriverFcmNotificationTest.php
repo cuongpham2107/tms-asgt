@@ -1,6 +1,6 @@
 <?php
 
-use App\Enums\DriverSwapReason;
+use App\Enums\AssignmentEndReason;
 use App\Enums\OrderStatus;
 use App\Enums\ShiftType;
 use App\Enums\TripStatus;
@@ -10,10 +10,9 @@ use App\Enums\VehicleType;
 use App\Filament\Resources\Orders\Actions\CancelOrderAction;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
+use App\Filament\Resources\Trips\Actions\AssignDriverAction;
 use App\Filament\Resources\Trips\Actions\CancelTripAction;
 use App\Filament\Resources\Trips\Actions\CreateEmptyRunAction;
-use App\Filament\Resources\Trips\Actions\DriverSwapAction;
-use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
 use App\Filament\Resources\Trips\Actions\SendTripAction;
 use App\Models\Area;
@@ -25,6 +24,7 @@ use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripDriverService;
 use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -498,10 +498,10 @@ test('driver notification service sends trip driver swapped notification to new 
         ->and($resultOld)->toBeTrue();
 });
 
-test('driver swap action sends fcm notification to new driver and old driver', function () {
+test('assign driver action notifies the new driver and the previous driver of a swapped trip', function () {
     $oldDriver = User::factory()->create(['name' => 'Tài Xế A', 'fcm_token' => 'driver_a_token']);
     $newDriver = User::factory()->create(['name' => 'Tài Xế B', 'fcm_token' => 'driver_b_token']);
-    $this->actingAs($oldDriver);
+    $this->actingAs(User::factory()->create());
 
     $vehicle = Vehicle::create([
         'plate_number' => '29C-333.44',
@@ -510,86 +510,32 @@ test('driver swap action sends fcm notification to new driver and old driver', f
         'is_active' => true,
         'status' => VehicleStatus::Running,
         'type' => VehicleOwnerType::Company,
-        'current_mileage' => 10000,
     ]);
 
     $trip = Trip::create([
         'trip_code' => 'TRIP-SWAP-ACT',
         'vehicle_id' => $vehicle->id,
-        'driver_id' => $oldDriver->id,
-        'status' => TripStatus::Delivering,
-        'start_km' => 10000,
+        'status' => TripStatus::Pending,
     ]);
+    app(TripDriverService::class)->openAssignment($trip, $oldDriver);
+    $trip->update(['status' => TripStatus::Delivering]);
+    app(TripDriverService::class)->requestSwap($trip->fresh(), $oldDriver, AssignmentEndReason::ShiftHandover);
 
+    $sentTokens = [];
     $mockMessaging = Mockery::mock(Messaging::class);
-    $mockMessaging->shouldReceive('send')->twice()->andReturn([]);
+    $mockMessaging->shouldReceive('send')->twice()->andReturnUsing(function (CloudMessage $message) use (&$sentTokens) {
+        $sentTokens[] = $message->jsonSerialize()['token'];
+
+        return [];
+    });
     app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
 
-    $action = DriverSwapAction::make();
-    $action->record($trip);
-    $action->call(['data' => [
-        'to_driver_id' => $newDriver->id,
-        'handover_km' => 10050,
-        'reason' => DriverSwapReason::ShiftHandover->value,
-        'note' => 'Đổi ca tại trạm',
-    ]]);
+    AssignDriverAction::make()->record($trip->fresh())->call(['data' => ['driver_id' => $newDriver->id]]);
 
     $trip->refresh();
     expect($trip->driver_id)->toBe($newDriver->id)
-        ->and($trip->status)->toBe(TripStatus::DriverSwap);
-});
-
-test('reassign driver action sends fcm notification to new driver and return trip to old driver', function () {
-    $oldDriver = User::factory()->create(['name' => 'Tài Xế Cũ', 'fcm_token' => 'driver_old_reassign']);
-    $newDriver = User::factory()->create(['name' => 'Tài Xế Mới', 'fcm_token' => 'driver_new_reassign']);
-    $this->actingAs($oldDriver);
-
-    $vehicle1 = Vehicle::create([
-        'plate_number' => '29C-444.55',
-        'vehicle_type' => VehicleType::Normal,
-        'owner' => 'ASGT',
-        'is_active' => true,
-        'status' => VehicleStatus::Running,
-        'type' => VehicleOwnerType::Company,
-        'current_mileage' => 20000,
-    ]);
-    $vehicle2 = Vehicle::create([
-        'plate_number' => '29C-555.66',
-        'vehicle_type' => VehicleType::Normal,
-        'owner' => 'ASGT',
-        'is_active' => true,
-        'status' => VehicleStatus::On,
-        'type' => VehicleOwnerType::Company,
-        'current_mileage' => 30000,
-    ]);
-
-    $trip = Trip::create([
-        'trip_code' => 'TRIP-REASSIGN-ACT',
-        'vehicle_id' => $vehicle1->id,
-        'driver_id' => $oldDriver->id,
-        'status' => TripStatus::DriverSwap,
-        'start_km' => 20000,
-    ]);
-
-    $mockMessaging = Mockery::mock(Messaging::class);
-    $mockMessaging->shouldReceive('send')->twice()->andReturn([]);
-    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
-
-    $action = ReassignDriverAction::make();
-    $action->record($trip);
-    $action->call(['data' => [
-        'new_driver_id' => $newDriver->id,
-        'handover_km' => 20050,
-        'reason' => DriverSwapReason::CargoNotUnloaded->value,
-        'create_return_trip' => true,
-        'return_vehicle_id' => $vehicle2->id,
-    ]]);
-
-    $trip->refresh();
-    expect($trip->driver_id)->toBe($newDriver->id);
-
-    $returnTrip = Trip::where('driver_id', $oldDriver->id)->where('status', TripStatus::Started)->first();
-    expect($returnTrip)->not->toBeNull();
+        ->and($trip->status)->toBe(TripStatus::Delivering)
+        ->and($sentTokens)->toBe(['driver_b_token', 'driver_a_token']);
 });
 
 test('reassign transport action sends fcm notification to new driver and unassign to old driver', function () {

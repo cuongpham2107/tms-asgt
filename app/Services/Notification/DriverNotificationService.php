@@ -158,7 +158,7 @@ class DriverNotificationService
     }
 
     /**
-     * Gửi push notification khi chuyến đi được bàn giao cho tài xế mới sau khi đảo lái (DriverSwapAction / ReassignDriverAction).
+     * Gửi push notification khi chuyến đi được bàn giao cho tài xế mới sau khi đảo lái (TripDriverService).
      */
     public function sendTripDriverSwapped(Trip $trip, User $newDriver, ?User $oldDriver = null): bool
     {

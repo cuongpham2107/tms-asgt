@@ -79,6 +79,7 @@ class AuthController extends Controller
             'shift' => $activeShift
                 ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')]))
                 : null,
+            'min_app_version' => config('app.min_mobile_version'),
         ]);
     }
 
