@@ -11,3 +11,5 @@ Artisan::command('inspire', function () {
 
 // Chạy đồng bộ ngay trong scheduler (không cần queue worker).
 Schedule::job(new SyncEupGpsJob, connection: 'sync')->everyMinute()->withoutOverlapping();
+
+Schedule::command('gps:calculate-km')->everyFiveMinutes()->withoutOverlapping();

@@ -24,6 +24,7 @@ class DriverShift extends Model
         'total_km',
         'total_km_loaded',
         'total_km_empty',
+        'km_calculated_at',
     ];
 
     protected function casts(): array
@@ -38,6 +39,7 @@ class DriverShift extends Model
             'total_km' => 'decimal:1',
             'total_km_loaded' => 'decimal:1',
             'total_km_empty' => 'decimal:1',
+            'km_calculated_at' => 'datetime',
             'shift_type' => ShiftType::class,
             'is_overtime' => 'boolean',
         ];

@@ -59,6 +59,14 @@ class Trip extends Model
         'start_location_id',
         'end_location_id',
         'status_before_swap',
+        'km_source',
+        'gps_coverage',
+        'km_calculated_at',
+        'km_needs_review',
+        'km_adjusted',
+        'km_adjusted_loaded',
+        'km_adjust_reason',
+        'km_adjusted_by',
     ];
 
     protected function casts(): array
@@ -70,6 +78,11 @@ class Trip extends Model
             'total_km' => 'decimal:1',
             'total_km_loaded' => 'decimal:1',
             'total_km_empty' => 'decimal:1',
+            'gps_coverage' => 'decimal:2',
+            'km_calculated_at' => 'datetime',
+            'km_needs_review' => 'boolean',
+            'km_adjusted' => 'decimal:1',
+            'km_adjusted_loaded' => 'decimal:1',
             'is_empty_run' => 'boolean',
             'status' => TripStatus::class,
             'status_before_swap' => TripStatus::class,

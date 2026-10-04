@@ -26,6 +26,18 @@ class TripCheckpoint extends Model
         'vehicle_id',
     ];
 
+    /**
+     * Sửa giờ checkpoint của chuyến đã chốt km → đánh dấu để lệnh gps:calculate-km tính lại.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (TripCheckpoint $checkpoint): void {
+            if ($checkpoint->trip_id !== null && $checkpoint->wasChanged('occurred_at')) {
+                Trip::whereKey($checkpoint->trip_id)->whereNotNull('km_calculated_at')->update(['km_calculated_at' => null]);
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [

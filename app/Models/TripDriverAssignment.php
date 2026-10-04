@@ -26,6 +26,9 @@ class TripDriverAssignment extends Model
         'end_reason',
         'note',
         'created_by',
+        'km',
+        'km_loaded',
+        'km_empty',
     ];
 
     protected function casts(): array
@@ -34,6 +37,9 @@ class TripDriverAssignment extends Model
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
             'end_reason' => AssignmentEndReason::class,
+            'km' => 'decimal:1',
+            'km_loaded' => 'decimal:1',
+            'km_empty' => 'decimal:1',
         ];
     }
 

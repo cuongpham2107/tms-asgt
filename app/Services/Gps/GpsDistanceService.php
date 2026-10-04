@@ -19,7 +19,7 @@ class GpsDistanceService
 
     public function __construct(private readonly OsrmService $osrm) {}
 
-    public function distance(int $vehicleId, CarbonInterface $from, CarbonInterface $to, ?int $driverId = null): DistanceResult
+    public function distance(?int $vehicleId, CarbonInterface $from, CarbonInterface $to, ?int $driverId = null): DistanceResult
     {
         if ($to->lte($from)) {
             return DistanceResult::empty();
@@ -56,7 +56,7 @@ class GpsDistanceService
     /**
      * @return Collection<int, VehicleGpsPoint>
      */
-    private function phonePoints(int $vehicleId, CarbonInterface $from, CarbonInterface $to, ?int $driverId): Collection
+    private function phonePoints(?int $vehicleId, CarbonInterface $from, CarbonInterface $to, ?int $driverId): Collection
     {
         return VehicleGpsPoint::query()
             ->where('source', VehicleGpsPoint::SOURCE_PHONE)
@@ -73,8 +73,12 @@ class GpsDistanceService
     /**
      * @return Collection<int, VehicleGpsPoint>
      */
-    private function eupPoints(int $vehicleId, CarbonInterface $from, CarbonInterface $to): Collection
+    private function eupPoints(?int $vehicleId, CarbonInterface $from, CarbonInterface $to): Collection
     {
+        if ($vehicleId === null) {
+            return collect();
+        }
+
         return VehicleGpsPoint::query()
             ->where('source', VehicleGpsPoint::SOURCE_EUP)
             ->where('vehicle_id', $vehicleId)
@@ -83,7 +87,7 @@ class GpsDistanceService
             ->get();
     }
 
-    private function hasMocked(int $vehicleId, CarbonInterface $from, CarbonInterface $to, ?int $driverId): bool
+    private function hasMocked(?int $vehicleId, CarbonInterface $from, CarbonInterface $to, ?int $driverId): bool
     {
         return VehicleGpsPoint::query()
             ->where('source', VehicleGpsPoint::SOURCE_PHONE)

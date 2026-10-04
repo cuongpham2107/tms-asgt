@@ -3,23 +3,34 @@
 namespace App\Services;
 
 use App\Models\DriverShift;
-use App\Models\Trip;
+use App\Models\TripDriverAssignment;
+use App\Services\Gps\GpsDistanceService;
 
+/**
+ * Km ca của tài xế: tổng = GPS điện thoại của tài xế suốt ca (gồm chạy rỗng giữa các chuyến);
+ * có hàng = tổng km có hàng các lượt lái trong ca; không hàng = phần còn lại.
+ */
 class ShiftKmCalculatorService
 {
-    /**
-     * @todo P6: Rewrite using GpsDistanceService
-     */
-    public function calculateForTrip(Trip $trip): void
-    {
-        // No-op until Phase 6
-    }
+    public function __construct(private readonly GpsDistanceService $gps) {}
 
-    /**
-     * @todo P6: Rewrite using GpsDistanceService
-     */
     public function calculate(DriverShift $shift): void
     {
-        // No-op until Phase 6
+        if ($shift->start_time === null || $shift->end_time === null) {
+            return;
+        }
+
+        $total = $this->gps->distance(null, $shift->start_time, $shift->end_time, $shift->driver_id)->km;
+
+        $loaded = (float) TripDriverAssignment::query()
+            ->where('shift_id', $shift->id)
+            ->where('driver_id', $shift->driver_id)
+            ->sum('km_loaded');
+
+        $shift->total_km = round($total, 1);
+        $shift->total_km_loaded = round(min($loaded, $total), 1);
+        $shift->total_km_empty = round(max(0, $total - $loaded), 1);
+        $shift->km_calculated_at = now();
+        $shift->save();
     }
 }
