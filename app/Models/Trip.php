@@ -2,14 +2,13 @@
 
 namespace App\Models;
 
-use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
+use App\Services\Trip\TripStateMachine;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
@@ -191,44 +190,10 @@ class Trip extends Model
 
     public function complete(?string $completedAt = null): void
     {
-        DB::transaction(function () use ($completedAt) {
-            $this->status = TripStatus::Completed;
-            $this->completed_at = $completedAt ?? now();
-            $this->save();
-
-            $this->createMissingEndCheckpoints($this->completed_at);
-        });
-    }
-
-    /**
-     * Tự động tạo end checkpoint cho các order đã completed nhưng chưa có end.
-     * Chạy bên trong DB transaction của complete().
-     */
-    private function createMissingEndCheckpoints(string $occurredAt): void
-    {
-        $completedOrderIds = $this->orders()
-            ->where('status', OrderStatus::Completed->value)
-            ->pluck('id');
-
-        if ($completedOrderIds->isEmpty()) {
-            return;
+        if ($completedAt !== null) {
+            $this->completed_at = $completedAt;
         }
 
-        $existingEndOrderIds = TripCheckpoint::whereIn('order_id', $completedOrderIds)
-            ->where('checkpoint_type', CheckpointType::End->value)
-            ->pluck('order_id');
-
-        $missingOrderIds = $completedOrderIds->diff($existingEndOrderIds);
-
-        foreach ($missingOrderIds as $orderId) {
-            TripCheckpoint::create([
-                'checkpoint_type' => CheckpointType::End->value,
-                'trip_id' => $this->id,
-                'order_id' => $orderId,
-                'occurred_at' => $occurredAt,
-                'driver_id' => $this->driver_id,
-                'shift_id' => $this->shift_id,
-            ]);
-        }
+        app(TripStateMachine::class)->complete($this);
     }
 }

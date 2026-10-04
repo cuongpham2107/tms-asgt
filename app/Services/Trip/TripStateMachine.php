@@ -11,6 +11,7 @@ use App\Exceptions\InvalidTransitionException;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Support\Collection;
@@ -81,6 +82,9 @@ class TripStateMachine
         foreach ($trip->orders as $order) {
             if ($order->status === OrderStatus::Assigned) {
                 $order->status = OrderStatus::Sent;
+                if ($order->sent_at === null) {
+                    $order->sent_at = now();
+                }
                 $order->save();
             }
         }
@@ -200,7 +204,10 @@ class TripStateMachine
 
     private function handleEndCheckpoint(Trip $trip): void
     {
-        if ($trip->status !== TripStatus::Delivered) {
+        $canEnd = $trip->status === TripStatus::Delivered
+            || ($trip->is_empty_run && in_array($trip->status, [TripStatus::Started, TripStatus::Delivered], true));
+
+        if (! $canEnd) {
             throw new InvalidTransitionException("Không thể kết thúc chuyến khi chưa giao xong toàn bộ đơn hàng (trạng thái hiện tại: {$trip->status->getLabel()}).");
         }
 
@@ -389,6 +396,29 @@ class TripStateMachine
                 $trip->completed_at = now();
             }
             $trip->save();
+
+            $completedOrderIds = $trip->orders()
+                ->where('status', OrderStatus::Completed->value)
+                ->pluck('id');
+
+            if ($completedOrderIds->isNotEmpty()) {
+                $existingEndOrderIds = TripCheckpoint::whereIn('order_id', $completedOrderIds)
+                    ->where('checkpoint_type', CheckpointType::End->value)
+                    ->pluck('order_id');
+
+                $missingOrderIds = $completedOrderIds->diff($existingEndOrderIds);
+
+                foreach ($missingOrderIds as $orderId) {
+                    TripCheckpoint::create([
+                        'checkpoint_type' => CheckpointType::End->value,
+                        'trip_id' => $trip->id,
+                        'order_id' => $orderId,
+                        'occurred_at' => $trip->completed_at,
+                        'driver_id' => $trip->driver_id,
+                        'shift_id' => $trip->shift_id,
+                    ]);
+                }
+            }
 
             $this->syncVehicleStatus($trip->vehicle);
 
