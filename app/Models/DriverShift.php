@@ -90,7 +90,6 @@ class DriverShift extends Model
                     'time' => $trip->started_at,
                     'display' => view('filament.resources.driver-shifts.components.timeline-trip-start', [
                         'trip_code' => $trip->trip_code,
-                        'km' => $trip->start_km ? number_format((float) $trip->start_km, 1).' km' : null,
                     ])->render(),
                     'vehicle' => $trip->vehicle?->plate_number,
                     'group_index' => $index,
@@ -103,7 +102,6 @@ class DriverShift extends Model
                     'time' => $trip->completed_at,
                     'display' => view('filament.resources.driver-shifts.components.timeline-trip-end', [
                         'trip_code' => $trip->trip_code,
-                        'km' => $trip->end_km ? number_format((float) $trip->end_km, 1).' km' : null,
                         'total_km' => max(0, (float) $trip->total_km),
                     ])->render(),
                     'vehicle' => $trip->vehicle?->plate_number,
@@ -150,7 +148,6 @@ class DriverShift extends Model
                     'checkpoint' => [
                         'checkpoint_type' => $first->checkpoint_type,
                         'order_codes' => $orderCodes->toArray(),
-                        'km' => $first->km_reading ? number_format((float) $first->km_reading, 1).' km' : null,
                         'voice_note' => $first->voice_note,
                         'dp_label' => $dpLabel,
                     ],
@@ -228,8 +225,6 @@ class DriverShift extends Model
             'id' => $order->id,
             'order_code' => $order->order_code,
             'vehicle_plate' => $trip->vehicle?->plate_number ?? '-',
-            'start_km' => '-',
-            'end_km' => '-',
             'loaded_km' => $loadedKm > 0 ? number_format((float) $loadedKm, 1).' km' : '-',
             'status' => $order->status?->getLabel() ?? $order->status,
             'pickup_time' => $arrivedCheckpoint?->occurred_at?->format('d/m/Y H:i') ?? '-',

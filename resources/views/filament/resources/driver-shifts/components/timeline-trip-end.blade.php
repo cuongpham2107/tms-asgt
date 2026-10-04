@@ -4,9 +4,6 @@
     </span>
     <span class="text-sm text-gray-600">
         {{ $trip_code }}
-        @if($km)
-            <span class="text-gray-400">· {{ $km }}</span>
-        @endif
         @if($total_km)
             <span class="text-gray-400">· Tổng: {{ number_format((float) $total_km, 1) }} km</span>
         @endif

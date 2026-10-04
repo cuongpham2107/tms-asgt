@@ -83,7 +83,7 @@ class VehiclesTable extends BaseTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('current_mileage')
-                    ->label('Số km')
+                    ->label('Số km ODO (nhập tay)')
                     ->formatStateUsing(fn ($state) => $state ? number_format($state, 0, ',', '.').' km' : '—')
                     ->sortable(),
                 TextColumn::make('load_capacity')

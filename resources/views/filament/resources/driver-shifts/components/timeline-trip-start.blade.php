@@ -4,8 +4,5 @@
     </span>
     <span class="text-sm text-gray-600">
         {{ $trip_code }}
-        @if($km)
-            <span class="text-gray-400">· {{ $km }}</span>
-        @endif
     </span>
 </div>

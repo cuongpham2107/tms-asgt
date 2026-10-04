@@ -26,29 +26,9 @@ class EndShiftAction
             ->modalDescription('Xác nhận kết thúc ca làm việc này? Hệ thống sẽ tự động tính toán km dựa trên dữ liệu đã ghi nhận.')
             ->modalSubmitActionLabel('Kết thúc ca')
             ->action(function (array $data, DriverShift $record): void {
-                // Gate: phải có checkpoint type='end' trước khi kết thúc ca
-                $endCheckpoint = TripCheckpoint::where('shift_id', $record->id)
-                    ->where('checkpoint_type', CheckpointType::End->value)
-                    ->whereNotNull('km_reading')
-                    ->latest('id')
-                    ->first();
-
-                if ($endCheckpoint === null) {
-                    Notification::make()
-                        ->danger()
-                        ->title('Không thể kết thúc ca')
-                        ->body('Cần nhập km kết thúc trước khi kết thúc ca.')
-                        ->send();
-
-                    return;
-                }
-
-                $endKm = (float) $endCheckpoint->km_reading;
-
                 DB::beginTransaction();
                 try {
                     $record->end_time = now();
-                    $record->end_km = $endKm;
                     $record->save();
 
                     // Auto driver_swap: chuyển trip đang active có đơn hàng chưa hoàn thành sang driver_swap
@@ -93,7 +73,6 @@ class EndShiftAction
                             'shift_id' => $record->id,
                             'checkpoint_type' => CheckpointType::DriverSwap->value,
                             'occurred_at' => now(),
-                            'km_reading' => $endKm,
                         ]);
                     }
 
@@ -119,9 +98,9 @@ class EndShiftAction
                     ->title('Đã kết thúc ca')
                     ->body(sprintf(
                         'Tổng km: %s | Có tải: %s | Rỗng: %s',
-                        number_format($record->total_km, 1),
-                        number_format($record->total_km_loaded, 1),
-                        number_format($record->total_km_empty, 1),
+                        number_format((float) ($record->total_km ?? 0), 1),
+                        number_format((float) ($record->total_km_loaded ?? 0), 1),
+                        number_format((float) ($record->total_km_empty ?? 0), 1),
                     ))
                     ->send();
             });

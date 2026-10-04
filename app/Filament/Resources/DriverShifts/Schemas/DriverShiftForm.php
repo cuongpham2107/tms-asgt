@@ -45,34 +45,28 @@ class DriverShiftForm
                             ->prefixIcon(Heroicon::OutlinedCalendarDays),
                     ]),
                 Section::make('Thông tin km')
-                    ->columns(5)
+                    ->columns(3)
                     ->columnSpanFull()
                     ->schema([
-                        TextInput::make('start_km')
-                            ->label('Km bắt đầu')
-                            ->prefixIcon(Heroicon::OutlinedPlayCircle)
-                            ->mask(RawJs::make('$money($input)'))
-                            ->stripCharacters(',')
-                            ->numeric(),
-                        TextInput::make('end_km')
-                            ->label('Km kết thúc')
-                            ->prefixIcon(Heroicon::OutlinedStopCircle)
-                            ->mask(RawJs::make('$money($input)'))
-                            ->stripCharacters(',')
-                            ->numeric(),
                         TextInput::make('total_km')
                             ->label('Tổng km')
+                            ->disabled()
+                            ->dehydrated(false)
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
                             ->numeric(),
                         TextInput::make('total_km_loaded')
                             ->label('Km có tải')
+                            ->disabled()
+                            ->dehydrated(false)
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
                             ->numeric(),
                         TextInput::make('total_km_empty')
                             ->label('Km rỗng')
+                            ->disabled()
+                            ->dehydrated(false)
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
                             ->numeric(),
@@ -88,8 +82,6 @@ class DriverShiftForm
                                 TableColumn::make('Mã chuyến')->width('150px'),
                                 TableColumn::make('Bắt đầu')->width('200px'),
                                 TableColumn::make('Kết thúc')->width('200px'),
-                                TableColumn::make('Km đầu')->width('100px'),
-                                TableColumn::make('Km cuối')->width('100px'),
                             ])
                             ->schema([
                                 Placeholder::make('vehicle_info')
@@ -108,18 +100,8 @@ class DriverShiftForm
                                     ->displayFormat('d/m/Y H:i')
                                     ->seconds(false)
                                     ->native(false),
-                                TextInput::make('start_km')
-                                    ->label('Km đầu')
-                                    ->mask(RawJs::make('$money($input)'))
-                                    ->stripCharacters(',')
-                                    ->numeric(),
-                                TextInput::make('end_km')
-                                    ->label('Km cuối')
-                                    ->mask(RawJs::make('$money($input)'))
-                                    ->stripCharacters(',')
-                                    ->numeric(),
                             ])
-                            ->columns(3)
+                            ->columns(2)
                             ->addActionLabel('Thêm chuyến'),
                     ]),
                 Section::make('Chi tiết km chạy theo từng đơn hàng')
@@ -142,8 +124,6 @@ class DriverShiftForm
                                 $html .= '<tr>';
                                 $html .= '<th class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm text-gray-700 dark:text-gray-300">Mã đơn hàng</th>';
                                 $html .= '<th class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm text-gray-700 dark:text-gray-300">Phương tiện</th>';
-                                $html .= '<th class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm text-gray-700 dark:text-gray-300">Km nhận hàng (Pickup)</th>';
-                                $html .= '<th class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm text-gray-700 dark:text-gray-300">Km giao xong (Completed)</th>';
                                 $html .= '<th class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm text-gray-700 dark:text-gray-300">Km chạy có tải</th>';
                                 $html .= '<th class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm text-gray-700 dark:text-gray-300">Giờ nhận hàng</th>';
                                 $html .= '<th class="px-4 py-2 border-b border-gray-200 dark:border-gray-700 font-semibold text-sm text-gray-700 dark:text-gray-300">Giờ hoàn thành</th>';
@@ -156,8 +136,6 @@ class DriverShiftForm
                                     $html .= '<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">';
                                     $html .= '<td class="px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100">'.e($order['order_code']).'</td>';
                                     $html .= '<td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">'.e($order['vehicle_plate']).'</td>';
-                                    $html .= '<td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">'.e($order['start_km']).'</td>';
-                                    $html .= '<td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">'.e($order['end_km']).'</td>';
                                     $html .= '<td class="px-4 py-2 text-sm font-semibold text-green-600 dark:text-green-400">'.e($order['loaded_km']).'</td>';
                                     $html .= '<td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">'.e($order['pickup_time']).'</td>';
                                     $html .= '<td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">'.e($order['completed_time']).'</td>';

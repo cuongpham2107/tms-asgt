@@ -110,7 +110,7 @@ class VehicleForm
                         //         'Other' => 'Khác',
                         //     ]),
                         TextInput::make('current_mileage')
-                            ->label('Số km hiện tại')
+                            ->label('Số km ODO (nhập tay)')
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
                             ->numeric()

@@ -6,6 +6,7 @@ use App\Enums\OnDutyLocation;
 use App\Enums\ShiftType;
 use App\Filament\Forms\Components\PillFilter;
 use App\Models\DriverShift;
+use App\Models\DriverSwap;
 use App\Models\User;
 use App\Models\Vehicle;
 use BackedEnum;
@@ -285,12 +286,12 @@ class DriverDutyReport extends Page implements HasTable
                     ->first()?->vehicle;
             }
 
-            $swapTrip = $shift?->trips()
-                ->whereNotNull('end_km')
-                ->where('status', 'driver_swap')
-                ->first();
-
-            $hasSwap = $swapTrip !== null;
+            $hasSwap = $shift ? DriverSwap::where(function ($q) use ($driver, $shift) {
+                $q->where('from_driver_id', $driver->id)
+                    ->orWhere('to_driver_id', $driver->id)
+                    ->orWhere('from_shift_id', $shift->id)
+                    ->orWhere('to_shift_id', $shift->id);
+            })->exists() : false;
             $plate = $vehicle?->plate_number;
 
             $driver->station_display = $driver->station?->getLabel() ?? '—';

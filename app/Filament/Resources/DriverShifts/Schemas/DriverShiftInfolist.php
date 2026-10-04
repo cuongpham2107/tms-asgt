@@ -81,8 +81,6 @@ class DriverShiftInfolist
                             ->table([
                                 RepeatableTableColumn::make('Mã đơn hàng'),
                                 RepeatableTableColumn::make('Phương tiện'),
-                                RepeatableTableColumn::make('Km nhận hàng (Pickup)'),
-                                RepeatableTableColumn::make('Km giao xong (Completed)'),
                                 RepeatableTableColumn::make('Km chạy có tải'),
                                 RepeatableTableColumn::make('Giờ nhận hàng'),
                                 RepeatableTableColumn::make('Giờ hoàn thành'),
@@ -94,10 +92,6 @@ class DriverShiftInfolist
                                 TextEntry::make('vehicle_plate')
                                     ->label('Phương tiện')
                                     ->icon(Heroicon::OutlinedTruck),
-                                TextEntry::make('start_km')
-                                    ->label('Km nhận hàng (Pickup)'),
-                                TextEntry::make('end_km')
-                                    ->label('Km giao xong (Completed)'),
                                 TextEntry::make('loaded_km')
                                     ->label('Km chạy có tải')
                                     ->badge()

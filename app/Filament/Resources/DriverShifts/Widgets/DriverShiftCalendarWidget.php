@@ -63,8 +63,6 @@ class DriverShiftCalendarWidget extends FullCalendarWidget
                     ->borderColor($isActive ? '#eab308' : '#22c55e')
                     ->extendedProps([
                         'status' => $isActive ? 'active' : 'completed',
-                        'start_km' => $shift->start_km,
-                        'end_km' => $shift->end_km,
                         'total_km' => $shift->total_km,
                     ])
                     ->toArray();

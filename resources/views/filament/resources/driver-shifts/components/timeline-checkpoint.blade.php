@@ -29,9 +29,6 @@
                 <span class="font-medium text-gray-700">{{ $code }}</span>{{ $i < count($orderCodes) - 1 ? ', ' : '' }}
             @endforeach
         @endif
-        @if($checkpoint['km'] ?? null)
-            <span class="text-gray-400"> · {{ $checkpoint['km'] }}</span>
-        @endif
         @if($checkpoint['voice_note'] ?? null)
             <span class="text-gray-400"> · 💬 {{ $checkpoint['voice_note'] }}</span>
         @endif
