@@ -7,6 +7,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
+use App\Filament\Resources\Trips\Actions\AdjustTripKmAction;
 use App\Filament\Resources\Trips\Actions\AssignDriverAction;
 use App\Filament\Resources\Trips\Actions\CancelTripAction;
 use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
@@ -15,10 +16,12 @@ use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
 use App\Models\User;
+use App\Services\Gps\TripTrack;
 use App\Services\Trip\TripDriverService;
 use App\Services\Trip\TripStateMachine;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
+use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -28,6 +31,7 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -107,6 +111,26 @@ class TripsTable extends BaseTable
                 TextColumn::make('km')
                     ->label('KM')
                     ->state(fn (Trip $record): string => self::getKmDisplay($record)),
+                TextColumn::make('km_review')
+                    ->label('Km GPS')
+                    ->badge()
+                    ->state(fn (Trip $record): string => match (true) {
+                        $record->km_calculated_at === null => '—',
+                        $record->km_needs_review => 'Cần kiểm tra',
+                        $record->km_adjusted !== null => 'Đã điều chỉnh',
+                        default => 'OK',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'Cần kiểm tra' => 'danger',
+                        'Đã điều chỉnh' => 'warning',
+                        'OK' => 'success',
+                        default => 'gray',
+                    })
+                    ->tooltip(fn (Trip $record): ?string => $record->km_calculated_at === null ? null : sprintf(
+                        'Nguồn: %s · Phủ GPS: %s%%',
+                        $record->km_source ?? '—',
+                        number_format((float) $record->gps_coverage, 0),
+                    )),
                 TextColumn::make('gps_speed')
                     ->label('Tốc độ')
                     ->state(fn (Trip $record): string => $record->vehicle?->gps_speed !== null
@@ -178,6 +202,12 @@ class TripsTable extends BaseTable
                     ->label('Phương tiện'),
             ])
             ->searchable(false)
+            ->filters([
+                Filter::make('km_needs_review')
+                    ->label('Cần kiểm tra km')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => $query->where('km_needs_review', true)),
+            ])
 
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(50)
@@ -237,6 +267,7 @@ class TripsTable extends BaseTable
                         }),
 
                     AssignDriverAction::make(),
+                    AdjustTripKmAction::make(),
                     CancelTripAction::make(),
                     DeleteAction::make(),
                     ActivityLogTimelineTableAction::make('Activities')
@@ -398,13 +429,9 @@ class TripsTable extends BaseTable
 
     private static function getKmDisplay(Trip $record): string
     {
-        if ($record->total_km !== null) {
-            $totalKm = (float) $record->total_km;
+        $totalKm = $record->reportedTotalKm();
 
-            return $totalKm > 0 ? number_format($totalKm, 1, ',', '.').' km' : '—';
-        }
-
-        return '—';
+        return $totalKm !== null && $totalKm > 0 ? number_format($totalKm, 1, ',', '.').' km' : '—';
     }
 
     private static function getShiftLabel(Trip $record): string
@@ -427,16 +454,24 @@ class TripsTable extends BaseTable
             ->popupContent(($vehicle?->plate_number ?? '').' — '.($record->driver?->name ?? 'Chưa phân lái xe'))
             ->toArray();
 
+        $track = app(TripTrack::class)->segments($record);
+        foreach ($track as $segment) {
+            $layers[] = Polyline::make($segment['points'])
+                ->color($segment['loaded'] ? '#F97316' : '#3B82F6')
+                ->weight(4)
+                ->toArray();
+        }
+
         return [
             'mapId' => 'gps-map-'.$record->getKey(),
             'mapHeight' => 340,
             'defaultCoord' => [$lat, $lng],
             'autoCenter' => true,
-            'fitBounds' => false,
+            'fitBounds' => $track !== [],
             'defaultZoom' => 15,
             'geoJsonColors' => [],
             'geoJsonData' => [],
-            'infoText' => '',
+            'infoText' => $track !== [] ? 'Cam: có hàng · Xanh: không hàng' : '',
             'tileLayersUrl' => [[
                 TileLayer::OpenStreetMap->getLabel(),
                 TileLayer::OpenStreetMap->getUrl(),

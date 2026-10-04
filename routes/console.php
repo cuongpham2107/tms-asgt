@@ -13,3 +13,4 @@ Artisan::command('inspire', function () {
 Schedule::job(new SyncEupGpsJob, connection: 'sync')->everyMinute()->withoutOverlapping();
 
 Schedule::command('gps:calculate-km')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('gps:check-stale')->everyMinute()->withoutOverlapping();

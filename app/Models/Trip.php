@@ -124,6 +124,32 @@ class Trip extends Model
         return $this->hasMany(TripCheckpoint::class)->orderBy('occurred_at');
     }
 
+    /**
+     * Km dùng cho báo cáo / hoá đơn: số điều hành đã điều chỉnh (nếu có), ngược lại số GPS.
+     */
+    public function reportedTotalKm(): ?float
+    {
+        $km = $this->km_adjusted ?? $this->total_km;
+
+        return $km !== null ? (float) $km : null;
+    }
+
+    public function reportedLoadedKm(): ?float
+    {
+        $km = $this->km_adjusted_loaded ?? $this->total_km_loaded;
+
+        return $km !== null ? (float) $km : null;
+    }
+
+    public function reportedEmptyKm(): ?float
+    {
+        if ($this->km_adjusted !== null) {
+            return max(0, (float) $this->km_adjusted - (float) ($this->km_adjusted_loaded ?? 0));
+        }
+
+        return $this->total_km_empty !== null ? (float) $this->total_km_empty : null;
+    }
+
     public function driverAssignments(): HasMany
     {
         return $this->hasMany(TripDriverAssignment::class)->orderBy('started_at')->orderBy('id');

@@ -89,6 +89,25 @@ class TripKmCalculatorService
     }
 
     /**
+     * Các khoảng thời gian xe có hàng (hợp của mọi đơn), dùng cho bản đồ hành trình.
+     *
+     * @return Collection<int, array{0: CarbonImmutable, 1: CarbonImmutable}>
+     */
+    public function loadedIntervals(Trip $trip): Collection
+    {
+        $trip->loadMissing(['orders', 'checkpoints']);
+
+        $start = $trip->started_at?->toImmutable();
+        $end = ($trip->completed_at ?? $trip->cancelled_at ?? now())->toImmutable();
+
+        if ($start === null || $end->lte($start)) {
+            return collect();
+        }
+
+        return $this->union($this->orderIntervals($trip, $start, $end)->flatten(1));
+    }
+
+    /**
      * Chia thời gian chuyến theo lượt lái; khoảng không ai giữ chuyến (chờ đảo lái) tính theo xe.
      *
      * @return Collection<int, array{from: CarbonImmutable, to: CarbonImmutable, driver_id: ?int, assignment: ?TripDriverAssignment}>
