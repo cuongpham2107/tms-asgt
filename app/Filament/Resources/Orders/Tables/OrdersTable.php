@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Tables;
 
+use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -16,6 +17,7 @@ use App\Filament\Resources\Orders\Actions\CancelOrderAction;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
+use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Order;
 use App\Models\Trip;
@@ -299,14 +301,14 @@ class OrdersTable extends BaseTable
                             return $record;
                         }),
 
-                    // UnsendOrderAction::make(),
+                    UnsendOrderAction::make(),
                     // CreateReturnTripAction::make(),
                     CancelOrderAction::make(),
                     DeleteAction::make()
                         ->hidden(fn (Order $record): bool => ! $record->status->canDelete())
                         ->requiresConfirmation()
                         ->modalHeading('Xác nhận xóa đơn')
-                        ->modalDescription('Bạn chắc chắn muốn xóa đơn hàng này? Chỉ đơn ở trạng thái Nháp hoặc Đã hủy mới có thể xóa.')
+                        ->modalDescription('Bạn chắc chắn muốn xóa đơn hàng này? Chỉ đơn ở trạng thái Nháp, Đã gán xe hoặc Đã gửi mới có thể xóa.')
                         ->modalSubmitActionLabel('Xóa')
                         ->modalCancelActionLabel('Hủy'),
                     ReplicateAction::make()
@@ -348,7 +350,7 @@ class OrdersTable extends BaseTable
                                     'contact_phone' => $dp->contact_phone,
                                     'total_packages' => $dp->total_packages,
                                     'total_weight' => $dp->total_weight,
-                                    'status' => $dp->status,
+                                    'status' => OrderDeliveryPointStatus::Pending,
                                 ]);
                             }
                         })
@@ -405,7 +407,7 @@ class OrdersTable extends BaseTable
 
         foreach ($deliveryPoints as $deliveryPoint) {
             $locations->push(
-                e($deliveryPoint->location->code ?: $deliveryPoint->location?->code ?: 'Chưa có điểm đến')
+                e($deliveryPoint->location?->code ?: $deliveryPoint->address ?: 'Chưa có điểm đến')
             );
         }
 

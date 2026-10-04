@@ -5,8 +5,10 @@ namespace App\Filament\Resources\Trips\Actions;
 use App\Enums\OrderStatus;
 use App\Models\Trip;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripStateMachine;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -20,7 +22,7 @@ class SendTripAction
             ->color('success')
             ->button()
             ->size('xs')
-            ->visible(fn (Trip $record): bool => $record->orders->contains(fn ($o) => in_array($o->status, [OrderStatus::Assigned, OrderStatus::Draft])))
+            ->visible(fn (Trip $record): bool => $record->orders->contains(fn ($o) => $o->status === OrderStatus::Assigned))
             ->requiresConfirmation()
             ->modalHeading('Xác nhận gửi lệnh chuyến đi')
             ->modalDescription('Bạn chắc chắn muốn chuyển tất cả đơn hàng trong chuyến này sang trạng thái Đã gửi?')
@@ -28,12 +30,10 @@ class SendTripAction
             ->modalCancelActionLabel('Hủy')
             ->action(function (Trip $record): void {
                 try {
-                    $count = $record->orders()
-                        ->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Draft->value])
-                        ->update([
-                            'status' => OrderStatus::Sent->value,
-                            'sent_at' => now(),
-                        ]);
+                    $stateMachine = app(TripStateMachine::class);
+                    $assignedOrders = $record->orders()->where('status', OrderStatus::Assigned->value)->get();
+                    DB::transaction(fn () => $assignedOrders->each(fn ($order) => $stateMachine->sendOrder($order)));
+                    $count = $assignedOrders->count();
 
                     if ($count === 0) {
                         Notification::make()

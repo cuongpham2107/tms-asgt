@@ -3,8 +3,11 @@
 namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
+use App\Enums\TripStatus;
+use App\Exceptions\InvalidTransitionException;
 use App\Models\Order;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripStateMachine;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Throwable;
@@ -17,7 +20,8 @@ class UnsendOrderAction
             ->label('Thu hồi lệnh')
             ->icon('heroicon-o-arrow-uturn-left')
             ->color('warning')
-            ->hidden(fn (Order $record): bool => $record->status !== OrderStatus::Draft)
+            ->visible(fn (Order $record): bool => $record->status === OrderStatus::Sent
+                && ! in_array($record->trip?->status, [TripStatus::Delivering, TripStatus::ArrivedDelivery, TripStatus::Delivered, TripStatus::Completed], true))
             ->requiresConfirmation()
             ->modalHeading('Xác nhận thu hồi lệnh')
             ->modalDescription('Bạn chắc chắn muốn thu hồi lệnh cho đơn hàng này không?')
@@ -25,20 +29,7 @@ class UnsendOrderAction
             ->modalCancelActionLabel('Hủy')
             ->action(function (Order $record): void {
                 try {
-                    if (! $record->status->canRecall()) {
-                        Notification::make()
-                            ->title('Không thể thu hồi')
-                            ->body('Chỉ có thể thu hồi đơn hàng trước khi lái xe bắt đầu đi giao hàng.')
-                            ->warning()
-                            ->send();
-
-                        return;
-                    }
-
-                    Order::query()->whereKey($record->id)->update([
-                        'status' => OrderStatus::Assigned->value,
-                        'sent_at' => null,
-                    ]);
+                    app(TripStateMachine::class)->recallOrder($record);
 
                     try {
                         app(DriverNotificationService::class)->sendOrderRecalled($record);
@@ -49,6 +40,12 @@ class UnsendOrderAction
                         ->title('Thu hồi thành công')
                         ->body('Đơn hàng đã được thu hồi, quay lại trạng thái gán xe.')
                         ->success()
+                        ->send();
+                } catch (InvalidTransitionException $e) {
+                    Notification::make()
+                        ->title('Không thể thu hồi')
+                        ->body($e->getMessage())
+                        ->warning()
                         ->send();
                 } catch (Throwable $e) {
                     Notification::make()

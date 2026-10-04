@@ -294,9 +294,9 @@ class TripStateMachine
         });
     }
 
-    public function cancelTrip(Trip $trip, User $by, ?string $reason = null): Trip
+    public function cancelTrip(Trip $trip, ?User $by = null, ?string $reason = null): Trip
     {
-        if (in_array($trip->status, [TripStatus::Completed, TripStatus::Cancelled], true)) {
+        if (! $trip->status->canCancel()) {
             throw new InvalidTransitionException("Không thể huỷ chuyến ở trạng thái {$trip->status->getLabel()}.");
         }
 
@@ -304,6 +304,13 @@ class TripStateMachine
             $trip->status = TripStatus::Cancelled;
             $trip->cancelled_at = now();
             $trip->save();
+
+            $trip->checkpoints()->create([
+                'checkpoint_type' => CheckpointType::Cancelled->value,
+                'occurred_at' => $trip->cancelled_at,
+                'driver_id' => $trip->driver_id,
+                'shift_id' => $trip->shift_id,
+            ]);
 
             foreach ($trip->orders as $order) {
                 if (! in_array($order->status, OrderStatus::closedStatuses(), true)) {
@@ -320,7 +327,7 @@ class TripStateMachine
         });
     }
 
-    public function cancelOrder(Order $order, User $by, ?string $reason = null): Order
+    public function cancelOrder(Order $order, ?User $by = null, ?string $reason = null): Order
     {
         if ($order->status->isClosed()) {
             throw new InvalidTransitionException('Đơn hàng đã đóng, không thể huỷ.');
@@ -373,6 +380,7 @@ class TripStateMachine
         }
 
         $order->status = OrderStatus::Sent;
+        $order->sent_at = now();
         $order->save();
 
         return $order->refresh();
@@ -397,6 +405,7 @@ class TripStateMachine
         }
 
         $order->status = OrderStatus::Assigned;
+        $order->sent_at = null;
         $order->save();
 
         return $order->refresh();
@@ -450,6 +459,42 @@ class TripStateMachine
             $this->syncVehicleStatus($trip->vehicle);
 
             return $trip->refresh();
+        });
+    }
+
+    /**
+     * Xe thuê ngoài không dùng app: điều hành nhập giờ hoàn thành thì đóng mọi đơn và điểm giao rồi hoàn thành chuyến.
+     */
+    public function completeExternalTrip(Trip $trip): Trip
+    {
+        if ($trip->status === TripStatus::Cancelled) {
+            throw new InvalidTransitionException('Không thể hoàn thành chuyến đã huỷ.');
+        }
+
+        return DB::transaction(function () use ($trip) {
+            $completedAt = $trip->completed_at ?? now();
+
+            foreach ($trip->orders()->with('deliveryPoints')->get() as $order) {
+                if ($order->status->isClosed()) {
+                    continue;
+                }
+
+                foreach ($order->deliveryPoints as $point) {
+                    if ($point->status !== OrderDeliveryPointStatus::Delivered) {
+                        $point->status = OrderDeliveryPointStatus::Delivered;
+                        $point->arrived_at ??= $completedAt;
+                        $point->delivered_at = $completedAt;
+                        $point->save();
+                    }
+                }
+
+                $order->status = OrderStatus::Completed;
+                $order->save();
+            }
+
+            $trip->completed_at = $completedAt;
+
+            return $this->complete($trip);
         });
     }
 

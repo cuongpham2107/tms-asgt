@@ -2,11 +2,10 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
-use App\Enums\OrderStatus;
-use App\Enums\TripStatus;
+use App\Exceptions\InvalidTransitionException;
 use App\Models\Order;
-use App\Models\Trip;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripStateMachine;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -20,7 +19,7 @@ class CancelOrderAction
             ->label('Huỷ đơn')
             ->icon('heroicon-o-x-circle')
             ->color('danger')
-            ->hidden(fn (Order $record): bool => $record->status !== OrderStatus::Draft)
+            ->visible(fn (Order $record): bool => $record->status->canCancel())
             ->requiresConfirmation()
             ->modalHeading('Xác nhận huỷ chuyến')
             ->modalDescription('Bạn chắc chắn muốn huỷ chuyến hàng này không?')
@@ -34,38 +33,7 @@ class CancelOrderAction
             ])
             ->action(function (Order $record, array $data): void {
                 try {
-                    if (! $record->status->canCancel()) {
-                        Notification::make()
-                            ->title('Không thể huỷ đơn hàng')
-                            ->body('Không thể huỷ đơn hàng ở trạng thái này.')
-                            ->warning()
-                            ->send();
-
-                        return;
-                    }
-
-                    Order::query()->whereKey($record->id)->update([
-                        'status' => OrderStatus::Cancelled->value,
-                        'cancelled_at' => now(),
-                        'cancel_reason' => $data['cancel_reason'] ?? null,
-                    ]);
-
-                    if ($record->trip_id !== null) {
-                        $remainingActive = Order::query()
-                            ->where('trip_id', $record->trip_id)
-                            ->where('id', '!=', $record->id)
-                            ->whereNotIn('status', [
-                                OrderStatus::Cancelled->value,
-                                OrderStatus::Completed->value,
-                            ])
-                            ->exists();
-
-                        if (! $remainingActive) {
-                            Trip::query()->whereKey($record->trip_id)->update([
-                                'status' => TripStatus::Cancelled->value,
-                            ]);
-                        }
-                    }
+                    app(TripStateMachine::class)->cancelOrder($record, auth()->user(), $data['cancel_reason'] ?? null);
 
                     try {
                         app(DriverNotificationService::class)->sendOrderCancelled($record, $data['cancel_reason'] ?? null);
@@ -76,6 +44,12 @@ class CancelOrderAction
                         ->title('Huỷ đơn hàng thành công')
                         ->body('Đơn hàng đã được huỷ.')
                         ->success()
+                        ->send();
+                } catch (InvalidTransitionException $e) {
+                    Notification::make()
+                        ->title('Không thể huỷ đơn hàng')
+                        ->body($e->getMessage())
+                        ->warning()
                         ->send();
                 } catch (Throwable $e) {
                     Notification::make()

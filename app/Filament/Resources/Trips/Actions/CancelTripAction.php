@@ -2,16 +2,13 @@
 
 namespace App\Filament\Resources\Trips\Actions;
 
-use App\Enums\CheckpointType;
-use App\Enums\OrderStatus;
-use App\Enums\TripStatus;
-use App\Enums\VehicleStatus;
+use App\Exceptions\InvalidTransitionException;
 use App\Models\Trip;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripStateMachine;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
-use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class CancelTripAction
@@ -22,7 +19,7 @@ class CancelTripAction
             ->label('Huỷ chuyến')
             ->icon('heroicon-o-x-circle')
             ->color('danger')
-            ->hidden(fn (Trip $record): bool => $record->status === TripStatus::Completed || $record->status === TripStatus::Cancelled)
+            ->visible(fn (Trip $record): bool => $record->status->canCancel())
             ->modalHeading('Huỷ chuyến')
             ->modalDescription('Chuyến sẽ bị huỷ, tất cả đơn hàng đang chạy sẽ chuyển sang trạng thái Huỷ.')
             ->modalSubmitActionLabel('Xác nhận huỷ')
@@ -34,38 +31,7 @@ class CancelTripAction
             ])
             ->action(function (Trip $record, array $data): void {
                 try {
-                    DB::transaction(function () use ($record, $data) {
-                        // Cập nhật trip
-                        $record->status = TripStatus::Cancelled;
-                        $record->cancelled_at = now();
-                        $record->save();
-
-                        // Đưa xe về trạng thái sẵn sàng
-                        if ($record->vehicle) {
-                            $record->vehicle->status = VehicleStatus::On;
-                            $record->vehicle->save();
-                        }
-
-                        // Huỷ tất cả orders chưa đóng
-                        $record->orders()
-                            ->whereNotIn('status', [
-                                OrderStatus::Completed->value,
-                                OrderStatus::Cancelled->value,
-                            ])
-                            ->update([
-                                'status' => OrderStatus::Cancelled->value,
-                                'cancelled_at' => now(),
-                                'cancel_reason' => $data['cancel_reason'] ?? '',
-                            ]);
-
-                        // Tạo checkpoint huỷ chuyến
-                        $record->checkpoints()->create([
-                            'checkpoint_type' => CheckpointType::Cancelled->value,
-                            'occurred_at' => now(),
-                            'driver_id' => $record->driver_id,
-                            'shift_id' => $record->shift_id,
-                        ]);
-                    });
+                    app(TripStateMachine::class)->cancelTrip($record, auth()->user(), $data['cancel_reason'] ?? null);
 
                     try {
                         app(DriverNotificationService::class)->sendTripCancelled($record, $data['cancel_reason'] ?? null);
@@ -76,6 +42,12 @@ class CancelTripAction
                         ->title('Huỷ chuyến thành công')
                         ->body("Chuyến #{$record->trip_code} đã được huỷ.")
                         ->success()
+                        ->send();
+                } catch (InvalidTransitionException $e) {
+                    Notification::make()
+                        ->title('Không thể huỷ chuyến')
+                        ->body($e->getMessage())
+                        ->warning()
                         ->send();
                 } catch (Throwable $e) {
                     Notification::make()

@@ -253,7 +253,7 @@ test('send trip action updates order status and sends fcm notification to driver
     ]);
     $order2 = Order::create([
         'order_code' => 'ASG-102',
-        'status' => OrderStatus::Draft,
+        'status' => OrderStatus::Assigned,
         'area_id' => $area->id,
         'customer_id' => $customer->id,
         'created_by' => $driver->id,

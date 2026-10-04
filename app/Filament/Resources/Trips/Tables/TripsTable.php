@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Trips\Tables;
 
-use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
@@ -17,6 +16,7 @@ use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
 use App\Models\User;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripStateMachine;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Actions\Action;
@@ -213,22 +213,18 @@ class TripsTable extends BaseTable
                         ->using(function (Model $record, array $data): Model {
                             $record->loadMissing(['vehicle', 'orders']);
 
-                            if ($record->vehicle?->type === VehicleOwnerType::Rent && filled($data['completed_at'] ?? null)) {
-                                $data['status'] = TripStatus::Completed;
-                            }
-
-                            $newStatus = $data['status'] ?? $record->status;
-
-                            if ($newStatus === TripStatus::Completed && $record->vehicle?->type === VehicleOwnerType::Rent) {
-                                $record->orders->each(function ($order) {
-                                    $order->update(['status' => OrderStatus::Completed]);
-                                });
-                            }
+                            $completesExternalTrip = $record->vehicle?->type === VehicleOwnerType::Rent
+                                && filled($data['completed_at'] ?? null)
+                                && $record->status !== TripStatus::Completed;
 
                             $oldDriverId = $record->driver_id;
                             $newDriverId = $data['driver_id'] ?? null;
 
                             $record->update($data);
+
+                            if ($completesExternalTrip) {
+                                app(TripStateMachine::class)->completeExternalTrip($record);
+                            }
 
                             if ($newDriverId && (int) $oldDriverId !== (int) $newDriverId) {
                                 $oldDriver = $oldDriverId ? User::find($oldDriverId) : null;

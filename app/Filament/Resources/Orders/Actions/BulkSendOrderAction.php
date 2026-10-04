@@ -2,12 +2,13 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
-use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripStateMachine;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class BulkSendOrderAction
@@ -37,10 +38,8 @@ class BulkSendOrderAction
                 }
 
                 try {
-                    Order::query()->whereIn('id', $assignOrders->pluck('id'))->update([
-                        'status' => OrderStatus::Sent->value,
-                        'sent_at' => now(),
-                    ]);
+                    $stateMachine = app(TripStateMachine::class);
+                    DB::transaction(fn () => $assignOrders->each(fn (Order $order) => $stateMachine->sendOrder($order)));
 
                     foreach ($assignOrders as $order) {
                         try {

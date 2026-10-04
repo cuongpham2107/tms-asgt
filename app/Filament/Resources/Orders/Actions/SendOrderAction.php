@@ -2,9 +2,10 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
-use App\Enums\OrderStatus;
+use App\Exceptions\InvalidTransitionException;
 use App\Models\Order;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripStateMachine;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Throwable;
@@ -25,20 +26,7 @@ class SendOrderAction
             ->modalCancelActionLabel('Hủy')
             ->action(function (Order $record): void {
                 try {
-                    if (! $record->status->canSend()) {
-                        Notification::make()
-                            ->title('Không thể gửi lệnh')
-                            ->body('Chỉ có thể gửi lệnh cho đơn hàng đã được gán xe.')
-                            ->warning()
-                            ->send();
-
-                        return;
-                    }
-
-                    Order::query()->whereKey($record->id)->update([
-                        'status' => OrderStatus::Sent->value,
-                        'sent_at' => now(),
-                    ]);
+                    app(TripStateMachine::class)->sendOrder($record);
 
                     try {
                         app(DriverNotificationService::class)->sendOrderAssigned($record);
@@ -50,6 +38,12 @@ class SendOrderAction
                         ->title('Gửi lệnh thành công')
                         ->body('Đơn hàng đã được gửi.')
                         ->success()
+                        ->send();
+                } catch (InvalidTransitionException $e) {
+                    Notification::make()
+                        ->title('Không thể gửi lệnh')
+                        ->body($e->getMessage())
+                        ->warning()
                         ->send();
                 } catch (Throwable $e) {
                     Notification::make()

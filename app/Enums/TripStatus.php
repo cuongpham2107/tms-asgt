@@ -109,6 +109,20 @@ enum TripStatus: string implements HasColor, HasLabel
         };
     }
 
+    /**
+     * Huỷ chuyến chỉ được phép trước khi đến điểm giao (docs/Dieu_hanh.md).
+     */
+    public function canCancel(): bool
+    {
+        return in_array($this, [
+            self::Pending,
+            self::Started,
+            self::ArrivedPickup,
+            self::Delivering,
+            self::DriverSwap,
+        ], true);
+    }
+
     public function canSwapDriver(): bool
     {
         return in_array($this, [
