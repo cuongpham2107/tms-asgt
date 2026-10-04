@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Vehicle;
+use App\Models\VehicleGpsPoint;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -111,6 +112,7 @@ class EupGpsService
                 $updateData['last_gps_update'] = Carbon::now();
 
                 $vehicle->update($updateData);
+                $this->storeTrackPoint($vehicle, $updateData);
                 $updated++;
             }
 
@@ -134,5 +136,28 @@ class EupGpsService
 
             return ['success' => false, 'message' => 'Lỗi kết nối đến API GPS: '.$e->getMessage()];
         }
+    }
+
+    /**
+     * Lưu điểm hộp đen EUP để lấp khoảng trống khi điện thoại mất tín hiệu.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function storeTrackPoint(Vehicle $vehicle, array $data): void
+    {
+        if (! isset($data['gps_lat'], $data['gps_lng'])) {
+            return;
+        }
+
+        VehicleGpsPoint::create([
+            'vehicle_id' => $vehicle->id,
+            'driver_id' => $vehicle->current_driver_id,
+            'recorded_at' => $data['last_gps_update'],
+            'lat' => $data['gps_lat'],
+            'lng' => $data['gps_lng'],
+            'speed' => $data['gps_speed'] ?? null,
+            'heading' => $data['gps_direction'] ?? null,
+            'source' => VehicleGpsPoint::SOURCE_EUP,
+        ]);
     }
 }

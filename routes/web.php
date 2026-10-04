@@ -10,7 +10,7 @@ Route::post('/mapbox/match', [MapboxController::class, 'match']);
 // Đồng bộ GPS từ API EUP
 Route::get('/gps-sync', function (EupGpsService $service) {
     return response()->json($service->sync());
-})->name('gps.sync');
+})->middleware('auth')->name('gps.sync');
 
 // Chính sách quyền riêng tư (Privacy Policy) cho Apple App Store & Google Play Console
 Route::get('/privacy-policy', function () {
