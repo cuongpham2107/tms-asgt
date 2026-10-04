@@ -31,8 +31,6 @@ it('returns correct stats counts including completed trips with draft orders', f
         'status' => TripStatus::Completed,
         'started_at' => now()->subDays(2),
         'completed_at' => now()->subDay(),
-        'start_km' => 15000,
-        'end_km' => 15400,
         'total_km' => 400,
         'total_km_loaded' => 300,
         'total_km_empty' => 100,
@@ -44,8 +42,6 @@ it('returns correct stats counts including completed trips with draft orders', f
         'status' => TripStatus::Completed,
         'started_at' => now()->subDays(1),
         'completed_at' => now()->subHours(5),
-        'start_km' => 15400,
-        'end_km' => 15800,
         'total_km' => 400,
         'total_km_loaded' => 200,
         'total_km_empty' => 200,
@@ -68,7 +64,6 @@ it('counts return trips as in_progress', function () {
         'vehicle_id' => $this->vehicle->id,
         'status' => TripStatus::ReturnTrip,
         'started_at' => now()->subHours(2),
-        'start_km' => 15000,
     ]);
 
     $response = $this->getJson('/api/driver/trips/stats');
@@ -132,8 +127,6 @@ it('includes km from cancelled trips that have driven km', function () {
         'status' => TripStatus::Completed,
         'started_at' => now()->subHours(5),
         'completed_at' => now()->subHours(3),
-        'start_km' => 15000,
-        'end_km' => 15150,
         'total_km' => 150,
         'total_km_loaded' => 100,
         'total_km_empty' => 50,
@@ -145,8 +138,6 @@ it('includes km from cancelled trips that have driven km', function () {
         'status' => TripStatus::Cancelled,
         'started_at' => now()->subHours(2),
         'cancelled_at' => now()->subHour(),
-        'start_km' => 15150,
-        'end_km' => 15250,
         'total_km' => 100,
         'total_km_loaded' => 0,
         'total_km_empty' => 100,
@@ -161,7 +152,7 @@ it('includes km from cancelled trips that have driven km', function () {
         ->assertJsonPath('data.total_km_empty', 150);
 });
 
-it('calculates proportional driver km for swapped trips', function () {
+it('calculates driver km for swapped trips from db', function () {
     $driverB = User::factory()->create();
     $driverB->assignRole('driver');
 
@@ -171,8 +162,6 @@ it('calculates proportional driver km for swapped trips', function () {
         'status' => TripStatus::Completed,
         'started_at' => now()->subHours(4),
         'completed_at' => now()->subHours(1),
-        'start_km' => 20000,
-        'end_km' => 20100,
         'total_km' => 100,
         'total_km_loaded' => 60,
         'total_km_empty' => 40,
@@ -182,27 +171,24 @@ it('calculates proportional driver km for swapped trips', function () {
         'trip_id' => $trip->id,
         'from_driver_id' => $this->driver->id,
         'to_driver_id' => $driverB->id,
-        'handover_km' => 20040,
         'reason' => DriverSwapReason::ShiftHandover,
         'created_by' => $this->driver->id,
     ]);
 
-    // Driver A (this->driver) drove 20000 -> 20040 = 40 km (empty)
     $response = $this->getJson('/api/driver/trips/stats');
 
     $response->assertSuccessful()
         ->assertJsonPath('data.completed', 1)
-        ->assertJsonPath('data.total_km', 40)
-        ->assertJsonPath('data.total_km_loaded', 0)
+        ->assertJsonPath('data.total_km', 100)
+        ->assertJsonPath('data.total_km_loaded', 60)
         ->assertJsonPath('data.total_km_empty', 40);
 
-    // Driver B drove 20040 -> 20100 = 60 km
     Sanctum::actingAs($driverB);
     $responseB = $this->getJson('/api/driver/trips/stats');
 
     $responseB->assertSuccessful()
         ->assertJsonPath('data.completed', 1)
-        ->assertJsonPath('data.total_km', 60)
-        ->assertJsonPath('data.total_km_loaded', 0)
-        ->assertJsonPath('data.total_km_empty', 60);
+        ->assertJsonPath('data.total_km', 100)
+        ->assertJsonPath('data.total_km_loaded', 60)
+        ->assertJsonPath('data.total_km_empty', 40);
 });

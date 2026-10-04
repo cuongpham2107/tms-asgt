@@ -155,7 +155,7 @@ class DriverSwapAction
 
                 if ($newDriver !== null) {
                     try {
-                        app(DriverNotificationService::class)->sendTripDriverSwapped($record, $newDriver, $oldDriver, $handoverKm);
+                        app(DriverNotificationService::class)->sendTripDriverSwapped($record, $newDriver, $oldDriver);
                     } catch (\Throwable) {
                     }
                 }

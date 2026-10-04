@@ -54,8 +54,6 @@ class ActivityLogFormatter
             'cancelled_at' => 'Thời gian hủy',
             'cancel_reason' => 'Lý do hủy',
             'sent_at' => 'Thời gian gửi chuyến',
-            'start_km' => 'Km bắt đầu',
-            'end_km' => 'Km kết thúc',
             'total_km' => 'Tổng Km',
             'total_km_loaded' => 'Km có tải',
             'total_km_empty' => 'Km không tải',

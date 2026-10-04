@@ -27,8 +27,6 @@ it('returns paginated completed trips for the driver', function () {
         'status' => TripStatus::Completed,
         'started_at' => now()->subDays(2),
         'completed_at' => now()->subDay(),
-        'start_km' => 15000,
-        'end_km' => 15400,
     ]);
 
     $response = $this->getJson('/api/driver/trips/history');
@@ -36,7 +34,7 @@ it('returns paginated completed trips for the driver', function () {
     $response->assertSuccessful()
         ->assertJsonStructure([
             'data' => [
-                '*' => ['id', 'trip_code', 'status', 'started_at', 'completed_at', 'start_km', 'end_km', 'vehicle', 'checkpoints', 'orders'],
+                '*' => ['id', 'trip_code', 'status', 'started_at', 'completed_at', 'vehicle', 'checkpoints', 'orders'],
             ],
             'meta' => ['current_page', 'last_page', 'per_page', 'total'],
         ])

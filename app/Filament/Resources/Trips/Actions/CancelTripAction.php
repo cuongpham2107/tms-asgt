@@ -10,7 +10,6 @@ use App\Models\Trip;
 use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -28,12 +27,6 @@ class CancelTripAction
             ->modalDescription('Chuyến sẽ bị huỷ, tất cả đơn hàng đang chạy sẽ chuyển sang trạng thái Huỷ. KM sẽ được tính theo số km hiện tại.')
             ->modalSubmitActionLabel('Xác nhận huỷ')
             ->schema([
-                TextInput::make('km_reading')
-                    ->label('Số km hiện tại')
-                    ->numeric()
-                    ->required()
-                    ->default(fn (Trip $record): ?float => $record->vehicle?->current_mileage)
-                    ->helperText('Km đồng hồ tại thời điểm huỷ chuyến. Mặc định là km hiện tại của xe.'),
                 Textarea::make('cancel_reason')
                     ->label('Lý do huỷ')
                     // ->required()
@@ -41,49 +34,14 @@ class CancelTripAction
             ])
             ->action(function (Trip $record, array $data): void {
                 try {
-                    $kmReading = (float) $data['km_reading'];
-
-                    if ($kmReading <= 0) {
-                        Notification::make()
-                            ->title('Số km không hợp lệ')
-                            ->body('Vui lòng nhập số km lớn hơn 0.')
-                            ->danger()
-                            ->send();
-
-                        return;
-                    }
-
-                    if ($record->start_km !== null && $kmReading < (float) $record->start_km) {
-                        Notification::make()
-                            ->title('Số km không hợp lệ')
-                            ->body('Km huỷ chuyến ('.number_format($kmReading, 1).') phải lớn hơn hoặc bằng Km bắt đầu ('.number_format((float) $record->start_km, 1).').')
-                            ->danger()
-                            ->send();
-
-                        return;
-                    }
-
-                    $maxCheckpointKm = $record->checkpoints()->whereNotNull('km_reading')->max('km_reading');
-                    if ($maxCheckpointKm !== null && $kmReading < (float) $maxCheckpointKm) {
-                        Notification::make()
-                            ->title('Số km không hợp lệ')
-                            ->body('Km huỷ chuyến phải >= km cao nhất của chuyến ('.number_format((float) $maxCheckpointKm, 1).' km).')
-                            ->danger()
-                            ->send();
-
-                        return;
-                    }
-
-                    DB::transaction(function () use ($record, $kmReading, $data) {
+                    DB::transaction(function () use ($record, $data) {
                         // Cập nhật trip
-                        $record->end_km = $kmReading;
                         $record->status = TripStatus::Cancelled;
                         $record->cancelled_at = now();
                         $record->save();
 
-                        // Cập nhật km xe và đưa xe về trạng thái sẵn sàng
+                        // Đưa xe về trạng thái sẵn sàng
                         if ($record->vehicle) {
-                            $record->vehicle->current_mileage = $kmReading;
                             $record->vehicle->status = VehicleStatus::On;
                             $record->vehicle->save();
                         }
@@ -103,7 +61,6 @@ class CancelTripAction
                         // Tạo checkpoint huỷ chuyến
                         $record->checkpoints()->create([
                             'checkpoint_type' => CheckpointType::Cancelled->value,
-                            'km_reading' => $kmReading,
                             'occurred_at' => now(),
                             'driver_id' => $record->driver_id,
                             'shift_id' => $record->shift_id,
@@ -117,7 +74,7 @@ class CancelTripAction
 
                     Notification::make()
                         ->title('Huỷ chuyến thành công')
-                        ->body("Chuyến #{$record->trip_code} đã được huỷ. Km huỷ: ".number_format($kmReading, 1))
+                        ->body("Chuyến #{$record->trip_code} đã được huỷ.")
                         ->success()
                         ->send();
                 } catch (Throwable $e) {

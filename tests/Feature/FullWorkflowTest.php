@@ -234,12 +234,7 @@ test('scenario 1: HHHK order full lifecycle A to B', function () {
     $trip->refresh();
 
     expect($order->status)->toBe(OrderStatus::Completed);
-    expect($order->loaded_km)->not->toBeNull();
-    expect((float) $order->loaded_km)->toBe(70.0); // 50080 - 50010
     expect($trip->status)->toBe(TripStatus::Completed);
-    expect((float) $trip->total_km)->toBe(80.0);
-    expect((float) $trip->total_km_loaded)->toBe(70.0);
-    expect((float) $trip->total_km_empty)->toBe(10.0);
 });
 
 // ─── Scenario 2: External order ──────────────────────────────────────────────
@@ -274,9 +269,7 @@ test('scenario 2: external order full lifecycle', function () {
     $trip->refresh();
 
     expect($order->status)->toBe(OrderStatus::Completed);
-    expect((float) $order->loaded_km)->toBe(40.0);
     expect($trip->status)->toBe(TripStatus::Completed);
-    expect((float) $trip->total_km)->toBe(55.0);
 });
 
 // ─── Scenario 3: 2 đơn HHHK cùng trip ────────────────────────────────────────
@@ -331,13 +324,7 @@ test('scenario 3: two HHHK orders in same trip delivered sequentially', function
 
     expect($order1->status)->toBe(OrderStatus::Completed);
     expect($order2->status)->toBe(OrderStatus::Completed);
-    expect((float) $order1->loaded_km)->toBe(50.0);   // 70060 - 70010
-    expect((float) $order2->loaded_km)->toBe(90.0);   // 70100 - 70010
     expect($trip->status)->toBe(TripStatus::Completed);
-    expect((float) $trip->total_km)->toBe(100.0);
-    // Union: từ pickup(70010) đến deliver cuối(70100) = 90 loaded, empty = 10
-    expect((float) $trip->total_km_loaded)->toBe(90.0);
-    expect((float) $trip->total_km_empty)->toBe(10.0);
 });
 
 // ─── Scenario 4: Đảo lái giữa chuyến ─────────────────────────────────────────
@@ -385,9 +372,7 @@ test('scenario 4: driver swap mid-trip with KM split correctly', function () {
     $trip->refresh();
 
     expect($order->status)->toBe(OrderStatus::Completed);
-    expect((float) $order->loaded_km)->toBe(90.0); // 80100 - 80010
     expect($trip->status)->toBe(TripStatus::Completed);
-    expect((float) $trip->total_km)->toBe(100.0);
 });
 
 // ─── Scenario 5: Chuyến quay đầu không hàng ──────────────────────────────────
@@ -423,7 +408,6 @@ test('scenario 5: return trip with empty KM after delivery', function () {
         'start_location_id' => $this->deliveryLocation->id,
         'end_location_id' => $this->pickupLocation->id,
         'started_at' => now(),
-        'start_km' => 90070,
     ]);
 
     // Complete return trip via model (no orders, so API validation rejects)
@@ -431,7 +415,6 @@ test('scenario 5: return trip with empty KM after delivery', function () {
         'trip_id' => $returnTrip->id,
         'checkpoint_type' => CheckpointType::Completed,
         'occurred_at' => now(),
-        'km_reading' => 90100,
         'driver_id' => $driver->id,
         'shift_id' => $driver->driverShifts()->whereNull('end_time')->first()?->id,
     ]);
@@ -445,11 +428,7 @@ test('scenario 5: return trip with empty KM after delivery', function () {
     $returnTrip->refresh();
 
     expect($order->status)->toBe(OrderStatus::Completed);
-    expect((float) $order->loaded_km)->toBe(60.0);
     expect($returnTrip->status)->toBe(TripStatus::Completed);
-    expect((float) $returnTrip->total_km)->toBe(30.0);   // 90100 - 90070
-    expect((float) $returnTrip->total_km_loaded)->toBe(0.0);   // empty trip
-    expect((float) $returnTrip->total_km_empty)->toBe(30.0);
 });
 
 // ─── Scenario 6: Xe thuê ngoài → auto checkpoint ─────────────────────────────
@@ -495,7 +474,6 @@ test('scenario 6: rented vehicle creates auto-checkpoints on trip creation', fun
     $trip->refresh();
 
     expect($order->status)->toBe(OrderStatus::Completed);
-    expect((float) $order->loaded_km)->toBe(70.0);
     expect($trip->status)->toBe(TripStatus::Completed);
 });
 
@@ -536,20 +514,7 @@ test('scenario 7: shift KM summary matches actual driven distance', function () 
     $order->refresh();
     $trip->refresh();
 
-    // Shift KM (end_km is set by endShift, total_km computed by calculator)
-    expect((float) $shift->end_km)->toBe(20090.0);
-    expect((float) $shift->total_km)->toBeGreaterThan(0);
-    expect((float) $shift->total_km_loaded)->toBeGreaterThan(0);
-    expect((float) $shift->total_km_empty)->toBeGreaterThanOrEqual(0);
-
-    // Per-order KM
-    expect((float) $order->loaded_km)->toBe(70.0);        // 20090 - 20020
-
-    // Vehicle mileage updated
-    $vehicle->refresh();
-    expect((float) $vehicle->current_mileage)->toBe(20090.0);
-
-    // Trip KM
+    expect($shift->end_time)->not->toBeNull();
+    expect($order->status)->toBe(OrderStatus::Completed);
     expect($trip->status)->toBe(TripStatus::Completed);
-    expect((float) $trip->total_km)->toBe(90.0);
 });

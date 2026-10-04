@@ -57,13 +57,10 @@ class DriverShiftController extends Controller
 
         DB::beginTransaction();
         try {
-            $startKm = $activeVehicle?->current_mileage ?? 0;
-
             $shift = DriverShift::create([
                 'driver_id' => $user->id,
                 'shift_type' => $payload['shift_type'],
                 'start_time' => $startTime,
-                'start_km' => $startKm,
                 'start_gps_lat' => $payload['start_gps_lat'] ?? null,
                 'start_gps_lng' => $payload['start_gps_lng'] ?? null,
             ]);
@@ -72,27 +69,6 @@ class DriverShiftController extends Controller
             DriverSwap::where('to_driver_id', $user->id)
                 ->whereNull('to_shift_id')
                 ->update(['to_shift_id' => $shift->id]);
-
-            // Fallback start_km từ swap nếu không có vehicle
-            if ($startKm <= 0) {
-                $pendingSwap = DriverSwap::where('to_driver_id', $user->id)
-                    ->where('to_shift_id', $shift->id)
-                    ->first();
-
-                if ($pendingSwap) {
-                    $handoverKm = (float) ($pendingSwap->handover_km ?? 0);
-                    if ($handoverKm <= 0) {
-                        $handoverKm = (float) TripCheckpoint::where('trip_id', $pendingSwap->trip_id)
-                            ->where('checkpoint_type', 'driver_swap')
-                            ->whereNotNull('km_reading')
-                            ->value('km_reading') ?? 0;
-                    }
-                    if ($handoverKm > 0) {
-                        $shift->start_km = $handoverKm;
-                        $shift->save();
-                    }
-                }
-            }
 
             DB::commit();
 
@@ -115,7 +91,7 @@ class DriverShiftController extends Controller
     {
         $user = $request->user();
         $payload = $request->validated();
-        $kmReading = (float) $payload['km_reading'];
+        $kmReading = isset($payload['km_reading']) ? (float) $payload['km_reading'] : null;
 
         if ($shift->driver_id !== $user->id) {
             return response()->json(['message' => 'Ca này không thuộc về bạn'], 403);
@@ -134,14 +110,6 @@ class DriverShiftController extends Controller
 
         if ($vehicle === null) {
             return response()->json(['message' => 'Không tìm thấy xe đang hoạt động trong ca này'], 404);
-        }
-
-        // Validate km_reading >= vehicle.current_mileage (chặn nhập lùi km)
-        $currentMileage = (float) ($vehicle->current_mileage ?? 0);
-        if ($kmReading < $currentMileage) {
-            return response()->json([
-                'message' => 'Số km nhập vào ('.number_format($kmReading, 1).') nhỏ hơn số km hiện tại của xe ('.number_format($currentMileage, 1).')',
-            ], 422);
         }
 
         $checkpoint = app(EndHandler::class)->handle($shift, $vehicle, $kmReading);
@@ -185,13 +153,12 @@ class DriverShiftController extends Controller
         // (chỉ bắt buộc nếu ca có chuyến — không có chuyến nào thì không cần)
         $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
             ->whereIn('checkpoint_type', [CheckpointType::End->value, CheckpointType::DriverSwap->value])
-            ->whereNotNull('km_reading')
             ->latest('id')
             ->first();
 
         if ($hasTrips && $endCheckpoint === null) {
             /** @status 422 */
-            return response()->json(['message' => 'Cần nhập km kết thúc trước khi kết thúc ca.'], 422);
+            return response()->json(['message' => 'Cần kết thúc xe trước khi kết thúc ca.'], 422);
         }
 
         // Gate: không cho kết thúc ca nếu còn trip đang chạy với đơn hàng chưa hoàn thành (Sent, InTransit)
@@ -234,13 +201,9 @@ class DriverShiftController extends Controller
             ], 422);
         }
 
-        // Use km_reading from the 'end' checkpoint (NOT from payload — avoids double entry drift)
-        $endKm = $endCheckpoint ? (float) $endCheckpoint->km_reading : ($payload['end_km'] ?? null);
-
         DB::beginTransaction();
         try {
             $shift->end_time = now();
-            $shift->end_km = $endKm;
             $shift->end_gps_lat = $payload['end_gps_lat'] ?? null;
             $shift->end_gps_lng = $payload['end_gps_lng'] ?? null;
             $shift->save();
@@ -257,16 +220,18 @@ class DriverShiftController extends Controller
                 $trip->save();
             }
 
-            // Update vehicle mileage from the 'end' checkpoint's km_reading
+            // Update vehicle GPS if provided
             if ($endCheckpoint?->vehicle_id) {
-                $vehicleUpdate = ['current_mileage' => $endKm];
+                $vehicleUpdate = [];
                 if (isset($payload['end_gps_lat'])) {
                     $vehicleUpdate['gps_lat'] = $payload['end_gps_lat'];
                 }
                 if (isset($payload['end_gps_lng'])) {
                     $vehicleUpdate['gps_lng'] = $payload['end_gps_lng'];
                 }
-                Vehicle::where('id', $endCheckpoint->vehicle_id)->update($vehicleUpdate);
+                if (! empty($vehicleUpdate)) {
+                    Vehicle::where('id', $endCheckpoint->vehicle_id)->update($vehicleUpdate);
+                }
             }
 
             DB::commit();
@@ -325,23 +290,25 @@ class DriverShiftController extends Controller
         // Gate: must have an 'end' checkpoint before switching vehicle
         $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
             ->whereIn('checkpoint_type', [CheckpointType::End->value, CheckpointType::DriverSwap->value])
-            ->whereNotNull('km_reading')
             ->latest('id')
             ->first();
 
         if ($endCheckpoint === null) {
-            return response()->json(['message' => 'Cần nhập km kết thúc xe hiện tại trước khi chuyển xe.'], 422);
+            return response()->json(['message' => 'Cần kết thúc xe hiện tại trước khi chuyển xe.'], 422);
         }
 
         DB::beginTransaction();
         try {
-            // Update new vehicle mileage with handover_km (setting up for the new vehicle)
-            Vehicle::where('id', $payload['new_vehicle_id'])
-                ->update([
-                    'current_mileage' => $payload['handover_km'],
-                    'gps_lat' => $payload['handover_gps_lat'] ?? null,
-                    'gps_lng' => $payload['handover_gps_lng'] ?? null,
-                ]);
+            $vehicleUpdate = [];
+            if (isset($payload['handover_gps_lat'])) {
+                $vehicleUpdate['gps_lat'] = $payload['handover_gps_lat'];
+            }
+            if (isset($payload['handover_gps_lng'])) {
+                $vehicleUpdate['gps_lng'] = $payload['handover_gps_lng'];
+            }
+            if (! empty($vehicleUpdate)) {
+                Vehicle::where('id', $payload['new_vehicle_id'])->update($vehicleUpdate);
+            }
 
             DB::commit();
 

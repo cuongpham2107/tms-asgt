@@ -159,22 +159,14 @@ test('started with km_reading succeeds', function () {
     ])->assertSuccessful();
 });
 
-test('arrived_pickup requires km_reading', function () {
+test('arrived_pickup succeeds without km_reading', function () {
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_pickup',
-        'km_reading' => 50010,
         'occurred_at' => now()->toIso8601String(),
     ])->assertSuccessful();
 
     $this->trip->refresh();
     expect($this->trip->status)->toBe(TripStatus::ArrivedPickup);
-});
-
-test('arrived_pickup without km_reading fails', function () {
-    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
-        'checkpoint_type' => 'arrived_pickup',
-        'occurred_at' => now()->toIso8601String(),
-    ])->assertStatus(422);
 });
 
 test('arrived_delivery requires order_id and delivery_point_id', function () {
@@ -840,4 +832,25 @@ test('completes trip on end checkpoint without km reading when all orders are co
     expect($this->trip->fresh()->status)->toBe(TripStatus::Completed);
     expect($this->trip->fresh()->completed_at)->not->toBeNull();
     expect($this->trip->checkpoints()->where('checkpoint_type', CheckpointType::End->value)->count())->toBe(2);
+});
+
+test('post checkpoint arrived_pickup with km_reading succeeds and ignores km', function () {
+    $response = $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'km_reading' => 12345,
+        'occurred_at' => now()->toIso8601String(),
+    ]);
+
+    $response->assertSuccessful();
+    expect($this->trip->fresh()->status)->toBe(TripStatus::ArrivedPickup);
+});
+
+test('post checkpoint arrived_pickup without km succeeds', function () {
+    $response = $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'occurred_at' => now()->toIso8601String(),
+    ]);
+
+    $response->assertSuccessful();
+    expect($this->trip->fresh()->status)->toBe(TripStatus::ArrivedPickup);
 });

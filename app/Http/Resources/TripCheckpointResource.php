@@ -28,7 +28,6 @@ class TripCheckpointResource extends JsonResource
             'checkpoint_type' => $this->checkpoint_type,
             /** @var string ISO 8601 */
             'occurred_at' => $this->occurred_at?->toIso8601String(),
-            'km_reading' => $this->km_reading,
             /** @var float|null GPS latitude */
             'gps_lat' => $this->gps_lat,
             /** @var float|null GPS longitude */

@@ -19,7 +19,6 @@ class DriverSwapResource extends JsonResource
             'from_driver_id' => $this->from_driver_id,
             'to_driver_id' => $this->to_driver_id,
             'from_shift_id' => $this->from_shift_id,
-            'handover_km' => $this->handover_km,
             'reason' => $this->reason,
             'note' => $this->note,
             'created_by' => $this->created_by,

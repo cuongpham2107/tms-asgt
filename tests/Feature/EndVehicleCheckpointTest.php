@@ -69,11 +69,10 @@ function endMakeShift(User $driver): DriverShift
         'driver_id' => $driver->id,
         'shift_type' => ShiftType::Full,
         'start_time' => now()->subHours(4),
-        'start_km' => 10000,
     ]);
 }
 
-function endMakeTrip(DriverShift $shift, Vehicle $vehicle, User $driver, int $startKm): Trip
+function endMakeTrip(DriverShift $shift, Vehicle $vehicle, User $driver, ?int $startKm = null): Trip
 {
     return Trip::create([
         'trip_code' => 'TRIP-END-'.fake()->unique()->randomNumber(),
@@ -82,7 +81,6 @@ function endMakeTrip(DriverShift $shift, Vehicle $vehicle, User $driver, int $st
         'shift_id' => $shift->id,
         'status' => TripStatus::Started,
         'started_at' => now()->subHours(3),
-        'start_km' => $startKm,
     ]);
 }
 
@@ -99,7 +97,7 @@ function endMakeOrder(Trip $trip, User $driver, $area, $customer): Order
     ]);
 }
 
-function endMakeCheckpoint(Trip $trip, Order $order, string $type, int $kmReading, ?DriverShift $shift = null, ?Vehicle $vehicle = null): TripCheckpoint
+function endMakeCheckpoint(Trip $trip, Order $order, string $type, ?int $kmReading = null, ?DriverShift $shift = null, ?Vehicle $vehicle = null): TripCheckpoint
 {
     return TripCheckpoint::create([
         'trip_id' => $trip->id,
@@ -109,7 +107,6 @@ function endMakeCheckpoint(Trip $trip, Order $order, string $type, int $kmReadin
         'vehicle_id' => $vehicle?->id ?? $trip->vehicle_id,
         'checkpoint_type' => $type,
         'occurred_at' => now(),
-        'km_reading' => $kmReading,
     ]);
 }
 
@@ -129,132 +126,22 @@ test('simple trip with one order calculates loaded and empty km correctly', func
     expect((float) $trip->total_km)->toBe(90.0);
     expect((float) $trip->total_km_loaded)->toBe(80.0);
     expect((float) $trip->total_km_empty)->toBe(10.0);
-});
+})->skip('Km calculation will be reimplemented in P6 with GPS');
 
 // === TEST 2: Bug 1 — km lang thang sau khi hoàn thành đơn cuối ===
 test('wandering km after last order goes to shift empty km', function () {
-    $shift = endMakeShift($this->driver);
-    $shift->start_km = 10000;
-    $shift->save();
-
-    $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
-    $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
-
-    endMakeCheckpoint($trip, $order, CheckpointType::ArrivedPickup->value, 10010, $shift, $this->vehicle);
-    endMakeCheckpoint($trip, $order, CheckpointType::Completed->value, 10050, $shift, $this->vehicle);
-    $trip->update(['end_km' => 10050, 'status' => TripStatus::Completed]);
-    app(TripKmCalculatorService::class)->calculate($trip);
-
-    $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
-        'km_reading' => 10080,
-    ])->assertSuccessful();
-
-    $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
-        ->where('checkpoint_type', CheckpointType::End->value)
-        ->first();
-    expect($endCheckpoint)->not->toBeNull();
-    expect((float) $endCheckpoint->km_reading)->toBe(10080.0);
-
-    $this->postJson('/api/driver/shifts/end', [
-        'end_gps_lat' => 10.5,
-        'end_gps_lng' => 106.5,
-    ])->assertSuccessful();
-
-    $shift->refresh();
-    expect((float) $shift->end_km)->toBe(10080.0);
-    expect((float) $shift->total_km_empty)->toBeGreaterThanOrEqual(30.0);
-});
+    //
+})->skip('Km calculation will be reimplemented in P6 with GPS');
 
 // === TEST 3: Ca tiếp theo nhận đúng start_km ===
 test('next shift starts at end checkpoint km', function () {
-    $shift1 = endMakeShift($this->driver);
-    $shift1->start_km = 10000;
-    $shift1->save();
-
-    $trip = endMakeTrip($shift1, $this->vehicle, $this->driver, 10000);
-    $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
-
-    endMakeCheckpoint($trip, $order, CheckpointType::ArrivedPickup->value, 10010, $shift1, $this->vehicle);
-    endMakeCheckpoint($trip, $order, CheckpointType::Completed->value, 10050, $shift1, $this->vehicle);
-    $trip->update(['end_km' => 10050, 'status' => TripStatus::Completed]);
-    app(TripKmCalculatorService::class)->calculate($trip);
-
-    $this->postJson("/api/driver/shifts/{$shift1->id}/end-vehicle", [
-        'km_reading' => 10080,
-    ])->assertSuccessful();
-
-    $this->postJson('/api/driver/shifts/end', [])->assertSuccessful();
-
-    expect((float) $this->vehicle->fresh()->current_mileage)->toBe(10080.0);
-
-    $shift2 = DriverShift::create([
-        'driver_id' => $this->driver->id,
-        'shift_type' => ShiftType::Full,
-        'start_time' => now(),
-        'start_km' => $this->vehicle->fresh()->current_mileage,
-    ]);
-
-    expect((float) $shift2->start_km)->toBe(10080.0);
-});
+    //
+})->skip('Km calculation will be reimplemented in P6 with GPS');
 
 // === TEST 4: Bug 2 — đổi xe giữa ca ===
 test('vehicle swap mid-shift calculates correct segmented km', function () {
-    $shift = endMakeShift($this->driver);
-    $shift->start_km = 10000;
-    $shift->save();
-
-    // Vehicle 1 segment
-    $trip1 = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
-    $order1 = endMakeOrder($trip1, $this->driver, $this->area, $this->customer);
-
-    endMakeCheckpoint($trip1, $order1, CheckpointType::ArrivedPickup->value, 10010, $shift, $this->vehicle);
-    endMakeCheckpoint($trip1, $order1, CheckpointType::Completed->value, 10050, $shift, $this->vehicle);
-    $trip1->update(['end_km' => 10050, 'status' => TripStatus::Completed]);
-    app(TripKmCalculatorService::class)->calculate($trip1);
-
-    // End vehicle 1
-    $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
-        'km_reading' => 10070,
-    ])->assertSuccessful();
-
-    // Switch to vehicle 2
-    $this->postJson('/api/driver/shifts/switch-vehicle', [
-        'new_vehicle_id' => $this->vehicle2->id,
-        'handover_km' => 50000,
-    ])->assertSuccessful();
-
-    // Vehicle 2 segment
-    $trip2 = Trip::create([
-        'trip_code' => 'TRIP-END-V2',
-        'vehicle_id' => $this->vehicle2->id,
-        'driver_id' => $this->driver->id,
-        'shift_id' => $shift->id,
-        'status' => TripStatus::Started,
-        'started_at' => now()->subHour(),
-        'start_km' => 50000,
-    ]);
-
-    $order2 = endMakeOrder($trip2, $this->driver, $this->area, $this->customer);
-    endMakeCheckpoint($trip2, $order2, CheckpointType::ArrivedPickup->value, 50010, $shift, $this->vehicle2);
-    endMakeCheckpoint($trip2, $order2, CheckpointType::Completed->value, 50080, $shift, $this->vehicle2);
-    $trip2->update(['end_km' => 50080, 'status' => TripStatus::Completed]);
-    app(TripKmCalculatorService::class)->calculate($trip2);
-
-    // End vehicle 2
-    $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
-        'km_reading' => 50100,
-    ])->assertSuccessful();
-
-    // End shift
-    $this->postJson('/api/driver/shifts/end', [])->assertSuccessful();
-
-    $shift->refresh();
-    expect((float) $shift->end_km)->toBe(50100.0);
-    expect((float) $shift->total_km)->toBeGreaterThan(0);
-    expect((float) $shift->total_km)->toBeLessThan(1000000);
-    expect((float) $shift->total_km_loaded)->toBeLessThan(1000000);
-    expect((float) $shift->total_km_empty)->toBeLessThan(1000000);
-});
+    //
+})->skip('Km calculation will be reimplemented in P6 with GPS');
 
 // === TEST 5: End Shift khi đang có trip, chưa có checkpoint 'end' → reject ===
 test('end shift without end checkpoint is rejected', function () {
@@ -265,19 +152,17 @@ test('end shift without end checkpoint is rejected', function () {
     $response = $this->postJson('/api/driver/shifts/end', []);
 
     $response->assertStatus(422);
-    $response->assertJsonPath('message', 'Cần nhập km kết thúc trước khi kết thúc ca.');
+    $response->assertJsonPath('message', 'Cần kết thúc xe trước khi kết thúc ca.');
 });
 
 // === TEST 6: Rời xe khi đang có trip chưa hoàn thành → driver_swap ===
 test('end vehicle with active incomplete trip triggers driver swap', function () {
     $shift = endMakeShift($this->driver);
-    $shift->start_km = 10000;
-    $shift->save();
 
-    $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $trip = endMakeTrip($shift, $this->vehicle, $this->driver);
     $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
 
-    endMakeCheckpoint($trip, $order, CheckpointType::ArrivedPickup->value, 10010, $shift, $this->vehicle);
+    endMakeCheckpoint($trip, $order, CheckpointType::ArrivedPickup->value, null, $shift, $this->vehicle);
 
     $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
         'km_reading' => 10060,
@@ -285,23 +170,20 @@ test('end vehicle with active incomplete trip triggers driver swap', function ()
 
     $trip->refresh();
     expect($trip->status)->toBe(TripStatus::DriverSwap);
-    // shift_id is cleared during end() cleanup, not in EndHandler
-    expect((float) $trip->end_km)->toBe(10060.0);
-    expect((float) $trip->total_km_loaded)->toBeGreaterThan(0);
 
     // Verify checkpoint type is DriverSwap, not End
     $checkpoint = TripCheckpoint::where('trip_id', $trip->id)
         ->where('checkpoint_type', CheckpointType::DriverSwap->value)
         ->first();
     expect($checkpoint)->not->toBeNull();
-    expect((float) $checkpoint->km_reading)->toBe(10060.0);
     expect($checkpoint->order_id)->not->toBeNull();
 });
 
-// === TEST 7: Nhập km_reading nhỏ hơn vehicle.current_mileage → reject ===
-test('end vehicle with km less than current mileage is rejected', function () {
+// === TEST 7: Nhập km_reading không validate current_mileage nữa ===
+test('end vehicle accepts km_reading without validating against current mileage', function () {
     $shift = endMakeShift($this->driver);
-    $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $trip = endMakeTrip($shift, $this->vehicle, $this->driver);
+    $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
     $this->vehicle->current_mileage = 10050;
     $this->vehicle->save();
 
@@ -309,13 +191,13 @@ test('end vehicle with km less than current mileage is rejected', function () {
         'km_reading' => 10000,
     ]);
 
-    $response->assertStatus(422);
+    $response->assertSuccessful();
 });
 
 // === TEST 8: End shift succeeds when driver has pending trips with assigned orders ===
 test('end shift succeeds when driver has pending trips with assigned orders', function () {
     $shift = endMakeShift($this->driver);
-    $trip1 = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $trip1 = endMakeTrip($shift, $this->vehicle, $this->driver);
     $order1 = endMakeOrder($trip1, $this->driver, $this->area, $this->customer);
     $trip1->update(['status' => TripStatus::Completed]);
     $order1->update(['status' => OrderStatus::Completed]);
@@ -325,7 +207,6 @@ test('end shift succeeds when driver has pending trips with assigned orders', fu
         'shift_id' => $shift->id,
         'driver_id' => $this->driver->id,
         'checkpoint_type' => CheckpointType::End->value,
-        'km_reading' => 10050,
         'occurred_at' => now(),
     ]);
 
@@ -352,7 +233,6 @@ test('end shift succeeds when driver has pending trips with assigned orders', fu
     $response->assertSuccessful();
     $shift->refresh();
     expect($shift->end_time)->not->toBeNull();
-    expect((float) $shift->end_km)->toBe(10050.0);
     // Trip 2 should remain pending and not be touched
     expect($trip2->fresh()->status)->toBe(TripStatus::Pending);
 });
@@ -360,7 +240,7 @@ test('end shift succeeds when driver has pending trips with assigned orders', fu
 // === TEST 9: End shift is rejected when driver has in-progress trip with sent orders ===
 test('end shift is rejected when driver has in-progress trip with sent orders', function () {
     $shift = endMakeShift($this->driver);
-    $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $trip = endMakeTrip($shift, $this->vehicle, $this->driver);
     $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
     $trip->update(['status' => TripStatus::Started]);
     $order->update(['status' => OrderStatus::Sent]);
@@ -369,7 +249,6 @@ test('end shift is rejected when driver has in-progress trip with sent orders', 
         'shift_id' => $shift->id,
         'driver_id' => $this->driver->id,
         'checkpoint_type' => CheckpointType::End->value,
-        'km_reading' => 10050,
         'occurred_at' => now(),
     ]);
 

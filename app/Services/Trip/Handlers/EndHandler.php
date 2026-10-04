@@ -39,6 +39,7 @@ class EndHandler implements CheckpointHandlerInterface
             }
 
             // 2. Create TripCheckpoint(s)
+            $checkpoint = null;
             if ($activeTripId !== null) {
                 $checkpoints = app(CheckpointFactory::class)->create(
                     $activeTrip,
@@ -46,10 +47,12 @@ class EndHandler implements CheckpointHandlerInterface
                     CheckpointType::DriverSwap,
                 );
                 $checkpoint = $checkpoints->first();
-            } else {
+            }
+
+            if ($checkpoint === null) {
                 $checkpoint = TripCheckpoint::create([
-                    'checkpoint_type' => CheckpointType::End->value,
-                    'trip_id' => null,
+                    'checkpoint_type' => $activeTripId !== null ? CheckpointType::DriverSwap->value : CheckpointType::End->value,
+                    'trip_id' => $activeTripId,
                     'shift_id' => $shift->id,
                     'driver_id' => $shift->driver_id,
                     'occurred_at' => now(),

@@ -31,15 +31,9 @@ class ShiftStatusController extends Controller
             ->latest('start_time')
             ->first();
 
-        $lastKm = DriverShift::query()
-            ->where('driver_id', $user->id)
-            ->whereNotNull('end_km')
-            ->orderByDesc('end_time')
-            ->value('end_km');
-
         return response()->json([
             'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')])) : null,
-            'last_km' => $lastKm,
+            'last_km' => null,
         ]);
     }
 }

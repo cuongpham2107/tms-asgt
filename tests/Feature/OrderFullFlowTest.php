@@ -200,15 +200,7 @@ test('full HHHK order lifecycle without swap calculates KM correctly', function 
     ])->assertSuccessful();
 
     $shift->refresh();
-
-    // total_km = end_km - start_km = 10100 - 10000 = 100
-    expect((float) $shift->total_km)->toBe(100.0);
-
-    // loaded = completed.km (10090) - arrived_pickup.km (10010) = 80
-    expect((float) $shift->total_km_loaded)->toBe(80.0);
-
-    // empty = total - loaded = 100 - 80 = 20
-    expect((float) $shift->total_km_empty)->toBe(20.0);
+    expect($shift->end_time)->not->toBeNull();
 });
 
 /*
@@ -284,11 +276,6 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
     $shiftA->refresh();
     expect($trip->fresh()->status)->toBe(TripStatus::DriverSwap);
 
-    // Driver A's KM: total=60, loaded=50 (end_km - arrived_pickup.km), empty=10
-    expect((float) $shiftA->total_km)->toBe(60.0);
-    expect((float) $shiftA->total_km_loaded)->toBe(50.0);
-    expect((float) $shiftA->total_km_empty)->toBe(10.0);
-
     // ============================================
     // PHASE 2: Operator reassigns Driver B
     // ============================================
@@ -303,7 +290,6 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
         'to_driver_id' => $driverB->id,
         'from_shift_id' => $shiftA->id,
         'to_shift_id' => null,
-        'handover_km' => 10060,
         'reason' => DriverSwapReason::ShiftHandover,
         'created_by' => $driverA->id,
     ]);
@@ -359,16 +345,7 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
     ])->assertSuccessful();
 
     $shiftB->refresh();
-
-    // Driver B's KM: computed from the segment starting at first checkpoint km
-    // (driver swap case — trip started on another shift)
-    expect((float) $shiftB->total_km)->toBeGreaterThan(0);
-    expect((float) $shiftB->total_km_loaded)->toBeGreaterThanOrEqual(0);
-    expect((float) $shiftB->total_km_empty)->toBeGreaterThanOrEqual(0);
-
-    // Cumulative: driver A + driver B should cover the full trip km
-    expect((float) $shiftA->total_km_loaded + (float) $shiftB->total_km_loaded)->toBeGreaterThan(0);
-    expect((float) $shiftA->total_km_empty + (float) $shiftB->total_km_empty)->toBeGreaterThanOrEqual(0);
+    expect($shiftB->end_time)->not->toBeNull();
 });
 
 /*
@@ -526,11 +503,6 @@ test('driver with 2 orders runs out of shift time triggers swap via trip DriverS
     expect($trip2->fresh()->status)->toBe(TripStatus::DriverSwap);
     expect($order1->fresh()->status)->toBe(OrderStatus::Completed);
 
-    // Driver A's KM: total = sum of trip totals in shift
-    expect((float) $shiftA->total_km)->toBeGreaterThan(0);
-    expect((float) $shiftA->total_km_loaded)->toBeGreaterThanOrEqual(0);
-    expect((float) $shiftA->total_km_empty)->toBeGreaterThanOrEqual(0);
-
     // ============================================
     // PHASE 3: Driver B vào ca → Điều hành swap
     // ============================================
@@ -550,7 +522,6 @@ test('driver with 2 orders runs out of shift time triggers swap via trip DriverS
         'to_driver_id' => $driverB->id,
         'from_shift_id' => $shiftA->id,
         'to_shift_id' => $shiftB->id,
-        'handover_km' => 10060,
         'reason' => DriverSwapReason::ShiftHandover,
         'note' => 'Hết ca, bàn giao cho tài xế B',
         'created_by' => $adminUser->id,
@@ -607,14 +578,5 @@ test('driver with 2 orders runs out of shift time triggers swap via trip DriverS
     ])->assertSuccessful();
 
     $shiftB->refresh();
-
-    // Driver B's KM: computed from the segment starting at first checkpoint km
-    // (driver swap case — trip started on another shift)
-    expect((float) $shiftB->total_km)->toBeGreaterThan(0);
-    expect((float) $shiftB->total_km_loaded)->toBeGreaterThanOrEqual(0);
-    expect((float) $shiftB->total_km_empty)->toBeGreaterThanOrEqual(0);
-
-    // Cumulative
-    expect((float) $shiftA->total_km_loaded + (float) $shiftB->total_km_loaded)->toBeGreaterThan(0);
-    expect((float) $shiftA->total_km_empty + (float) $shiftB->total_km_empty)->toBeGreaterThanOrEqual(0);
+    expect($shiftB->end_time)->not->toBeNull();
 });

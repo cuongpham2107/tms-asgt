@@ -29,7 +29,7 @@ class VehicleSearchController extends Controller
             })
             ->orderBy('plate_number')
             ->limit(10)
-            ->get(['id', 'plate_number', 'vehicle_type', 'load_capacity', 'current_mileage']);
+            ->get(['id', 'plate_number', 'vehicle_type', 'load_capacity']);
 
         return response()->json([
             'data' => $vehicles,
@@ -42,7 +42,7 @@ class VehicleSearchController extends Controller
      * Trả về các xe đang hoạt động và chưa được gán lái (current_driver_id = null).
      * Dùng khi lái xe vào ca để chọn xe trống.
      *
-     * @response array{data: array<int, array{id: int, plate_number: string, vehicle_type: string, load_capacity: float, current_mileage: float}>}
+     * @response array{data: array<int, array{id: int, plate_number: string, vehicle_type: string, load_capacity: float}>}
      */
     public function available(Request $request): JsonResponse
     {
@@ -50,7 +50,7 @@ class VehicleSearchController extends Controller
             ->where('is_active', true)
             ->whereNull('current_driver_id')
             ->orderBy('plate_number')
-            ->get(['id', 'plate_number', 'vehicle_type', 'load_capacity', 'current_mileage']);
+            ->get(['id', 'plate_number', 'vehicle_type', 'load_capacity']);
 
         return response()->json([
             'data' => $vehicles,
@@ -60,7 +60,7 @@ class VehicleSearchController extends Controller
     /**
      * Chi tiết thông tin 1 xe.
      *
-     * @response array{id: int, plate_number: string, vehicle_type: string, owner: string, make: ?string, model_year: ?int, load_capacity: ?float, current_mileage: ?float, current_driver_id: ?int, status: string, type: string, notes: ?string}
+     * @response array{id: int, plate_number: string, vehicle_type: string, owner: string, make: ?string, model_year: ?int, load_capacity: ?float, current_driver_id: ?int, status: string, type: string, notes: ?string}
      */
     public function show(Vehicle $vehicle): JsonResponse
     {
@@ -74,7 +74,6 @@ class VehicleSearchController extends Controller
                 'make' => $vehicle->make,
                 'model_year' => $vehicle->model_year,
                 'load_capacity' => $vehicle->load_capacity !== null ? (float) $vehicle->load_capacity : null,
-                'current_mileage' => $vehicle->current_mileage !== null ? (float) $vehicle->current_mileage : null,
                 'current_driver_id' => $vehicle->current_driver_id,
                 'status' => $vehicle->status?->value,
                 'status_label' => $vehicle->getStatusLabel(),

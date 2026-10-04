@@ -59,7 +59,6 @@ test('trips list page renders successfully', function () {
         'vehicle_id' => $vehicle->id,
         'status' => TripStatus::Started,
         'started_at' => now(),
-        'start_km' => 100,
     ]);
 
     Livewire::test(ListTrips::class)
@@ -82,13 +81,11 @@ test('trip view timeline page renders successfully', function () {
         'vehicle_id' => $vehicle->id,
         'status' => TripStatus::Started,
         'started_at' => now(),
-        'start_km' => 100,
     ]);
 
     TripCheckpoint::create([
         'trip_id' => $trip->id,
         'checkpoint_type' => CheckpointType::Completed,
-        'km_reading' => 150.5,
         'occurred_at' => now(),
     ]);
 
@@ -97,7 +94,7 @@ test('trip view timeline page renders successfully', function () {
     ])
         ->assertStatus(200)
         ->assertHasNoErrors()
-        ->assertSee('150,5 km');
+        ->assertSee('Hoàn thành');
 });
 
 test('trip stats overview widget renders successfully', function () {
@@ -123,7 +120,6 @@ test('trip resolves orders and lists pickups/deliveries correctly', function () 
         'vehicle_id' => $vehicle->id,
         'status' => TripStatus::Started,
         'started_at' => now(),
-        'start_km' => 100,
     ]);
 
     $area = Area::create([

@@ -491,7 +491,7 @@ test('driver notification service sends trip driver swapped notification to new 
     }))->andReturn([]);
 
     $service = new DriverNotificationService($mockMessaging);
-    $resultNew = $service->sendTripDriverSwapped($trip, $newDriver, $oldDriver, 50000.5);
+    $resultNew = $service->sendTripDriverSwapped($trip, $newDriver, $oldDriver);
     $resultOld = $service->sendTripDriverSwapHandover($trip, $oldDriver, $newDriver);
 
     expect($resultNew)->toBeTrue()

@@ -258,15 +258,6 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
 
     $shift->refresh();
 
-    // total_km = end_km - start_km = 15100 - 15000 = 100
-    expect((float) $shift->total_km)->toBe(100.0);
-
-    // loaded_km = completed(15060) - arrived_pickup(15005) = 55
-    expect((float) $shift->total_km_loaded)->toBe(55.0);
-
-    // empty = max(0, total - loaded) = 45
-    expect((float) $shift->total_km_empty)->toBe(45.0);
-
     // Xe không bị xoá current_driver_id khi hết ca (do driver track qua Trip, không qua Vehicle)
     expect($this->vehicle->fresh()->current_driver_id)->toBe($this->driver->id);
 });

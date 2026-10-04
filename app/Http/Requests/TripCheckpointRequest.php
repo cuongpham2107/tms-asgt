@@ -6,7 +6,6 @@ use App\Enums\CheckpointType;
 use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\Order;
 use App\Models\Trip;
-use App\Models\TripCheckpoint;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -42,12 +41,7 @@ class TripCheckpointRequest extends FormRequest
             'delivery_point_id' => $deliveryPointIdRules,
             'new_delivery_location_id' => 'nullable|exists:locations,id',
             'occurred_at' => 'nullable|date',
-            'km_reading' => [
-                'nullable',
-                'numeric',
-                'min:0',
-                Rule::when(in_array($type, ['arrived_pickup', 'completed'], true), 'required'),
-            ],
+            'km_reading' => 'nullable',
             'gps_lat' => 'nullable|numeric',
             'gps_lng' => 'nullable|numeric',
             'voice_note' => 'nullable|string',
@@ -87,51 +81,6 @@ class TripCheckpointRequest extends FormRequest
                     if (! $hasDeliveryPoints && ! $hasDeliveryPointId && ! $hasNewLocationId) {
                         $validator->errors()->add('delivery_point_id', 'Đơn hàng chưa có điểm đến. Vui lòng chọn điểm giao hàng.');
                     }
-                }
-            },
-
-            function (\Illuminate\Validation\Validator $validator) {
-                if ($this->input('km_reading') === null) {
-                    return;
-                }
-
-                $trip = $this->route('trip');
-                if (! $trip instanceof Trip) {
-                    return;
-                }
-
-                $kmReading = (float) $this->input('km_reading');
-                $type = (string) $this->input('checkpoint_type');
-                $orderId = $this->input('order_id') ? (int) $this->input('order_id') : null;
-
-                if ($orderId !== null) {
-                    $lastOrderKm = TripCheckpoint::where('order_id', $orderId)
-                        ->whereNotNull('km_reading')
-                        ->orderByDesc('occurred_at')
-                        ->orderByDesc('id')
-                        ->value('km_reading');
-
-                    if ($lastOrderKm !== null && $kmReading < (float) $lastOrderKm) {
-                        $validator->errors()->add('km_reading', 'Số km phải lớn hơn hoặc bằng km gần nhất của đơn hàng này ('.number_format((float) $lastOrderKm, 1).' km)');
-                    }
-                }
-            },
-
-            function (\Illuminate\Validation\Validator $validator) {
-                if (! in_array($this->input('checkpoint_type'), ['arrived_delivery', 'completed'], true) || $this->input('km_reading') === null || $this->input('order_id') === null) {
-                    return;
-                }
-
-                $leftPickupKm = TripCheckpoint::where('order_id', $this->input('order_id'))
-                    ->where('checkpoint_type', 'left_pickup')
-                    ->whereNotNull('km_reading')
-                    ->value('km_reading');
-
-                if ($leftPickupKm !== null && (float) $this->input('km_reading') <= (float) $leftPickupKm) {
-                    $validator->errors()->add('km_reading', sprintf(
-                        'Số km phải lớn hơn km lúc rời điểm nhận (%.1f km)',
-                        $leftPickupKm
-                    ));
                 }
             },
         ];

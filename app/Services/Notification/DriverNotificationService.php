@@ -160,22 +160,20 @@ class DriverNotificationService
     /**
      * Gửi push notification khi chuyến đi được bàn giao cho tài xế mới sau khi đảo lái (DriverSwapAction / ReassignDriverAction).
      */
-    public function sendTripDriverSwapped(Trip $trip, User $newDriver, ?User $oldDriver = null, float $handoverKm = 0): bool
+    public function sendTripDriverSwapped(Trip $trip, User $newDriver, ?User $oldDriver = null): bool
     {
         $orderCount = $trip->orders()->count();
         $countText = $orderCount > 0 ? " với {$orderCount} đơn hàng" : '';
         $fromText = $oldDriver ? " từ tài xế {$oldDriver->name}" : '';
-        $kmText = $handoverKm > 0 ? ' (Km bàn giao: '.number_format($handoverKm, 1, ',', '.').')' : '';
 
         $title = "Bàn giao chuyến đi: #{$trip->trip_code}";
-        $body = "Bạn nhận bàn giao chuyến đi #{$trip->trip_code}{$fromText}{$countText}{$kmText}.";
+        $body = "Bạn nhận bàn giao chuyến đi #{$trip->trip_code}{$fromText}{$countText}.";
 
         $data = [
             'type' => 'trip_driver_swapped',
             'trip_id' => (string) $trip->id,
             'trip_code' => (string) $trip->trip_code,
             'order_count' => (string) $orderCount,
-            'handover_km' => (string) $handoverKm,
             'from_driver_id' => (string) ($oldDriver?->id ?? ''),
             'from_driver_name' => (string) ($oldDriver?->name ?? ''),
         ];

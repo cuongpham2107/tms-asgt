@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\NormalizesDecimalInput;
-use App\Models\DriverShift;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -21,7 +20,7 @@ class EndShiftRequest extends FormRequest
     {
         return [
             'end_time' => 'nullable|date',
-            'end_km' => 'nullable|numeric',
+            'end_km' => 'nullable',
             'end_gps_lat' => 'nullable|numeric',
             'end_gps_lng' => 'nullable|numeric',
         ];
@@ -38,33 +37,7 @@ class EndShiftRequest extends FormRequest
 
     public function after(): array
     {
-        return [
-            function (\Illuminate\Validation\Validator $validator) {
-                if ($this->input('end_km') === null) {
-                    return;
-                }
-
-                $shift = DriverShift::query()
-                    ->where('driver_id', $this->user()->id)
-                    ->whereNull('end_time')
-                    ->first();
-
-                if ($shift === null) {
-                    return;
-                }
-
-                $referenceKm = $shift->start_km;
-
-                if ($referenceKm === null) {
-                    return;
-                }
-
-                if ((float) $this->input('end_km') <= (float) $referenceKm) {
-                    $message = 'Số km kết thúc ca phải lớn hơn số km bắt đầu ca ('.number_format((float) $referenceKm, 1).' km)';
-                    throw new HttpResponseException(response()->json(['message' => $message], 422));
-                }
-            },
-        ];
+        return [];
     }
 
     protected function failedValidation(Validator $validator): void
