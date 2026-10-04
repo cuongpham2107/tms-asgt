@@ -8,6 +8,7 @@ use App\Enums\VehicleStatus;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
 use Illuminate\Support\Collection;
@@ -20,7 +21,10 @@ use Throwable;
  */
 class TripAssignmentService
 {
-    public function __construct(private readonly DriverNotificationService $notifications) {}
+    public function __construct(
+        private readonly DriverNotificationService $notifications,
+        private readonly TripDriverService $driverService,
+    ) {}
 
     /**
      * @param  Collection<int, Order>  $orders
@@ -33,11 +37,15 @@ class TripAssignmentService
             $trip = Trip::create([
                 'trip_code' => Trip::generateTripCode(),
                 'vehicle_id' => $vehicleId,
-                'driver_id' => $driverId,
                 'status' => TripStatus::Pending,
                 'start_location_id' => $sorted->first()?->pickup_location_id,
                 'end_location_id' => $sorted->last()?->deliveryPoints()->orderByDesc('sequence')->first()?->location_id,
             ]);
+
+            $driver = $driverId !== null ? User::find($driverId) : null;
+            if ($driver !== null) {
+                $this->driverService->openAssignment($trip, $driver, auth()->user());
+            }
 
             foreach ($sorted as $sequence => $order) {
                 $order->trip_id = $trip->id;

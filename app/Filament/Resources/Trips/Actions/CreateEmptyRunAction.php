@@ -12,6 +12,7 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripDriverService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -138,6 +139,10 @@ class CreateEmptyRunAction
                     'note' => $data['note'] ?? null,
                     'started_at' => $now,
                 ]);
+
+                if ($driver !== null) {
+                    app(TripDriverService::class)->openAssignment($trip, $driver, auth()->user());
+                }
 
                 TripCheckpoint::create([
                     'trip_id' => $trip->id,

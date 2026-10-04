@@ -2,6 +2,7 @@
 
 namespace App\Services\Trip;
 
+use App\Enums\AssignmentEndReason;
 use App\Enums\CheckpointType;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
@@ -12,6 +13,7 @@ use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Models\TripDriverAssignment;
 use App\Models\User;
 use App\Models\Vehicle;
 use Carbon\CarbonInterface;
@@ -50,7 +52,7 @@ class TripStateMachine
                 CheckpointType::ArrivedDelivery => $this->handleArrivedDeliveryCheckpoint($trip, $checkpoints),
                 CheckpointType::Completed => $this->handleCompletedCheckpoint($trip, $checkpoints),
                 CheckpointType::End => $this->handleEndCheckpoint($trip, $checkpoints, $occurredAt),
-                CheckpointType::DriverSwap => $this->requestSwap($trip),
+                CheckpointType::DriverSwap => throw new InvalidTransitionException('Dùng chức năng Đảo lái để bàn giao chuyến.'),
                 CheckpointType::Cancelled => throw new InvalidTransitionException('Không dùng checkpoint để huỷ chuyến.'),
             };
 
@@ -305,6 +307,8 @@ class TripStateMachine
             $trip->cancelled_at = now();
             $trip->save();
 
+            $this->closeOpenAssignment($trip, AssignmentEndReason::TripCancelled);
+
             $trip->checkpoints()->create([
                 'checkpoint_type' => CheckpointType::Cancelled->value,
                 'occurred_at' => $trip->cancelled_at,
@@ -433,6 +437,8 @@ class TripStateMachine
             }
             $trip->save();
 
+            $this->closeOpenAssignment($trip, AssignmentEndReason::TripFinished);
+
             $completedOrderIds = $trip->orders()
                 ->where('status', OrderStatus::Completed->value)
                 ->pluck('id');
@@ -496,6 +502,14 @@ class TripStateMachine
 
             return $this->complete($trip);
         });
+    }
+
+    private function closeOpenAssignment(Trip $trip, AssignmentEndReason $reason): void
+    {
+        TripDriverAssignment::query()
+            ->where('trip_id', $trip->id)
+            ->whereNull('ended_at')
+            ->update(['ended_at' => now(), 'end_reason' => $reason->value, 'updated_at' => now()]);
     }
 
     public function syncVehicleStatus(?Vehicle $vehicle): void

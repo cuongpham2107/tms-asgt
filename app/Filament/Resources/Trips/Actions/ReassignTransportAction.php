@@ -12,6 +12,7 @@ use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripDriverService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
@@ -90,11 +91,14 @@ class ReassignTransportAction extends CreatesOrderTransportCards
                                 ->first();
                         }
 
-                        $record->update([
-                            'vehicle_id' => $newVehicleId,
-                            'driver_id' => $newDriverId,
-                            'shift_id' => $newShift?->id,
-                        ]);
+                        $record->update(['vehicle_id' => $newVehicleId]);
+
+                        if ((int) $record->driver_id !== (int) $newDriverId) {
+                            $newDriverModel = $newDriverId ? User::find($newDriverId) : null;
+                            $newDriverModel !== null
+                                ? app(TripDriverService::class)->openAssignment($record, $newDriverModel, auth()->user())
+                                : app(TripDriverService::class)->unassign($record);
+                        }
 
                         $record->checkpoints()->update([
                             'vehicle_id' => $newVehicleId,

@@ -15,7 +15,7 @@ use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
 use App\Models\User;
-use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripDriverService;
 use App\Services\Trip\TripStateMachine;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
@@ -217,32 +217,21 @@ class TripsTable extends BaseTable
                                 && filled($data['completed_at'] ?? null)
                                 && $record->status !== TripStatus::Completed;
 
-                            $oldDriverId = $record->driver_id;
                             $newDriverId = $data['driver_id'] ?? null;
+                            $driverChanged = array_key_exists('driver_id', $data) && (int) $record->driver_id !== (int) $newDriverId;
+                            unset($data['driver_id']);
 
                             $record->update($data);
 
-                            if ($completesExternalTrip) {
-                                app(TripStateMachine::class)->completeExternalTrip($record);
+                            if ($driverChanged) {
+                                $newDriver = $newDriverId ? User::find($newDriverId) : null;
+                                $newDriver !== null
+                                    ? app(TripDriverService::class)->replaceDriver($record, $newDriver, auth()->user())
+                                    : ($record->status === TripStatus::Pending ? app(TripDriverService::class)->unassign($record) : null);
                             }
 
-                            if ($newDriverId && (int) $oldDriverId !== (int) $newDriverId) {
-                                $oldDriver = $oldDriverId ? User::find($oldDriverId) : null;
-                                $newDriver = User::find($newDriverId);
-
-                                if ($newDriver !== null) {
-                                    try {
-                                        app(DriverNotificationService::class)->sendTripReassigned($record, $newDriver, $oldDriver);
-                                    } catch (\Throwable) {
-                                    }
-                                }
-
-                                if ($oldDriver !== null) {
-                                    try {
-                                        app(DriverNotificationService::class)->sendTripUnassigned($record, $oldDriver);
-                                    } catch (\Throwable) {
-                                    }
-                                }
+                            if ($completesExternalTrip) {
+                                app(TripStateMachine::class)->completeExternalTrip($record);
                             }
 
                             return $record;
