@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
@@ -108,6 +109,16 @@ class Trip extends Model
     public function checkpoints(): HasMany
     {
         return $this->hasMany(TripCheckpoint::class)->orderBy('occurred_at');
+    }
+
+    public function driverAssignments(): HasMany
+    {
+        return $this->hasMany(TripDriverAssignment::class)->orderBy('started_at')->orderBy('id');
+    }
+
+    public function openDriverAssignment(): HasOne
+    {
+        return $this->hasOne(TripDriverAssignment::class)->whereNull('ended_at')->latestOfMany();
     }
 
     public function driverSwaps(): HasMany
