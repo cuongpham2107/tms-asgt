@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DriverFcmTokenController;
 use App\Http\Controllers\Api\DriverShiftController;
+use App\Http\Controllers\Api\GpsPointController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OvertimeRegistrationController;
@@ -56,6 +57,9 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')-
     Route::post('/trips/{trip}/checkpoints', [TripCheckpointController::class, 'checkpoint']);
     Route::post('/trips/{trip}/complete', [TripController::class, 'complete']);
     Route::post('/trips/{trip}/swap', [TripController::class, 'swap']);
+
+    // GPS hành trình từ app tài xế (gửi theo lô)
+    Route::post('/gps-points', [GpsPointController::class, 'store'])->middleware('throttle:30,1');
 
     // Locations (danh sách địa điểm có search và limit)
     Route::get('/locations', [LocationController::class, 'index']);
