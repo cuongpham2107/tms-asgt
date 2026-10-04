@@ -34,7 +34,7 @@ class TripController extends Controller
             $q->where('driver_id', $user->id)
                 ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
         })
-            ->whereIn('status', TripStatus::activeStatuses())
+            ->whereIn('status', TripStatus::driverActionableStatuses())
             ->where(function ($q) {
                 $q->where('is_empty_run', true)
                     ->orWhereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]));
@@ -74,7 +74,7 @@ class TripController extends Controller
         $user = $request->user();
 
         $trip = Trip::where('driver_id', $user->id)
-            ->whereIn('status', TripStatus::activeStatuses())
+            ->whereIn('status', TripStatus::driverActionableStatuses())
             ->where(function ($q) {
                 $q->where('is_empty_run', true)
                     ->orWhereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]));

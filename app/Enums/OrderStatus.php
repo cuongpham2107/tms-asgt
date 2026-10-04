@@ -71,9 +71,22 @@ enum OrderStatus: string implements HasColor, HasLabel
         return in_array($this, [self::Draft, self::Assigned, self::Sent]);
     }
 
+    /**
+     * Các trạng thái đơn hàng đã đóng.
+     *
+     * @return self[]
+     */
+    public static function closedStatuses(): array
+    {
+        return [
+            self::Completed,
+            self::Cancelled,
+        ];
+    }
+
     public function isClosed(): bool
     {
-        return in_array($this, [self::Completed, self::Cancelled]);
+        return in_array($this, self::closedStatuses(), true);
     }
 
     public function canCreateReturn(): bool

@@ -126,10 +126,7 @@ class TripCheckpointService
         // Nếu trip này là chuyến có hàng: chỉ kiểm tra các chuyến có hàng khác đang chạy (chuyến không hàng chưa chạy sẽ không chặn)
         $activeTripQuery = Trip::where('driver_id', $trip->driver_id)
             ->where('id', '!=', $trip->id)
-            ->whereIn('status', array_filter(
-                TripStatus::activeStatuses(),
-                fn (TripStatus $s) => ! in_array($s, [TripStatus::Pending, TripStatus::DriverSwap]),
-            ));
+            ->whereIn('status', TripStatus::activeStatuses());
 
         if (! $trip->is_empty_run) {
             $activeTripQuery->where('is_empty_run', false);
@@ -165,10 +162,7 @@ class TripCheckpointService
 
         $activeTripQuery = Trip::where('vehicle_id', $trip->vehicle_id)
             ->where('id', '!=', $trip->id)
-            ->whereIn('status', array_filter(
-                TripStatus::activeStatuses(),
-                fn (TripStatus $s) => ! in_array($s, [TripStatus::Pending, TripStatus::DriverSwap]),
-            ));
+            ->whereIn('status', TripStatus::activeStatuses());
 
         if (! $trip->is_empty_run) {
             $activeTripQuery->where('is_empty_run', false);

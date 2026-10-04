@@ -35,12 +35,28 @@ enum TripStatus: string implements HasColor, HasLabel
     }
 
     /**
-     * Các trạng thái được coi là "đang chạy" — chuyến chưa kết thúc.
-     * Dùng để kiểm tra tài xế có đang thực hiện chuyến khác không.
+     * Các trạng thái được coi là "đang chạy" (đã bắt đầu nhưng chưa kết thúc hoặc huỷ).
      *
      * @return self[]
      */
     public static function activeStatuses(): array
+    {
+        return [
+            self::Started,
+            self::ArrivedPickup,
+            self::Delivering,
+            self::ArrivedDelivery,
+            self::Delivered,
+            self::ReturnTrip,
+        ];
+    }
+
+    /**
+     * Các trạng thái xe/tài xế được coi là bận và chặn bắt đầu chuyến mới.
+     *
+     * @return self[]
+     */
+    public static function busyStatuses(): array
     {
         return [
             self::Pending,
@@ -51,6 +67,23 @@ enum TripStatus: string implements HasColor, HasLabel
             self::Delivered,
             self::DriverSwap,
             self::ReturnTrip,
+        ];
+    }
+
+    /**
+     * Các trạng thái lái xe được thao tác.
+     *
+     * @return self[]
+     */
+    public static function driverActionableStatuses(): array
+    {
+        return [
+            self::Pending,
+            self::Started,
+            self::ArrivedPickup,
+            self::Delivering,
+            self::ArrivedDelivery,
+            self::Delivered,
         ];
     }
 
