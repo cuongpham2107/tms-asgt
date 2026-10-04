@@ -205,9 +205,6 @@ function sendCheckpoint(string $token, int $tripId, string $type, ?int $orderId 
     if ($dpId !== null) {
         $payload['delivery_point_id'] = $dpId;
     }
-    if ($kmReading !== null) {
-        $payload['km_reading'] = $kmReading;
-    }
 
     global $baseUrl;
     request('POST', "$baseUrl/api/driver/trips/{$tripId}/checkpoints", $token, $payload);
@@ -293,18 +290,14 @@ $order1Status = trim(shell_exec("php artisan tinker --execute 'echo DB::table(\"
 assertTrue($order1Status === 'completed', "Order status = completed (actual: $order1Status)");
 ok('Completed → order done');
 
-step(8, 'TH1 — Kết thúc chuyến (POST /trips/{trip}/complete, end_km=20090)');
-$completeResult = request('POST', "$baseUrl/api/driver/trips/{$th1['trip_id']}/complete", $token, [
-    'end_km' => 20090,
-]);
+step(8, 'TH1 — Kết thúc chuyến (POST /trips/{trip}/complete)');
+$completeResult = request('POST', "$baseUrl/api/driver/trips/{$th1['trip_id']}/complete", $token, []);
 $trip1Status = trim(shell_exec("php artisan tinker --execute 'echo DB::table(\"trips\")->where(\"id\",{$th1['trip_id']})->value(\"status\");' 2>/dev/null"));
 assertTrue($trip1Status === 'completed', "Trip status = completed (actual: $trip1Status)");
 ok('Trip completed');
 
-step(9, 'TH1 — Về điểm đỗ (end-vehicle, km=20100)');
-request('POST', "$baseUrl/api/driver/shifts/{$shiftId}/end-vehicle", $token, [
-    'km_reading' => 20100,
-]);
+step(9, 'TH1 — Về điểm đỗ (end-vehicle)');
+request('POST', "$baseUrl/api/driver/shifts/{$shiftId}/end-vehicle", $token, []);
 ok('End vehicle → checkpoint end created');
 
 step(10, 'TH1 — Kết thúc ca (end)');
@@ -314,12 +307,7 @@ $endResult = request('POST', "$baseUrl/api/driver/shifts/end", $token, [
 $shift = $endResult['body']['shift'];
 ok('End shift');
 
-echo "\n  📊 Kết quả KM TH1:\n";
-echo "    start_km  = {$shift['start_km']}\n";
-echo "    end_km    = {$shift['end_km']}\n";
-echo "    total_km       = {$shift['total_km']} km  (expect ≈100)\n";
-echo "    total_km_loaded = {$shift['total_km_loaded']} km  (expect ≈80)\n";
-echo "    total_km_empty  = {$shift['total_km_empty']} km  (expect ≈20)\n";
+echo "\n  📊 TH1 Shift ID: {$shift['id']}\n";
 
 // ======================================================================
 // TH4: Chưa giao xong, bàn giao xe, hết ca
@@ -341,16 +329,14 @@ $shiftId2 = $shift2Result['body']['shift']['id'];
 
 $th4 = createOrderWithTrip($vehicleId, $driverId, $customerId, $categoryId, 'TH4');
 
-step(11, 'TH4 — Bắt đầu chuyến + Đến điểm nhận (arrived_pickup, km=30010)');
+step(11, 'TH4 — Bắt đầu chuyến + Đến điểm nhận (arrived_pickup)');
 sendCheckpoint($token, $th4['trip_id'], 'started');
-sendCheckpoint($token, $th4['trip_id'], 'arrived_pickup', kmReading: 30010);
+sendCheckpoint($token, $th4['trip_id'], 'arrived_pickup');
 ok('Started + ArrivedPickup');
 
 step(12, 'TH4 — Chưa giao xong, bấm "Kết thúc đơn hàng" để bàn giao');
 info('Cách 1: Gọi POST /trips/{trip}/complete → trip.status = DriverSwap (orders chưa xong)');
-$complete4Result = request('POST', "$baseUrl/api/driver/trips/{$th4['trip_id']}/complete", $token, [
-    'end_km' => 30030,
-]);
+$complete4Result = request('POST', "$baseUrl/api/driver/trips/{$th4['trip_id']}/complete", $token, []);
 $trip4Status = trim(shell_exec("php artisan tinker --execute 'echo DB::table(\"trips\")->where(\"id\",{$th4['trip_id']})->value(\"status\");' 2>/dev/null"));
 assertTrue($trip4Status === 'driver_swap', "Trip status = driver_swap (actual: $trip4Status)");
 
@@ -360,23 +346,17 @@ ok('Trip → DriverSwap, orders → DriverSwap');
 
 info('Trên web trả về trạng thái "Đảo lái" để điều hành biết và phân lái khác');
 
-step(13, 'TH4 — Về điểm đỗ (end-vehicle, km=30050)');
-request('POST', "$baseUrl/api/driver/shifts/{$shiftId2}/end-vehicle", $token, [
-    'km_reading' => 30050,
-]);
+step(13, 'TH4 — Về điểm đỗ (end-vehicle)');
+request('POST', "$baseUrl/api/driver/shifts/{$shiftId2}/end-vehicle", $token, []);
 ok('End vehicle');
 
 step(14, 'TH4 — Kết thúc ca');
 $end2Result = request('POST', "$baseUrl/api/driver/shifts/end", $token, ['end_time' => date('c')]);
 $shift2 = $end2Result['body']['shift'];
 
-echo "\n  📊 Kết quả KM TH4 (DriverSwap giữa chừng):\n";
-echo "    end_km    = {$shift2['end_km']}\n";
-echo "    total_km       = {$shift2['total_km']} km\n";
-echo "    total_km_loaded = {$shift2['total_km_loaded']} km\n";
-echo "    total_km_empty  = {$shift2['total_km_empty']} km\n";
+echo "\n  📊 TH4 Shift ID: {$shift2['id']}\n";
 
-info('Lái mới có thể nhận trip bàn giao này và tiếp tục từ km hiện tại');
+info('Lái mới có thể nhận trip bàn giao này và tiếp tục');
 
 // ======================================================================
 // TH2: Giao xong, đổi xe khác về kết thúc ca
@@ -387,10 +367,6 @@ if ($vehicle2Id > 0) {
     echo "══════════════════════════════════════════════════════════════\n";
 
     cleanupShifts($driverId, $vehicleId);
-    shell_exec("php artisan tinker --execute '
-DB::table(\"vehicles\")->where(\"id\",{$vehicleId})->update([\"current_mileage\"=>40000]);
-DB::table(\"vehicles\")->where(\"id\",{$vehicle2Id})->update([\"current_mileage\"=>50000]);
-' 2>/dev/null");
 
     $shift3Result = request('POST', "$baseUrl/api/driver/shifts/start", $token, [
         'vehicle_id' => $vehicleId,
@@ -403,40 +379,31 @@ DB::table(\"vehicles\")->where(\"id\",{$vehicle2Id})->update([\"current_mileage\
 
     step(15, 'TH2 — Giao xong đơn (xe cũ)');
     sendCheckpoint($token, $th2['trip_id'], 'started');
-    sendCheckpoint($token, $th2['trip_id'], 'arrived_pickup', kmReading: 40010);
-    sendCheckpoint($token, $th2['trip_id'], 'arrived_delivery', orderId: $th2['order_id'], dpId: $th2['dp_id'], kmReading: 40040);
-    sendCheckpoint($token, $th2['trip_id'], 'completed', orderId: $th2['order_id'], dpId: $th2['dp_id'], kmReading: 40040);
-    request('POST', "$baseUrl/api/driver/trips/{$th2['trip_id']}/complete", $token, ['end_km' => 40040]);
+    sendCheckpoint($token, $th2['trip_id'], 'arrived_pickup');
+    sendCheckpoint($token, $th2['trip_id'], 'arrived_delivery', orderId: $th2['order_id'], dpId: $th2['dp_id']);
+    sendCheckpoint($token, $th2['trip_id'], 'completed', orderId: $th2['order_id'], dpId: $th2['dp_id']);
+    request('POST', "$baseUrl/api/driver/trips/{$th2['trip_id']}/complete", $token, []);
     ok('Đơn xong, trip completed');
 
-    step(16, 'TH2 — Về điểm đỗ xe cũ (end-vehicle, km=40070)');
-    request('POST', "$baseUrl/api/driver/shifts/{$shiftId3}/end-vehicle", $token, [
-        'km_reading' => 40070,
-    ]);
+    step(16, 'TH2 — Về điểm đỗ xe cũ (end-vehicle)');
+    request('POST', "$baseUrl/api/driver/shifts/{$shiftId3}/end-vehicle", $token, []);
     ok('End vehicle (xe cũ)');
 
     step(17, 'TH2 — Đổi sang xe mới (switch-vehicle)');
     $switchResult = request('POST', "$baseUrl/api/driver/shifts/switch-vehicle", $token, [
         'new_vehicle_id' => $vehicle2Id,
-        'handover_km' => 50000,
     ]);
     ok('Switch to vehicle '.$vehicle2Id);
 
-    step(18, 'TH2 — Về điểm đỗ xe mới (end-vehicle, km=50010)');
-    request('POST', "$baseUrl/api/driver/shifts/{$shiftId3}/end-vehicle", $token, [
-        'km_reading' => 50010,
-    ]);
+    step(18, 'TH2 — Về điểm đỗ xe mới (end-vehicle)');
+    request('POST', "$baseUrl/api/driver/shifts/{$shiftId3}/end-vehicle", $token, []);
     ok('End vehicle (xe mới)');
 
     step(19, 'TH2 — Kết thúc ca');
     $end3Result = request('POST', "$baseUrl/api/driver/shifts/end", $token, ['end_time' => date('c')]);
     $shift3 = $end3Result['body']['shift'];
 
-    echo "\n  📊 Kết quả KM TH2 (đổi xe giữa ca):\n";
-    echo "    end_km    = {$shift3['end_km']}\n";
-    echo "    total_km       = {$shift3['total_km']} km  (2 segments riêng)\n";
-    echo "    total_km_loaded = {$shift3['total_km_loaded']} km\n";
-    echo "    total_km_empty  = {$shift3['total_km_empty']} km\n";
+    echo "\n  📊 TH2 Shift ID: {$shift3['id']}\n";
 }
 
 // ======================================================================

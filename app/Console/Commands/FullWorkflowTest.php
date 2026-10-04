@@ -371,15 +371,12 @@ class FullWorkflowTest extends Command
         return $this->assertOk($res, 'Start shift');
     }
 
-    private function sendCheckpoint(string $token, Trip $trip, string $type, ?int $km, ?int $orderId = null, ?int $dpId = null): bool
+    private function sendCheckpoint(string $token, Trip $trip, string $type, ?int $km = null, ?int $orderId = null, ?int $dpId = null): bool
     {
         $data = [
             'checkpoint_type' => $type,
             'occurred_at' => now()->toIso8601String(),
         ];
-        if ($km !== null) {
-            $data['km_reading'] = $km;
-        }
         if ($orderId !== null) {
             $data['order_id'] = $orderId;
         }
@@ -395,19 +392,21 @@ class FullWorkflowTest extends Command
             'completed' => '✅ Completed',
             default => $type,
         };
-        if ($km) {
-            $label .= " (km={$km})";
-        }
 
         $res = $this->api($token, 'post', "/api/driver/trips/{$trip->id}/checkpoints", $data);
 
         return $this->assertOk($res, $label);
     }
 
-    private function endDriverShift(User $driver, int $endKm, string $token): bool
+    private function endDriverShift(User $driver, mixed $kmOrToken, ?string $token = null): bool
     {
-        $res = $this->api($token, 'post', '/api/driver/shifts/end', [
-            'end_km' => $endKm,
+        $authToken = is_string($kmOrToken) ? $kmOrToken : $token;
+        $shift = DriverShift::where('driver_id', $driver->id)->whereNull('end_time')->latest('start_time')->first();
+        if ($shift && $shift->trips()->exists()) {
+            $this->api($authToken, 'post', "/api/driver/shifts/{$shift->id}/end-vehicle", []);
+        }
+
+        $res = $this->api($authToken, 'post', '/api/driver/shifts/end', [
             'end_time' => now()->toIso8601String(),
         ]);
 
@@ -628,7 +627,6 @@ class FullWorkflowTest extends Command
             'start_location_id' => $this->delivery->id,
             'end_location_id' => $this->pickup->id,
             'started_at' => now(),
-            'start_km' => $km + 70,
         ]);
         $this->ok('Return trip', $returnTrip->trip_code);
 
@@ -637,7 +635,6 @@ class FullWorkflowTest extends Command
             'trip_id' => $returnTrip->id,
             'checkpoint_type' => CheckpointType::Completed,
             'occurred_at' => now(),
-            'km_reading' => $km + 100,
             'driver_id' => $this->driverA->id,
         ]);
 
@@ -715,7 +712,7 @@ class FullWorkflowTest extends Command
         $shift = DriverShift::where('driver_id', $this->driverA->id)
             ->whereNull('end_time')
             ->first();
-        $this->cinfo('Shift started', "KM start = {$shift->start_km}");
+        $this->cinfo('Shift started', "Shift ID = {$shift->id}");
 
         $this->sendCheckpoint($this->tokenA, $trip, 'started', null);
         $this->sendCheckpoint($this->tokenA, $trip, 'arrived_pickup', $km + 20);
@@ -729,19 +726,15 @@ class FullWorkflowTest extends Command
         $trip->refresh();
 
         $this->newLine();
-        $this->line('  <fg=bright-white>📊 SHIFT KM SUMMARY:</>');
+        $this->line('  <fg=bright-white>📊 SHIFT SUMMARY:</>');
         $this->line('  ┌──────────────────────────────────────┐');
-        $this->line(sprintf('  │  Start KM:  %8s km              │', number_format((float) $shift->start_km, 1)));
-        $this->line(sprintf('  │  End KM:    %8s km              │', number_format((float) $shift->end_km, 1)));
-        $this->line(sprintf('  │  Total:     %8s km              │', number_format((float) $shift->total_km, 1)));
-        $this->line(sprintf('  │  Loaded:    %8s km  (có hàng)   │', number_format((float) $shift->total_km_loaded, 1)));
-        $this->line(sprintf('  │  Empty:     %8s km  (không hàng)│', number_format((float) $shift->total_km_empty, 1)));
+        $this->line(sprintf('  │  Shift ID:  %8s                  │', $shift->id));
+        $this->line(sprintf('  │  End Time:  %19s   │', (string) $shift->end_time));
         $this->line('  └──────────────────────────────────────┘');
 
         $this->cinfo('Order loaded_km', number_format((float) $order->loaded_km, 1).' km');
 
         return $order->status === OrderStatus::Completed
-            && $shift->total_km !== null
-            && (float) $shift->total_km > 0;
+            && $shift->end_time !== null;
     }
 }

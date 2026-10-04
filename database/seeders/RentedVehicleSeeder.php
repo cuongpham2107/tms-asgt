@@ -815,7 +815,7 @@ class RentedVehicleSeeder extends Seeder
                     'type' => VehicleOwnerType::Rent->value,
                     'vehicle_type' => $v['vehicle_type'] ?? VehicleType::Normal->value,
                     'status' => VehicleStatus::On->value,
-                    'current_mileage' => 10000,
+                    'current_mileage' => null,
                     'is_active' => true,
                     'created_at' => $now,
                     'updated_at' => $now,

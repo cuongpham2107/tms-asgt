@@ -115,12 +115,12 @@ class CheckTripCheckpoints extends Command
 
         // Post checkpoints
         $this->checkpoint($trip1, $driver, ['checkpoint_type' => CheckpointType::Started->value, 'occurred_at' => now()], CheckpointType::Started);
-        $this->checkpoint($trip1, $driver, ['checkpoint_type' => CheckpointType::ArrivedPickup->value, 'km_reading' => 1000, 'occurred_at' => now()], CheckpointType::ArrivedPickup);
-        $this->checkpoint($trip1, $driver, ['checkpoint_type' => CheckpointType::LeftPickup->value, 'km_reading' => 1005, 'occurred_at' => now()], CheckpointType::LeftPickup);
-        $this->checkpoint($trip1, $driver, ['checkpoint_type' => CheckpointType::ArrivedDelivery->value, 'order_id' => $order1a->id, 'delivery_point_id' => $dp1a->id, 'km_reading' => 1050, 'occurred_at' => now()], CheckpointType::ArrivedDelivery);
+        $this->checkpoint($trip1, $driver, ['checkpoint_type' => CheckpointType::ArrivedPickup->value, 'occurred_at' => now()], CheckpointType::ArrivedPickup);
+        $this->checkpoint($trip1, $driver, ['checkpoint_type' => CheckpointType::LeftPickup->value, 'occurred_at' => now()], CheckpointType::LeftPickup);
+        $this->checkpoint($trip1, $driver, ['checkpoint_type' => CheckpointType::ArrivedDelivery->value, 'order_id' => $order1a->id, 'delivery_point_id' => $dp1a->id, 'occurred_at' => now()], CheckpointType::ArrivedDelivery);
 
         // completed cho order A → kiểm tra checkpoint có auto-tạo cho order B không?
-        $this->checkpoint($trip1, $driver, ['checkpoint_type' => CheckpointType::Completed->value, 'order_id' => $order1a->id, 'delivery_point_id' => $dp1a->id, 'km_reading' => 1060, 'occurred_at' => now()], CheckpointType::Completed);
+        $this->checkpoint($trip1, $driver, ['checkpoint_type' => CheckpointType::Completed->value, 'order_id' => $order1a->id, 'delivery_point_id' => $dp1a->id, 'occurred_at' => now()], CheckpointType::Completed);
         $trip1->refresh();
 
         $completedA = TripCheckpoint::where('trip_id', $trip1->id)->where('checkpoint_type', 'completed')->where('order_id', $order1a->id)->exists();
@@ -160,14 +160,13 @@ class CheckTripCheckpoints extends Command
         $trip2->update(['shift_id' => $shift2->id]);
 
         $this->checkpoint($trip2, $driver, ['checkpoint_type' => CheckpointType::Started->value, 'occurred_at' => now()], CheckpointType::Started);
-        $this->checkpoint($trip2, $driver, ['checkpoint_type' => CheckpointType::ArrivedPickup->value, 'km_reading' => 2000, 'occurred_at' => now()], CheckpointType::ArrivedPickup);
-        $this->checkpoint($trip2, $driver, ['checkpoint_type' => CheckpointType::LeftPickup->value, 'km_reading' => 2005, 'occurred_at' => now()], CheckpointType::LeftPickup);
+        $this->checkpoint($trip2, $driver, ['checkpoint_type' => CheckpointType::ArrivedPickup->value, 'occurred_at' => now()], CheckpointType::ArrivedPickup);
+        $this->checkpoint($trip2, $driver, ['checkpoint_type' => CheckpointType::LeftPickup->value, 'occurred_at' => now()], CheckpointType::LeftPickup);
 
         // completed với new_delivery_location_id — phải tự tạo OrderDeliveryPoint
         $this->checkpoint($trip2, $driver, [
             'checkpoint_type' => CheckpointType::Completed->value,
             'order_id' => $order2->id,
-            'km_reading' => 2060,
             'occurred_at' => now(),
             'new_delivery_location_id' => $deliveryLocation->id,
         ], CheckpointType::Completed);
@@ -232,11 +231,11 @@ class CheckTripCheckpoints extends Command
         $trip3->update(['shift_id' => $shift3->id]);
 
         $this->checkpoint($trip3, $driver, ['checkpoint_type' => CheckpointType::Started->value, 'occurred_at' => now()], CheckpointType::Started);
-        $this->checkpoint($trip3, $driver, ['checkpoint_type' => CheckpointType::ArrivedPickup->value, 'km_reading' => 3000, 'occurred_at' => now()], CheckpointType::ArrivedPickup);
-        $this->checkpoint($trip3, $driver, ['checkpoint_type' => CheckpointType::LeftPickup->value, 'km_reading' => 3005, 'occurred_at' => now()], CheckpointType::LeftPickup);
+        $this->checkpoint($trip3, $driver, ['checkpoint_type' => CheckpointType::ArrivedPickup->value, 'occurred_at' => now()], CheckpointType::ArrivedPickup);
+        $this->checkpoint($trip3, $driver, ['checkpoint_type' => CheckpointType::LeftPickup->value, 'occurred_at' => now()], CheckpointType::LeftPickup);
 
         // completed cho order A (Kho B) — chỉ checkpoint cho A, không ảnh hưởng B
-        $this->checkpoint($trip3, $driver, ['checkpoint_type' => CheckpointType::Completed->value, 'order_id' => $order3a->id, 'delivery_point_id' => $dp3a->id, 'km_reading' => 3060, 'occurred_at' => now()], CheckpointType::Completed);
+        $this->checkpoint($trip3, $driver, ['checkpoint_type' => CheckpointType::Completed->value, 'order_id' => $order3a->id, 'delivery_point_id' => $dp3a->id, 'occurred_at' => now()], CheckpointType::Completed);
         $trip3->refresh();
 
         $completed3a = TripCheckpoint::where('trip_id', $trip3->id)->where('checkpoint_type', 'completed')->where('order_id', $order3a->id)->exists();
@@ -266,14 +265,10 @@ class CheckTripCheckpoints extends Command
 
     private function startShift(User $driver, Vehicle $vehicle): DriverShift
     {
-        $vehicle->current_mileage ??= 0;
-        $vehicle->save();
-
         return DriverShift::create([
             'driver_id' => $driver->id,
             'shift_type' => ShiftType::Full,
             'start_time' => now(),
-            'start_km' => $vehicle->current_mileage,
         ]);
     }
 
@@ -288,7 +283,7 @@ class CheckTripCheckpoints extends Command
                     'delivery_point_id' => $payload['delivery_point_id'] ?? null,
                     'driver_id' => $trip->driver_id, 'shift_id' => $shiftId,
                     'checkpoint_type' => $type->value,
-                    'occurred_at' => $payload['occurred_at'], 'km_reading' => $payload['km_reading'] ?? null,
+                    'occurred_at' => $payload['occurred_at'],
                     'gps_lat' => $payload['gps_lat'] ?? null, 'gps_lng' => $payload['gps_lng'] ?? null,
                 ]);
             }
@@ -312,7 +307,7 @@ class CheckTripCheckpoints extends Command
                 'delivery_point_id' => $payload['delivery_point_id'] ?? null,
                 'driver_id' => $trip->driver_id, 'shift_id' => $shiftId,
                 'checkpoint_type' => $type->value,
-                'occurred_at' => $payload['occurred_at'], 'km_reading' => $payload['km_reading'],
+                'occurred_at' => $payload['occurred_at'],
                 'gps_lat' => $payload['gps_lat'] ?? null, 'gps_lng' => $payload['gps_lng'] ?? null,
             ]);
         } else {
@@ -340,7 +335,7 @@ class CheckTripCheckpoints extends Command
                     'delivery_point_id' => $payload['delivery_point_id'] ?? null,
                     'driver_id' => $trip->driver_id, 'shift_id' => $shiftId,
                     'checkpoint_type' => $type->value,
-                    'occurred_at' => $payload['occurred_at'], 'km_reading' => $payload['km_reading'] ?? null,
+                    'occurred_at' => $payload['occurred_at'],
                     'gps_lat' => $payload['gps_lat'] ?? null, 'gps_lng' => $payload['gps_lng'] ?? null,
                 ]);
             }
@@ -354,19 +349,12 @@ class CheckTripCheckpoints extends Command
             CheckpointType::Completed => $this->handleCompleted($trip, $payload),
             default => null,
         };
-
-        $vehicle = $trip->vehicle;
-        if ($vehicle && isset($payload['km_reading'])) {
-            $vehicle->current_mileage = $payload['km_reading'];
-            $vehicle->save();
-        }
     }
 
     private function handleStarted(Trip $trip, array $payload): void
     {
         $trip->status = TripStatus::Started;
         $trip->started_at = $payload['occurred_at'] ?? now();
-        $trip->start_km = $trip->vehicle?->current_mileage ?? $trip->start_km;
         $trip->save();
     }
 

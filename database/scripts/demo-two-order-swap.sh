@@ -120,21 +120,21 @@ step 3 "🚀 Order 1: started"
 curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O1_ID',"shift_id":'$SFT_A_ID',"checkpoint_type":"started","occurred_at":"'$DT_FMT'"}' | php -r '$r=json_decode(file_get_contents("php://stdin"));echo $r->checkpoint->id??$r->message??"FAIL";echo "\n";'
 ok "Checkpoint started"
 
-step 4 "📍 Order 1: arrived_pickup (km=10010)"
-curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O1_ID',"shift_id":'$SFT_A_ID',"delivery_point_id":'$DP1_ID',"checkpoint_type":"arrived_pickup","km_reading":10010,"occurred_at":"'$DT_FMT'"}' > /dev/null
+step 4 "📍 Order 1: arrived_pickup"
+curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O1_ID',"shift_id":'$SFT_A_ID',"delivery_point_id":'$DP1_ID',"checkpoint_type":"arrived_pickup","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "ArrivedPickup"
 
-step 5 "🚚 Order 1: left_pickup (km=10015)"
-curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O1_ID',"shift_id":'$SFT_A_ID',"checkpoint_type":"left_pickup","km_reading":10015,"occurred_at":"'$DT_FMT'"}' > /dev/null
+step 5 "🚚 Order 1: left_pickup"
+curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O1_ID',"shift_id":'$SFT_A_ID',"checkpoint_type":"left_pickup","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "LeftPickup → Delivering"
 
-step 6 "🏁 Order 1: arrived_delivery (km=10025)"
-curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O1_ID',"shift_id":'$SFT_A_ID',"delivery_point_id":'$DP1_ID',"checkpoint_type":"arrived_delivery","km_reading":10025,"occurred_at":"'$DT_FMT'"}' > /dev/null
+step 6 "🏁 Order 1: arrived_delivery"
+curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O1_ID',"shift_id":'$SFT_A_ID',"delivery_point_id":'$DP1_ID',"checkpoint_type":"arrived_delivery","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "ArrivedDelivery"
 
 # ── 7. Order 1: completed ─────────────────────────────────────────
-step 7 "✅ Order 1: completed (km=10030)"
-curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O1_ID',"shift_id":'$SFT_A_ID',"delivery_point_id":'$DP1_ID',"checkpoint_type":"completed","km_reading":10030,"occurred_at":"'$DT_FMT'"}' > /dev/null
+step 7 "✅ Order 1: completed"
+curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O1_ID',"shift_id":'$SFT_A_ID',"delivery_point_id":'$DP1_ID',"checkpoint_type":"completed","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "Completed"
 
 # =====================================================================
@@ -146,23 +146,23 @@ step 8 "🚀 Order 2: started (A)"
 curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_A_ID',"checkpoint_type":"started","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "Started"
 
-step 9 "📍 Order 2: arrived_pickup (km=10040)"
-curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_A_ID',"delivery_point_id":'$DP2_ID',"checkpoint_type":"arrived_pickup","km_reading":10040,"occurred_at":"'$DT_FMT'"}' > /dev/null
+step 9 "📍 Order 2: arrived_pickup"
+curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_A_ID',"delivery_point_id":'$DP2_ID',"checkpoint_type":"arrived_pickup","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "ArrivedPickup"
 
-step 10 "🚚 Order 2: left_pickup (km=10045)"
-curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_A_ID',"checkpoint_type":"left_pickup","km_reading":10045,"occurred_at":"'$DT_FMT'"}' > /dev/null
+step 10 "🚚 Order 2: left_pickup"
+curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_A_ID',"checkpoint_type":"left_pickup","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "LeftPickup → Delivering"
 
 # ── 11. Kết thúc ca A → auto DriverSwap ───────────────────────────
-step 11 "⏹️  Kết thúc ca A (end_km=10060) → auto DriverSwap"
-END_A_R=$(curl -s -X POST "$BASE/api/driver/shifts/end" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"end_km":10060,"end_time":"'$DT_FMT'"}')
-END_A_MSG=$(echo "$END_A_R" | php -r '$r=json_decode(file_get_contents("php://stdin"));echo $r->shift->total_km??$r->message??"FAIL";')
-ok "Kết thúc ca A, total_km=$END_A_MSG"
+step 11 "⏹️  Kết thúc ca A → auto DriverSwap"
+curl -s -X POST "$BASE/api/driver/shifts/$SFT_A_ID/end-vehicle" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" > /dev/null
+END_A_R=$(curl -s -X POST "$BASE/api/driver/shifts/end" -H "$AUTH_A" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"end_time":"'$DT_FMT'"}')
+END_A_MSG=$(echo "$END_A_R" | php -r '$r=json_decode(file_get_contents("php://stdin"));echo $r->shift->id??$r->message??"FAIL";')
+ok "Kết thúc ca A: Shift $END_A_MSG"
 
 php artisan tinker --execute '
 $s=DB::table("driver_shifts")->find('$SFT_A_ID');
-echo "  📊 Shift A: total_km=$s->total_km loaded=$s->total_km_loaded empty=$s->total_km_empty (kỳ vọng: total=60, loaded=40, empty=20)\n";
 $o2s=DB::table("orders")->find('$O2_ID');
 echo "  📄 Trạng thái đơn 2: $o2s->status (kỳ vọng: driver_swap)\n";
 ' 2>/dev/null
@@ -176,7 +176,7 @@ step 12 "🔄 Điều hành swap: Driver A → Driver B"
 php artisan tinker --execute '
 DB::table("driver_swaps")->insert([
   "order_id"=>'$O2_ID',"from_driver_id"=>'$DA_ID',"to_driver_id"=>'$DB_ID',
-  "from_shift_id"=>'$SFT_A_ID',"to_shift_id"=>null,"handover_km"=>10060,
+  "from_shift_id"=>'$SFT_A_ID',"to_shift_id"=>null,
   "reason"=>"shift_handover","note"=>"Hết ca, bàn giao cho tài xế B","created_by"=>'$DA_ID',"created_at"=>now()
 ]);
 DB::table("orders")->where("id",'$O2_ID')->update(["driver_id"=>'$DB_ID',"status"=>"driver_swap","updated_at"=>now()]);
@@ -209,19 +209,20 @@ step 15 "🚀 Order 2: started (B)"
 curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_B_ID',"checkpoint_type":"started","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "Started"
 
-step 16 "🏁 Order 2: arrived_delivery (km=10080)"
-curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_B_ID',"delivery_point_id":'$DP2_ID',"checkpoint_type":"arrived_delivery","km_reading":10080,"occurred_at":"'$DT_FMT'"}' > /dev/null
+step 16 "🏁 Order 2: arrived_delivery"
+curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_B_ID',"delivery_point_id":'$DP2_ID',"checkpoint_type":"arrived_delivery","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "ArrivedDelivery"
 
-step 17 "✅ Order 2: completed (km=10090)"
-curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_B_ID',"delivery_point_id":'$DP2_ID',"checkpoint_type":"completed","km_reading":10090,"occurred_at":"'$DT_FMT'"}' > /dev/null
+step 17 "✅ Order 2: completed"
+curl -s -X POST "$BASE/api/driver/checkpoints" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"order_id":'$O2_ID',"shift_id":'$SFT_B_ID',"delivery_point_id":'$DP2_ID',"checkpoint_type":"completed","occurred_at":"'$DT_FMT'"}' > /dev/null
 ok "Completed"
 
 # ── 18. Kết thúc ca B ─────────────────────────────────────────────
-step 18 "⏹️  Kết thúc ca B (end_km=10100)"
-END_B_R=$(curl -s -X POST "$BASE/api/driver/shifts/end" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"end_km":10100,"end_time":"'$DT_FMT'"}')
-END_B_MSG=$(echo "$END_B_R" | php -r '$r=json_decode(file_get_contents("php://stdin"));echo $r->shift->total_km??$r->message??"FAIL";')
-ok "Kết thúc ca B, total_km=$END_B_MSG"
+step 18 "⏹️  Kết thúc ca B"
+curl -s -X POST "$BASE/api/driver/shifts/$SFT_B_ID/end-vehicle" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" > /dev/null
+END_B_R=$(curl -s -X POST "$BASE/api/driver/shifts/end" -H "$AUTH_B" -H "Accept: application/json" -H "Content-Type: application/json" -d '{"end_time":"'$DT_FMT'"}')
+END_B_MSG=$(echo "$END_B_R" | php -r '$r=json_decode(file_get_contents("php://stdin"));echo $r->shift->id??$r->message??"FAIL";')
+ok "Kết thúc ca B: Shift $END_B_MSG"
 
 # =====================================================================
 # VERIFICATION

@@ -210,9 +210,8 @@ echo \"OK\";
 info('Đã đặt vehicle.current_mileage = 10000');
 
 // ─── 5. Checkpoint: started ──────────────────────────────────────────
-step(5, '🚀 started (ko nhập km, tự lấy từ xe = 10000)');
+step(5, '🚀 started');
 
-// Theo công thức mới: ko nhập km, server tự lấy từ vehicle.current_mileage
 $started = request('POST', "$baseUrl/api/driver/checkpoints", $token, [
     'order_id' => $orderId,
     'shift_id' => $shiftId,
@@ -224,14 +223,13 @@ $started = request('POST', "$baseUrl/api/driver/checkpoints", $token, [
 ok('Checkpoint ID: '.($started['checkpoint']['id'] ?? '?'));
 
 // ─── 6. arrived_pickup ───────────────────────────────────────────────
-step(6, '📍 arrived_pickup (km=10010)');
+step(6, '📍 arrived_pickup');
 
 request('POST', "$baseUrl/api/driver/checkpoints", $token, [
     'order_id' => $orderId,
     'shift_id' => $shiftId,
     'delivery_point_id' => $deliveryPointId,
     'checkpoint_type' => 'arrived_pickup',
-    'km_reading' => 10010,
     'occurred_at' => date('c'),
     'gps_lat' => '10.8554',
     'gps_lng' => '106.7913',
@@ -243,7 +241,6 @@ request('POST', "$baseUrl/api/driver/checkpoints", $token, [
     'order_id' => $orderId,
     'shift_id' => $shiftId,
     'checkpoint_type' => 'left_pickup',
-    'km_reading' => 10015,
     'occurred_at' => date('c'),
     'gps_lat' => '10.8188',
     'gps_lng' => '106.6580',
@@ -256,7 +253,6 @@ request('POST', "$baseUrl/api/driver/checkpoints", $token, [
     'shift_id' => $shiftId,
     'delivery_point_id' => $deliveryPointId,
     'checkpoint_type' => 'arrived_delivery',
-    'km_reading' => 10080,
     'occurred_at' => date('c'),
     'gps_lat' => '10.8188',
     'gps_lng' => '106.6580',
@@ -264,25 +260,28 @@ request('POST', "$baseUrl/api/driver/checkpoints", $token, [
 ok('ArrivedDelivery');
 
 // ─── 7. completed ────────────────────────────────────────────────────
-step(7, '✅ completed (km=10090)');
+step(7, '✅ completed');
 
 request('POST', "$baseUrl/api/driver/checkpoints", $token, [
     'order_id' => $orderId,
     'shift_id' => $shiftId,
     'delivery_point_id' => $deliveryPointId,
     'checkpoint_type' => 'completed',
-    'km_reading' => 10090,
     'occurred_at' => date('c'),
     'gps_lat' => '10.8188',
     'gps_lng' => '106.6580',
 ]);
 ok('Completed');
 
+// ─── 7b. End vehicle ─────────────────────────────────────────────────
+step(7, '🚗 End vehicle');
+request('POST', "$baseUrl/api/driver/shifts/$shiftId/end-vehicle", $token, []);
+ok('EndVehicle');
+
 // ─── 8. Kết thúc ca ──────────────────────────────────────────────────
-step(8, '⏹️  Kết thúc ca (end_km=10100)');
+step(8, '⏹️  Kết thúc ca');
 
 $endResult = request('POST', "$baseUrl/api/driver/shifts/end", $token, [
-    'end_km' => 10100,
     'end_time' => date('c'),
     'end_gps_lat' => '10.8188',
     'end_gps_lng' => '106.6580',
@@ -292,10 +291,7 @@ $shift = $endResult['shift'];
 echo "\n";
 echo "════════════════════════════════════════════════\n";
 echo "  ✅ Kết thúc ca thành công!\n\n";
-echo "  📊 Kết quả KM:\n";
-echo "    total_km       = {$shift['total_km']} km\n";
-echo "    total_km_loaded = {$shift['total_km_loaded']} km\n";
-echo "    total_km_empty  = {$shift['total_km_empty']} km\n";
+echo "  📊 Shift ID: {$shift['id']}\n";
 echo "\n";
 echo "  📄 Trạng thái đơn:\n";
 
@@ -303,14 +299,3 @@ echo "  📄 Trạng thái đơn:\n";
 $orderDetail = request('GET', "$baseUrl/api/driver/orders/{$orderId}", $token);
 echo "    #{$orderDetail['data']['id']} {$orderDetail['data']['order_code']}: {$orderDetail['data']['status']}\n";
 echo "════════════════════════════════════════════════\n";
-
-// Dự tính kỳ vọng
-$expectedTotalKm = 10100 - 10000; // 100
-$expectedLoaded = 10090 - 10010; // 80
-$expectedEmpty = $expectedTotalKm - $expectedLoaded; // 20
-
-echo "\n";
-echo "🔍 Kiểm tra kết quả:\n";
-echo "  total_km:       {$shift['total_km']} (kỳ vọng: $expectedTotalKm) ".((float) $shift['total_km'] === (float) $expectedTotalKm ? '✅' : '❌')."\n";
-echo "  total_km_loaded: {$shift['total_km_loaded']} (kỳ vọng: $expectedLoaded) ".((float) $shift['total_km_loaded'] === (float) $expectedLoaded ? '✅' : '❌')."\n";
-echo "  total_km_empty:  {$shift['total_km_empty']} (kỳ vọng: $expectedEmpty) ".((float) $shift['total_km_empty'] === (float) $expectedEmpty ? '✅' : '❌')."\n";

@@ -54,7 +54,7 @@ curl -s "$BASE/api/driver/vehicles/available" -H "$AUTH" -H "Accept: application
 step 3 "🟢 Start shift"
 SHIFT=$(curl -s -X POST "$BASE/api/driver/shifts/start" \
   -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
-  -d "{\"vehicle_id\":$VEHICLE_ID,\"shift_type\":\"full\",\"start_km\":10000,\"start_gps_lat\":10.8554,\"start_gps_lng\":106.7913}")
+  -d "{\"vehicle_id\":$VEHICLE_ID,\"shift_type\":\"full\",\"start_gps_lat\":10.8554,\"start_gps_lng\":106.7913}")
 echo "$SHIFT" | json
 SHIFT_ID=$(echo "$SHIFT" | php -r 'echo json_decode(file_get_contents("php://stdin"))->shift->id ?? "FAIL";')
 echo "  SHIFT_ID=$SHIFT_ID"
@@ -64,35 +64,33 @@ step 4 "📋 List my orders"
 curl -s "$BASE/api/driver/orders" -H "$AUTH" -H "Accept: application/json" | json
 
 # ── 5. Checkpoint: started ────────────────────────────────────────────
-step 5 "🚀 Checkpoint: started (km=10001)"
+step 5 "🚀 Checkpoint: started"
 curl -s -X POST "$BASE/api/driver/checkpoints" \
   -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
   -d "{
     \"order_id\":$ORDER_ID,
     \"shift_id\":$SHIFT_ID,
     \"checkpoint_type\":\"started\",
-    \"km_reading\":10001,
     \"occurred_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
     \"gps_lat\":10.8554,
     \"gps_lng\":106.7913
   }" | json
 
 # ── 6. arrived_pickup ─────────────────────────────────────────────────
-step 6 "📍 arrived_pickup (km=10010)"
+step 6 "📍 arrived_pickup"
 curl -s -X POST "$BASE/api/driver/checkpoints" \
   -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
   -d "{
     \"order_id\":$ORDER_ID,
     \"shift_id\":$SHIFT_ID,
     \"checkpoint_type\":\"arrived_pickup\",
-    \"km_reading\":10010,
     \"occurred_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
     \"gps_lat\":10.8554,
     \"gps_lng\":106.7913
   }" | json
 
 # ── 6b. left_pickup ──────────────────────────────────────────────────
-step 6b "🚚 left_pickup (km=10012)"
+step 6b "🚚 left_pickup"
 curl -s -X POST "$BASE/api/driver/checkpoints" \
   -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
   -d "{
@@ -100,14 +98,13 @@ curl -s -X POST "$BASE/api/driver/checkpoints" \
     \"shift_id\":$SHIFT_ID,
     \"delivery_point_id\":$DP_ID,
     \"checkpoint_type\":\"left_pickup\",
-    \"km_reading\":10012,
     \"occurred_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
     \"gps_lat\":10.8188,
     \"gps_lng\":106.6580
   }" | json
 
 # ── 6c. arrived_delivery ─────────────────────────────────────────────
-step 6c "🏁 arrived_delivery (km=10025)"
+step 6c "🏁 arrived_delivery"
 curl -s -X POST "$BASE/api/driver/checkpoints" \
   -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
   -d "{
@@ -115,14 +112,13 @@ curl -s -X POST "$BASE/api/driver/checkpoints" \
     \"shift_id\":$SHIFT_ID,
     \"delivery_point_id\":$DP_ID,
     \"checkpoint_type\":\"arrived_delivery\",
-    \"km_reading\":10025,
     \"occurred_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
     \"gps_lat\":10.8188,
     \"gps_lng\":106.6580
   }" | json
 
 # ── 7. completed ──────────────────────────────────────────────────────
-step 7 "✅ completed (km=10030)"
+step 7 "✅ completed"
 curl -s -X POST "$BASE/api/driver/checkpoints" \
   -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
   -d "{
@@ -130,18 +126,21 @@ curl -s -X POST "$BASE/api/driver/checkpoints" \
     \"shift_id\":$SHIFT_ID,
     \"delivery_point_id\":$DP_ID,
     \"checkpoint_type\":\"completed\",
-    \"km_reading\":10030,
     \"occurred_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
     \"gps_lat\":10.8188,
     \"gps_lng\":106.6580
   }" | json
 
+# ── 7b. End vehicle ──────────────────────────────────────────────────
+step 7b "🚗 End vehicle"
+curl -s -X POST "$BASE/api/driver/shifts/$SHIFT_ID/end-vehicle" \
+  -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" | json
+
 # ── 8. End shift ─────────────────────────────────────────────────────
-step 8 "⏹️  End shift (end_km=10040)"
+step 8 "⏹️  End shift"
 curl -s -X POST "$BASE/api/driver/shifts/end" \
   -H "$AUTH" -H "Accept: application/json" -H "Content-Type: application/json" \
   -d "{
-    \"end_km\":10040,
     \"occurred_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
     \"end_gps_lat\":10.8188,
     \"end_gps_lng\":106.6580

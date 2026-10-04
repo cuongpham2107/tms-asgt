@@ -93,7 +93,7 @@ class VehicleImportSeeder extends Seeder
                     'vehicle_type' => 'normal',
                     'fuel_type' => 'Diesel',
                     'status' => 'on',
-                    'current_mileage' => 100000,
+                    'current_mileage' => null,
                     'is_active' => true,
                     'created_at' => $now,
                     'updated_at' => $now,
