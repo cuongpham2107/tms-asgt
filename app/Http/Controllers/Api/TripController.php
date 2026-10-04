@@ -8,11 +8,7 @@ use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
 use App\Models\Trip;
-use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
-use App\Services\Trip\TripKmLimitService;
-use App\Services\TripKmCalculatorService;
-use App\Services\TripKmSplitService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
@@ -278,18 +274,6 @@ class TripController extends Controller
             ]], 422);
         }
 
-        $validationResult = app(TripKmLimitService::class)->validate(
-            $trip,
-            (float) $validated['end_km'],
-            CheckpointType::End->value,
-        );
-
-        if (! $validationResult['is_valid']) {
-            return response()->json(['message' => [
-                'end_km' => [$validationResult['message']],
-            ]], 422);
-        }
-
         $endKm = (float) $validated['end_km'];
         $completedAt = $validated['completed_at'] ?? null;
 
@@ -303,10 +287,6 @@ class TripController extends Controller
         } else {
             // Còn orders chưa xong → driver_swap, tính partial km
             DB::transaction(function () use ($trip, $endKm, $completedAt) {
-                app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
-                $trip->refresh();
-                app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
-
                 $trip->end_km = $endKm;
                 $trip->status = TripStatus::DriverSwap;
                 $trip->save();
@@ -401,9 +381,8 @@ class TripController extends Controller
                 $completed++;
             }
 
-            $driverKm = TripKmSplitService::driverKm($trip, (int) $user->id);
-            $totalKm += $driverKm['total_km'];
-            $totalLoaded += $driverKm['total_km_loaded'];
+            $totalKm += (float) ($trip->total_km ?? 0);
+            $totalLoaded += (float) ($trip->total_km_loaded ?? 0);
         }
 
         $totalEmpty = max(0.0, $totalKm - $totalLoaded);

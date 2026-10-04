@@ -7,7 +7,6 @@ use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
-use App\Services\Trip\TripKmLimitService;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -104,12 +103,6 @@ class TripCheckpointRequest extends FormRequest
                 $kmReading = (float) $this->input('km_reading');
                 $type = (string) $this->input('checkpoint_type');
                 $orderId = $this->input('order_id') ? (int) $this->input('order_id') : null;
-
-                $validationResult = app(TripKmLimitService::class)->validate($trip, $kmReading, $type, $orderId);
-
-                if (! $validationResult['is_valid']) {
-                    $validator->errors()->add('km_reading', $validationResult['message']);
-                }
 
                 if ($orderId !== null) {
                     $lastOrderKm = TripCheckpoint::where('order_id', $orderId)

@@ -9,9 +9,7 @@ use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
-use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
-use App\Services\TripKmCalculatorService;
 use Illuminate\Support\Facades\DB;
 
 class EndHandler implements CheckpointHandlerInterface
@@ -29,10 +27,6 @@ class EndHandler implements CheckpointHandlerInterface
 
             if ($activeTrip !== null) {
                 // Trip chưa hoàn thành — driver_swap giữa chừng
-                app(TripKmCalculatorService::class)->calculate($activeTrip, endKm: $kmReading);
-                $activeTrip->refresh();
-                app(ShiftKmCalculatorService::class)->calculateForTrip($activeTrip);
-
                 $activeTrip->end_km = $kmReading;
                 $activeTrip->status = TripStatus::DriverSwap;
                 $activeTrip->save();

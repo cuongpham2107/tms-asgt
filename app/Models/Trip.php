@@ -5,13 +5,10 @@ namespace App\Models;
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\TripKmCalculatorService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -122,16 +119,6 @@ class Trip extends Model
         return $this->hasMany(TripCheckpoint::class)->where('checkpoint_type', 'driver_swap');
     }
 
-    public function kmReports(): HasMany
-    {
-        return $this->hasMany(TripKmReport::class);
-    }
-
-    public function latestPendingKmReport(): HasOne
-    {
-        return $this->hasOne(TripKmReport::class)->where('status', 'pending')->latestOfMany();
-    }
-
     public function getStatusLabel(): string
     {
         if ($this->status === TripStatus::Pending) {
@@ -218,9 +205,6 @@ class Trip extends Model
                 $this->vehicle->current_mileage = $endKmValue;
                 $this->vehicle->save();
             }
-
-            app(TripKmCalculatorService::class)->calculate($this);
-            app(ShiftKmCalculatorService::class)->calculateForTrip($this);
 
             $this->createMissingEndCheckpoints($endKmValue, $this->completed_at);
         });

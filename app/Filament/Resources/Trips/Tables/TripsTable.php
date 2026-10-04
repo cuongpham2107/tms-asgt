@@ -17,19 +17,12 @@ use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
 use App\Models\User;
 use App\Services\Notification\DriverNotificationService;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\TripKmAdjustmentService;
-use App\Services\TripKmCalculatorService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\ToggleButtons;
-use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\Width;
@@ -40,7 +33,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 
 class TripsTable extends BaseTable
@@ -61,7 +53,6 @@ class TripsTable extends BaseTable
                     'orders.pickupLocation',
                     'orders.deliveryPoints.location',
                     'orders.area',
-                    'latestPendingKmReport',
                 ])
             )
             ->columns([
@@ -117,17 +108,6 @@ class TripsTable extends BaseTable
                 TextColumn::make('km')
                     ->label('KM')
                     ->state(fn (Trip $record): string => self::getKmDisplay($record)),
-                TextColumn::make('km_report_status')
-                    ->label('Báo sai Km')
-                    ->badge()
-                    ->color(fn (?Trip $record): ?string => $record?->latestPendingKmReport ? 'warning' : null)
-                    ->icon(fn (?Trip $record): ?string => $record?->latestPendingKmReport ? 'heroicon-o-exclamation-triangle' : null)
-                    ->placeholder('—')
-                    ->state(fn (?Trip $record): ?string => $record?->latestPendingKmReport
-                        ? number_format((float) $record->latestPendingKmReport->reported_km, 1, ',', '.').' km'
-                        : null
-                    )
-                    ->toggleable(),
                 TextColumn::make('gps_speed')
                     ->label('Tốc độ')
                     ->state(fn (Trip $record): string => $record->vehicle?->gps_speed !== null
@@ -274,159 +254,6 @@ class TripsTable extends BaseTable
                             return $record;
                         }),
 
-                    Action::make('recalculate_km')
-                        ->label('Tính lại Km')
-                        ->icon('heroicon-o-calculator')
-                        ->color('warning')
-                        ->requiresConfirmation()
-                        ->modalHeading('Tính lại số km?')
-                        ->modalDescription('Sẽ tính lại total_km, loaded, empty cho trip, cập nhật km xe, và tính lại km cho tất cả ca liên quan.')
-                        ->action(function (Trip $record) {
-                            self::recalculateKm($record);
-                            Notification::make()->success()->title('Đã tính lại km')->send();
-                        }),
-
-                    Action::make('resolve_km_report')
-                        ->label('Xử lý báo sai Km')
-                        ->icon('heroicon-o-exclamation-triangle')
-                        ->color('warning')
-                        ->visible(fn (?Trip $record): bool => $record?->latestPendingKmReport !== null)
-                        ->modal()
-                        ->modalWidth(Width::ExtraLarge)
-                        ->modalHeading(fn (?Trip $record): string => 'Xử lý báo sai Km — '.($record?->trip_code ?? ''))
-                        ->modalContent(function (Trip $record): HtmlString {
-                            $report = $record->latestPendingKmReport?->loadMissing(['checkpoint', 'driver']);
-                            if ($report === null) {
-                                return new HtmlString('<p>Không có báo cáo nào.</p>');
-                            }
-
-                            $photoHtml = '';
-                            if ($report->photo_path) {
-                                $photoUrl = Storage::disk('public')->url($report->photo_path);
-                                $photoHtml = '<div class="mt-3"><span class="text-xs text-gray-500 font-medium">Ảnh chụp Taplo:</span><div class="mt-1"><img src="'.e($photoUrl).'" class="max-w-full max-h-80 rounded-lg border object-contain" alt="Ảnh taplo"></div></div>';
-                            }
-
-                            $delta = (float) $report->reported_km - (float) ($report->system_km ?? 0);
-                            $deltaFormatted = ($delta >= 0 ? '+' : '').number_format($delta, 1, ',', '.');
-                            $deltaColor = $delta < 0 ? 'text-red-600' : 'text-green-600';
-                            $driverName = e($report->driver?->name ?? '—');
-                            $createdAt = $report->created_at ? $report->created_at->format('H:i d/m/Y') : '—';
-                            $reportedKmStr = number_format((float) $report->reported_km, 1, ',', '.');
-                            $systemKmStr = $report->system_km !== null ? number_format((float) $report->system_km, 1, ',', '.') : '—';
-                            $noteStr = e($report->note ?? '—');
-
-                            $cp = $report->checkpoint;
-                            $cpName = 'Mốc hiện tại';
-                            if ($cp) {
-                                $typeLabel = $cp->checkpoint_type?->getLabel() ?? $cp->checkpoint_type->value;
-                                $timeStr = $cp->occurred_at ? $cp->occurred_at->format('H:i d/m') : '';
-                                $cpKmStr = $cp->km_reading !== null ? number_format((float) $cp->km_reading, 1, ',', '.').' km' : 'chưa có km';
-                                $cpName = "[{$timeStr}] {$typeLabel} ({$cpKmStr})";
-                            }
-
-                            return new HtmlString(<<<HTML
-                                <div class="space-y-3">
-                                    <div class="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                                        <span class="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Bước yêu cầu sửa:</span>
-                                        <p class="text-base font-bold text-amber-800 dark:text-amber-100">{$cpName}</p>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-4 rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-                                        <div>
-                                            <span class="text-xs text-gray-500">Tài xế báo cáo</span>
-                                            <p class="font-semibold">{$driverName}</p>
-                                        </div>
-                                        <div>
-                                            <span class="text-xs text-gray-500">Thời gian gửi</span>
-                                            <p class="font-semibold">{$createdAt}</p>
-                                        </div>
-                                        <div>
-                                            <span class="text-xs text-gray-500">Km lái xe báo (taplo)</span>
-                                            <p class="text-lg font-bold text-amber-600">{$reportedKmStr} km</p>
-                                        </div>
-                                        <div>
-                                            <span class="text-xs text-gray-500">Km hệ thống ghi nhận</span>
-                                            <p class="text-lg font-bold">{$systemKmStr} km</p>
-                                        </div>
-                                        <div>
-                                            <span class="text-xs text-gray-500">Độ lệch chênh lệch</span>
-                                            <p class="text-lg font-bold {$deltaColor}">{$deltaFormatted} km</p>
-                                        </div>
-                                        <div>
-                                            <span class="text-xs text-gray-500">Lý do báo sai</span>
-                                            <p class="font-medium text-sm text-gray-700 dark:text-gray-300">{$noteStr}</p>
-                                        </div>
-                                    </div>
-                                    {$photoHtml}
-                                </div>
-                            HTML);
-                        })
-                        ->schema([
-                            ToggleButtons::make('decision')
-                                ->label('Lựa chọn xử lý')
-                                ->options([
-                                    'ok' => 'OK (Đồng ý sửa theo mốc này)',
-                                    'reject' => 'Không OK (Từ chối báo cáo)',
-                                ])
-                                ->colors([
-                                    'ok' => 'success',
-                                    'reject' => 'danger',
-                                ])
-                                ->icons([
-                                    'ok' => 'heroicon-o-check-circle',
-                                    'reject' => 'heroicon-o-x-circle',
-                                ])
-                                ->default('ok')
-                                ->inline()
-                                ->required()
-                                ->live(),
-
-                            TextInput::make('corrected_km')
-                                ->label('Số km điều chỉnh')
-                                ->numeric()
-                                ->required(fn ($get) => $get('decision') === 'ok')
-                                ->visible(fn ($get) => $get('decision') === 'ok')
-                                ->default(fn (?Trip $record) => $record?->latestPendingKmReport?->reported_km)
-                                ->helperText('Số km thực tế áp dụng cho mốc này (mặc định lấy theo số lái xe báo).'),
-
-                            Textarea::make('admin_note')
-                                ->label(fn ($get) => $get('decision') === 'reject' ? 'Lý do từ chối *' : 'Ghi chú xử lý')
-                                ->required(fn ($get) => $get('decision') === 'reject')
-                                ->placeholder(fn ($get) => $get('decision') === 'reject' ? 'Nhập lý do từ chối báo cáo...' : 'Ghi chú nội bộ (không bắt buộc)...')
-                                ->rows(2),
-                        ])
-                        ->action(function (Trip $record, array $data) {
-                            $report = $record->latestPendingKmReport;
-                            if ($report === null) {
-                                return;
-                            }
-
-                            if (($data['decision'] ?? 'ok') === 'reject') {
-                                app(TripKmAdjustmentService::class)->rejectReport(
-                                    $report,
-                                    $data['admin_note'] ?? 'Từ chối báo cáo',
-                                    auth()->id(),
-                                );
-
-                                Notification::make()
-                                    ->danger()
-                                    ->title('Đã từ chối báo cáo sai km')
-                                    ->send();
-                            } else {
-                                app(TripKmAdjustmentService::class)->resolveReport(
-                                    $report,
-                                    (float) $data['corrected_km'],
-                                    $report->checkpoint_id,
-                                    $data['admin_note'] ?? null,
-                                    auth()->id(),
-                                );
-
-                                Notification::make()
-                                    ->success()
-                                    ->title('Đã điều chỉnh km mốc hiện tại và tính lại chuyến')
-                                    ->send();
-                            }
-                        })
-                        ->modalSubmitActionLabel('Xác nhận xử lý'),
                     ReassignDriverAction::make(),
                     CancelTripAction::make(),
                     DeleteAction::make(),
@@ -665,17 +492,5 @@ class TripsTable extends BaseTable
             'customStyles' => '',
             'customScripts' => '',
         ];
-    }
-
-    private static function recalculateKm(Trip $record): void
-    {
-        app(TripKmCalculatorService::class)->calculate($record);
-        $record->refresh();
-
-        if ($record->end_km > 0 && $record->vehicle) {
-            $record->vehicle->update(['current_mileage' => $record->end_km]);
-        }
-
-        app(ShiftKmCalculatorService::class)->calculateForTrip($record);
     }
 }

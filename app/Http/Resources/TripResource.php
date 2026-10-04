@@ -3,7 +3,6 @@
 namespace App\Http\Resources;
 
 use App\Models\Trip;
-use App\Services\TripKmSplitService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -50,13 +49,6 @@ class TripResource extends JsonResource
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
-
-        $adjusted = $this->adjustedKmForDriver($request->user()?->id);
-        if ($adjusted !== null) {
-            $data['total_km'] = $adjusted['total_km'];
-            $data['total_km_loaded'] = $adjusted['total_km_loaded'];
-            $data['total_km_empty'] = $adjusted['total_km_empty'];
-        }
 
         return $data;
     }
@@ -107,26 +99,5 @@ class TripResource extends JsonResource
         }
 
         return null;
-    }
-
-    /**
-     * Điều chỉnh km của chuyến theo phần mà tài xế hiện tại thực sự chạy,
-     * cộng dồn tất cả các đoạn khi đảo lái qua lại nhiều lần.
-     *
-     * @return array{total_km: float, total_km_loaded: float, total_km_empty: float}|null
-     */
-    private function adjustedKmForDriver(?int $driverId): ?array
-    {
-        if ($driverId === null) {
-            return null;
-        }
-
-        $segments = TripKmSplitService::segments($this->resource);
-
-        if ($segments === []) {
-            return null;
-        }
-
-        return TripKmSplitService::driverKm($this->resource, $driverId);
     }
 }

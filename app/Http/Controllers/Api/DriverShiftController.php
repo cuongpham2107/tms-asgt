@@ -16,7 +16,6 @@ use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
-use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\Handlers\EndHandler;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
@@ -246,8 +245,6 @@ class DriverShiftController extends Controller
             $shift->end_gps_lng = $payload['end_gps_lng'] ?? null;
             $shift->save();
 
-            app(ShiftKmCalculatorService::class)->calculate($shift);
-
             // Clean up trips that were driver_swapped via EndHandler
             // (status=DriverSwap but still linked to this shift)
             $driverSwappedTrips = Trip::where('driver_id', $user->id)
@@ -298,10 +295,6 @@ class DriverShiftController extends Controller
             ->whereNull('end_time')
             ->latest('start_time')
             ->first();
-
-        if ($shift) {
-            app(ShiftKmCalculatorService::class)->calculate($shift);
-        }
 
         return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')])) : null]);
     }

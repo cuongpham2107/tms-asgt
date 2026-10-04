@@ -23,7 +23,6 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\TripKmCalculatorService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Role;
@@ -585,8 +584,6 @@ class FullWorkflowTest extends Command
         $this->sendCheckpoint($this->tokenB, $trip, 'arrived_delivery', null, $order->id, $dp->id);
         $this->sendCheckpoint($this->tokenB, $trip, 'completed', $km + 100, $order->id, $dp->id);
 
-        // Recalculate trip KM
-        app(TripKmCalculatorService::class)->calculate($trip);
         $this->endDriverShift($this->driverB, $km + 100, $this->tokenB);
 
         $order->refresh();
@@ -645,7 +642,6 @@ class FullWorkflowTest extends Command
         ]);
 
         $returnTrip->complete(endKm: $km + 100);
-        app(TripKmCalculatorService::class)->calculate($returnTrip);
 
         $this->endDriverShift($this->driverA, $km + 100, $this->tokenA);
 

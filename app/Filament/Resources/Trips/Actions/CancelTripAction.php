@@ -8,8 +8,6 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
 use App\Models\Trip;
 use App\Services\Notification\DriverNotificationService;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\TripKmCalculatorService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -77,10 +75,6 @@ class CancelTripAction
                     }
 
                     DB::transaction(function () use ($record, $kmReading, $data) {
-                        // Tính partial KM
-                        app(TripKmCalculatorService::class)->calculate($record, endKm: $kmReading);
-                        $record->refresh();
-
                         // Cập nhật trip
                         $record->end_km = $kmReading;
                         $record->status = TripStatus::Cancelled;
@@ -114,11 +108,6 @@ class CancelTripAction
                             'driver_id' => $record->driver_id,
                             'shift_id' => $record->shift_id,
                         ]);
-
-                        // Tính lại km ca
-                        if ($record->shift_id) {
-                            app(ShiftKmCalculatorService::class)->calculate($record->shift);
-                        }
                     });
 
                     try {

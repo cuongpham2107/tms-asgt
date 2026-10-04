@@ -10,9 +10,7 @@ use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\User;
 use App\Services\Notification\DriverNotificationService;
-use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
-use App\Services\Trip\TripKmLimitService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -123,24 +121,6 @@ class DriverSwapAction
                     return;
                 }
 
-                $validationResult = app(TripKmLimitService::class)->validate(
-                    $record,
-                    $handoverKm,
-                    CheckpointType::DriverSwap->value,
-                );
-
-                if (! $validationResult['is_valid']) {
-                    Notification::make()
-                        ->title('Km chuyển giao không hợp lệ')
-                        ->body($validationResult['message'])
-                        ->danger()
-                        ->send();
-
-                    $action->halt();
-
-                    return;
-                }
-
                 DriverSwap::create([
                     'trip_id' => $record->id,
                     'from_driver_id' => $record->driver_id,
@@ -172,8 +152,6 @@ class DriverSwapAction
                 $record->orders()
                     ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
                     ->update(['status' => OrderStatus::DriverSwap->value]);
-
-                app(ShiftKmCalculatorService::class)->calculateForTrip($record);
 
                 if ($newDriver !== null) {
                     try {
