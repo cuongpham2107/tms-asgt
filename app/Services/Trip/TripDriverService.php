@@ -34,6 +34,7 @@ class TripDriverService
     public function openAssignment(Trip $trip, User $driver, ?User $by = null): TripDriverAssignment
     {
         return DB::transaction(function () use ($trip, $driver, $by) {
+            $this->lock($trip);
             $this->closeOpenAssignment($trip, AssignmentEndReason::Reassigned);
 
             return $this->startAssignment($trip, $driver, $by);
@@ -47,11 +48,13 @@ class TripDriverService
      */
     public function requestSwap(Trip $trip, User $driver, AssignmentEndReason $reason, ?string $note = null): Trip
     {
-        if ((int) $trip->driver_id !== (int) $driver->id) {
-            throw new AuthorizationException('Bạn không phải tài xế đang giữ chuyến này.');
-        }
+        return DB::transaction(function () use ($trip, $driver, $reason, $note) {
+            $this->lock($trip);
 
-        return DB::transaction(function () use ($trip, $reason, $note) {
+            if ((int) $trip->driver_id !== (int) $driver->id) {
+                throw new AuthorizationException('Bạn không phải tài xế đang giữ chuyến này.');
+            }
+
             $this->checkpointFactory->create($trip, ['occurred_at' => now()], CheckpointType::DriverSwap);
 
             $this->stateMachine->requestSwap($trip);
@@ -69,13 +72,15 @@ class TripDriverService
      */
     public function assignDriver(Trip $trip, User $driver, ?User $by = null): Trip
     {
-        if (! in_array($trip->status, [TripStatus::DriverSwap, TripStatus::Pending], true)) {
-            throw new InvalidTransitionException('Chỉ gán tài xế cho chuyến đang chờ lái hoặc chưa chạy.');
-        }
-
         $previousDriver = $this->lastDriver($trip);
 
         $trip = DB::transaction(function () use ($trip, $driver, $by) {
+            $this->lock($trip);
+
+            if (! in_array($trip->status, [TripStatus::DriverSwap, TripStatus::Pending], true)) {
+                throw new InvalidTransitionException('Chỉ gán tài xế cho chuyến đang chờ lái hoặc chưa chạy.');
+            }
+
             $this->closeOpenAssignment($trip, AssignmentEndReason::Reassigned);
             $this->startAssignment($trip, $driver, $by);
 
@@ -105,6 +110,12 @@ class TripDriverService
         $previousDriver = $this->lastDriver($trip);
 
         $trip = DB::transaction(function () use ($trip, $driver, $by, $note) {
+            $this->lock($trip);
+
+            if (in_array($trip->status, [TripStatus::Completed, TripStatus::Cancelled, TripStatus::DriverSwap, TripStatus::Pending], true)) {
+                throw new InvalidTransitionException('Trạng thái chuyến vừa thay đổi, vui lòng tải lại và thử lại.');
+            }
+
             $this->closeOpenAssignment($trip, AssignmentEndReason::Reassigned, $note);
             $this->startAssignment($trip, $driver, $by);
 
@@ -122,6 +133,7 @@ class TripDriverService
     public function unassign(Trip $trip): Trip
     {
         return DB::transaction(function () use ($trip) {
+            $this->lock($trip);
             $this->closeOpenAssignment($trip, AssignmentEndReason::Reassigned);
 
             $trip->driver_id = null;
@@ -147,6 +159,15 @@ class TripDriverService
             ->whereNull('shift_id')
             ->whereIn('status', TripStatus::busyStatuses())
             ->update(['shift_id' => $shift->id]);
+    }
+
+    /**
+     * Khoá dòng chuyến trong transaction và nạp lại trạng thái mới nhất, tránh hai thao tác đồng thời cùng mở lượt lái.
+     */
+    private function lock(Trip $trip): void
+    {
+        Trip::whereKey($trip->id)->lockForUpdate()->first();
+        $trip->refresh();
     }
 
     private function startAssignment(Trip $trip, User $driver, ?User $by): TripDriverAssignment

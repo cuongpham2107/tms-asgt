@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreGpsPointsRequest;
 use App\Models\DriverShift;
+use App\Models\Trip;
+use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleGpsPoint;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 
 class GpsPointController extends Controller
@@ -28,7 +32,7 @@ class GpsPointController extends Controller
             return response()->json(['message' => 'Ca làm việc không thuộc về bạn'], 403);
         }
 
-        $vehicleId = $validated['vehicle_id'] ?? null;
+        $vehicleId = $this->ownVehicleId($user, $validated['vehicle_id'] ?? null);
         $now = now();
 
         $rows = collect($validated['points'])->map(fn (array $point): array => [
@@ -51,10 +55,52 @@ class GpsPointController extends Controller
         VehicleGpsPoint::insertOrIgnore($rows->all());
 
         $this->updateVehiclePosition($vehicleId, $rows->sortBy('recorded_at')->last());
+        $this->reopenSettledKm($user, $rows->min('recorded_at'), $rows->max('recorded_at'));
 
         return response()->json([
-            'last_seq' => (int) VehicleGpsPoint::where('device_id', $deviceId)->max('seq'),
+            'last_seq' => (int) VehicleGpsPoint::where('driver_id', $user->id)->where('device_id', $deviceId)->max('seq'),
         ]);
+    }
+
+    /**
+     * Chỉ nhận xe tài xế đang giữ (chuyến đang chạy hoặc xe được gán); xe khác bị bỏ qua để không ghi đè vị trí xe người khác.
+     */
+    private function ownVehicleId(User $driver, ?int $vehicleId): ?int
+    {
+        if ($vehicleId === null) {
+            return null;
+        }
+
+        $isOwn = Trip::query()
+            ->where('driver_id', $driver->id)
+            ->where('vehicle_id', $vehicleId)
+            ->whereIn('status', TripStatus::busyStatuses())
+            ->exists()
+            || Vehicle::whereKey($vehicleId)->where('current_driver_id', $driver->id)->exists();
+
+        return $isOwn ? $vehicleId : null;
+    }
+
+    /**
+     * Điểm gửi bù muộn rơi vào chuyến/ca đã chốt km → mở lại để lệnh gps:calculate-km tính lại
+     * (trừ chuyến điều hành đã điều chỉnh tay).
+     */
+    private function reopenSettledKm(User $driver, CarbonInterface $from, CarbonInterface $to): void
+    {
+        Trip::query()
+            ->whereNotNull('km_calculated_at')
+            ->whereNull('km_adjusted')
+            ->where('started_at', '<=', $to)
+            ->where(fn ($q) => $q->where('completed_at', '>=', $from)->orWhere('cancelled_at', '>=', $from))
+            ->whereHas('driverAssignments', fn ($q) => $q->where('driver_id', $driver->id))
+            ->update(['km_calculated_at' => null]);
+
+        DriverShift::query()
+            ->where('driver_id', $driver->id)
+            ->whereNotNull('km_calculated_at')
+            ->where('start_time', '<=', $to)
+            ->where('end_time', '>=', $from)
+            ->update(['km_calculated_at' => null]);
     }
 
     /**

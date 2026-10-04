@@ -113,3 +113,21 @@ test('a pending trip gets an open assignment', function () {
 
     expect($trip->openDriverAssignment()->first()?->driver_id)->toBe($trip->driver_id);
 });
+
+test('a legacy swap without a timestamp still closes the previous driver assignment', function () {
+    $driverA = User::factory()->create();
+    $driverB = User::factory()->create();
+    $trip = Trip::factory()->create(['driver_id' => $driverB->id, 'status' => TripStatus::Delivering, 'started_at' => now()->subHour()]);
+    DB::table('driver_swaps')->insert([
+        'trip_id' => $trip->id,
+        'from_driver_id' => $driverA->id,
+        'to_driver_id' => $driverB->id,
+        'reason' => 'other',
+        'created_by' => $driverA->id,
+        'created_at' => null,
+    ]);
+
+    runAssignmentBackfill();
+
+    expect(TripDriverAssignment::where('trip_id', $trip->id)->whereNull('ended_at')->pluck('driver_id')->all())->toBe([$driverB->id]);
+});

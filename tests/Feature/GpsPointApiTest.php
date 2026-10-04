@@ -1,7 +1,10 @@
 <?php
 
 use App\Enums\ShiftType;
+use App\Enums\TripStatus;
 use App\Models\DriverShift;
+use App\Models\Trip;
+use App\Models\TripDriverAssignment;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleGpsPoint;
@@ -14,7 +17,7 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     $this->driver = User::factory()->create();
     $this->driver->assignRole(Role::create(['name' => 'driver', 'guard_name' => 'web']));
-    $this->vehicle = Vehicle::factory()->create();
+    $this->vehicle = Vehicle::factory()->create(['current_driver_id' => $this->driver->id]);
     $this->shift = DriverShift::create([
         'driver_id' => $this->driver->id,
         'shift_type' => ShiftType::Full,
@@ -82,4 +85,47 @@ test('mocked locations are stored but do not move the vehicle on the map', funct
 
     expect(VehicleGpsPoint::first()->mocked)->toBeTrue()
         ->and($this->vehicle->fresh()->last_gps_update)->toBeNull();
+});
+
+test('points for a vehicle the driver does not hold are stored without moving that vehicle', function () {
+    $foreignVehicle = Vehicle::factory()->create();
+
+    $this->postJson('/api/driver/gps-points', [...gpsBatch([1]), 'vehicle_id' => $foreignVehicle->id])->assertSuccessful();
+
+    expect(VehicleGpsPoint::first()->vehicle_id)->toBeNull()
+        ->and($foreignVehicle->fresh()->last_gps_update)->toBeNull();
+});
+
+test('late points for an already settled trip re-open its km for recalculation', function () {
+    $trip = Trip::factory()->create([
+        'vehicle_id' => $this->vehicle->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subHour(),
+        'completed_at' => now()->addMinutes(10),
+        'km_calculated_at' => now(),
+    ]);
+    TripDriverAssignment::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $this->driver->id,
+        'started_at' => now()->subHour(),
+        'ended_at' => now()->addMinutes(10),
+    ]);
+
+    $this->postJson('/api/driver/gps-points', gpsBatch([1, 2]))->assertSuccessful();
+
+    expect($trip->fresh()->km_calculated_at)->toBeNull();
+});
+
+test('the same device sequence from another driver is not treated as a duplicate', function () {
+    $this->postJson('/api/driver/gps-points', gpsBatch([1]))->assertSuccessful();
+
+    $other = User::factory()->create();
+    $other->assignRole('driver');
+    Sanctum::actingAs($other);
+
+    $this->postJson('/api/driver/gps-points', [...gpsBatch([1]), 'shift_id' => null, 'vehicle_id' => null])
+        ->assertSuccessful()
+        ->assertJsonPath('last_seq', 1);
+
+    expect(VehicleGpsPoint::count())->toBe(2);
 });

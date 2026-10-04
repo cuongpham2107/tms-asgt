@@ -24,6 +24,9 @@ return [
     // Khoảng trống dài hơn (giây) giữa 2 điểm thì tính theo đường bộ OSRM thay vì đường thẳng.
     'osrm_gap_seconds' => (int) env('GPS_OSRM_GAP_SECONDS', 300),
 
+    // Chờ (phút) sau khi chuyến kết thúc rồi mới chốt km, để điện thoại kịp gửi bù điểm còn trong hàng đợi.
+    'settle_after_minutes' => (int) env('GPS_SETTLE_AFTER_MINUTES', 30),
+
     // Chuyến có độ phủ GPS (%) dưới ngưỡng này thì cần kiểm tra km trước khi xuất hoá đơn.
     'review_coverage_percent' => (float) env('GPS_REVIEW_COVERAGE_PERCENT', 90),
 ];

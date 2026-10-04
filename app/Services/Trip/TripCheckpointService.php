@@ -61,6 +61,9 @@ class TripCheckpointService
         $this->validateVehicleNotBusy($trip);
 
         return DB::transaction(function () use ($trip, $payload, $photos, $checkpointType) {
+            Trip::whereKey($trip->id)->lockForUpdate()->first();
+            $trip->refresh();
+
             $this->shiftResolver->resolveForTrip($trip);
 
             // Auto-start: tạo checkpoint started trước checkpoint thực tế; trạng thái do state machine xử lý.

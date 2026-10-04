@@ -33,11 +33,14 @@ return new class extends Migration
         $cursor = $trip->started_at ?? $trip->created_at;
         $rows = [];
 
-        foreach ($swaps as $swap) {
+        foreach ($swaps->values() as $index => $swap) {
+            // Bản ghi cũ thiếu created_at: dùng mốc đảo lái kế tiếp hoặc lần cập nhật cuối của chuyến để lượt lái luôn được đóng.
+            $swappedAt = $swap->created_at ?? $swaps->get($index + 1)?->created_at ?? $trip->updated_at ?? now();
+
             if ($swap->from_driver_id !== null) {
-                $rows[] = $this->row($trip->id, $swap->from_driver_id, $swap->from_shift_id, $cursor, $swap->created_at, $swap->reason ?? 'other', $swap->note);
+                $rows[] = $this->row($trip->id, $swap->from_driver_id, $swap->from_shift_id, $cursor, $swappedAt, $swap->reason ?? 'other', $swap->note);
             }
-            $cursor = $swap->created_at ?? $cursor;
+            $cursor = $swappedAt;
         }
 
         if ($trip->status === 'driver_swap') {

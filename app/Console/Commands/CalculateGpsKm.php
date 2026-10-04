@@ -24,6 +24,10 @@ class CalculateGpsKm extends Command
             ->whereIn('status', [TripStatus::Completed, TripStatus::Cancelled])
             ->whereNotNull('started_at')
             ->whereNull('km_calculated_at')
+            ->whereNull('km_adjusted')
+            ->where(fn ($q) => $q
+                ->where('completed_at', '<=', now()->subMinutes(config('gps.settle_after_minutes')))
+                ->orWhere(fn ($q) => $q->whereNull('completed_at')->where('cancelled_at', '<=', now()->subMinutes(config('gps.settle_after_minutes')))))
             ->get();
 
         foreach ($trips as $trip) {
@@ -40,7 +44,7 @@ class CalculateGpsKm extends Command
         }
 
         $shifts = DriverShift::query()
-            ->whereNotNull('end_time')
+            ->where('end_time', '<=', now()->subMinutes(config('gps.settle_after_minutes')))
             ->whereNull('km_calculated_at')
             ->get();
 

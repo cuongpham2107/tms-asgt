@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('source', 10)->comment('phone | eup');
             $table->timestamp('created_at')->nullable();
 
-            $table->unique(['device_id', 'seq']);
+            $table->unique(['driver_id', 'device_id', 'seq']);
             $table->index(['vehicle_id', 'recorded_at']);
             $table->index(['driver_id', 'recorded_at']);
         });

@@ -175,6 +175,8 @@ test('a trip with GPS for only half of its time needs review', function () {
 });
 
 test('the scheduled command settles trip km and then the shift totals', function () {
+    $this->travelTo($this->t0->addHours(3));
+
     $shift = DriverShift::create([
         'driver_id' => $this->driverA->id,
         'shift_type' => ShiftType::Full,
@@ -201,6 +203,15 @@ test('editing a checkpoint time on a settled trip marks it for recalculation', f
     $trip->update(['km_calculated_at' => now()]);
 
     $trip->checkpoints()->first()->update(['occurred_at' => $this->t0->addMinutes(12)]);
+
+    expect($trip->fresh()->km_calculated_at)->toBeNull();
+});
+
+test('trips are not settled until the upload grace period has passed', function () {
+    $this->travelTo($this->t0->addMinutes(45));
+    $trip = kmTrip($this->vehicle, $this->t0, 40);
+
+    $this->artisan('gps:calculate-km')->assertSuccessful();
 
     expect($trip->fresh()->km_calculated_at)->toBeNull();
 });
