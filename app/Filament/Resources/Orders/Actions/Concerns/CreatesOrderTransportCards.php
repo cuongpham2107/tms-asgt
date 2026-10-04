@@ -1009,7 +1009,6 @@ abstract class CreatesOrderTransportCards
                 'order_id' => $order->id,
                 'checkpoint_type' => CheckpointType::Started,
                 'occurred_at' => $base,
-                'km_reading' => null,
                 'driver_id' => $driverId,
                 'shift_id' => $shiftId,
             ]);
@@ -1021,7 +1020,6 @@ abstract class CreatesOrderTransportCards
                 'order_id' => $order->id,
                 'checkpoint_type' => CheckpointType::ArrivedPickup,
                 'occurred_at' => (clone $now)->addMinutes($offset),
-                'km_reading' => null,
                 'driver_id' => $driverId,
                 'shift_id' => $shiftId,
             ]);
@@ -1033,7 +1031,6 @@ abstract class CreatesOrderTransportCards
                 'order_id' => $order->id,
                 'checkpoint_type' => CheckpointType::LeftPickup,
                 'occurred_at' => (clone $now)->addMinutes($offset),
-                'km_reading' => null,
                 'driver_id' => $driverId,
                 'shift_id' => $shiftId,
             ]);
@@ -1050,7 +1047,6 @@ abstract class CreatesOrderTransportCards
                         'delivery_point_id' => $dp->id,
                         'checkpoint_type' => CheckpointType::ArrivedDelivery,
                         'occurred_at' => (clone $now)->addMinutes($offset),
-                        'km_reading' => null,
                         'driver_id' => $driverId,
                         'shift_id' => $shiftId,
                     ]);
@@ -1063,7 +1059,6 @@ abstract class CreatesOrderTransportCards
                         'delivery_point_id' => $dp->id,
                         'checkpoint_type' => CheckpointType::Completed,
                         'occurred_at' => (clone $now)->addMinutes($offset),
-                        'km_reading' => null,
                         'driver_id' => $driverId,
                         'shift_id' => $shiftId,
                     ]);
@@ -1076,7 +1071,6 @@ abstract class CreatesOrderTransportCards
                     'order_id' => $order->id,
                     'checkpoint_type' => CheckpointType::ArrivedDelivery,
                     'occurred_at' => (clone $now)->addMinutes($offset),
-                    'km_reading' => null,
                     'driver_id' => $driverId,
                     'shift_id' => $shiftId,
                 ]);
@@ -1088,7 +1082,6 @@ abstract class CreatesOrderTransportCards
                     'order_id' => $order->id,
                     'checkpoint_type' => CheckpointType::Completed,
                     'occurred_at' => (clone $now)->addMinutes($offset),
-                    'km_reading' => null,
                     'driver_id' => $driverId,
                     'shift_id' => $shiftId,
                 ]);
