@@ -79,12 +79,9 @@
         $html .= '</div>';
         $html .= '<p class="text-sm text-gray-500 dark:text-gray-400">'.e($cp->deliveryPoint?->location?->code ?? $cp->deliveryPoint?->location?->code ?? '—').'</p>';
 
-        $hasExtra = $cp->km_reading || ($cp->gps_lat && $cp->gps_lng) || $cp->voice_note;
+        $hasExtra = ($cp->gps_lat && $cp->gps_lng) || $cp->voice_note;
         if ($hasExtra) {
             $html .= '<div class="mt-1 flex flex-wrap gap-x-3 text-xs text-gray-400 dark:text-gray-500">';
-            if ($cp->km_reading) {
-                $html .= '<span>'.e(number_format((float) $cp->km_reading, 1, ',', '.')).' km</span>';
-            }
             if ($cp->gps_lat && $cp->gps_lng) {
                 $html .= '<span>'.e(number_format((float) $cp->gps_lat, 4, ',', '.')).', '.e(number_format((float) $cp->gps_lng, 4, ',', '.')).'</span>';
             }

@@ -444,8 +444,6 @@
                             h += `<div style="font-weight:700;color:#111827;margin-bottom:4px">${this.esc(pt.label)}</div>`;
                             if (pt.occurred_at)
                                 h += `<div style="color:#6b7280">🕐 ${this.esc(pt.occurred_at)}</div>`;
-                            if (pt.km_reading != null)
-                                h += `<div style="color:#6b7280">📍 ${pt.km_reading.toLocaleString()} km</div>`;
                             if (pt.voice_note)
                                 h += `<div style="margin-top:4px;color:#374151;background:#f9fafb;border-radius:4px;padding:4px 6px;border-left:2px solid #3b82f6">
                                         🎤 ${this.esc(pt.voice_note)}</div>`;
@@ -853,9 +851,6 @@
                                                             x-text="pt.label"></p>
                                                         <p class="text-xs text-gray-500 dark:text-gray-400"
                                                             x-show="pt.occurred_at" x-text="pt.occurred_at"></p>
-                                                        <p class="text-xs text-gray-400" x-show="pt.km_reading"
-                                                            x-text="'📍 ' + (pt.km_reading?.toLocaleString() ?? '') + ' km'">
-                                                        </p>
                                                         <p class="mt-0.5 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
                                                             x-show="pt.voice_note" x-text="'🎤 ' + pt.voice_note"></p>
                                                         <p class="text-xs text-blue-500" x-show="pt.photo_count"

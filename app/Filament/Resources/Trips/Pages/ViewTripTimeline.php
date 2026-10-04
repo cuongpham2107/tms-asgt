@@ -73,9 +73,6 @@ class ViewTripTimeline extends Page
                         ?? $cp->deliveryPoint?->location?->name
                         ?? '—',
                     'driver_name' => $trip->driver?->name,
-                    'km_reading' => $cp->km_reading !== null
-                        ? number_format((float) $cp->km_reading, 1, ',', '.').' km'
-                        : null,
                     'gps' => ($cp->gps_lat !== null && $cp->gps_lng !== null)
                         ? number_format((float) $cp->gps_lat, 4, ',', '.').', '.number_format((float) $cp->gps_lng, 4, ',', '.')
                         : null,

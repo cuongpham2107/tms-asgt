@@ -137,14 +137,12 @@ class CreateEmptyRunAction
                     'end_location_id' => $data['end_location_id'],
                     'note' => $data['note'] ?? null,
                     'started_at' => $now,
-                    'start_km' => $vehicle?->current_mileage ?? 0,
                 ]);
 
                 TripCheckpoint::create([
                     'trip_id' => $trip->id,
                     'checkpoint_type' => CheckpointType::Started->value,
                     'occurred_at' => $now,
-                    'km_reading' => $vehicle?->current_mileage,
                     'gps_lat' => $vehicle?->gps_lat,
                     'gps_lng' => $vehicle?->gps_lng,
                     'driver_id' => $data['driver_id'],
@@ -157,7 +155,6 @@ class CreateEmptyRunAction
                     'trip_id' => $trip->id,
                     'checkpoint_type' => CheckpointType::End->value,
                     'occurred_at' => $now->addSecond(),
-                    'km_reading' => null,
                     'gps_lat' => $vehicle?->gps_lat,
                     'gps_lng' => $vehicle?->gps_lng,
                     'driver_id' => $data['driver_id'],

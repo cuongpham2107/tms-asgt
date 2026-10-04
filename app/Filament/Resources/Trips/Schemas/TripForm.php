@@ -18,7 +18,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Filament\Support\RawJs;
 use Illuminate\Database\Eloquent\Model;
 
 class TripForm
@@ -63,7 +62,7 @@ class TripForm
                             ->native(false)
                             ->columnSpan(['default' => 1, 'sm' => 3]),
                     ]),
-                Section::make('Km & Thời gian')
+                Section::make('Thời gian & Địa điểm')
                     ->columns(['default' => 1, 'sm' => 12])
                     ->columnSpanFull()
                     ->schema([
@@ -94,50 +93,13 @@ class TripForm
                             ->native(false)
                             ->hidden(fn (?Model $record) => $record?->vehicle?->type !== VehicleOwnerType::Rent)
                             ->columnSpan(['default' => 1, 'sm' => 6]),
-                        TextInput::make('start_km')
-                            ->label('Km bắt đầu')
-                            ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
-                            ->mask(RawJs::make('$money($input)'))
-                            ->stripCharacters(',')
-                            ->hidden(fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent)
-                            ->numeric()
-                            ->columnSpan(['default' => 1, 'sm' => 3])
-                            ->afterStateHydrated(function (TextInput $component, ?Trip $record): void {
-                                if ($record === null || $component->getState() !== null) {
-                                    return;
-                                }
-
-                                $minKm = $record->checkpoints()
-                                    ->whereNotNull('km_reading')
-                                    ->min('km_reading');
-
-                                if ($minKm !== null) {
-                                    $component->state((float) $minKm);
-                                }
-                            }),
-                        TextInput::make('end_km')
-                            ->label('Km kết thúc')
-                            ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
-                            ->mask(RawJs::make('$money($input)'))
-                            ->stripCharacters(',')
-                            ->hidden(fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent)
-                            ->columnSpan(['default' => 1, 'sm' => 3])
-                            ->numeric(),
-                        TextInput::make('total_km')
-                            ->label('Km tổng')
-                            ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
-                            ->mask(RawJs::make('$money($input)'))
-                            ->stripCharacters(',')
-                            ->hidden(fn (?Model $record) => $record?->vehicle?->type !== VehicleOwnerType::Rent)
-                            ->columnSpan(['default' => 1, 'sm' => 4])
-                            ->numeric(),
                         DateTimePicker::make('started_at')
                             ->label('Bắt đầu')
                             ->prefixIcon(Heroicon::OutlinedClock)
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
                             ->native(true)
-                            ->columnSpan(['default' => 1, 'sm' => fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent ? 4 : 3])
+                            ->columnSpan(['default' => 1, 'sm' => 6])
                             ->afterStateHydrated(function (DateTimePicker $component, ?Trip $record): void {
                                 if ($record === null || $component->getState() !== null) {
                                     return;
@@ -163,7 +125,7 @@ class TripForm
                                     $set('status', TripStatus::Completed);
                                 }
                             })
-                            ->columnSpan(['default' => 1, 'sm' => fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent ? 4 : 3]),
+                            ->columnSpan(['default' => 1, 'sm' => 6]),
                     ]),
                 Section::make('Các mốc hành trình')
                     ->columnSpanFull()
@@ -295,13 +257,6 @@ class TripForm
                                         ->toArray())
                                     ->searchable()
                                     ->native(false)
-                                    ->nullable(),
-                                TextInput::make('km_reading')
-                                    ->label('Km')
-                                    ->mask(RawJs::make('$money($input)'))
-                                    ->stripCharacters(',')
-                                    ->numeric()
-                                    ->step(0.1)
                                     ->nullable(),
                                 DateTimePicker::make('occurred_at')
                                     ->label('Thời gian')

@@ -58,21 +58,17 @@ class TripInfolist
                                             ->icon(Heroicon::OutlinedClock)
                                             ->placeholder('Đang chạy...'),
 
-                                        TextEntry::make('start_km')
-                                            ->label('Km bắt đầu')
-                                            ->numeric()
-                                            ->suffix(' km')
-                                            ->placeholder('—'),
-
-                                        TextEntry::make('end_km')
-                                            ->label('Km kết thúc')
-                                            ->numeric()
-                                            ->suffix(' km')
-                                            ->placeholder('—'),
-
                                         TextEntry::make('total_km')
-                                            ->label('Quãng đường')
-                                            ->state(fn (Trip $record): string => self::getKmOver($record)),
+                                            ->label('Tổng quãng đường')
+                                            ->state(fn (Trip $record): string => $record->total_km !== null ? number_format((float) $record->total_km, 1, ',', '.').' km' : '—'),
+
+                                        TextEntry::make('total_km_loaded')
+                                            ->label('Km có hàng')
+                                            ->state(fn (Trip $record): string => $record->total_km_loaded !== null ? number_format((float) $record->total_km_loaded, 1, ',', '.').' km' : '—'),
+
+                                        TextEntry::make('total_km_empty')
+                                            ->label('Km không hàng')
+                                            ->state(fn (Trip $record): string => $record->total_km_empty !== null ? number_format((float) $record->total_km_empty, 1, ',', '.').' km' : '—'),
                                     ])
                                     ->columns(4),
 
@@ -164,25 +160,5 @@ class TripInfolist
                     ->persistTab()
                     ->id('trip-infolist-tabs'),
             ]);
-    }
-
-    private static function getKmOver(Trip $record): string
-    {
-        if ($record->end_km !== null && $record->start_km !== null) {
-            $totalKm = (float) $record->end_km - (float) $record->start_km;
-
-            return $totalKm > 0 ? number_format($totalKm, 1, ',', '.').' km' : '—';
-        }
-
-        if ($record->start_km !== null) {
-            $currentKm = $record->vehicle?->current_mileage;
-            if ($currentKm !== null) {
-                $diff = (float) $currentKm - (float) $record->start_km;
-
-                return $diff > 0 ? number_format($diff, 1, ',', '.').' km (đang chạy)' : '—';
-            }
-        }
-
-        return '—';
     }
 }

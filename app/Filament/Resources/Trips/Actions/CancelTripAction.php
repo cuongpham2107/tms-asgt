@@ -24,7 +24,7 @@ class CancelTripAction
             ->color('danger')
             ->hidden(fn (Trip $record): bool => $record->status === TripStatus::Completed || $record->status === TripStatus::Cancelled)
             ->modalHeading('Huỷ chuyến')
-            ->modalDescription('Chuyến sẽ bị huỷ, tất cả đơn hàng đang chạy sẽ chuyển sang trạng thái Huỷ. KM sẽ được tính theo số km hiện tại.')
+            ->modalDescription('Chuyến sẽ bị huỷ, tất cả đơn hàng đang chạy sẽ chuyển sang trạng thái Huỷ.')
             ->modalSubmitActionLabel('Xác nhận huỷ')
             ->schema([
                 Textarea::make('cancel_reason')

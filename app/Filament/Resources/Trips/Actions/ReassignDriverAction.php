@@ -19,9 +19,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Filament\Support\RawJs;
 
 class ReassignDriverAction
 {
@@ -83,16 +81,6 @@ class ReassignDriverAction
                         ->all())
                     ->searchable()
                     ->required(),
-                TextInput::make('handover_km')
-                    ->label('Km chuyển giao')
-                    ->mask(RawJs::make('$money($input)'))
-                    ->stripCharacters(',')
-                    ->numeric()
-                    ->required()
-                    ->hidden()
-                    ->dehydratedWhenHidden()
-                    ->default(fn (Trip $record): ?float => $record->vehicle?->current_mileage !== null ? (float) $record->vehicle->current_mileage : null)
-                    ->helperText('Mặc định lấy km hiện tại của xe, có thể sửa lại nếu cần'),
                 Select::make('reason')
                     ->label('Lý do')
                     ->options(DriverSwapReason::class)
@@ -100,7 +88,7 @@ class ReassignDriverAction
                     ->required(),
                 Checkbox::make('create_return_trip')
                     ->label('Tạo chuyến không hàng (quay đầu)')
-                    ->helperText('Tạo chuyến đi rỗng cho tài xế mới để nhập km')
+                    ->helperText('Tạo chuyến đi rỗng cho tài xế mới')
                     ->hidden()
                     ->live(),
                 Select::make('return_vehicle_id')
@@ -185,17 +173,6 @@ class ReassignDriverAction
                 //     return;
                 // }
 
-                $handoverKm = (float) $data['handover_km'];
-                if ($handoverKm <= 0) {
-                    Notification::make()
-                        ->danger()
-                        ->title('Km chuyển giao không hợp lệ')
-                        ->body('Vui lòng nhập km chuyển giao lớn hơn 0.')
-                        ->send();
-
-                    return;
-                }
-
                 $oldShift = DriverShift::query()->where('driver_id', $oldDriver->id)
                     ->latest('start_time')
                     ->first();
@@ -210,14 +187,9 @@ class ReassignDriverAction
                     'to_driver_id' => $data['new_driver_id'],
                     'from_shift_id' => $oldShift?->id,
                     'to_shift_id' => $newShift?->id,
-                    'handover_km' => $handoverKm,
                     'reason' => $data['reason'],
                     'created_by' => auth()->id(),
                 ]);
-
-                if ($record->vehicle) {
-                    $record->vehicle->update(['current_mileage' => $handoverKm]);
-                }
 
                 $lastCheckpoint = TripCheckpoint::query()
                     ->where('trip_id', $record->id)
@@ -238,7 +210,6 @@ class ReassignDriverAction
                     'driver_id' => $data['new_driver_id'],
                     'shift_id' => $newShift?->id,
                     'status' => $status,
-                    'start_km' => $record->start_km ?? $record->vehicle?->current_mileage,
                     'started_at' => $record->started_at ?? now(),
                 ]);
 
@@ -284,7 +255,6 @@ class ReassignDriverAction
                         'start_location_id' => $data['start_location_id'] ?? null,
                         'end_location_id' => $data['end_location_id'] ?? null,
                         'started_at' => $now,
-                        'start_km' => $vehicle?->current_mileage,
                         'is_empty_run' => true,
                     ]);
 
@@ -292,7 +262,6 @@ class ReassignDriverAction
                         'trip_id' => $returnTrip->id,
                         'checkpoint_type' => CheckpointType::Started->value,
                         'occurred_at' => $now,
-                        'km_reading' => $vehicle?->current_mileage,
                         'gps_lat' => $vehicle?->gps_lat,
                         'gps_lng' => $vehicle?->gps_lng,
                         'driver_id' => $oldDriver->id,
@@ -305,7 +274,6 @@ class ReassignDriverAction
                         'trip_id' => $returnTrip->id,
                         'checkpoint_type' => CheckpointType::End->value,
                         'occurred_at' => $now->addSecond(),
-                        'km_reading' => null,
                         'gps_lat' => $vehicle?->gps_lat,
                         'gps_lng' => $vehicle?->gps_lng,
                         'driver_id' => $oldDriver->id,

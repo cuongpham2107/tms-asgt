@@ -230,8 +230,6 @@ class TripsTable extends BaseTable
 
                             $record->update($data);
 
-                            self::recalculateKm($record);
-
                             if ($newDriverId && (int) $oldDriverId !== (int) $newDriverId) {
                                 $oldDriver = $oldDriverId ? User::find($oldDriverId) : null;
                                 $newDriver = User::find($newDriverId);
@@ -429,19 +427,10 @@ class TripsTable extends BaseTable
 
     private static function getKmDisplay(Trip $record): string
     {
-        if ($record->end_km !== null && $record->start_km !== null) {
-            $totalKm = (float) $record->end_km - (float) $record->start_km;
+        if ($record->total_km !== null) {
+            $totalKm = (float) $record->total_km;
 
             return $totalKm > 0 ? number_format($totalKm, 1, ',', '.').' km' : '—';
-        }
-
-        if ($record->start_km !== null) {
-            $currentKm = $record->vehicle?->current_mileage;
-            if ($currentKm !== null) {
-                $diff = (float) $currentKm - (float) $record->start_km;
-
-                return $diff > 0 ? number_format($diff, 1, ',', '.').' km' : '—';
-            }
         }
 
         return '—';
