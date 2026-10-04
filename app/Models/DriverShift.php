@@ -114,14 +114,13 @@ class DriverShift extends Model
             }
         });
 
-        // Group checkpoints by (type, km, time) to collapse duplicates
+        // Group checkpoints by (type, time) to collapse duplicates
         $groupedCheckpoints = $this->tripCheckpoints
             ->filter(fn ($tc) => ! ($tc->checkpoint_type === CheckpointType::End && ! $tc->order_id))
             ->groupBy(function ($tc) {
-                $km = $tc->km_reading ? number_format((float) $tc->km_reading, 1, '.', '') : 'null';
                 $time = $tc->occurred_at?->format('Y-m-d H:i:s') ?? 'null';
 
-                return $tc->checkpoint_type->value.'|'.$km.'|'.$time;
+                return $tc->checkpoint_type->value.'|'.$time;
             });
 
         foreach ($groupedCheckpoints as $group) {
@@ -220,23 +219,17 @@ class DriverShift extends Model
         $completedCheckpoint = $trip->checkpoints
             ->where('order_id', $order->id)
             ->where('checkpoint_type', CheckpointType::Completed)
-            ->sortByDesc('km_reading')
+            ->sortByDesc(fn ($cp) => $cp->occurred_at?->timestamp ?? 0)
             ->first();
 
-        $startKm = $arrivedCheckpoint?->km_reading;
-        $endKm = $completedCheckpoint?->km_reading;
-
-        $loadedKm = 0;
-        if ($startKm !== null && $endKm !== null) {
-            $loadedKm = max(0, (float) $endKm - (float) $startKm);
-        }
+        $loadedKm = (float) ($order->loaded_km ?? 0);
 
         return [
             'id' => $order->id,
             'order_code' => $order->order_code,
             'vehicle_plate' => $trip->vehicle?->plate_number ?? '-',
-            'start_km' => $startKm ? number_format((float) $startKm, 1).' km' : '-',
-            'end_km' => $endKm ? number_format((float) $endKm, 1).' km' : '-',
+            'start_km' => '-',
+            'end_km' => '-',
             'loaded_km' => $loadedKm > 0 ? number_format((float) $loadedKm, 1).' km' : '-',
             'status' => $order->status?->getLabel() ?? $order->status,
             'pickup_time' => $arrivedCheckpoint?->occurred_at?->format('d/m/Y H:i') ?? '-',

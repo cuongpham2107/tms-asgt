@@ -14,9 +14,9 @@ use Illuminate\Support\Facades\DB;
 
 class EndHandler implements CheckpointHandlerInterface
 {
-    public function handle(DriverShift $shift, Vehicle $vehicle, float $kmReading): TripCheckpoint
+    public function handle(DriverShift $shift, Vehicle $vehicle, ?float $kmReading = null): TripCheckpoint
     {
-        return DB::transaction(function () use ($shift, $vehicle, $kmReading) {
+        return DB::transaction(function () use ($shift, $vehicle) {
             // 1. Find active trip on this vehicle in this shift
             $activeTrip = Trip::where('vehicle_id', $vehicle->id)
                 ->where('shift_id', $shift->id)
@@ -27,7 +27,6 @@ class EndHandler implements CheckpointHandlerInterface
 
             if ($activeTrip !== null) {
                 // Trip chưa hoàn thành — driver_swap giữa chừng
-                $activeTrip->end_km = $kmReading;
                 $activeTrip->status = TripStatus::DriverSwap;
                 $activeTrip->save();
 
@@ -43,7 +42,7 @@ class EndHandler implements CheckpointHandlerInterface
             if ($activeTripId !== null) {
                 $checkpoints = app(CheckpointFactory::class)->create(
                     $activeTrip,
-                    ['occurred_at' => now(), 'km_reading' => $kmReading],
+                    ['occurred_at' => now()],
                     CheckpointType::DriverSwap,
                 );
                 $checkpoint = $checkpoints->first();
@@ -53,14 +52,9 @@ class EndHandler implements CheckpointHandlerInterface
                     'trip_id' => null,
                     'shift_id' => $shift->id,
                     'driver_id' => $shift->driver_id,
-                    'km_reading' => $kmReading,
                     'occurred_at' => now(),
                 ]);
             }
-
-            // 3. Update vehicle mileage — critical for Bug 1 fix
-            $vehicle->current_mileage = $kmReading;
-            $vehicle->save();
 
             return $checkpoint;
         });

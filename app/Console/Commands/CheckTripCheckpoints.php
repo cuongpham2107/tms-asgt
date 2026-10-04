@@ -383,9 +383,9 @@ class CheckTripCheckpoints extends Command
             ->exists();
 
         if (! $hasMoreActive) {
+            $occurredAt = $payload['occurred_at'] ?? now();
             $trip->complete(
-                endKm: $payload['km_reading'] ?? null,
-                completedAt: $payload['occurred_at'] ?? now(),
+                completedAt: is_string($occurredAt) ? $occurredAt : $occurredAt->toDateTimeString(),
             );
         }
     }

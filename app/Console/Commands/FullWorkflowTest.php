@@ -641,7 +641,7 @@ class FullWorkflowTest extends Command
             'driver_id' => $this->driverA->id,
         ]);
 
-        $returnTrip->complete(endKm: $km + 100);
+        $returnTrip->complete();
 
         $this->endDriverShift($this->driverA, $km + 100, $this->tokenA);
 

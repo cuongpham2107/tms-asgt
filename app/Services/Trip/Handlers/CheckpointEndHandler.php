@@ -18,12 +18,6 @@ class CheckpointEndHandler implements CheckpointHandlerInterface
      */
     public function handle(Trip $trip, array $payload): void
     {
-        $endKm = isset($payload['km_reading']) ? (float) $payload['km_reading'] : null;
-
-        if ($endKm === null) {
-            return;
-        }
-
         if ($trip->isCompleted() || $trip->status === TripStatus::Cancelled) {
             return;
         }
@@ -40,6 +34,11 @@ class CheckpointEndHandler implements CheckpointHandlerInterface
             return;
         }
 
-        $trip->complete(endKm: $endKm);
+        $occurredAt = $payload['occurred_at'] ?? now();
+        $completedAt = $occurredAt instanceof \DateTimeInterface
+            ? $occurredAt->format('Y-m-d H:i:s')
+            : (string) $occurredAt;
+
+        $trip->complete($completedAt);
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CheckpointType;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
@@ -17,6 +18,7 @@ use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Trip\TripCheckpointService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
@@ -809,4 +811,33 @@ test('arrived_delivery and completed handle order with repeated locations in rou
 
     expect($dp3->fresh()->status)->toBe(OrderDeliveryPointStatus::Delivered);
     expect($order->fresh()->status)->toBe(OrderStatus::Completed);
+});
+
+test('auto-starts pending trip on arrived_pickup checkpoint even when vehicle current_mileage is null', function () {
+    $this->vehicle->update(['current_mileage' => null]);
+    expect($this->vehicle->fresh()->current_mileage)->toBeNull();
+
+    app(TripCheckpointService::class)->recordCheckpoint($this->trip, [
+        'checkpoint_type' => 'arrived_pickup',
+        'occurred_at' => now()->toIso8601String(),
+    ]);
+
+    expect($this->trip->fresh()->status)->toBe(TripStatus::ArrivedPickup);
+    expect($this->trip->checkpoints()->where('checkpoint_type', CheckpointType::Started->value)->exists())->toBeTrue();
+    expect($this->trip->checkpoints()->where('checkpoint_type', CheckpointType::ArrivedPickup->value)->exists())->toBeTrue();
+});
+
+test('completes trip on end checkpoint without km reading when all orders are completed', function () {
+    $this->order1->update(['status' => OrderStatus::Completed]);
+    $this->order2->update(['status' => OrderStatus::Completed]);
+    $this->trip->update(['status' => TripStatus::Delivered]);
+
+    app(TripCheckpointService::class)->recordCheckpoint($this->trip, [
+        'checkpoint_type' => 'end',
+        'occurred_at' => now()->toIso8601String(),
+    ]);
+
+    expect($this->trip->fresh()->status)->toBe(TripStatus::Completed);
+    expect($this->trip->fresh()->completed_at)->not->toBeNull();
+    expect($this->trip->checkpoints()->where('checkpoint_type', CheckpointType::End->value)->count())->toBe(2);
 });

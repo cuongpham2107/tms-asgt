@@ -25,7 +25,6 @@ class StartedHandler implements CheckpointHandlerInterface
 
         $trip->status = TripStatus::Started;
         $trip->started_at = $payload['occurred_at'] ?? now();
-        $trip->start_km = $trip->vehicle?->current_mileage ?? $trip->start_km;
         $trip->save();
     }
 

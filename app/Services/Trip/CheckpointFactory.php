@@ -49,12 +49,6 @@ class CheckpointFactory
                     ->where('checkpoint_type', $type->value)
                     ->first();
 
-                if ($existing && $existing->driver_id !== $trip->driver_id && $existing->km_reading === null) {
-                    $existing->delete();
-
-                    return false;
-                }
-
                 return $existing !== null;
             })
             ->map(fn ($order) => TripCheckpoint::create(
@@ -79,11 +73,6 @@ class CheckpointFactory
                 ->where('checkpoint_type', $type->value)
                 ->where('delivery_point_id', $dp->id)
                 ->first();
-
-            if ($existing && $existing->driver_id !== $trip->driver_id && $existing->km_reading === null) {
-                $existing->delete();
-                $existing = null;
-            }
 
             if ($existing !== null) {
                 continue;
@@ -158,12 +147,6 @@ class CheckpointFactory
         int $orderId,
         ?int $deliveryPointId,
     ): array {
-        // Auto-fill km_reading from vehicle for started checkpoint
-        $kmReading = $payload['km_reading'] ?? null;
-        if ($kmReading === null && $type === CheckpointType::Started) {
-            $kmReading = $trip->vehicle?->current_mileage;
-        }
-
         return [
             'trip_id' => $trip->id,
             'order_id' => $orderId,
@@ -174,7 +157,6 @@ class CheckpointFactory
             'vehicle_id' => $trip->vehicle_id,
             'checkpoint_type' => $type->value,
             'occurred_at' => $payload['occurred_at'] ?? now(),
-            'km_reading' => $kmReading,
             'gps_lat' => $payload['gps_lat'] ?? $trip->vehicle?->gps_lat,
             'gps_lng' => $payload['gps_lng'] ?? $trip->vehicle?->gps_lng,
             'voice_note' => $payload['voice_note'] ?? null,

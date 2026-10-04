@@ -436,7 +436,7 @@ test('scenario 5: return trip with empty KM after delivery', function () {
         'shift_id' => $driver->driverShifts()->whereNull('end_time')->first()?->id,
     ]);
 
-    $returnTrip->complete(endKm: 90100);
+    $returnTrip->complete();
     app(TripKmCalculatorService::class)->calculate($returnTrip);
 
     fwEndShift($driver, 90100);

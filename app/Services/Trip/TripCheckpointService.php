@@ -45,7 +45,7 @@ class TripCheckpointService
     {
         $checkpointType = CheckpointType::from($payload['checkpoint_type']);
 
-        // Return trip: no orders, just update existing checkpoint km_reading
+        // Return trip: no orders, return existing checkpoint
         if ($trip->status === TripStatus::ReturnTrip && in_array($checkpointType, [CheckpointType::Started, CheckpointType::End], true)) {
             $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id);
             if ($activeCargoTrip !== null) {
@@ -58,11 +58,6 @@ class TripCheckpointService
             $existing = TripCheckpoint::where('trip_id', $trip->id)
                 ->where('checkpoint_type', $checkpointType->value)
                 ->first();
-
-            if ($existing && isset($payload['km_reading'])) {
-                $existing->km_reading = $payload['km_reading'];
-                $existing->save();
-            }
 
             return collect($existing ? [$existing] : []);
         }
@@ -234,7 +229,7 @@ class TripCheckpointService
 
     /**
      * Tự động bắt đầu chuyến khi tài xế gửi checkpoint đầu tiên (vd: arrived_pickup).
-     * Dùng km hiện tại của xe làm start_km, tạo Started checkpoint, cập nhật trip.
+     * Tạo Started checkpoint, cập nhật trip.
      *
      * @return Collection<int, TripCheckpoint>
      */
@@ -243,14 +238,7 @@ class TripCheckpointService
         $this->validateNoActiveTrip($trip, CheckpointType::Started);
         $this->validateVehicleNotBusy($trip);
 
-        $vehicleKm = $trip->vehicle?->current_mileage;
         $occurredAt = $payload['occurred_at'] ?? now();
-
-        if ($vehicleKm === null) {
-            throw ValidationException::withMessages([
-                'checkpoint_type' => 'Không thể tự động bắt đầu chuyến: xe chưa có km. Vui lòng bắt đầu chuyến thủ công.',
-            ]);
-        }
 
         // Lùi 1 giây để started luôn đứng trước checkpoint thực tế trong timeline
         $startOccurredAt = Carbon::parse($occurredAt)->subSecond();
@@ -258,13 +246,9 @@ class TripCheckpointService
         $startPayload = [
             'checkpoint_type' => CheckpointType::Started->value,
             'occurred_at' => $startOccurredAt,
-            'km_reading' => $vehicleKm,
         ];
 
         $checkpoints = $this->checkpointFactory->create($trip, $startPayload, CheckpointType::Started);
-
-        // Cập nhật vehicle mileage nếu chưa có
-        $this->vehicleUpdater->updateFromPayload($trip, $startPayload);
 
         $this->startedHandler->handle($trip, $startPayload);
 

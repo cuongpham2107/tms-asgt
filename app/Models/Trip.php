@@ -187,26 +187,14 @@ class Trip extends Model
         return 'CD-'.now()->format('Y-m-d').'-'.$nextId;
     }
 
-    public function complete(?float $endKm = null, ?string $completedAt = null): void
+    public function complete(?string $completedAt = null): void
     {
-        DB::transaction(function () use ($endKm, $completedAt) {
+        DB::transaction(function () use ($completedAt) {
             $this->status = TripStatus::Completed;
             $this->completed_at = $completedAt ?? now();
-            $this->end_km = $endKm ?? $this->end_km;
-
-            $startKm = (float) ($this->start_km ?? 0);
-            $endKmValue = (float) ($this->end_km ?? 0);
-            $this->total_km = max(0, $endKmValue - $startKm);
-
             $this->save();
 
-            // Cập nhật km xe theo km kết thúc chuyến
-            if ($endKmValue > 0 && $this->vehicle) {
-                $this->vehicle->current_mileage = $endKmValue;
-                $this->vehicle->save();
-            }
-
-            $this->createMissingEndCheckpoints($endKmValue, $this->completed_at);
+            $this->createMissingEndCheckpoints($this->completed_at);
         });
     }
 
@@ -214,7 +202,7 @@ class Trip extends Model
      * Tự động tạo end checkpoint cho các order đã completed nhưng chưa có end.
      * Chạy bên trong DB transaction của complete().
      */
-    private function createMissingEndCheckpoints(float $endKm, string $occurredAt): void
+    private function createMissingEndCheckpoints(string $occurredAt): void
     {
         $completedOrderIds = $this->orders()
             ->where('status', OrderStatus::Completed->value)
@@ -235,7 +223,6 @@ class Trip extends Model
                 'checkpoint_type' => CheckpointType::End->value,
                 'trip_id' => $this->id,
                 'order_id' => $orderId,
-                'km_reading' => $endKm,
                 'occurred_at' => $occurredAt,
                 'driver_id' => $this->driver_id,
                 'shift_id' => $this->shift_id,

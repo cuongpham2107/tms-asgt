@@ -283,11 +283,10 @@ class TripController extends Controller
 
         if ($allOrdersDone) {
             // Tất cả orders đã xong → complete bình thường
-            $trip->complete(endKm: $endKm, completedAt: $completedAt);
+            $trip->complete(completedAt: $completedAt);
         } else {
-            // Còn orders chưa xong → driver_swap, tính partial km
-            DB::transaction(function () use ($trip, $endKm, $completedAt) {
-                $trip->end_km = $endKm;
+            // Còn orders chưa xong → driver_swap
+            DB::transaction(function () use ($trip, $completedAt, $validated) {
                 $trip->status = TripStatus::DriverSwap;
                 $trip->save();
 
@@ -299,17 +298,10 @@ class TripController extends Controller
                     ])
                     ->update(['status' => OrderStatus::DriverSwap->value]);
 
-                // Cập nhật km hiện tại của xe
-                if ($endKm > 0 && $trip->vehicle) {
-                    $trip->vehicle->current_mileage = $endKm;
-                    $trip->vehicle->save();
-                }
-
                 // Tạo checkpoint đảo lái cho từng order trong trip
                 app(CheckpointFactory::class)->create(
                     $trip,
                     [
-                        'km_reading' => $endKm,
                         'occurred_at' => $completedAt ? Carbon::parse($completedAt) : now(),
                         'gps_lat' => $validated['gps_lat'] ?? null,
                         'gps_lng' => $validated['gps_lng'] ?? null,

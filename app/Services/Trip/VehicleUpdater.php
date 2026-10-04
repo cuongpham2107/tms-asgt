@@ -20,11 +20,6 @@ class VehicleUpdater
 
         $dirty = false;
 
-        if (isset($payload['km_reading'])) {
-            $vehicle->current_mileage = $payload['km_reading'];
-            $dirty = true;
-        }
-
         if (isset($payload['gps_lat'])) {
             $vehicle->gps_lat = $payload['gps_lat'];
             $dirty = true;
