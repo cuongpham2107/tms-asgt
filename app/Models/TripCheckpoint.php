@@ -18,7 +18,6 @@ class TripCheckpoint extends Model
         'delivery_point_id',
         'checkpoint_type',
         'occurred_at',
-        'km_reading',
         'gps_lat',
         'gps_lng',
         'voice_note',
@@ -32,7 +31,6 @@ class TripCheckpoint extends Model
         return [
             'created_at' => 'datetime',
             'occurred_at' => 'datetime',
-            'km_reading' => 'decimal:1',
             'gps_lat' => 'decimal:7',
             'gps_lng' => 'decimal:7',
             'checkpoint_type' => CheckpointType::class,

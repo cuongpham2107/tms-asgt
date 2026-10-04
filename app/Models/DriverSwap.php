@@ -14,7 +14,6 @@ class DriverSwap extends Model
         'to_driver_id',
         'from_shift_id',
         'to_shift_id',
-        'handover_km',
         'reason',
         'note',
         'created_by',
@@ -25,7 +24,6 @@ class DriverSwap extends Model
     protected function casts(): array
     {
         return [
-            'handover_km' => 'decimal:1',
             'created_at' => 'datetime',
             'reason' => DriverSwapReason::class,
         ];

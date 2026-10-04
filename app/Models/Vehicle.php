@@ -18,10 +18,6 @@ class Vehicle extends Model
 {
     use HasFactory;
 
-    protected $attributes = [
-        'current_mileage' => 10000,
-    ];
-
     protected $fillable = [
         'plate_number',
         'registration_number',

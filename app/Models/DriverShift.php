@@ -17,8 +17,6 @@ class DriverShift extends Model
         'is_overtime',
         'start_time',
         'end_time',
-        'start_km',
-        'end_km',
         'start_gps_lat',
         'start_gps_lng',
         'end_gps_lat',
@@ -33,8 +31,6 @@ class DriverShift extends Model
         return [
             'start_time' => 'datetime',
             'end_time' => 'datetime',
-            'start_km' => 'decimal:1',
-            'end_km' => 'decimal:1',
             'start_gps_lat' => 'decimal:7',
             'start_gps_lng' => 'decimal:7',
             'end_gps_lat' => 'decimal:7',
