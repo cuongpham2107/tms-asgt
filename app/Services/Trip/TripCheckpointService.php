@@ -6,12 +6,6 @@ use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
-use App\Services\Trip\Handlers\ArrivedDeliveryHandler;
-use App\Services\Trip\Handlers\ArrivedPickupHandler;
-use App\Services\Trip\Handlers\CheckpointEndHandler;
-use App\Services\Trip\Handlers\CompletedHandler;
-use App\Services\Trip\Handlers\LeftPickupHandler;
-use App\Services\Trip\Handlers\StartedHandler;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -26,12 +20,7 @@ class TripCheckpointService
         private readonly CheckpointFactory $checkpointFactory,
         private readonly TripPhotoAttacher $photoAttacher,
         private readonly VehicleUpdater $vehicleUpdater,
-        private readonly StartedHandler $startedHandler,
-        private readonly ArrivedPickupHandler $arrivedPickupHandler,
-        private readonly LeftPickupHandler $leftPickupHandler,
-        private readonly ArrivedDeliveryHandler $arrivedDeliveryHandler,
-        private readonly CompletedHandler $completedHandler,
-        private readonly CheckpointEndHandler $checkpointEndHandler,
+        private readonly TripStateMachine $stateMachine,
     ) {}
 
     /**
@@ -62,6 +51,11 @@ class TripCheckpointService
             return collect($existing ? [$existing] : []);
         }
 
+        // Gửi lại "kết thúc" cho chuyến đã hoàn thành → bỏ qua, không báo lỗi.
+        if ($checkpointType === CheckpointType::End && $trip->status === TripStatus::Completed) {
+            return collect();
+        }
+
         $this->validateOrderBelongsToTrip($trip, $payload, $checkpointType);
         $this->validateNoActiveTrip($trip, $checkpointType);
         $this->validateVehicleNotBusy($trip);
@@ -69,8 +63,7 @@ class TripCheckpointService
         return DB::transaction(function () use ($trip, $payload, $photos, $checkpointType) {
             $this->shiftResolver->resolveForTrip($trip);
 
-            // Auto-start trip if driver submits a non-started checkpoint on a pending trip.
-            // The started checkpoint gets vehicle's current mileage; the actual checkpoint gets the driver's entered km.
+            // Auto-start: tạo checkpoint started trước checkpoint thực tế; trạng thái do state machine xử lý.
             $startedCheckpoints = collect();
             if ($checkpointType !== CheckpointType::Started && $trip->isPending()) {
                 $startedCheckpoints = $this->autoStartTrip($trip, $payload);
@@ -86,7 +79,20 @@ class TripCheckpointService
                 $this->photoAttacher->attach($checkpoints, $photos);
             }
 
-            $this->dispatchHandler($checkpointType, $trip, $payload, $checkpoints);
+            // Gửi lại checkpoint đã ghi nhận (mạng chập chờn) → không chuyển trạng thái lần nữa.
+            $isReplay = $checkpointType !== CheckpointType::End
+                && $checkpoints->isEmpty()
+                && $startedCheckpoints->isEmpty()
+                && $trip->orders()->exists();
+
+            if (! $isReplay) {
+                $this->stateMachine->applyCheckpoint(
+                    $trip,
+                    $checkpointType,
+                    $checkpoints,
+                    Carbon::parse($payload['occurred_at'] ?? now()),
+                );
+            }
 
             $checkpoints->each->load('photos');
             $startedCheckpoints->each->load('photos');
@@ -200,30 +206,9 @@ class TripCheckpointService
         }
     }
 
-    private function dispatchHandler(
-        CheckpointType $type,
-        Trip $trip,
-        array $payload,
-        Collection $checkpoints,
-    ): void {
-        if ($trip->isPending() && $type !== CheckpointType::Started) {
-            $this->startedHandler->handle($trip, $payload);
-        }
-
-        match ($type) {
-            CheckpointType::Started => $this->startedHandler->handle($trip, $payload),
-            CheckpointType::ArrivedPickup => $this->arrivedPickupHandler->handle($trip),
-            CheckpointType::LeftPickup => $this->leftPickupHandler->handle($trip),
-            CheckpointType::ArrivedDelivery => $this->arrivedDeliveryHandler->handle($trip, $payload, $checkpoints),
-            CheckpointType::Completed => $this->completedHandler->handle($trip, $payload, $checkpoints),
-            CheckpointType::DriverSwap => null,
-            CheckpointType::End => $this->checkpointEndHandler->handle($trip, $payload),
-        };
-    }
-
     /**
      * Tự động bắt đầu chuyến khi tài xế gửi checkpoint đầu tiên (vd: arrived_pickup).
-     * Tạo Started checkpoint, cập nhật trip.
+     * Chỉ tạo Started checkpoint; trạng thái do TripStateMachine cập nhật.
      *
      * @return Collection<int, TripCheckpoint>
      */
@@ -242,10 +227,6 @@ class TripCheckpointService
             'occurred_at' => $startOccurredAt,
         ];
 
-        $checkpoints = $this->checkpointFactory->create($trip, $startPayload, CheckpointType::Started);
-
-        $this->startedHandler->handle($trip, $startPayload);
-
-        return $checkpoints;
+        return $this->checkpointFactory->create($trip, $startPayload, CheckpointType::Started);
     }
 }

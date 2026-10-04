@@ -63,7 +63,8 @@ class CheckpointFactory
      */
     private function createForDeliveryGroup(Trip $trip, array $payload, CheckpointType $type): Collection
     {
-        $deliveryPoints = $this->resolveDeliveryGroup($trip, $payload);
+        // "Kết thúc đơn hàng" chỉ áp dụng cho đúng đơn được chọn, không gộp theo địa điểm.
+        $deliveryPoints = $this->resolveDeliveryGroup($trip, $payload, groupByLocation: $type !== CheckpointType::End);
 
         $created = collect();
 
@@ -96,7 +97,7 @@ class CheckpointFactory
      *
      * @return Collection<int, OrderDeliveryPoint>
      */
-    private function resolveDeliveryGroup(Trip $trip, array $payload): Collection
+    private function resolveDeliveryGroup(Trip $trip, array $payload, bool $groupByLocation = true): Collection
     {
         $deliveryPointId = $payload['delivery_point_id'] ?? null;
 
@@ -104,7 +105,7 @@ class CheckpointFactory
             $point = OrderDeliveryPoint::find($deliveryPointId);
 
             if ($point !== null) {
-                if ($point->location_id === null) {
+                if (! $groupByLocation || $point->location_id === null) {
                     return collect([$point]);
                 }
 

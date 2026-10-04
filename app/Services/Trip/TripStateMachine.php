@@ -14,6 +14,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -22,7 +23,7 @@ class TripStateMachine
     /**
      * @param  Collection<int, mixed>  $checkpoints
      */
-    public function applyCheckpoint(Trip $trip, CheckpointType $checkpointType, Collection $checkpoints): Trip
+    public function applyCheckpoint(Trip $trip, CheckpointType $checkpointType, Collection $checkpoints, ?CarbonInterface $occurredAt = null): Trip
     {
         if ($trip->status === TripStatus::Cancelled) {
             throw new InvalidTransitionException('Không thể cập nhật chuyến đã bị huỷ.');
@@ -36,19 +37,19 @@ class TripStateMachine
             throw new InvalidTransitionException('Chuyến đang ở trạng thái đảo lái, vui lòng gán lái xe trước khi tiếp tục.');
         }
 
-        return DB::transaction(function () use ($trip, $checkpointType, $checkpoints) {
+        return DB::transaction(function () use ($trip, $checkpointType, $checkpoints, $occurredAt) {
             // Auto-start nếu trip đang pending và checkpoint không phải Started
             if ($trip->status === TripStatus::Pending && $checkpointType !== CheckpointType::Started) {
-                $this->transitionToStarted($trip);
+                $this->transitionToStarted($trip, $occurredAt);
             }
 
             match ($checkpointType) {
-                CheckpointType::Started => $this->handleStartedCheckpoint($trip),
+                CheckpointType::Started => $this->handleStartedCheckpoint($trip, $occurredAt),
                 CheckpointType::ArrivedPickup => $this->handleArrivedPickupCheckpoint($trip),
                 CheckpointType::LeftPickup => $this->handleLeftPickupCheckpoint($trip),
                 CheckpointType::ArrivedDelivery => $this->handleArrivedDeliveryCheckpoint($trip, $checkpoints),
                 CheckpointType::Completed => $this->handleCompletedCheckpoint($trip, $checkpoints),
-                CheckpointType::End => $this->handleEndCheckpoint($trip),
+                CheckpointType::End => $this->handleEndCheckpoint($trip, $checkpoints, $occurredAt),
                 CheckpointType::DriverSwap => $this->requestSwap($trip),
                 CheckpointType::Cancelled => throw new InvalidTransitionException('Không dùng checkpoint để huỷ chuyến.'),
             };
@@ -57,20 +58,22 @@ class TripStateMachine
         });
     }
 
-    private function handleStartedCheckpoint(Trip $trip): void
+    private function handleStartedCheckpoint(Trip $trip, ?CarbonInterface $occurredAt): void
     {
         if ($trip->status !== TripStatus::Pending) {
             throw new InvalidTransitionException("Không thể bắt đầu chuyến từ trạng thái {$trip->status->getLabel()}.");
         }
 
-        $this->transitionToStarted($trip);
+        $this->transitionToStarted($trip, $occurredAt);
     }
 
-    private function transitionToStarted(Trip $trip): void
+    private function transitionToStarted(Trip $trip, ?CarbonInterface $occurredAt = null): void
     {
+        $occurredAt ??= now();
+
         $trip->status = TripStatus::Started;
         if ($trip->started_at === null) {
-            $trip->started_at = now();
+            $trip->started_at = $occurredAt;
         }
         $trip->save();
 
@@ -83,7 +86,7 @@ class TripStateMachine
             if ($order->status === OrderStatus::Assigned) {
                 $order->status = OrderStatus::Sent;
                 if ($order->sent_at === null) {
-                    $order->sent_at = now();
+                    $order->sent_at = $occurredAt;
                 }
                 $order->save();
             }
@@ -202,16 +205,40 @@ class TripStateMachine
         $trip->save();
     }
 
-    private function handleEndCheckpoint(Trip $trip): void
+    /**
+     * "Kết thúc đơn hàng" được gửi theo từng đơn. Trip chỉ hoàn thành khi đã Delivered;
+     * nếu trip còn đơn khác đang giao thì chỉ ghi nhận checkpoint cho đơn đã đóng.
+     *
+     * @param  Collection<int, mixed>  $checkpoints
+     */
+    private function handleEndCheckpoint(Trip $trip, Collection $checkpoints, ?CarbonInterface $occurredAt): void
     {
         $canEnd = $trip->status === TripStatus::Delivered
             || ($trip->is_empty_run && in_array($trip->status, [TripStatus::Started, TripStatus::Delivered], true));
 
-        if (! $canEnd) {
-            throw new InvalidTransitionException("Không thể kết thúc chuyến khi chưa giao xong toàn bộ đơn hàng (trạng thái hiện tại: {$trip->status->getLabel()}).");
+        if ($canEnd) {
+            if ($occurredAt !== null && $trip->completed_at === null) {
+                $trip->completed_at = $occurredAt;
+            }
+
+            $this->complete($trip);
+
+            return;
         }
 
-        $this->complete($trip);
+        $orderIds = $checkpoints
+            ->map(fn ($cp) => is_array($cp) ? ($cp['order_id'] ?? null) : ($cp->order_id ?? null))
+            ->filter()
+            ->unique();
+
+        $endedOrdersAreClosed = $orderIds->isNotEmpty()
+            && Order::whereIn('id', $orderIds)
+                ->whereNotIn('status', OrderStatus::closedStatuses())
+                ->doesntExist();
+
+        if (! $endedOrdersAreClosed) {
+            throw new InvalidTransitionException("Không thể kết thúc chuyến khi chưa giao xong toàn bộ đơn hàng (trạng thái hiện tại: {$trip->status->getLabel()}).");
+        }
     }
 
     public function requestSwap(Trip $trip, ?User $by = null, ?string $reason = null): Trip

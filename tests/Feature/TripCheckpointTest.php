@@ -26,6 +26,19 @@ use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
+/**
+ * Post arrived_pickup + left_pickup so the trip reaches Delivering (auto-starts a pending trip).
+ */
+function checkpointAdvanceToDelivering(Trip $trip): void
+{
+    foreach (['arrived_pickup', 'left_pickup'] as $type) {
+        test()->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+            'checkpoint_type' => $type,
+            'occurred_at' => now()->toIso8601String(),
+        ])->assertSuccessful();
+    }
+}
+
 beforeEach(function () {
     $this->driverRole = Role::create(['name' => 'driver', 'guard_name' => 'web']);
 
@@ -170,6 +183,8 @@ test('arrived_pickup succeeds without km_reading', function () {
 });
 
 test('arrived_delivery requires order_id and delivery_point_id', function () {
+    checkpointAdvanceToDelivering($this->trip);
+
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
@@ -197,6 +212,8 @@ test('completed without order_id fails validation', function () {
 });
 
 test('completed completes all orders and trip via manual complete endpoint', function () {
+    checkpointAdvanceToDelivering($this->trip);
+
     // Cả 2 orders cùng location_id → arrived_delivery cho 1 order sẽ tạo cho cả 2
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_delivery',
@@ -209,11 +226,6 @@ test('completed completes all orders and trip via manual complete endpoint', fun
     expect($checkpoints)->toHaveCount(2);
     expect($checkpoints->pluck('order_id')->sort()->values()->toArray())
         ->toBe([$this->order1->id, $this->order2->id]);
-
-    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
-        'checkpoint_type' => 'left_pickup',
-        'occurred_at' => now()->toIso8601String(),
-    ])->assertSuccessful();
 
     // Completed cho 1 order cùng location → complete cả 2 orders
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
@@ -271,10 +283,7 @@ test('completed handles orders at different locations separately', function () {
         'status' => 'pending',
     ]);
 
-    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
-        'checkpoint_type' => 'left_pickup',
-        'occurred_at' => now()->toIso8601String(),
-    ])->assertSuccessful();
+    checkpointAdvanceToDelivering($this->trip);
 
     // Arrived delivery cho order1 (cùng location với order2)
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
@@ -299,8 +308,9 @@ test('completed handles orders at different locations separately', function () {
     // order3 khác location → chưa completed
     expect($order3->fresh()->status)->toBe(OrderStatus::InTransit);
 
+    // Còn order3 chưa giao → trip quay lại Delivering
     $this->trip->refresh();
-    expect($this->trip->status)->toBe(TripStatus::ArrivedDelivery);
+    expect($this->trip->status)->toBe(TripStatus::Delivering);
 
     // Arrived delivery cho order3
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
@@ -334,11 +344,8 @@ test('completed handles orders at different locations separately', function () {
 });
 
 test('arrived_delivery groups orders at same location', function () {
-    // Start trip first so auto-start doesn't add checkpoints to the arrived_delivery response
-    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
-        'checkpoint_type' => 'started',
-        'occurred_at' => now()->toIso8601String(),
-    ])->assertSuccessful();
+    // Advance first so auto-start doesn't add checkpoints to the arrived_delivery response
+    checkpointAdvanceToDelivering($this->trip);
 
     // Cả 2 orders cùng location_id → arrived_delivery tạo checkpoint cho cả 2
     $response = $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
@@ -371,10 +378,7 @@ test('arrived_delivery without delivery_point_id does not group', function () {
         'created_by' => $this->driver->id,
     ]);
 
-    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
-        'checkpoint_type' => 'left_pickup',
-        'occurred_at' => now()->toIso8601String(),
-    ])->assertSuccessful();
+    checkpointAdvanceToDelivering($this->trip);
 
     // Không có delivery_point_id, nhưng có new_delivery_location_id
     $newLocation = Location::create([
@@ -398,6 +402,8 @@ test('arrived_delivery without delivery_point_id does not group', function () {
 });
 
 test('arrived_delivery skips duplicate checkpoints in group', function () {
+    checkpointAdvanceToDelivering($this->trip);
+
     // arrived_delivery cho order1 → tạo cho cả 2
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_delivery',
@@ -458,11 +464,7 @@ test('completed does not complete order with remaining delivery points', functio
         'status' => 'pending',
     ]);
 
-    // left_pickup
-    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
-        'checkpoint_type' => 'left_pickup',
-        'occurred_at' => now()->toIso8601String(),
-    ])->assertSuccessful();
+    checkpointAdvanceToDelivering($this->trip);
 
     // arrived_delivery + completed cho dp seq 1
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
@@ -521,6 +523,8 @@ test('arrived_delivery with photos attaches to all grouped checkpoints', functio
     // Tạo file ảnh giả
     $file = UploadedFile::fake()->image('test.jpg');
 
+    checkpointAdvanceToDelivering($this->trip);
+
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
@@ -554,6 +558,8 @@ test('order not in trip returns 422', function () {
         'status' => TripStatus::Pending,
     ]);
 
+    checkpointAdvanceToDelivering($this->trip);
+
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $this->order1->id,
@@ -566,10 +572,16 @@ test('order not in trip returns 422', function () {
         'order_id' => $this->order1->id,
         'delivery_point_id' => $this->dp1->id,
         'occurred_at' => now()->toIso8601String(),
-    ])->assertStatus(422);
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Order không thuộc chuyến này');
 });
 
 test('left_pickup updates trip status to delivering', function () {
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'left_pickup',
         'occurred_at' => now()->toIso8601String(),

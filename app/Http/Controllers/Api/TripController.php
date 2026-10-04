@@ -2,18 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
 use App\Models\Trip;
-use App\Services\Trip\CheckpointFactory;
+use App\Services\Trip\TripStateMachine;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TripController extends Controller
@@ -232,8 +230,8 @@ class TripController extends Controller
             return response()->json(['message' => 'Bạn không phải tài xế được gán cho chuyến này'], 403);
         }
 
-        if ($trip->isCompleted() || $trip->status === TripStatus::DriverSwap) {
-            return response()->json(['message' => 'Chuyến đã kết thúc'], 422);
+        if (in_array($trip->status, [TripStatus::Completed, TripStatus::Cancelled, TripStatus::DriverSwap], true)) {
+            return response()->json(['message' => 'Chuyến đã kết thúc hoặc đang chờ đảo lái'], 422);
         }
 
         if ($trip->is_empty_run || $trip->status === TripStatus::ReturnTrip) {
@@ -248,47 +246,26 @@ class TripController extends Controller
         }
 
         $validated = $request->validate([
-            'end_km' => 'nullable|numeric',
             'completed_at' => 'nullable|date',
             'gps_lat' => 'nullable|numeric',
             'gps_lng' => 'nullable|numeric',
         ]);
 
-        $completedAt = $validated['completed_at'] ?? null;
+        $hasOpenOrders = $trip->orders()
+            ->whereNotIn('status', OrderStatus::closedStatuses())
+            ->exists();
 
-        $allOrdersDone = $trip->orders()
-            ->where('status', '!=', OrderStatus::Completed)
-            ->doesntExist();
-
-        if ($allOrdersDone) {
-            // Tất cả orders đã xong → complete bình thường
-            $trip->complete(completedAt: $completedAt);
-        } else {
-            // Còn orders chưa xong → driver_swap
-            DB::transaction(function () use ($trip, $completedAt, $validated) {
-                $trip->status = TripStatus::DriverSwap;
-                $trip->save();
-
-                $trip->orders()
-                    ->whereIn('status', [
-                        OrderStatus::Sent->value,
-                        OrderStatus::InTransit->value,
-                        OrderStatus::Assigned->value,
-                    ])
-                    ->update(['status' => OrderStatus::DriverSwap->value]);
-
-                // Tạo checkpoint đảo lái cho từng order trong trip
-                app(CheckpointFactory::class)->create(
-                    $trip,
-                    [
-                        'occurred_at' => $completedAt ? Carbon::parse($completedAt) : now(),
-                        'gps_lat' => $validated['gps_lat'] ?? null,
-                        'gps_lng' => $validated['gps_lng'] ?? null,
-                    ],
-                    CheckpointType::DriverSwap,
-                );
-            });
+        if ($hasOpenOrders) {
+            return response()->json([
+                'message' => 'Còn đơn hàng chưa giao xong, hãy dùng Đảo lái nếu cần bàn giao chuyến.',
+            ], 422);
         }
+
+        if (isset($validated['completed_at'])) {
+            $trip->completed_at = Carbon::parse($validated['completed_at']);
+        }
+
+        app(TripStateMachine::class)->complete($trip);
 
         $trip->load([
             'vehicle',

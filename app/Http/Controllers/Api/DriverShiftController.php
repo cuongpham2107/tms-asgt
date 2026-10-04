@@ -86,12 +86,9 @@ class DriverShiftController extends Controller
      *
      * @response array{checkpoint: array, vehicle: array}
      */
-    #[BodyParameter('km_reading', type: 'number', description: 'Số km đồng hồ lúc rời xe.', required: true)]
     public function endVehicle(EndVehicleRequest $request, DriverShift $shift): JsonResponse
     {
         $user = $request->user();
-        $payload = $request->validated();
-        $kmReading = isset($payload['km_reading']) ? (float) $payload['km_reading'] : null;
 
         if ($shift->driver_id !== $user->id) {
             return response()->json(['message' => 'Ca này không thuộc về bạn'], 403);
@@ -112,7 +109,7 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Không tìm thấy xe đang hoạt động trong ca này'], 404);
         }
 
-        $checkpoint = app(EndHandler::class)->handle($shift, $vehicle, $kmReading);
+        $checkpoint = app(EndHandler::class)->handle($shift, $vehicle);
 
         return response()->json([
             'checkpoint' => $checkpoint->toArray(),

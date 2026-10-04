@@ -329,7 +329,7 @@ test('scenario 3: two HHHK orders in same trip delivered sequentially', function
 
 // ─── Scenario 4: Đảo lái giữa chuyến ─────────────────────────────────────────
 
-test('scenario 4: driver swap mid-trip with KM split correctly', function () {
+test('scenario 4: driver swap mid-trip', function () {
     $vehicle = $this->companyVehicle;
     $vehicle->update(['current_mileage' => 80000, 'status' => VehicleStatus::On]);
     $driverA = $this->driverA;
@@ -355,12 +355,11 @@ test('scenario 4: driver swap mid-trip with KM split correctly', function () {
     expect($trip->status)->toBe(TripStatus::DriverSwap);
     expect($order->status)->toBe(OrderStatus::DriverSwap);
 
-    // Reassign to Driver B
-    $trip->update(['driver_id' => $driverB->id, 'status' => TripStatus::Started]);
+    // Reassign to Driver B, resuming where Driver A left off (already left pickup)
+    $trip->update(['driver_id' => $driverB->id, 'status' => TripStatus::Delivering]);
 
-    // Driver B: start → arrived_delivery → completed
+    // Driver B: arrived_delivery → completed
     fwStartShift($driverB, $vehicle);
-    fwPostCheckpoint($driverB, $trip, CheckpointType::Started->value);
     fwPostCheckpoint($driverB, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order->id, deliveryPointId: $dp->id);
     fwPostCheckpoint($driverB, $trip, CheckpointType::Completed->value, kmReading: 80100, orderId: $order->id, deliveryPointId: $dp->id);
 

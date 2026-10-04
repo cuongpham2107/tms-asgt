@@ -205,23 +205,8 @@ test('full HHHK order lifecycle without swap calculates KM correctly', function 
 
 /*
  * Flow: Driver A đi được 1 nửa → kết thúc ca → auto driver_swap → Operator gán Driver B → hoàn tất
- *
- * KM kỳ vọng cho Driver A (in-progress):
- *   total_km_a       = end_km_a - start_km_a          = 10060 - 10000 = 60
- *   loaded_a         = end_km_a - arrived_pickup.km   = 10060 - 10010 = 50
- *   empty_a          = total_km_a - loaded_a           = 60 - 50 = 10
- *
- * KM kỳ vọng cho Driver B (hoàn tất):
- *   total_km_b       = end_km_b - start_km_b          = 10100 - 10060 = 40
- *   loaded_b         = completed.km - start_km_b      = 10090 - 10060 = 30
- *   empty_b          = total_km_b - loaded_b           = 40 - 30 = 10
- *
- * Kiểm tra tổng:
- *   total_trip       = 10100 - 10000 = 100
- *   loaded_total     = 50 + 30 = 80
- *   empty_total      = 10 + 10 = 20 = total_trip - loaded_total ✓
  */
-test('driver swap mid-delivery correctly splits KM between two drivers', function () {
+test('driver swap mid-delivery hands trip over to second driver', function () {
     $driverA = User::factory()->create();
     $driverA->assignRole($this->driverRole);
 
@@ -279,9 +264,10 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
     // ============================================
     // PHASE 2: Operator reassigns Driver B
     // ============================================
+    // Resume where Driver A left off (already left pickup)
     $trip->update([
         'driver_id' => $driverB->id,
-        'status' => TripStatus::Started,
+        'status' => TripStatus::Delivering,
     ]);
 
     DriverSwap::create([
@@ -305,12 +291,6 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
         'vehicle_id' => $this->vehicle->id,
     ])->assertSuccessful();
     $shiftB = DriverShift::find($shiftBResponse->json('shift.id'));
-
-    // Driver B posts started (vehicle mileage = 10060, will auto-assign shift to trip)
-    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
-        'checkpoint_type' => CheckpointType::Started->value,
-        'occurred_at' => now()->toIso8601String(),
-    ])->assertSuccessful();
 
     $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
         'order_id' => $order->id,
@@ -530,18 +510,12 @@ test('driver with 2 orders runs out of shift time triggers swap via trip DriverS
     $trip2->update([
         'driver_id' => $driverB->id,
         'shift_id' => $shiftB->id,
-        'status' => TripStatus::Started,
+        'status' => TripStatus::Delivering,
     ]);
 
     // ============================================
     // PHASE 4: Driver B hoàn tất Order 2
     // ============================================
-
-    // Driver B posts started (vehicle mileage = 10060)
-    $this->postJson("/api/driver/trips/{$trip2->id}/checkpoints", [
-        'checkpoint_type' => CheckpointType::Started->value,
-        'occurred_at' => now()->toIso8601String(),
-    ])->assertSuccessful();
 
     // Order 2: arrived_delivery
     $this->postJson("/api/driver/trips/{$trip2->id}/checkpoints", [

@@ -3,63 +3,64 @@
 namespace App\Services\Trip\Handlers;
 
 use App\Enums\CheckpointType;
-use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
 use App\Services\Trip\CheckpointFactory;
+use App\Services\Trip\TripStateMachine;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Tài xế rời xe giữa ca: chuyến đã giao xong thì hoàn thành, chuyến đang chạy thì chuyển đảo lái.
+ *
+ * @todo P4-T3 thay bằng TripDriverService khi bỏ endpoint end-vehicle.
+ */
 class EndHandler implements CheckpointHandlerInterface
 {
-    public function handle(DriverShift $shift, Vehicle $vehicle, ?float $kmReading = null): TripCheckpoint
+    public function __construct(
+        private readonly TripStateMachine $stateMachine,
+        private readonly CheckpointFactory $checkpointFactory,
+    ) {}
+
+    public function handle(DriverShift $shift, Vehicle $vehicle): TripCheckpoint
     {
         return DB::transaction(function () use ($shift, $vehicle) {
-            // 1. Find active trip on this vehicle in this shift
             $activeTrip = Trip::where('vehicle_id', $vehicle->id)
                 ->where('shift_id', $shift->id)
-                ->whereNotIn('status', [TripStatus::Completed, TripStatus::DriverSwap, TripStatus::Cancelled])
+                ->whereIn('status', [
+                    TripStatus::Started,
+                    TripStatus::ArrivedPickup,
+                    TripStatus::Delivering,
+                    TripStatus::ArrivedDelivery,
+                    TripStatus::Delivered,
+                ])
                 ->first();
 
-            $activeTripId = null;
+            if ($activeTrip?->status === TripStatus::Delivered) {
+                $this->stateMachine->complete($activeTrip);
+            } elseif ($activeTrip !== null) {
+                $this->stateMachine->requestSwap($activeTrip);
 
-            if ($activeTrip !== null) {
-                // Trip chưa hoàn thành — driver_swap giữa chừng
-                $activeTrip->status = TripStatus::DriverSwap;
-                $activeTrip->save();
+                $checkpoint = $this->checkpointFactory
+                    ->create($activeTrip, ['occurred_at' => now()], CheckpointType::DriverSwap)
+                    ->first();
 
-                foreach ($activeTrip->orders()->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])->get() as $order) {
-                    $order->status = OrderStatus::DriverSwap;
-                    $order->save();
+                if ($checkpoint !== null) {
+                    return $checkpoint;
                 }
-
-                $activeTripId = $activeTrip->id;
             }
 
-            // 2. Create TripCheckpoint(s)
-            $checkpoint = null;
-            if ($activeTripId !== null) {
-                $checkpoints = app(CheckpointFactory::class)->create(
-                    $activeTrip,
-                    ['occurred_at' => now()],
-                    CheckpointType::DriverSwap,
-                );
-                $checkpoint = $checkpoints->first();
-            }
+            $isSwap = $activeTrip !== null && $activeTrip->status === TripStatus::DriverSwap;
 
-            if ($checkpoint === null) {
-                $checkpoint = TripCheckpoint::create([
-                    'checkpoint_type' => $activeTripId !== null ? CheckpointType::DriverSwap->value : CheckpointType::End->value,
-                    'trip_id' => $activeTripId,
-                    'shift_id' => $shift->id,
-                    'driver_id' => $shift->driver_id,
-                    'occurred_at' => now(),
-                ]);
-            }
-
-            return $checkpoint;
+            return TripCheckpoint::create([
+                'checkpoint_type' => $isSwap ? CheckpointType::DriverSwap->value : CheckpointType::End->value,
+                'trip_id' => $isSwap ? $activeTrip->id : null,
+                'shift_id' => $shift->id,
+                'driver_id' => $shift->driver_id,
+                'occurred_at' => now(),
+            ]);
         });
     }
 }
