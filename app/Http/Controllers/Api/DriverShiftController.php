@@ -171,7 +171,6 @@ class DriverShiftController extends Controller
                             TripStatus::Delivering,
                             TripStatus::ArrivedDelivery,
                             TripStatus::Delivered,
-                            TripStatus::ReturnTrip,
                         ]);
                 });
             })
@@ -181,7 +180,6 @@ class DriverShiftController extends Controller
                 TripStatus::Delivering,
                 TripStatus::ArrivedDelivery,
                 TripStatus::Delivered,
-                TripStatus::ReturnTrip,
             ])
             ->get();
 

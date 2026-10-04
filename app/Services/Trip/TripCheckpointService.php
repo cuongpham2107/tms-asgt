@@ -34,8 +34,8 @@ class TripCheckpointService
     {
         $checkpointType = CheckpointType::from($payload['checkpoint_type']);
 
-        // Return trip: no orders, return existing checkpoint
-        if ($trip->status === TripStatus::ReturnTrip && in_array($checkpointType, [CheckpointType::Started, CheckpointType::End], true)) {
+        // Chuyến không hàng: started/end đã được tạo sẵn khi điều hành tạo chuyến → trả checkpoint có sẵn
+        if ($trip->is_empty_run && $trip->orders()->doesntExist() && in_array($checkpointType, [CheckpointType::Started, CheckpointType::End], true)) {
             $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id);
             if ($activeCargoTrip !== null) {
                 $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);

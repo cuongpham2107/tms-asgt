@@ -84,6 +84,16 @@ enum OrderStatus: string implements HasColor, HasLabel
         ];
     }
 
+    /**
+     * Đơn đã gán xe và chưa đóng: xe và lái xe của đơn đang bận.
+     *
+     * @return array<int, self>
+     */
+    public static function openStatuses(): array
+    {
+        return [self::Assigned, self::Sent, self::InTransit, self::DriverSwap];
+    }
+
     public function isClosed(): bool
     {
         return in_array($this, self::closedStatuses(), true);

@@ -6,9 +6,7 @@ use App\Enums\CheckpointType;
 use App\Enums\LocationType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
-use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
-use App\Enums\VehicleStatus;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Models\Area;
@@ -19,7 +17,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripAssignmentService;
 use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -32,7 +30,6 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 abstract class CreatesOrderTransportCards
@@ -76,7 +73,7 @@ abstract class CreatesOrderTransportCards
                 ->selectSub(
                     Order::selectRaw('COUNT(*)')
                         ->whereIn('trip_id', Trip::select('id')->whereColumn('trips.driver_id', 'users.id'))
-                        ->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Sent->value]),
+                        ->whereIn('status', OrderStatus::openStatuses()),
                     'active_orders_count'
                 )
                 ->selectSub(
@@ -204,7 +201,7 @@ abstract class CreatesOrderTransportCards
                 ->selectSub(
                     Order::selectRaw('COUNT(*)')
                         ->whereIn('trip_id', Trip::select('id')->whereColumn('trips.vehicle_id', 'vehicles.id'))
-                        ->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Sent->value]),
+                        ->whereIn('status', OrderStatus::openStatuses()),
                     'active_orders_count'
                 )
                 ->with([
@@ -326,10 +323,7 @@ abstract class CreatesOrderTransportCards
                 ->select('orders.id', 'orders.pickup_location_id', 'trips.vehicle_id', 'orders.created_at')
                 ->join('trips', 'orders.trip_id', '=', 'trips.id')
                 ->whereIn('trips.vehicle_id', $vehicleIds)
-                ->whereIn('orders.status', [
-                    OrderStatus::Assigned->value,
-                    OrderStatus::Sent->value,
-                ])
+                ->whereIn('orders.status', OrderStatus::openStatuses())
                 ->with(['pickupLocation' => fn ($q) => $q->select('id', 'name')])
                 ->orderBy('orders.created_at', 'desc')
                 ->get()
@@ -396,10 +390,7 @@ abstract class CreatesOrderTransportCards
         $activeOrder = Order::query()
             ->select('id', 'pickup_location_id', 'created_at')
             ->whereHas('trip', fn ($q) => $q->where('vehicle_id', $vehicle->id))
-            ->whereIn('status', [
-                OrderStatus::Assigned->value,
-                OrderStatus::Sent->value,
-            ])
+            ->whereIn('status', OrderStatus::openStatuses())
             ->with(['pickupLocation' => fn ($q) => $q->select('id', 'name')])
             ->latest('created_at')
             ->first();
@@ -937,49 +928,12 @@ abstract class CreatesOrderTransportCards
             }
 
             if ($forceAssignedWhenTransportProvided && filled($data['vehicle_id'] ?? null)) {
-                $trip = Trip::create([
-                    'trip_code' => Trip::generateTripCode(),
-                    'vehicle_id' => $data['vehicle_id'],
-                    'driver_id' => $data['driver_id'] ?? null,
-                    'status' => TripStatus::Pending,
-                    'start_location_id' => $order->pickup_location_id,
-                    'end_location_id' => $order->deliveryPoints()
-                        ->orderBy('sequence', 'desc')
-                        ->first()?->location_id,
-                ]);
-
-                $status = ! empty($data['send_immediately']) ? OrderStatus::Sent->value : OrderStatus::Assigned->value;
-
-                $orderUpdates = [
-                    'trip_id' => $trip->id,
-                    'status' => $status,
-                ];
-
-                if (! empty($data['send_immediately'])) {
-                    $orderUpdates['sent_at'] = now();
-                }
-
-                $updated = $order->update($orderUpdates);
-
-                if (! $updated) {
-                    throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
-                }
-
-                static::createCheckpointsForExternalVehicle($trip, collect([$order]));
-
-                if (! empty($data['send_immediately'])) {
-                    try {
-                        app(DriverNotificationService::class)->sendOrderAssigned($order, $trip);
-                    } catch (Throwable $e) {
-                        Log::warning('Lỗi gửi push notification khi tạo đơn: '.$e->getMessage(), ['exception' => $e]);
-                    }
-                }
-
-                $vehicle = Vehicle::query()->find($data['vehicle_id']);
-
-                if ($vehicle !== null) {
-                    $vehicle->update(['status' => VehicleStatus::Running]);
-                }
+                app(TripAssignmentService::class)->assign(
+                    collect([$order]),
+                    (int) $data['vehicle_id'],
+                    filled($data['driver_id'] ?? null) ? (int) $data['driver_id'] : null,
+                    ! empty($data['send_immediately']),
+                );
             }
         });
 

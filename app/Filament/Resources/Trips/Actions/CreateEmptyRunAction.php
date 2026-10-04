@@ -131,7 +131,7 @@ class CreateEmptyRunAction
                     'vehicle_id' => $data['vehicle_id'],
                     'driver_id' => $data['driver_id'],
                     'shift_id' => $activeShift?->id,
-                    'status' => TripStatus::ReturnTrip,
+                    'status' => TripStatus::Started,
                     'is_empty_run' => true,
                     'start_location_id' => $data['start_location_id'],
                     'end_location_id' => $data['end_location_id'],

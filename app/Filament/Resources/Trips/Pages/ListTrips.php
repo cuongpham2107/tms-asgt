@@ -151,7 +151,6 @@ class ListTrips extends ListRecords
             TripStatus::ArrivedDelivery->value,
             TripStatus::Delivered->value,
             TripStatus::DriverSwap->value,
-            TripStatus::ReturnTrip->value,
         ];
 
         $running = (clone $baseQuery)
@@ -483,7 +482,6 @@ class ListTrips extends ListRecords
             TripStatus::ArrivedDelivery->value => 4,
             TripStatus::Delivered->value => 5,
             TripStatus::DriverSwap->value => 6,
-            TripStatus::ReturnTrip->value => 7,
             TripStatus::Completed->value => 8,
             TripStatus::Cancelled->value => 9,
         ];
@@ -563,7 +561,6 @@ class ListTrips extends ListRecords
                 TripStatus::ArrivedDelivery->value,
                 TripStatus::Delivered->value,
                 TripStatus::DriverSwap->value,
-                TripStatus::ReturnTrip->value,
             ]),
             'started' => $query->where('status', TripStatus::Started->value),
             'arrived_pickup' => $query->where('status', TripStatus::ArrivedPickup->value),
@@ -571,7 +568,7 @@ class ListTrips extends ListRecords
             'arrived_delivery' => $query->where('status', TripStatus::ArrivedDelivery->value),
             'delivered' => $query->where('status', TripStatus::Delivered->value),
             'driver_swap' => $query->where('status', TripStatus::DriverSwap->value),
-            'return_trip' => $query->where('status', TripStatus::ReturnTrip->value),
+            'return_trip' => $query->where('is_empty_run', true)->whereNotIn('status', [TripStatus::Completed->value, TripStatus::Cancelled->value]),
             'completed' => $query->where('status', TripStatus::Completed->value),
             'cancelled' => $query->where('status', TripStatus::Cancelled->value),
             'delayed' => $query->whereIn('status', [

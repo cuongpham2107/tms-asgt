@@ -234,7 +234,7 @@ class TripController extends Controller
             return response()->json(['message' => 'Chuyến đã kết thúc hoặc đang chờ đảo lái'], 422);
         }
 
-        if ($trip->is_empty_run || $trip->status === TripStatus::ReturnTrip) {
+        if ($trip->is_empty_run) {
             $activeCargoTrip = Trip::getActiveCargoTripForDriver($user->id, $trip->id);
             if ($activeCargoTrip !== null) {
                 $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);
@@ -313,7 +313,6 @@ class TripController extends Controller
             TripStatus::Delivering,
             TripStatus::ArrivedDelivery,
             TripStatus::Delivered,
-            TripStatus::ReturnTrip,
         ];
 
         foreach ($trips as $trip) {

@@ -62,7 +62,7 @@ it('counts return trips as in_progress', function () {
     $trip = Trip::factory()->create([
         'driver_id' => $this->driver->id,
         'vehicle_id' => $this->vehicle->id,
-        'status' => TripStatus::ReturnTrip,
+        'status' => TripStatus::Started,
         'started_at' => now()->subHours(2),
     ]);
 

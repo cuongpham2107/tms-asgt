@@ -78,7 +78,6 @@ class ExportTripsExcelAction
                             'completed' => 'Hoàn thành',
                             'delayed' => 'Trễ giờ',
                             'driver_swap' => 'Đảo lái',
-                            'return_trip' => 'Chuyến không hàng',
                             'cancelled' => 'Đã huỷ',
                         ]),
                 ]),

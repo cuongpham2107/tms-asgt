@@ -44,7 +44,6 @@ class EndShiftAction
                                         TripStatus::Delivering,
                                         TripStatus::ArrivedDelivery,
                                         TripStatus::Delivered,
-                                        TripStatus::ReturnTrip,
                                     ]);
                             });
                         })
@@ -54,7 +53,6 @@ class EndShiftAction
                             TripStatus::Delivering,
                             TripStatus::ArrivedDelivery,
                             TripStatus::Delivered,
-                            TripStatus::ReturnTrip,
                         ])
                         ->get();
 

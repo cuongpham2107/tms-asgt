@@ -55,7 +55,7 @@ test('cargo trip can be started even if an empty run exists for driver and vehic
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
         'shift_id' => $shift->id,
-        'status' => TripStatus::ReturnTrip,
+        'status' => TripStatus::Started,
         'is_empty_run' => true,
         'start_km' => 10000,
     ]);
@@ -149,7 +149,7 @@ test('empty run cannot be completed while a cargo trip is in progress', function
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
         'shift_id' => $shift->id,
-        'status' => TripStatus::ReturnTrip,
+        'status' => TripStatus::Started,
         'is_empty_run' => true,
         'start_km' => 20050,
     ]);
@@ -167,7 +167,7 @@ test('empty run cannot be completed while a cargo trip is in progress', function
         ]);
 
     $emptyTrip->refresh();
-    expect($emptyTrip->status)->toBe(TripStatus::ReturnTrip);
+    expect($emptyTrip->status)->toBe(TripStatus::Started);
 });
 
 test('empty run cannot record checkpoints while a cargo trip is in progress', function () {
@@ -222,7 +222,7 @@ test('empty run cannot record checkpoints while a cargo trip is in progress', fu
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
         'shift_id' => $shift->id,
-        'status' => TripStatus::ReturnTrip,
+        'status' => TripStatus::Started,
         'is_empty_run' => true,
         'start_km' => 30050,
     ]);
@@ -280,7 +280,7 @@ test('empty run can be completed after cargo trip is completed or driver swapped
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
         'shift_id' => $shift->id,
-        'status' => TripStatus::ReturnTrip,
+        'status' => TripStatus::Started,
         'is_empty_run' => true,
         'start_km' => 40050,
     ]);
@@ -316,7 +316,7 @@ test('api current and active endpoints prioritize cargo trip over empty run', fu
         'trip_code' => 'TRIP-EMPTY-05',
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
-        'status' => TripStatus::ReturnTrip,
+        'status' => TripStatus::Started,
         'is_empty_run' => true,
         'created_at' => now()->addMinute(),
     ]);
@@ -407,7 +407,7 @@ test('empty run can be executed and completed when a cargo trip is still pending
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
         'shift_id' => $shift->id,
-        'status' => TripStatus::ReturnTrip,
+        'status' => TripStatus::Started,
         'is_empty_run' => true,
         'start_km' => 60000,
     ]);

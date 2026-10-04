@@ -4,15 +4,11 @@ namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
-use App\Enums\TripStatus;
-use App\Enums\VehicleStatus;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
-use App\Models\Trip;
-use App\Models\Vehicle;
-use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripAssignmentService;
 use Filament\Actions\BulkAction;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Toggle;
@@ -21,7 +17,6 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use Throwable;
 
@@ -116,58 +111,12 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
         try {
             $label = $orderStatus === OrderStatus::Sent ? 'Tạo và gửi chuyến' : 'Tạo chuyến';
 
-            DB::transaction(function () use ($draftOrders, $data, $orderStatus) {
-                $sorted = $draftOrders->sortBy('planned_loading_at')->values();
-                $firstOrder = $sorted->first();
-                $lastOrder = $sorted->last();
-
-                $trip = Trip::create([
-                    'trip_code' => Trip::generateTripCode(),
-                    'vehicle_id' => $data['vehicle_id'],
-                    'driver_id' => $data['driver_id'] ?? null,
-                    'status' => TripStatus::Pending,
-                    'start_location_id' => $firstOrder?->pickup_location_id,
-                    'end_location_id' => $lastOrder?->deliveryPoints()?->orderBy('sequence', 'desc')?->first()?->location_id,
-                ]);
-
-                $sequence = 0;
-                foreach ($draftOrders as $order) {
-                    $orderUpdates = [
-                        'trip_id' => $trip->id,
-                        'trip_sequence' => $sequence++,
-                        'status' => $orderStatus,
-                    ];
-
-                    if ($orderStatus === OrderStatus::Sent) {
-                        $orderUpdates['sent_at'] = now();
-                    }
-
-                    $updated = $order->update($orderUpdates);
-
-                    if (! $updated) {
-                        throw new \RuntimeException("Không thể gán đơn hàng {$order->order_code} vào chuyến.");
-                    }
-                }
-
-                static::createCheckpointsForExternalVehicle($trip, $draftOrders);
-
-                if ($orderStatus === OrderStatus::Sent) {
-                    try {
-                        app(DriverNotificationService::class)->sendTripDispatched($trip, $draftOrders->count());
-                    } catch (Throwable) {
-                        // Không ngắt luồng nếu push notification gặp lỗi
-                    }
-                }
-
-                if (filled($data['vehicle_id'] ?? null)) {
-                    $vehicle = Vehicle::query()->find($data['vehicle_id']);
-
-                    if ($vehicle !== null) {
-                        $vehicle->status = VehicleStatus::Running;
-                        $vehicle->save();
-                    }
-                }
-            });
+            app(TripAssignmentService::class)->assign(
+                $draftOrders,
+                (int) $data['vehicle_id'],
+                filled($data['driver_id'] ?? null) ? (int) $data['driver_id'] : null,
+                $orderStatus === OrderStatus::Sent,
+            );
 
             Notification::make()
                 ->title("{$label} thành công")

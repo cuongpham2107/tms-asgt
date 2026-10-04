@@ -251,7 +251,7 @@ class ReassignDriverAction
                         'vehicle_id' => $data['return_vehicle_id'],
                         'driver_id' => $oldDriver->id,
                         'shift_id' => $oldShift?->id,
-                        'status' => TripStatus::ReturnTrip,
+                        'status' => TripStatus::Started,
                         'start_location_id' => $data['start_location_id'] ?? null,
                         'end_location_id' => $data['end_location_id'] ?? null,
                         'started_at' => $now,

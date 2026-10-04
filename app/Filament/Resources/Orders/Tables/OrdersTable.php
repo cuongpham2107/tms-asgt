@@ -5,9 +5,7 @@ namespace App\Filament\Resources\Orders\Tables;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
-use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
-use App\Enums\VehicleStatus;
 use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
@@ -20,9 +18,8 @@ use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Order;
-use App\Models\Trip;
-use App\Models\Vehicle;
 use App\Services\OsrmService;
+use App\Services\Trip\TripAssignmentService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
@@ -273,29 +270,12 @@ class OrdersTable extends BaseTable
                             $record->update($data);
 
                             if (filled($vehicleId) && ! $record->trip) {
-                                $trip = Trip::create([
-                                    'trip_code' => Trip::generateTripCode(),
-                                    'vehicle_id' => $vehicleId,
-                                    'driver_id' => $driverId,
-                                    'status' => TripStatus::Pending,
-                                    'start_location_id' => $record->pickup_location_id,
-                                    'end_location_id' => $record->deliveryPoints()
-                                        ->orderBy('sequence', 'desc')
-                                        ->first()?->location_id,
-                                ]);
-
-                                $record->update([
-                                    'trip_id' => $trip->id,
-                                    'status' => OrderStatus::Assigned,
-                                ]);
-
-                                CreatesOrderTransportCards::createCheckpointsForExternalVehicle($trip, collect([$record]));
-
-                                $vehicle = Vehicle::query()->find($vehicleId);
-                                if ($vehicle !== null) {
-                                    $vehicle->status = VehicleStatus::Running;
-                                    $vehicle->save();
-                                }
+                                app(TripAssignmentService::class)->assign(
+                                    collect([$record]),
+                                    (int) $vehicleId,
+                                    filled($driverId) ? (int) $driverId : null,
+                                    false,
+                                );
                             }
 
                             return $record;

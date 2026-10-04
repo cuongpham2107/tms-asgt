@@ -623,7 +623,7 @@ class FullWorkflowTest extends Command
             'trip_code' => Trip::generateTripCode(),
             'vehicle_id' => $this->companyVehicle->id,
             'driver_id' => $this->driverA->id,
-            'status' => TripStatus::ReturnTrip,
+            'status' => TripStatus::Started,
             'start_location_id' => $this->delivery->id,
             'end_location_id' => $this->pickup->id,
             'started_at' => now(),

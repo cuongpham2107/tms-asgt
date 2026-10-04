@@ -403,7 +403,7 @@ test('scenario 5: return trip with empty KM after delivery', function () {
         'trip_code' => Trip::generateTripCode(),
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
-        'status' => TripStatus::ReturnTrip,
+        'status' => TripStatus::Started,
         'start_location_id' => $this->deliveryLocation->id,
         'end_location_id' => $this->pickupLocation->id,
         'started_at' => now(),

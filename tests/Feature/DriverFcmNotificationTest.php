@@ -386,7 +386,7 @@ test('driver notification service sends empty run push notification to driver', 
         'trip_code' => 'TRIP-EMPTY-001',
         'vehicle_id' => $vehicle->id,
         'driver_id' => $driver->id,
-        'status' => TripStatus::ReturnTrip,
+        'status' => TripStatus::Started,
         'is_empty_run' => true,
         'start_location_id' => $locStart->id,
         'end_location_id' => $locEnd->id,
@@ -449,7 +449,7 @@ test('create empty run action sends fcm notification to driver', function () {
 
     $createdTrip = Trip::where('driver_id', $driver->id)->where('is_empty_run', true)->first();
     expect($createdTrip)->not->toBeNull()
-        ->and($createdTrip->status)->toBe(TripStatus::ReturnTrip)
+        ->and($createdTrip->status)->toBe(TripStatus::Started)
         ->and($createdTrip->is_empty_run)->toBeTrue();
 });
 
@@ -588,7 +588,7 @@ test('reassign driver action sends fcm notification to new driver and return tri
     $trip->refresh();
     expect($trip->driver_id)->toBe($newDriver->id);
 
-    $returnTrip = Trip::where('driver_id', $oldDriver->id)->where('status', TripStatus::ReturnTrip)->first();
+    $returnTrip = Trip::where('driver_id', $oldDriver->id)->where('status', TripStatus::Started)->first();
     expect($returnTrip)->not->toBeNull();
 });
 
