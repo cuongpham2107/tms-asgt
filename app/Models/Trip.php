@@ -58,6 +58,7 @@ class Trip extends Model
         'note',
         'start_location_id',
         'end_location_id',
+        'status_before_swap',
     ];
 
     protected function casts(): array
@@ -71,6 +72,7 @@ class Trip extends Model
             'total_km_empty' => 'decimal:1',
             'is_empty_run' => 'boolean',
             'status' => TripStatus::class,
+            'status_before_swap' => TripStatus::class,
         ];
     }
 
