@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Enums\TripStatus;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Services\Trip\TripStateMachine;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -69,6 +70,8 @@ class OrderResource extends JsonResource
             'status' => $this->status,
             /** Nhãn tiếng Việt của trạng thái đơn hàng. */
             'status_label' => $this->status?->getLabel(),
+            /** Các nút lái xe được bấm trên đơn này (do server quyết định). */
+            'available_actions' => app(TripStateMachine::class)->availableOrderActions($this->resource, $request->user()),
             /** Độ ưu tiên của đơn hàng (low, medium, high, urgent). */
             'priority' => $this->priority,
             /** Nhãn tiếng Việt của độ ưu tiên đơn hàng. */

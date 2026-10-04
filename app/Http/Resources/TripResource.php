@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Trip;
+use App\Services\Trip\TripStateMachine;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,6 +21,8 @@ class TripResource extends JsonResource
             'trip_code' => $this->trip_code,
             'vehicle_id' => $this->vehicle_id,
             'status' => $this->status,
+            'status_label' => $this->status?->getLabel(),
+            'available_actions' => app(TripStateMachine::class)->availableActions($this->resource, $request->user()),
             'started_at' => $this->started_at?->toIso8601String(),
             'completed_at' => $this->completed_at?->toIso8601String(),
             'total_km' => $this->total_km,

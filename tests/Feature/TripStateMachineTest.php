@@ -375,7 +375,7 @@ test('cancelled checkpoint directly via applyCheckpoint throws InvalidTransition
 
 test('availableActions returns correct actions for trip statuses', function () {
     $trip = createTestTrip($this->vehicle, TripStatus::Pending);
-    expect($this->stateMachine->availableActions($trip))->toBe(['started']);
+    expect($this->stateMachine->availableActions($trip))->toBe(['started', 'arrived_pickup']);
 
     $trip->status = TripStatus::Started;
     expect($this->stateMachine->availableActions($trip))->toBe(['arrived_pickup', 'request_swap']);

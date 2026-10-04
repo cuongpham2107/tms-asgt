@@ -14,7 +14,7 @@ class OrderController extends Controller
     /**
      * Danh sách đơn hàng được gửi lệnh cho lái xe.
      *
-     * Chỉ trả về đơn đã gửi lệnh (status: Sent, InTransit).
+     * Chỉ trả về đơn đã gửi lệnh (status: Sent, InTransit, DriverSwap).
      * Đơn ở trạng thái Assigned (chưa gửi lệnh) sẽ không hiển thị.
      * Sắp xếp theo planned_loading_at tăng dần.
      *
@@ -33,7 +33,7 @@ class OrderController extends Controller
                 'tripCheckpoints' => fn ($query) => $query->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
-            ->whereIn('status', [OrderStatus::Sent, OrderStatus::InTransit])
+            ->whereIn('status', [OrderStatus::Sent, OrderStatus::InTransit, OrderStatus::DriverSwap])
             ->orderBy('planned_loading_at')
             ->get();
 
@@ -62,7 +62,7 @@ class OrderController extends Controller
         }
 
         // Driver only sees orders that have been sent
-        if ($order->status === OrderStatus::Assigned) {
+        if (in_array($order->status, [OrderStatus::Draft, OrderStatus::Assigned], true)) {
             /** @status 403 */
             return response()->json(['message' => 'Order has not been sent yet'], 403);
         }
@@ -167,7 +167,7 @@ class OrderController extends Controller
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
             ->selectRaw("
                 SUM(CASE WHEN status IN ('assigned') THEN 1 ELSE 0 END) as assigned,
-                SUM(CASE WHEN status IN ('sent') THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status IN ('sent', 'in_transit', 'driver_swap') THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
             ")
             ->first();

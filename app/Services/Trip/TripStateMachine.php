@@ -519,18 +519,75 @@ class TripStateMachine
     }
 
     /**
+     * Các nút lái xe được bấm trên chuyến. Lái không giữ chuyến thì không có nút nào.
+     *
      * @return array<int, string>
      */
     public function availableActions(Trip $trip, ?User $driver = null): array
     {
+        if ($driver !== null && (int) $trip->driver_id !== (int) $driver->id) {
+            return [];
+        }
+
         return match ($trip->status) {
-            TripStatus::Pending => ['started'],
+            TripStatus::Pending => ['started', 'arrived_pickup'],
             TripStatus::Started => ['arrived_pickup', 'request_swap'],
             TripStatus::ArrivedPickup => ['left_pickup', 'request_swap'],
-            TripStatus::Delivering => ['arrived_delivery', 'completed', 'request_swap'],
-            TripStatus::ArrivedDelivery => ['arrived_delivery', 'completed', 'request_swap'],
+            TripStatus::Delivering, TripStatus::ArrivedDelivery => ['arrived_delivery', 'completed', 'request_swap'],
             TripStatus::Delivered => ['end'],
             default => [],
         };
+    }
+
+    /**
+     * Các nút lái xe được bấm trên một đơn, theo tiến độ của chính đơn đó.
+     *
+     * @return array<int, string>
+     */
+    public function availableOrderActions(Order $order, ?User $driver = null): array
+    {
+        $trip = $order->trip;
+
+        if ($trip === null || $order->status === OrderStatus::Cancelled) {
+            return [];
+        }
+
+        $tripActions = $this->availableActions($trip, $driver);
+
+        if ($tripActions === []) {
+            return [];
+        }
+
+        $swap = in_array('request_swap', $tripActions, true) ? ['request_swap'] : [];
+
+        if ($order->status === OrderStatus::Completed) {
+            $hasEnd = $order->tripCheckpoints()->where('checkpoint_type', CheckpointType::End->value)->exists();
+
+            return $hasEnd ? $swap : ['end', ...$swap];
+        }
+
+        return match ($trip->status) {
+            TripStatus::Pending, TripStatus::Started, TripStatus::ArrivedPickup => array_values(array_intersect($tripActions, ['arrived_pickup', 'left_pickup', 'request_swap'])),
+            TripStatus::Delivering, TripStatus::ArrivedDelivery => [...$this->nextDeliveryAction($order), ...$swap],
+            default => [],
+        };
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function nextDeliveryAction(Order $order): array
+    {
+        $statuses = $order->deliveryPoints()->pluck('status');
+
+        if ($statuses->contains(OrderDeliveryPointStatus::Arrived)) {
+            return ['completed'];
+        }
+
+        if ($statuses->isEmpty() || $statuses->contains(OrderDeliveryPointStatus::Pending)) {
+            return ['arrived_delivery'];
+        }
+
+        return [];
     }
 }

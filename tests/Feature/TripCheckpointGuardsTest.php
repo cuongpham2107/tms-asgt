@@ -17,6 +17,7 @@ use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Trip\TripStateMachine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
@@ -215,4 +216,33 @@ test('re-sending end for a completed trip is accepted', function () {
     $this->trip->update(['status' => TripStatus::Completed, 'completed_at' => now()]);
 
     guardsPostCheckpoint($this->trip, 'end')->assertSuccessful();
+});
+
+test('a driver who does not hold the trip gets no actions', function () {
+    $otherDriver = User::factory()->create();
+
+    expect(app(TripStateMachine::class)->availableActions($this->trip, $otherDriver))->toBe([])
+        ->and(app(TripStateMachine::class)->availableOrderActions($this->order1, $otherDriver))->toBe([]);
+});
+
+test('order actions follow the progress of each order', function () {
+    $machine = app(TripStateMachine::class);
+
+    expect($machine->availableOrderActions($this->order1->fresh(), $this->driver))->toBe(['arrived_pickup']);
+
+    guardsDriveToDelivering($this->trip);
+    expect($machine->availableOrderActions($this->order1->fresh(), $this->driver))->toBe(['arrived_delivery', 'request_swap']);
+
+    guardsPostCheckpoint($this->trip, 'arrived_delivery', ['order_id' => $this->order1->id, 'delivery_point_id' => $this->dp1->id])->assertSuccessful();
+    expect($machine->availableOrderActions($this->order1->fresh(), $this->driver))->toBe(['completed', 'request_swap']);
+
+    guardsPostCheckpoint($this->trip, 'completed', ['order_id' => $this->order1->id, 'delivery_point_id' => $this->dp1->id])->assertSuccessful();
+    expect($machine->availableOrderActions($this->order1->fresh(), $this->driver))->toBe(['end']);
+});
+
+test('trip detail API returns status label and available actions', function () {
+    $this->getJson("/api/driver/trips/{$this->trip->id}")
+        ->assertSuccessful()
+        ->assertJsonPath('data.status_label', TripStatus::Pending->getLabel())
+        ->assertJsonPath('data.available_actions', ['started', 'arrived_pickup']);
 });
