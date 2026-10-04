@@ -18,67 +18,52 @@ import { Ionicons } from "@expo/vector-icons";
 
 const statusConfig: Record<
     string,
-    { icon: string; bg: string; text: string; label: string }
+    { icon: string; bg: string; text: string }
 > = {
     pending: {
         icon: "time-outline",
         bg: "#F3F4F6",
         text: "#6B7280",
-        label: "Chờ",
     },
     started: {
         icon: "play-circle-outline",
         bg: "#FEF3C7",
         text: "#D97706",
-        label: "Đang chạy",
     },
     arrived_pickup: {
         icon: "cube-outline",
         bg: "#FEF3C7",
         text: "#D97706",
-        label: "Đến lấy",
     },
     delivering: {
         icon: "car-outline",
         bg: "#DBEAFE",
         text: "#2563EB",
-        label: "Đang giao",
     },
     arrived_delivery: {
         icon: "location-outline",
         bg: "#FEF3C7",
         text: "#D97706",
-        label: "Đến giao",
     },
     delivered: {
         icon: "checkmark-done",
         bg: "#D1FAE5",
         text: "#059669",
-        label: "Đã giao",
     },
     completed: {
         icon: "checkmark-circle",
         bg: "#D1FAE5",
         text: "#059669",
-        label: "Hoàn thành",
     },
     driver_swap: {
         icon: "swap-horizontal",
         bg: "#E0E7FF",
         text: "#4F46E5",
-        label: "Đảo lái",
-    },
-    return_trip: {
-        icon: "arrow-undo",
-        bg: "#FEE2E2",
-        text: "#DC2626",
-        label: "Quay đầu",
     },
     cancelled: {
         icon: "close-circle",
         bg: "#FEE2E2",
         text: "#DC2626",
-        label: "Huỷ",
     },
 };
 
@@ -87,7 +72,6 @@ const IN_PROGRESS_STATUSES = [
     "arrived_pickup",
     "delivering",
     "arrived_delivery",
-    "return_trip",
 ];
 
 const tabs = [
@@ -107,7 +91,7 @@ const periods = [
     { key: "month", label: "Tháng này" },
 ];
 
-const fmt = (v: any) => (v != null ? parseInt(v).toLocaleString("vi-VN") : "-");
+const fmt = (v: any) => (v != null ? parseInt(v).toLocaleString("vi-VN") : "—");
 
 export default function TripsScreen() {
     const { token, shift } = useAuth();
@@ -458,11 +442,6 @@ export default function TripsScreen() {
                         item.status !== "driver_swap" &&
                         item.status !== "completed";
                     const isSwapped = userId && item.driver_id !== userId;
-                    const handoverKm = isSwapped
-                        ? (item.driver_swaps || []).find(
-                              (s: any) => s.from_driver_id === userId,
-                          )?.handover_km
-                        : null;
                     return (
                         <TouchableOpacity
                             style={[
@@ -599,16 +578,12 @@ export default function TripsScreen() {
                                             { color: st.text },
                                         ]}
                                     >
-                                        {st.label}
+                                        {item.status_label ?? item.status}
                                     </Text>
                                 </View>
                             </View>
                             <Text style={s.kmLine}>
-                                📏 {fmt(item.total_km)} km ·{" "}
-                                {fmt(item.start_km)} →{" "}
-                                {isSwapped && handoverKm != null
-                                    ? fmt(handoverKm)
-                                    : fmt(item.end_km)}
+                                📏 {fmt(item.total_km)} km
                             </Text>
                             {(() => {
                                 const loadingTimes = (item.orders || [])

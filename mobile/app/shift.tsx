@@ -1,11 +1,12 @@
 import { useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { flushAndStop, hasAlwaysPermission } from "../src/tracking/tracker";
 
 const shiftOptions = [
   { key: "full", label: "Cả ca (X)", desc: "Làm việc toàn thời gian" },
@@ -20,7 +21,6 @@ export default function ShiftScreen() {
   const { showLoading, hideLoading } = useLoading();
   const [loading, setLoading] = useState(false);
   const [showEnd, setShowEnd] = useState(false);
-  const [endKm, setEndKm] = useState("");
   const [ending, setEnding] = useState(false);
   const [activeWarning, setActiveWarning] = useState<string | null>(null);
 
@@ -30,8 +30,6 @@ export default function ShiftScreen() {
       if (res?.shift && !res.shift.end_time) {
         setShift(res.shift);
         setShowEnd(true);
-        const vKm = res.shift.vehicle?.current_mileage;
-        if (vKm != null && !endKm) setEndKm(String(parseInt(vKm)));
       }
     }).catch(() => {});
   }, [token]));
@@ -63,6 +61,11 @@ export default function ShiftScreen() {
   }, [token]));
 
   async function startShift(type: string) {
+    // Bắt buộc quyền vị trí "Luôn luôn" trước khi vào ca (ghi GPS tính km)
+    if (!(await hasAlwaysPermission().catch(() => false))) {
+      router.push("/gps-permission");
+      return;
+    }
     setLoading(true); showLoading();
     try {
       let gps = null;
@@ -87,14 +90,12 @@ export default function ShiftScreen() {
   }
 
   async function handleEndShift() {
-    const km = parseFloat(endKm);
-    if (!km || km <= 0) { Alert.alert("Thiếu", "Nhập số Km kết thúc"); return; }
     if (!shift?.id) return;
 
     setEnding(true); showLoading();
     try {
-      await api.shifts.endVehicle(String(shift.id), km, token!);
       const res = await api.shifts.end(token!);
+      await flushAndStop();
       setShift(res?.shift || null);
       setShowEnd(false);
       Alert.alert("Thành công", "Đã kết thúc ca");
@@ -123,7 +124,7 @@ export default function ShiftScreen() {
       ) : (
         <>
           <Text style={s.title}>Kết thúc ca làm việc</Text>
-          <Text style={s.subtitle}>Ca đang hoạt động — nhập Km đồng hồ để kết thúc</Text>
+          <Text style={s.subtitle}>Ca đang hoạt động — các chuyến chưa xong sẽ tự chuyển đảo lái</Text>
 
           {activeWarning && (
             <View style={s.warnBox}>
@@ -135,17 +136,6 @@ export default function ShiftScreen() {
             </View>
           )}
 
-          <View style={s.endCard}>
-            <Text style={s.endLabel}>Km đồng hồ hiện tại</Text>
-            <TextInput
-              style={s.endInput}
-              placeholder="Nhập số Km đồng hồ"
-              placeholderTextColor="#D1D5DB"
-              keyboardType="numeric"
-              value={endKm}
-              onChangeText={setEndKm}
-            />
-          </View>
           <TouchableOpacity style={[s.endBtn, ending && s.btnDisabled]} onPress={handleEndShift} disabled={ending}>
             <Text style={s.endBtnText}>{ending ? "Đang xử lý..." : "Kết thúc ca"}</Text>
           </TouchableOpacity>
@@ -163,9 +153,6 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: "600", color: "#4F46E5" },
   cardDesc: { fontSize: 14, color: "#6B7280", marginTop: 4 },
   loading: { textAlign: "center", color: "#6B7280", marginTop: 12 },
-  endCard: { backgroundColor: "#fff", padding: 20, borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", marginBottom: 16 },
-  endLabel: { fontSize: 14, fontWeight: "600", color: "#111827", marginBottom: 10 },
-  endInput: { backgroundColor: "#F9FAFB", padding: 14, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", fontSize: 18, color: "#111827" },
   endBtn: { backgroundColor: "#EF4444", padding: 16, borderRadius: 12, alignItems: "center" },
   endBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   btnDisabled: { opacity: 0.6 },

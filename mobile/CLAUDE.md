@@ -34,12 +34,14 @@ Kết nối với TMS-ASGT Laravel backend qua Sanctum API:
 |----------|-------|
 | `POST /api/driver/login` | Đăng nhập (email + password → token) |
 | `POST /api/driver/shifts/start` | Bắt đầu ca |
-| `POST /api/driver/shifts/end` | Kết thúc ca (cần `end-vehicle` trước) |
-| `POST /api/driver/shifts/{shift}/end-vehicle` | Nhập km rời xe |
+| `POST /api/driver/shifts/end` | Kết thúc ca (chuyến đang chạy tự chuyển đảo lái) |
+| `GET /api/driver/shifts/active` | Trạng thái ca + `min_app_version` |
 | `GET /api/driver/shifts/current` | Ca hiện tại |
 | `GET /api/driver/trips/active` | Chuyến đang active |
 | `GET /api/driver/trips/{id}` | Chi tiết chuyến |
-| `POST /api/driver/trips/{id}/complete` | Kết thúc chuyến (Completed hoặc DriverSwap) |
+| `POST /api/driver/trips/{id}/complete` | Kết thúc chuyến (chỉ khi `available_actions` có `end`) |
+| `POST /api/driver/trips/{id}/swap` | Xin đảo lái `{reason, note?}` |
+| `POST /api/driver/gps-points` | Gửi lô điểm GPS (`src/tracking/`) |
 | `POST /api/driver/trips/{id}/checkpoints` | Tạo checkpoint |
 | `GET /api/driver/orders` | Danh sách đơn hàng |
 | `GET /api/driver/orders/{id}` | Chi tiết đơn hàng |
@@ -63,6 +65,7 @@ Trước khi chạy, cập nhật IP trong `src/lib/api.ts` trỏ đến máy ch
 3. **Dashboard** → Xem chuyến đang chạy, thống kê ca
 4. **Chuyến đi** → Xem chi tiết, orders trong chuyến
 5. **Đơn hàng** → Gửi checkpoints (đến lấy hàng, đến giao, giao xong)
-6. **Kết thúc chuyến** → `POST /trips/{id}/complete` (nếu đơn chưa xong → DriverSwap)
-7. **Rời xe** → `POST /shifts/{id}/end-vehicle`
-8. **Kết thúc ca** → `POST /shifts/end`
+6. **Kết thúc chuyến** → `POST /trips/{id}/complete`; **Đảo lái** → `POST /trips/{id}/swap`
+7. **Kết thúc ca** → `POST /shifts/end` (flush GPS rồi dừng ghi)
+
+Nút thao tác chỉ hiển thị theo `available_actions` của trip/order; nhãn trạng thái dùng `status_label` từ API. Không còn nhập km: km tính từ GPS ghi nền suốt ca (`src/tracking/`, cần quyền vị trí "Luôn luôn" — màn `app/gps-permission.tsx`).

@@ -6,6 +6,7 @@ import { useLoading } from "../../src/lib/loading";
 import { api, PRIVACY_POLICY_URL } from "../../src/lib/api";
 import { showAlert, showDestructiveConfirm } from "../../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
+import { flushAndStop } from "../../src/tracking/tracker";
 
 export default function ProfileScreen() {
   const { logout, token, shift, setShift } = useAuth(); const router = useRouter();
@@ -72,9 +73,10 @@ export default function ProfileScreen() {
 
     if (activeTrips.length > 0) {
       const codes = activeTrips.map((t: any) => t.trip_code).join(", ");
-      showAlert(
-        "Chưa thể kết thúc ca",
-        `Bạn có ${activeTrips.length} chuyến đang hoạt động (${codes}). Vui lòng hoàn thành tất cả đơn hàng hoặc kết thúc đơn hàng trước khi kết thúc ca.`,
+      showDestructiveConfirm(
+        "Kết thúc ca?",
+        `Bạn có ${activeTrips.length} chuyến đang hoạt động (${codes}). Các chuyến này sẽ tự chuyển sang đảo lái (bàn giao ca) để điều hành gán lái mới.`,
+        doEnd,
       );
       return;
     }
@@ -85,21 +87,20 @@ export default function ProfileScreen() {
   const doEnd = async () => {
     setEnding(true); showLoading();
     try {
-      let kmToUse = shift?.vehicle?.current_mileage;
-      const fresh = await api.shifts.current(token!).catch(() => null);
-      if (fresh?.shift?.vehicle?.current_mileage != null) {
-        kmToUse = fresh.shift.vehicle.current_mileage;
-      }
-      if (kmToUse != null) {
-        await api.shifts.endVehicle(String(shift.id), parseInt(kmToUse), token!);
-      }
       const res = await api.shifts.end(token!);
+      await flushAndStop();
       setShift(res?.shift || shift);
       setLocalDriver(res?.shift?.driver || localDriver);
       showAlert("Thành công", "Đã kết thúc ca");
       router.replace("/");
     } catch (e: any) { showAlert("Lỗi", e.message); }
     finally { setEnding(false); hideLoading(); }
+  };
+
+  // Đăng xuất: gửi hết điểm GPS đang chờ rồi dừng ghi
+  const handleLogout = async () => {
+    await flushAndStop();
+    logout();
   };
 
   const initials = driver?.name
@@ -116,7 +117,7 @@ export default function ProfileScreen() {
           if (token) {
             await api.account.requestDelete(token);
           }
-          await logout();
+          await handleLogout();
           showAlert("Thành công", "Yêu cầu xóa tài khoản của bạn đã được ghi nhận.");
           router.replace("/login");
         } catch (e: any) {
@@ -240,7 +241,7 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.menuItem} onPress={logout}>
+        <TouchableOpacity style={s.menuItem} onPress={handleLogout}>
           <View style={[s.menuIcon, { backgroundColor: "#F3F4F6" }]}>
             <Ionicons name="log-out" size={20} color="#4B5563" />
           </View>

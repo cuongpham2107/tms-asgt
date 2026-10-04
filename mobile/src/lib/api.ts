@@ -32,7 +32,7 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
 // ─── Auth ────────────────────────────────────────────────────────────
 
 export function login(account: string, password: string) {
-    return fetchApi<{ token: string; shift?: any }>("/login", undefined, {
+    return fetchApi<{ token: string; shift?: any; min_app_version?: string }>("/login", undefined, {
         method: "POST",
         body: JSON.stringify({ email: account, login: account, phone: account, password }),
     });
@@ -60,16 +60,11 @@ export const api = {
     // Shifts
     shifts: {
         current: (t: string) => fetchApi<{ shift: any }>("/shifts/current", t),
+        active: (t: string) => fetchApi<{ min_app_version?: string } & Record<string, any>>("/shifts/active", t),
         start: (body: { shift_type: string; start_gps_lat?: number; start_gps_lng?: number }, t: string) =>
             fetchApi<{ shift: any }>("/shifts/start", t, { method: "POST", body: JSON.stringify(body) }),
         end: (t: string) =>
             fetchApi<{ shift: any }>("/shifts/end", t, { method: "POST", body: JSON.stringify({}) }),
-        endVehicle: (shiftId: string, kmReading: number, t: string) =>
-            fetchApi<{ checkpoint: any; vehicle: any }>(`/shifts/${shiftId}/end-vehicle`, t, {
-                method: "POST", body: JSON.stringify({ km_reading: kmReading }),
-            }),
-        switchVehicle: (body: { new_vehicle_id: number; handover_km: number }, t: string) =>
-            fetchApi<{ shift: any }>("/shifts/switch-vehicle", t, { method: "POST", body: JSON.stringify(body) }),
     },
 
     // Trips
@@ -81,8 +76,10 @@ export const api = {
             return fetchApi<{ data: any[]; meta: any }>(`/trips/history?${qs}`, t);
         },
         detail: (id: string, t: string) => fetchApi<{ data: any }>(`/trips/${id}`, t),
-        complete: (tripId: string, endKm: number, t: string, gps?: { gps_lat?: number; gps_lng?: number }) =>
-            fetchApi<{ data: any }>(`/trips/${tripId}/complete`, t, { method: "POST", body: JSON.stringify({ end_km: endKm, ...gps }) }),
+        complete: (tripId: string, t: string, gps?: { gps_lat?: number; gps_lng?: number }) =>
+            fetchApi<{ data: any }>(`/trips/${tripId}/complete`, t, { method: "POST", body: JSON.stringify({ ...gps }) }),
+        swap: (tripId: string, body: { reason: SwapReason; note?: string }, t: string) =>
+            fetchApi<{ data: any }>(`/trips/${tripId}/swap`, t, { method: "POST", body: JSON.stringify(body) }),
         checkpoint: async (tripId: string, body: any, t: string) => {
             const hasPhotos = body.photos && Array.isArray(body.photos) && body.photos.length > 0;
             if (hasPhotos) {
@@ -107,26 +104,6 @@ export const api = {
                 return fetchApi<any>(`/trips/${tripId}/checkpoints`, t, { method: "POST", body: fd });
             }
             return fetchApi<any>(`/trips/${tripId}/checkpoints`, t, { method: "POST", body: JSON.stringify(body) });
-        },
-        reportKmIssue: async (tripId: string, body: { reported_km: number; checkpoint_id?: number; note?: string; photo?: string }, t: string) => {
-            if (body.photo) {
-                const fd = new FormData();
-                const res = await fetch(body.photo);
-                const blob = await res.blob();
-                fd.append("photo", blob, "km_report.jpg");
-                fd.append("reported_km", String(body.reported_km));
-                if (body.checkpoint_id) {
-                    fd.append("checkpoint_id", String(body.checkpoint_id));
-                }
-                if (body.note) {
-                    fd.append("note", body.note);
-                }
-                return fetchApi<any>(`/trips/${tripId}/report-km-issue`, t, { method: "POST", body: fd });
-            }
-            return fetchApi<any>(`/trips/${tripId}/report-km-issue`, t, {
-                method: "POST",
-                body: JSON.stringify(body),
-            });
         },
     },
 
@@ -171,6 +148,10 @@ export const api = {
         detail: (id: string, t: string) => fetchApi<{ data: any }>(`/vehicles/${id}`, t),
     },
 
+    // GPS points (P6-T6)
+    gpsPoints: (body: { device_id: string; shift_id: number; vehicle_id: number | null; points: GpsPoint[] }, t: string) =>
+        fetchApi<{ last_seq: number }>("/gps-points", t, { method: "POST", body: JSON.stringify(body) }),
+
     // Locations
     locations: (params: { search?: string; area_id?: number }, t: string) => {
         const qs = new URLSearchParams();
@@ -214,6 +195,25 @@ export const api = {
     },
 };
 
+export type SwapReason = "shift_handover" | "cargo_not_unloaded" | "other";
+
+export const SWAP_REASONS: { key: SwapReason; label: string }[] = [
+    { key: "shift_handover", label: "Bàn giao ca" },
+    { key: "cargo_not_unloaded", label: "Hàng chưa hạ được" },
+    { key: "other", label: "Khác" },
+];
+
+export interface GpsPoint {
+    seq: number;
+    recorded_at: string;
+    lat: number;
+    lng: number;
+    speed: number | null;
+    heading: number | null;
+    accuracy: number | null;
+    mocked: boolean;
+}
+
 export const PRIVACY_POLICY_URL = "https://tms.asgl.net.vn/privacy-policy";
 
 // ─── Type helpers ────────────────────────────────────────────────────
@@ -237,8 +237,6 @@ export interface ShiftResource {
     shift_type: string;
     start_time: string;
     end_time: string | null;
-    start_km: string | null;
-    end_km: string | null;
     total_km: string | null;
     total_km_loaded: string | null;
     total_km_empty: string | null;
@@ -250,12 +248,13 @@ export interface TripResource {
     status: string;
     started_at: string | null;
     completed_at: string | null;
-    start_km: string | null;
-    end_km: string | null;
     total_km: string | null;
     total_km_loaded: string | null;
     total_km_empty: string | null;
-    vehicle?: { plate_number: string; current_mileage: string };
+    status_label: string;
+    available_actions: string[];
+    is_empty_run?: boolean;
+    vehicle?: { plate_number: string };
     orders?: OrderResource[];
     checkpoints?: CheckpointResource[];
 }
@@ -270,12 +269,13 @@ export interface OrderResource {
     customer?: { name: string };
     pickup_address: string | null;
     loaded_km: string | null;
+    status_label: string;
+    available_actions: string[];
 }
 
 export interface CheckpointResource {
     id: number;
     checkpoint_type: string;
-    km_reading: string | null;
     occurred_at: string;
     voice_note: string | null;
     photos?: { url: string }[];

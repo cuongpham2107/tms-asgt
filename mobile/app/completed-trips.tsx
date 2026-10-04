@@ -5,7 +5,7 @@ import { api } from "../src/lib/api";
 import { useAuth } from "../src/lib/auth";
 import { Ionicons } from "@expo/vector-icons";
 
-const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
+const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "—";
 
 export default function CompletedTripsScreen() {
   const { token } = useAuth();
@@ -30,7 +30,7 @@ export default function CompletedTripsScreen() {
           <View style={s.topRow}>
             <View style={s.iconBox}><Ionicons name="checkmark-circle" size={22} color="#059669" /></View>
             <View style={{ flex: 1 }}><Text style={s.code}>{item.vehicle?.plate_number || "Chưa gán xe"}</Text></View>
-            <View style={s.badge}><Text style={s.badgeText}>Hoàn thành</Text></View>
+            <View style={s.badge}><Text style={s.badgeText}>{item.status_label ?? "Hoàn thành"}</Text></View>
           </View>
           <View style={s.kmRow}>
             <View style={s.kmItem}><Text style={s.kmVal}>{fmt(item.total_km)}</Text><Text style={s.kmLbl}>tổng km</Text></View>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
     View,
     Text,
@@ -10,101 +10,68 @@ import {
     Modal,
     KeyboardAvoidingView,
     Platform,
-    Image,
     Keyboard,
     Pressable,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
-import { api } from "../src/lib/api";
+import { api, SWAP_REASONS, type SwapReason } from "../src/lib/api";
 import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { clearNotificationBadge } from "../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import * as ImagePicker from "expo-image-picker";
 
 const statusConfig: Record<
     string,
-    { icon: string; bg: string; text: string; label: string }
+    { icon: string; bg: string; text: string }
 > = {
     pending: {
         icon: "time-outline",
         bg: "#F3F4F6",
         text: "#6B7280",
-        label: "Chờ",
     },
     started: {
         icon: "play-circle-outline",
         bg: "#FEF3C7",
         text: "#D97706",
-        label: "Đang chạy",
     },
     arrived_pickup: {
         icon: "cube-outline",
         bg: "#FEF3C7",
         text: "#D97706",
-        label: "Đến lấy",
     },
     delivering: {
         icon: "car-outline",
         bg: "#DBEAFE",
         text: "#2563EB",
-        label: "Đang giao",
     },
     arrived_delivery: {
         icon: "location-outline",
         bg: "#FEF3C7",
         text: "#D97706",
-        label: "Đến giao",
     },
     delivered: {
         icon: "checkmark-done",
         bg: "#D1FAE5",
         text: "#059669",
-        label: "Đã giao",
     },
     completed: {
         icon: "checkmark-circle",
         bg: "#D1FAE5",
         text: "#059669",
-        label: "Hoàn thành",
     },
     driver_swap: {
         icon: "swap-horizontal",
         bg: "#E0E7FF",
         text: "#4F46E5",
-        label: "Đảo lái",
-    },
-    return_trip: {
-        icon: "arrow-undo",
-        bg: "#FEE2E2",
-        text: "#DC2626",
-        label: "Quay đầu",
     },
     cancelled: {
         icon: "close-circle",
         bg: "#FEE2E2",
         text: "#DC2626",
-        label: "Đã huỷ",
     },
 };
-
-const orderStatusLabel: Record<string, string> = {
-    assigned: "Đã gán",
-    sent: "Chờ lấy",
-    in_transit: "Đang giao",
-    completed: "Xong",
-    driver_swap: "Đảo lái",
-    cancelled: "Huỷ",
-};
-
-const KM_REASONS = [
-    "Gõ nhầm số km",
-    "Đồng hồ taplo lệch",
-    "Nhận ca trước bàn giao sai",
-    "Khác",
-];
 
 const localISO = (d: Date = new Date()) => {
     const pad = (n: number) => String(n).padStart(2, "0");
@@ -117,145 +84,22 @@ export default function TripDetailScreen() {
     const { showLoading, hideLoading } = useLoading();
     const params = useLocalSearchParams<{ id: string; trip: string }>();
     const trip = params.trip ? JSON.parse(params.trip) : null;
+    const tripId = trip?.id || params.id;
     const [detail, setDetail] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [completeKm, setCompleteKm] = useState("");
     const [completing, setCompleting] = useState(false);
     const [starting, setStarting] = useState(false);
-    const [startKmInput, setStartKmInput] = useState("");
-    const [returnStarted, setReturnStarted] = useState(false);
-    const [showCompleteModal, setShowCompleteModal] = useState(false);
-    const [showReportModal, setShowReportModal] = useState(false);
-    const [reportKm, setReportKm] = useState("");
-    const [reportReason, setReportReason] = useState(KM_REASONS[0]);
-    const [reportNote, setReportNote] = useState("");
-    const [reportPhoto, setReportPhoto] = useState<string | null>(null);
-    const [submittingReport, setSubmittingReport] = useState(false);
+    const [showSwapModal, setShowSwapModal] = useState(false);
+    const [swapReason, setSwapReason] = useState<SwapReason>("shift_handover");
+    const [swapNote, setSwapNote] = useState("");
+    const [swapping, setSwapping] = useState(false);
     const userId = shift?.driver?.id;
 
     // Format: bỏ .0, hiển thị số nguyên
     const fmt = (v: any) =>
-        v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
+        v != null ? parseInt(v).toLocaleString("vi-VN") : "—";
 
-    const getCurrentStepInfo = () => {
-        const cps = detail?.checkpoints || [];
-        const driverCps = userId
-            ? cps.filter((c: any) => c.driver_id === userId)
-            : cps;
-        const latestCp = (driverCps.length > 0 ? driverCps : cps).slice(-1)[0];
-
-        const typeLabels: Record<string, string> = {
-            started: "Bắt đầu chuyến",
-            arrived_pickup: "Đến lấy hàng",
-            left_pickup: "Rời lấy hàng",
-            arrived_delivery: "Đến giao hàng",
-            completed: "Hoàn thành",
-            driver_swap: "Đảo lái",
-            end: "Kết thúc xe",
-            cancelled: "Huỷ chuyến",
-        };
-
-        if (!latestCp) {
-            return {
-                id: undefined,
-                name: "Bắt đầu chuyến",
-                km:
-                    detail?.start_km != null
-                        ? Number(detail.start_km)
-                        : null,
-            };
-        }
-
-        return {
-            id: latestCp.id,
-            name:
-                typeLabels[latestCp.checkpoint_type] ||
-                latestCp.checkpoint_type ||
-                "Mốc hiện tại",
-            km:
-                latestCp.km_reading != null
-                    ? Number(latestCp.km_reading)
-                    : null,
-        };
-    };
-
-    const handlePickReportPhoto = async () => {
-        const { status } =
-            await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== "granted") {
-            showAlert("Quyền truy cập", "Cần cấp quyền truy cập thư viện ảnh");
-            return;
-        }
-        const res = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            quality: 0.8,
-        });
-        if (!res.canceled && res.assets?.[0]?.uri) {
-            setReportPhoto(res.assets[0].uri);
-        }
-    };
-
-    const handleTakeReportPhoto = async () => {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== "granted") {
-            showAlert("Quyền truy cập", "Cần cấp quyền chụp ảnh");
-            return;
-        }
-        const res = await ImagePicker.launchCameraAsync({
-            allowsEditing: false,
-            quality: 0.8,
-        });
-        if (!res.canceled && res.assets?.[0]?.uri) {
-            setReportPhoto(res.assets[0].uri);
-        }
-    };
-
-    const handleSubmitReport = async () => {
-        const km = parseFloat(reportKm);
-        if (!km || km < 0) {
-            showAlert(
-                "Thiếu thông tin",
-                "Vui lòng nhập số km thực tế trên taplo",
-            );
-            return;
-        }
-        const tripId = trip?.id || params.id;
-        if (!tripId || !token) return;
-
-        const currentStep = getCurrentStepInfo();
-
-        setSubmittingReport(true);
-        showLoading();
-        try {
-            await api.trips.reportKmIssue(
-                String(tripId),
-                {
-                    reported_km: km,
-                    checkpoint_id: currentStep.id,
-                    note: reportNote ? `${reportReason}: ${reportNote}` : reportReason,
-                    photo: reportPhoto || undefined,
-                },
-                token,
-            );
-            showAlert(
-                "Đã gửi báo cáo",
-                "Điều hành sẽ kiểm tra và cập nhật lại số km cho bạn.",
-            );
-            setShowReportModal(false);
-            setReportKm("");
-            setReportReason(KM_REASONS[0]);
-            setReportNote("");
-            setReportPhoto(null);
-            await load();
-        } catch (e: any) {
-            showAlert("Lỗi gửi báo cáo", e.message);
-        } finally {
-            setSubmittingReport(false);
-            hideLoading();
-        }
-    };
 
     const getGps = async () => {
         try {
@@ -273,7 +117,6 @@ export default function TripDetailScreen() {
     };
 
     const load = async () => {
-        const tripId = trip?.id || params.id;
         if (!token || !tripId) return;
         try {
             const r = await api.trips.detail(String(tripId), token);
@@ -296,47 +139,21 @@ export default function TripDetailScreen() {
         setRefreshing(false);
     };
 
+
     const currentStatus = detail?.status || trip?.status || "pending";
-    const isReturnTrip = currentStatus === "return_trip";
     const isSwapped = detail && userId && detail.driver_id !== userId;
-    const currentShiftId = shift?.id;
-    const tripShiftId = detail?.shift_id ?? trip?.shift_id;
-    const isCurrentShift =
-        !!currentShiftId &&
-        (!tripShiftId || String(tripShiftId) === String(currentShiftId));
-    const canStart =
-        currentStatus === "pending" &&
-        !isReturnTrip &&
-        !isSwapped &&
-        !!shift &&
-        isCurrentShift;
-    const canComplete =
-        (!["pending", "completed", "driver_swap", "cancelled"].includes(
-            currentStatus,
-        ) ||
-            (isReturnTrip && currentStatus !== "completed")) &&
-        !isSwapped &&
-        !!shift &&
-        isCurrentShift;
+    // Nút chỉ hiển thị theo available_actions do server tính
+    const actions: string[] =
+        detail?.available_actions ?? trip?.available_actions ?? [];
+    const canStart = actions.includes("started");
+    const canEnd = actions.includes("end");
+    const canSwap = actions.includes("request_swap");
     const isEmptyRun =
-        (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true ||
-        currentStatus === "return_trip";
-    const hasStarted = detail?.start_km != null || trip?.start_km != null;
+        (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true;
     const orders: any[] = detail?.orders || trip?.orders || [];
 
-    // Auto lấy km hiện tại của xe
-    const vehicleKm = detail?.vehicle?.km_reading ?? trip?.vehicle?.km_reading;
-
-    // Auto-fill KM input for return trip with vehicle's current mileage
-    useEffect(() => {
-        if (vehicleKm != null) {
-            if (!startKmInput) setStartKmInput(String(Math.round(vehicleKm)));
-            if (!completeKm) setCompleteKm(String(Math.round(vehicleKm)));
-        }
-    }, [vehicleKm]);
-
     const handleStart = async () => {
-        if (!trip?.id || !token) return;
+        if (!tripId || !token) return;
         setStarting(true);
         showLoading();
         try {
@@ -349,7 +166,7 @@ export default function TripDetailScreen() {
                 body.gps_lat = gps.gps_lat;
                 body.gps_lng = gps.gps_lng;
             }
-            await api.trips.checkpoint(String(trip.id), body, token);
+            await api.trips.checkpoint(String(tripId), body, token);
             const updated = await load();
             const currentOrders: any[] = updated?.orders || detail?.orders || trip?.orders || [];
             const targetOrder = currentOrders.find((o: any) => o.status !== "completed") || currentOrders[0];
@@ -360,7 +177,7 @@ export default function TripDetailScreen() {
                         id: targetOrder.id,
                         order: JSON.stringify({
                             ...targetOrder,
-                            trip_id: trip?.id || params.id,
+                            trip_id: tripId,
                             vehicle: updated?.vehicle || detail?.vehicle || trip?.vehicle,
                             is_swapped: isSwapped,
                         }),
@@ -385,80 +202,22 @@ export default function TripDetailScreen() {
         }
     };
 
-    const handleStartReturn = async () => {
-        const sKm = parseFloat(startKmInput);
-        if (!sKm) {
-            showAlert("Thiếu", "Nhập Km bắt đầu");
-            return;
-        }
-        if (!trip?.id || !token) return;
-        setStarting(true);
-        try {
-            const cps = detail?.checkpoints || [];
-            const startedCp = cps.find(
-                (cp: any) => cp.checkpoint_type === "started",
-            );
-            if (startedCp) {
-                await api.trips.checkpoint(
-                    String(trip.id),
-                    {
-                        checkpoint_type: "started",
-                        km_reading: sKm,
-                        occurred_at: startedCp.occurred_at,
-                    },
-                    token,
-                );
-            }
-            setReturnStarted(true);
-            showAlert("Thành công", "Đã ghi nhận Km bắt đầu");
-            await load();
-        } catch (e: any) {
-            showAlert("Lỗi", e.message);
-        } finally {
-            setStarting(false);
-            hideLoading();
-        }
-    };
-
-    const handleCompleteReturn = async () => {
-        const eKm = parseFloat(completeKm);
-        if (!eKm) {
-            showAlert("Thiếu", "Nhập Km kết thúc");
-            return;
-        }
-        const sKm = detail?.start_km ?? trip?.start_km;
-        if (sKm != null && eKm < sKm) {
-            showAlert(
-                "Lỗi",
-                `Km kết thúc (${eKm}) phải >= Km bắt đầu (${sKm})`,
-            );
-            return;
-        }
-        if (!trip?.id || !token) return;
+    const handleEnd = () => {
+        if (!tripId || !token) return;
         showDestructiveConfirm(
-            "Kết thúc chuyến quay đầu",
-            "Bạn có chắc chắn muốn kết thúc chuyến quay đầu?",
+            "Kết thúc chuyến",
+            "Bạn có chắc chắn muốn kết thúc chuyến?",
             async () => {
                 setCompleting(true);
                 showLoading();
                 try {
-                    const cps = detail?.checkpoints || [];
-                    const endCp = cps.find(
-                        (cp: any) => cp.checkpoint_type === "end",
+                    const gps = await getGps();
+                    await api.trips.complete(
+                        String(tripId),
+                        token,
+                        gps ?? undefined,
                     );
-                    if (endCp) {
-                        await api.trips.checkpoint(
-                            String(trip.id),
-                            {
-                                checkpoint_type: "end",
-                                km_reading: eKm,
-                                occurred_at: endCp.occurred_at,
-                            },
-                            token,
-                        );
-                    }
-                    await api.trips.complete(String(trip.id), eKm, token);
-                    showAlert("Thành công", "Đã kết thúc chuyến quay đầu");
+                    showAlert("Thành công", "Đã kết thúc chuyến");
                     await load();
                 } catch (e: any) {
                     showAlert("Lỗi", e.message);
@@ -467,39 +226,43 @@ export default function TripDetailScreen() {
                     hideLoading();
                 }
             },
+            undefined,
+            "Kết thúc",
         );
     };
 
-    const doComplete = async (km: number) => {
-        if (!trip?.id || !token) return;
-        setCompleting(true);
+    const handleSwap = async () => {
+        if (!tripId || !token) return;
+        if (swapReason === "other" && !swapNote.trim()) {
+            showAlert("Thiếu thông tin", "Vui lòng nhập lý do cụ thể");
+            return;
+        }
+        setSwapping(true);
         showLoading();
         try {
-            const gps = await getGps();
-            await api.trips.complete(
-                String(trip.id),
-                km,
+            await api.trips.swap(
+                String(tripId),
+                {
+                    reason: swapReason,
+                    note: swapNote.trim() || undefined,
+                },
                 token,
-                gps ?? undefined,
             );
-            const hasIncomplete = orders.some(
-                (o: any) => o.status !== "completed",
-            );
+            setShowSwapModal(false);
+            setSwapNote("");
             showAlert(
-                "Thành công",
-                hasIncomplete
-                    ? "Chuyến → Đảo lái (đơn chưa xong)"
-                    : "Đã kết thúc chuyến",
+                "Đã gửi yêu cầu đảo lái",
+                "Điều hành sẽ gán lái mới cho chuyến này.",
+                () => router.replace("/(tabs)/trips"),
             );
-            setShowCompleteModal(false);
-            await load();
         } catch (e: any) {
             showAlert("Lỗi", e.message);
         } finally {
-            setCompleting(false);
+            setSwapping(false);
             hideLoading();
         }
     };
+
 
     // Show loading while fetching trip data
     if (!trip && !detail) {
@@ -582,7 +345,7 @@ export default function TripDetailScreen() {
                             <Text
                                 style={[s.statusPillText, { color: st.text }]}
                             >
-                                {st.label}
+                                {effectiveTrip?.status_label ?? currentStatus}
                             </Text>
                         </View>
                     </View>
@@ -635,42 +398,38 @@ export default function TripDetailScreen() {
                     )}
                 </View>
 
-                {/* Km stats — ẩn với chuyến quay đầu */}
-                {!isReturnTrip && (
-                    <View style={s.statsGrid}>
-                        {[
-                            {
-                                icon: "speedometer-outline",
-                                label: "Tổng Km",
-                                value: fmt(detail?.total_km ?? trip?.total_km),
-                                color: "#4F46E5",
-                                bg: "#EEF2FF",
-                            },
-                            {
-                                icon: "cube-outline",
-                                label: "Km có hàng",
-                                value: fmt(
-                                    detail?.total_km_loaded ??
-                                        trip?.total_km_loaded,
-                                ),
-                                color: "#3B82F6",
-                                bg: "#EFF6FF",
-                            },
-                            {
-                                icon: "arrow-down-circle-outline",
-                                label: "Km bắt đầu",
-                                value: fmt(detail?.start_km ?? trip?.start_km),
-                                color: "#10B981",
-                                bg: "#ECFDF5",
-                            },
-                            {
-                                icon: "arrow-up-circle-outline",
-                                label: "Km xe",
-                                value: fmt(vehicleKm),
-                                color: "#F59E0B",
-                                bg: "#FFFBEB",
-                            },
-                        ].map((st2, i) => (
+
+                {/* Km stats (tính từ GPS ở server, null → —) */}
+                <View style={s.statsGrid}>
+                    {[
+                        {
+                            icon: "speedometer-outline",
+                            label: "Tổng Km",
+                            value: fmt(detail?.total_km ?? trip?.total_km),
+                            color: "#4F46E5",
+                            bg: "#EEF2FF",
+                        },
+                        {
+                            icon: "cube-outline",
+                            label: "Km có hàng",
+                            value: fmt(
+                                detail?.total_km_loaded ??
+                                    trip?.total_km_loaded,
+                            ),
+                            color: "#3B82F6",
+                            bg: "#EFF6FF",
+                        },
+                        {
+                            icon: "arrow-undo-outline",
+                            label: "Km rỗng",
+                            value: fmt(
+                                detail?.total_km_empty ??
+                                    trip?.total_km_empty,
+                            ),
+                            color: "#F59E0B",
+                            bg: "#FFFBEB",
+                        },
+                    ].map((st2, i) => (
                             <View key={i} style={s.statCard}>
                                 <View
                                     style={[
@@ -691,31 +450,7 @@ export default function TripDetailScreen() {
                             </View>
                         ))}
                     </View>
-                )}
 
-                {/* Nút báo sai lệch số Km */}
-                {!isSwapped && !!shift && isCurrentShift && (
-                    <TouchableOpacity
-                        style={s.reportKmBtn}
-                        onPress={() => {
-                            setReportKm(
-                                vehicleKm != null
-                                    ? String(Math.round(vehicleKm))
-                                    : "",
-                            );
-                            setShowReportModal(true);
-                        }}
-                    >
-                        <Ionicons
-                            name="warning-outline"
-                            size={15}
-                            color="#D97706"
-                        />
-                        <Text style={s.reportKmBtnText}>
-                            Báo sai lệch Km đồng hồ
-                        </Text>
-                    </TouchableOpacity>
-                )}
 
                 {/* Thời gian */}
                 {detail?.started_at && (
@@ -751,249 +486,7 @@ export default function TripDetailScreen() {
                     </View>
                 )}
 
-                {/* Orders hoặc Return Trip Info */}
-                {isReturnTrip ? (
-                    <View style={s.infoCard}>
-                        {currentStatus === "completed" ? (
-                            <>
-                                <Ionicons
-                                    name="checkmark-circle"
-                                    size={48}
-                                    color="#059669"
-                                    style={{
-                                        alignSelf: "center",
-                                        marginBottom: 8,
-                                    }}
-                                />
-                                <Text
-                                    style={[s.infoTitle, { color: "#059669" }]}
-                                >
-                                    Chuyến quay đầu đã hoàn thành
-                                </Text>
-                                <View
-                                    style={{
-                                        flexDirection: "row",
-                                        gap: 8,
-                                        marginTop: 12,
-                                    }}
-                                >
-                                    <View
-                                        style={{
-                                            flex: 1,
-                                            backgroundColor: "#ECFDF5",
-                                            padding: 12,
-                                            borderRadius: 10,
-                                        }}
-                                    >
-                                        <Text
-                                            style={{
-                                                fontSize: 11,
-                                                color: "#6B7280",
-                                            }}
-                                        >
-                                            Km bắt đầu
-                                        </Text>
-                                        <Text
-                                            style={{
-                                                fontSize: 18,
-                                                fontWeight: "800",
-                                                color: "#059669",
-                                            }}
-                                        >
-                                            {fmt(
-                                                detail?.start_km ??
-                                                    trip?.start_km,
-                                            )}
-                                        </Text>
-                                    </View>
-                                    <View
-                                        style={{
-                                            flex: 1,
-                                            backgroundColor: "#ECFDF5",
-                                            padding: 12,
-                                            borderRadius: 10,
-                                        }}
-                                    >
-                                        <Text
-                                            style={{
-                                                fontSize: 11,
-                                                color: "#6B7280",
-                                            }}
-                                        >
-                                            Km kết thúc
-                                        </Text>
-                                        <Text
-                                            style={{
-                                                fontSize: 18,
-                                                fontWeight: "800",
-                                                color: "#059669",
-                                            }}
-                                        >
-                                            {fmt(
-                                                detail?.end_km ?? trip?.end_km,
-                                            )}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <Text
-                                    style={{
-                                        fontSize: 13,
-                                        color: "#6B7280",
-                                        textAlign: "center",
-                                        marginTop: 8,
-                                    }}
-                                >
-                                    Tổng:{" "}
-                                    <Text
-                                        style={{
-                                            fontWeight: "700",
-                                            color: "#111827",
-                                        }}
-                                    >
-                                        {fmt(
-                                            detail?.total_km ?? trip?.total_km,
-                                        )}{" "}
-                                        km
-                                    </Text>
-                                </Text>
-                            </>
-                        ) : (
-                            <>
-                                <Ionicons
-                                    name="car-outline"
-                                    size={40}
-                                    color="#DC2626"
-                                    style={{
-                                        alignSelf: "center",
-                                        marginBottom: 12,
-                                    }}
-                                />
-                                <Text style={s.infoTitle}>
-                                    Chuyến quay đầu — không hàng
-                                </Text>
-                                <Text
-                                    style={{
-                                        fontSize: 13,
-                                        color: "#6B7280",
-                                        textAlign: "center",
-                                        marginTop: 4,
-                                    }}
-                                >
-                                    Km xe hiện tại:{" "}
-                                    <Text
-                                        style={{
-                                            fontWeight: "700",
-                                            color: "#4F46E5",
-                                        }}
-                                    >
-                                        {fmt(vehicleKm)}
-                                    </Text>
-                                </Text>
-                                {hasStarted || returnStarted ? (
-                                    <>
-                                        <Text style={s.infoDesc}>
-                                            Bước 2: Nhập Km kết thúc
-                                        </Text>
-                                        <View
-                                            style={{
-                                                flexDirection: "row",
-                                                alignItems: "center",
-                                                gap: 8,
-                                                marginTop: 8,
-                                                backgroundColor: "#ECFDF5",
-                                                padding: 10,
-                                                borderRadius: 10,
-                                            }}
-                                        >
-                                            <Ionicons
-                                                name="checkmark-circle"
-                                                size={16}
-                                                color="#059669"
-                                            />
-                                            <Text
-                                                style={{
-                                                    fontSize: 13,
-                                                    color: "#059669",
-                                                    fontWeight: "600",
-                                                }}
-                                            >
-                                                Km bắt đầu:{" "}
-                                                {fmt(
-                                                    detail?.start_km ??
-                                                        trip?.start_km,
-                                                )}
-                                            </Text>
-                                        </View>
-                                        <TextInput
-                                            style={[
-                                                s.kmInput,
-                                                { marginTop: 12 },
-                                            ]}
-                                            placeholder="Km kết thúc"
-                                            placeholderTextColor="#D1D5DB"
-                                            keyboardType="numeric"
-                                            value={completeKm}
-                                            onChangeText={setCompleteKm}
-                                        />
-                                    </>
-                                ) : (
-                                    <>
-                                        <Text style={s.infoDesc}>
-                                            Bước 1: Nhập Km bắt đầu
-                                        </Text>
-                                        <TextInput
-                                            style={[
-                                                s.kmInput,
-                                                {
-                                                    marginTop: 12,
-                                                    marginBottom: 12,
-                                                },
-                                            ]}
-                                            placeholder="Km bắt đầu"
-                                            placeholderTextColor="#D1D5DB"
-                                            keyboardType="numeric"
-                                            value={startKmInput}
-                                            onChangeText={setStartKmInput}
-                                        />
-                                        {!!shift ? (
-                                            <TouchableOpacity
-                                                style={[
-                                                    s.actionBtn,
-                                                    {
-                                                        backgroundColor:
-                                                            "#10B981",
-                                                        marginTop: 4,
-                                                    },
-                                                ]}
-                                                onPress={handleStartReturn}
-                                                disabled={starting}
-                                            >
-                                                <Ionicons
-                                                    name="play-circle"
-                                                    size={20}
-                                                    color="#fff"
-                                                />
-                                                <Text style={s.actionBtnText}>
-                                                    {starting
-                                                        ? "Đang xử lý..."
-                                                        : "Bắt đầu chuyến"}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ) : (
-                                            <View style={s.warnBox}>
-                                                <Text style={s.warnText}>
-                                                    Bạn cần vào ca trước khi bắt
-                                                    đầu chuyến.
-                                                </Text>
-                                            </View>
-                                        )}
-                                    </>
-                                )}
-                            </>
-                        )}
-                    </View>
-                ) : (
-                    <>
+
                         <View style={s.sectionHeader}>
                             <Text style={s.sectionTitle}>
                                 📦 Đơn hàng ({orders.length})
@@ -1012,8 +505,7 @@ export default function TripDetailScreen() {
                             </View>
                         ) : (
                             orders.map((o: any, i: number) => {
-                                const osText =
-                                    orderStatusLabel[o.status] || o.status;
+                                const osText = o.status_label ?? o.status;
                                 const osColor =
                                     o.status === "completed"
                                         ? "#059669"
@@ -1022,11 +514,6 @@ export default function TripDetailScreen() {
                                           : o.status === "driver_swap"
                                             ? "#8B5CF6"
                                             : "#6B7280";
-                                const hasEndCk = (
-                                    o.trip_checkpoints || []
-                                ).some(
-                                    (cp: any) => cp.checkpoint_type === "end",
-                                );
                                 return (
                                     <TouchableOpacity
                                         key={o.id}
@@ -1042,9 +529,7 @@ export default function TripDetailScreen() {
                                                     id: o.id,
                                                     order: JSON.stringify({
                                                         ...o,
-                                                        trip_id:
-                                                            trip?.id ||
-                                                            params.id,
+                                                        trip_id: tripId,
                                                         vehicle:
                                                             detail?.vehicle ||
                                                             trip?.vehicle,
@@ -1179,7 +664,7 @@ export default function TripDetailScreen() {
                                                 </Text>
                                             )}
                                             <Text style={s.orderKm}>
-                                                📏 loaded: {fmt(o.loaded_km)} km
+                                                📏 Km có hàng: {fmt(o.loaded_km)} km
                                             </Text>
                                         </View>
                                         <Ionicons
@@ -1191,330 +676,113 @@ export default function TripDetailScreen() {
                                 );
                             })
                         )}
-                    </>
-                )}
 
                 <View style={{ height: 100 }} />
             </ScrollView>
 
-            {/* Sticky bottom — Kết thúc chuyến */}
-            {canComplete && (
-                <View style={s.stickyBar}>
-                    {isReturnTrip && (returnStarted || hasStarted) ? (
+            {/* Sticky bottom — Đảo lái / Kết thúc chuyến (theo available_actions) */}
+            {(canSwap || canEnd) && (
+                <View style={[s.stickyBar, { flexDirection: "row", gap: 10 }]}>
+                    {canSwap && (
                         <TouchableOpacity
-                            style={[
-                                {
-                                    backgroundColor: "#DC2626",
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 8,
-                                    paddingVertical: 14,
-                                    borderRadius: 12,
-                                },
-                            ]}
-                            onPress={handleCompleteReturn}
+                            style={[s.stickyBtn, { backgroundColor: "#4F46E5" }]}
+                            onPress={() => setShowSwapModal(true)}
+                            disabled={swapping}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons
+                                name="swap-horizontal"
+                                size={20}
+                                color="#fff"
+                            />
+                            <Text style={s.stickyBtnText}>Đảo lái</Text>
+                        </TouchableOpacity>
+                    )}
+                    {canEnd && (
+                        <TouchableOpacity
+                            style={[s.stickyBtn, { backgroundColor: "#DC2626" }]}
+                            onPress={handleEnd}
                             disabled={completing}
                             activeOpacity={0.8}
                         >
                             <Ionicons name="flag" size={20} color="#fff" />
-                            <Text
-                                style={{
-                                    color: "#fff",
-                                    fontSize: 17,
-                                    fontWeight: "800",
-                                }}
-                            >
-                                {completing
-                                    ? "Đang xử lý..."
-                                    : "Kết thúc chuyến quay đầu"}
-                            </Text>
-                        </TouchableOpacity>
-                    ) : isReturnTrip ? null : (
-                        <TouchableOpacity
-                            style={[
-                                {
-                                    backgroundColor: "#DC2626",
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 8,
-                                    paddingVertical: 14,
-                                    borderRadius: 12,
-                                },
-                            ]}
-                            onPress={() => {
-                                setCompleteKm(
-                                    String(
-                                        vehicleKm != null
-                                            ? Math.round(vehicleKm)
-                                            : "",
-                                    ),
-                                );
-                                setShowCompleteModal(true);
-                            }}
-                            activeOpacity={0.8}
-                        >
-                            <Ionicons name="flag" size={20} color="#fff" />
-                            <Text
-                                style={{
-                                    color: "#fff",
-                                    fontSize: 17,
-                                    fontWeight: "800",
-                                }}
-                            >
-                                Kết thúc chuyến
+                            <Text style={s.stickyBtnText}>
+                                {completing ? "Đang xử lý..." : "Kết thúc chuyến"}
                             </Text>
                         </TouchableOpacity>
                     )}
                 </View>
             )}
-            {/* Modal Báo sai lệch số Km */}
+
+            {/* Modal Đảo lái */}
             <Modal
-                visible={showReportModal}
+                visible={showSwapModal}
                 transparent
                 animationType="fade"
-                onRequestClose={() => setShowReportModal(false)}
+                onRequestClose={() => setShowSwapModal(false)}
             >
                 <Pressable style={s.modalOverlay} onPress={Keyboard.dismiss}>
                     <View style={[s.modalCard, { maxWidth: 420 }]}>
-                        <View
-                            style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                gap: 8,
-                                marginBottom: 12,
-                            }}
-                        >
-                            <Ionicons
-                                name="warning"
-                                size={22}
-                                color="#D97706"
-                            />
-                            <Text
-                                style={[
-                                    s.modalTitle,
-                                    {
-                                        marginBottom: 0,
-                                        textAlign: "left",
-                                        flex: 1,
-                                    },
-                                ]}
-                            >
-                                Báo sai lệch số Km
-                            </Text>
-                        </View>
-
-                        {/* Hiển thị bước hiện tại */}
-                        {(() => {
-                            const step = getCurrentStepInfo();
-                            return (
-                                <View
-                                    style={{
-                                        backgroundColor: "#FEF3C7",
-                                        borderColor: "#FCD34D",
-                                        borderWidth: 1,
-                                        borderRadius: 8,
-                                        padding: 10,
-                                        marginBottom: 12,
-                                    }}
-                                >
-                                    <Text
-                                        style={{
-                                            fontSize: 12,
-                                            color: "#92400E",
-                                            fontWeight: "600",
-                                        }}
-                                    >
-                                        Mốc hành trình báo sai:
-                                    </Text>
-                                    <Text
-                                        style={{
-                                            fontSize: 14,
-                                            color: "#78350F",
-                                            fontWeight: "700",
-                                            marginTop: 2,
-                                        }}
-                                    >
-                                        {step.name}{" "}
-                                        {step.km != null
-                                            ? `(Đang ghi nhận: ${step.km.toLocaleString("vi-VN")} km)`
-                                            : ""}
-                                    </Text>
-                                </View>
-                            );
-                        })()}
-
-                        <Text style={s.modalSectionLabel}>
-                            Số Km thực tế trên Taplo xe *
-                        </Text>
-                        <TextInput
-                            style={[s.modalKmInput, { marginBottom: 12 }]}
-                            value={reportKm}
-                            onChangeText={setReportKm}
-                            placeholder="VD: 100085"
-                            placeholderTextColor="#9CA3AF"
-                            keyboardType="numeric"
-                            returnKeyType="done"
-                        />
-
-                        <Text style={s.modalSectionLabel}>
-                            Ảnh chụp đồng hồ Taplo xe
-                        </Text>
-                        {reportPhoto ? (
-                            <View
-                                style={{
-                                    marginBottom: 12,
-                                    alignItems: "center",
-                                }}
-                            >
-                                <Image
-                                    source={{ uri: reportPhoto }}
-                                    style={{
-                                        width: "100%",
-                                        height: 140,
-                                        borderRadius: 10,
-                                    }}
-                                    resizeMode="cover"
-                                />
-                                <TouchableOpacity
-                                    onPress={() => setReportPhoto(null)}
-                                    style={{ marginTop: 6 }}
-                                >
-                                    <Text
-                                        style={{
-                                            color: "#DC2626",
-                                            fontSize: 13,
-                                            fontWeight: "600",
-                                        }}
-                                    >
-                                        Xoá ảnh
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <View
-                                style={{
-                                    flexDirection: "row",
-                                    gap: 8,
-                                    marginBottom: 12,
-                                }}
-                            >
-                                <TouchableOpacity
-                                    style={s.photoPickerBtn}
-                                    onPress={handleTakeReportPhoto}
-                                >
-                                    <Ionicons
-                                        name="camera"
-                                        size={18}
-                                        color="#4F46E5"
-                                    />
-                                    <Text style={s.photoPickerBtnText}>
-                                        Chụp ảnh
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={s.photoPickerBtn}
-                                    onPress={handlePickReportPhoto}
-                                >
-                                    <Ionicons
-                                        name="images"
-                                        size={18}
-                                        color="#4F46E5"
-                                    />
-                                    <Text style={s.photoPickerBtnText}>
-                                        Thư viện
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-
-                        <Text style={s.modalSectionLabel}>
-                            Lý do báo sai lệch *
-                        </Text>
+                        <Text style={s.modalTitle}>Xin đảo lái</Text>
+                        <Text style={s.modalSectionLabel}>Lý do *</Text>
                         <View
                             style={{
                                 flexDirection: "row",
                                 flexWrap: "wrap",
                                 gap: 8,
-                                marginBottom: reportReason === "Khác" ? 10 : 16,
+                                marginBottom: 12,
                             }}
                         >
-                            {KM_REASONS.map((r) => {
-                                const isSelected = reportReason === r;
+                            {SWAP_REASONS.map((r) => {
+                                const isSelected = swapReason === r.key;
                                 return (
                                     <TouchableOpacity
-                                        key={r}
-                                        onPress={() => setReportReason(r)}
-                                        style={{
-                                            paddingHorizontal: 12,
-                                            paddingVertical: 8,
-                                            borderRadius: 8,
-                                            borderWidth: 1.5,
-                                            borderColor: isSelected
-                                                ? "#D97706"
-                                                : "#E5E7EB",
-                                            backgroundColor: isSelected
-                                                ? "#FFFBEB"
-                                                : "#F9FAFB",
-                                            flexDirection: "row",
-                                            alignItems: "center",
-                                            gap: 6,
-                                        }}
+                                        key={r.key}
+                                        onPress={() => setSwapReason(r.key)}
+                                        style={[
+                                            s.reasonChip,
+                                            isSelected && s.reasonChipActive,
+                                        ]}
                                     >
                                         {isSelected && (
                                             <Ionicons
                                                 name="checkmark-circle"
                                                 size={16}
-                                                color="#D97706"
+                                                color="#4F46E5"
                                             />
                                         )}
                                         <Text
-                                            style={{
-                                                fontSize: 13,
-                                                fontWeight: isSelected
-                                                    ? "700"
-                                                    : "500",
-                                                color: isSelected
-                                                    ? "#B45309"
-                                                    : "#374151",
-                                            }}
+                                            style={[
+                                                s.reasonChipText,
+                                                isSelected &&
+                                                    s.reasonChipTextActive,
+                                            ]}
                                         >
-                                            {r}
+                                            {r.label}
                                         </Text>
                                     </TouchableOpacity>
                                 );
                             })}
                         </View>
-
-                        {reportReason === "Khác" && (
-                            <TextInput
-                                style={[
-                                    s.stickyInput,
-                                    {
-                                        marginBottom: 16,
-                                        minHeight: 60,
-                                        height: 60,
-                                        textAlignVertical: "top",
-                                        paddingTop: 8,
-                                    },
-                                ]}
-                                value={reportNote}
-                                onChangeText={setReportNote}
-                                placeholder="Nhập lý do cụ thể..."
-                                placeholderTextColor="#9CA3AF"
-                                multiline
-                                numberOfLines={2}
-                            />
-                        )}
-
+                        <Text style={s.modalSectionLabel}>
+                            Ghi chú{swapReason === "other" ? " *" : ""}
+                        </Text>
+                        <TextInput
+                            style={[s.stickyInput, s.noteInput]}
+                            value={swapNote}
+                            onChangeText={setSwapNote}
+                            placeholder="Nhập ghi chú..."
+                            placeholderTextColor="#9CA3AF"
+                            multiline
+                            numberOfLines={3}
+                        />
                         <View style={{ flexDirection: "row", gap: 10 }}>
                             <TouchableOpacity
                                 style={[
                                     s.modalBtn,
                                     { backgroundColor: "#F3F4F6" },
                                 ]}
-                                onPress={() => setShowReportModal(false)}
+                                onPress={() => setShowSwapModal(false)}
                             >
                                 <Text
                                     style={[
@@ -1528,210 +796,15 @@ export default function TripDetailScreen() {
                             <TouchableOpacity
                                 style={[
                                     s.modalBtn,
-                                    { backgroundColor: "#D97706" },
+                                    { backgroundColor: "#4F46E5" },
                                 ]}
-                                onPress={handleSubmitReport}
-                                disabled={submittingReport}
+                                onPress={handleSwap}
+                                disabled={swapping}
                             >
                                 <Text
                                     style={[s.modalBtnText, { color: "#fff" }]}
                                 >
-                                    {submittingReport
-                                        ? "Đang gửi..."
-                                        : "Gửi báo cáo"}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </Pressable>
-            </Modal>
-
-            {/* Complete Modal */}
-            <Modal
-                visible={showCompleteModal}
-                animationType="fade"
-                transparent
-                onRequestClose={() => setShowCompleteModal(false)}
-            >
-                <Pressable style={s.modalOverlay} onPress={Keyboard.dismiss}>
-                    <View style={s.modalCard}>
-                        <Text style={s.modalTitle}>Kết thúc chuyến</Text>
-
-                        <Text style={s.modalSectionLabel}>
-                            Trạng thái đơn hàng ({orders.length})
-                        </Text>
-                        {orders.map((o: any, i: number) => {
-                            const hasEnd = (o.trip_checkpoints || []).some(
-                                (cp: any) => cp.checkpoint_type === "end",
-                            );
-                            return (
-                                <View
-                                    key={i}
-                                    style={{
-                                        flexDirection: "row",
-                                        justifyContent: "space-between",
-                                        alignItems: "center",
-                                        paddingVertical: 6,
-                                        borderBottomWidth: 1,
-                                        borderBottomColor: "#F3F4F6",
-                                    }}
-                                >
-                                    <View style={{ flex: 1 }}>
-                                        <Text
-                                            style={{
-                                                fontSize: 14,
-                                                fontWeight: "600",
-                                                color: "#111827",
-                                            }}
-                                        >
-                                            {o.order_code || `#${o.id}`}
-                                        </Text>
-                                    </View>
-                                    <Text
-                                        style={{
-                                            fontSize: 13,
-                                            color:
-                                                o.status === "completed"
-                                                    ? "#059669"
-                                                    : "#D97706",
-                                            fontWeight: "600",
-                                            marginRight: 6,
-                                        }}
-                                    >
-                                        {orderStatusLabel[o.status] || o.status}
-                                    </Text>
-                                    {o.status === "completed" && (
-                                        <Text
-                                            style={{
-                                                fontSize: 11,
-                                                fontWeight: "700",
-                                                color: hasEnd
-                                                    ? "#059669"
-                                                    : "#F59E0B",
-                                            }}
-                                        >
-                                            {hasEnd ? "✓ End" : "✗ End"}
-                                        </Text>
-                                    )}
-                                </View>
-                            );
-                        })}
-
-                        <Text style={[s.modalSectionLabel, { marginTop: 16 }]}>
-                            Km đồng hồ
-                        </Text>
-                        <TextInput
-                            style={s.modalKmInput}
-                            placeholder="Km hiện tại"
-                            placeholderTextColor="#D1D5DB"
-                            keyboardType="numeric"
-                            returnKeyType="done"
-                            value={completeKm}
-                            onChangeText={setCompleteKm}
-                            autoFocus
-                        />
-
-                        {orders.some((o: any) => o.status !== "completed") && (
-                            <View
-                                style={{
-                                    backgroundColor: "#FEF3C7",
-                                    padding: 10,
-                                    borderRadius: 8,
-                                    marginTop: 12,
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        color: "#D97706",
-                                        textAlign: "center",
-                                    }}
-                                >
-                                    ⚠️ Kết thúc chuyến sẽ tạo Đảo lái cho đơn
-                                    chưa xong
-                                </Text>
-                            </View>
-                        )}
-
-                        {orders.some(
-                            (o: any) =>
-                                o.status === "completed" &&
-                                !(o.trip_checkpoints || []).some(
-                                    (cp: any) => cp.checkpoint_type === "end",
-                                ),
-                        ) && (
-                            <View
-                                style={{
-                                    backgroundColor: "#FEF3C7",
-                                    padding: 10,
-                                    borderRadius: 8,
-                                    marginTop: 12,
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        fontSize: 12,
-                                        color: "#D97706",
-                                        textAlign: "center",
-                                    }}
-                                >
-                                    ⚠️ Một số đơn chưa có chốt "Kết thúc đơn
-                                    hàng" — sẽ được tự động tạo
-                                </Text>
-                            </View>
-                        )}
-
-                        <View
-                            style={{
-                                flexDirection: "row",
-                                gap: 10,
-                                marginTop: 20,
-                            }}
-                        >
-                            <TouchableOpacity
-                                style={[
-                                    s.modalBtn,
-                                    { backgroundColor: "#F3F4F6" },
-                                ]}
-                                onPress={() => setShowCompleteModal(false)}
-                            >
-                                <Text
-                                    style={[
-                                        s.modalBtnText,
-                                        { color: "#6B7280" },
-                                    ]}
-                                >
-                                    Huỷ
-                                </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[
-                                    s.modalBtn,
-                                    { backgroundColor: "#DC2626" },
-                                ]}
-                                onPress={() => {
-                                    const km = parseFloat(completeKm);
-                                    if (!km) {
-                                        showAlert("Thiếu", "Vui lòng nhập Km");
-                                        return;
-                                    }
-                                    const startKm =
-                                        detail?.start_km ?? trip?.start_km;
-                                    if (startKm != null && km < startKm) {
-                                        showAlert(
-                                            "Lỗi",
-                                            `Km kết thúc (${km}) phải >= Km bắt đầu (${startKm})`,
-                                        );
-                                        return;
-                                    }
-                                    doComplete(km);
-                                }}
-                                disabled={completing}
-                            >
-                                <Text
-                                    style={[s.modalBtnText, { color: "#fff" }]}
-                                >
-                                    {completing ? "Đang xử lý..." : "Kết thúc"}
+                                    {swapping ? "Đang gửi..." : "Xác nhận"}
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -1925,40 +998,6 @@ const s = StyleSheet.create({
         fontSize: 16,
         color: "#111827",
     },
-    // Return trip info
-    infoCard: {
-        backgroundColor: "#fff",
-        marginHorizontal: 16,
-        padding: 20,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: "#F3F4F6",
-        marginBottom: 12,
-    },
-    infoTitle: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: "#DC2626",
-        textAlign: "center",
-    },
-    infoDesc: {
-        fontSize: 13,
-        color: "#6B7280",
-        textAlign: "center",
-        marginTop: 6,
-        lineHeight: 18,
-    },
-    kmInput: {
-        backgroundColor: "#F9FAFB",
-        padding: 12,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: "#E5E7EB",
-        fontSize: 18,
-        fontWeight: "700",
-        color: "#111827",
-        textAlign: "center",
-    },
     // Complete modal
     modalOverlay: {
         flex: 1,
@@ -1989,17 +1028,6 @@ const s = StyleSheet.create({
         textTransform: "uppercase",
         letterSpacing: 0.5,
     },
-    modalKmInput: {
-        backgroundColor: "#F9FAFB",
-        padding: 14,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#E5E7EB",
-        fontSize: 20,
-        fontWeight: "700",
-        color: "#111827",
-        textAlign: "center",
-    },
     modalBtn: {
         flex: 1,
         paddingVertical: 12,
@@ -2022,32 +1050,24 @@ const s = StyleSheet.create({
         fontWeight: "600",
         textAlign: "center",
     },
-    reportKmBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        marginHorizontal: 16,
-        marginBottom: 12,
-        paddingVertical: 8,
+    noteInput: {
+        marginBottom: 16,
+        minHeight: 72,
+        textAlignVertical: "top",
+        paddingTop: 8,
+    },
+    reasonChip: {
         paddingHorizontal: 12,
-        backgroundColor: "#FFFBEB",
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: "#FDE68A",
-    },
-    reportKmBtnText: { fontSize: 12, fontWeight: "700", color: "#B45309" },
-    photoPickerBtn: {
-        flex: 1,
+        paddingVertical: 8,
+        borderRadius: 8,
+        borderWidth: 1.5,
+        borderColor: "#E5E7EB",
+        backgroundColor: "#F9FAFB",
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "center",
         gap: 6,
-        paddingVertical: 10,
-        backgroundColor: "#EEF2FF",
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: "#C7D2FE",
     },
-    photoPickerBtnText: { fontSize: 13, fontWeight: "600", color: "#4F46E5" },
+    reasonChipActive: { borderColor: "#4F46E5", backgroundColor: "#EEF2FF" },
+    reasonChipText: { fontSize: 13, fontWeight: "500", color: "#374151" },
+    reasonChipTextActive: { fontWeight: "700", color: "#4338CA" },
 });

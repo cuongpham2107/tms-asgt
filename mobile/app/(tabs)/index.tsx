@@ -4,20 +4,51 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
+import { getGpsStatus, type GpsStatus } from "../../src/tracking/tracker";
+
+const GPS_POLL_MS = 5000;
+const gpsPillConfig = {
+  ok: { icon: "🟢", text: "GPS đang ghi", bg: "#ECFDF5", color: "#047857" },
+  stale: { icon: "🟡", text: "GPS: chưa có điểm mới (60s)", bg: "#FFFBEB", color: "#B45309" },
+  off: { icon: "🔴", text: "GPS tắt hoặc thiếu quyền", bg: "#FEF2F2", color: "#B91C1C" },
+} as const;
+
+/** Thanh trạng thái ghi GPS khi đang trong ca. Ẩn trên web. */
+function GpsStatusPill({ onFix }: { onFix: () => void }) {
+  const [status, setStatus] = useState<GpsStatus | null>(null);
+  useFocusEffect(useCallback(() => {
+    const tick = () => getGpsStatus().then(setStatus).catch(() => {});
+    tick();
+    const timer = setInterval(tick, GPS_POLL_MS);
+    return () => clearInterval(timer);
+  }, []));
+  if (!status) return null;
+  const cfg = gpsPillConfig[status.level];
+  return (
+    <TouchableOpacity
+      style={[st.gpsPill, { backgroundColor: cfg.bg }]}
+      onPress={status.level === "off" ? onFix : undefined}
+      disabled={status.level !== "off"}
+      activeOpacity={0.8}
+    >
+      <Text style={[st.gpsPillText, { color: cfg.color }]}>{cfg.icon} {cfg.text}</Text>
+      <Text style={[st.gpsPillText, { color: cfg.color }]}>Chờ gửi: {status.pending}</Text>
+    </TouchableOpacity>
+  );
+}
 
 const shiftLabels: Record<string, string> = { full: "Cả ca (X)", morning_half: "Nửa ca ngày (X/2)", night_half: "Nửa ca đêm (Y/2)" };
 
-const statusColors: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: "#F3F4F6", text: "#6B7280", label: "Chờ" },
-  started: { bg: "#FEF3C7", text: "#D97706", label: "Đang chạy" },
-  arrived_pickup: { bg: "#FEF3C7", text: "#D97706", label: "Đến lấy hàng" },
-  delivering: { bg: "#DBEAFE", text: "#2563EB", label: "Đang giao" },
-  arrived_delivery: { bg: "#FEF3C7", text: "#D97706", label: "Đến giao" },
-  delivered: { bg: "#D1FAE5", text: "#059669", label: "Đã giao" },
-  completed: { bg: "#D1FAE5", text: "#059669", label: "Hoàn thành" },
-  driver_swap: { bg: "#E0E7FF", text: "#4F46E5", label: "Đảo lái" },
-  return_trip: { bg: "#FEE2E2", text: "#DC2626", label: "Quay đầu" },
-  cancelled: { bg: "#FEE2E2", text: "#DC2626", label: "Đã huỷ" },
+const statusColors: Record<string, { bg: string; text: string }> = {
+  pending: { bg: "#F3F4F6", text: "#6B7280" },
+  started: { bg: "#FEF3C7", text: "#D97706" },
+  arrived_pickup: { bg: "#FEF3C7", text: "#D97706" },
+  delivering: { bg: "#DBEAFE", text: "#2563EB" },
+  arrived_delivery: { bg: "#FEF3C7", text: "#D97706" },
+  delivered: { bg: "#D1FAE5", text: "#059669" },
+  completed: { bg: "#D1FAE5", text: "#059669" },
+  driver_swap: { bg: "#E0E7FF", text: "#4F46E5" },
+  cancelled: { bg: "#FEE2E2", text: "#DC2626" },
 };
 
 export default function DashboardScreen() {
@@ -81,7 +112,7 @@ export default function DashboardScreen() {
   const mergedTrips = [...tripsInShift];
   activeInShift.forEach((t: any) => { if (!mergedTrips.find((m: any) => m.id === t.id)) mergedTrips.push(t); });
   const shiftAssigned = mergedTrips.filter((t: any) => t.status === "pending").length;
-  const shiftInProgress = activeTrips.filter((t: any) => ["started", "arrived_pickup", "delivering", "arrived_delivery", "delivered", "return_trip"].includes(t.status)).length;
+  const shiftInProgress = activeTrips.filter((t: any) => ["started", "arrived_pickup", "delivering", "arrived_delivery", "delivered"].includes(t.status)).length;
   const shiftCompleted = mergedTrips.filter((t: any) => t.status === "completed").length;
   const shiftTotalKm = shift?.total_km != null ? parseFloat(shift.total_km) : null;
   const shiftLoaded = shift?.total_km_loaded != null ? parseFloat(shift.total_km_loaded) : null;
@@ -96,7 +127,7 @@ export default function DashboardScreen() {
   })() : null;
 
   // Hiển thị km ca: từ DB nếu đã tính, nếu không tổng hợp từ trips
-  const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
+  const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "—";
 
   return (
     <ScrollView style={st.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}>
@@ -131,6 +162,8 @@ export default function DashboardScreen() {
           </View>
         </View>
       )}
+
+      {shift && !shift.end_time && <GpsStatusPill onFix={() => router.push("/gps-permission")} />}
 
       {!shift && (
         <TouchableOpacity style={st.startShiftBtn} onPress={() => router.replace("/shift")} activeOpacity={0.8}>
@@ -223,11 +256,11 @@ export default function DashboardScreen() {
                     {isSwapped && <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 9, fontWeight: "700", color: "#D97706" }}>⤿ ĐÃ BÀN GIAO</Text></View>}
                   </View>
                   <View style={[st.tripBadge, { backgroundColor: sc.bg }]}>
-                    <Text style={[st.tripBadgeText, { color: sc.text }]}>{sc.label}</Text>
+                    <Text style={[st.tripBadgeText, { color: sc.text }]}>{t.status_label ?? t.status}</Text>
                   </View>
                 </View>
                 <Text style={st.tripKm}>
-                  📏 {t.total_km ?? "-"} km · {t.start_km != null ? `${t.start_km} → ${t.end_km ?? "?"}` : "Chưa có Km"}
+                  📏 {t.total_km ?? "—"} km
                 </Text>
                 {(() => {
                   const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
@@ -287,6 +320,8 @@ const st = StyleSheet.create({
   loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   linkBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 4, padding: 16 },
   linkText: { color: "#4F46E5", fontWeight: "600", fontSize: 14 },
+  gpsPill: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginHorizontal: 16, marginTop: -8, marginBottom: 16, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  gpsPillText: { fontSize: 13, fontWeight: "600" },
   startShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4F46E5", paddingVertical: 14, borderRadius: 12, marginHorizontal: 16, marginTop: 8, marginBottom:8 },
   startShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   overtimeBanner: {

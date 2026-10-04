@@ -5,7 +5,7 @@ import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 
-const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
+const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "—";
 
 const statusBadge: Record<string, { label: string; bg: string; color: string; border: string }> = {
   completed: { label: "Hoàn thành", bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },
@@ -202,7 +202,7 @@ export default function StatsScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       <Text style={s.tripCode}>{t.vehicle?.plate_number || "-"}</Text>
                       <View style={[s.badge, { backgroundColor: statusInfo.bg }]}>
-                        <Text style={[s.badgeText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
+                        <Text style={[s.badgeText, { color: statusInfo.color }]}>{t.status_label ?? statusInfo.label}</Text>
                       </View>
                     </View>
                     {(() => {

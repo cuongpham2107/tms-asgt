@@ -20,7 +20,7 @@ import { login } from "../src/lib/api";
 const REMEMBER_KEY = "@tms_driver_saved_login";
 
 export default function LoginScreen() {
-  const { setAuth } = useAuth();
+  const { setAuth, setMinAppVersion } = useAuth();
   const { showLoading, hideLoading } = useLoading();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -68,6 +68,7 @@ export default function LoginScreen() {
         await AsyncStorage.removeItem(REMEMBER_KEY);
       }
 
+      setMinAppVersion(res.min_app_version);
       const shift = res.shift;
       setAuth(res.token, shift?.id ? String(shift.id) : undefined, shift);
       router.replace("/");

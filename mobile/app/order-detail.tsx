@@ -25,43 +25,37 @@ import { Ionicons } from "@expo/vector-icons";
 
 const statusConfig: Record<
     string,
-    { icon: string; bg: string; text: string; label: string }
+    { icon: string; bg: string; text: string }
 > = {
     assigned: {
         icon: "person-outline",
         bg: "#DBEAFE",
         text: "#2563EB",
-        label: "Đã gán",
     },
     sent: {
         icon: "send-outline",
         bg: "#E0E7FF",
         text: "#4F46E5",
-        label: "Chờ lấy",
     },
     in_transit: {
         icon: "car-outline",
         bg: "#FEF3C7",
         text: "#D97706",
-        label: "Đang giao",
     },
     completed: {
         icon: "checkmark-circle",
         bg: "#D1FAE5",
         text: "#059669",
-        label: "Hoàn thành",
     },
     driver_swap: {
         icon: "swap-horizontal",
         bg: "#E0E7FF",
         text: "#8B5CF6",
-        label: "Đảo lái",
     },
     cancelled: {
         icon: "close-circle",
         bg: "#FEE2E2",
         text: "#DC2626",
-        label: "Huỷ",
     },
 };
 
@@ -105,7 +99,6 @@ export default function OrderDetailScreen() {
         }
     }, [params.order]);
     const isSwapped = order?.is_swapped || false;
-    const [km, setKm] = useState("");
     const [note, setNote] = useState("");
     const [loading, setLoading] = useState(false);
     const [detail, setDetail] = useState<any>(null);
@@ -171,11 +164,8 @@ export default function OrderDetailScreen() {
         icon: "document-text-outline",
         bg: "#F3F4F6",
         text: "#6B7280",
-        label: d.status,
     };
     const tripId = d.trip_id;
-    const vehicleKm =
-        d.vehicle?.current_mileage ?? d.vehicle?.km_reading ?? null;
 
     // Format tel URI
     const formatTelUri = (rawPhone: string) => {
@@ -249,12 +239,6 @@ export default function OrderDetailScreen() {
         return parts.length > 0 ? parts : text;
     }, [d?.notes]);
 
-    // Auto-fill KM from vehicle's current mileage (re-fill sau mỗi lần loadDetail)
-    useEffect(() => {
-        if (vehicleKm != null && !km) {
-            setKm(String(Math.round(vehicleKm)));
-        }
-    }, [detail]);
     // Find next pending delivery point (for multi-DP orders)
     const deliveryPoints: any[] = d.delivery_points || [];
     const nextPendingDp = deliveryPoints.find(
@@ -318,17 +302,7 @@ export default function OrderDetailScreen() {
             dp.code || dp.location?.code || `Điểm ${dp.sequence}`;
     });
     const hasDeliveryPoint = !!activeDpId || deliveryPoints.length > 0;
-    const hasEndCheckpoint = checkpoints.some(
-        (cp: any) => cp.checkpoint_type === "end",
-    );
 
-    // Sequential: chỉ hiện 1 action tại 1 thời điểm, theo đúng luồng
-    const hasArrivedPickup = checkpoints.some(
-        (cp: any) => cp.checkpoint_type === "arrived_pickup",
-    );
-    const hasLeftPickup = checkpoints.some(
-        (cp: any) => cp.checkpoint_type === "left_pickup",
-    );
 
     // Check SELECTED DP for arrived_delivery/completed
     const activeDpHasCp = (cpType: string) =>
@@ -346,25 +320,21 @@ export default function OrderDetailScreen() {
     const isMidDelivery = hasArrivedDelivery && !hasCompleted;
     const canSelectDp = !isMidDelivery;
 
-    // Can do actions on the SELECTED DP (not necessarily next pending)
-    const canArrivePickup =
-        (d.status === "assigned" || d.status === "sent") &&
-        !hasArrivedPickup &&
-        !!shift;
-    const canLeftPickup =
-        d.status === "sent" && hasArrivedPickup && !hasLeftPickup && !!shift;
+    // Nút theo available_actions của đơn (server tính); điểm giao vẫn đi tuần tự đến → giao xong
+    const actions: string[] = d.available_actions ?? [];
+    const hasDpTarget = !!activeDpId || !!selectedLoc;
+    const canArrivePickup = actions.includes("arrived_pickup");
+    const canLeftPickup = actions.includes("left_pickup");
     const canArriveDelivery =
-        d.status === "in_transit" &&
-        (!!activeDpId || !!selectedLoc) &&
-        !hasArrivedDelivery &&
-        !!shift;
+        actions.includes("arrived_delivery") &&
+        hasDpTarget &&
+        !hasArrivedDelivery;
     const canComplete =
-        d.status === "in_transit" &&
-        (!!activeDpId || !!selectedLoc) &&
+        actions.includes("completed") &&
+        hasDpTarget &&
         hasArrivedDelivery &&
-        !hasCompleted &&
-        !!shift;
-    const canEnd = d.status === "completed" && !hasEndCheckpoint && !!shift;
+        !hasCompleted;
+    const canEnd = actions.includes("end");
 
     async function pickImage() {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -397,15 +367,6 @@ export default function OrderDetailScreen() {
 
     async function submitCheckpoint(type: string) {
         if (!tripId || !token || !d.id) return;
-        if (
-            !km &&
-            ["arrived_pickup", "arrived_delivery", "completed", "end"].includes(
-                type,
-            )
-        ) {
-            showAlert("Thiếu", "Vui lòng nhập số Km");
-            return;
-        }
         const body: any = {
             checkpoint_type: type,
             occurred_at: localISO(),
@@ -416,7 +377,6 @@ export default function OrderDetailScreen() {
             body.gps_lat = gps.gps_lat;
             body.gps_lng = gps.gps_lng;
         }
-        if (km) body.km_reading = parseFloat(km);
         if (note) body.voice_note = note;
         if (d.id) body.order_id = d.id;
         if (photos.length > 0) body.photos = photos;
@@ -443,7 +403,6 @@ export default function OrderDetailScreen() {
                 "Thành công",
                 `Đã cập nhật: ${cpInfo[type]?.label || type}`,
             );
-            setKm("");
             setNote("");
             setPhotos([]);
             setSelectedLoc(null);
@@ -593,7 +552,7 @@ export default function OrderDetailScreen() {
                             <Text
                                 style={[s.statusPillText, { color: st.text }]}
                             >
-                                {st.label}
+                                {d.status_label ?? d.status}
                             </Text>
                         </View>
                     </View>
@@ -687,8 +646,7 @@ export default function OrderDetailScreen() {
                 </View>
 
                 {/* Location picker — chỉ hiện khi trạng thái tiếp theo là đến điểm giao hàng */}
-                {d.status === "in_transit" &&
-                    hasLeftPickup &&
+                {actions.includes("arrived_delivery") &&
                     !hasDeliveryPoint &&
                     !hasArrivedDelivery && (
                         <>
@@ -990,41 +948,8 @@ export default function OrderDetailScreen() {
                                             </Text>
                                         )}
                                 </Text>
-                                <Text
-                                    style={{ fontSize: 13, color: "#6B7280" }}
-                                >
-                                    Km xe:{" "}
-                                    <Text
-                                        style={{
-                                            fontWeight: "700",
-                                            color: "#4F46E5",
-                                        }}
-                                    >
-                                        {d.vehicle?.current_mileage != null
-                                            ? parseInt(
-                                                  d.vehicle.current_mileage,
-                                              ).toLocaleString("vi-VN")
-                                            : "?"}
-                                    </Text>
-                                </Text>
                             </View>
                             <View style={s.formCard}>
-                                <View style={s.inputRow}>
-                                    <Ionicons
-                                        name="speedometer-outline"
-                                        size={18}
-                                        color="#9CA3AF"
-                                        style={{ marginTop: 12 }}
-                                    />
-                                    <TextInput
-                                        style={s.input}
-                                        placeholder="Số Km hiện tại"
-                                        placeholderTextColor="#D1D5DB"
-                                        keyboardType="numeric"
-                                        value={km}
-                                        onChangeText={setKm}
-                                    />
-                                </View>
                                 <View style={s.inputRow}>
                                     <Ionicons
                                         name="mic-outline"
@@ -1297,13 +1222,6 @@ export default function OrderDetailScreen() {
                                             </Text>
                                         </View>
                                         <Text style={s.tlInfo}>
-                                            Km:{" "}
-                                            {cp.km_reading != null
-                                                ? parseInt(
-                                                      cp.km_reading,
-                                                  ).toLocaleString("vi-VN")
-                                                : "-"}{" "}
-                                            •{" "}
                                             {new Date(
                                                 cp.occurred_at,
                                             ).toLocaleString("vi-VN")}
