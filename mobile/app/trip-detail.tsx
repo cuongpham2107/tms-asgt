@@ -20,7 +20,8 @@ import { api, SWAP_REASONS, type SwapReason } from "../src/lib/api";
 import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { clearNotificationBadge } from "../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
-import * as Location from "expo-location";
+import { getCheckpointGps, toFakePoint, FakePoint } from "../src/lib/fakeLocation";
+import FakeLocationPicker from "../src/components/FakeLocationPicker";
 
 const statusConfig: Record<
     string,
@@ -101,21 +102,6 @@ export default function TripDetailScreen() {
         v != null ? parseInt(v).toLocaleString("vi-VN") : "—";
 
 
-    const getGps = async () => {
-        try {
-            await Location.requestForegroundPermissionsAsync();
-            const pos = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.High,
-            });
-            return {
-                gps_lat: pos.coords.latitude,
-                gps_lng: pos.coords.longitude,
-            };
-        } catch {
-            return null;
-        }
-    };
-
     const load = async () => {
         if (!token || !tripId) return;
         try {
@@ -152,12 +138,26 @@ export default function TripDetailScreen() {
         (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true;
     const orders: any[] = detail?.orders || trip?.orders || [];
 
+    // Giả lập vị trí khi test: bắt đầu = điểm lấy của đơn đầu, kết thúc = điểm giao cuối của đơn cuối
+    const startFakePoint = toFakePoint(
+        `Lấy: ${orders[0]?.pickup_location?.code || "điểm lấy"}`,
+        orders[0]?.pickup_location,
+    );
+    const lastDeliveryPoints: any[] = orders[orders.length - 1]?.delivery_points || [];
+    const endFakePoint = toFakePoint(
+        "Điểm giao cuối",
+        lastDeliveryPoints[lastDeliveryPoints.length - 1]?.location,
+    );
+    const fakePoints = [startFakePoint, endFakePoint].filter(
+        (p): p is FakePoint => p !== null,
+    );
+
     const handleStart = async () => {
         if (!tripId || !token) return;
         setStarting(true);
         showLoading();
         try {
-            const gps = await getGps();
+            const gps = await getCheckpointGps(startFakePoint);
             const body: any = {
                 checkpoint_type: "started",
                 occurred_at: localISO(),
@@ -211,7 +211,7 @@ export default function TripDetailScreen() {
                 setCompleting(true);
                 showLoading();
                 try {
-                    const gps = await getGps();
+                    const gps = await getCheckpointGps(endFakePoint);
                     await api.trips.complete(
                         String(tripId),
                         token,
@@ -369,6 +369,9 @@ export default function TripDetailScreen() {
                                 {detail?.route || trip?.route}
                             </Text>
                         </View>
+                    )}
+                    {(canStart || canEnd) && (
+                        <FakeLocationPicker points={fakePoints} />
                     )}
                     {canStart && (
                         <TouchableOpacity

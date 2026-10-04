@@ -19,8 +19,9 @@ import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
 import { showAlert } from "../src/lib/alert";
+import { getCheckpointGps, toFakePoint, FakePoint } from "../src/lib/fakeLocation";
+import FakeLocationPicker from "../src/components/FakeLocationPicker";
 import * as ImagePicker from "expo-image-picker";
-import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 
 const statusConfig: Record<
@@ -303,6 +304,18 @@ export default function OrderDetailScreen() {
     });
     const hasDeliveryPoint = !!activeDpId || deliveryPoints.length > 0;
 
+    // Địa điểm của đơn để giả lập vị trí checkpoint khi test (chỉ bản dev/test)
+    const pickupFakePoint = toFakePoint(
+        `Lấy: ${d.pickup_location?.code || "điểm lấy"}`,
+        d.pickup_location,
+    );
+    const fakePoints: FakePoint[] = [
+        pickupFakePoint,
+        ...deliveryPoints.map((dp: any) =>
+            toFakePoint(`Giao: ${dpCodeMap[dp.id]}`, dp.location),
+        ),
+    ].filter((p): p is FakePoint => p !== null);
+
 
     // Check SELECTED DP for arrived_delivery/completed
     const activeDpHasCp = (cpType: string) =>
@@ -348,31 +361,18 @@ export default function OrderDetailScreen() {
         }
     }
 
-    async function getGpsCoordinates() {
-        try {
-            const { status } =
-                await Location.requestForegroundPermissionsAsync();
-            if (status !== "granted") return null;
-            const pos = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.High,
-            });
-            return {
-                gps_lat: pos.coords.latitude,
-                gps_lng: pos.coords.longitude,
-            };
-        } catch {
-            return null;
-        }
-    }
-
     async function submitCheckpoint(type: string) {
         if (!tripId || !token || !d.id) return;
         const body: any = {
             checkpoint_type: type,
             occurred_at: localISO(),
         };
-        // Capture GPS coordinates
-        const gps = await getGpsCoordinates();
+        // Capture GPS coordinates (bản test có thể giả lập theo địa điểm của bước đang bấm)
+        const isDeliveryStep = ["arrived_delivery", "completed", "end"].includes(type);
+        const autoPoint = isDeliveryStep
+            ? toFakePoint("Điểm giao", activeDp?.location ?? selectedLoc)
+            : pickupFakePoint;
+        const gps = await getCheckpointGps(autoPoint);
         if (gps) {
             body.gps_lat = gps.gps_lat;
             body.gps_lng = gps.gps_lng;
@@ -902,6 +902,10 @@ export default function OrderDetailScreen() {
                             </View>
                         </View>
                     )}
+
+                {!isSwapped && actions.length > 0 && (
+                    <FakeLocationPicker points={fakePoints} />
+                )}
 
                 {/* Checkpoint form */}
                 {(canArrivePickup ||

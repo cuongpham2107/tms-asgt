@@ -6,7 +6,10 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_FAKE_LOCATION": "1"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -15,6 +18,9 @@
       },
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_FAKE_LOCATION": "1"
       }
     },
     "production": {
