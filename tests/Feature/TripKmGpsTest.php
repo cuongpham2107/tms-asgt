@@ -16,6 +16,7 @@ use App\Models\TripDriverAssignment;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleGpsPoint;
+use App\Services\Trip\TripLegService;
 use App\Services\TripKmCalculatorService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -148,6 +149,77 @@ test('a mid-trip driver swap splits km between the two assignments', function ()
         ->and((float) $first->fresh()->km_loaded)->toEqualWithDelta(15, 0.5)
         ->and((float) $second->fresh()->km_loaded)->toEqualWithDelta(15, 0.5)
         ->and((float) $trip->total_km)->toEqualWithDelta(50, 0.5);
+});
+
+test('a swap before pickup leaves the handover driver fully empty and gives the receiver empty-to-pickup then loaded', function () {
+    $trip = kmTrip($this->vehicle, $this->t0, 50);
+    $first = kmAssign($trip, $this->driverA, $this->t0, $this->t0->addMinutes(5));
+    $second = kmAssign($trip, $this->driverB, $this->t0->addMinutes(5), $this->t0->addMinutes(50));
+    kmOrder($trip, $this->t0, 15, 40);
+    kmDrive($this->driverA->id, $this->vehicle->id, $this->t0, 0, 5);
+    kmDrive($this->driverB->id, $this->vehicle->id, $this->t0, 5, 50);
+
+    app(TripKmCalculatorService::class)->calculate($trip);
+
+    // A giao xe trước khi lấy hàng: toàn bộ rỗng. B: rỗng tới kho [5,15] + có hàng [15,40] + rỗng về [40,50].
+    expect((float) $first->fresh()->km_loaded)->toEqualWithDelta(0, 0.5)
+        ->and((float) $first->fresh()->km_empty)->toEqualWithDelta(5, 0.5)
+        ->and((float) $second->fresh()->km_loaded)->toEqualWithDelta(25, 0.5)
+        ->and((float) $second->fresh()->km_empty)->toEqualWithDelta(20, 0.5);
+});
+
+test('a total-only km adjustment is spread across each driver assignment', function () {
+    $trip = kmTrip($this->vehicle, $this->t0, 50);
+    $first = kmAssign($trip, $this->driverA, $this->t0, $this->t0->addMinutes(25));
+    $second = kmAssign($trip, $this->driverB, $this->t0->addMinutes(25), $this->t0->addMinutes(50));
+    kmOrder($trip, $this->t0, 10, 40);
+    kmDrive($this->driverA->id, $this->vehicle->id, $this->t0, 0, 25);
+    kmDrive($this->driverB->id, $this->vehicle->id, $this->t0, 25, 50);
+    app(TripKmCalculatorService::class)->calculate($trip);
+    // GPS: mỗi lượt 25 km (tổng 50), có hàng 15 km mỗi lượt.
+
+    // Điều hành chỉnh thẳng tổng lên 60 km, có hàng 30 km.
+    app(TripLegService::class)->applyTotalAdjustment($trip->fresh(), 60, 30, 'Bù km kẹt xe', 1);
+
+    $trip->refresh();
+    // Số điều chỉnh phải lan xuống từng lượt lái (app tài xế & km ca đọc từ đây).
+    expect((float) $trip->km_adjusted)->toEqualWithDelta(60, 0.01)
+        ->and((float) $first->fresh()->km)->toEqualWithDelta(30, 0.5)
+        ->and((float) $second->fresh()->km)->toEqualWithDelta(30, 0.5)
+        ->and((float) $first->fresh()->km_loaded)->toEqualWithDelta(15, 0.5)
+        ->and((float) $first->fresh()->km + (float) $second->fresh()->km)->toEqualWithDelta(60, 0.2);
+});
+
+test('an empty run trip counts all distance as empty and does not need review', function () {
+    $trip = kmTrip($this->vehicle, $this->t0, 30);
+    $trip->update(['is_empty_run' => true]);
+    kmAssign($trip, $this->driverA, $this->t0, $this->t0->addMinutes(30));
+    kmDrive($this->driverA->id, $this->vehicle->id, $this->t0, 0, 30);
+
+    app(TripKmCalculatorService::class)->calculate($trip);
+
+    $trip->refresh();
+    expect((float) $trip->total_km)->toEqualWithDelta(30, 0.5)
+        ->and((float) $trip->total_km_loaded)->toEqualWithDelta(0, 0.5)
+        ->and((float) $trip->total_km_empty)->toEqualWithDelta(30, 0.5)
+        ->and($trip->km_needs_review)->toBeFalse();
+});
+
+test('a swap after delivery gives the handover driver loaded plus empty and the receiver an empty return', function () {
+    $trip = kmTrip($this->vehicle, $this->t0, 50);
+    $first = kmAssign($trip, $this->driverA, $this->t0, $this->t0->addMinutes(42));
+    $second = kmAssign($trip, $this->driverB, $this->t0->addMinutes(42), $this->t0->addMinutes(50));
+    kmOrder($trip, $this->t0, 10, 40);
+    kmDrive($this->driverA->id, $this->vehicle->id, $this->t0, 0, 42);
+    kmDrive($this->driverB->id, $this->vehicle->id, $this->t0, 42, 50);
+
+    app(TripKmCalculatorService::class)->calculate($trip);
+
+    // A: rỗng [0,10] + có hàng [10,40] + rỗng [40,42]. B nhận xe sau khi giao xong: rỗng về bãi [42,50].
+    expect((float) $first->fresh()->km_loaded)->toEqualWithDelta(30, 0.5)
+        ->and((float) $first->fresh()->km_empty)->toEqualWithDelta(12, 0.5)
+        ->and((float) $second->fresh()->km_loaded)->toEqualWithDelta(0, 0.5)
+        ->and((float) $second->fresh()->km_empty)->toEqualWithDelta(8, 0.5);
 });
 
 test('an order cancelled after pickup is loaded until it was cancelled', function () {
