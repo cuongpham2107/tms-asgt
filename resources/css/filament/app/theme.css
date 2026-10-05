@@ -3,6 +3,8 @@
 @source '../../../../app/Filament/**/*';
 @source '../../../../resources/views/**/*';
 @source '../../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
+@source '../../../../vendor/codewithkyrian/filament-date-range/resources/views/**/*.blade.php';
+@source '../../../../vendor/codewithkyrian/filament-date-range/dist/components/*.js';
 
 /* ==========================================================================
    1. VARIABLES & BASE TYPOGRAPHY (partials/_variables.css)
@@ -299,58 +301,6 @@ html.dark .fi-sidebar-group.fi-collapsed > .fi-sidebar-group-btn {
     row-gap: calc(var(--spacing) * 4) !important;
 }
 
-/* Custom Stats Bar Cards */
-.trip-stat-card {
-    background-color: #ffffff;
-    border: 1px solid rgb(229 231 235);
-    transition: all 150ms ease-in-out;
-}
-
-html.dark .trip-stat-card {
-    background-color: rgb(15 23 42 / 0.85) !important;
-    border-color: rgb(30 41 59 / 0.9) !important;
-}
-
-/* Collapsible Filter Bar */
-.collapsible-filter-bar {
-    background-color: rgb(255 255 255 / 0.7);
-    border: 1px solid rgb(229 231 235);
-}
-
-html.dark .collapsible-filter-bar {
-    background-color: rgb(15 23 42 / 0.75) !important;
-    border-color: rgb(30 41 59 / 0.8) !important;
-}
-
-/* Toolbar Buttons */
-.toolbar-toggle-btn {
-    border: 1px solid rgb(229 231 235);
-    background-color: #ffffff;
-    color: rgb(55 65 81);
-}
-
-html.dark .toolbar-toggle-btn {
-    background-color: rgb(30 41 59 / 0.85) !important;
-    border-color: rgb(51 65 85 / 0.8) !important;
-    color: rgb(226 232 240) !important;
-}
-
-html.dark .toolbar-toggle-btn:hover {
-    background-color: rgb(51 65 85 / 0.9) !important;
-    border-color: rgb(71 85 105) !important;
-}
-
-html.dark .toolbar-mine-btn {
-    background-color: rgb(30 41 59 / 0.85) !important;
-    border: 1px solid rgb(51 65 85 / 0.8) !important;
-    color: rgb(226 232 240) !important;
-}
-
-html.dark .toolbar-mine-btn:hover {
-    background-color: rgb(51 65 85 / 0.95) !important;
-    color: #ffffff !important;
-}
-
 /* Header Actions (Call-to-Action) */
 .header-action-hhhk,
 .fi-page-header .fi-ac-action.header-action-hhhk {
@@ -544,7 +494,7 @@ html.dark tr.trashed-order-table-row > td { background-color: #450a0a; }
    ========================================================================== */
 .fi-tabs-item {
     &.fi-active {
-        background-color: #4f39f6;
+        background-color: var(--primary-600);
     }
 }
 

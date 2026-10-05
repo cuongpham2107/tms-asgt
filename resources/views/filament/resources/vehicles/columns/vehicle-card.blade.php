@@ -8,111 +8,96 @@
     $driver = $record->driver;
 @endphp
 
-<div class="flex flex-col h-full p-2">
-    <!-- Header Section -->
-    <div class="flex items-start gap-4 mb-5">
-        <div
-            class="w-12 h-12 flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-500 shrink-0 border border-blue-100/50 dark:border-blue-900/50">
-            <x-heroicon-o-truck class="w-6 h-6" />
+<div class="flex h-full flex-col gap-4 p-2">
+    {{-- Header Section --}}
+    <div class="flex items-start gap-3">
+        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-400/10 dark:text-primary-400">
+            <x-filament::icon icon="heroicon-o-truck" class="h-6 w-6" />
         </div>
-        <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between gap-2">
-                <h2 class="text-xl! font-bold text-gray-900 dark:text-white truncate">
-                    {{ $record->plate_number }}
-                </h2>
-                <div class="flex flex-col items-end gap-1">
-                    <span @class([
-                        'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
-                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' => $record->status === 'running',
-                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' => $record->status === 'on',
-                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' => $record->status === 'bdsc',
-                        'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400' => $record->status === 'off',
-                    ])>
-                        <span class="inline-block w-1 h-1 rounded-full bg-current mr-1 mb-0.5"></span>
+        <div class="min-w-0 flex-1">
+            <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                    <h2 class="truncate text-lg font-semibold text-gray-950 dark:text-white" title="{{ $record->plate_number }}">
+                        {{ $record->plate_number }}
+                    </h2>
+                    <p class="truncate text-sm text-gray-500 dark:text-gray-400">
+                        {{ $record->owner }}
+                    </p>
+                </div>
+                <div class="flex shrink-0 flex-col items-end gap-1">
+                    <x-filament::badge :color="$statusColor" size="sm">
                         {{ $statusLabel }}
-                    </span>
-                    <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 flex items-center gap-1">
-                        <x-heroicon-m-building-office-2 class="w-3 h-3" />
+                    </x-filament::badge>
+                    <x-filament::badge color="gray" size="sm" icon="heroicon-m-building-office-2">
                         {{ $typeLabel }}
-                    </span>
+                    </x-filament::badge>
                 </div>
             </div>
-            <p class="text-sm text-gray-400 dark:text-gray-500 font-medium">
-                {{ $record->owner }}
-            </p>
         </div>
     </div>
 
-    <!-- Active Toggle Section -->
-    <div class="bg-gray-50/50 dark:bg-gray-900/50 rounded-xl p-3 mb-6 flex items-center justify-between border border-gray-100 dark:border-gray-800">
-        <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Trạng thái hoạt động</span>
-        <div @class([
-            'w-10 h-5 rounded-full relative transition-colors duration-200',
-            'bg-emerald-500' => $record->is_active,
-            'bg-gray-300 dark:bg-gray-700' => !$record->is_active,
-        ])>
-            <div @class([
-                'absolute top-1 w-3 h-3 bg-white rounded-full transition-transform duration-200',
-                'translate-left-1 left-1' => !$record->is_active,
-                'right-1' => $record->is_active,
-            ])></div>
-        </div>
+    {{-- Active State Section --}}
+    <div class="flex items-center justify-between gap-3 rounded-lg bg-gray-50 p-3 dark:bg-white/5">
+        <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Trạng thái hoạt động</span>
+        <x-filament::badge
+            :color="$record->is_active ? 'success' : 'gray'"
+            :icon="$record->is_active ? 'heroicon-m-check-circle' : 'heroicon-m-minus-circle'"
+            size="sm"
+        >
+            {{ $record->is_active ? 'Hoạt động' : 'Ngừng hoạt động' }}
+        </x-filament::badge>
     </div>
 
-    <!-- Info Grid -->
-    <div class="grid grid-cols-2 gap-y-4 gap-x-6 mb-6">
-        <div>
-            <p class="text-[11px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-semibold mb-1">Loại xe</p>
-            <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $vehicleTypeLabel }}</p>
+    {{-- Info Grid --}}
+    <dl class="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div class="min-w-0">
+            <dt class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Loại xe</dt>
+            <dd class="truncate text-sm font-semibold text-gray-950 dark:text-white">{{ $vehicleTypeLabel }}</dd>
         </div>
-        <div>
-            <p class="text-[11px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-semibold mb-1">Tải trọng</p>
-            <p class="text-sm font-bold text-gray-900 dark:text-white">{{ number_format($record->load_capacity, 1) }} tấn</p>
+        <div class="min-w-0">
+            <dt class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Tải trọng</dt>
+            <dd class="text-sm font-semibold tabular-nums text-gray-950 dark:text-white">{{ number_format($record->load_capacity, 1) }} tấn</dd>
         </div>
-        <div>
-            <p class="text-[11px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-semibold mb-1">Điểm hiện tại</p>
-            <p class="text-sm font-bold text-gray-900 dark:text-white">
+        <div class="min-w-0">
+            <dt class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Điểm hiện tại</dt>
+            <dd class="truncate text-sm font-semibold tabular-nums text-gray-950 dark:text-white">
                 @if($record->gps_lat && $record->gps_lng)
                     {{ number_format($record->gps_lat, 4) }}, {{ number_format($record->gps_lng, 4) }}
                 @else
                     Đang cập nhật
                 @endif
-            </p>
+            </dd>
         </div>
-        <div>
-            <p class="text-[11px] text-gray-400 dark:text-gray-500 uppercase tracking-wider font-semibold mb-1">Số km</p>
-            <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $record->current_mileage ? number_format($record->current_mileage, 0, ',', '.') : '—' }} km</p>
+        <div class="min-w-0">
+            <dt class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">Số km</dt>
+            <dd class="text-sm font-semibold tabular-nums text-gray-950 dark:text-white">{{ $record->current_mileage ? number_format($record->current_mileage, 0, ',', '.') : '—' }} km</dd>
         </div>
-    </div>
+    </dl>
 
-    <div class="h-px bg-gray-100 dark:bg-gray-800 w-full mb-5"></div>
-
-    <!-- Footer Section -->
-    <div class="flex items-center justify-between">
-        <div>
-            <p class="text-[10px] text-gray-400 dark:text-gray-500 font-semibold mb-1">BDSC gần nhất</p>
-            <p class="text-sm font-bold text-gray-700 dark:text-gray-300">
+    {{-- Footer Section --}}
+    <div class="flex items-center justify-between gap-3 border-t border-gray-200 pt-4 dark:border-white/10">
+        <div class="min-w-0">
+            <p class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">BDSC gần nhất</p>
+            <p class="text-sm font-semibold tabular-nums text-gray-950 dark:text-white">
                 {{ $latestMaintenance?->completed_at?->format('d/m/Y') ?? 'Chưa có' }}
             </p>
         </div>
 
         @if($driver)
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden border border-white dark:border-gray-800 shadow-sm">
+            <div class="flex min-w-0 items-center gap-2">
+                <div class="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-gray-100 ring-1 ring-gray-950/5 dark:bg-white/5 dark:ring-white/10">
                     @if($driver->avatar_url)
-                        <img src="{{ $driver->avatar_url }}" alt="{{ $driver->name }}" class="w-full h-full object-cover">
+                        <img src="{{ $driver->avatar_url }}" alt="{{ $driver->name }}" class="h-full w-full object-cover">
                     @else
-                        <div class="w-full h-full flex items-center justify-center text-gray-400">
-                            <x-heroicon-m-user class="w-5 h-5" />
+                        <div class="flex h-full w-full items-center justify-center text-gray-400 dark:text-gray-500">
+                            <x-filament::icon icon="heroicon-m-user" class="h-5 w-5" />
                         </div>
                     @endif
                 </div>
-                <div class="flex flex-col">
-                    <span class="text-sm font-bold text-gray-700 dark:text-gray-300 leading-tight">{{ $driver->name }}</span>
-                </div>
+                <span class="truncate text-sm font-medium text-gray-950 dark:text-white" title="{{ $driver->name }}">{{ $driver->name }}</span>
             </div>
         @else
-            <div class="text-[10px] text-gray-400 italic">Chưa gán lái xe</div>
+            <span class="text-xs italic text-gray-400 dark:text-gray-500">Chưa gán lái xe</span>
         @endif
     </div>
 </div>

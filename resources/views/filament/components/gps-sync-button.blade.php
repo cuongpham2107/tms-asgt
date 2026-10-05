@@ -24,18 +24,17 @@
             }
         }
     }"
-    class="flex items-center gap-2 px-2"
+    class="flex items-center"
 >
-    <x-filament::button
-        size="sm"
+    <x-filament::icon-button
         color="gray"
         icon="heroicon-o-arrow-path"
+        icon-size="lg"
+        label="Đồng bộ GPS"
+        tooltip="Đồng bộ GPS"
         x-on:click="doSync"
         x-bind:disabled="syncing"
-    >
-        <span x-show="!syncing">GPS</span>
-        <span x-show="syncing" x-cloak>
-            <x-filament::loading-indicator class="h-4 w-4" />
-        </span>
-    </x-filament::button>
+        x-bind:aria-busy="syncing ? 'true' : 'false'"
+        x-bind:class="{ 'motion-safe:[&_svg]:animate-spin': syncing }"
+    />
 </div>

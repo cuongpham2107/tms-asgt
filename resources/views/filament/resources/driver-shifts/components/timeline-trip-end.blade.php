@@ -1,11 +1,11 @@
-<div class="flex items-center gap-2">
-    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-        🏁 Kết thúc chuyến
-    </span>
-    <span class="text-sm text-gray-600">
+<div class="flex flex-wrap items-center gap-2">
+    <x-filament::badge color="danger" icon="heroicon-m-flag">
+        Kết thúc chuyến
+    </x-filament::badge>
+    <span class="text-sm font-medium text-gray-950 dark:text-white">
         {{ $trip_code }}
         @if($total_km)
-            <span class="text-gray-400">· Tổng: {{ number_format((float) $total_km, 1) }} km</span>
+            <span class="text-xs font-normal text-gray-500 dark:text-gray-400">· Tổng: <span class="tabular-nums">{{ number_format((float) $total_km, 1) }}</span> km</span>
         @endif
     </span>
 </div>

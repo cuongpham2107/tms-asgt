@@ -1,99 +1,92 @@
 <x-filament-panels::page>
     {{-- Station filter pills --}}
-    <div class="mb-4 flex items-center gap-2">
-        <button
+    <div class="flex flex-wrap items-center gap-2">
+        <x-filament::button
             type="button"
             wire:click="filterStation('all')"
-            @class([
-                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 whitespace-nowrap cursor-pointer',
-                'bg-[#008fd5] border-transparent text-white shadow-sm' => $activeStationFilter === 'all',
-                'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700' => $activeStationFilter !== 'all',
-            ])
+            :color="$activeStationFilter === 'all' ? 'primary' : 'gray'"
+            size="sm"
         >
-            <span>Tất cả</span>
-        </button>
+            Tất cả
+        </x-filament::button>
         @foreach (\App\Enums\OnDutyLocation::cases() as $station)
-            @php
-                $color = match($station->value) {
-                    'TN' => 'bg-sky-500',
-                    'BN' => 'bg-amber-500',
-                    'NBA' => 'bg-emerald-500',
-                    default => 'bg-[#008fd5]',
-                };
-            @endphp
-            <button
+            <x-filament::button
                 type="button"
                 wire:click="filterStation('{{ $station->value }}')"
-                @class([
-                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 whitespace-nowrap cursor-pointer',
-                    $color . ' border-transparent text-white shadow-sm' => $activeStationFilter === $station->value,
-                    'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700' => $activeStationFilter !== $station->value,
-                ])
+                :color="$activeStationFilter === $station->value ? $station->getColor() : 'gray'"
+                :icon="$activeStationFilter === $station->value ? 'heroicon-m-check' : null"
+                size="sm"
             >
-                @if ($activeStationFilter === $station->value)
-                    <span class="h-1.5 w-1.5 rounded-full bg-white shrink-0"></span>
-                @endif
-                <span>{{ $station->getLabel() }}</span>
-            </button>
+                {{ $station->getLabel() }}
+            </x-filament::button>
         @endforeach
     </div>
 
     {{-- Grid 2-1 layout --}}
-    <div class="grid grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {{-- Left: summary table (col-span-2) --}}
-        <div class="col-span-2">
+        <div class="min-w-0 lg:col-span-2">
            {{ $this->table }}
         </div>
 
         {{-- Right: main table (col-span-1) --}}
-        <div class="col-span-1">
+        <div class="min-w-0 lg:col-span-1">
 
             @php $data = $this->getSummaryData(); @endphp
-            <div class="rounded-xl border border-gray-200 bg-white shadow-sm">
-                <div class="border-b-0.5 border-gray-200 px-4 py-3">
-                    <h3 class="text-sm font-semibold text-gray-900">Tổng hợp ca trực lái xe</h3>
+            @php
+                $th = 'border border-gray-200 px-3 py-2 text-center text-sm font-semibold text-gray-950 dark:border-white/10 dark:text-white';
+                $thSub = 'border border-gray-200 px-3 py-1 text-center text-xs font-medium text-gray-500 dark:border-white/10 dark:text-gray-400';
+                $td = 'border border-gray-200 px-3 py-2 text-center tabular-nums dark:border-white/10';
+                $thFirst = 'border border-gray-200 px-4 py-2 text-left text-sm font-semibold text-gray-950 dark:border-white/10 dark:text-white';
+                $tdFirst = 'border border-gray-200 px-4 py-2 text-left dark:border-white/10';
+            @endphp
+            <div class="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+                <div class="border-b border-gray-200 px-4 py-3 dark:border-white/10">
+                    <h3 class="text-base font-semibold text-gray-950 dark:text-white">Tổng hợp ca trực lái xe</h3>
                 </div>
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="bg-gray-50">
-                            <th class="border border-gray-200 px-4 py-2 text-left font-medium text-gray-700">Điểm trực</th>
-                            <th class="border border-gray-200 px-3 py-2 text-center font-medium text-gray-700" colspan="4">Đi làm</th>
-                            <th class="border border-gray-200 px-3 py-2 text-center font-medium text-gray-700">Nghỉ</th>
-                            <th class="border border-gray-200 px-3 py-2 text-center font-medium text-gray-700">TTL</th>
-                        </tr>
-                        <tr class="bg-gray-50 text-xs text-gray-500">
-                            <th class="border border-gray-200"></th>
-                            <th class="border border-gray-200 px-3 py-1 text-center">TTL</th>
-                            <th class="border border-gray-200 px-3 py-1 text-center">X/2</th>
-                            <th class="border border-gray-200 px-3 py-1 text-center">Y/2</th>
-                            <th class="border border-gray-200 px-3 py-1 text-center">X</th>
-                            <th class="border border-gray-200 px-3 py-1 text-center"></th>
-                            <th class="border border-gray-200 px-3 py-1 text-center"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($data['stations'] as $s)
-                        <tr class="hover:bg-gray-50">
-                            <td class="border border-gray-200 px-4 py-2 font-medium">{{ $s['label'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center font-bold">{{ $s['working_ttl'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $s['morning_half'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $s['night_half'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $s['full'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center text-red-600">{{ $s['off'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center font-bold">{{ $s['total'] }}</td>
-                        </tr>
-                        @endforeach
-                        <tr class="bg-gray-100 font-bold">
-                            <td class="border border-gray-200 px-4 py-2">Tổng lái xe</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['working_ttl'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['morning_half'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['night_half'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['full'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center text-red-600">{{ $data['grand']['off'] }}</td>
-                            <td class="border border-gray-200 px-3 py-2 text-center">{{ $data['grand']['total'] }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="overflow-x-auto">
+                    <table class="w-full border-collapse text-sm text-gray-950 dark:text-white">
+                        <thead class="bg-gray-50 dark:bg-white/5">
+                            <tr>
+                                <th class="{{ $thFirst }}">Điểm trực</th>
+                                <th class="{{ $th }}" colspan="4">Đi làm</th>
+                                <th class="{{ $th }}">Nghỉ</th>
+                                <th class="{{ $th }}">TTL</th>
+                            </tr>
+                            <tr>
+                                <th class="{{ $thSub }}"></th>
+                                <th class="{{ $thSub }}">TTL</th>
+                                <th class="{{ $thSub }}">X/2</th>
+                                <th class="{{ $thSub }}">Y/2</th>
+                                <th class="{{ $thSub }}">X</th>
+                                <th class="{{ $thSub }}"></th>
+                                <th class="{{ $thSub }}"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($data['stations'] as $s)
+                            <tr class="transition duration-75 hover:bg-gray-50 dark:hover:bg-white/5">
+                                <td class="{{ $tdFirst }} font-medium">{{ $s['label'] }}</td>
+                                <td class="{{ $td }} font-semibold">{{ $s['working_ttl'] }}</td>
+                                <td class="{{ $td }}">{{ $s['morning_half'] }}</td>
+                                <td class="{{ $td }}">{{ $s['night_half'] }}</td>
+                                <td class="{{ $td }}">{{ $s['full'] }}</td>
+                                <td class="{{ $td }} text-danger-600 dark:text-danger-400">{{ $s['off'] }}</td>
+                                <td class="{{ $td }} font-semibold">{{ $s['total'] }}</td>
+                            </tr>
+                            @endforeach
+                            <tr class="bg-gray-50 font-semibold dark:bg-white/5">
+                                <td class="{{ $tdFirst }}">Tổng lái xe</td>
+                                <td class="{{ $td }}">{{ $data['grand']['working_ttl'] }}</td>
+                                <td class="{{ $td }}">{{ $data['grand']['morning_half'] }}</td>
+                                <td class="{{ $td }}">{{ $data['grand']['night_half'] }}</td>
+                                <td class="{{ $td }}">{{ $data['grand']['full'] }}</td>
+                                <td class="{{ $td }} text-danger-600 dark:text-danger-400">{{ $data['grand']['off'] }}</td>
+                                <td class="{{ $td }}">{{ $data['grand']['total'] }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

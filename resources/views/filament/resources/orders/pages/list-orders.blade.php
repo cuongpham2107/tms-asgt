@@ -1,18 +1,4 @@
 <x-filament-panels::page>
-    <style>
-        html.dark .collapsible-filter-bar {
-            background-color: rgb(15 23 42 / 0.75) !important;
-            border-color: rgb(30 41 59 / 0.8) !important;
-        }
-        html.dark .toolbar-toggle-btn {
-            background-color: rgb(30 41 59 / 0.85) !important;
-            border-color: rgb(51 65 85 / 0.8) !important;
-            color: rgb(226 232 240) !important;
-        }
-        html.dark .toolbar-toggle-btn:hover {
-            background-color: rgb(51 65 85 / 0.95) !important;
-        }
-    </style>
     <div
         x-data="{
             isFiltersOpen: localStorage.getItem('list_orders_filters_open') !== 'false'
@@ -22,22 +8,26 @@
     >
         {{-- Toolbar: Toggle Filters Button + Date Range + Mine Only + Search --}}
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-                <button
+            <div class="flex flex-wrap items-center gap-3">
+                <x-filament::button
                     type="button"
+                    color="gray"
+                    size="sm"
+                    icon="heroicon-o-funnel"
                     x-on:click="isFiltersOpen = !isFiltersOpen"
-                    class="toolbar-toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-xs transition cursor-pointer"
+                    x-bind:aria-expanded="isFiltersOpen"
                 >
-                    <x-filament::icon icon="heroicon-o-funnel" class="h-4 w-4 text-primary-500" />
-                    <span>Bộ lọc</span>
-                    <x-filament::icon
-                        icon="heroicon-m-chevron-down"
-                        class="h-3.5 w-3.5 text-gray-400 transition-transform duration-200"
-                        x-bind:class="{ 'rotate-180': isFiltersOpen }"
-                    />
-                </button>
+                    <span class="inline-flex items-center gap-1">
+                        Bộ lọc
+                        <x-filament::icon
+                            icon="heroicon-m-chevron-down"
+                            class="h-4 w-4 text-gray-400 transition-transform duration-200 motion-reduce:transition-none dark:text-gray-500"
+                            x-bind:class="{ 'rotate-180': isFiltersOpen }"
+                        />
+                    </span>
+                </x-filament::button>
 
-                <div class="w-[380px] sm:w-[420px]">
+                <div class="w-full max-w-[420px] sm:w-[420px]">
                     {{ $this->dateRangeForm }}
                 </div>
 
@@ -46,7 +36,6 @@
                     :color="$showMineOnly ? 'primary' : 'gray'"
                     size="sm"
                     :icon="$showMineOnly ? 'heroicon-s-user' : 'heroicon-o-user'"
-                    class="toolbar-mine-btn"
                 >
                     Đơn của tôi
                 </x-filament::button>
@@ -57,13 +46,12 @@
                     color="gray"
                     size="sm"
                     icon="heroicon-o-arrow-down-tray"
-                    class="toolbar-mine-btn"
                 >
                     Xuất Excel
                 </x-filament::button>
             </div>
 
-            <div class="flex-1 min-w-0 sm:max-w-md">
+            <div class="min-w-0 flex-1 sm:max-w-md">
                 {{ $this->searchForm }}
             </div>
         </div>
@@ -73,32 +61,32 @@
             x-show="isFiltersOpen"
             x-collapse
             x-cloak
-            class="collapsible-filter-bar rounded-xl flex flex-col divide-y divide-gray-100 dark:divide-gray-800 p-2 shadow-2xs"
+            class="flex flex-col divide-y divide-gray-200 rounded-xl bg-white p-2 shadow-sm ring-1 ring-gray-950/5 dark:divide-white/10 dark:bg-gray-900 dark:ring-white/10"
         >
             {{ $this->filtersForm }}
         </div>
 
         {{-- Active filters summary --}}
         @if ($activeOrderTypeFilter !== 'all' || $activeStatusFilter !== 'all' || $activePlaceFilter !== 'all')
-            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span>Đang lọc:</span>
                 @if ($activeOrderTypeFilter !== 'all')
-                    <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-700 dark:border dark:border-blue-800/50">
+                    <x-filament::badge color="primary">
                         {{ $orderTypeFilters[$activeOrderTypeFilter]['label'] ?? $activeOrderTypeFilter }}
-                        <button wire:click="filterOrderType('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
-                    </span>
+                        <x-slot name="deleteButton" label="Bỏ lọc" wire:click="filterOrderType('all')"></x-slot>
+                    </x-filament::badge>
                 @endif
                 @if ($activeStatusFilter !== 'all')
-                    <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 dark:border dark:border-amber-800/50">
+                    <x-filament::badge color="warning">
                         {{ $orderStatusFilters[$activeStatusFilter]['label'] ?? $activeStatusFilter }}
-                        <button wire:click="filterStatus('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
-                    </span>
+                        <x-slot name="deleteButton" label="Bỏ lọc" wire:click="filterStatus('all')"></x-slot>
+                    </x-filament::badge>
                 @endif
                 @if ($activePlaceFilter !== 'all')
-                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border dark:border-emerald-800/50">
+                    <x-filament::badge color="success">
                         {{ $activePlaceFilter ? ($orderPlaceFilters[(string) $activePlaceFilter] ?? $activePlaceFilter) : '' }}
-                        <button wire:click="filterPlace('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
-                    </span>
+                        <x-slot name="deleteButton" label="Bỏ lọc" wire:click="filterPlace('all')"></x-slot>
+                    </x-filament::badge>
                 @endif
             </div>
         @endif

@@ -1,8 +1,8 @@
-<div class="flex items-center gap-2">
-    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-        🚀 Bắt đầu chuyến
-    </span>
-    <span class="text-sm text-gray-600">
+<div class="flex flex-wrap items-center gap-2">
+    <x-filament::badge color="success" icon="heroicon-m-play">
+        Bắt đầu chuyến
+    </x-filament::badge>
+    <span class="text-sm font-medium text-gray-950 dark:text-white">
         {{ $trip_code }}
     </span>
 </div>

@@ -9,6 +9,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\HtmlString;
 
 class DriverShiftInfolist
 {
@@ -127,7 +128,8 @@ class DriverShiftInfolist
                                     ->dateTime('d/m/Y H:i'),
                                 TextEntry::make('display')
                                     ->label('Hoạt động')
-                                    ->html(),
+                                    // Nội dung là Blade do server render (đã escape {{ }}); ->html() sẽ lọc mất icon SVG.
+                                    ->formatStateUsing(fn (?string $state): HtmlString => new HtmlString($state ?? '')),
                                 TextEntry::make('vehicle')
                                     ->label('Phương tiện')
                                     ->formatStateUsing(fn ($state) => $state ?? '-'),

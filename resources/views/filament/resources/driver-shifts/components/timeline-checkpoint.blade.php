@@ -4,33 +4,26 @@
     $typeLabel = $type instanceof CheckpointType ? $type->getLabel() : ($type?->value ?? $type);
     $typeColor = $type instanceof CheckpointType ? $type->getColor() : 'gray';
 
-    $colorMap = [
-        'info'    => 'bg-blue-50 text-blue-700 border-blue-200',
-        'warning' => 'bg-amber-50 text-amber-700 border-amber-200',
-        'success' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        'danger'  => 'bg-red-50 text-red-700 border-red-200',
-        'primary' => 'bg-purple-50 text-purple-700 border-purple-200',
-        'gray'    => 'bg-gray-50 text-gray-600 border-gray-200',
-    ];
-    $colorClass = $colorMap[$typeColor] ?? $colorMap['gray'];
-
     $orderCodes = $checkpoint['order_codes'] ?? [];
     $dpLabel = $checkpoint['dp_label'] ?? '';
 @endphp
 
-<div class="flex items-center gap-2">
-    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border {{ $colorClass }}">
+<div class="flex flex-wrap items-center gap-2">
+    <x-filament::badge :color="$typeColor">
         {{ $typeLabel }}{{ $dpLabel }}
-    </span>
-    <span class="text-sm text-gray-600">
+    </x-filament::badge>
+    <span class="min-w-0 text-sm text-gray-500 dark:text-gray-400">
         @if(count($orderCodes) > 0)
-            <span class="text-gray-500">Đơn: </span>
+            <span>Đơn: </span>
             @foreach($orderCodes as $i => $code)
-                <span class="font-medium text-gray-700">{{ $code }}</span>{{ $i < count($orderCodes) - 1 ? ', ' : '' }}
+                <span class="font-medium text-gray-950 dark:text-white">{{ $code }}</span>{{ $i < count($orderCodes) - 1 ? ', ' : '' }}
             @endforeach
         @endif
         @if($checkpoint['voice_note'] ?? null)
-            <span class="text-gray-400"> · 💬 {{ $checkpoint['voice_note'] }}</span>
+            <span class="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                · <x-filament::icon icon="heroicon-m-chat-bubble-left-ellipsis" class="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
+                {{ $checkpoint['voice_note'] }}
+            </span>
         @endif
     </span>
 </div>

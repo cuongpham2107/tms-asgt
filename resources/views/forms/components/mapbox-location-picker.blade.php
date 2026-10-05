@@ -94,23 +94,24 @@
             }
         },
     }" x-init="init()" class="space-y-3">
-        <div x-ref="map" class="w-full rounded-lg border border-gray-200 dark:border-gray-700" style="height: 400px;">
-        </div>
+        <div x-ref="map" class="w-full overflow-hidden rounded-lg shadow-sm ring-1 ring-gray-950/10 dark:ring-white/20"
+            style="height: 400px;"></div>
 
-        <div class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-            <span class="inline-flex items-center gap-1">
-                <x-filament::icon icon="heroicon-o-map-pin" class="h-4 w-4" />
-                <span x-text="lat ? lat.toFixed(6) : '—'"></span>
-            </span>
-            <span class="inline-flex items-center gap-1">
-                <x-filament::icon icon="heroicon-o-globe-alt" class="h-4 w-4" />
-                <span x-text="lng ? lng.toFixed(6) : '—'"></span>
-            </span>
-        </div>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                <span class="inline-flex items-center gap-1.5">
+                    <x-filament::icon icon="heroicon-o-map-pin" class="size-4 text-gray-400 dark:text-gray-500" />
+                    <span class="tabular-nums text-gray-950 dark:text-white" x-text="lat ? lat.toFixed(6) : '—'"></span>
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                    <x-filament::icon icon="heroicon-o-globe-alt" class="size-4 text-gray-400 dark:text-gray-500" />
+                    <span class="tabular-nums text-gray-950 dark:text-white" x-text="lng ? lng.toFixed(6) : '—'"></span>
+                </span>
+            </div>
 
-        <x-filament::button type="button" color="gray" size="sm" x-on:click="clear()">
-            <x-filament::icon icon="heroicon-o-x-mark" class="h-4 w-4" />
-            <span class="ml-1">Xóa vị trí</span>
-        </x-filament::button>
+            <x-filament::button type="button" color="gray" size="sm" icon="heroicon-o-x-mark" x-on:click="clear()">
+                Xóa vị trí
+            </x-filament::button>
+        </div>
     </div>
 </x-dynamic-component>

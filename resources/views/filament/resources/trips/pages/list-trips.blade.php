@@ -1,50 +1,52 @@
 <x-filament-panels::page>
-    <style>
-        html.dark .trip-stat-card {
-            background-color: rgb(15 23 42 / 0.85) !important;
-            border-color: rgb(30 41 59 / 0.9) !important;
-        }
-        html.dark .collapsible-filter-bar {
-            background-color: rgb(15 23 42 / 0.75) !important;
-            border-color: rgb(30 41 59 / 0.8) !important;
-        }
-        html.dark .toolbar-toggle-btn {
-            background-color: rgb(30 41 59 / 0.85) !important;
-            border-color: rgb(51 65 85 / 0.8) !important;
-            color: rgb(226 232 240) !important;
-        }
-        html.dark .toolbar-toggle-btn:hover {
-            background-color: rgb(51 65 85 / 0.95) !important;
-        }
-    </style>
     {{-- Custom Stats Bar --}}
     @php
         $stats = $this->getTripStats();
+
+        // Semantic Filament palette per stat key (literal class strings so Tailwind picks them up).
+        $statIconClasses = [
+            'all' => 'bg-primary-50 text-primary-600 dark:bg-primary-400/10 dark:text-primary-400',
+            'unsent' => 'bg-warning-50 text-warning-600 dark:bg-warning-400/10 dark:text-warning-400',
+            'running' => 'bg-info-50 text-info-600 dark:bg-info-400/10 dark:text-info-400',
+            'completed' => 'bg-success-50 text-success-600 dark:bg-success-400/10 dark:text-success-400',
+            'delayed' => 'bg-danger-50 text-danger-600 dark:bg-danger-400/10 dark:text-danger-400',
+        ];
     @endphp
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         @foreach ($stats as $stat)
-            <div
-                @if (!empty($stat['filter']))
+            @php
+                $isClickable = ! empty($stat['filter']);
+                $isActive = $isClickable && $activeStatusFilter === $stat['filter'];
+            @endphp
+            <{{ $isClickable ? 'button' : 'div' }}
+                @if ($isClickable)
+                    type="button"
                     wire:click="filterStatus('{{ $stat['filter'] }}')"
-                    role="button"
-                    class="trip-stat-card group relative flex items-center justify-between rounded-xl p-3 shadow-2xs transition-all duration-150 hover:shadow-xs hover:border-primary-400 cursor-pointer"
-                @else
-                    class="trip-stat-card relative flex items-center justify-between rounded-xl p-3 shadow-2xs"
+                    aria-pressed="{{ $isActive ? 'true' : 'false' }}"
                 @endif
+                @class([
+                    'relative flex items-center justify-between gap-3 rounded-xl bg-white p-3 text-start shadow-sm ring-1 dark:bg-gray-900',
+                    'cursor-pointer transition duration-75 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 motion-reduce:transition-none dark:hover:bg-white/5 dark:focus-visible:ring-primary-500' => $isClickable,
+                    'ring-2 ring-primary-600 dark:ring-primary-500' => $isActive,
+                    'ring-gray-950/5 dark:ring-white/10' => ! $isActive,
+                ])
             >
                 <div class="min-w-0 flex-1">
-                    <p class="truncate text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <p class="truncate text-xs font-medium text-gray-500 dark:text-gray-400" title="{{ $stat['label'] }}">
                         {{ $stat['label'] }}
                     </p>
-                    <p class="mt-0.5 text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+                    <p class="mt-0.5 text-xl font-semibold tracking-tight tabular-nums text-gray-950 dark:text-white">
                         {{ number_format($stat['value']) }}
                     </p>
                 </div>
 
-                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg {{ $stat['bg'] }} {{ $stat['color'] }}">
+                <div @class([
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                    $statIconClasses[$stat['key'] ?? ''] ?? 'bg-gray-50 text-gray-600 dark:bg-white/5 dark:text-gray-400',
+                ])>
                     <x-filament::icon :icon="$stat['icon']" class="h-5 w-5" />
                 </div>
-            </div>
+            </{{ $isClickable ? 'button' : 'div' }}>
         @endforeach
     </div>
 
@@ -57,22 +59,26 @@
     >
         {{-- Toolbar: Toggle Filters Button + Date Range + Search --}}
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-                <button
+            <div class="flex flex-wrap items-center gap-3">
+                <x-filament::button
                     type="button"
+                    color="gray"
+                    size="sm"
+                    icon="heroicon-o-funnel"
                     x-on:click="isFiltersOpen = !isFiltersOpen"
-                    class="toolbar-toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-xs transition cursor-pointer"
+                    x-bind:aria-expanded="isFiltersOpen"
                 >
-                    <x-filament::icon icon="heroicon-o-funnel" class="h-4 w-4 text-primary-500" />
-                    <span>Bộ lọc</span>
-                    <x-filament::icon
-                        icon="heroicon-m-chevron-down"
-                        class="h-3.5 w-3.5 text-gray-400 transition-transform duration-200"
-                        x-bind:class="{ 'rotate-180': isFiltersOpen }"
-                    />
-                </button>
+                    <span class="inline-flex items-center gap-1">
+                        Bộ lọc
+                        <x-filament::icon
+                            icon="heroicon-m-chevron-down"
+                            class="h-4 w-4 text-gray-400 transition-transform duration-200 motion-reduce:transition-none dark:text-gray-500"
+                            x-bind:class="{ 'rotate-180': isFiltersOpen }"
+                        />
+                    </span>
+                </x-filament::button>
 
-                <div class="w-[380px] sm:w-[420px]">
+                <div class="w-full max-w-[420px] sm:w-[420px]">
                     {{ $this->dateRangeForm }}
                 </div>
 
@@ -82,13 +88,12 @@
                     color="gray"
                     size="sm"
                     icon="heroicon-o-arrow-down-tray"
-                    class="toolbar-toggle-btn"
                 >
                     Xuất Excel
                 </x-filament::button>
             </div>
 
-            <div class="flex-1 min-w-0 sm:max-w-md">
+            <div class="min-w-0 flex-1 sm:max-w-md">
                 {{ $this->searchForm }}
             </div>
         </div>
@@ -98,38 +103,38 @@
             x-show="isFiltersOpen"
             x-collapse
             x-cloak
-            class="collapsible-filter-bar rounded-xl flex flex-col divide-y divide-gray-100 dark:divide-gray-800 p-2 shadow-2xs"
+            class="flex flex-col divide-y divide-gray-200 rounded-xl bg-white p-2 shadow-sm ring-1 ring-gray-950/5 dark:divide-white/10 dark:bg-gray-900 dark:ring-white/10"
         >
             {{ $this->filtersForm }}
         </div>
 
         {{-- Active filter summary --}}
         @if ($activeStatusFilter !== 'all' || $vehicleOwner !== 'all' || $orderType !== 'all' || $activePlaceFilter !== 'all')
-            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span>Đang lọc:</span>
                 @if ($activeStatusFilter !== 'all')
-                <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 dark:border dark:border-amber-800/50">
-                    {{ $tripStatusFilters[$activeStatusFilter]['label'] ?? $activeStatusFilter }}
-                    <button wire:click="filterStatus('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
-                </span>
+                    <x-filament::badge color="warning">
+                        {{ $tripStatusFilters[$activeStatusFilter]['label'] ?? $activeStatusFilter }}
+                        <x-slot name="deleteButton" label="Bỏ lọc" wire:click="filterStatus('all')"></x-slot>
+                    </x-filament::badge>
                 @endif
                 @if ($vehicleOwner !== 'all')
-                <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-700 dark:border dark:border-blue-800/50">
-                    {{ $vehicleOwnerFilters[$vehicleOwner]['label'] ?? $vehicleOwner }}
-                    <button wire:click="filterVehicleOwner('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
-                </span>
+                    <x-filament::badge color="primary">
+                        {{ $vehicleOwnerFilters[$vehicleOwner]['label'] ?? $vehicleOwner }}
+                        <x-slot name="deleteButton" label="Bỏ lọc" wire:click="filterVehicleOwner('all')"></x-slot>
+                    </x-filament::badge>
                 @endif
                 @if ($orderType !== 'all')
-                <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-700 dark:border dark:border-blue-800/50">
-                    {{ $orderTypeFilters[$orderType]['label'] ?? $orderType }}
-                    <button wire:click="filterOrderType('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
-                </span>
+                    <x-filament::badge color="primary">
+                        {{ $orderTypeFilters[$orderType]['label'] ?? $orderType }}
+                        <x-slot name="deleteButton" label="Bỏ lọc" wire:click="filterOrderType('all')"></x-slot>
+                    </x-filament::badge>
                 @endif
                 @if ($activePlaceFilter !== 'all')
-                <span class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 font-medium text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 dark:border dark:border-purple-800/50">
-                    Khu vực: {{ $activePlaceFilter ? ($orderPlaceFilters[(string) $activePlaceFilter] ?? $activePlaceFilter) : '' }}
-                    <button wire:click="filterPlace('all')" class="ml-0.5 hover:text-red-500 cursor-pointer">&times;</button>
-                </span>
+                    <x-filament::badge color="success">
+                        Khu vực: {{ $activePlaceFilter ? ($orderPlaceFilters[(string) $activePlaceFilter] ?? $activePlaceFilter) : '' }}
+                        <x-slot name="deleteButton" label="Bỏ lọc" wire:click="filterPlace('all')"></x-slot>
+                    </x-filament::badge>
                 @endif
             </div>
         @endif
