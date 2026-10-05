@@ -2,11 +2,13 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Models\Trip;
 use App\Models\VehicleGpsPoint;
 use App\Services\OsrmService;
 use App\Services\TripKmCalculatorService;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 
@@ -265,17 +267,11 @@ class MockTripGpsTrack extends Command
 
                 $currentSpeed = $legMeters > 50 ? ($speedKmh + (mt_rand(-30, 30) / 10.0)) : 0.0;
 
-                $pointDriverId = $this->resolveDriverIdAt($trip, $pointTime);
-                if (! array_key_exists((int) $pointDriverId, $seqByDriver)) {
-                    $seqByDriver[(int) $pointDriverId] = $this->nextSeq($pointDriverId, $deviceId);
-                }
-
+                // Gán tài xế + seq ở lượt sau, SAU khi resync thời gian các lượt lái theo mốc đảo lái.
                 $allPoints[] = [
                     'vehicle_id' => $trip->vehicle_id,
-                    'driver_id' => $pointDriverId,
                     'shift_id' => null,
                     'device_id' => $deviceId,
-                    'seq' => $seqByDriver[(int) $pointDriverId]++,
                     'recorded_at' => $pointTime->format('Y-m-d H:i:s'),
                     'lat' => $pt['lat'],
                     'lng' => $pt['lng'],
@@ -298,12 +294,36 @@ class MockTripGpsTrack extends Command
             }
         }
 
-        // Chèn vào vehicle_gps_points
+        $endTime = $currentTime->copy();
+
+        // Cập nhật thời gian chuyến.
+        $trip->started_at = $startTime;
+        if ($trip->status === TripStatus::Completed) {
+            $trip->completed_at = $endTime;
+        }
+        $trip->save();
+
+        // Căn lại thời gian từng lượt lái theo mốc đảo lái đã đồng bộ (quan trọng cho chuyến đảo lái).
+        if ($syncCheckpoints) {
+            $this->resyncAssignments($trip, $startTime, $endTime);
+        }
+
+        // Gán tài xế + seq cho từng điểm theo lượt lái ĐÃ resync, rồi mới chèn.
+        $trip->load('driverAssignments');
+        $seqByDriver = [];
+        foreach ($allPoints as &$point) {
+            $driverId = $this->resolveDriverIdAt($trip, Carbon::parse($point['recorded_at']));
+            if (! array_key_exists((int) $driverId, $seqByDriver)) {
+                $seqByDriver[(int) $driverId] = $this->nextSeq($driverId, $deviceId);
+            }
+            $point['driver_id'] = $driverId;
+            $point['seq'] = $seqByDriver[(int) $driverId]++;
+        }
+        unset($point);
+
         foreach (array_chunk($allPoints, 200) as $chunk) {
             VehicleGpsPoint::insert($chunk);
         }
-
-        $endTime = $currentTime->copy();
 
         $this->info(sprintf('Đã chèn %d điểm GPS (từ %s đến %s, tổng độ dài ~%.1f km)',
             count($allPoints),
@@ -311,24 +331,6 @@ class MockTripGpsTrack extends Command
             $endTime->format('H:i:s d/m/Y'),
             array_sum(array_column($legs, 'meters')) / 1000.0
         ));
-
-        // Cập nhật trip & driver assignments
-        $trip->started_at = $startTime;
-        if ($trip->status === TripStatus::Completed) {
-            $trip->completed_at = $endTime;
-        }
-
-        if ($trip->driverAssignments->isNotEmpty()) {
-            $firstDa = $trip->driverAssignments->first();
-            $firstDa->started_at = $startTime;
-            $firstDa->save();
-
-            $lastDa = $trip->driverAssignments->last();
-            if ($lastDa && ($trip->status === TripStatus::Completed || $lastDa->ended_at !== null)) {
-                $lastDa->ended_at = $endTime;
-                $lastDa->save();
-            }
-        }
 
         $trip->km_calculated_at = null;
         $trip->save();
@@ -378,6 +380,40 @@ class MockTripGpsTrack extends Command
         return ((int) VehicleGpsPoint::where('driver_id', $driverId)
             ->where('device_id', $deviceId)
             ->max('seq')) + 1;
+    }
+
+    /**
+     * Căn lại thời gian từng lượt lái theo các mốc đảo lái đã đồng bộ.
+     * Lượt i chạy từ [mốc đảo lái trước, mốc đảo lái của lượt i]; lượt cuối chạy tới hết chuyến.
+     */
+    private function resyncAssignments(Trip $trip, CarbonInterface $start, CarbonInterface $end): void
+    {
+        $assignments = $trip->driverAssignments()->orderBy('started_at')->orderBy('id')->get();
+
+        if ($assignments->isEmpty()) {
+            return;
+        }
+
+        $swapTimes = $trip->checkpoints()
+            ->where('checkpoint_type', CheckpointType::DriverSwap->value)
+            ->orderBy('occurred_at')
+            ->pluck('occurred_at')
+            ->values();
+
+        $cursor = $start;
+        $lastIndex = $assignments->count() - 1;
+
+        foreach ($assignments as $i => $assignment) {
+            $assignment->started_at = $cursor;
+            $endAt = $i === $lastIndex ? $end : ($swapTimes->get($i) ?? $end);
+
+            if ($assignment->ended_at !== null || $trip->status === TripStatus::Completed || $i !== $lastIndex) {
+                $assignment->ended_at = $endAt;
+            }
+
+            $assignment->save();
+            $cursor = $endAt;
+        }
     }
 
     private function haversineMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
