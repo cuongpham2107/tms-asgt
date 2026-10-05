@@ -118,9 +118,20 @@
 
         return new Illuminate\Support\HtmlString($html);
     };
+    $mapConfig = new \App\Support\TripGpsMapConfig($trip);
 @endphp
 
-<div class="space-y-4">
+<div x-data="{ tab: 'timeline' }">
+    <x-filament::tabs class="mb-4">
+        <x-filament::tabs.item icon="heroicon-m-list-bullet" x-on:click="tab = 'timeline'" alpine-active="tab === 'timeline'">
+            Hành trình
+        </x-filament::tabs.item>
+        <x-filament::tabs.item icon="heroicon-m-map" x-on:click="tab = 'map'" alpine-active="tab === 'map'">
+            Bản đồ GPS
+        </x-filament::tabs.item>
+    </x-filament::tabs>
+
+    <div class="space-y-4" x-show="tab === 'timeline'">
     {{-- Header --}}
     <dl class="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl bg-gray-50 px-4 py-3 dark:bg-white/5">
         <div class="flex min-w-0 items-baseline gap-2">
@@ -268,4 +279,26 @@
             @endif
         </div>
     @endif
-</div>
+    </div>{{-- /tab Hành trình --}}
+
+    {{-- x-if: map chỉ mount khi tab được mở (hiển thị) nên fitBounds tính đúng kích thước --}}
+    <template x-if="tab === 'map'">
+        <div class="space-y-3">
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                Đường đi tô màu theo từng lượt lái, kèm mốc hành trình — đối chiếu GPS post lên có đúng không.
+                @if ($mapConfig->outOfBoundsCount() > 0)
+                    <span class="font-semibold text-warning-600 dark:text-warning-400">{{ $mapConfig->outOfBoundsCount() }} điểm bị loại (ngoài vùng hoạt động).</span>
+                @endif
+            </p>
+            @if ($mapConfig->hasGpsTrack())
+                <div class="overflow-hidden rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10" style="width: 900px; max-width: 88vw;">
+                    <x-filament-leaflet::map :config="$mapConfig->getMapData()" widget />
+                </div>
+            @else
+                <div class="flex items-center justify-center rounded-xl bg-gray-50 py-16 text-sm text-gray-500 dark:bg-white/5 dark:text-gray-400">
+                    Chưa đủ điểm GPS điện thoại để vẽ bản đồ cho chuyến này.
+                </div>
+            @endif
+        </div>
+    </template>
+</div>{{-- /tabs --}}
