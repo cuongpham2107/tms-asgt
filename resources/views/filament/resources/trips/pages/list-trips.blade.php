@@ -4,7 +4,7 @@
         <div class="flex flex-wrap items-center gap-2">
             {{ $this->filtersForm }}
 
-            <div class="w-full sm:w-76">
+            <div class="w-full sm:w-96">
                 {{ $this->dateRangeForm }}
             </div>
 
