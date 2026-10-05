@@ -217,8 +217,9 @@ class TripGpsMapConfig
                 ->fillOpacity(0.95)
                 ->weight(2)
                 ->tooltipContent($labels)
-                ->tooltipPermanent()
-                ->tooltipDirection('top');
+                // JS của package đọc cờ từ tooltip.options, nên tooltipPermanent()/Direction() (ghi cấp phẳng)
+                // không có tác dụng — phải truyền qua tooltipOptions().
+                ->tooltipOptions(['permanent' => true, 'direction' => 'top']);
         }
 
         return $shapes;
