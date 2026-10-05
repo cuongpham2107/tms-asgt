@@ -202,6 +202,31 @@ class TripGpsMapConfig
                 ->tooltipContent($cp->checkpoint_type->getLabel().' • '.($cp->occurred_at?->format('H:i') ?? ''));
         }
 
+        // Marker Xuất phát (xanh) + Kết thúc (đỏ) nổi bật, vẽ sau cùng để luôn nằm trên.
+        $onTrack = $points->filter(fn (VehicleGpsPoint $p) => $this->inBounds($p, $bounds))->values();
+        if ($onTrack->isNotEmpty()) {
+            $start = $onTrack->first();
+            $end = $onTrack->last();
+
+            $shapes[] = CircleMarker::make((float) $start->lat, (float) $start->lng)
+                ->id('trip-start')
+                ->radius(9)
+                ->color('#14532d')
+                ->fillColor('#22c55e')
+                ->fillOpacity(0.95)
+                ->weight(3)
+                ->tooltipContent('Xuất phát • '.($start->recorded_at?->format('H:i') ?? ''));
+
+            $shapes[] = CircleMarker::make((float) $end->lat, (float) $end->lng)
+                ->id('trip-end')
+                ->radius(9)
+                ->color('#7f1d1d')
+                ->fillColor('#ef4444')
+                ->fillOpacity(0.95)
+                ->weight(3)
+                ->tooltipContent('Kết thúc • '.($end->recorded_at?->format('H:i') ?? ''));
+        }
+
         return $shapes;
     }
 }
