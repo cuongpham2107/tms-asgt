@@ -62,7 +62,7 @@ class TripLegService
             'endLocation',
             'orders.pickupLocation',
             'orders.deliveryPoints.location',
-            'checkpoints' => fn ($q) => $q->with(['deliveryPoint.location', 'order.pickupLocation'])->orderBy('occurred_at'),
+            'checkpoints' => fn ($q) => $q->with(['driver', 'deliveryPoint.location', 'order.pickupLocation'])->orderBy('occurred_at'),
             'legs',
         ]);
 
@@ -129,7 +129,7 @@ class TripLegService
             'endLocation',
             'orders.pickupLocation',
             'orders.deliveryPoints.location',
-            'checkpoints' => fn ($q) => $q->with(['deliveryPoint.location', 'order.pickupLocation'])->orderBy('occurred_at'),
+            'checkpoints' => fn ($q) => $q->with(['driver', 'deliveryPoint.location', 'order.pickupLocation'])->orderBy('occurred_at'),
         ]);
 
         $checkpoints = $trip->checkpoints->sortBy('occurred_at')->values();
@@ -301,6 +301,60 @@ class TripLegService
     }
 
     /**
+     * Điều hành chỉnh thẳng TỔNG km chuyến (không sửa từng chặng).
+     * Ghi vào km_adjusted (giữ GPS gốc) và phân bổ xuống từng lượt lái theo tỉ lệ km GPS gốc,
+     * để app tài xế, km ca và thống kê đều ăn số đã điều chỉnh.
+     */
+    public function applyTotalAdjustment(Trip $trip, float $totalKm, float $loadedKm, string $reason, int $userId): void
+    {
+        $totalKm = round($totalKm, 1);
+        $loadedKm = round(min($loadedKm, $totalKm), 1);
+
+        $trip->km_adjusted = $totalKm;
+        $trip->km_adjusted_loaded = $loadedKm;
+        $trip->km_adjust_reason = $reason;
+        $trip->km_adjusted_by = $userId;
+        $trip->km_needs_review = false;
+        $trip->save();
+
+        $trip->loadMissing('driverAssignments');
+        $assignments = $trip->driverAssignments;
+
+        if ($assignments->isEmpty()) {
+            return;
+        }
+
+        if ($assignments->count() === 1) {
+            $assignments->first()->update([
+                'km' => $totalKm,
+                'km_loaded' => $loadedKm,
+                'km_empty' => round(max(0, $totalKm - $loadedKm), 1),
+            ]);
+
+            return;
+        }
+
+        // Phân bổ theo tỉ lệ km GPS gốc của từng lượt; nếu GPS gốc = 0 thì chia đều.
+        $gpsTotal = (float) $assignments->sum('km');
+        $gpsLoaded = (float) $assignments->sum('km_loaded');
+        $count = $assignments->count();
+
+        foreach ($assignments as $assignment) {
+            $kmShare = $gpsTotal > 0 ? (float) $assignment->km / $gpsTotal : 1.0 / $count;
+            $loadedShare = $gpsLoaded > 0 ? (float) $assignment->km_loaded / $gpsLoaded : $kmShare;
+
+            $daKm = round($totalKm * $kmShare, 1);
+            $daLoaded = round(min($loadedKm * $loadedShare, $daKm), 1);
+
+            $assignment->update([
+                'km' => $daKm,
+                'km_loaded' => $daLoaded,
+                'km_empty' => round(max(0, $daKm - $daLoaded), 1),
+            ]);
+        }
+    }
+
+    /**
      * @param  Collection<int, TripCheckpoint>  $checkpoints
      * @return array<int, array{
      *     leg_index: int,
@@ -374,6 +428,12 @@ class TripLegService
     public function formatCheckpointName(TripCheckpoint $cp, Trip $trip): string
     {
         $label = $cp->checkpoint_type->getLabel();
+
+        if ($cp->checkpoint_type === CheckpointType::DriverSwap) {
+            $driverName = $cp->driver?->name;
+
+            return $driverName ? "{$label} ({$driverName})" : $label;
+        }
 
         $loc = $cp->deliveryPoint?->location ?? $cp->order?->pickupLocation;
         $locName = $loc?->code ?: $loc?->name;

@@ -26,7 +26,7 @@ class AdjustTripKmAction
             ->label('Điều chỉnh km')
             ->icon('heroicon-o-pencil-square')
             ->color('warning')
-            ->modalWidth(Width::FourExtraLarge)
+            ->modalWidth(Width::SixExtraLarge)
             ->visible(fn (Trip $record): bool => $record->km_calculated_at !== null)
             ->modalHeading(fn (Trip $record): string => 'Điều chỉnh km — '.$record->trip_code)
             ->modalDescription(fn (Trip $record): string => sprintf(
@@ -120,26 +120,25 @@ class AdjustTripKmAction
                 $legsData = $data['legs'] ?? [];
                 $hasLegAdjustments = false;
 
-                if (! empty($legsData)) {
-                    foreach ($legsData as $legItem) {
-                        if (isset($legItem['distance_adjusted_km']) && $legItem['distance_adjusted_km'] !== null && $legItem['distance_adjusted_km'] !== '') {
-                            $hasLegAdjustments = true;
-                            break;
-                        }
+                foreach ($legsData as $legItem) {
+                    if (isset($legItem['distance_adjusted_km']) && $legItem['distance_adjusted_km'] !== null && $legItem['distance_adjusted_km'] !== '') {
+                        $hasLegAdjustments = true;
+                        break;
                     }
-
-                    app(TripLegService::class)->adjustLegs($record, $legsData, $reason, $userId);
                 }
 
-                // Nếu người dùng không nhập km từng chặng mà nhập thẳng tổng số km:
-                if (! $hasLegAdjustments) {
-                    $record->update([
-                        'km_adjusted' => $data['km_adjusted'],
-                        'km_adjusted_loaded' => $data['km_adjusted_loaded'],
-                        'km_adjust_reason' => $reason,
-                        'km_adjusted_by' => $userId,
-                        'km_needs_review' => false,
-                    ]);
+                if ($hasLegAdjustments) {
+                    // Sửa từng chặng: tính lại tổng + lượt lái từ các chặng.
+                    app(TripLegService::class)->adjustLegs($record, $legsData, $reason, $userId);
+                } else {
+                    // Nhập thẳng tổng km: ghi km_adjusted và phân bổ xuống từng lượt lái.
+                    app(TripLegService::class)->applyTotalAdjustment(
+                        $record,
+                        (float) $data['km_adjusted'],
+                        (float) $data['km_adjusted_loaded'],
+                        $reason,
+                        $userId,
+                    );
                 }
 
                 Notification::make()->success()->title('Đã điều chỉnh km chuyến và các chặng')->send();
