@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\CheckpointType;
 use App\Models\Trip;
 use App\Models\VehicleGpsPoint;
 use EduardoRibeiroDev\FilamentLeaflet\Concerns\HasMapConfig;
@@ -187,44 +188,35 @@ class TripGpsMapConfig
             }
         }
 
-        foreach ($this->trip->checkpoints as $cp) {
-            if ($cp->gps_lat === null || $cp->gps_lng === null) {
-                continue;
-            }
+        // Gộp các mốc TRÙNG toạ độ (ví dụ Xuất phát + Đến lấy hàng cùng ở kho) vào 1 marker,
+        // tooltip liệt kê đủ để vẫn biết có những mốc nào ở đó. Màu: bắt đầu = xanh, kết thúc = đỏ.
+        $byLocation = $this->trip->checkpoints
+            ->filter(fn ($cp) => $cp->gps_lat !== null && $cp->gps_lng !== null)
+            ->groupBy(fn ($cp) => round((float) $cp->gps_lat, 5).','.round((float) $cp->gps_lng, 5));
 
-            $shapes[] = CircleMarker::make((float) $cp->gps_lat, (float) $cp->gps_lng)
-                ->id('cp-'.$cp->id)
-                ->radius(7)
-                ->color('#1f2937')
-                ->fillColor('#f59e0b')
+        foreach ($byLocation as $group) {
+            $sorted = $group->sortBy('occurred_at')->values();
+            $first = $sorted->first();
+            $types = $sorted->pluck('checkpoint_type');
+
+            [$fillColor, $strokeColor] = match (true) {
+                $types->contains(CheckpointType::Started) => ['#22c55e', '#14532d'],
+                $types->contains(CheckpointType::End) => ['#ef4444', '#7f1d1d'],
+                default => ['#f59e0b', '#1f2937'],
+            };
+
+            $labels = $sorted
+                ->map(fn ($cp) => $cp->checkpoint_type->getLabel().' ('.($cp->occurred_at?->format('H:i') ?? '').')')
+                ->implode(', ');
+
+            $shapes[] = CircleMarker::make((float) $first->gps_lat, (float) $first->gps_lng)
+                ->id('cp-'.$first->id)
+                ->radius(8)
+                ->color($strokeColor)
+                ->fillColor($fillColor)
                 ->fillOpacity(0.95)
                 ->weight(2)
-                ->tooltipContent($cp->checkpoint_type->getLabel().' • '.($cp->occurred_at?->format('H:i') ?? ''));
-        }
-
-        // Marker Xuất phát (xanh) + Kết thúc (đỏ) nổi bật, vẽ sau cùng để luôn nằm trên.
-        $onTrack = $points->filter(fn (VehicleGpsPoint $p) => $this->inBounds($p, $bounds))->values();
-        if ($onTrack->isNotEmpty()) {
-            $start = $onTrack->first();
-            $end = $onTrack->last();
-
-            $shapes[] = CircleMarker::make((float) $start->lat, (float) $start->lng)
-                ->id('trip-start')
-                ->radius(9)
-                ->color('#14532d')
-                ->fillColor('#22c55e')
-                ->fillOpacity(0.95)
-                ->weight(3)
-                ->tooltipContent('Xuất phát • '.($start->recorded_at?->format('H:i') ?? ''));
-
-            $shapes[] = CircleMarker::make((float) $end->lat, (float) $end->lng)
-                ->id('trip-end')
-                ->radius(9)
-                ->color('#7f1d1d')
-                ->fillColor('#ef4444')
-                ->fillOpacity(0.95)
-                ->weight(3)
-                ->tooltipContent('Kết thúc • '.($end->recorded_at?->format('H:i') ?? ''));
+                ->tooltipContent($labels);
         }
 
         return $shapes;
