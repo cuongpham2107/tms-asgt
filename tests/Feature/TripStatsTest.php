@@ -173,6 +173,9 @@ it('includes swapped trips for both drivers via driver assignments', function ()
         'started_at' => now()->subHours(4),
         'ended_at' => now()->subHours(2),
         'end_reason' => AssignmentEndReason::ShiftHandover,
+        'km' => 40,
+        'km_loaded' => 25,
+        'km_empty' => 15,
     ]);
     TripDriverAssignment::create([
         'trip_id' => $trip->id,
@@ -180,22 +183,25 @@ it('includes swapped trips for both drivers via driver assignments', function ()
         'started_at' => now()->subHours(2),
         'ended_at' => now()->subHours(1),
         'end_reason' => AssignmentEndReason::TripFinished,
+        'km' => 60,
+        'km_loaded' => 35,
+        'km_empty' => 25,
     ]);
 
     $response = $this->getJson('/api/driver/trips/stats');
 
     $response->assertSuccessful()
         ->assertJsonPath('data.completed', 1)
-        ->assertJsonPath('data.total_km', 100)
-        ->assertJsonPath('data.total_km_loaded', 60)
-        ->assertJsonPath('data.total_km_empty', 40);
+        ->assertJsonPath('data.total_km', 40)
+        ->assertJsonPath('data.total_km_loaded', 25)
+        ->assertJsonPath('data.total_km_empty', 15);
 
     Sanctum::actingAs($driverB);
     $responseB = $this->getJson('/api/driver/trips/stats');
 
     $responseB->assertSuccessful()
         ->assertJsonPath('data.completed', 1)
-        ->assertJsonPath('data.total_km', 100)
-        ->assertJsonPath('data.total_km_loaded', 60)
-        ->assertJsonPath('data.total_km_empty', 40);
+        ->assertJsonPath('data.total_km', 60)
+        ->assertJsonPath('data.total_km_loaded', 35)
+        ->assertJsonPath('data.total_km_empty', 25);
 });

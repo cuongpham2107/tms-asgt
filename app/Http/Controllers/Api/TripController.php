@@ -329,6 +329,7 @@ class TripController extends Controller
                 $q->where('driver_id', $user->id)
                     ->orWhereHas('driverAssignments', fn ($q) => $q->where('driver_id', $user->id));
             })
+            ->with('driverAssignments')
             ->when($from, fn ($q) => $q->where(fn ($sq) => $sq->whereDate('started_at', '>=', $from)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->whereDate('created_at', '>=', $from))))
             ->when($to, fn ($q) => $q->where(fn ($sq) => $sq->whereDate('started_at', '<=', $to)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->whereDate('created_at', '<=', $to))))
             ->get();
@@ -360,8 +361,15 @@ class TripController extends Controller
                 $completed++;
             }
 
-            $totalKm += (float) ($trip->total_km ?? 0);
-            $totalLoaded += (float) ($trip->total_km_loaded ?? 0);
+            // Ai lái lượt nào thì chỉ hưởng km của lượt lái đó
+            $userAssignments = $trip->driverAssignments->where('driver_id', $user->id);
+            if ($userAssignments->isNotEmpty()) {
+                $totalKm += (float) $userAssignments->sum('km');
+                $totalLoaded += (float) $userAssignments->sum('km_loaded');
+            } elseif ((int) $trip->driver_id === (int) $user->id) {
+                $totalKm += (float) ($trip->total_km ?? 0);
+                $totalLoaded += (float) ($trip->total_km_loaded ?? 0);
+            }
         }
 
         $totalEmpty = max(0.0, $totalKm - $totalLoaded);

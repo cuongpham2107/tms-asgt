@@ -53,7 +53,9 @@ class TripKmCalculatorService
 
             $totalKm += $result->km;
             $loadedKm += $segmentLoaded;
-            $coverageSeconds += $result->coverage / 100 * $segment['from']->diffInSeconds($segment['to']);
+            if ($segment['assignment'] !== null) {
+                $coverageSeconds += $result->coverage / 100 * $segment['from']->diffInSeconds($segment['to']);
+            }
             $hasMocked = $hasMocked || $result->hasMocked;
             if ($result->source !== null) {
                 $sources->push($result->source);
@@ -141,7 +143,10 @@ class TripKmCalculatorService
         }
 
         $loadedKm = min($loadedKm, $totalKm);
-        $coverage = round($coverageSeconds / $start->diffInSeconds($end) * 100, 2);
+        $activeSeconds = (float) $segments->filter(fn (array $s) => $s['assignment'] !== null)
+            ->sum(fn (array $s) => $s['from']->diffInSeconds($s['to']));
+        $durationSeconds = $activeSeconds > 0 ? $activeSeconds : (float) $start->diffInSeconds($end);
+        $coverage = round($coverageSeconds / max(1.0, $durationSeconds) * 100, 2);
 
         $trip->total_km = round($totalKm, 1);
         $trip->total_km_loaded = round($loadedKm, 1);

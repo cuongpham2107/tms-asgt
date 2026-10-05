@@ -43,21 +43,34 @@ class DriverShiftResource extends JsonResource
             'total_km' => $this->total_km,
             'total_km_loaded' => $this->total_km_loaded,
             'total_km_empty' => $this->total_km_empty,
-            'trips' => $this->whenLoaded('trips', fn () => $this->trips->map(fn ($trip) => [
-                'id' => $trip->id,
-                'trip_code' => $trip->trip_code,
-                'vehicle_id' => $trip->vehicle_id,
-                'status' => $trip->status,
-                'vehicle' => $trip->vehicle ? [
-                    'id' => $trip->vehicle->id,
-                    'plate_number' => $trip->vehicle->plate_number,
-                ] : null,
-                'started_at' => $trip->started_at?->toDateTimeString(),
-                'completed_at' => $trip->completed_at?->toDateTimeString(),
-                'total_km' => $trip->total_km,
-                'total_km_loaded' => $trip->total_km_loaded,
-                'total_km_empty' => $trip->total_km_empty,
-            ])),
+            'trips' => $this->whenLoaded('trips', fn () => $this->trips->map(function ($trip) {
+                $userAssignment = $trip->relationLoaded('driverAssignments')
+                    ? $trip->driverAssignments->where('driver_id', $this->driver_id)
+                    : $trip->driverAssignments()->where('driver_id', $this->driver_id)->get();
+
+                $myKm = $userAssignment->isNotEmpty() ? (float) $userAssignment->sum('km') : (float) $trip->total_km;
+                $myLoaded = $userAssignment->isNotEmpty() ? (float) $userAssignment->sum('km_loaded') : (float) $trip->total_km_loaded;
+                $myEmpty = $userAssignment->isNotEmpty() ? (float) $userAssignment->sum('km_empty') : (float) $trip->total_km_empty;
+
+                return [
+                    'id' => $trip->id,
+                    'trip_code' => $trip->trip_code,
+                    'vehicle_id' => $trip->vehicle_id,
+                    'status' => $trip->status,
+                    'vehicle' => $trip->vehicle ? [
+                        'id' => $trip->vehicle->id,
+                        'plate_number' => $trip->vehicle->plate_number,
+                    ] : null,
+                    'started_at' => $trip->started_at?->toDateTimeString(),
+                    'completed_at' => $trip->completed_at?->toDateTimeString(),
+                    'total_km' => $trip->total_km,
+                    'total_km_loaded' => $trip->total_km_loaded,
+                    'total_km_empty' => $trip->total_km_empty,
+                    'driver_km' => round($myKm, 1),
+                    'driver_km_loaded' => round($myLoaded, 1),
+                    'driver_km_empty' => round($myEmpty, 1),
+                ];
+            })),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

@@ -72,6 +72,7 @@ class DriverShift extends Model
     {
         $this->loadMissing([
             'trips.vehicle',
+            'trips.driverAssignments',
             'tripCheckpoints.order.deliveryPoints',
         ]);
 
@@ -94,11 +95,14 @@ class DriverShift extends Model
                 ]);
             }
             if ($trip->completed_at) {
+                $da = $trip->driverAssignments?->where('driver_id', $this->driver_id)->first();
+                $tripKm = $da && $da->km !== null ? (float) $da->km : (float) $trip->total_km;
+
                 $activities->push([
                     'time' => $trip->completed_at,
                     'display' => view('filament.resources.driver-shifts.components.timeline-trip-end', [
                         'trip_code' => $trip->trip_code,
-                        'total_km' => max(0, (float) $trip->total_km),
+                        'total_km' => max(0, $tripKm),
                     ])->render(),
                     'vehicle' => $trip->vehicle?->plate_number,
                     'group_index' => $index,
@@ -174,6 +178,7 @@ class DriverShift extends Model
             'trips.orders',
             'trips.checkpoints',
             'trips.vehicle',
+            'trips.driverAssignments',
             'tripCheckpoints.order',
             'tripCheckpoints.trip.checkpoints',
             'tripCheckpoints.trip.vehicle',
@@ -215,7 +220,8 @@ class DriverShift extends Model
             ->sortByDesc(fn ($cp) => $cp->occurred_at?->timestamp ?? 0)
             ->first();
 
-        $loadedKm = (float) ($order->loaded_km ?? 0);
+        $da = $trip->driverAssignments?->where('driver_id', $this->driver_id)->first();
+        $loadedKm = $da && $da->km_loaded !== null ? (float) $da->km_loaded : (float) ($order->loaded_km ?? 0);
 
         return [
             'id' => $order->id,

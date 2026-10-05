@@ -24,6 +24,9 @@ return [
     // Khoảng trống dài hơn (giây) giữa 2 điểm thì tính theo đường bộ OSRM thay vì đường thẳng.
     'osrm_gap_seconds' => (int) env('GPS_OSRM_GAP_SECONDS', 300),
 
+    // Khoảng trống lớn hơn (giây) thì không bắc OSRM (coi là ngắt kết nối/nghỉ ca, tránh cộng km ảo).
+    'osrm_max_gap_seconds' => (int) env('GPS_OSRM_MAX_GAP_SECONDS', 900),
+
     // Chờ (phút) sau khi chuyến kết thúc rồi mới chốt km, để điện thoại kịp gửi bù điểm còn trong hàng đợi.
     'settle_after_minutes' => (int) env('GPS_SETTLE_AFTER_MINUTES', 30),
 

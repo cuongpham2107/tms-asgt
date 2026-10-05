@@ -27,8 +27,15 @@ class ShiftKmCalculatorService
             ->where('driver_id', $shift->driver_id)
             ->sum('km_loaded');
 
+        $assignmentTotal = (float) TripDriverAssignment::query()
+            ->where('shift_id', $shift->id)
+            ->where('driver_id', $shift->driver_id)
+            ->sum('km');
+
+        $total = max($total, $assignmentTotal, $loaded);
+
         $shift->total_km = round($total, 1);
-        $shift->total_km_loaded = round(min($loaded, $total), 1);
+        $shift->total_km_loaded = round($loaded, 1);
         $shift->total_km_empty = round(max(0, $total - $loaded), 1);
         $shift->km_calculated_at = now();
         $shift->save();

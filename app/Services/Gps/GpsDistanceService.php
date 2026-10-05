@@ -138,8 +138,14 @@ class GpsDistanceService
     {
         $kept = collect();
         $previous = null;
+        $rejected = null;
 
         foreach ($track as $point) {
+            // Lọc toạ độ rác ngoài lãnh thổ hoạt động (ví dụ vị trí mặc định San Francisco của iOS simulator)
+            if ($point->lat < 8.0 || $point->lat > 24.0 || $point->lng < 102.0 || $point->lng > 110.0) {
+                continue;
+            }
+
             if ($previous === null) {
                 $kept->push($point);
                 $previous = $point;
@@ -152,8 +158,34 @@ class GpsDistanceService
             $impliedKmh = $meters / $seconds * 3.6;
 
             if ($impliedKmh > config('gps.max_speed_kmh')) {
+                // Nếu điểm trước đó ($previous) là điểm rác đơn lẻ (outlier ban đầu):
+                // khi có 2 điểm liên tiếp hợp lý với nhau ($rejected và $point <= max_speed),
+                // loại bỏ $previous bất thường và bắt đầu lại từ cụm hợp lệ.
+                if ($rejected !== null) {
+                    $rejMeters = $this->haversine($rejected, $point);
+                    $rejSeconds = max(1, $rejected->recorded_at->diffInSeconds($point->recorded_at));
+                    $rejKmh = $rejMeters / $rejSeconds * 3.6;
+
+                    if ($rejKmh <= config('gps.max_speed_kmh')) {
+                        if ($kept->count() <= 2) {
+                            $kept = collect([$rejected]);
+                        } else {
+                            $kept->pop();
+                        }
+                        $kept->push($point);
+                        $previous = $point;
+                        $rejected = null;
+
+                        continue;
+                    }
+                }
+
+                $rejected = $point;
+
                 continue;
             }
+
+            $rejected = null;
 
             $isStationaryJitter = $point->speed !== null
                 ? $point->speed < config('gps.stationary_speed_kmh') && $meters < config('gps.stationary_radius_m')
@@ -178,6 +210,7 @@ class GpsDistanceService
     {
         $meters = 0.0;
         $osrmSeconds = 0;
+        $maxOsrmGap = config('gps.osrm_max_gap_seconds', 900);
 
         for ($i = 1; $i < $points->count(); $i++) {
             $a = $points[$i - 1];
@@ -185,7 +218,7 @@ class GpsDistanceService
             $straight = $this->haversine($a, $b);
             $gap = $a->recorded_at->diffInSeconds($b->recorded_at);
 
-            if ($gap > config('gps.osrm_gap_seconds')) {
+            if ($gap > config('gps.osrm_gap_seconds') && $gap <= $maxOsrmGap) {
                 $road = $this->roadDistance($a, $b);
                 if ($road !== null) {
                     $meters += max($road, $straight);
@@ -193,6 +226,10 @@ class GpsDistanceService
 
                     continue;
                 }
+            } elseif ($gap > $maxOsrmGap) {
+                // Khoảng trống lớn (> 15 phút, ví dụ nghỉ qua đêm giữa ca hoặc ngắt kết nối):
+                // không bắc cầu đường bộ OSRM để tránh tạo quãng đường ảo.
+                continue;
             }
 
             $meters += $straight;

@@ -33,11 +33,11 @@ export default function CompletedTripsScreen() {
             <View style={s.badge}><Text style={s.badgeText}>{item.status_label ?? "Hoàn thành"}</Text></View>
           </View>
           <View style={s.kmRow}>
-            <View style={s.kmItem}><Text style={s.kmVal}>{fmt(item.total_km)}</Text><Text style={s.kmLbl}>tổng km</Text></View>
+            <View style={s.kmItem}><Text style={s.kmVal}>{fmt(item.driver_km ?? item.total_km)}</Text><Text style={s.kmLbl}>{item.is_multi_driver ? "km của bạn" : "tổng km"}</Text></View>
             <View style={s.kmSep} />
-            <View style={s.kmItem}><Text style={s.kmVal}>{fmt(item.total_km_loaded)}</Text><Text style={s.kmLbl}>có hàng</Text></View>
+            <View style={s.kmItem}><Text style={s.kmVal}>{fmt(item.driver_km_loaded ?? item.total_km_loaded)}</Text><Text style={s.kmLbl}>có hàng</Text></View>
             <View style={s.kmSep} />
-            <View style={s.kmItem}><Text style={s.kmVal}>{fmt(item.total_km_empty)}</Text><Text style={s.kmLbl}>rỗng</Text></View>
+            <View style={s.kmItem}><Text style={s.kmVal}>{fmt(item.driver_km_empty ?? item.total_km_empty)}</Text><Text style={s.kmLbl}>rỗng</Text></View>
           </View>
           {item.completed_at && (
             <View style={s.timeRow}><Ionicons name="time-outline" size={13} color="#9CA3AF" /><Text style={s.timeText}>{new Date(item.completed_at).toLocaleString("vi-VN")}</Text></View>

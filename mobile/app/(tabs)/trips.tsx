@@ -583,7 +583,7 @@ export default function TripsScreen() {
                                 </View>
                             </View>
                             <Text style={s.kmLine}>
-                                📏 {fmt(item.total_km)} km
+                                📏 {fmt(item.driver_km ?? item.total_km)} km
                             </Text>
                             {(() => {
                                 const loadingTimes = (item.orders || [])

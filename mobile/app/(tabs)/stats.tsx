@@ -117,8 +117,8 @@ export default function StatsScreen() {
     }
   };
 
-  const histTotalKm = data?.total_km !== undefined ? data.total_km : filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.total_km) || 0), 0);
-  const histLoadedKm = data?.total_km_loaded !== undefined ? data.total_km_loaded : filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.total_km_loaded) || 0), 0);
+  const histTotalKm = data?.total_km !== undefined ? data.total_km : filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.driver_km ?? t.total_km) || 0), 0);
+  const histLoadedKm = data?.total_km_loaded !== undefined ? data.total_km_loaded : filteredHistory.reduce((s: number, t: any) => s + (parseFloat(t.driver_km_loaded ?? t.total_km_loaded) || 0), 0);
   const histEmptyKm = data?.total_km_empty !== undefined ? data.total_km_empty : (histTotalKm != null && histLoadedKm != null ? histTotalKm - histLoadedKm : null);
 
   return (
@@ -212,7 +212,7 @@ export default function StatsScreen() {
                     })()}
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={s.tripKm}>{fmt(t.total_km)} km</Text>
+                    <Text style={s.tripKm}>{fmt(t.driver_km ?? t.total_km)} km</Text>
                     <Text style={s.tripDate}>
                       {t.completed_at ? new Date(t.completed_at).toLocaleDateString("vi-VN") : (t.started_at ? new Date(t.started_at).toLocaleDateString("vi-VN") : "-")}
                     </Text>

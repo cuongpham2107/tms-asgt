@@ -15,6 +15,34 @@ class TripResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $myKm = null;
+        $myLoaded = null;
+        $myEmpty = null;
+        $isMultiDriver = false;
+
+        if ($user) {
+            $userAssignments = $this->relationLoaded('driverAssignments')
+                ? $this->driverAssignments->where('driver_id', $user->id)
+                : $this->driverAssignments()->where('driver_id', $user->id)->get();
+
+            $totalAssignmentsCount = $this->relationLoaded('driverAssignments')
+                ? $this->driverAssignments->count()
+                : $this->driverAssignments()->count();
+
+            $isMultiDriver = $totalAssignmentsCount > 1;
+
+            if ($userAssignments->isNotEmpty()) {
+                $myKm = (float) $userAssignments->sum('km');
+                $myLoaded = (float) $userAssignments->sum('km_loaded');
+                $myEmpty = (float) $userAssignments->sum('km_empty');
+            } elseif ((int) $this->driver_id === (int) $user->id) {
+                $myKm = $this->total_km !== null ? (float) $this->total_km : null;
+                $myLoaded = $this->total_km_loaded !== null ? (float) $this->total_km_loaded : null;
+                $myEmpty = $this->total_km_empty !== null ? (float) $this->total_km_empty : null;
+            }
+        }
+
         $data = [
             'id' => $this->id,
             'driver_id' => $this->driver_id,
@@ -29,6 +57,10 @@ class TripResource extends JsonResource
             'total_km' => $this->total_km,
             'total_km_loaded' => $this->total_km_loaded,
             'total_km_empty' => $this->total_km_empty,
+            'driver_km' => $myKm !== null ? round($myKm, 1) : null,
+            'driver_km_loaded' => $myLoaded !== null ? round($myLoaded, 1) : null,
+            'driver_km_empty' => $myEmpty !== null ? round($myEmpty, 1) : null,
+            'is_multi_driver' => $isMultiDriver,
             'is_empty_run' => $this->is_empty_run,
             'note' => $this->note,
 

@@ -1,7 +1,9 @@
 <?php
 
+use App\Enums\AssignmentEndReason;
 use App\Enums\TripStatus;
 use App\Models\Trip;
+use App\Models\TripDriverAssignment;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -141,4 +143,58 @@ it('requires driver role', function () {
 it('throws 422 for invalid status filter', function () {
     $this->getJson('/api/driver/trips/history?status=InvalidStatus')
         ->assertStatus(422);
+});
+
+it('returns driver specific km when trip has multiple driver assignments', function () {
+    $driverB = User::factory()->create();
+    $driverB->assignRole('driver');
+
+    $trip = Trip::factory()->create([
+        'driver_id' => $driverB->id,
+        'vehicle_id' => $this->vehicle->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subHours(4),
+        'completed_at' => now()->subHours(1),
+        'total_km' => 100,
+        'total_km_loaded' => 60,
+        'total_km_empty' => 40,
+    ]);
+
+    TripDriverAssignment::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $this->driver->id,
+        'started_at' => now()->subHours(4),
+        'ended_at' => now()->subHours(2),
+        'end_reason' => AssignmentEndReason::ShiftHandover,
+        'km' => 35,
+        'km_loaded' => 20,
+        'km_empty' => 15,
+    ]);
+    TripDriverAssignment::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $driverB->id,
+        'started_at' => now()->subHours(2),
+        'ended_at' => now()->subHours(1),
+        'end_reason' => AssignmentEndReason::TripFinished,
+        'km' => 65,
+        'km_loaded' => 40,
+        'km_empty' => 25,
+    ]);
+
+    $responseA = $this->getJson('/api/driver/trips/history');
+    $responseA->assertSuccessful()
+        ->assertJsonPath('data.0.total_km', '100.0')
+        ->assertJsonPath('data.0.driver_km', 35)
+        ->assertJsonPath('data.0.driver_km_loaded', 20)
+        ->assertJsonPath('data.0.driver_km_empty', 15)
+        ->assertJsonPath('data.0.is_multi_driver', true);
+
+    Sanctum::actingAs($driverB);
+    $responseB = $this->getJson('/api/driver/trips/history');
+    $responseB->assertSuccessful()
+        ->assertJsonPath('data.0.total_km', '100.0')
+        ->assertJsonPath('data.0.driver_km', 65)
+        ->assertJsonPath('data.0.driver_km_loaded', 40)
+        ->assertJsonPath('data.0.driver_km_empty', 25)
+        ->assertJsonPath('data.0.is_multi_driver', true);
 });
