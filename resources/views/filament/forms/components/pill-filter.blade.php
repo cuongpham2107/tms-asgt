@@ -27,6 +27,51 @@
     ];
 @endphp
 
+@if ($isDropdown())
+    @php
+        $activeOption = $options[$activeValue] ?? null;
+        $activeLabel = is_array($activeOption) ? ($activeOption['label'] ?? $activeValue) : ($activeOption ?? $activeValue);
+        $isFiltering = $activeValue !== 'all';
+    @endphp
+
+    <x-filament::dropdown placement="bottom-start" :attributes="$getExtraAttributeBag()">
+        <x-slot name="trigger">
+            <x-filament::button
+                :color="$isFiltering ? 'primary' : 'gray'"
+                :outlined="$isFiltering"
+                size="sm"
+                icon="heroicon-m-chevron-down"
+                icon-position="after"
+            >
+                @if ($prefix = $getLabelPrefix())
+                    <span class="font-normal text-gray-500 dark:text-gray-400">{{ $prefix }}:</span>
+                @endif
+                {{ $activeLabel }}
+            </x-filament::button>
+        </x-slot>
+
+        <x-filament::dropdown.list>
+            @foreach ($options as $key => $option)
+                @php
+                    $keyStr = (string) $key;
+                    $label = is_array($option) ? ($option['label'] ?? '') : $option;
+                    $isActive = $activeValue === $keyStr;
+                @endphp
+
+                <x-filament::dropdown.list.item
+                    :color="$isActive ? 'primary' : 'gray'"
+                    :icon="$isActive ? 'heroicon-m-check' : null"
+                    :badge="$getCount($keyStr)"
+                    :badge-color="$toSemanticColor(is_array($option) ? ($option['color'] ?? null) : null)"
+                    wire:click="{{ $clickAction }}('{{ $keyStr }}')"
+                    x-on:click="close"
+                >
+                    {{ $label }}
+                </x-filament::dropdown.list.item>
+            @endforeach
+        </x-filament::dropdown.list>
+    </x-filament::dropdown>
+@else
 <div {{ $getExtraAttributeBag()->class(['pill-filter-wrapper']) }}>
     <style>
         .pill-filter-wrapper.fi-sc-has-gap {
@@ -34,14 +79,14 @@
             gap: calc(var(--spacing) * 2) !important;
         }
     </style>
-    <div class="flex min-w-0 items-center gap-2 overflow-x-auto">
+    <div class="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         @if ($prefix = $getLabelPrefix())
             <span class="shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400">
                 {{ $prefix }}
             </span>
         @endif
 
-        <x-filament::tabs contained class="min-w-0">
+        <x-filament::tabs contained class="min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             @foreach ($options as $key => $option)
                 @php
                     $keyStr = (string) $key;
@@ -72,3 +117,4 @@
         </x-filament::tabs>
     </div>
 </div>
+@endif

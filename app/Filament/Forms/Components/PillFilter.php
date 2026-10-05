@@ -19,6 +19,8 @@ class PillFilter extends Field
 
     protected ?string $clickAction = null;
 
+    protected bool $isDropdown = false;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -94,5 +96,20 @@ class PillFilter extends Field
     public function getClickAction(): ?string
     {
         return $this->clickAction;
+    }
+
+    /**
+     * Hiển thị gọn thành một nút dropdown (dùng labelPrefix làm nhãn) thay vì một hàng tab.
+     */
+    public function dropdown(bool $condition = true): static
+    {
+        $this->isDropdown = $condition;
+
+        return $this;
+    }
+
+    public function isDropdown(): bool
+    {
+        return $this->isDropdown;
     }
 }

@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
@@ -325,37 +326,68 @@ class ListTrips extends ListRecords
             ->when($except !== 'place' && $this->activePlaceFilter !== 'all', fn (Builder $query): Builder => $query->whereHas('orders.area', fn (Builder $q) => $q->where('code', $this->activePlaceFilter)));
     }
 
+    /**
+     * Bộ lọc phụ hiển thị gọn thành các nút dropdown trên một hàng.
+     */
     public function filtersForm(Schema $form): Schema
     {
         return $form
             ->components([
-                PillFilter::make('orderType')
-                    ->options($this->orderTypeFilters)
-                    ->countCallback(fn ($key) => $this->getOrderTypeCount($key))
-                    ->activeValue(fn ($livewire) => $livewire->orderType)
-                    ->clickAction('filterOrderType'),
+                Flex::make([
+                    PillFilter::make('orderType')
+                        ->dropdown()
+                        ->labelPrefix('Loại đơn')
+                        ->grow(false)
+                        ->options($this->orderTypeFilters)
+                        ->countCallback(fn ($key) => $this->getOrderTypeCount($key))
+                        ->activeValue(fn ($livewire) => $livewire->orderType)
+                        ->clickAction('filterOrderType'),
+                    PillFilter::make('activePlaceFilter')
+                        ->dropdown()
+                        ->labelPrefix('Khu vực')
+                        ->grow(false)
+                        ->options(fn (): array => $this->placeFilterOptions())
+                        ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
+                        ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
+                        ->clickAction('filterPlace'),
+                    PillFilter::make('vehicleOwner')
+                        ->dropdown()
+                        ->labelPrefix('Chủ xe')
+                        ->grow(false)
+                        ->options($this->vehicleOwnerFilters)
+                        ->countCallback(fn ($key) => $this->getVehicleOwnerCount($key))
+                        ->activeValue(fn ($livewire) => $livewire->vehicleOwner)
+                        ->clickAction('filterVehicleOwner'),
+                ]),
+            ]);
+    }
+
+    /**
+     * Trạng thái là bộ lọc chính: hiển thị thành tab có số đếm ngay trên bảng.
+     */
+    public function statusFilterForm(Schema $form): Schema
+    {
+        return $form
+            ->components([
                 PillFilter::make('activeStatusFilter')
                     ->options($this->tripStatusFilters)
                     ->countCallback(fn ($key) => $this->getTripStatusCount($key))
                     ->activeValue(fn ($livewire) => $livewire->activeStatusFilter)
                     ->clickAction('filterStatus'),
-                PillFilter::make('vehicleOwner')
-                    ->options($this->vehicleOwnerFilters)
-                    ->countCallback(fn ($key) => $this->getVehicleOwnerCount($key))
-                    ->activeValue(fn ($livewire) => $livewire->vehicleOwner)
-                    ->clickAction('filterVehicleOwner'),
-                PillFilter::make('activePlaceFilter')
-                    ->options(fn (): array => Area::query()
-                        ->where('is_active', true)
-                        ->orderBy('sort_order', 'asc')
-                        ->pluck('code', 'code')
-                        ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
-                        ->toArray() + ['all' => 'Tất cả'])
-                    ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
-                    ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
-                    ->clickAction('filterPlace'),
-
             ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function placeFilterOptions(): array
+    {
+        return Area::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order', 'asc')
+            ->pluck('code', 'code')
+            ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
+            ->toArray() + ['all' => 'Tất cả'];
     }
 
     public function exportExcel(?TripExcelExportService $exportService = null, array $data = []): StreamedResponse

@@ -17,6 +17,7 @@ use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -271,6 +272,7 @@ class ListOrders extends ListRecords
             'searchForm',
             'dateRangeForm',
             'filtersForm',
+            'statusFilterForm',
         ];
     }
 
@@ -296,35 +298,51 @@ class ListOrders extends ListRecords
             ]);
     }
 
+    /**
+     * Bộ lọc phụ hiển thị gọn thành các nút dropdown trên một hàng.
+     */
     public function filtersForm(Schema $form): Schema
     {
         return $form
             ->components([
-                PillFilter::make('activeOrderTypeFilter')
-                    // ->labelPrefix('Loại đơn')
-                    ->options($this->orderTypeFilters)
-                    ->countCallback(fn ($key) => $this->getOrderTypeCount($key))
-                    ->activeValue(fn ($livewire) => $livewire->activeOrderTypeFilter)
-                    ->clickAction('filterOrderType'),
+                Flex::make([
+                    PillFilter::make('activeOrderTypeFilter')
+                        ->dropdown()
+                        ->labelPrefix('Loại đơn')
+                        ->grow(false)
+                        ->options($this->orderTypeFilters)
+                        ->countCallback(fn ($key) => $this->getOrderTypeCount($key))
+                        ->activeValue(fn ($livewire) => $livewire->activeOrderTypeFilter)
+                        ->clickAction('filterOrderType'),
+                    PillFilter::make('activePlaceFilter')
+                        ->dropdown()
+                        ->labelPrefix('Khu vực')
+                        ->grow(false)
+                        ->options(fn (): array => Area::query()
+                            ->where('is_active', true)
+                            ->orderBy('sort_order', 'asc')
+                            ->pluck('code', 'code')
+                            ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
+                            ->toArray() + ['all' => 'Tất cả'])
+                        ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
+                        ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
+                        ->clickAction('filterPlace'),
+                ]),
+            ]);
+    }
 
+    /**
+     * Trạng thái là bộ lọc chính: hiển thị thành tab có số đếm ngay trên bảng.
+     */
+    public function statusFilterForm(Schema $form): Schema
+    {
+        return $form
+            ->components([
                 PillFilter::make('activeStatusFilter')
-                    // ->labelPrefix('Trạng thái')
                     ->options($this->orderStatusFilters)
                     ->countCallback(fn ($key) => $this->getOrderStatusCount($key))
                     ->activeValue(fn ($livewire) => $livewire->activeStatusFilter)
                     ->clickAction('filterStatus'),
-
-                PillFilter::make('activePlaceFilter')
-                    // ->labelPrefix('Khu vực')
-                    ->options(fn (): array => Area::query()
-                        ->where('is_active', true)
-                        ->orderBy('sort_order', 'asc')
-                        ->pluck('code', 'code')
-                        ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
-                        ->toArray() + ['all' => 'Tất cả'])
-                    ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
-                    ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
-                    ->clickAction('filterPlace'),
             ]);
     }
 
