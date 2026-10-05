@@ -1,12 +1,22 @@
 import { Platform } from "react-native";
 
 // ─── Cấu hình API Laravel ───────────────────────────────────────────
-// Thay IP này thành IP máy chạy Laravel backend
-const API = Platform.select({
+// Mặc định: server production. Chạy simulator với backend local thì đặt trong mobile/.env.local:
+//   EXPO_PUBLIC_API_URL=local            → iOS simulator: localhost:8000, Android emulator: 10.0.2.2:8000
+//   EXPO_PUBLIC_API_URL=http://192.168.x.x:8000/api/driver   → máy thật cùng mạng Wi-Fi
+const PRODUCTION_API = Platform.select({
     ios: "https://tms.asgl.net.vn/api/driver",
-    android: "http://tms.asgl.net.vn/api/driver",
     default: "http://tms.asgl.net.vn/api/driver",
 });
+
+const LOCAL_API = Platform.select({
+    android: "http://10.0.2.2:8000/api/driver",
+    default: "http://localhost:8000/api/driver",
+});
+
+const API_OVERRIDE = process.env.EXPO_PUBLIC_API_URL;
+
+const API = API_OVERRIDE === "local" ? LOCAL_API : API_OVERRIDE || PRODUCTION_API;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 

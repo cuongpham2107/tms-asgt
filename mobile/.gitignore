@@ -13,3 +13,6 @@ web-build/
 package-lock.json
 android/
 ios/
+
+# Cấu hình riêng từng máy (vd. EXPO_PUBLIC_API_URL cho simulator)
+.env*.local
