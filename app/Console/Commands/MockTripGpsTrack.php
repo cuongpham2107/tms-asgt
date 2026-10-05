@@ -7,6 +7,7 @@ use App\Models\Trip;
 use App\Models\VehicleGpsPoint;
 use App\Services\OsrmService;
 use App\Services\TripKmCalculatorService;
+use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 
 class MockTripGpsTrack extends Command
@@ -203,16 +204,31 @@ class MockTripGpsTrack extends Command
         $startTime = $trip->started_at ?? now()->subSeconds($totalEstimatedSeconds + 120);
         $currentTime = $startTime->copy();
 
+        $deviceId = 'mock_cli';
+        $windowStart = $startTime->copy()->subMinutes(10);
+        $windowEnd = $startTime->copy()->addSeconds($totalEstimatedSeconds + 300);
+
         if ($this->option('clean')) {
-            $endTime = $startTime->copy()->addSeconds($totalEstimatedSeconds + 300);
             $deleted = VehicleGpsPoint::where('vehicle_id', $trip->vehicle_id)
-                ->whereBetween('recorded_at', [$startTime->copy()->subMinutes(10), $endTime])
+                ->whereBetween('recorded_at', [$windowStart, $windowEnd])
                 ->delete();
             $this->info("Đã xóa {$deleted} điểm GPS cũ.");
+        } else {
+            // Chạy lại cho cùng chuyến: bỏ điểm mô phỏng cũ để không nhân đôi quãng đường.
+            $deleted = VehicleGpsPoint::where('vehicle_id', $trip->vehicle_id)
+                ->where('device_id', $deviceId)
+                ->whereBetween('recorded_at', [$windowStart, $windowEnd])
+                ->delete();
+
+            if ($deleted > 0) {
+                $this->info("Đã xóa {$deleted} điểm mô phỏng cũ của chuyến này.");
+            }
         }
 
         $allPoints = [];
-        $seq = 1;
+        // Mỗi điểm gán cho tài xế đang giữ chuyến tại thời điểm đó (lượt lái), không gán chung một người.
+        // Khoá duy nhất là (driver_id, device_id, seq) nên seq phải nối tiếp theo TỪNG tài xế.
+        $seqByDriver = [];
 
         // Điểm đầu tiên
         if ($syncCheckpoints && ! empty($orderedPoints[0]['checkpoint'])) {
@@ -243,12 +259,17 @@ class MockTripGpsTrack extends Command
 
                 $currentSpeed = $legMeters > 50 ? ($speedKmh + (mt_rand(-30, 30) / 10.0)) : 0.0;
 
+                $pointDriverId = $this->resolveDriverIdAt($trip, $pointTime);
+                if (! array_key_exists((int) $pointDriverId, $seqByDriver)) {
+                    $seqByDriver[(int) $pointDriverId] = $this->nextSeq($pointDriverId, $deviceId);
+                }
+
                 $allPoints[] = [
                     'vehicle_id' => $trip->vehicle_id,
-                    'driver_id' => $trip->driver_id,
+                    'driver_id' => $pointDriverId,
                     'shift_id' => null,
-                    'device_id' => 'mock_cli',
-                    'seq' => $seq++,
+                    'device_id' => $deviceId,
+                    'seq' => $seqByDriver[(int) $pointDriverId]++,
                     'recorded_at' => $pointTime->format('Y-m-d H:i:s'),
                     'lat' => $pt['lat'],
                     'lng' => $pt['lng'],
@@ -326,6 +347,31 @@ class MockTripGpsTrack extends Command
         );
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Tài xế đang giữ chuyến tại một thời điểm (theo lượt lái); fallback về tài xế chính của chuyến.
+     */
+    private function resolveDriverIdAt(Trip $trip, CarbonInterface $time): ?int
+    {
+        foreach ($trip->driverAssignments as $assignment) {
+            if ($assignment->started_at === null) {
+                continue;
+            }
+
+            if ($time->gte($assignment->started_at) && ($assignment->ended_at === null || $time->lte($assignment->ended_at))) {
+                return $assignment->driver_id;
+            }
+        }
+
+        return $trip->driver_id;
+    }
+
+    private function nextSeq(?int $driverId, string $deviceId): int
+    {
+        return ((int) VehicleGpsPoint::where('driver_id', $driverId)
+            ->where('device_id', $deviceId)
+            ->max('seq')) + 1;
     }
 
     private function haversineMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
