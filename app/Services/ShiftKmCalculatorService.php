@@ -22,15 +22,14 @@ class ShiftKmCalculatorService
 
         $total = $this->gps->distance(null, $shift->start_time, $shift->end_time, $shift->driver_id)->km;
 
-        $loaded = (float) TripDriverAssignment::query()
+        $sums = TripDriverAssignment::query()
             ->where('shift_id', $shift->id)
             ->where('driver_id', $shift->driver_id)
-            ->sum('km_loaded');
+            ->selectRaw('COALESCE(SUM(km), 0) as total, COALESCE(SUM(km_loaded), 0) as loaded')
+            ->first();
 
-        $assignmentTotal = (float) TripDriverAssignment::query()
-            ->where('shift_id', $shift->id)
-            ->where('driver_id', $shift->driver_id)
-            ->sum('km');
+        $loaded = (float) $sums->loaded;
+        $assignmentTotal = (float) $sums->total;
 
         $total = max($total, $assignmentTotal, $loaded);
 
