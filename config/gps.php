@@ -32,4 +32,14 @@ return [
 
     // Chuyến có độ phủ GPS (%) dưới ngưỡng này thì cần kiểm tra km trước khi xuất hoá đơn.
     'review_coverage_percent' => (float) env('GPS_REVIEW_COVERAGE_PERCENT', 90),
+
+    // Vùng hoạt động hợp lệ: điểm ĐIỆN THOẠI ngoài khung này bị coi là rác (ví dụ vị trí mặc định
+    // San Francisco của iOS simulator) và bị loại khi tính km, đồng thời gắn cờ cần kiểm tra.
+    // Điểm hộp đen EUP không bị lọc theo vùng. Đặt GPS_BOUNDS_ENABLED=false để tắt.
+    'bounds' => env('GPS_BOUNDS_ENABLED', true) ? [
+        'min_lat' => (float) env('GPS_BOUNDS_MIN_LAT', 8.0),
+        'max_lat' => (float) env('GPS_BOUNDS_MAX_LAT', 24.0),
+        'min_lng' => (float) env('GPS_BOUNDS_MIN_LNG', 102.0),
+        'max_lng' => (float) env('GPS_BOUNDS_MAX_LNG', 110.0),
+    ] : null,
 ];

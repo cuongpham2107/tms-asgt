@@ -16,6 +16,7 @@ final readonly class DistanceResult
         public ?string $source,
         public bool $hasMocked,
         public int $osrmFilledSeconds,
+        public bool $hasOutOfBounds = false,
     ) {}
 
     public static function empty(): self

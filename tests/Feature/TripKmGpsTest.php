@@ -204,6 +204,31 @@ test('a long GPS gap still counts the straight-line distance instead of dropping
     expect((float) $trip->fresh()->total_km)->toEqualWithDelta(40, 1.0);
 });
 
+test('an out-of-bounds phone point is excluded from km and flags the trip for review', function () {
+    $trip = kmTrip($this->vehicle, $this->t0, 30);
+    kmAssign($trip, $this->driverA, $this->t0, $this->t0->addMinutes(30));
+    kmOrder($trip, $this->t0, 5, 25);
+    // Điểm rác San Francisco (vị trí mặc định iOS simulator) ngay đầu ca.
+    VehicleGpsPoint::create([
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driverA->id,
+        'recorded_at' => $this->t0,
+        'lat' => 37.7749,
+        'lng' => -122.4194,
+        'speed' => 0,
+        'accuracy' => 8,
+        'source' => VehicleGpsPoint::SOURCE_PHONE,
+    ]);
+    kmDrive($this->driverA->id, $this->vehicle->id, $this->t0, 0, 30);
+
+    app(TripKmCalculatorService::class)->calculate($trip);
+
+    $trip->refresh();
+    // Điểm SF bị loại -> km không nhảy khổng lồ (~30), và chuyến bị gắn cờ cần kiểm tra.
+    expect((float) $trip->total_km)->toEqualWithDelta(30, 1.0)
+        ->and($trip->km_needs_review)->toBeTrue();
+});
+
 test('an empty run trip counts all distance as empty and does not need review', function () {
     $trip = kmTrip($this->vehicle, $this->t0, 30);
     $trip->update(['is_empty_run' => true]);

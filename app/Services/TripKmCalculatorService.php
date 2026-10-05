@@ -46,6 +46,7 @@ class TripKmCalculatorService
         $coverageSeconds = 0.0;
         $sources = collect();
         $hasMocked = false;
+        $hasOutOfBounds = false;
 
         foreach ($segments as $segment) {
             $result = $this->measure($trip, $segment['from'], $segment['to'], $segment['driver_id']);
@@ -57,6 +58,7 @@ class TripKmCalculatorService
                 $coverageSeconds += $result->coverage / 100 * $segment['from']->diffInSeconds($segment['to']);
             }
             $hasMocked = $hasMocked || $result->hasMocked;
+            $hasOutOfBounds = $hasOutOfBounds || $result->hasOutOfBounds;
             if ($result->source !== null) {
                 $sources->push($result->source);
             }
@@ -153,7 +155,7 @@ class TripKmCalculatorService
         $trip->total_km_empty = round(max(0, $totalKm - $loadedKm), 1);
         $trip->gps_coverage = $coverage;
         $trip->km_source = $this->combinedSource($sources);
-        $trip->km_needs_review = $hasMocked || $coverage < config('gps.review_coverage_percent');
+        $trip->km_needs_review = $hasMocked || $hasOutOfBounds || $coverage < config('gps.review_coverage_percent');
         $trip->km_calculated_at = now();
         $trip->save();
 

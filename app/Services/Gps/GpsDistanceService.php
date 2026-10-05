@@ -6,6 +6,7 @@ use App\Models\VehicleGpsPoint;
 use App\Services\OsrmService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Quãng đường xe chạy trong một khoảng thời gian, tính từ điểm GPS đã lưu.
@@ -34,7 +35,17 @@ class GpsDistanceService
             return new DistanceResult(0.0, 0.0, null, $this->hasMocked($vehicleId, $from, $to, $driverId), 0);
         }
 
-        $kept = $this->filterNoise($track);
+        [$bounded, $outOfBounds] = $this->filterBounds($track);
+
+        if ($outOfBounds > 0) {
+            Log::warning('GPS: bỏ qua điểm điện thoại ngoài vùng hoạt động khi tính km', [
+                'vehicle_id' => $vehicleId,
+                'driver_id' => $driverId,
+                'dropped' => $outOfBounds,
+            ]);
+        }
+
+        $kept = $this->filterNoise($bounded);
         [$meters, $osrmSeconds] = $this->sumDistance($kept);
 
         $usesPhone = $kept->contains(fn (VehicleGpsPoint $p) => $p->source === VehicleGpsPoint::SOURCE_PHONE);
@@ -42,7 +53,7 @@ class GpsDistanceService
 
         return new DistanceResult(
             km: round($meters / 1000, 2),
-            coverage: $this->coverage($track, $from, $to),
+            coverage: $this->coverage($bounded, $from, $to),
             source: match (true) {
                 $usesPhone && $usesEup => DistanceResult::SOURCE_MIXED,
                 $usesPhone => DistanceResult::SOURCE_PHONE,
@@ -50,7 +61,42 @@ class GpsDistanceService
             },
             hasMocked: $this->hasMocked($vehicleId, $from, $to, $driverId),
             osrmFilledSeconds: $osrmSeconds,
+            hasOutOfBounds: $outOfBounds > 0,
         );
+    }
+
+    /**
+     * Loại điểm ĐIỆN THOẠI nằm ngoài vùng hoạt động (config gps.bounds); điểm EUP luôn giữ.
+     *
+     * @param  Collection<int, VehicleGpsPoint>  $track
+     * @return array{0: Collection<int, VehicleGpsPoint>, 1: int} [track còn lại, số điểm bị loại]
+     */
+    private function filterBounds(Collection $track): array
+    {
+        $bounds = config('gps.bounds');
+
+        if ($bounds === null) {
+            return [$track, 0];
+        }
+
+        $dropped = 0;
+
+        $kept = $track->filter(function (VehicleGpsPoint $point) use ($bounds, &$dropped): bool {
+            if ($point->source !== VehicleGpsPoint::SOURCE_PHONE) {
+                return true;
+            }
+
+            $inBounds = $point->lat >= $bounds['min_lat'] && $point->lat <= $bounds['max_lat']
+                && $point->lng >= $bounds['min_lng'] && $point->lng <= $bounds['max_lng'];
+
+            if (! $inBounds) {
+                $dropped++;
+            }
+
+            return $inBounds;
+        })->values();
+
+        return [$kept, $dropped];
     }
 
     /**
@@ -141,11 +187,6 @@ class GpsDistanceService
         $rejected = null;
 
         foreach ($track as $point) {
-            // Lọc toạ độ rác ngoài lãnh thổ hoạt động (ví dụ vị trí mặc định San Francisco của iOS simulator)
-            if ($point->lat < 8.0 || $point->lat > 24.0 || $point->lng < 102.0 || $point->lng > 110.0) {
-                continue;
-            }
-
             if ($previous === null) {
                 $kept->push($point);
                 $previous = $point;
