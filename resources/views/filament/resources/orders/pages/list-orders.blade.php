@@ -1,6 +1,6 @@
 <x-filament-panels::page>
     <div class="space-y-3">
-        {{-- Một hàng: bộ lọc phụ (dropdown) + khoảng ngày + đơn của tôi + tìm kiếm + xuất Excel theo bộ lọc --}}
+        {{-- Một hàng: bộ lọc phụ (dropdown) + khoảng ngày + đơn của tôi bên trái, tìm kiếm bên phải --}}
         <div class="flex flex-wrap items-center gap-2">
             {{ $this->filtersForm }}
 
@@ -18,18 +18,9 @@
                 Đơn của tôi
             </x-filament::button>
 
-            <div class="min-w-40 flex-1">
+            <div class="w-full sm:ml-auto sm:w-80">
                 {{ $this->searchForm }}
             </div>
-
-            <x-filament::icon-button
-                icon="heroicon-o-arrow-down-tray"
-                color="gray"
-                label="Xuất Excel theo bộ lọc"
-                tooltip="Xuất Excel theo bộ lọc"
-                wire:click="exportExcel"
-                wire:loading.attr="disabled"
-            />
         </div>
 
         {{-- Trạng thái đơn (bộ lọc chính) --}}
