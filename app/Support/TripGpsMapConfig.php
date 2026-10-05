@@ -24,6 +24,8 @@ class TripGpsMapConfig
 
     private const PALETTE = ['#2563eb', '#16a34a', '#db2777', '#ea580c', '#7c3aed', '#0891b2'];
 
+    private const MAX_DOTS_PER_DRIVER = 300;
+
     /** @var Collection<int, VehicleGpsPoint>|null */
     private ?Collection $cachedPoints = null;
 
@@ -147,23 +149,42 @@ class TripGpsMapConfig
         $shapes = [];
 
         foreach ($points->groupBy('driver_id') as $driverId => $group) {
-            $coords = $group
-                ->filter(fn (VehicleGpsPoint $p) => $this->inBounds($p, $bounds))
-                ->map(fn (VehicleGpsPoint $p) => [(float) $p->lat, (float) $p->lng])
-                ->values()
-                ->all();
+            $inBounds = $group->filter(fn (VehicleGpsPoint $p) => $this->inBounds($p, $bounds))->values();
+            $coords = $inBounds->map(fn (VehicleGpsPoint $p) => [(float) $p->lat, (float) $p->lng])->all();
 
             if (count($coords) < 2) {
                 continue;
             }
 
+            $color = self::PALETTE[max(0, (int) $driverIds->search($driverId)) % count(self::PALETTE)];
+            $driverLabel = $names[$driverId] ?? ('#'.$driverId);
+
             $shapes[] = Polyline::make($coords)
                 ->id('gps-driver-'.$driverId)
-                ->color(self::PALETTE[max(0, (int) $driverIds->search($driverId)) % count(self::PALETTE)])
-                ->weight(4)
-                ->opacity(0.85)
+                ->color($color)
+                ->weight(3)
+                ->opacity(0.55)
                 ->fill(false)
-                ->tooltipContent('Lượt lái: '.($names[$driverId] ?? ('#'.$driverId)));
+                ->tooltipContent('Lượt lái: '.$driverLabel);
+
+            // Chấm nhỏ mỗi điểm GPS ghi nhận -> thấy mật độ & cách thiết bị ghi.
+            // Giới hạn ~MAX_DOTS chấm/lượt lái (chuyến dài thì rải thưa) để modal không quá nặng.
+            $dots = $inBounds;
+            if ($dots->count() > self::MAX_DOTS_PER_DRIVER) {
+                $step = (int) ceil($dots->count() / self::MAX_DOTS_PER_DRIVER);
+                $dots = $dots->filter(fn (VehicleGpsPoint $p, int $i) => $i % $step === 0)->values();
+            }
+
+            foreach ($dots as $point) {
+                $shapes[] = CircleMarker::make((float) $point->lat, (float) $point->lng)
+                    ->id('pt-'.$point->id)
+                    ->radius(2)
+                    ->color($color)
+                    ->fillColor($color)
+                    ->fillOpacity(0.8)
+                    ->weight(1)
+                    ->tooltipContent($point->recorded_at?->format('H:i:s') ?? '');
+            }
         }
 
         foreach ($this->trip->checkpoints as $cp) {
