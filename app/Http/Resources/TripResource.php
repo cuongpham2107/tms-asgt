@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Trip;
+use App\Services\Trip\TripLegService;
 use App\Services\Trip\TripStateMachine;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -43,6 +44,11 @@ class TripResource extends JsonResource
             'orders' => OrderResource::collection($this->whenLoaded('orders')),
 
             'checkpoints' => TripCheckpointResource::collection($this->whenLoaded('checkpoints')),
+
+            'legs' => $this->when(
+                $this->relationLoaded('checkpoints'),
+                fn () => app(TripLegService::class)->calculateLegs($this->resource)
+            ),
 
             'driver_assignments' => TripDriverAssignmentResource::collection($this->whenLoaded('driverAssignments')),
 

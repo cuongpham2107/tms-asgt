@@ -42,7 +42,11 @@
         '<x-filament::icon icon="'.$icon.'" class="'.$classes.'" />'
     );
 
-    $renderCheckpoint = function ($cp, $loop) use ($iconMap, $semanticColors, $photoUrl, $renderIcon) {
+    $tripLegService = app(\App\Services\Trip\TripLegService::class);
+    $checkpointDistances = $tripLegService->checkpointDistances($trip);
+    $legs = $tripLegService->calculateLegs($trip);
+
+    $renderCheckpoint = function ($cp, $loop) use ($iconMap, $semanticColors, $photoUrl, $renderIcon, $checkpointDistances) {
         $icon = $iconMap[$cp->checkpoint_type->value] ?? 'heroicon-o-question-mark-circle';
         $color = $cp->checkpoint_type->getColor();
         $color = in_array($color, $semanticColors, true) ? $color : 'gray';
@@ -50,12 +54,29 @@
         $endAfter = !$loop->last;
         $lastCls = $loop->last ? 'mb-0' : 'mb-5';
 
+        $distInfo = $checkpointDistances[$cp->id] ?? null;
+
         $html = '<div class="flex gap-x-3">';
         $html .= '<div class="relative flex flex-col items-center'.($endAfter ? ' after:absolute after:top-8 after:bottom-0 after:w-px after:bg-gray-200 dark:after:bg-white/10' : '').'">';
         $html .= '<div class="fi-color-'.$color.' relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--color-50) text-(--color-600) ring-1 ring-(--color-600)/20 dark:bg-(--color-400)/10 dark:text-(--color-400) dark:ring-(--color-400)/30">';
         $html .= $renderIcon($icon, 'h-4 w-4');
         $html .= '</div></div>';
         $html .= '<div class="min-w-0 grow pt-1 '.$lastCls.'">';
+
+        $distKm = (float) ($distInfo['distance_from_prev_km'] ?? $distInfo['distance_km'] ?? 0);
+
+        if ($distInfo && $distKm > 0) {
+            $km = number_format($distKm, 1, ',', '.');
+            $loadedText = $distInfo['is_loaded'] ? 'Có hàng' : 'Xe rỗng';
+            $loadedCls = $distInfo['is_loaded']
+                ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400'
+                : 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400';
+            $srcText = ! empty($distInfo['is_adjusted']) ? 'Đã sửa' : ($distInfo['source'] === 'osrm' ? 'Đường bộ' : 'GPS');
+            $html .= '<div class="mb-2"><span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 '.$loadedCls.'">';
+            $html .= $renderIcon('heroicon-m-arrow-trending-up', 'h-3.5 w-3.5');
+            $html .= ' + '.$km.' km ('.$loadedText.') <span class="text-[10px] opacity-75">('.$srcText.')</span>';
+            $html .= '</span></div>';
+        }
         $html .= '<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">';
         $html .= '<p class="text-sm font-semibold text-gray-950 dark:text-white">';
         $html .= e($cp->checkpoint_type->getLabel());
@@ -115,6 +136,39 @@
             <dd class="text-sm font-semibold text-gray-950 dark:text-white">{{ $trip->driver?->name ?? '—' }}</dd>
         </div>
     </dl>
+
+    @if (! empty($legs))
+        <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-white/5">
+            <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Khoảng cách các chặng</h4>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                @foreach ($legs as $leg)
+                    <div class="flex items-center justify-between rounded-lg bg-white p-2.5 shadow-xs ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+                        <div class="min-w-0 pr-2">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs font-semibold text-gray-900 dark:text-white">Chặng {{ $leg['leg_index'] }}</span>
+                                <span class="rounded px-1.5 py-0.5 text-[10px] font-medium {{ $leg['is_loaded'] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' }}">
+                                    {{ $leg['is_loaded'] ? 'Có hàng' : 'Xe rỗng' }}
+                                </span>
+                            </div>
+                            <p class="truncate text-xs text-gray-500 dark:text-gray-400" title="{{ $leg['from_name'] }} ➔ {{ $leg['to_name'] }}">
+                                {{ $leg['from_name'] }} ➔ {{ $leg['to_name'] }}
+                            </p>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <span class="text-sm font-bold text-gray-950 dark:text-white tabular-nums">{{ number_format($leg['distance_km'], 1, ',', '.') }} km</span>
+                            @if (! empty($leg['is_adjusted']))
+                                <span class="block text-[10px] font-semibold text-amber-600 dark:text-amber-400" title="{{ $leg['adjust_reason'] ?? '' }}">
+                                    Đã sửa (gốc: {{ number_format($leg['original_distance_km'], 1, ',', '.') }} km)
+                                </span>
+                            @else
+                                <span class="block text-[10px] text-gray-400">({{ $leg['source'] === 'osrm' ? 'Đường bộ' : 'GPS' }})</span>
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
 
     {{-- Single order: flat timeline --}}
     @if ($orders->count() === 1)

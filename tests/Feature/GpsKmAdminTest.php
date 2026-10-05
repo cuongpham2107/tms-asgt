@@ -1,18 +1,23 @@
 <?php
 
 use App\Enums\CheckpointType;
+use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Models\Area;
 use App\Models\Customer;
+use App\Models\Location;
 use App\Models\Order;
+use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Models\TripLeg;
 use App\Models\User;
 use App\Models\VehicleGpsPoint;
 use App\Services\Gps\TripTrack;
+use App\Services\Trip\TripLegService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
@@ -78,6 +83,77 @@ test('adjusting km keeps the GPS figures and reports the adjusted ones', functio
         ->and($trip->reportedEmptyKm())->toBe(21.0)
         ->and($trip->km_adjusted_by)->toBe($this->admin->id)
         ->and($trip->km_needs_review)->toBeFalse();
+});
+
+test('dispatchers can adjust leg-by-leg km via table action', function () {
+    $trip = settledTrip($this->t0);
+    $area = Area::create(['type' => OrderType::Hhhk, 'code' => 'LEG', 'name' => 'Leg Area']);
+    $customer = Customer::create(['code' => 'CUST-LEG', 'name' => 'Cust Leg', 'is_active' => true]);
+    $pickupLoc = Location::create(['code' => 'PK', 'name' => 'Pick', 'lat' => 21.199, 'lng' => 105.994, 'area_id' => $area->id]);
+    $delivLoc = Location::create(['code' => 'DL', 'name' => 'Deliv', 'lat' => 21.218, 'lng' => 105.804, 'area_id' => $area->id]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-LEG-ADM', 'type' => OrderType::Hhhk, 'area_id' => $area->id,
+        'customer_id' => $customer->id, 'trip_id' => $trip->id, 'pickup_location_id' => $pickupLoc->id,
+        'pickup_address' => 'Kho PK', 'status' => OrderStatus::Completed, 'created_by' => $this->admin->id,
+    ]);
+    $dp = OrderDeliveryPoint::create([
+        'order_id' => $order->id, 'location_id' => $delivLoc->id, 'address' => 'Kho DL',
+        'sequence' => 1, 'status' => OrderDeliveryPointStatus::Delivered,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id, 'checkpoint_type' => CheckpointType::Started->value,
+        'occurred_at' => $this->t0, 'gps_lat' => 21.000, 'gps_lng' => 105.800,
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id, 'order_id' => $order->id, 'checkpoint_type' => CheckpointType::ArrivedPickup->value,
+        'occurred_at' => $this->t0->addMinutes(15), 'gps_lat' => 21.199, 'gps_lng' => 105.994,
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id, 'order_id' => $order->id, 'delivery_point_id' => $dp->id, 'checkpoint_type' => CheckpointType::Completed->value,
+        'occurred_at' => $this->t0->addMinutes(40), 'gps_lat' => 21.218, 'gps_lng' => 105.804,
+    ]);
+
+    app(TripLegService::class)->syncLegs($trip);
+
+    $dbLegs = $trip->fresh()->legs;
+    expect($dbLegs->count())->toBe(2);
+
+    $legsData = [
+        [
+            'id' => $dbLegs[0]->id,
+            'leg_index' => 1,
+            'distance_adjusted_km' => 16.0,
+            'adjust_reason' => 'Sửa chặng 1',
+        ],
+        [
+            'id' => $dbLegs[1]->id,
+            'leg_index' => 2,
+            'distance_adjusted_km' => 30.0,
+            'adjust_reason' => 'Sửa chặng 2',
+        ],
+    ];
+
+    adjustKm($trip, [
+        'km_adjusted' => 46,
+        'km_adjusted_loaded' => 30,
+        'km_adjust_reason' => 'Điều chỉnh theo chặng thực tế',
+        'legs' => $legsData,
+    ])->assertHasNoTableActionErrors();
+
+    $trip->refresh();
+    expect((float) $trip->km_adjusted)->toBe(46.0)
+        ->and((float) $trip->km_adjusted_loaded)->toBe(30.0)
+        ->and($trip->reportedTotalKm())->toBe(46.0)
+        ->and($trip->reportedLoadedKm())->toBe(30.0)
+        ->and($trip->reportedEmptyKm())->toBe(16.0);
+
+    $leg1 = TripLeg::find($dbLegs[0]->id);
+    $leg2 = TripLeg::find($dbLegs[1]->id);
+
+    expect((float) $leg1->distance_adjusted_km)->toBe(16.0)
+        ->and((float) $leg2->distance_adjusted_km)->toBe(30.0);
 });
 
 test('the trip map splits the track into loaded and empty segments', function () {

@@ -10,10 +10,12 @@ use App\Http\Resources\TripResource;
 use App\Models\Trip;
 use App\Services\Trip\TripDriverService;
 use App\Services\Trip\TripStateMachine;
+use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class TripController extends Controller
@@ -289,6 +291,13 @@ class TripController extends Controller
         }
 
         app(TripStateMachine::class)->complete($trip);
+
+        try {
+            app(TripKmCalculatorService::class)->calculate($trip);
+            $trip->refresh();
+        } catch (\Throwable $e) {
+            Log::warning('TripKmCalculatorService on complete failed: '.$e->getMessage());
+        }
 
         $trip->load([
             'vehicle',

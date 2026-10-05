@@ -20,6 +20,7 @@ import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
 import { showAlert } from "../src/lib/alert";
 import { getCheckpointGps, toFakePoint, FakePoint } from "../src/lib/fakeLocation";
+import { flushBeforeCheckpoint } from "../src/tracking/tracker";
 import FakeLocationPicker from "../src/components/FakeLocationPicker";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -398,6 +399,7 @@ export default function OrderDetailScreen() {
         setLoading(true);
         showLoading();
         try {
+            await flushBeforeCheckpoint();
             await api.trips.checkpoint(String(tripId), body, token);
             showAlert(
                 "Thành công",

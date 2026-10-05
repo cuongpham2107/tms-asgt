@@ -2,9 +2,11 @@
 
 namespace App\Filament\Resources\Trips\Pages;
 
+use App\Filament\Resources\Trips\Actions\AdjustTripKmAction;
 use App\Filament\Resources\Trips\TripResource;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Services\Trip\TripLegService;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
 use Illuminate\Database\Eloquent\Model;
@@ -39,6 +41,14 @@ class ViewTripTimeline extends Page
         return $this->record;
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [
+            AdjustTripKmAction::make()
+                ->record($this->getRecord()),
+        ];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -54,6 +64,10 @@ class ViewTripTimeline extends Page
 
         $checkpoints = $trip->checkpoints;
 
+        $legService = app(TripLegService::class);
+        $distances = $legService->checkpointDistances($trip);
+        $legs = $legService->calculateLegs($trip);
+
         return [
             'order' => [
                 'order_code' => $orderCodes ?: '—',
@@ -61,6 +75,7 @@ class ViewTripTimeline extends Page
                 'vehicle_plate' => $trip->vehicle?->plate_number ?? '—',
                 'driver_name' => $trip->driver?->name ?? '—',
             ],
+            'legs' => $legs,
             'checkpoints' => $checkpoints
                 ->map(fn (TripCheckpoint $cp): array => [
                     'id' => $cp->id,
@@ -76,6 +91,11 @@ class ViewTripTimeline extends Page
                     'gps' => ($cp->gps_lat !== null && $cp->gps_lng !== null)
                         ? number_format((float) $cp->gps_lat, 4, ',', '.').', '.number_format((float) $cp->gps_lng, 4, ',', '.')
                         : null,
+                    'distance_from_prev' => $distances[$cp->id]['distance_from_prev_km'] ?? null,
+                    'is_loaded' => $distances[$cp->id]['is_loaded'] ?? false,
+                    'dist_source' => ! empty($distances[$cp->id]['is_adjusted']) ? 'Đã sửa' : ($distances[$cp->id]['source'] ?? null),
+                    'is_adjusted' => $distances[$cp->id]['is_adjusted'] ?? false,
+                    'original_distance' => $distances[$cp->id]['original_distance_km'] ?? null,
                     'voice_note' => $cp->voice_note,
                     'photo_count' => $cp->photos->count(),
                 ])

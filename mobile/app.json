@@ -10,6 +10,7 @@
         "scheme": "tms-driver",
         "plugins": [
             "./plugins/withAndroidManifest.js",
+            "./plugins/withIosFmtCxx17.js",
             "expo-router",
             "expo-image-picker",
             [

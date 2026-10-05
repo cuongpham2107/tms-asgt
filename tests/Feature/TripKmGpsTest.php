@@ -215,3 +215,51 @@ test('trips are not settled until the upload grace period has passed', function 
 
     expect($trip->fresh()->km_calculated_at)->toBeNull();
 });
+
+test('driver swap before arrived pickup counts all previous km as empty', function () {
+    // Chuyến 50 phút. Lấy hàng ở phút 10, hoàn thành ở phút 40.
+    // Đảo lái ở phút 5 (TRƯỚC KHI ĐẾN LẤY HÀNG).
+    $trip = kmTrip($this->vehicle, $this->t0, 50);
+    $first = kmAssign($trip, $this->driverA, $this->t0, $this->t0->addMinutes(5));
+    $second = kmAssign($trip, $this->driverB, $this->t0->addMinutes(5), $this->t0->addMinutes(50));
+    kmOrder($trip, $this->t0, 10, 40);
+    kmDrive($this->driverA->id, $this->vehicle->id, $this->t0, 0, 5);
+    kmDrive($this->driverB->id, $this->vehicle->id, $this->t0, 5, 50);
+
+    app(TripKmCalculatorService::class)->calculate($trip);
+
+    $trip->refresh();
+    // Tài xế A: chạy từ phút 0 đến phút 5 => hoàn toàn là xe rỗng (0 km có hàng)
+    expect((float) $first->fresh()->km)->toEqualWithDelta(5, 0.5)
+        ->and((float) $first->fresh()->km_loaded)->toBe(0.0)
+        ->and((float) $first->fresh()->km_empty)->toEqualWithDelta(5, 0.5);
+
+    // Tài xế B: chạy từ phút 5 đến 50 => có hàng từ phút 10 đến 40 (30 km), không hàng (5-10 & 40-50: 15 km)
+    expect((float) $second->fresh()->km)->toEqualWithDelta(45, 0.5)
+        ->and((float) $second->fresh()->km_loaded)->toEqualWithDelta(30, 0.5)
+        ->and((float) $second->fresh()->km_empty)->toEqualWithDelta(15, 0.5);
+});
+
+test('driver swap after completed counts all subsequent km as empty', function () {
+    // Chuyến 50 phút. Lấy hàng ở phút 10, hoàn thành ở phút 40.
+    // Đảo lái ở phút 45 (SAU KHI HOÀN THÀNH GIAO HÀNG).
+    $trip = kmTrip($this->vehicle, $this->t0, 50);
+    $first = kmAssign($trip, $this->driverA, $this->t0, $this->t0->addMinutes(45));
+    $second = kmAssign($trip, $this->driverB, $this->t0->addMinutes(45), $this->t0->addMinutes(50));
+    kmOrder($trip, $this->t0, 10, 40);
+    kmDrive($this->driverA->id, $this->vehicle->id, $this->t0, 0, 45);
+    kmDrive($this->driverB->id, $this->vehicle->id, $this->t0, 45, 50);
+
+    app(TripKmCalculatorService::class)->calculate($trip);
+
+    $trip->refresh();
+    // Tài xế A: chạy từ phút 0 đến 45 => có hàng 30 km (10 -> 40), không hàng 15 km (0 -> 10 và 40 -> 45)
+    expect((float) $first->fresh()->km)->toEqualWithDelta(45, 0.5)
+        ->and((float) $first->fresh()->km_loaded)->toEqualWithDelta(30, 0.5)
+        ->and((float) $first->fresh()->km_empty)->toEqualWithDelta(15, 0.5);
+
+    // Tài xế B: chạy từ phút 45 đến 50 => sau khi đã hoàn thành giao hàng, hoàn toàn là xe rỗng (0 km có hàng)
+    expect((float) $second->fresh()->km)->toEqualWithDelta(5, 0.5)
+        ->and((float) $second->fresh()->km_loaded)->toBe(0.0)
+        ->and((float) $second->fresh()->km_empty)->toEqualWithDelta(5, 0.5);
+});

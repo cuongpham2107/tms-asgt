@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Trips\Schemas;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripPhoto;
+use App\Services\Trip\TripLegService;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -71,6 +72,59 @@ class TripInfolist
                                             ->state(fn (Trip $record): string => $record->total_km_empty !== null ? number_format((float) $record->total_km_empty, 1, ',', '.').' km' : '—'),
                                     ])
                                     ->columns(4),
+
+                                Section::make('Khoảng cách các chặng')
+                                    ->icon(Heroicon::OutlinedMapPin)
+                                    ->schema([
+                                        RepeatableEntry::make('trip_legs')
+                                            ->label('Chi tiết quãng đường từng chặng')
+                                            ->state(fn (Trip $record): array => app(TripLegService::class)->calculateLegs($record))
+                                            ->schema([
+                                                TextEntry::make('leg_index')
+                                                    ->label('Chặng')
+                                                    ->formatStateUsing(fn ($state) => 'Chặng '.$state)
+                                                    ->weight('bold'),
+                                                TextEntry::make('from_name')
+                                                    ->label('Điểm đi'),
+                                                TextEntry::make('to_name')
+                                                    ->label('Điểm đến'),
+                                                TextEntry::make('distance_km')
+                                                    ->label('Quãng đường')
+                                                    ->weight('bold')
+                                                    ->formatStateUsing(function ($state, $record) {
+                                                        $kmStr = number_format((float) $state, 1, ',', '.').' km';
+                                                        if (! empty($record['is_adjusted'])) {
+                                                            $origKm = number_format((float) ($record['original_distance_km'] ?? $state), 1, ',', '.');
+
+                                                            return "{$kmStr} (gốc: {$origKm} km)";
+                                                        }
+
+                                                        return $kmStr;
+                                                    })
+                                                    ->color(fn ($record) => ! empty($record['is_adjusted']) ? 'warning' : null),
+                                                TextEntry::make('is_adjusted')
+                                                    ->label('Trạng thái km')
+                                                    ->badge()
+                                                    ->formatStateUsing(fn ($state) => $state ? 'Đã điều chỉnh' : 'Nguyên gốc')
+                                                    ->color(fn ($state) => $state ? 'warning' : 'gray'),
+                                                TextEntry::make('is_loaded')
+                                                    ->label('Tải trọng')
+                                                    ->badge()
+                                                    ->formatStateUsing(fn ($state) => $state ? 'Có hàng' : 'Xe rỗng')
+                                                    ->color(fn ($state) => $state ? 'success' : 'warning'),
+                                                TextEntry::make('source')
+                                                    ->label('Nguồn')
+                                                    ->badge()
+                                                    ->formatStateUsing(fn ($state) => $state === 'osrm' ? 'Lộ trình đường bộ' : 'GPS')
+                                                    ->color('gray'),
+                                            ])
+                                            ->columns(7)
+                                            ->grid([
+                                                'default' => 1,
+                                            ])
+                                            ->placeholder('Chưa có thông tin chặng hành trình'),
+                                    ])
+                                    ->collapsible(),
 
                                 Section::make('Danh sách đơn hàng')
                                     ->icon(Heroicon::OutlinedDocumentText)

@@ -124,6 +124,11 @@ class Trip extends Model
         return $this->hasMany(TripCheckpoint::class)->orderBy('occurred_at');
     }
 
+    public function legs(): HasMany
+    {
+        return $this->hasMany(TripLeg::class)->orderBy('leg_index');
+    }
+
     /**
      * Km dùng cho báo cáo / hoá đơn: số điều hành đã điều chỉnh (nếu có), ngược lại số GPS.
      */

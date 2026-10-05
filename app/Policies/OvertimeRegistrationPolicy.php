@@ -61,4 +61,14 @@ class OvertimeRegistrationPolicy
     {
         return $authUser->can('RestoreAny:OvertimeRegistration');
     }
+
+    public function replicate(AuthUser $authUser, OvertimeRegistration $overtimeRegistration): bool
+    {
+        return $authUser->can('Replicate:OvertimeRegistration');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:OvertimeRegistration');
+    }
 }

@@ -58,16 +58,92 @@ export async function startTracking(next: TrackingContext): Promise<boolean> {
         pausesUpdatesAutomatically: false,
         showsBackgroundLocationIndicator: true,
     });
+    if (!heartbeatTimer) {
+        heartbeatTimer = setInterval(recordPeriodicPointIfStale, 60_000);
+    }
     return true;
+}
+
+let heartbeatTimer: any = null;
+
+function isoWithOffset(ms: number): string {
+    const d = new Date(ms);
+    const pad = (n: number) => String(Math.floor(Math.abs(n))).padStart(2, "0");
+    const offset = -d.getTimezoneOffset();
+    const sign = offset >= 0 ? "+" : "-";
+    return (
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+        `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
+        `${sign}${pad(offset / 60)}:${pad(offset % 60)}`
+    );
+}
+
+const orNull = (v: number | null | undefined) => (v == null || v < 0 ? null : v);
+
+/** Kiểm tra và ghi bổ sung GPS mỗi 60s nếu xe đứng yên không phát sinh di chuyển >25m */
+async function recordPeriodicPointIfStale(): Promise<void> {
+    if (isWeb) return;
+    try {
+        const lastRaw = await AsyncStorage.getItem(LAST_POINT_KEY);
+        const lastAt = lastRaw ? Number(lastRaw) : 0;
+        if (Date.now() - lastAt < STALE_AFTER_MS) return;
+
+        const ctx = await getTrackingContext();
+        if (!ctx) return;
+
+        const fg = await Location.getForegroundPermissionsAsync();
+        if (!fg.granted) return;
+
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const { enqueue } = require("./queue");
+        const { onPointsQueued } = require("./uploader");
+
+        await enqueue([
+            {
+                shift_id: ctx.shiftId,
+                vehicle_id: ctx.vehicleId,
+                recorded_at: isoWithOffset(pos.timestamp),
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                speed: pos.coords.speed != null && pos.coords.speed >= 0 ? pos.coords.speed * 3.6 : null,
+                heading: orNull(pos.coords.heading),
+                accuracy: orNull(pos.coords.accuracy),
+                mocked: pos.mocked === true,
+            },
+        ]);
+        await AsyncStorage.setItem(LAST_POINT_KEY, String(Date.now()));
+        await onPointsQueued();
+    } catch (e) {
+        // bỏ qua lỗi nếu không lấy được toạ độ
+    }
 }
 
 export async function stopTracking(): Promise<void> {
     if (isWeb) return;
+    if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+    }
     if (await isTracking()) {
         await Location.stopLocationUpdatesAsync(LOCATION_TASK);
     }
     context = null;
     await AsyncStorage.removeItem(CONTEXT_KEY);
+}
+
+/**
+ * Đẩy toàn bộ điểm GPS trong hàng đợi SQLite lên server trước khi gửi Checkpoint.
+ * Có timeout 3.5s để nếu mạng lag thì checkpoint vẫn không bị treo.
+ */
+export async function flushBeforeCheckpoint(): Promise<void> {
+    try {
+        await Promise.race([
+            flush(true),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3500)),
+        ]);
+    } catch (e) {
+        console.log("flushBeforeCheckpoint finished or timed out");
+    }
 }
 
 /** Kết ca / đăng xuất: gửi hết điểm đang chờ rồi dừng ghi. Lỗi mạng thì điểm vẫn nằm trong hàng đợi để gửi sau. */

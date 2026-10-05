@@ -9,6 +9,7 @@ use App\Models\Trip;
 use App\Models\TripDriverAssignment;
 use App\Services\Gps\DistanceResult;
 use App\Services\Gps\GpsDistanceService;
+use App\Services\Trip\TripLegService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -20,7 +21,10 @@ use Illuminate\Support\Collection;
  */
 class TripKmCalculatorService
 {
-    public function __construct(private readonly GpsDistanceService $gps) {}
+    public function __construct(
+        private readonly GpsDistanceService $gps,
+        private readonly TripLegService $legService,
+    ) {}
 
     public function calculate(Trip $trip): void
     {
@@ -75,6 +79,67 @@ class TripKmCalculatorService
             $order->save();
         }
 
+        // Fallback: nếu không có điểm GPS (như khi test tại bàn hoặc mất GPS), tính theo các chặng đường bộ OSRM
+        if ($totalKm == 0.0) {
+            $legs = $this->legService->calculateLegs($trip);
+            if (! empty($legs)) {
+                $osrmTotal = array_sum(array_column($legs, 'distance_km'));
+                if ($osrmTotal > 0.0) {
+                    $osrmLoaded = array_sum(array_map(fn ($l) => $l['is_loaded'] ? $l['distance_km'] : 0, $legs));
+                    $totalKm = $osrmTotal;
+                    $loadedKm = $osrmLoaded;
+                    $sources->push('osrm');
+
+                    foreach ($trip->orders as $order) {
+                        if (($order->loaded_km ?? 0.0) == 0.0) {
+                            $order->loaded_km = round($osrmLoaded, 1);
+                            $order->save();
+                        }
+                    }
+
+                    if ($trip->driverAssignments->isNotEmpty()) {
+                        if ($trip->driverAssignments->count() === 1) {
+                            $trip->driverAssignments->first()->update([
+                                'km' => round($totalKm, 1),
+                                'km_loaded' => round($loadedKm, 1),
+                                'km_empty' => round(max(0, $totalKm - $loadedKm), 1),
+                            ]);
+                        } else {
+                            // Phân bổ km từng chặng cho từng lượt lái (đảo lái)
+                            foreach ($trip->driverAssignments as $da) {
+                                $daStart = $this->later($da->started_at->toImmutable(), $start);
+                                $daEnd = $this->earlier(($da->ended_at ?? $end)->toImmutable(), $end);
+
+                                $daKm = 0.0;
+                                $daLoaded = 0.0;
+
+                                foreach ($legs as $leg) {
+                                    $lFrom = ! empty($leg['from_time']) ? CarbonImmutable::parse($leg['from_time']) : null;
+                                    $lTo = ! empty($leg['to_time']) ? CarbonImmutable::parse($leg['to_time']) : null;
+
+                                    if ($lFrom && $lTo) {
+                                        $midTime = $lFrom->addSeconds((int) round($lFrom->diffInSeconds($lTo) / 2));
+                                        if ($midTime->gte($daStart) && $midTime->lte($daEnd)) {
+                                            $daKm += (float) $leg['distance_km'];
+                                            if ($leg['is_loaded']) {
+                                                $daLoaded += (float) $leg['distance_km'];
+                                            }
+                                        }
+                                    }
+                                }
+
+                                $da->update([
+                                    'km' => round($daKm, 1),
+                                    'km_loaded' => round($daLoaded, 1),
+                                    'km_empty' => round(max(0, $daKm - $daLoaded), 1),
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         $loadedKm = min($loadedKm, $totalKm);
         $coverage = round($coverageSeconds / $start->diffInSeconds($end) * 100, 2);
 
@@ -86,6 +151,8 @@ class TripKmCalculatorService
         $trip->km_needs_review = $hasMocked || $coverage < config('gps.review_coverage_percent');
         $trip->km_calculated_at = now();
         $trip->save();
+
+        $this->legService->syncLegs($trip);
     }
 
     /**
@@ -142,6 +209,7 @@ class TripKmCalculatorService
 
     /**
      * Khoảng có hàng của từng đơn, theo id đơn.
+     * Quy tắc: từ Đến lấy hàng -> Hoàn thành là CÓ HÀNG, còn lại là KHÔNG HÀNG.
      *
      * @return Collection<int, Collection<int, array{0: CarbonImmutable, 1: CarbonImmutable}>>
      */
@@ -149,15 +217,19 @@ class TripKmCalculatorService
     {
         return $trip->orders
             ->mapWithKeys(function (Order $order) use ($trip, $start, $end) {
-                $checkpoints = $trip->checkpoints->where('order_id', $order->id);
-                $pickedUpAt = $checkpoints->where('checkpoint_type', CheckpointType::ArrivedPickup)->min('occurred_at');
-                $deliveredAt = $checkpoints->where('checkpoint_type', CheckpointType::Completed)->max('occurred_at');
+                $checkpoints = $trip->checkpoints->filter(fn ($cp) => $cp->order_id === null || $cp->order_id === $order->id);
+                $pickedUpAt = $checkpoints->whereIn('checkpoint_type', [CheckpointType::ArrivedPickup, CheckpointType::LeftPickup])->min('occurred_at');
+                $deliveredAt = $checkpoints->whereIn('checkpoint_type', [CheckpointType::Completed, CheckpointType::ArrivedDelivery])->max('occurred_at');
 
                 if ($order->status === OrderStatus::Cancelled && $pickedUpAt === null) {
                     return [];
                 }
 
-                $from = $pickedUpAt?->toImmutable() ?? $start;
+                if ($pickedUpAt === null) {
+                    return [];
+                }
+
+                $from = $pickedUpAt->toImmutable();
                 $to = $deliveredAt?->toImmutable()
                     ?? ($order->status === OrderStatus::Cancelled ? $order->cancelled_at?->toImmutable() : null)
                     ?? $end;

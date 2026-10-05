@@ -46,6 +46,37 @@
             </dl>
         </x-filament::section>
 
+        {{-- Khoảng cách các chặng --}}
+        @if (! empty($timeline['legs']))
+            <x-filament::section icon="heroicon-o-map-pin" heading="Khoảng cách các chặng">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    @foreach ($timeline['legs'] as $leg)
+                        <div class="rounded-lg border border-gray-200 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-white/5">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Chặng {{ $leg['leg_index'] }}</span>
+                                <x-filament::badge :color="$leg['is_loaded'] ? 'success' : 'warning'" size="sm">
+                                    {{ $leg['is_loaded'] ? 'Có hàng' : 'Xe rỗng' }}
+                                </x-filament::badge>
+                            </div>
+                            <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white truncate" title="{{ $leg['from_name'] }} ➔ {{ $leg['to_name'] }}">
+                                {{ $leg['from_name'] }} ➔ {{ $leg['to_name'] }}
+                            </p>
+                            <div class="mt-2 flex items-baseline justify-between gap-2">
+                                <span class="text-lg font-bold text-gray-950 dark:text-white tabular-nums">{{ number_format($leg['distance_km'], 1, ',', '.') }} km</span>
+                                @if (! empty($leg['is_adjusted']))
+                                    <span class="text-xs font-semibold text-amber-600 dark:text-amber-400" title="{{ $leg['adjust_reason'] ?? '' }}">
+                                        Đã sửa (gốc: {{ number_format($leg['original_distance_km'], 1, ',', '.') }} km)
+                                    </span>
+                                @else
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">({{ $leg['source'] === 'osrm' ? 'Lộ trình đường bộ' : 'GPS' }})</span>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </x-filament::section>
+        @endif
+
         {{-- Timeline Section --}}
         <div x-data="{ showAll: false, limit: 5 }">
             <x-filament::section icon="heroicon-o-map" heading="Mốc hành trình">
@@ -86,6 +117,18 @@
 
                                 {{-- Content --}}
                                 <div class="min-w-0 grow pt-1 {{ $isLast ? 'mb-0' : 'mb-6' }}">
+                                    @if (! empty($cp['distance_from_prev']) && (float) $cp['distance_from_prev'] > 0)
+                                        <div class="mb-2">
+                                            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold {{ $cp['is_loaded'] ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400' }}">
+                                                <x-filament::icon icon="heroicon-m-arrow-trending-up" class="h-3.5 w-3.5" />
+                                                + {{ number_format((float) $cp['distance_from_prev'], 1, ',', '.') }} km ({{ $cp['is_loaded'] ? 'Có hàng' : 'Xe rỗng' }})
+                                                @if (! empty($cp['dist_source']))
+                                                    <span class="text-[10px] opacity-75">({{ $cp['dist_source'] === 'osrm' ? 'Đường bộ' : 'GPS' }})</span>
+                                                @endif
+                                            </span>
+                                        </div>
+                                    @endif
+
                                     {{-- Header row: type + time --}}
                                     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                                         <h4 class="text-sm font-semibold text-gray-950 dark:text-white">

@@ -225,7 +225,6 @@ class TripForm
                                 TableColumn::make('Loại')->width('160px'),
                                 TableColumn::make('Đơn hàng')->width('110px'),
                                 TableColumn::make('Tài xế')->width('160px'),
-                                TableColumn::make('Km')->width('100px'),
                                 TableColumn::make('Giờ')->width('160px'),
                                 TableColumn::make('Điểm giao')->width('110px'),
                             ])

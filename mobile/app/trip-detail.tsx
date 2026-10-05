@@ -21,6 +21,7 @@ import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { clearNotificationBadge } from "../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
 import { getCheckpointGps, toFakePoint, FakePoint } from "../src/lib/fakeLocation";
+import { flushBeforeCheckpoint } from "../src/tracking/tracker";
 import FakeLocationPicker from "../src/components/FakeLocationPicker";
 
 const statusConfig: Record<
@@ -157,6 +158,7 @@ export default function TripDetailScreen() {
         setStarting(true);
         showLoading();
         try {
+            await flushBeforeCheckpoint();
             const gps = await getCheckpointGps(startFakePoint);
             const body: any = {
                 checkpoint_type: "started",
@@ -192,9 +194,9 @@ export default function TripDetailScreen() {
             showAlert("Không thể bắt đầu", msg, () => {
                 if (match)
                     router.push({
-                        pathname: "/trip-detail",
-                        params: { id: match[1] },
-                    });
+                    pathname: "/trip-detail",
+                    params: { id: match[1] },
+                });
             });
         } finally {
             setStarting(false);
@@ -211,6 +213,7 @@ export default function TripDetailScreen() {
                 setCompleting(true);
                 showLoading();
                 try {
+                    await flushBeforeCheckpoint();
                     const gps = await getCheckpointGps(endFakePoint);
                     await api.trips.complete(
                         String(tripId),
@@ -489,8 +492,72 @@ export default function TripDetailScreen() {
                     </View>
                 )}
 
+                {/* Lộ trình & Khoảng cách các chặng */}
+                {detail?.legs && detail.legs.length > 0 && (
+                    <View style={s.legsCard}>
+                        <Text style={s.sectionTitle}>
+                            🛣️ Khoảng cách các chặng ({detail.legs.length})
+                        </Text>
+                        <View style={{ marginTop: 10 }}>
+                            {detail.legs.map((leg: any, idx: number) => {
+                                const isLoaded = leg.is_loaded;
+                                return (
+                                    <View key={idx} style={s.legItem}>
+                                        <View style={s.legIndicator}>
+                                            <View
+                                                style={[
+                                                    s.legDot,
+                                                    { backgroundColor: isLoaded ? "#10B981" : "#F59E0B" },
+                                                ]}
+                                            />
+                                            {idx < detail.legs.length - 1 && <View style={s.legLine} />}
+                                        </View>
+                                        <View style={s.legContent}>
+                                            <View style={s.legTitleRow}>
+                                                <Text style={s.legTitle} numberOfLines={2}>
+                                                    Chặng {leg.leg_index}: {leg.from_name} ➔ {leg.to_name}
+                                                </Text>
+                                            </View>
+                                            <View style={s.legMetaRow}>
+                                                <View
+                                                    style={[
+                                                        s.legBadge,
+                                                        { backgroundColor: isLoaded ? "#D1FAE5" : "#FEF3C7" },
+                                                    ]}
+                                                >
+                                                    <Text
+                                                        style={[
+                                                            s.legBadgeText,
+                                                            { color: isLoaded ? "#059669" : "#D97706" },
+                                                        ]}
+                                                    >
+                                                        {isLoaded ? "Có hàng" : "Xe rỗng"}
+                                                    </Text>
+                                                </View>
+                                                <Text style={s.legKmText}>
+                                                    📏 {leg.distance_km} km
+                                                </Text>
+                                                {leg.is_adjusted ? (
+                                                    <Text style={[s.legSourceText, { color: "#D97706", fontWeight: "600" }]}>
+                                                        (Đã sửa)
+                                                    </Text>
+                                                ) : (
+                                                    leg.source && (
+                                                        <Text style={s.legSourceText}>
+                                                            ({leg.source === "osrm" ? "Lộ trình đường bộ" : "GPS"})
+                                                        </Text>
+                                                    )
+                                                )}
+                                            </View>
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    </View>
+                )}
 
-                        <View style={s.sectionHeader}>
+                <View style={s.sectionHeader}>
                             <Text style={s.sectionTitle}>
                                 📦 Đơn hàng ({orders.length})
                             </Text>
@@ -1073,4 +1140,68 @@ const s = StyleSheet.create({
     reasonChipActive: { borderColor: "#4F46E5", backgroundColor: "#EEF2FF" },
     reasonChipText: { fontSize: 13, fontWeight: "500", color: "#374151" },
     reasonChipTextActive: { fontWeight: "700", color: "#4338CA" },
+    legsCard: {
+        backgroundColor: "#fff",
+        borderRadius: 14,
+        padding: 14,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
+    },
+    legItem: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        marginBottom: 12,
+    },
+    legIndicator: {
+        alignItems: "center",
+        width: 18,
+        marginRight: 8,
+        marginTop: 4,
+    },
+    legDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+    },
+    legLine: {
+        width: 2,
+        height: 38,
+        backgroundColor: "#E5E7EB",
+        marginTop: 2,
+    },
+    legContent: {
+        flex: 1,
+    },
+    legTitleRow: {
+        marginBottom: 4,
+    },
+    legTitle: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#1F2937",
+    },
+    legMetaRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+    },
+    legBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 4,
+    },
+    legBadgeText: {
+        fontSize: 10,
+        fontWeight: "700",
+    },
+    legKmText: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: "#111827",
+    },
+    legSourceText: {
+        fontSize: 11,
+        color: "#9CA3AF",
+    },
 });
