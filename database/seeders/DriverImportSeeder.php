@@ -6,6 +6,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
 
 class DriverImportSeeder extends Seeder
 {
@@ -111,17 +112,15 @@ class DriverImportSeeder extends Seeder
             }
         }
 
-        // Assign "driver" role to all imported drivers
-        $driverRoleId = DB::table('roles')->where('name', 'driver')->value('id');
-        if ($driverRoleId) {
-            $imported = DB::table('users')->whereIn('email', array_keys($seen))->get();
-            foreach ($imported as $user) {
-                DB::table('model_has_roles')->upsert(
-                    [['role_id' => $driverRoleId, 'model_type' => 'App\Models\User', 'model_id' => $user->id]],
-                    ['role_id', 'model_id', 'model_type'],
-                    ['role_id', 'model_id', 'model_type'],
-                );
-            }
+        // Tạo role nếu chưa có; trước đây thiếu role thì tài xế bị bỏ qua không báo, app và trang quản trị không thấy tài xế.
+        $driverRoleId = Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web'])->id;
+        $imported = DB::table('users')->whereIn('email', array_keys($seen))->get();
+        foreach ($imported as $user) {
+            DB::table('model_has_roles')->upsert(
+                [['role_id' => $driverRoleId, 'model_type' => 'App\Models\User', 'model_id' => $user->id]],
+                ['role_id', 'model_id', 'model_type'],
+                ['role_id', 'model_id', 'model_type'],
+            );
         }
 
         $this->command?->info('Imported '.count($drivers).' drivers from CSV.');
