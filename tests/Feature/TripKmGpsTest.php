@@ -190,6 +190,20 @@ test('a total-only km adjustment is spread across each driver assignment', funct
         ->and((float) $first->fresh()->km + (float) $second->fresh()->km)->toEqualWithDelta(60, 0.2);
 });
 
+test('a long GPS gap still counts the straight-line distance instead of dropping it', function () {
+    $trip = kmTrip($this->vehicle, $this->t0, 40);
+    kmAssign($trip, $this->driverA, $this->t0, $this->t0->addMinutes(40));
+    kmOrder($trip, $this->t0, 5, 35);
+    kmDrive($this->driverA->id, $this->vehicle->id, $this->t0, 0, 10);
+    // Mất sóng 20 phút (10'->30', vượt osrm_max_gap 15'), xe vẫn đi ~20 km.
+    kmDrive($this->driverA->id, $this->vehicle->id, $this->t0, 30, 40);
+
+    app(TripKmCalculatorService::class)->calculate($trip);
+
+    // 10 (đoạn 1) + ~20 (đường thẳng qua khoảng mất sóng) + 10 (đoạn 2) ≈ 40 km, không bị về 20.
+    expect((float) $trip->fresh()->total_km)->toEqualWithDelta(40, 1.0);
+});
+
 test('an empty run trip counts all distance as empty and does not need review', function () {
     $trip = kmTrip($this->vehicle, $this->t0, 30);
     $trip->update(['is_empty_run' => true]);

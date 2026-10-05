@@ -220,8 +220,9 @@ class DriverShift extends Model
             ->sortByDesc(fn ($cp) => $cp->occurred_at?->timestamp ?? 0)
             ->first();
 
-        $da = $trip->driverAssignments?->where('driver_id', $this->driver_id)->first();
-        $loadedKm = $da && $da->km_loaded !== null ? (float) $da->km_loaded : (float) ($order->loaded_km ?? 0);
+        // Km có hàng hiển thị theo TỪNG ĐƠN (order->loaded_km), không dùng km cả chuyến của lượt lái
+        // để tránh lặp cùng một con số cho mọi đơn trong chuyến.
+        $loadedKm = (float) ($order->loaded_km ?? 0);
 
         return [
             'id' => $order->id,

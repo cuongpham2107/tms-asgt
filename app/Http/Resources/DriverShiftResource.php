@@ -48,9 +48,12 @@ class DriverShiftResource extends JsonResource
                     ? $trip->driverAssignments->where('driver_id', $this->driver_id)
                     : $trip->driverAssignments()->where('driver_id', $this->driver_id)->get();
 
-                $myKm = $userAssignment->isNotEmpty() ? (float) $userAssignment->sum('km') : (float) $trip->total_km;
-                $myLoaded = $userAssignment->isNotEmpty() ? (float) $userAssignment->sum('km_loaded') : (float) $trip->total_km_loaded;
-                $myEmpty = $userAssignment->isNotEmpty() ? (float) $userAssignment->sum('km_empty') : (float) $trip->total_km_empty;
+                // Không có lượt lái của chủ ca trên chuyến này: chỉ quy về cả chuyến nếu chủ ca là
+                // tài xế chính, ngược lại = 0 (không gán nhầm km cả chuyến cho người không lái).
+                $isTripDriver = (int) $trip->driver_id === (int) $this->driver_id;
+                $myKm = $userAssignment->isNotEmpty() ? (float) $userAssignment->sum('km') : ($isTripDriver ? (float) $trip->total_km : 0.0);
+                $myLoaded = $userAssignment->isNotEmpty() ? (float) $userAssignment->sum('km_loaded') : ($isTripDriver ? (float) $trip->total_km_loaded : 0.0);
+                $myEmpty = $userAssignment->isNotEmpty() ? (float) $userAssignment->sum('km_empty') : ($isTripDriver ? (float) $trip->total_km_empty : 0.0);
 
                 return [
                     'id' => $trip->id,

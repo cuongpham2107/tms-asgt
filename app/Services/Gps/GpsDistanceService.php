@@ -218,6 +218,10 @@ class GpsDistanceService
             $straight = $this->haversine($a, $b);
             $gap = $a->recorded_at->diffInSeconds($b->recorded_at);
 
+            // Khoảng trống vừa (osrm_gap..max): bắc cầu đường bộ OSRM.
+            // Khoảng trống quá lớn (> max, ví dụ nghỉ qua đêm/mất sóng dài): KHÔNG bắc OSRM để tránh
+            // km ảo theo đường bộ, nhưng VẪN cộng đường thẳng — filterNoise đã loại điểm nhảy nên
+            // đường thẳng không bịa quãng đường (dừng tại chỗ -> ~0; đi thật -> cận dưới hợp lý).
             if ($gap > config('gps.osrm_gap_seconds') && $gap <= $maxOsrmGap) {
                 $road = $this->roadDistance($a, $b);
                 if ($road !== null) {
@@ -226,10 +230,6 @@ class GpsDistanceService
 
                     continue;
                 }
-            } elseif ($gap > $maxOsrmGap) {
-                // Khoảng trống lớn (> 15 phút, ví dụ nghỉ qua đêm giữa ca hoặc ngắt kết nối):
-                // không bắc cầu đường bộ OSRM để tránh tạo quãng đường ảo.
-                continue;
             }
 
             $meters += $straight;

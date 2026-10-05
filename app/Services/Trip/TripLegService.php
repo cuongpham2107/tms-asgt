@@ -10,6 +10,7 @@ use App\Services\Gps\GpsDistanceService;
 use App\Services\OsrmService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Bóc tách các chặng (legs) và tính khoảng cách từng chặng trong chuyến xe.
@@ -310,48 +311,60 @@ class TripLegService
         $totalKm = round($totalKm, 1);
         $loadedKm = round(min($loadedKm, $totalKm), 1);
 
-        $trip->km_adjusted = $totalKm;
-        $trip->km_adjusted_loaded = $loadedKm;
-        $trip->km_adjust_reason = $reason;
-        $trip->km_adjusted_by = $userId;
-        $trip->km_needs_review = false;
-        $trip->save();
+        DB::transaction(function () use ($trip, $totalKm, $loadedKm, $reason, $userId) {
+            $trip->km_adjusted = $totalKm;
+            $trip->km_adjusted_loaded = $loadedKm;
+            $trip->km_adjust_reason = $reason;
+            $trip->km_adjusted_by = $userId;
+            $trip->km_needs_review = false;
+            $trip->save();
 
-        $trip->loadMissing('driverAssignments');
-        $assignments = $trip->driverAssignments;
+            $trip->loadMissing('driverAssignments');
+            $assignments = $trip->driverAssignments->values();
 
-        if ($assignments->isEmpty()) {
-            return;
-        }
+            if ($assignments->isEmpty()) {
+                return;
+            }
 
-        if ($assignments->count() === 1) {
-            $assignments->first()->update([
-                'km' => $totalKm,
-                'km_loaded' => $loadedKm,
-                'km_empty' => round(max(0, $totalKm - $loadedKm), 1),
-            ]);
+            if ($assignments->count() === 1) {
+                $assignments->first()->update([
+                    'km' => $totalKm,
+                    'km_loaded' => $loadedKm,
+                    'km_empty' => round(max(0, $totalKm - $loadedKm), 1),
+                ]);
 
-            return;
-        }
+                return;
+            }
 
-        // Phân bổ theo tỉ lệ km GPS gốc của từng lượt; nếu GPS gốc = 0 thì chia đều.
-        $gpsTotal = (float) $assignments->sum('km');
-        $gpsLoaded = (float) $assignments->sum('km_loaded');
-        $count = $assignments->count();
+            // Phân bổ theo tỉ lệ km GPS gốc của từng lượt; GPS gốc = 0 thì chia đều.
+            // Lượt cuối gánh phần dư làm tròn để tổng các lượt khớp đúng tổng đã điều chỉnh.
+            $gpsTotal = (float) $assignments->sum('km');
+            $gpsLoaded = (float) $assignments->sum('km_loaded');
+            $count = $assignments->count();
+            $kmLeft = $totalKm;
+            $loadedLeft = $loadedKm;
 
-        foreach ($assignments as $assignment) {
-            $kmShare = $gpsTotal > 0 ? (float) $assignment->km / $gpsTotal : 1.0 / $count;
-            $loadedShare = $gpsLoaded > 0 ? (float) $assignment->km_loaded / $gpsLoaded : $kmShare;
+            foreach ($assignments as $i => $assignment) {
+                if ($i === $count - 1) {
+                    $daKm = round($kmLeft, 1);
+                    $daLoaded = round(min($loadedLeft, $daKm), 1);
+                } else {
+                    $kmShare = $gpsTotal > 0 ? (float) $assignment->km / $gpsTotal : 1.0 / $count;
+                    $loadedShare = $gpsLoaded > 0 ? (float) $assignment->km_loaded / $gpsLoaded : $kmShare;
+                    $daKm = round($totalKm * $kmShare, 1);
+                    $daLoaded = round(min($loadedKm * $loadedShare, $daKm), 1);
+                }
 
-            $daKm = round($totalKm * $kmShare, 1);
-            $daLoaded = round(min($loadedKm * $loadedShare, $daKm), 1);
+                $assignment->update([
+                    'km' => $daKm,
+                    'km_loaded' => $daLoaded,
+                    'km_empty' => round(max(0, $daKm - $daLoaded), 1),
+                ]);
 
-            $assignment->update([
-                'km' => $daKm,
-                'km_loaded' => $daLoaded,
-                'km_empty' => round(max(0, $daKm - $daLoaded), 1),
-            ]);
-        }
+                $kmLeft = round($kmLeft - $daKm, 1);
+                $loadedLeft = round($loadedLeft - $daLoaded, 1);
+            }
+        });
     }
 
     /**

@@ -23,6 +23,12 @@ class MockTripGpsTrack extends Command
 
     public function handle(OsrmService $osrm, TripKmCalculatorService $calculator): int
     {
+        if (app()->isProduction()) {
+            $this->error('Lệnh mô phỏng GPS chỉ dùng cho test/dev, không chạy trên production.');
+
+            return self::FAILURE;
+        }
+
         $tripArg = $this->argument('trip');
 
         /** @var Trip|null $trip */
