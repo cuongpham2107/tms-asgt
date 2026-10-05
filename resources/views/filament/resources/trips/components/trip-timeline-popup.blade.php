@@ -44,7 +44,6 @@
 
     $tripLegService = app(\App\Services\Trip\TripLegService::class);
     $checkpointDistances = $tripLegService->checkpointDistances($trip);
-    $legs = $tripLegService->calculateLegs($trip);
 
     $renderCheckpoint = function ($cp, $loop) use ($iconMap, $semanticColors, $photoUrl, $renderIcon, $checkpointDistances) {
         $icon = $iconMap[$cp->checkpoint_type->value] ?? 'heroicon-o-question-mark-circle';
@@ -147,39 +146,6 @@
             <dd class="text-sm font-semibold text-gray-950 dark:text-white">{{ $trip->driver?->name ?? '—' }}</dd>
         </div>
     </dl>
-
-    @if (! empty($legs))
-        <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-white/5">
-            <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Khoảng cách các chặng</h4>
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                @foreach ($legs as $leg)
-                    <div class="flex items-center justify-between rounded-lg bg-white p-2.5 shadow-xs ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
-                        <div class="min-w-0 pr-2">
-                            <div class="flex items-center gap-1.5">
-                                <span class="text-xs font-semibold text-gray-900 dark:text-white">Chặng {{ $leg['leg_index'] }}</span>
-                                <span class="rounded px-1.5 py-0.5 text-[10px] font-medium {{ $leg['is_loaded'] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' }}">
-                                    {{ $leg['is_loaded'] ? 'Có hàng' : 'Xe rỗng' }}
-                                </span>
-                            </div>
-                            <p class="truncate text-xs text-gray-500 dark:text-gray-400" title="{{ $leg['from_name'] }} ➔ {{ $leg['to_name'] }}">
-                                {{ $leg['from_name'] }} ➔ {{ $leg['to_name'] }}
-                            </p>
-                        </div>
-                        <div class="text-right shrink-0">
-                            <span class="text-sm font-bold text-gray-950 dark:text-white tabular-nums">{{ number_format($leg['distance_km'], 1, ',', '.') }} km</span>
-                            @if (! empty($leg['is_adjusted']))
-                                <span class="block text-[10px] font-semibold text-amber-600 dark:text-amber-400" title="{{ $leg['adjust_reason'] ?? '' }}">
-                                    Đã sửa (gốc: {{ number_format($leg['original_distance_km'], 1, ',', '.') }} km)
-                                </span>
-                            @else
-                                <span class="block text-[10px] text-gray-400">({{ $leg['source'] === 'osrm' ? 'Đường bộ' : 'GPS' }})</span>
-                            @endif
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    @endif
 
     {{-- Single order: flat timeline --}}
     @if ($orders->count() === 1)
