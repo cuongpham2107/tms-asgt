@@ -216,7 +216,9 @@ class TripGpsMapConfig
                 ->fillColor($fillColor)
                 ->fillOpacity(0.95)
                 ->weight(2)
-                ->tooltipContent($labels);
+                ->tooltipContent($labels)
+                ->tooltipPermanent()
+                ->tooltipDirection('top');
         }
 
         return $shapes;
