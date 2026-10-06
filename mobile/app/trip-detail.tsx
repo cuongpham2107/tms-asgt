@@ -263,6 +263,54 @@ export default function TripDetailScreen() {
     const nextAct = resolveNextAction(detail || trip, userId);
     const deliveryStops = getPhysicalDeliveryStops(detail || trip);
 
+    const legs: any[] = detail?.legs || trip?.legs || [];
+    const legsTotalKm =
+        legs.length > 0
+            ? legs.reduce(
+                  (acc: number, l: any) =>
+                      acc + (Number(l.distance_km) || 0),
+                  0,
+              )
+            : null;
+    const legsLoadedKm =
+        legs.length > 0
+            ? legs
+                  .filter((l: any) => l.is_loaded)
+                  .reduce(
+                      (acc: number, l: any) =>
+                          acc + (Number(l.distance_km) || 0),
+                      0,
+                  )
+            : null;
+    const legsEmptyKm =
+        legs.length > 0
+            ? legs
+                  .filter((l: any) => !l.is_loaded)
+                  .reduce(
+                      (acc: number, l: any) =>
+                          acc + (Number(l.distance_km) || 0),
+                      0,
+                  )
+            : null;
+
+    const displayTotalKm = detail?.total_km ?? legsTotalKm ?? trip?.total_km;
+    const displayLoadedKm =
+        detail?.total_km_loaded ?? legsLoadedKm ?? trip?.total_km_loaded;
+    const displayEmptyKm =
+        detail?.total_km_empty ?? legsEmptyKm ?? trip?.total_km_empty;
+    const displayDriverKm =
+        detail?.driver_km != null && Number(detail.driver_km) > 0
+            ? detail.driver_km
+            : (displayTotalKm ?? null);
+    const displayDriverLoadedKm =
+        detail?.driver_km_loaded != null && Number(detail.driver_km_loaded) > 0
+            ? detail.driver_km_loaded
+            : (displayLoadedKm ?? null);
+    const displayDriverEmptyKm =
+        detail?.driver_km_empty != null && Number(detail.driver_km_empty) > 0
+            ? detail.driver_km_empty
+            : (displayEmptyKm ?? null);
+
     // Giả lập vị trí khi test: bắt đầu = điểm lấy của đơn đầu, kết thúc = điểm giao cuối của đơn cuối
     const startFakePoint = toFakePoint(
         `Lấy: ${orders[0]?.pickup_location?.code || "điểm lấy"}`,
@@ -518,42 +566,28 @@ export default function TripDetailScreen() {
                               {
                                   icon: "speedometer-outline",
                                   label: "Km của bạn",
-                                  value: fmt(
-                                      detail?.driver_km ??
-                                          detail?.total_km ??
-                                          trip?.total_km,
-                                  ),
+                                  value: fmt(displayDriverKm),
                                   color: "#4F46E5",
                                   bg: "#EEF2FF",
                               },
                               {
                                   icon: "map-outline",
                                   label: "Toàn chuyến",
-                                  value: fmt(
-                                      detail?.total_km ?? trip?.total_km,
-                                  ),
+                                  value: fmt(displayTotalKm),
                                   color: "#0D9488",
                                   bg: "#F0FDFA",
                               },
                               {
                                   icon: "cube-outline",
                                   label: "Km có hàng",
-                                  value: fmt(
-                                      detail?.driver_km_loaded ??
-                                          detail?.total_km_loaded ??
-                                          trip?.total_km_loaded,
-                                  ),
+                                  value: fmt(displayDriverLoadedKm),
                                   color: "#3B82F6",
                                   bg: "#EFF6FF",
                               },
                               {
                                   icon: "arrow-undo-outline",
                                   label: "Km rỗng",
-                                  value: fmt(
-                                      detail?.driver_km_empty ??
-                                          detail?.total_km_empty ??
-                                          trip?.total_km_empty,
-                                  ),
+                                  value: fmt(displayDriverEmptyKm),
                                   color: "#F59E0B",
                                   bg: "#FFFBEB",
                               },
@@ -562,9 +596,7 @@ export default function TripDetailScreen() {
                               {
                                   icon: "speedometer-outline",
                                   label: "Tổng Km",
-                                  value: fmt(
-                                      detail?.total_km ?? trip?.total_km,
-                                  ),
+                                  value: fmt(displayTotalKm),
                                   color: "#4F46E5",
                                   bg: "#EEF2FF",
                                   fullWidth: true,
@@ -572,20 +604,14 @@ export default function TripDetailScreen() {
                               {
                                   icon: "cube-outline",
                                   label: "Km có hàng",
-                                  value: fmt(
-                                      detail?.total_km_loaded ??
-                                          trip?.total_km_loaded,
-                                  ),
+                                  value: fmt(displayLoadedKm),
                                   color: "#3B82F6",
                                   bg: "#EFF6FF",
                               },
                               {
                                   icon: "arrow-undo-outline",
                                   label: "Km rỗng",
-                                  value: fmt(
-                                      detail?.total_km_empty ??
-                                          trip?.total_km_empty,
-                                  ),
+                                  value: fmt(displayEmptyKm),
                                   color: "#F59E0B",
                                   bg: "#FFFBEB",
                               },
@@ -812,7 +838,7 @@ export default function TripDetailScreen() {
                                         </Text>
                                     )}
                                     <Text style={s.orderKm}>
-                                        📏 Km có hàng: {fmt(o.loaded_km)} km
+                                        📏 Km có hàng: {fmt(o.loaded_km ?? (orders.length === 1 ? displayLoadedKm : null))} km
                                     </Text>
 
                                     {/* Danh sách các điểm giao của đơn */}

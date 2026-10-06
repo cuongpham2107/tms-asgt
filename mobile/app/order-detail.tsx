@@ -1111,9 +1111,9 @@ export default function OrderDetailScreen() {
                             color="#10B981"
                         />
                         <Text style={s.doneText}>Đơn hàng đã hoàn thành</Text>
-                        {d.loaded_km && (
+                        {d.loaded_km != null && (
                             <Text style={s.doneKm}>
-                                Km có hàng: {d.loaded_km} km
+                                Km có hàng: {fmt(d.loaded_km)} km
                             </Text>
                         )}
                     </View>

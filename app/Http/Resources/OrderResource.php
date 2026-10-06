@@ -87,6 +87,8 @@ class OrderResource extends JsonResource
             'total_packages' => $this->total_packages,
             /** Tổng khối lượng hàng hóa (tấn). */
             'total_weight' => $this->total_weight,
+            /** Km có hàng tính cho đơn này (từ OSRM / GPS). */
+            'loaded_km' => $this->getLoadedKm(),
             /** Thời điểm dự kiến bốc xếp hàng (ISO 8601). */
             'planned_loading_at' => $this->planned_loading_at?->toIso8601String(),
             // Pickup
@@ -156,5 +158,47 @@ class OrderResource extends JsonResource
                     ->exists();
             }),
         ];
+    }
+
+    private function getLoadedKm(): ?float
+    {
+        if ($this->loaded_km !== null) {
+            return (float) $this->loaded_km;
+        }
+
+        $trip = $this->relationLoaded('trip') ? $this->trip : null;
+        if (! $trip && $this->trip_id) {
+            if ($this->relationLoaded('tripCheckpoints') && $this->tripCheckpoints->isNotEmpty()) {
+                $trip = $this->trip()->first();
+            }
+        }
+
+        if ($trip) {
+            $distances = app(TripLegService::class)->checkpointDistances($trip);
+            $orderCheckpointIds = $this->relationLoaded('tripCheckpoints')
+                ? $this->tripCheckpoints->pluck('id')->all()
+                : $this->tripCheckpoints()->pluck('id')->all();
+
+            $sum = 0.0;
+            foreach ($orderCheckpointIds as $cpId) {
+                if (isset($distances[$cpId]) && ! empty($distances[$cpId]['is_loaded'])) {
+                    $sum += (float) ($distances[$cpId]['distance_km'] ?? 0);
+                }
+            }
+
+            if ($sum > 0) {
+                return round($sum, 1);
+            }
+
+            if ($trip->relationLoaded('orders') ? $trip->orders->count() === 1 : $trip->orders()->count() === 1) {
+                $legs = app(TripLegService::class)->calculateLegs($trip);
+                $loadedLegsSum = array_sum(array_map(fn ($l) => $l['is_loaded'] ? $l['distance_km'] : 0, $legs));
+                if ($loadedLegsSum > 0) {
+                    return round($loadedLegsSum, 1);
+                }
+            }
+        }
+
+        return null;
     }
 }

@@ -21,6 +21,25 @@ class TripResource extends JsonResource
         $myEmpty = null;
         $isMultiDriver = false;
 
+        $legs = null;
+        if ($this->relationLoaded('checkpoints')) {
+            $legs = app(TripLegService::class)->calculateLegs($this->resource);
+        }
+
+        $totalKm = $this->total_km;
+        $totalKmLoaded = $this->total_km_loaded;
+        $totalKmEmpty = $this->total_km_empty;
+
+        // Fallback: khi chuyến đang chạy hoặc chưa tính hoàn tất, lấy số km tính từ legs OSRM / GPS
+        if ($totalKm === null && $legs !== null && ! empty($legs)) {
+            $legsTotal = (float) array_sum(array_column($legs, 'distance_km'));
+            if ($legsTotal > 0) {
+                $totalKm = round($legsTotal, 1);
+                $totalKmLoaded = round(array_sum(array_map(fn ($l) => $l['is_loaded'] ? $l['distance_km'] : 0, $legs)), 1);
+                $totalKmEmpty = round(max(0.0, $totalKm - $totalKmLoaded), 1);
+            }
+        }
+
         if ($user) {
             $userAssignments = $this->relationLoaded('driverAssignments')
                 ? $this->driverAssignments->where('driver_id', $user->id)
@@ -32,14 +51,24 @@ class TripResource extends JsonResource
 
             $isMultiDriver = $totalAssignmentsCount > 1;
 
-            if ($userAssignments->isNotEmpty()) {
+            if ($userAssignments->isNotEmpty() && $userAssignments->contains(fn ($a) => $a->km !== null)) {
                 $myKm = (float) $userAssignments->sum('km');
                 $myLoaded = (float) $userAssignments->sum('km_loaded');
                 $myEmpty = (float) $userAssignments->sum('km_empty');
+            } elseif ($legs !== null && ! empty($legs)) {
+                $userLegs = $isMultiDriver
+                    ? array_filter($legs, fn ($l) => ($l['driver_id'] ?? null) === $user->id)
+                    : $legs;
+                $userSum = (float) array_sum(array_column($userLegs, 'distance_km'));
+                if ($userSum > 0) {
+                    $myKm = round($userSum, 1);
+                    $myLoaded = round(array_sum(array_map(fn ($l) => $l['is_loaded'] ? $l['distance_km'] : 0, $userLegs)), 1);
+                    $myEmpty = round(max(0.0, $myKm - $myLoaded), 1);
+                }
             } elseif ((int) $this->driver_id === (int) $user->id) {
-                $myKm = $this->total_km !== null ? (float) $this->total_km : null;
-                $myLoaded = $this->total_km_loaded !== null ? (float) $this->total_km_loaded : null;
-                $myEmpty = $this->total_km_empty !== null ? (float) $this->total_km_empty : null;
+                $myKm = $totalKm;
+                $myLoaded = $totalKmLoaded;
+                $myEmpty = $totalKmEmpty;
             }
         }
 
@@ -54,9 +83,9 @@ class TripResource extends JsonResource
             'available_actions' => app(TripStateMachine::class)->availableActions($this->resource, $request->user()),
             'started_at' => $this->started_at?->toIso8601String(),
             'completed_at' => $this->completed_at?->toIso8601String(),
-            'total_km' => $this->total_km,
-            'total_km_loaded' => $this->total_km_loaded,
-            'total_km_empty' => $this->total_km_empty,
+            'total_km' => $totalKm,
+            'total_km_loaded' => $totalKmLoaded,
+            'total_km_empty' => $totalKmEmpty,
             'driver_km' => $myKm !== null ? round($myKm, 1) : null,
             'driver_km_loaded' => $myLoaded !== null ? round($myLoaded, 1) : null,
             'driver_km_empty' => $myEmpty !== null ? round($myEmpty, 1) : null,
@@ -89,7 +118,7 @@ class TripResource extends JsonResource
                 return TripCheckpointResource::collection($this->checkpoints);
             }),
 
-            'legs' => $this->when(
+            'legs' => $legs ?? $this->when(
                 $this->relationLoaded('checkpoints'),
                 fn () => app(TripLegService::class)->calculateLegs($this->resource)
             ),
