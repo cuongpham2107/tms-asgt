@@ -15,6 +15,9 @@
       },
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://tms-v2.asgl.net.vn/api/driver"
       }
     },
     "production": {
