@@ -301,18 +301,25 @@ export default function TripDetailScreen() {
         detail?.total_km_loaded ?? legsLoadedKm ?? trip?.total_km_loaded;
     const displayEmptyKm =
         detail?.total_km_empty ?? legsEmptyKm ?? trip?.total_km_empty;
+    const isMultiDriver = Boolean(detail?.is_multi_driver || isSwapped);
     const displayDriverKm =
-        detail?.driver_km != null && Number(detail.driver_km) > 0
+        detail?.driver_km != null
             ? detail.driver_km
             : (displayTotalKm ?? null);
     const displayDriverLoadedKm =
-        detail?.driver_km_loaded != null && Number(detail.driver_km_loaded) > 0
+        detail?.driver_km_loaded != null
             ? detail.driver_km_loaded
-            : (displayLoadedKm ?? null);
+            : (isMultiDriver && detail?.driver_km != null
+                ? detail.driver_km
+                : (displayLoadedKm ?? null));
     const displayDriverEmptyKm =
-        detail?.driver_km_empty != null && Number(detail.driver_km_empty) > 0
+        detail?.driver_km_empty != null
             ? detail.driver_km_empty
-            : (displayEmptyKm ?? null);
+            : (isMultiDriver
+                ? (detail?.driver_km != null && detail?.driver_km_loaded != null
+                    ? Math.max(0, Number(detail.driver_km) - Number(detail.driver_km_loaded))
+                    : 0)
+                : (displayEmptyKm ?? null));
 
     // Giả lập vị trí khi test: bắt đầu = điểm lấy của đơn đầu, kết thúc = điểm giao cuối của đơn cuối
     const startFakePoint = toFakePoint(
