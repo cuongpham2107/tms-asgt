@@ -19,8 +19,8 @@ class DriverShiftResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $firstTrip = $this->trips()->first();
-        $latestTrip = $this->trips()->latest('started_at')->first();
+        $firstTrip = $this->relationLoaded('trips') ? $this->trips->first() : $this->trips()->first();
+        $latestTrip = $this->relationLoaded('trips') ? $this->trips->sortByDesc('started_at')->first() : $this->trips()->latest('started_at')->first();
         $displayTrip = $latestTrip ?? $firstTrip;
 
         $totalKm = $this->total_km;
@@ -29,8 +29,14 @@ class DriverShiftResource extends JsonResource
 
         if ($totalKm === null) {
             $assignments = TripDriverAssignment::query()
-                ->where('shift_id', $this->id)
                 ->where('driver_id', $this->driver_id)
+                ->where(function ($q) {
+                    $q->where('shift_id', $this->id)
+                        ->orWhere(function ($sq) {
+                            $sq->where('started_at', '>=', $this->start_time)
+                                ->when($this->end_time, fn ($ssq) => $ssq->where('started_at', '<=', $this->end_time));
+                        });
+                })
                 ->with('trip')
                 ->get();
 

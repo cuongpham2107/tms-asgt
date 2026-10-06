@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EndShiftRequest;
 use App\Http\Requests\StartShiftRequest;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
+use App\Models\Trip;
 use App\Services\DriverShiftService;
 use App\Services\Trip\TripDriverService;
 use Carbon\Carbon;
@@ -121,6 +123,30 @@ class DriverShiftController extends Controller
             ->latest('start_time')
             ->first();
 
-        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')])) : null]);
+        if (! $shift) {
+            return response()->json(['shift' => null]);
+        }
+
+        $trips = Trip::query()
+            ->where('status', '!=', TripStatus::Cancelled->value)
+            ->where(function ($q) use ($shift) {
+                $q->where('shift_id', $shift->id)
+                    ->orWhereHas('driverAssignments', function ($aq) use ($shift) {
+                        $aq->where('driver_id', $shift->driver_id)
+                            ->where(function ($sq) use ($shift) {
+                                $sq->where('shift_id', $shift->id)
+                                    ->orWhere(function ($tsq) use ($shift) {
+                                        $tsq->where('started_at', '>=', $shift->start_time)
+                                            ->when($shift->end_time, fn ($esq) => $esq->where('started_at', '<=', $shift->end_time));
+                                    });
+                            });
+                    });
+            })
+            ->with(['vehicle', 'driverAssignments'])
+            ->get();
+
+        $shift->setRelation('trips', $trips);
+
+        return response()->json(['shift' => DriverShiftResource::make($shift->load('driver'))]);
     }
 }
