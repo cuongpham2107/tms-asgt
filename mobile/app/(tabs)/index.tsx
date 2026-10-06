@@ -274,38 +274,24 @@ export default function DashboardScreen() {
                   const nextAct = resolveNextAction(t, userId);
                   if (!nextAct) return null;
                   return (
-                    <View style={{
-                      marginTop: 10,
-                      backgroundColor: nextAct.bg,
-                      borderWidth: 1,
-                      borderColor: nextAct.color + "40",
-                      borderRadius: 10,
-                      padding: 8,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}>
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <Text style={{ fontSize: 10, fontWeight: "700", color: nextAct.color, letterSpacing: 0.5 }}>
-                          BƯỚC TIẾP THEO
-                        </Text>
-                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#1F2937" }} numberOfLines={1}>
+                    <View style={st.nextActionBanner}>
+                      <View style={{ flex: 1, marginRight: 10 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 3 }}>
+                          <View style={[st.nextActionDot, { backgroundColor: nextAct.color }]} />
+                          <Text style={[st.nextActionTag, { color: nextAct.color }]}>
+                            BƯỚC TIẾP THEO
+                          </Text>
+                        </View>
+                        <Text style={st.nextActionLabel} numberOfLines={1}>
                           {nextAct.label}
                         </Text>
                       </View>
-                      <View style={{
-                        backgroundColor: nextAct.color,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
-                        paddingHorizontal: 10,
-                        paddingVertical: 6,
-                        borderRadius: 8,
-                      }}>
-                        <Ionicons name={nextAct.icon as any} size={14} color="#fff" />
-                        <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>
+                      <View style={[st.nextActionBtn, { backgroundColor: nextAct.color }]}>
+                        <Ionicons name={nextAct.icon as any} size={13} color="#fff" />
+                        <Text style={st.nextActionBtnText}>
                           Cập nhật
                         </Text>
+                        <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.8)" />
                       </View>
                     </View>
                   );
@@ -367,6 +353,50 @@ const st = StyleSheet.create({
   gpsPillText: { fontSize: 13, fontWeight: "600" },
   startShiftBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4F46E5", paddingVertical: 14, borderRadius: 12, marginHorizontal: 16, marginTop: 8, marginBottom:8 },
   startShiftText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  nextActionBanner: {
+    marginTop: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  nextActionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  nextActionTag: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
+  nextActionLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  nextActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  nextActionBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   overtimeBanner: {
     flexDirection: "row",
     alignItems: "center",

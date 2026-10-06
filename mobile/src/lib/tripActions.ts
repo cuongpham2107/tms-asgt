@@ -49,7 +49,7 @@ export function resolveNextAction(trip: any, userId?: number | null): NextAction
             label: "Bắt đầu chuyến",
             sub: trip.vehicle?.plate_number ? `Xe ${trip.vehicle.plate_number}` : "Bắt đầu hành trình",
             icon: "play-circle",
-            color: "#10B981",
+            color: "#059669",
             bg: "#ECFDF5",
         };
     }
@@ -71,8 +71,8 @@ export function resolveNextAction(trip: any, userId?: number | null): NextAction
             label: `Đến lấy hàng (${pCode})`,
             sub: pLoc?.address || firstOrder?.pickup_address || "Đến kho nhận hàng",
             icon: "cube",
-            color: "#D97706",
-            bg: "#FEF3C7",
+            color: "#EA580C",
+            bg: "#FFF7ED",
             orderId: firstOrder?.id,
             targetLocation: pLoc,
             pointLabel: pCode,
