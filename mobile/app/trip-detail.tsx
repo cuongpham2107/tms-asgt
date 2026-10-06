@@ -13,7 +13,11 @@ import {
     Platform,
     Keyboard,
     Pressable,
+    Image,
+    ActivityIndicator,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { resolveNextAction, type NextAction } from "../src/lib/tripActions";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
@@ -99,6 +103,119 @@ export default function TripDetailScreen() {
     const [swapReason, setSwapReason] = useState<SwapReason>("shift_handover");
     const [swapNote, setSwapNote] = useState("");
     const [swapping, setSwapping] = useState(false);
+
+    // Quick action checkpoint modal
+    const [quickActionModal, setQuickActionModal] = useState<NextAction | null>(null);
+    const [quickPhotos, setQuickPhotos] = useState<string[]>([]);
+    const [quickNote, setQuickNote] = useState("");
+    const [submittingQuick, setSubmittingQuick] = useState(false);
+
+    const handleTakeQuickCamera = async () => {
+        try {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== "granted") {
+                showAlert("Quyền truy cập", "Cần cấp quyền camera để chụp ảnh");
+                return;
+            }
+            const res = await ImagePicker.launchCameraAsync({
+                allowsEditing: false,
+                quality: 0.7,
+            });
+            if (!res.canceled && res.assets?.[0]?.uri) {
+                setQuickPhotos((prev) => [...prev, res.assets[0].uri]);
+            }
+        } catch (e: any) {
+            const msg = String(e?.message || "");
+            if (
+                msg.toLowerCase().includes("simulator") ||
+                msg.toLowerCase().includes("not available") ||
+                msg.toLowerCase().includes("unavailable")
+            ) {
+                await handlePickQuickGallery();
+                return;
+            }
+            showAlert("Lỗi chụp ảnh", msg || "Không thể mở camera");
+        }
+    };
+
+    const handlePickQuickGallery = async () => {
+        try {
+            const res = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ["images"],
+                allowsEditing: false,
+                quality: 0.7,
+            });
+            if (!res.canceled && res.assets?.[0]?.uri) {
+                setQuickPhotos((prev) => [...prev, res.assets[0].uri]);
+            }
+        } catch (e: any) {
+            showAlert("Lỗi chọn ảnh", e?.message || "Không thể mở thư viện ảnh");
+        }
+    };
+
+    const handleActionPress = (act: NextAction) => {
+        if (!token) return;
+        if (!shift && act.type !== "started") {
+            showAlert("Cần vào ca", "Bạn cần vào ca trước khi thực hiện thao tác");
+            return;
+        }
+        if (act.type === "end") {
+            handleEnd();
+            return;
+        }
+        setQuickPhotos([]);
+        setQuickNote("");
+        setQuickActionModal(act);
+    };
+
+    const handleSubmitQuickAction = async () => {
+        if (!quickActionModal || !token || !tripId) return;
+        const act = quickActionModal;
+
+        setSubmittingQuick(true);
+        showLoading();
+        try {
+            await flushBeforeCheckpoint();
+            const fakeFallback = act.targetLocation
+                ? toFakePoint(act.pointLabel || act.label, act.targetLocation)
+                : (act.type === "started" ? startFakePoint : null);
+            const gps = await getCheckpointGps(fakeFallback);
+
+            const body: any = {
+                checkpoint_type: act.type,
+                occurred_at: localISO(),
+            };
+            if (gps) {
+                body.gps_lat = gps.gps_lat;
+                body.gps_lng = gps.gps_lng;
+            }
+            if (quickPhotos.length > 0) {
+                body.photos = quickPhotos;
+            }
+            if (quickNote.trim().length > 0) {
+                body.voice_note = quickNote.trim();
+            }
+            if (act.orderId) body.order_id = act.orderId;
+            if (act.deliveryPointId) {
+                body.delivery_point_id = act.deliveryPointId;
+            } else if (act.targetLocation?.id) {
+                body.new_delivery_location_id = act.targetLocation.id;
+            }
+
+            await api.trips.checkpoint(String(tripId), body, token);
+
+            showAlert("Thành công", `Đã cập nhật: ${act.label}`);
+            setQuickActionModal(null);
+            setQuickPhotos([]);
+            setQuickNote("");
+            await load();
+        } catch (e: any) {
+            showAlert("Lỗi cập nhật", e.message || "Không thể thực hiện");
+        } finally {
+            setSubmittingQuick(false);
+            hideLoading();
+        }
+    };
     const userId = user?.id || shift?.driver?.id;
 
     const fmt = formatKm;
@@ -137,6 +254,7 @@ export default function TripDetailScreen() {
     const isEmptyRun =
         (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true;
     const orders: any[] = detail?.orders || trip?.orders || [];
+    const nextAct = resolveNextAction(detail || trip, userId);
 
     // Giả lập vị trí khi test: bắt đầu = điểm lấy của đơn đầu, kết thúc = điểm giao cuối của đơn cuối
     const startFakePoint = toFakePoint(
@@ -169,31 +287,8 @@ export default function TripDetailScreen() {
                 body.gps_lng = gps.gps_lng;
             }
             await api.trips.checkpoint(String(tripId), body, token);
-            const updated = await load();
-            const currentOrders: any[] =
-                updated?.orders || detail?.orders || trip?.orders || [];
-            const targetOrder =
-                currentOrders.find((o: any) => o.status !== "completed") ||
-                currentOrders[0];
-            if (targetOrder) {
-                router.push({
-                    pathname: "/order-detail",
-                    params: {
-                        id: targetOrder.id,
-                        order: JSON.stringify({
-                            ...targetOrder,
-                            trip_id: tripId,
-                            vehicle:
-                                updated?.vehicle ||
-                                detail?.vehicle ||
-                                trip?.vehicle,
-                            is_swapped: isSwapped,
-                        }),
-                    },
-                });
-            } else {
-                showAlert("Thành công", "Đã bắt đầu chuyến");
-            }
+            await load();
+            showAlert("Thành công", "Đã bắt đầu chuyến");
         } catch (e: any) {
             const msg = e.message || "";
             const match = msg.match(/#(\d+)/);
@@ -726,35 +821,78 @@ export default function TripDetailScreen() {
                 <View style={{ height: 100 }} />
             </ScrollView>
 
-            {/* Sticky bottom — Đảo lái / Kết thúc chuyến (theo available_actions) */}
-            {(canSwap || canEnd) && (
+            {/* Sticky bottom — Cập nhật bước tiếp theo & Đảo lái */}
+            {(nextAct || canSwap || canEnd) && !isSwapped && (
                 <View style={[s.stickyBar, { flexDirection: "row", gap: 10 }]}>
                     {canSwap && (
                         <TouchableOpacity
                             style={[
                                 s.stickyBtn,
-                                { backgroundColor: "#4F46E5" },
+                                {
+                                    backgroundColor: "#F3F4F6",
+                                    flex: nextAct ? 0.8 : 1,
+                                    borderWidth: 1,
+                                    borderColor: "#E5E7EB",
+                                },
                             ]}
                             onPress={() => setShowSwapModal(true)}
-                            disabled={swapping}
+                            disabled={swapping || submittingQuick}
                             activeOpacity={0.8}
                         >
                             <Ionicons
                                 name="swap-horizontal"
-                                size={20}
-                                color="#fff"
+                                size={18}
+                                color="#4B5563"
                             />
-                            <Text style={s.stickyBtnText}>Đảo lái</Text>
+                            <Text style={[s.stickyBtnText, { color: "#374151" }]}>
+                                Đảo lái
+                            </Text>
                         </TouchableOpacity>
                     )}
-                    {canEnd && (
+                    {nextAct && (
                         <TouchableOpacity
                             style={[
                                 s.stickyBtn,
-                                { backgroundColor: "#DC2626" },
+                                {
+                                    backgroundColor: nextAct.color,
+                                    flex: canSwap ? 2.2 : 1,
+                                },
+                            ]}
+                            onPress={() => handleActionPress(nextAct)}
+                            disabled={starting || completing || submittingQuick}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons
+                                name={(nextAct.icon as any) || "cube"}
+                                size={20}
+                                color="#fff"
+                            />
+                            <View style={{ alignItems: "center" }}>
+                                <Text style={s.stickyBtnText} numberOfLines={1}>
+                                    {nextAct.label}
+                                </Text>
+                                {nextAct.multiOrderCount && nextAct.multiOrderCount > 1 ? (
+                                    <Text
+                                        style={{
+                                            fontSize: 10,
+                                            color: "rgba(255,255,255,0.9)",
+                                            fontWeight: "600",
+                                        }}
+                                    >
+                                        ({nextAct.multiOrderCount} đơn cùng điểm)
+                                    </Text>
+                                ) : null}
+                            </View>
+                        </TouchableOpacity>
+                    )}
+                    {!nextAct && canEnd && (
+                        <TouchableOpacity
+                            style={[
+                                s.stickyBtn,
+                                { backgroundColor: "#DC2626", flex: canSwap ? 2.2 : 1 },
                             ]}
                             onPress={handleEnd}
-                            disabled={completing}
+                            disabled={completing || submittingQuick}
                             activeOpacity={0.8}
                         >
                             <Ionicons name="flag" size={20} color="#fff" />
@@ -767,6 +905,147 @@ export default function TripDetailScreen() {
                     )}
                 </View>
             )}
+
+            {/* Modal Cập nhật nhanh bước tiếp theo */}
+            <Modal
+                visible={!!quickActionModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setQuickActionModal(null)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === "ios" ? "padding" : undefined}
+                    style={s.modalOverlayCenter}
+                >
+                    <Pressable
+                        style={s.modalBackdrop}
+                        onPress={() => setQuickActionModal(null)}
+                    />
+                    <View style={s.quickModalCard}>
+                        {/* Header */}
+                        <View style={s.quickModalHeader}>
+                            <View
+                                style={[
+                                    s.quickModalIconWrap,
+                                    { backgroundColor: quickActionModal?.bg || "#EEF2FF" },
+                                ]}
+                            >
+                                <Ionicons
+                                    name={(quickActionModal?.icon as any) || "cube"}
+                                    size={22}
+                                    color={quickActionModal?.color || "#4F46E5"}
+                                />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.quickModalTitle}>
+                                    {quickActionModal?.label}
+                                </Text>
+                                {quickActionModal?.sub ? (
+                                    <Text style={s.quickModalSub} numberOfLines={2}>
+                                        {quickActionModal.sub}
+                                    </Text>
+                                ) : null}
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setQuickActionModal(null)}
+                                hitSlop={12}
+                                style={s.quickModalCloseBtn}
+                            >
+                                <Ionicons name="close" size={20} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Multi-order notice */}
+                        {quickActionModal?.multiOrderCount && quickActionModal.multiOrderCount > 1 ? (
+                            <View style={s.multiOrderNoticeBox}>
+                                <Ionicons name="layers" size={16} color="#0369A1" />
+                                <Text style={s.multiOrderNoticeText}>
+                                    Cùng điểm: áp dụng cho {quickActionModal.multiOrderCount} đơn (
+                                    {quickActionModal.orderCodes?.join(", ")})
+                                </Text>
+                            </View>
+                        ) : null}
+
+                        {/* Photo row */}
+                        <Text style={s.quickSectionLabel}>HÌNH ẢNH XÁC THỰC</Text>
+                        <View style={s.quickPhotoRow}>
+                            <TouchableOpacity
+                                style={s.quickAddPhotoBtn}
+                                activeOpacity={0.7}
+                                onPress={handleTakeQuickCamera}
+                            >
+                                <Ionicons name="camera" size={22} color="#4F46E5" />
+                                <Text style={s.quickAddPhotoText}>Chụp ảnh</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[
+                                    s.quickAddPhotoBtn,
+                                    { backgroundColor: "#F8FAFC", borderColor: "#CBD5E1" },
+                                ]}
+                                activeOpacity={0.7}
+                                onPress={handlePickQuickGallery}
+                            >
+                                <Ionicons name="images" size={22} color="#64748B" />
+                                <Text style={[s.quickAddPhotoText, { color: "#64748B" }]}>Thư viện</Text>
+                            </TouchableOpacity>
+
+                            {quickPhotos.map((uri, idx) => (
+                                <View key={idx} style={s.quickThumbWrap}>
+                                    <Image source={{ uri }} style={s.quickThumb} />
+                                    <TouchableOpacity
+                                        style={s.quickThumbRemove}
+                                        onPress={() =>
+                                            setQuickPhotos((prev) => prev.filter((_, i) => i !== idx))
+                                        }
+                                    >
+                                        <Ionicons name="close" size={12} color="#fff" />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Notes */}
+                        <Text style={s.quickSectionLabel}>GHI CHÚ (KHÔNG BẮT BUỘC)</Text>
+                        <TextInput
+                            style={s.quickNoteInput}
+                            placeholder="Ghi chú thêm nếu có..."
+                            placeholderTextColor="#94A3B8"
+                            value={quickNote}
+                            onChangeText={setQuickNote}
+                            multiline
+                            numberOfLines={3}
+                        />
+
+                        {/* Buttons */}
+                        <View style={s.quickBtnRow}>
+                            <TouchableOpacity
+                                style={s.quickCancelBtn}
+                                onPress={() => setQuickActionModal(null)}
+                                disabled={submittingQuick}
+                            >
+                                <Text style={s.quickCancelText}>Huỷ</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    s.quickSubmitBtn,
+                                    { backgroundColor: quickActionModal?.color || "#4F46E5" },
+                                    submittingQuick && { opacity: 0.7 },
+                                ]}
+                                activeOpacity={0.85}
+                                onPress={handleSubmitQuickAction}
+                                disabled={submittingQuick}
+                            >
+                                {submittingQuick ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={s.quickSubmitText}>Xác nhận gửi</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
 
             {/* Modal Đảo lái */}
             <Modal
@@ -1187,5 +1466,180 @@ const s = StyleSheet.create({
     legSourceText: {
         fontSize: 11,
         color: "#9CA3AF",
+    },
+    modalOverlayCenter: {
+        flex: 1,
+        backgroundColor: "rgba(15, 23, 42, 0.5)",
+        justifyContent: "center",
+        alignItems: "center",
+        paddingHorizontal: 16,
+    },
+    modalBackdrop: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    quickModalCard: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 20,
+        padding: 20,
+        width: "100%",
+        maxWidth: 390,
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 24,
+        elevation: 8,
+    },
+    quickModalHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 14,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F1F5F9",
+    },
+    quickModalIconWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    quickModalTitle: {
+        fontSize: 16,
+        fontWeight: "800",
+        color: "#0F172A",
+        letterSpacing: -0.2,
+    },
+    quickModalSub: {
+        fontSize: 12,
+        color: "#64748B",
+        marginTop: 2,
+    },
+    quickModalCloseBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "#F1F5F9",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    multiOrderNoticeBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        backgroundColor: "#E0F2FE",
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        marginBottom: 14,
+    },
+    multiOrderNoticeText: {
+        fontSize: 12,
+        color: "#0369A1",
+        fontWeight: "600",
+        flex: 1,
+    },
+    quickSectionLabel: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#64748B",
+        marginBottom: 8,
+        letterSpacing: 0.5,
+    },
+    quickPhotoRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 16,
+        flexWrap: "wrap",
+    },
+    quickAddPhotoBtn: {
+        width: 72,
+        height: 72,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: "#C7D2FE",
+        borderStyle: "dashed",
+        backgroundColor: "#EEF2FF",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+    },
+    quickAddPhotoText: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#4F46E5",
+    },
+    quickThumbWrap: {
+        position: "relative",
+    },
+    quickThumb: {
+        width: 72,
+        height: 72,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+    },
+    quickThumbRemove: {
+        position: "absolute",
+        top: -5,
+        right: -5,
+        backgroundColor: "#EF4444",
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    quickNoteInput: {
+        borderRadius: 12,
+        backgroundColor: "#F8FAFC",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        padding: 12,
+        fontSize: 14,
+        color: "#0F172A",
+        minHeight: 74,
+        textAlignVertical: "top",
+        marginBottom: 18,
+    },
+    quickBtnRow: {
+        flexDirection: "row",
+        gap: 10,
+    },
+    quickCancelBtn: {
+        flex: 1,
+        height: 46,
+        borderRadius: 12,
+        backgroundColor: "#F1F5F9",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    quickCancelText: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#475569",
+    },
+    quickSubmitBtn: {
+        flex: 1.6,
+        height: 46,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.18,
+        shadowRadius: 5,
+        elevation: 3,
+    },
+    quickSubmitText: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#FFFFFF",
     },
 });

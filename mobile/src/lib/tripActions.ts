@@ -1,9 +1,3 @@
-/**
- * Helper xác định hành động chốt chặng tiếp theo của Chuyến xe.
- * Phục vụ trải nghiệm "1-Tap Cockpit" — tài xế cập nhật trực tiếp
- * mà không cần phải chuyển màn hình lồng nhau.
- */
-
 export interface NextAction {
     type: "started" | "arrived_pickup" | "left_pickup" | "arrived_delivery" | "completed" | "end";
     label: string;
@@ -22,6 +16,23 @@ export interface NextAction {
         lng?: number | string;
     };
     pointLabel?: string;
+    multiOrderCount?: number;
+    orderCodes?: string[];
+}
+
+interface PhysicalDeliveryStop {
+    key: string;
+    sequence: number;
+    locationId?: number;
+    locationCode?: string;
+    locationName?: string;
+    location?: any;
+    address?: string;
+    orderIds: number[];
+    orderCodes: string[];
+    deliveryPointIds: number[];
+    allCompleted: boolean;
+    anyArrived: boolean;
 }
 
 export function resolveNextAction(trip: any, userId?: number | null): NextAction | null {
@@ -54,11 +65,28 @@ export function resolveNextAction(trip: any, userId?: number | null): NextAction
         };
     }
 
+    // Chuyến không hàng
+    if (trip.is_empty_run && (!trip.orders || trip.orders.length === 0)) {
+        const checkpoints: any[] = trip.checkpoints || [];
+        const hasEnd = checkpoints.some((cp) => cp.checkpoint_type === "end");
+        if (!hasEnd && trip.status !== "completed") {
+            return {
+                type: "end",
+                label: "Kết thúc xe",
+                sub: "Hoàn thành chuyến không hàng",
+                icon: "flag",
+                color: "#DC2626",
+                bg: "#FEF2F2",
+            };
+        }
+        return null;
+    }
+
     const checkpoints: any[] = trip.checkpoints || [];
     const orders: any[] = trip.orders || [];
     const firstOrder = orders[0];
 
-    // 2. Chuyến đã bắt đầu -> Kiểm tra đã Đến lấy hàng chưa
+    // 2. Chuyến đã bắt đầu -> Kiểm tra đã Đến lấy hàng chưa (áp dụng cho toàn bộ đơn trong chuyến)
     const hasArrivedPickup = checkpoints.some(
         (cp) => cp.checkpoint_type === "arrived_pickup"
     );
@@ -66,16 +94,19 @@ export function resolveNextAction(trip: any, userId?: number | null): NextAction
     if (trip.status === "started" || !hasArrivedPickup) {
         const pLoc = firstOrder?.pickup_location;
         const pCode = pLoc?.code || pLoc?.name || "Điểm lấy hàng";
+        const multiNote = orders.length > 1 ? `${orders.length} đơn cùng điểm đi • ` : "";
         return {
             type: "arrived_pickup",
             label: `Đến lấy hàng (${pCode})`,
-            sub: pLoc?.address || firstOrder?.pickup_address || "Đến kho nhận hàng",
+            sub: `${multiNote}${pLoc?.address || firstOrder?.pickup_address || "Đến kho nhận hàng"}`,
             icon: "cube",
             color: "#EA580C",
             bg: "#FFF7ED",
             orderId: firstOrder?.id,
             targetLocation: pLoc,
             pointLabel: pCode,
+            multiOrderCount: orders.length,
+            orderCodes: orders.map((o: any) => o.order_code).filter(Boolean),
         };
     }
 
@@ -87,29 +118,37 @@ export function resolveNextAction(trip: any, userId?: number | null): NextAction
     if (trip.status === "arrived_pickup" || !hasLeftPickup) {
         const pLoc = firstOrder?.pickup_location;
         const pCode = pLoc?.code || pLoc?.name || "Điểm lấy hàng";
+        const multiNote = orders.length > 1 ? `${orders.length} đơn hàng • ` : "";
         return {
             type: "left_pickup",
             label: `Rời lấy hàng (${pCode})`,
-            sub: "Đã bốc hàng xong, xuất phát giao hàng",
+            sub: `${multiNote}Đã bốc hàng xong, xuất phát giao hàng`,
             icon: "arrow-forward-circle",
             color: "#4F46E5",
             bg: "#EEF2FF",
             orderId: firstOrder?.id,
             targetLocation: pLoc,
             pointLabel: pCode,
+            multiOrderCount: orders.length,
+            orderCodes: orders.map((o: any) => o.order_code).filter(Boolean),
         };
     }
 
-    // 4. Đang đi giao hàng (hoặc sau khi đã rời lấy hàng)
-    // Duyệt qua các điểm giao hàng theo trình tự
-    for (const order of orders) {
+    // 4. Trả hàng: Gom nhóm các điểm trả hàng vật lý (hỗ trợ nhiều điểm giao & nhiều đơn cùng điểm trả)
+    const stopMap: Record<string, PhysicalDeliveryStop> = {};
+
+    for (let oIdx = 0; oIdx < orders.length; oIdx++) {
+        const order = orders[oIdx];
         const dps: any[] = order.delivery_points || [];
+
         if (dps.length > 0) {
-            const sortedDps = [...dps].sort(
-                (a, b) => (a.sequence || 0) - (b.sequence || 0)
-            );
-            for (const dp of sortedDps) {
-                const isCompleted =
+            for (const dp of dps) {
+                const locId = dp.location_id || dp.location?.id;
+                // Nếu cùng location_id thì gộp chung vào 1 điểm dừng vật lý (Samsung YP, Foxconn...)
+                const stopKey = locId ? `loc_${locId}` : `dp_${dp.id}`;
+                const seq = Number(dp.sequence ?? (oIdx * 10 + 1));
+
+                const isDpCompleted =
                     dp.status === "delivered" ||
                     dp.status === "completed" ||
                     checkpoints.some(
@@ -118,48 +157,55 @@ export function resolveNextAction(trip: any, userId?: number | null): NextAction
                             Number(cp.delivery_point_id) === Number(dp.id)
                     );
 
-                if (!isCompleted) {
-                    const hasArrived = checkpoints.some(
+                const isDpArrived =
+                    dp.status === "arrived" ||
+                    isDpCompleted ||
+                    checkpoints.some(
                         (cp) =>
                             cp.checkpoint_type === "arrived_delivery" &&
                             Number(cp.delivery_point_id) === Number(dp.id)
                     );
-                    const dpCode =
-                        dp.location?.code || dp.code || `Điểm ${dp.sequence || 1}`;
-                    const loc = dp.location;
 
-                    if (!hasArrived) {
-                        return {
-                            type: "arrived_delivery",
-                            label: `Đến giao hàng (${dpCode})`,
-                            sub: dp.address || loc?.name || loc?.address || "Đến điểm giao hàng",
-                            icon: "location",
-                            color: "#3B82F6",
-                            bg: "#EFF6FF",
-                            orderId: order.id,
-                            deliveryPointId: dp.id,
-                            targetLocation: loc,
-                            pointLabel: dpCode,
-                        };
-                    } else {
-                        return {
-                            type: "completed",
-                            label: `Hoàn thành giao (${dpCode})`,
-                            sub: loc?.name || dp.address || "Đã giao hàng xong",
-                            icon: "checkmark-circle",
-                            color: "#10B981",
-                            bg: "#ECFDF5",
-                            orderId: order.id,
-                            deliveryPointId: dp.id,
-                            targetLocation: loc,
-                            pointLabel: dpCode,
-                        };
+                if (!stopMap[stopKey]) {
+                    const loc = dp.location;
+                    stopMap[stopKey] = {
+                        key: stopKey,
+                        sequence: seq,
+                        locationId: locId,
+                        locationCode: loc?.code || dp.code || `Điểm ${seq}`,
+                        locationName: loc?.name || dp.name,
+                        location: loc,
+                        address: dp.address || loc?.address || loc?.name,
+                        orderIds: [order.id],
+                        orderCodes: order.order_code ? [order.order_code] : [],
+                        deliveryPointIds: [dp.id],
+                        allCompleted: isDpCompleted,
+                        anyArrived: isDpArrived,
+                    };
+                } else {
+                    const s = stopMap[stopKey];
+                    if (!s.orderIds.includes(order.id)) {
+                        s.orderIds.push(order.id);
+                        if (order.order_code) s.orderCodes.push(order.order_code);
                     }
+                    if (!s.deliveryPointIds.includes(dp.id)) {
+                        s.deliveryPointIds.push(dp.id);
+                    }
+                    s.sequence = Math.min(s.sequence, seq);
+                    // Cùng điểm dừng: coi là completed nếu TẤT CẢ các điểm trong nhóm đã hoàn thành
+                    s.allCompleted = s.allCompleted && isDpCompleted;
+                    // Coi là arrived nếu bất kỳ điểm nào trong nhóm đã đến
+                    s.anyArrived = s.anyArrived || isDpArrived;
                 }
             }
         } else {
-            // Đơn không chia nhỏ delivery_points
-            const isCompleted =
+            // Đơn không có delivery_points con -> dùng destination_location của đơn
+            const loc = order.destination_location;
+            const locId = order.destination_location_id || loc?.id;
+            const stopKey = locId ? `loc_${locId}` : `ord_${order.id}`;
+            const seq = (oIdx + 1) * 10;
+
+            const isOrdCompleted =
                 order.status === "completed" ||
                 checkpoints.some(
                     (cp) =>
@@ -167,58 +213,99 @@ export function resolveNextAction(trip: any, userId?: number | null): NextAction
                         Number(cp.order_id) === Number(order.id)
                 );
 
-            if (!isCompleted) {
-                const hasArrived = checkpoints.some(
+            const isOrdArrived =
+                isOrdCompleted ||
+                checkpoints.some(
                     (cp) =>
                         cp.checkpoint_type === "arrived_delivery" &&
                         Number(cp.order_id) === Number(order.id)
                 );
-                const destCode =
-                    order.destination_location?.code ||
-                    order.code ||
-                    `Đơn #${order.id}`;
 
-                if (!hasArrived) {
-                    return {
-                        type: "arrived_delivery",
-                        label: `Đến giao hàng (${destCode})`,
-                        sub:
-                            order.delivery_address ||
-                            order.destination_location?.address ||
-                            "Đến điểm giao",
-                        icon: "location",
-                        color: "#3B82F6",
-                        bg: "#EFF6FF",
-                        orderId: order.id,
-                        targetLocation: order.destination_location,
-                        pointLabel: destCode,
-                    };
-                } else {
-                    return {
-                        type: "completed",
-                        label: `Hoàn thành giao (${destCode})`,
-                        sub:
-                            order.destination_location?.name ||
-                            "Đã giao hàng xong",
-                        icon: "checkmark-circle",
-                        color: "#10B981",
-                        bg: "#ECFDF5",
-                        orderId: order.id,
-                        targetLocation: order.destination_location,
-                        pointLabel: destCode,
-                    };
+            if (!stopMap[stopKey]) {
+                stopMap[stopKey] = {
+                    key: stopKey,
+                    sequence: seq,
+                    locationId: locId,
+                    locationCode: loc?.code || order.order_code || `Đơn #${order.id}`,
+                    locationName: loc?.name || order.delivery_address,
+                    location: loc,
+                    address: order.delivery_address || loc?.address || loc?.name,
+                    orderIds: [order.id],
+                    orderCodes: order.order_code ? [order.order_code] : [],
+                    deliveryPointIds: [],
+                    allCompleted: isOrdCompleted,
+                    anyArrived: isOrdArrived,
+                };
+            } else {
+                const s = stopMap[stopKey];
+                if (!s.orderIds.includes(order.id)) {
+                    s.orderIds.push(order.id);
+                    if (order.order_code) s.orderCodes.push(order.order_code);
                 }
+                s.sequence = Math.min(s.sequence, seq);
+                s.allCompleted = s.allCompleted && isOrdCompleted;
+                s.anyArrived = s.anyArrived || isOrdArrived;
             }
+        }
+    }
+
+    // Sắp xếp các điểm dừng theo sequence tăng dần
+    const sortedStops = Object.values(stopMap).sort((a, b) => a.sequence - b.sequence);
+
+    // Tìm điểm dừng chưa hoàn thành đầu tiên
+    const nextStop = sortedStops.find((s) => !s.allCompleted);
+
+    if (nextStop) {
+        const stopLabel = nextStop.locationCode || nextStop.locationName || "Điểm giao";
+        const hasMultipleOrdersAtStop = nextStop.orderIds.length > 1;
+        const multiOrderPrefix = hasMultipleOrdersAtStop
+            ? `${nextStop.orderIds.length} đơn cùng điểm trả (${nextStop.orderCodes.join(", ")}) • `
+            : "";
+
+        if (!nextStop.anyArrived) {
+            return {
+                type: "arrived_delivery",
+                label: `Đến giao hàng (${stopLabel})`,
+                sub: `${multiOrderPrefix}${nextStop.address || "Đến điểm giao hàng"}`,
+                icon: "location",
+                color: "#3B82F6",
+                bg: "#EFF6FF",
+                orderId: nextStop.orderIds[0],
+                deliveryPointId: nextStop.deliveryPointIds[0],
+                targetLocation: nextStop.location,
+                pointLabel: stopLabel,
+                multiOrderCount: nextStop.orderIds.length,
+                orderCodes: nextStop.orderCodes,
+            };
+        } else {
+            return {
+                type: "completed",
+                label: `Hoàn thành giao (${stopLabel})`,
+                sub: hasMultipleOrdersAtStop
+                    ? `Xác nhận giao xong ${nextStop.orderIds.length} đơn (${nextStop.orderCodes.join(", ")})`
+                    : (nextStop.locationName || nextStop.address || "Đã giao hàng xong"),
+                icon: "checkmark-circle",
+                color: "#10B981",
+                bg: "#ECFDF5",
+                orderId: nextStop.orderIds[0],
+                deliveryPointId: nextStop.deliveryPointIds[0],
+                targetLocation: nextStop.location,
+                pointLabel: stopLabel,
+                multiOrderCount: nextStop.orderIds.length,
+                orderCodes: nextStop.orderCodes,
+            };
         }
     }
 
     // 5. Đã giao hết các điểm -> Kết thúc xe
     const hasEnd = checkpoints.some((cp) => cp.checkpoint_type === "end");
-    if (!hasEnd) {
+    if (!hasEnd && trip.status !== "completed") {
         return {
             type: "end",
             label: "Kết thúc xe",
-            sub: "Hoàn thành toàn bộ chuyến đi",
+            sub: orders.length > 1
+                ? `Hoàn thành toàn bộ lộ trình (${orders.length} đơn hàng)`
+                : "Hoàn thành toàn bộ chuyến đi",
             icon: "flag",
             color: "#DC2626",
             bg: "#FEF2F2",
