@@ -25,7 +25,7 @@ class TripGpsMapConfig
 
     private const PALETTE = ['#2563eb', '#16a34a', '#db2777', '#ea580c', '#7c3aed', '#0891b2'];
 
-    private const MAX_DOTS_PER_DRIVER = 300;
+    private const MAX_DOTS_PER_DRIVER = 40;
 
     /** @var Collection<int, VehicleGpsPoint>|null */
     private ?Collection $cachedPoints = null;
