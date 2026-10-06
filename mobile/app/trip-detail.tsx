@@ -538,9 +538,7 @@ export default function TripDetailScreen() {
                             </Text>
                         </View>
                     )}
-                    {(canStart || canEnd) && (
-                        <FakeLocationPicker points={fakePoints} />
-                    )}
+
                     {canStart && (
                         <TouchableOpacity
                             style={[

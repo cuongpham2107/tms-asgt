@@ -5,8 +5,8 @@ import { Platform } from "react-native";
 //   EXPO_PUBLIC_API_URL=local            → iOS simulator: localhost:8000, Android emulator: 10.0.2.2:8000
 //   EXPO_PUBLIC_API_URL=http://192.168.x.x:8000/api/driver   → máy thật cùng mạng Wi-Fi
 const PRODUCTION_API = Platform.select({
-    ios: "https://tms.asgl.net.vn/api/driver",
-    default: "http://tms.asgl.net.vn/api/driver",
+    ios: "https://tms-v2.asgl.net.vn/api/driver",
+    default: "https://tms-v2.asgl.net.vn/api/driver",
 });
 
 const LOCAL_API = Platform.select({
@@ -224,7 +224,7 @@ export interface GpsPoint {
     mocked: boolean;
 }
 
-export const PRIVACY_POLICY_URL = "https://tms.asgl.net.vn/privacy-policy";
+export const PRIVACY_POLICY_URL = "https://tms-v2.asgl.net.vn/privacy-policy";
 
 // ─── Type helpers ────────────────────────────────────────────────────
 
