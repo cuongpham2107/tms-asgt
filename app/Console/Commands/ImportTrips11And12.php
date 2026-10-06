@@ -158,6 +158,12 @@ class ImportTrips11And12 extends Command
 
                 $tripData = $tr;
                 unset($tripData['id']);
+                if (! empty($tripData['started_at'])) {
+                    $tripData['started_at'] = Carbon::parse($tripData['started_at'])->format('Y-m-d H:i:s');
+                }
+                if (! empty($tripData['completed_at'])) {
+                    $tripData['completed_at'] = Carbon::parse($tripData['completed_at'])->format('Y-m-d H:i:s');
+                }
                 $tripData['vehicle_id'] = $vehicleIdMap[$tr['vehicle_id']] ?? $tr['vehicle_id'];
                 $tripData['driver_id'] = $driverIdMap[$tr['driver_id']] ?? $tr['driver_id'];
 
@@ -178,77 +184,86 @@ class ImportTrips11And12 extends Command
                 }
             }
 
-            // 6. Xoá & nạp lại lượt lái (assignments)
+            // Xoá toàn bộ checkpoints, assignments, legs cũ của các chuyến để tránh nhân bản hoặc lệch thứ tự
+            foreach ($data['trips'] as $tr) {
+                $tId = $tripIdMap[$tr['id']] ?? null;
+                if ($tId) {
+                    TripCheckpoint::where('trip_id', $tId)->delete();
+                    TripDriverAssignment::where('trip_id', $tId)->delete();
+                    TripLeg::where('trip_id', $tId)->delete();
+                }
+            }
+
+            // 6. Nạp lại lượt lái (assignments) theo đúng thứ tự thời gian
             foreach ($data['assignments'] as $asgn) {
                 $newTripId = $tripIdMap[$asgn['trip_id']] ?? $asgn['trip_id'];
                 $newDriverId = $driverIdMap[$asgn['driver_id']] ?? $asgn['driver_id'];
-                $newShiftId = $shiftIdMap[$asgn['shift_id']] ?? $asgn['shift_id'];
+                $newShiftId = ! empty($asgn['shift_id']) ? ($shiftIdMap[$asgn['shift_id']] ?? $asgn['shift_id']) : null;
 
-                TripDriverAssignment::updateOrCreate(
-                    [
-                        'trip_id' => $newTripId,
-                        'driver_id' => $newDriverId,
-                        'started_at' => $asgn['started_at'],
-                    ],
-                    [
-                        'shift_id' => $newShiftId,
-                        'ended_at' => $asgn['ended_at'],
-                        'km' => $asgn['km'],
-                        'km_loaded' => $asgn['km_loaded'],
-                        'km_empty' => $asgn['km_empty'],
-                    ]
-                );
+                TripDriverAssignment::create([
+                    'trip_id' => $newTripId,
+                    'driver_id' => $newDriverId,
+                    'shift_id' => $newShiftId,
+                    'started_at' => Carbon::parse($asgn['started_at'])->format('Y-m-d H:i:s'),
+                    'ended_at' => ! empty($asgn['ended_at']) ? Carbon::parse($asgn['ended_at'])->format('Y-m-d H:i:s') : null,
+                    'end_reason' => $asgn['end_reason'] ?? null,
+                    'note' => $asgn['note'] ?? null,
+                    'km' => $asgn['km'],
+                    'km_loaded' => $asgn['km_loaded'],
+                    'km_empty' => $asgn['km_empty'],
+                ]);
             }
 
-            // 7. Xoá & nạp lại Checkpoints
+            // 7. Nạp lại Checkpoints theo đúng trình tự thời gian xảy ra (occurred_at ASC)
+            $cpIdMap = [];
             foreach ($data['checkpoints'] as $cp) {
                 $newTripId = $tripIdMap[$cp['trip_id']] ?? $cp['trip_id'];
                 $newOrderId = ! empty($cp['order_id']) ? ($orderIdMap[$cp['order_id']] ?? $cp['order_id']) : null;
                 $newDpId = ! empty($cp['delivery_point_id']) ? ($dpIdMap[$cp['delivery_point_id']] ?? $cp['delivery_point_id']) : null;
                 $newDriverId = ! empty($cp['driver_id']) ? ($driverIdMap[$cp['driver_id']] ?? $cp['driver_id']) : null;
                 $newShiftId = ! empty($cp['shift_id']) ? ($shiftIdMap[$cp['shift_id']] ?? $cp['shift_id']) : null;
+                $occurredAt = Carbon::parse($cp['occurred_at'])->format('Y-m-d H:i:s');
 
-                TripCheckpoint::updateOrCreate(
-                    [
-                        'trip_id' => $newTripId,
-                        'checkpoint_type' => $cp['checkpoint_type'],
-                        'occurred_at' => $cp['occurred_at'],
-                    ],
-                    [
-                        'order_id' => $newOrderId,
-                        'delivery_point_id' => $newDpId,
-                        'driver_id' => $newDriverId,
-                        'shift_id' => $newShiftId,
-                        'gps_lat' => $cp['gps_lat'],
-                        'gps_lng' => $cp['gps_lng'],
-                        'voice_note' => $cp['voice_note'] ?? null,
-                    ]
-                );
+                $newCp = TripCheckpoint::create([
+                    'trip_id' => $newTripId,
+                    'checkpoint_type' => $cp['checkpoint_type'],
+                    'occurred_at' => $occurredAt,
+                    'order_id' => $newOrderId,
+                    'delivery_point_id' => $newDpId,
+                    'driver_id' => $newDriverId,
+                    'shift_id' => $newShiftId,
+                    'gps_lat' => $cp['gps_lat'],
+                    'gps_lng' => $cp['gps_lng'],
+                    'voice_note' => $cp['voice_note'] ?? null,
+                    'created_at' => ! empty($cp['created_at']) ? Carbon::parse($cp['created_at'])->format('Y-m-d H:i:s') : $occurredAt,
+                ]);
+
+                $cpIdMap[$cp['id']] = $newCp->id;
             }
 
-            // 8. Xoá & nạp lại Legs
+            // 8. Nạp lại Legs (liên kết chuẩn checkpoint_id theo thứ tự mới)
             foreach ($data['legs'] as $leg) {
                 $newTripId = $tripIdMap[$leg['trip_id']] ?? $leg['trip_id'];
                 $newDriverId = ! empty($leg['driver_id']) ? ($driverIdMap[$leg['driver_id']] ?? $leg['driver_id']) : null;
 
-                TripLeg::updateOrCreate(
-                    [
-                        'trip_id' => $newTripId,
-                        'leg_index' => $leg['leg_index'],
-                    ],
-                    [
-                        'driver_id' => $newDriverId,
-                        'from_name' => $leg['from_name'],
-                        'to_name' => $leg['to_name'],
-                        'from_time' => $leg['from_time'],
-                        'to_time' => $leg['to_time'],
-                        'distance_km' => $leg['distance_km'],
-                        'distance_adjusted_km' => $leg['distance_adjusted_km'],
-                        'is_loaded' => $leg['is_loaded'],
-                        'source' => $leg['source'] ?? 'gps',
-                        'adjust_reason' => $leg['adjust_reason'],
-                    ]
-                );
+                TripLeg::create([
+                    'trip_id' => $newTripId,
+                    'leg_index' => $leg['leg_index'],
+                    'driver_id' => $newDriverId,
+                    'from_checkpoint_id' => $cpIdMap[$leg['from_checkpoint_id']] ?? null,
+                    'to_checkpoint_id' => $cpIdMap[$leg['to_checkpoint_id']] ?? null,
+                    'from_name' => $leg['from_name'],
+                    'to_name' => $leg['to_name'],
+                    'from_time' => ! empty($leg['from_time']) ? Carbon::parse($leg['from_time'])->format('Y-m-d H:i:s') : null,
+                    'to_time' => ! empty($leg['to_time']) ? Carbon::parse($leg['to_time'])->format('Y-m-d H:i:s') : null,
+                    'distance_km' => $leg['distance_km'],
+                    'distance_adjusted_km' => $leg['distance_adjusted_km'],
+                    'is_loaded' => $leg['is_loaded'],
+                    'source' => $leg['source'] ?? 'phone_gps',
+                    'adjusted_by' => $leg['adjusted_by'] ?? null,
+                    'adjust_reason' => $leg['adjust_reason'] ?? null,
+                    'adjusted_at' => ! empty($leg['adjusted_at']) ? Carbon::parse($leg['adjusted_at'])->format('Y-m-d H:i:s') : null,
+                ]);
             }
 
             // 9. Nạp toạ độ GPS (VehicleGpsPoint)
