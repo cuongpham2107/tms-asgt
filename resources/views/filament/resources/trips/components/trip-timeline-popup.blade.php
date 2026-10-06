@@ -117,7 +117,7 @@
 
         return new Illuminate\Support\HtmlString($html);
     };
-    $mapConfig = new \App\Support\TripGpsMapConfig($trip);
+    $mapConfig = new \App\Support\TripGpsMapConfig($trip, 720);
 @endphp
 
 <div x-data="{ tab: 'timeline' }">

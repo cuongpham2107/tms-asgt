@@ -30,7 +30,7 @@ class TripGpsMapConfig
     /** @var Collection<int, VehicleGpsPoint>|null */
     private ?Collection $cachedPoints = null;
 
-    public function __construct(private readonly Trip $trip)
+    public function __construct(private readonly Trip $trip, private readonly int $height = 720)
     {
         $this->trip->loadMissing(['driverAssignments.driver', 'checkpoints']);
     }
@@ -119,7 +119,7 @@ class TripGpsMapConfig
 
     protected function getMapHeight(): int
     {
-        return 520;
+        return $this->height;
     }
 
     protected function getFitBounds(): bool
