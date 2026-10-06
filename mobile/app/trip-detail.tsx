@@ -17,7 +17,13 @@ import {
     ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { resolveNextAction, type NextAction } from "../src/lib/tripActions";
+import {
+    resolveNextAction,
+    getPhysicalDeliveryStops,
+    createActionForDeliveryStop,
+    type NextAction,
+    type PhysicalDeliveryStop,
+} from "../src/lib/tripActions";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
@@ -255,6 +261,7 @@ export default function TripDetailScreen() {
         (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true;
     const orders: any[] = detail?.orders || trip?.orders || [];
     const nextAct = resolveNextAction(detail || trip, userId);
+    const deliveryStops = getPhysicalDeliveryStops(detail || trip);
 
     // Giả lập vị trí khi test: bắt đầu = điểm lấy của đơn đầu, kết thúc = điểm giao cuối của đơn cuối
     const startFakePoint = toFakePoint(
@@ -807,6 +814,121 @@ export default function TripDetailScreen() {
                                     <Text style={s.orderKm}>
                                         📏 Km có hàng: {fmt(o.loaded_km)} km
                                     </Text>
+
+                                    {/* Danh sách các điểm giao của đơn */}
+                                    {(o.delivery_points || []).length > 0 && (
+                                        <View style={s.orderDpList}>
+                                            {o.delivery_points.map((dp: any, dpIdx: number) => {
+                                                const loc = dp.location;
+                                                const dpCode =
+                                                    loc?.code ||
+                                                    dp.code ||
+                                                    `Điểm ${dp.sequence || dpIdx + 1}`;
+                                                const dpDone =
+                                                    dp.status === "delivered" ||
+                                                    dp.status === "completed" ||
+                                                    (detail?.checkpoints || trip?.checkpoints || []).some(
+                                                        (cp: any) =>
+                                                            cp.checkpoint_type === "completed" &&
+                                                            Number(cp.delivery_point_id) === Number(dp.id),
+                                                    );
+                                                const dpArrived =
+                                                    dpDone ||
+                                                    dp.status === "arrived" ||
+                                                    (detail?.checkpoints || trip?.checkpoints || []).some(
+                                                        (cp: any) =>
+                                                            cp.checkpoint_type === "arrived_delivery" &&
+                                                            Number(cp.delivery_point_id) === Number(dp.id),
+                                                    );
+
+                                                return (
+                                                    <View key={dp.id || dpIdx} style={s.orderDpRow}>
+                                                        <View style={s.orderDpDot}>
+                                                            <Text style={s.orderDpSeq}>
+                                                                {dp.sequence || dpIdx + 1}
+                                                            </Text>
+                                                        </View>
+                                                        <View style={{ flex: 1, marginRight: 8 }}>
+                                                            <Text style={s.orderDpName} numberOfLines={1}>
+                                                                {dpCode}
+                                                            </Text>
+                                                            <Text style={s.orderDpAddr} numberOfLines={1}>
+                                                                {dp.address || loc?.address || loc?.name || "Điểm giao"}
+                                                            </Text>
+                                                        </View>
+                                                        {dpDone ? (
+                                                            <View style={s.dpStatusDoneBadge}>
+                                                                <Ionicons
+                                                                    name="checkmark-circle"
+                                                                    size={13}
+                                                                    color="#059669"
+                                                                />
+                                                                <Text style={s.dpStatusDoneText}>Đã giao</Text>
+                                                            </View>
+                                                        ) : (
+                                                            <TouchableOpacity
+                                                                style={[
+                                                                    s.dpUpdateBtn,
+                                                                    {
+                                                                        backgroundColor: dpArrived
+                                                                            ? "#10B981"
+                                                                            : "#3B82F6",
+                                                                    },
+                                                                ]}
+                                                                onPress={(e) => {
+                                                                    e.stopPropagation?.();
+                                                                    const locId = dp.location_id || loc?.id;
+                                                                    const stop = deliveryStops.find(
+                                                                        (st) =>
+                                                                            (locId && st.locationId === locId) ||
+                                                                            st.deliveryPointIds.includes(dp.id),
+                                                                    );
+                                                                    if (stop) {
+                                                                        handleActionPress(
+                                                                            createActionForDeliveryStop(stop),
+                                                                        );
+                                                                    } else {
+                                                                        handleActionPress({
+                                                                            type: dpArrived
+                                                                                ? "completed"
+                                                                                : "arrived_delivery",
+                                                                            label: dpArrived
+                                                                                ? `Hoàn thành giao (${dpCode})`
+                                                                                : `Đến giao hàng (${dpCode})`,
+                                                                            sub: dp.address || loc?.name,
+                                                                            icon: dpArrived
+                                                                                ? "checkmark-circle"
+                                                                                : "location",
+                                                                            color: dpArrived
+                                                                                ? "#10B981"
+                                                                                : "#3B82F6",
+                                                                            bg: dpArrived
+                                                                                ? "#ECFDF5"
+                                                                                : "#EFF6FF",
+                                                                            orderId: o.id,
+                                                                            deliveryPointId: dp.id,
+                                                                            targetLocation: loc,
+                                                                            pointLabel: dpCode,
+                                                                        });
+                                                                    }
+                                                                }}
+                                                                activeOpacity={0.8}
+                                                            >
+                                                                <Ionicons
+                                                                    name={dpArrived ? "checkmark" : "location"}
+                                                                    size={12}
+                                                                    color="#fff"
+                                                                />
+                                                                <Text style={s.dpUpdateBtnText}>
+                                                                    {dpArrived ? "Giao xong" : "Đến giao"}
+                                                                </Text>
+                                                            </TouchableOpacity>
+                                                        )}
+                                                    </View>
+                                                );
+                                            })}
+                                        </View>
+                                    )}
                                 </View>
                                 <Ionicons
                                     name="chevron-forward"
@@ -954,6 +1076,125 @@ export default function TripDetailScreen() {
                                 <Ionicons name="close" size={20} color="#64748B" />
                             </TouchableOpacity>
                         </View>
+
+                        {/* Bộ chọn điểm giao hàng (khi có nhiều hơn 1 điểm và đang ở bước giao hàng) */}
+                        {(quickActionModal?.type === "arrived_delivery" || quickActionModal?.type === "completed") &&
+                            deliveryStops.length > 1 && (
+                                <View style={{ marginBottom: 14 }}>
+                                    <Text style={s.quickSectionLabel}>
+                                        CHỌN ĐIỂM GIAO ({deliveryStops.length} ĐIỂM)
+                                    </Text>
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+                                    >
+                                        {deliveryStops.map((stop) => {
+                                            const isSelected = quickActionModal.stopKey === stop.key;
+                                            const isDone = stop.allCompleted;
+                                            const statusText = isDone
+                                                ? "Đã giao"
+                                                : stop.anyArrived
+                                                  ? "Đã đến"
+                                                  : "Chờ giao";
+                                            const statusBg = isDone
+                                                ? "#D1FAE5"
+                                                : stop.anyArrived
+                                                  ? "#FEF3C7"
+                                                  : "#F1F5F9";
+                                            const statusColor = isDone
+                                                ? "#059669"
+                                                : stop.anyArrived
+                                                  ? "#D97706"
+                                                  : "#64748B";
+
+                                            return (
+                                                <TouchableOpacity
+                                                    key={stop.key}
+                                                    style={[
+                                                        s.stopChip,
+                                                        isSelected && s.stopChipSelected,
+                                                        isDone && { opacity: 0.6 },
+                                                    ]}
+                                                    onPress={() => {
+                                                        if (isDone) {
+                                                            showAlert(
+                                                                "Đã hoàn thành",
+                                                                "Điểm giao này đã được giao xong",
+                                                            );
+                                                            return;
+                                                        }
+                                                        const newAct = createActionForDeliveryStop(stop);
+                                                        setQuickActionModal(newAct);
+                                                    }}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <View
+                                                        style={{
+                                                            flexDirection: "row",
+                                                            alignItems: "center",
+                                                            gap: 6,
+                                                            marginBottom: 3,
+                                                        }}
+                                                    >
+                                                        <Ionicons
+                                                            name={
+                                                                isSelected
+                                                                    ? "radio-button-on"
+                                                                    : "radio-button-off"
+                                                            }
+                                                            size={15}
+                                                            color={isSelected ? "#4F46E5" : "#94A3B8"}
+                                                        />
+                                                        <Text
+                                                            style={[
+                                                                s.stopChipName,
+                                                                isSelected && {
+                                                                    color: "#4F46E5",
+                                                                    fontWeight: "700",
+                                                                },
+                                                            ]}
+                                                            numberOfLines={1}
+                                                        >
+                                                            {stop.locationCode ||
+                                                                stop.locationName ||
+                                                                `Điểm ${stop.sequence}`}
+                                                        </Text>
+                                                    </View>
+                                                    <View
+                                                        style={{
+                                                            flexDirection: "row",
+                                                            alignItems: "center",
+                                                            gap: 5,
+                                                        }}
+                                                    >
+                                                        <View
+                                                            style={[
+                                                                s.stopStatusPill,
+                                                                { backgroundColor: statusBg },
+                                                            ]}
+                                                        >
+                                                            <Text
+                                                                style={[
+                                                                    s.stopStatusText,
+                                                                    { color: statusColor },
+                                                                ]}
+                                                            >
+                                                                {statusText}
+                                                            </Text>
+                                                        </View>
+                                                        {stop.orderIds.length > 1 && (
+                                                            <Text style={s.stopMultiText}>
+                                                                {stop.orderIds.length} đơn
+                                                            </Text>
+                                                        )}
+                                                    </View>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </ScrollView>
+                                </View>
+                            )}
 
                         {/* Multi-order notice */}
                         {quickActionModal?.multiOrderCount && quickActionModal.multiOrderCount > 1 ? (
@@ -1639,6 +1880,102 @@ const s = StyleSheet.create({
     },
     quickSubmitText: {
         fontSize: 14,
+        fontWeight: "700",
+        color: "#FFFFFF",
+    },
+    stopChip: {
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#F8FAFC",
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        minWidth: 125,
+    },
+    stopChipSelected: {
+        borderColor: "#4F46E5",
+        backgroundColor: "#EEF2FF",
+    },
+    stopChipName: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#1E293B",
+    },
+    stopStatusPill: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    stopStatusText: {
+        fontSize: 10,
+        fontWeight: "700",
+    },
+    stopMultiText: {
+        fontSize: 10,
+        color: "#64748B",
+        fontWeight: "600",
+    },
+    orderDpList: {
+        marginTop: 10,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: "#F1F5F9",
+        gap: 6,
+    },
+    orderDpRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#F8FAFC",
+        padding: 8,
+        borderRadius: 10,
+    },
+    orderDpDot: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: "#EEF2FF",
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: 8,
+    },
+    orderDpSeq: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#4F46E5",
+    },
+    orderDpName: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: "#1E293B",
+    },
+    orderDpAddr: {
+        fontSize: 11,
+        color: "#64748B",
+    },
+    dpStatusDoneBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 3,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        backgroundColor: "#ECFDF5",
+    },
+    dpStatusDoneText: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#059669",
+    },
+    dpUpdateBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+    },
+    dpUpdateBtnText: {
+        fontSize: 11,
         fontWeight: "700",
         color: "#FFFFFF",
     },
