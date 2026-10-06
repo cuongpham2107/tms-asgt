@@ -204,7 +204,10 @@ export default function TripDetailScreen() {
             if (act.orderId) body.order_id = act.orderId;
             if (act.deliveryPointId) {
                 body.delivery_point_id = act.deliveryPointId;
-            } else if (act.targetLocation?.id) {
+            } else if (
+                (act.type === "arrived_delivery" || act.type === "completed") &&
+                act.targetLocation?.id
+            ) {
                 body.new_delivery_location_id = act.targetLocation.id;
             }
 
