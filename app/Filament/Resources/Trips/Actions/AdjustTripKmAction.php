@@ -6,12 +6,14 @@ use App\Models\Trip;
 use App\Models\TripLeg;
 use App\Services\Trip\TripLegService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 
 /**
@@ -39,22 +41,32 @@ class AdjustTripKmAction
                 $legService = app(TripLegService::class);
                 if ($record->exists) {
                     $legService->syncLegs($record);
-                    $record->loadMissing('legs');
+                    $record->load(['legs.driver', 'legs.toCheckpoint.driver', 'driver']);
                 }
 
                 $legsData = $record->legs->map(fn (TripLeg $l) => [
                     'id' => $l->id,
                     'leg_index' => $l->leg_index,
                     'route' => sprintf('Chặng %d: %s ➔ %s', $l->leg_index, $l->from_name, $l->to_name),
+                    'driver_name' => $l->driver?->name ?? $l->toCheckpoint?->driver?->name ?? $record->driver?->name ?? '—',
+                    'is_loaded' => (bool) $l->is_loaded,
                     'is_loaded_label' => $l->is_loaded ? 'Có hàng' : 'Xe rỗng',
                     'original_km' => number_format((float) $l->distance_km, 1, ',', '.').' km',
+                    'distance_km' => (float) $l->distance_km,
                     'distance_adjusted_km' => $l->distance_adjusted_km !== null ? (float) $l->distance_adjusted_km : null,
                     'adjust_reason' => $l->adjust_reason,
                 ])->toArray();
 
+                $totalKm = $record->km_adjusted ?? $record->total_km;
+                $loadedKm = $record->km_adjusted_loaded ?? $record->total_km_loaded;
+                $emptyKm = ($totalKm !== null && $loadedKm !== null)
+                    ? round(max(0, (float) $totalKm - (float) $loadedKm), 1)
+                    : ($record->total_km_empty !== null ? (float) $record->total_km_empty : null);
+
                 return [
-                    'km_adjusted' => $record->km_adjusted ?? $record->total_km,
-                    'km_adjusted_loaded' => $record->km_adjusted_loaded ?? $record->total_km_loaded,
+                    'km_adjusted' => $totalKm,
+                    'km_adjusted_loaded' => $loadedKm,
+                    'km_adjusted_empty' => $emptyKm,
                     'km_adjust_reason' => $record->km_adjust_reason,
                     'legs' => $legsData,
                 ];
@@ -70,10 +82,18 @@ class AdjustTripKmAction
                             ->deletable(false)
                             ->reorderable(false)
                             ->schema([
+                                Hidden::make('id'),
+                                Hidden::make('leg_index'),
+                                Hidden::make('is_loaded'),
+                                Hidden::make('distance_km'),
                                 TextInput::make('route')
                                     ->label('Chặng')
                                     ->disabled()
-                                    ->columnSpan(5),
+                                    ->columnSpan(4),
+                                TextInput::make('driver_name')
+                                    ->label('Tài xế')
+                                    ->disabled()
+                                    ->columnSpan(2),
                                 TextInput::make('is_loaded_label')
                                     ->label('Tải')
                                     ->disabled()
@@ -87,7 +107,11 @@ class AdjustTripKmAction
                                     ->numeric()
                                     ->minValue(0)
                                     ->placeholder('Giữ nguyên')
-                                    ->columnSpan(3),
+                                    ->columnSpan(2)
+                                    ->live(debounce: 500)
+                                    ->afterStateUpdated(function (Get $get, Set $set): void {
+                                        self::recalculateTotalsFromLegs($get, $set);
+                                    }),
                             ])
                             ->columns(12)
                             ->compact(),
@@ -99,19 +123,44 @@ class AdjustTripKmAction
                             ->label('Tổng km')
                             ->numeric()
                             ->minValue(0)
-                            ->required(),
+                            ->required()
+                            ->live(debounce: 500)
+                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state): void {
+                                if (is_numeric($state) && is_numeric($get('km_adjusted_loaded'))) {
+                                    $set('km_adjusted_empty', round(max(0, (float) $state - (float) $get('km_adjusted_loaded')), 1));
+                                }
+                            }),
                         TextInput::make('km_adjusted_loaded')
                             ->label('Km có hàng')
                             ->numeric()
                             ->minValue(0)
                             ->maxValue(fn (Get $get): ?float => is_numeric($get('km_adjusted')) ? (float) $get('km_adjusted') : null)
-                            ->required(),
+                            ->required()
+                            ->live(debounce: 500)
+                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state): void {
+                                if (is_numeric($state) && is_numeric($get('km_adjusted'))) {
+                                    $set('km_adjusted_empty', round(max(0, (float) $get('km_adjusted') - (float) $state), 1));
+                                }
+                            }),
+                        TextInput::make('km_adjusted_empty')
+                            ->label('Km không hàng')
+                            ->numeric()
+                            ->minValue(0)
+                            ->placeholder('Tự tính')
+                            ->live(debounce: 500)
+                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state): void {
+                                if ($state !== null && $state !== '' && is_numeric($state)) {
+                                    $loaded = is_numeric($get('km_adjusted_loaded')) ? (float) $get('km_adjusted_loaded') : 0.0;
+                                    $set('km_adjusted', round($loaded + (float) $state, 1));
+                                }
+                            }),
                         Textarea::make('km_adjust_reason')
                             ->label('Lý do điều chỉnh')
                             ->rows(2)
-                            ->required(),
+                            ->required()
+                            ->columnSpanFull(),
                     ])
-                    ->columns(2),
+                    ->columns(3),
             ])
             ->action(function (Trip $record, array $data): void {
                 $reason = $data['km_adjust_reason'];
@@ -143,5 +192,40 @@ class AdjustTripKmAction
 
                 Notification::make()->success()->title('Đã điều chỉnh km chuyến và các chặng')->send();
             });
+    }
+
+    public static function recalculateTotalsFromLegs(Get $get, Set $set): void
+    {
+        $legs = $get('../../legs');
+
+        if (empty($legs) || ! is_array($legs)) {
+            return;
+        }
+
+        $totalKm = 0.0;
+        $loadedKm = 0.0;
+
+        foreach ($legs as $leg) {
+            $adj = $leg['distance_adjusted_km'] ?? null;
+            $orig = isset($leg['distance_km']) && is_numeric($leg['distance_km'])
+                ? (float) $leg['distance_km']
+                : (float) str_replace([',', ' km'], ['.', ''], (string) ($leg['original_km'] ?? '0'));
+            $isLoaded = ! empty($leg['is_loaded']) || (($leg['is_loaded_label'] ?? '') === 'Có hàng');
+
+            $effective = ($adj !== null && $adj !== '' && is_numeric($adj))
+                ? (float) $adj
+                : $orig;
+
+            $totalKm += $effective;
+            if ($isLoaded) {
+                $loadedKm += $effective;
+            }
+        }
+
+        $emptyKm = round(max(0, $totalKm - $loadedKm), 1);
+
+        $set('../../km_adjusted', round($totalKm, 1));
+        $set('../../km_adjusted_loaded', round($loadedKm, 1));
+        $set('../../km_adjusted_empty', $emptyKm);
     }
 }

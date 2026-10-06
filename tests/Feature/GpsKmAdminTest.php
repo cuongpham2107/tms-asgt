@@ -5,6 +5,7 @@ use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
+use App\Filament\Resources\Trips\Actions\AdjustTripKmAction;
 use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Models\Area;
 use App\Models\Customer;
@@ -19,6 +20,9 @@ use App\Models\VehicleGpsPoint;
 use App\Services\Gps\TripTrack;
 use App\Services\Trip\TripLegService;
 use Carbon\CarbonImmutable;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Features\SupportTesting\Testable;
@@ -195,4 +199,66 @@ test('dispatchers are alerted once when a running trip stops sending GPS', funct
 
     expect($this->admin->notifications()->count())->toBe(1)
         ->and($driver->notifications()->count())->toBe(0);
+});
+
+test('recalculateTotalsFromLegs updates total and loaded km live from repeater state', function () {
+    $stateValues = [];
+    $mockSet = new class($stateValues) extends Set
+    {
+        public function __construct(private array &$stateValues) {}
+
+        public function __invoke(string|Component $path, mixed $state, bool $isAbsolute = false, bool $shouldCallUpdatedHooks = false): mixed
+        {
+            $this->stateValues[(string) $path] = $state;
+
+            return null;
+        }
+    };
+
+    $legsState = [
+        [
+            'id' => 1,
+            'leg_index' => 1,
+            'is_loaded' => false,
+            'distance_km' => 10.0,
+            'distance_adjusted_km' => 15.0, // Chặng rỗng điều chỉnh từ 10 lên 15
+        ],
+        [
+            'id' => 2,
+            'leg_index' => 2,
+            'is_loaded' => true,
+            'distance_km' => 20.0,
+            'distance_adjusted_km' => null, // Giữ nguyên gốc 20
+        ],
+        [
+            'id' => 3,
+            'leg_index' => 3,
+            'is_loaded' => true,
+            'distance_km' => 30.0,
+            'distance_adjusted_km' => 25.5, // Chặng có hàng điều chỉnh từ 30 xuống 25.5
+        ],
+    ];
+
+    $mockGet = new class($legsState) extends Get
+    {
+        public function __construct(private array $legs) {}
+
+        public function __invoke(string|Component|null $path = null, bool $isAbsolute = false): mixed
+        {
+            if ($path === '../../legs') {
+                return $this->legs;
+            }
+
+            return null;
+        }
+    };
+
+    AdjustTripKmAction::recalculateTotalsFromLegs($mockGet, $mockSet);
+
+    // Tổng km = 15.0 + 20.0 + 25.5 = 60.5
+    // Km có hàng = 20.0 + 25.5 = 45.5
+    // Km không hàng = 60.5 - 45.5 = 15.0
+    expect($stateValues['../../km_adjusted'])->toBe(60.5)
+        ->and($stateValues['../../km_adjusted_loaded'])->toBe(45.5)
+        ->and($stateValues['../../km_adjusted_empty'])->toBe(15.0);
 });
