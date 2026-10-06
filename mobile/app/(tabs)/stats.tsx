@@ -1,4 +1,4 @@
-import { formatKm } from "../../src/lib/format";
+import { formatKm, formatTripTime } from "../../src/lib/format";
 import { useState, useMemo, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -32,13 +32,17 @@ export default function StatsScreen() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  const toLocalDateStr = (d: Date): string => {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
   const getPeriodDates = (period: string) => {
     const now = new Date();
-    const to = now.toISOString().slice(0, 10);
+    const to = toLocalDateStr(now);
     if (period === "today") return { from: to, to };
     if (period === "week") {
       const d = new Date(now); d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1));
-      return { from: d.toISOString().slice(0, 10), to };
+      return { from: toLocalDateStr(d), to };
     }
     if (period === "month") {
       const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
@@ -53,7 +57,7 @@ export default function StatsScreen() {
     return history.filter((t: any) => {
       const d = t.completed_at || t.started_at || t.created_at;
       if (!d) return true;
-      const date = new Date(d).toISOString().slice(0, 10);
+      const date = toLocalDateStr(new Date(d));
       return date >= from! && date <= to!;
     });
   }, [history, activePeriod]);
@@ -207,9 +211,9 @@ export default function StatsScreen() {
                       </View>
                     </View>
                     {(() => {
-                      const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
-                      if (loadingTimes.length === 0) return null;
-                      return <Text style={s.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
+                      const timeStr = formatTripTime(t);
+                      if (!timeStr) return null;
+                      return <Text style={s.loadingTime}>🕐 Cập nhật: {timeStr}</Text>;
                     })()}
                   </View>
                   <View style={{ alignItems: "flex-end" }}>

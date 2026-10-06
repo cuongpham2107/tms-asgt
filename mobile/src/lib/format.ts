@@ -10,3 +10,17 @@ export const formatKm = (v: any): string => {
     if (isNaN(n)) return "—";
     return n.toFixed(1);
 };
+
+/**
+ * Lấy mốc thời gian cập nhật/hoạt động gần nhất của chuyến đi
+ */
+export const formatTripTime = (t: any): string | null => {
+    if (!t) return null;
+    const times = [t.completed_at, t.updated_at, t.started_at, t.created_at]
+        .filter(Boolean)
+        .map((d: string) => new Date(d).getTime())
+        .filter((ms: number) => !isNaN(ms));
+    if (times.length === 0) return null;
+    const d = new Date(Math.max(...times));
+    return d.toLocaleString("vi-VN");
+};

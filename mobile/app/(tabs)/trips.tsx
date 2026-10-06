@@ -1,4 +1,4 @@
-import { formatKm } from "../../src/lib/format";
+import { formatKm, formatTripTime } from "../../src/lib/format";
 import { useState, useMemo, useCallback } from "react";
 import {
     View,
@@ -587,16 +587,11 @@ export default function TripsScreen() {
                                 📏 {fmt(item.driver_km ?? item.total_km)} km
                             </Text>
                             {(() => {
-                                const loadingTimes = (item.orders || [])
-                                    .map((o: any) => o.planned_loading_at)
-                                    .filter(Boolean);
-                                if (loadingTimes.length === 0) return null;
+                                const timeStr = formatTripTime(item);
+                                if (!timeStr) return null;
                                 return (
                                     <Text style={s.loadingTime}>
-                                        🕐 Đóng hàng:{" "}
-                                        {new Date(
-                                            loadingTimes[0],
-                                        ).toLocaleString("vi-VN")}
+                                        🕐 Cập nhật: {timeStr}
                                     </Text>
                                 );
                             })()}

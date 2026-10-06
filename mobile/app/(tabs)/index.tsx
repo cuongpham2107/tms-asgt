@@ -1,5 +1,5 @@
 import { resolveNextAction } from "../../src/lib/tripActions";
-import { formatKm } from "../../src/lib/format";
+import { formatKm, formatTripTime } from "../../src/lib/format";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -280,9 +280,9 @@ export default function DashboardScreen() {
                   📏 {fmt(t.driver_km ?? t.total_km)} km
                 </Text>
                 {(() => {
-                  const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
-                  if (loadingTimes.length === 0) return null;
-                  return <Text style={st.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
+                  const timeStr = formatTripTime(t);
+                  if (!timeStr) return null;
+                  return <Text style={st.loadingTime}>🕐 Cập nhật: {timeStr}</Text>;
                 })()}
                 {(() => {
                   if (!isCurrent || isSwapped) return null;
