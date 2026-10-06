@@ -1,3 +1,4 @@
+import { resolveNextAction } from "../../src/lib/tripActions";
 import { formatKm } from "../../src/lib/format";
 import { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
@@ -53,12 +54,12 @@ const statusColors: Record<string, { bg: string; text: string }> = {
 };
 
 export default function DashboardScreen() {
-  const { token, shift: authShift, setShift } = useAuth();
+  const { token, shift: authShift, setShift, user } = useAuth();
   const router = useRouter();
   const [trips, setTrips] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [shift, setShiftState] = useState<any>(authShift);
-  const userId = shift?.driver?.id;
+  const userId = user?.id || shift?.driver?.id;
 
   useEffect(() => {
     if (authShift) setShiftState(authShift);
@@ -267,6 +268,47 @@ export default function DashboardScreen() {
                   const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
                   if (loadingTimes.length === 0) return null;
                   return <Text style={st.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
+                })()}
+                {(() => {
+                  if (!isCurrent || isSwapped) return null;
+                  const nextAct = resolveNextAction(t, userId);
+                  if (!nextAct) return null;
+                  return (
+                    <View style={{
+                      marginTop: 10,
+                      backgroundColor: nextAct.bg,
+                      borderWidth: 1,
+                      borderColor: nextAct.color + "40",
+                      borderRadius: 10,
+                      padding: 8,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: nextAct.color, letterSpacing: 0.5 }}>
+                          BƯỚC TIẾP THEO
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#1F2937" }} numberOfLines={1}>
+                          {nextAct.label}
+                        </Text>
+                      </View>
+                      <View style={{
+                        backgroundColor: nextAct.color,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                      }}>
+                        <Ionicons name={nextAct.icon as any} size={14} color="#fff" />
+                        <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>
+                          Cập nhật
+                        </Text>
+                      </View>
+                    </View>
+                  );
                 })()}
               </View>
               <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />

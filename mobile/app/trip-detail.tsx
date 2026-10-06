@@ -1,5 +1,7 @@
+import { resolveNextAction, type NextAction } from "../src/lib/tripActions";
+import * as ImagePicker from "expo-image-picker";
 import { formatKm } from "../src/lib/format";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
     View,
     Text,
@@ -13,6 +15,7 @@ import {
     Platform,
     Keyboard,
     Pressable,
+    Image,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
@@ -100,6 +103,10 @@ export default function TripDetailScreen() {
     const [swapNote, setSwapNote] = useState("");
     const [swapping, setSwapping] = useState(false);
     const userId = user?.id || shift?.driver?.id;
+    const [actionSubmitting, setActionSubmitting] = useState(false);
+    const [actionPhotos, setActionPhotos] = useState<string[]>([]);
+    const [actionNote, setActionNote] = useState("");
+    const [showNoteModal, setShowNoteModal] = useState(false);
 
     const fmt = formatKm;
 
@@ -152,6 +159,125 @@ export default function TripDetailScreen() {
     const fakePoints = [startFakePoint, endFakePoint].filter(
         (p): p is FakePoint => p !== null,
     );
+
+    const allFakePoints = useMemo(() => {
+        const pts: FakePoint[] = [];
+        orders.forEach((o: any) => {
+            if (o.pickup_location) {
+                const p = toFakePoint(
+                    `Lấy: ${o.pickup_location.code || "Kho lấy"}`,
+                    o.pickup_location,
+                );
+                if (p && !pts.some((x) => x.lat === p.lat && x.lng === p.lng)) {
+                    pts.push(p);
+                }
+            }
+            (o.delivery_points || []).forEach((dp: any) => {
+                const loc = dp.location;
+                if (loc) {
+                    const p = toFakePoint(
+                        `Giao: ${loc.code || dp.code || `Điểm ${dp.sequence}`}`,
+                        loc,
+                    );
+                    if (p && !pts.some((x) => x.lat === p.lat && x.lng === p.lng)) {
+                        pts.push(p);
+                    }
+                }
+            });
+        });
+        return pts.length > 0 ? pts : fakePoints;
+    }, [orders, fakePoints]);
+
+    const nextAction = resolveNextAction(detail || trip, userId);
+
+    const handlePickPhoto = async () => {
+        try {
+            const { status } =
+                await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== "granted") {
+                showAlert("Quyền truy cập", "Cần cấp quyền camera để chụp ảnh");
+                return;
+            }
+            const res = await ImagePicker.launchCameraAsync({
+                allowsEditing: false,
+                quality: 0.7,
+            });
+            if (!res.canceled && res.assets?.[0]?.uri) {
+                setActionPhotos((prev) => [...prev, res.assets[0].uri]);
+            }
+        } catch (e: any) {
+            showAlert("Lỗi chụp ảnh", e.message || "Không thể mở camera");
+        }
+    };
+
+    const handleExecuteNextAction = async (act: NextAction) => {
+        if (!tripId || !token) return;
+
+        if (!shift && act.type !== "started") {
+            showAlert("Cần vào ca", "Bạn cần vào ca trước khi thực hiện thao tác");
+            return;
+        }
+
+        if (act.type === "end") {
+            showDestructiveConfirm(
+                "Kết thúc xe",
+                "Bạn có chắc chắn muốn kết thúc xe và hoàn thành chuyến đi?",
+                async () => {
+                    await doSubmitCheckpoint(act);
+                },
+            );
+            return;
+        }
+
+        await doSubmitCheckpoint(act);
+    };
+
+    const doSubmitCheckpoint = async (act: NextAction) => {
+        if (!token || !tripId) return;
+        setActionSubmitting(true);
+        showLoading();
+        try {
+            await flushBeforeCheckpoint();
+
+            const fakeFallback = act.targetLocation
+                ? toFakePoint(act.pointLabel || act.label, act.targetLocation)
+                : null;
+            const gps = await getCheckpointGps(fakeFallback);
+
+            const body: any = {
+                checkpoint_type: act.type,
+                occurred_at: localISO(),
+            };
+            if (gps) {
+                body.gps_lat = gps.gps_lat;
+                body.gps_lng = gps.gps_lng;
+            }
+            if (actionNote.trim()) body.voice_note = actionNote.trim();
+            if (actionPhotos.length > 0) body.photos = actionPhotos;
+            if (act.orderId) body.order_id = act.orderId;
+            if (act.deliveryPointId) body.delivery_point_id = act.deliveryPointId;
+
+            await api.trips.checkpoint(String(tripId), body, token);
+            showAlert("Thành công", `Đã cập nhật: ${act.label}`);
+            setActionNote("");
+            setActionPhotos([]);
+            setShowNoteModal(false);
+            await load();
+        } catch (e: any) {
+            const msg = e.message || "";
+            const match = msg.match(/#(\d+)/);
+            showAlert("Không thể cập nhật", msg, () => {
+                if (match)
+                    router.push({
+                        pathname: "/trip-detail",
+                        params: { id: match[1] },
+                    });
+            });
+        } finally {
+            setActionSubmitting(false);
+            hideLoading();
+        }
+    };
 
     const handleStart = async () => {
         if (!tripId || !token) return;
@@ -378,36 +504,155 @@ export default function TripDetailScreen() {
                             </Text>
                         </View>
                     )}
-                    {(canStart || canEnd) && (
-                        <FakeLocationPicker points={fakePoints} />
+                    {/* Fake location picker khi test */}
+                    {allFakePoints.length > 0 && (
+                        <FakeLocationPicker points={allFakePoints} />
                     )}
-                    {canStart && (
-                        <TouchableOpacity
-                            style={[
-                                s.actionBtn,
-                                { backgroundColor: "#10B981", marginTop: 12 },
-                            ]}
-                            onPress={handleStart}
-                            disabled={starting}
-                        >
-                            <Ionicons
-                                name="play-circle"
-                                size={20}
-                                color="#fff"
-                            />
-                            <Text style={s.actionBtnText}>
-                                {starting ? "Đang xử lý..." : "Bắt đầu chuyến"}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-                    {!canStart && !shift && (
+                    {!shift && currentStatus !== "completed" && (
                         <View style={s.warnBox}>
                             <Text style={s.warnText}>
-                                Bạn cần vào ca trước khi bắt đầu chuyến.
+                                Bạn cần vào ca trước khi thao tác chuyến.
                             </Text>
                         </View>
                     )}
                 </View>
+
+                {/* COCKPIT ACTION CARD — KHỐI HÀNH ĐỘNG KẾ TIẾP */}
+                {nextAction && !isSwapped && (
+                    <View style={[s.cockpitCard, { borderColor: nextAction.color + "50" }]}>
+                        <View style={s.cockpitHeader}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                <View style={[s.pulsingDot, { backgroundColor: nextAction.color }]} />
+                                <Text style={[s.cockpitTag, { color: nextAction.color }]}>
+                                    BƯỚC TIẾP THEO
+                                </Text>
+                            </View>
+                            {nextAction.pointLabel && (
+                                <View style={[s.locBadge, { backgroundColor: nextAction.bg }]}>
+                                    <Text style={[s.locBadgeText, { color: nextAction.color }]}>
+                                        📍 {nextAction.pointLabel}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <Text style={s.cockpitTitle}>{nextAction.label}</Text>
+                        {nextAction.sub ? (
+                            <Text style={s.cockpitSub} numberOfLines={2}>
+                                {nextAction.sub}
+                            </Text>
+                        ) : null}
+
+                        {/* Preview ảnh đính kèm */}
+                        {actionPhotos.length > 0 && (
+                            <ScrollView
+                                horizontal
+                                style={s.photoPreviewRow}
+                                showsHorizontalScrollIndicator={false}
+                            >
+                                {actionPhotos.map((uri, idx) => (
+                                    <View key={idx} style={s.photoThumbWrap}>
+                                        <Image source={{ uri }} style={s.photoThumb} />
+                                        <TouchableOpacity
+                                            style={s.photoRemoveBtn}
+                                            onPress={() =>
+                                                setActionPhotos((prev) =>
+                                                    prev.filter((_, i) => i !== idx),
+                                                )
+                                            }
+                                        >
+                                            <Ionicons name="close" size={12} color="#fff" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        )}
+
+                        {/* Preview ghi chú đính kèm */}
+                        {actionNote.trim().length > 0 && (
+                            <View style={s.notePreviewBox}>
+                                <Ionicons
+                                    name="chatbubble-ellipses-outline"
+                                    size={14}
+                                    color="#6B7280"
+                                />
+                                <Text style={s.notePreviewText} numberOfLines={1}>
+                                    {actionNote}
+                                </Text>
+                                <TouchableOpacity onPress={() => setActionNote("")}>
+                                    <Ionicons name="close-circle" size={14} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {/* Nút bấm hành động chính (Big Button) */}
+                        <TouchableOpacity
+                            style={[s.bigActionBtn, { backgroundColor: nextAction.color }]}
+                            activeOpacity={0.8}
+                            onPress={() => handleExecuteNextAction(nextAction)}
+                            disabled={actionSubmitting}
+                        >
+                            <Ionicons name={nextAction.icon as any} size={22} color="#fff" />
+                            <Text style={s.bigActionBtnText}>
+                                {actionSubmitting ? "Đang xử lý..." : nextAction.label}
+                            </Text>
+                        </TouchableOpacity>
+
+                        {/* Thanh công cụ phụ: Chụp ảnh, Ghi chú, Đảo lái */}
+                        <View style={s.subActionsRow}>
+                            <TouchableOpacity
+                                style={s.subActionBtn}
+                                onPress={handlePickPhoto}
+                            >
+                                <Ionicons name="camera-outline" size={16} color="#4F46E5" />
+                                <Text style={s.subActionText}>
+                                    {actionPhotos.length > 0
+                                        ? `Ảnh (${actionPhotos.length})`
+                                        : "Chụp ảnh"}
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={s.subActionBtn}
+                                onPress={() => setShowNoteModal(true)}
+                            >
+                                <Ionicons
+                                    name="document-text-outline"
+                                    size={16}
+                                    color="#4F46E5"
+                                />
+                                <Text style={s.subActionText}>
+                                    {actionNote.trim().length > 0 ? "Sửa ghi chú" : "Ghi chú"}
+                                </Text>
+                            </TouchableOpacity>
+
+                            {canSwap && (
+                                <TouchableOpacity
+                                    style={[s.subActionBtn, { borderColor: "#FDE68A" }]}
+                                    onPress={() => setShowSwapModal(true)}
+                                >
+                                    <Ionicons
+                                        name="swap-horizontal"
+                                        size={16}
+                                        color="#D97706"
+                                    />
+                                    <Text style={[s.subActionText, { color: "#D97706" }]}>
+                                        Đảo lái
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+                )}
+
+                {isSwapped && (
+                    <View style={s.swappedBanner}>
+                        <Ionicons name="swap-horizontal" size={20} color="#D97706" />
+                        <Text style={s.swappedBannerText}>
+                            Bạn đã bàn giao chuyến này cho lái xe khác.
+                        </Text>
+                    </View>
+                )}
 
                 {/* Km stats (tính từ GPS ở server, null → —) */}
                 <View style={s.statsGrid}>
@@ -865,12 +1110,191 @@ export default function TripDetailScreen() {
                     </View>
                 </Pressable>
             </Modal>
+                    {/* Modal Ghi chú chốt chặng */}
+            <Modal
+                visible={showNoteModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowNoteModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === "android" ? "padding" : "padding"}
+                    style={s.modalOverlay}
+                >
+                    <Pressable
+                        style={s.modalBackdrop}
+                        onPress={() => setShowNoteModal(false)}
+                    />
+                    <View style={[s.modalCard, { maxWidth: 420 }]}>
+                        <Text style={s.modalTitle}>📝 Ghi chú cho mốc này</Text>
+                        <TextInput
+                            style={[s.stickyInput, s.noteInput]}
+                            placeholder="Nhập ghi chú (VD: Đã dỡ hàng xong, bảo vệ ký...)"
+                            placeholderTextColor="#9CA3AF"
+                            value={actionNote}
+                            onChangeText={setActionNote}
+                            multiline
+                            numberOfLines={3}
+                            autoFocus
+                        />
+                        <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+                            <TouchableOpacity
+                                style={[s.modalBtn, { backgroundColor: "#F3F4F6", flex: 1 }]}
+                                onPress={() => {
+                                    setActionNote("");
+                                    setShowNoteModal(false);
+                                }}
+                            >
+                                <Text style={{ color: "#6B7280", fontWeight: "600" }}>Xoá</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[s.modalBtn, { backgroundColor: "#4F46E5", flex: 2 }]}
+                                onPress={() => setShowNoteModal(false)}
+                            >
+                                <Text style={{ color: "#fff", fontWeight: "700" }}>Lưu ghi chú</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }
 
 const s = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#F9FAFB" },
+    cockpitCard: {
+        backgroundColor: "#fff",
+        marginHorizontal: 12,
+        marginBottom: 12,
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1.5,
+        borderColor: "#E0E7FF",
+        shadowColor: "#4F46E5",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 3,
+    },
+    cockpitHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 8,
+    },
+    pulsingDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    cockpitTag: {
+        fontSize: 11,
+        fontWeight: "700",
+        letterSpacing: 0.5,
+    },
+    locBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 12,
+    },
+    locBadgeText: {
+        fontSize: 11,
+        fontWeight: "700",
+    },
+    cockpitTitle: {
+        fontSize: 18,
+        fontWeight: "800",
+        color: "#111827",
+        marginBottom: 4,
+    },
+    cockpitSub: {
+        fontSize: 13,
+        color: "#6B7280",
+        lineHeight: 18,
+        marginBottom: 14,
+    },
+    bigActionBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 14,
+        borderRadius: 12,
+        gap: 8,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    bigActionBtnText: {
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "700",
+    },
+    subActionsRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginTop: 10,
+    },
+    subActionBtn: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 9,
+        paddingHorizontal: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
+        backgroundColor: "#F9FAFB",
+        gap: 4,
+    },
+    subActionText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#374151",
+    },
+    photoPreviewRow: {
+        flexDirection: "row",
+        marginBottom: 10,
+    },
+    photoThumbWrap: {
+        position: "relative",
+        marginRight: 8,
+    },
+    photoThumb: {
+        width: 54,
+        height: 54,
+        borderRadius: 8,
+    },
+    photoRemoveBtn: {
+        position: "absolute",
+        top: -4,
+        right: -4,
+        backgroundColor: "#EF4444",
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    notePreviewBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#F3F4F6",
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        gap: 6,
+        marginBottom: 10,
+    },
+    notePreviewText: {
+        flex: 1,
+        fontSize: 12,
+        color: "#4B5563",
+    },
     swappedBanner: {
         flexDirection: "row",
         alignItems: "center",
@@ -1053,6 +1477,7 @@ const s = StyleSheet.create({
         color: "#111827",
     },
     // Complete modal
+    modalBackdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
     modalOverlay: {
         flex: 1,
         backgroundColor: "rgba(0,0,0,0.5)",
