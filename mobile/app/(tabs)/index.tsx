@@ -1,12 +1,15 @@
-import { resolveNextAction } from "../../src/lib/tripActions";
+import { resolveNextAction, type NextAction } from "../../src/lib/tripActions";
+import { showAlert, showConfirm, showDestructiveConfirm } from "../../src/lib/alert";
+import { useLoading } from "../../src/lib/loading";
+import { getCheckpointGps, toFakePoint } from "../../src/lib/fakeLocation";
 import { formatKm } from "../../src/lib/format";
 import { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
-import { getGpsStatus, type GpsStatus } from "../../src/tracking/tracker";
+import { getGpsStatus, flushBeforeCheckpoint, type GpsStatus } from "../../src/tracking/tracker";
 
 const GPS_POLL_MS = 5000;
 const gpsPillConfig = {
@@ -54,6 +57,79 @@ const statusColors: Record<string, { bg: string; text: string }> = {
 };
 
 export default function DashboardScreen() {
+  const [updatingTripId, setUpdatingTripId] = useState<number | null>(null);
+  const { showLoading, hideLoading } = useLoading();
+
+  const localISO = () => {
+    const d = new Date();
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 19);
+  };
+
+  const handleQuickExecute = (t: any, act: NextAction) => {
+    if (!token) return;
+
+    if (!shift && act.type !== "started") {
+      showAlert("Cần vào ca", "Bạn cần vào ca trước khi thực hiện thao tác");
+      return;
+    }
+
+    if (act.type === "end") {
+      showDestructiveConfirm(
+        "Kết thúc chuyến",
+        `Bạn có chắc chắn muốn kết thúc chuyến xe ${t.vehicle?.plate_number || ""} và hoàn thành toàn bộ lộ trình?`,
+        () => doSubmitQuickAction(t, act),
+        undefined,
+        "Kết thúc xe"
+      );
+      return;
+    }
+
+    showConfirm(
+      "Cập nhật nhanh",
+      `Xác nhận thực hiện: "${act.label}"?`,
+      () => doSubmitQuickAction(t, act)
+    );
+  };
+
+  const doSubmitQuickAction = async (t: any, act: NextAction) => {
+    if (!token) return;
+    setUpdatingTripId(t.id);
+    showLoading();
+    try {
+      await flushBeforeCheckpoint();
+      const fakeFallback = act.targetLocation
+        ? toFakePoint(act.pointLabel || act.label, act.targetLocation)
+        : null;
+      const gps = await getCheckpointGps(fakeFallback);
+
+      if (act.type === "end") {
+        await api.trips.complete(String(t.id), token, gps ?? undefined);
+      } else {
+        const body: any = {
+          checkpoint_type: act.type,
+          occurred_at: localISO(),
+        };
+        if (gps) {
+          body.gps_lat = gps.gps_lat;
+          body.gps_lng = gps.gps_lng;
+        }
+        if (act.orderId) body.order_id = act.orderId;
+        if (act.deliveryPointId) body.delivery_point_id = act.deliveryPointId;
+
+        await api.trips.checkpoint(String(t.id), body, token);
+      }
+
+      showAlert("Thành công", `Đã cập nhật: ${act.label}`);
+      await refresh();
+    } catch (e: any) {
+      showAlert("Lỗi cập nhật", e.message || "Không thể thực hiện");
+    } finally {
+      setUpdatingTripId(null);
+      hideLoading();
+    }
+  };
   const { token, shift: authShift, setShift, user } = useAuth();
   const router = useRouter();
   const [trips, setTrips] = useState<any[]>([]);
@@ -286,13 +362,31 @@ export default function DashboardScreen() {
                           {nextAct.label}
                         </Text>
                       </View>
-                      <View style={[st.nextActionBtn, { backgroundColor: nextAct.color }]}>
-                        <Ionicons name={nextAct.icon as any} size={13} color="#fff" />
-                        <Text style={st.nextActionBtnText}>
-                          Cập nhật
-                        </Text>
-                        <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.8)" />
-                      </View>
+                      <TouchableOpacity
+                        style={[
+                          st.nextActionBtn,
+                          { backgroundColor: nextAct.color },
+                          updatingTripId === t.id && { opacity: 0.7 },
+                        ]}
+                        activeOpacity={0.8}
+                        disabled={updatingTripId === t.id}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          handleQuickExecute(t, nextAct);
+                        }}
+                      >
+                        {updatingTripId === t.id ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <>
+                            <Ionicons name={nextAct.icon as any} size={13} color="#fff" />
+                            <Text style={st.nextActionBtnText}>
+                              Cập nhật
+                            </Text>
+                            <Ionicons name="arrow-forward" size={12} color="rgba(255,255,255,0.8)" />
+                          </>
+                        )}
+                      </TouchableOpacity>
                     </View>
                   );
                 })()}
