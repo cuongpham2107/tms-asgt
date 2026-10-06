@@ -277,7 +277,7 @@ export default function DashboardScreen() {
                   </View>
                 </View>
                 <Text style={st.tripKm}>
-                  📏 {t.total_km ?? "—"} km
+                  📏 {fmt(t.driver_km ?? t.total_km)} km
                 </Text>
                 {(() => {
                   const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);

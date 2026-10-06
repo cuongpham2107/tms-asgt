@@ -8,5 +8,5 @@ export const formatKm = (v: any): string => {
     if (v === null || v === undefined || v === "") return "—";
     const n = typeof v === "number" ? v : parseFloat(v);
     if (isNaN(n)) return "—";
-    return n % 1 === 0 ? String(n) : n.toFixed(1);
+    return n.toFixed(1);
 };
