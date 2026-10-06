@@ -794,7 +794,13 @@ class TripLegService
     private function resolveCheckpointCoords(TripCheckpoint $cp, Trip $trip): array
     {
         if ($cp->gps_lat !== null && $cp->gps_lng !== null && ((float) $cp->gps_lat !== 0.0 || (float) $cp->gps_lng !== 0.0)) {
-            return ['lat' => (float) $cp->gps_lat, 'lng' => (float) $cp->gps_lng];
+            $fLat = (float) $cp->gps_lat;
+            $fLng = (float) $cp->gps_lng;
+            // Chỉ dùng toạ độ GPS nếu nằm trong lãnh thổ Việt Nam (8°N - 24°N, 102°E - 110°E)
+            // Tránh toạ độ mặc định từ simulator Apple HQ San Francisco (37.78, -122.40) gây sai lệch hàng vạn km
+            if ($fLat >= 8.0 && $fLat <= 24.0 && $fLng >= 102.0 && $fLng <= 110.0) {
+                return ['lat' => $fLat, 'lng' => $fLng];
+            }
         }
 
         if ($cp->deliveryPoint?->location) {
@@ -837,7 +843,11 @@ class TripLegService
             $lat = $pairs[$i] ?? null;
             $lng = $pairs[$i + 1] ?? null;
             if ($lat !== null && $lng !== null && ((float) $lat !== 0.0 || (float) $lng !== 0.0)) {
-                return ['lat' => (float) $lat, 'lng' => (float) $lng];
+                $fLat = (float) $lat;
+                $fLng = (float) $lng;
+                if ($fLat >= 8.0 && $fLat <= 24.0 && $fLng >= 102.0 && $fLng <= 110.0) {
+                    return ['lat' => $fLat, 'lng' => $fLng];
+                }
             }
         }
 

@@ -363,7 +363,7 @@ class TripController extends Controller
 
             // Ai lái lượt nào thì chỉ hưởng km của lượt lái đó
             $userAssignments = $trip->driverAssignments->where('driver_id', $user->id);
-            if ($userAssignments->isNotEmpty()) {
+            if ($userAssignments->isNotEmpty() && $userAssignments->contains(fn ($a) => $a->km !== null)) {
                 $totalKm += (float) $userAssignments->sum('km');
                 $totalLoaded += (float) $userAssignments->sum('km_loaded');
             } elseif ((int) $trip->driver_id === (int) $user->id) {

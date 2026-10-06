@@ -1,6 +1,6 @@
 import { resolveNextAction } from "../../src/lib/tripActions";
 import { formatKm } from "../../src/lib/format";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
@@ -116,9 +116,24 @@ export default function DashboardScreen() {
   const shiftAssigned = mergedTrips.filter((t: any) => t.status === "pending").length;
   const shiftInProgress = activeTrips.filter((t: any) => ["started", "arrived_pickup", "delivering", "arrived_delivery", "delivered"].includes(t.status)).length;
   const shiftCompleted = mergedTrips.filter((t: any) => t.status === "completed").length;
-  const shiftTotalKm = shift?.total_km != null ? parseFloat(shift.total_km) : null;
-  const shiftLoaded = shift?.total_km_loaded != null ? parseFloat(shift.total_km_loaded) : null;
-  const shiftEmpty = shift?.total_km_empty != null ? parseFloat(shift.total_km_empty) : null;
+  const fallbackShiftKm = useMemo(() => {
+    let total = 0;
+    let loaded = 0;
+    let has = false;
+    mergedTrips.forEach((t: any) => {
+      const k = t.driver_km ?? t.total_km;
+      if (k != null && Number(k) > 0) {
+        total += Number(k);
+        loaded += Number(t.driver_km_loaded ?? t.total_km_loaded ?? k);
+        has = true;
+      }
+    });
+    return has ? { total: Math.round(total * 10) / 10, loaded: Math.round(loaded * 10) / 10, empty: Math.round(Math.max(0, total - loaded) * 10) / 10 } : null;
+  }, [mergedTrips]);
+
+  const shiftTotalKm = shift?.total_km != null ? parseFloat(shift.total_km) : fallbackShiftKm?.total ?? null;
+  const shiftLoaded = shift?.total_km_loaded != null ? parseFloat(shift.total_km_loaded) : fallbackShiftKm?.loaded ?? null;
+  const shiftEmpty = shift?.total_km_empty != null ? parseFloat(shift.total_km_empty) : fallbackShiftKm?.empty ?? null;
 
   const shiftDuration = shift?.start_time ? (() => {
     const start = new Date(shift.start_time);
