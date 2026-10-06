@@ -1,3 +1,4 @@
+import { formatKm } from "../../src/lib/format";
 import { useState, useMemo, useCallback } from "react";
 import {
     View,
@@ -91,7 +92,7 @@ const periods = [
     { key: "month", label: "Tháng này" },
 ];
 
-const fmt = (v: any) => (v != null ? parseInt(v).toLocaleString("vi-VN") : "—");
+const fmt = formatKm;
 
 export default function TripsScreen() {
     const { token, shift } = useAuth();

@@ -55,8 +55,11 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        $order->load('trip');
-        if ($order->trip?->driver_id !== $user->id) {
+        $order->load(['trip.checkpoints']);
+        $belongsToDriver = (int) $order->trip?->driver_id === (int) $user->id
+            || ($order->trip && $order->trip->driverAssignments()->where('driver_id', $user->id)->exists());
+
+        if (! $belongsToDriver) {
             /** @status 403 */
             return response()->json(['message' => 'This order is not assigned to you'], 403);
         }

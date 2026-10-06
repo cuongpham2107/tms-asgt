@@ -75,7 +75,19 @@ class TripResource extends JsonResource
 
             'orders' => OrderResource::collection($this->whenLoaded('orders')),
 
-            'checkpoints' => TripCheckpointResource::collection($this->whenLoaded('checkpoints')),
+            'checkpoints' => $this->whenLoaded('checkpoints', function () {
+                $distances = app(TripLegService::class)->checkpointDistances($this->resource);
+                foreach ($this->checkpoints as $cp) {
+                    if (isset($distances[$cp->id])) {
+                        $cp->distance_km = $distances[$cp->id]['distance_km'];
+                        $cp->is_loaded = $distances[$cp->id]['is_loaded'];
+                        $cp->is_adjusted = $distances[$cp->id]['is_adjusted'];
+                        $cp->source = $distances[$cp->id]['source'];
+                    }
+                }
+
+                return TripCheckpointResource::collection($this->checkpoints);
+            }),
 
             'legs' => $this->when(
                 $this->relationLoaded('checkpoints'),

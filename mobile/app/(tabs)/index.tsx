@@ -1,3 +1,4 @@
+import { formatKm } from "../../src/lib/format";
 import { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -127,7 +128,7 @@ export default function DashboardScreen() {
   })() : null;
 
   // Hiển thị km ca: từ DB nếu đã tính, nếu không tổng hợp từ trips
-  const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "—";
+  const fmt = formatKm;
 
   return (
     <ScrollView style={st.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}>

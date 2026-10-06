@@ -1,3 +1,4 @@
+import { formatKm } from "../src/lib/format";
 import { useState, useCallback } from "react";
 import {
     View,
@@ -83,7 +84,7 @@ const localISO = (d: Date = new Date()) => {
 };
 
 export default function TripDetailScreen() {
-    const { token, shift } = useAuth();
+    const { token, shift, user } = useAuth();
     const router = useRouter();
     const { showLoading, hideLoading } = useLoading();
     const params = useLocalSearchParams<{ id: string; trip: string }>();
@@ -98,11 +99,9 @@ export default function TripDetailScreen() {
     const [swapReason, setSwapReason] = useState<SwapReason>("shift_handover");
     const [swapNote, setSwapNote] = useState("");
     const [swapping, setSwapping] = useState(false);
-    const userId = shift?.driver?.id;
+    const userId = user?.id || shift?.driver?.id;
 
-    // Format: bỏ .0, hiển thị số nguyên
-    const fmt = (v: any) =>
-        v != null ? parseInt(v).toLocaleString("vi-VN") : "—";
+    const fmt = formatKm;
 
     const load = async () => {
         if (!token || !tripId) return;
@@ -412,38 +411,91 @@ export default function TripDetailScreen() {
 
                 {/* Km stats (tính từ GPS ở server, null → —) */}
                 <View style={s.statsGrid}>
-                    {[
-                        {
-                            icon: "speedometer-outline",
-                            label: (detail?.is_multi_driver || isSwapped) ? "Km của bạn" : "Tổng Km",
-                            value: fmt(detail?.driver_km ?? detail?.total_km ?? trip?.total_km),
-                            color: "#4F46E5",
-                            bg: "#EEF2FF",
-                        },
-                        {
-                            icon: "cube-outline",
-                            label: "Km có hàng",
-                            value: fmt(
-                                detail?.driver_km_loaded ??
-                                    detail?.total_km_loaded ??
-                                    trip?.total_km_loaded,
-                            ),
-                            color: "#3B82F6",
-                            bg: "#EFF6FF",
-                        },
-                        {
-                            icon: "arrow-undo-outline",
-                            label: "Km rỗng",
-                            value: fmt(
-                                detail?.driver_km_empty ??
-                                    detail?.total_km_empty ??
-                                    trip?.total_km_empty,
-                            ),
-                            color: "#F59E0B",
-                            bg: "#FFFBEB",
-                        },
-                    ].map((st2, i) => (
-                        <View key={i} style={s.statCard}>
+                    {(Boolean(detail?.is_multi_driver || isSwapped)
+                        ? [
+                              {
+                                  icon: "speedometer-outline",
+                                  label: "Km của bạn",
+                                  value: fmt(
+                                      detail?.driver_km ??
+                                          detail?.total_km ??
+                                          trip?.total_km,
+                                  ),
+                                  color: "#4F46E5",
+                                  bg: "#EEF2FF",
+                              },
+                              {
+                                  icon: "map-outline",
+                                  label: "Toàn chuyến",
+                                  value: fmt(
+                                      detail?.total_km ?? trip?.total_km,
+                                  ),
+                                  color: "#0D9488",
+                                  bg: "#F0FDFA",
+                              },
+                              {
+                                  icon: "cube-outline",
+                                  label: "Km có hàng",
+                                  value: fmt(
+                                      detail?.driver_km_loaded ??
+                                          detail?.total_km_loaded ??
+                                          trip?.total_km_loaded,
+                                  ),
+                                  color: "#3B82F6",
+                                  bg: "#EFF6FF",
+                              },
+                              {
+                                  icon: "arrow-undo-outline",
+                                  label: "Km rỗng",
+                                  value: fmt(
+                                      detail?.driver_km_empty ??
+                                          detail?.total_km_empty ??
+                                          trip?.total_km_empty,
+                                  ),
+                                  color: "#F59E0B",
+                                  bg: "#FFFBEB",
+                              },
+                          ]
+                        : [
+                              {
+                                  icon: "speedometer-outline",
+                                  label: "Tổng Km",
+                                  value: fmt(
+                                      detail?.total_km ?? trip?.total_km,
+                                  ),
+                                  color: "#4F46E5",
+                                  bg: "#EEF2FF",
+                                  fullWidth: true,
+                              },
+                              {
+                                  icon: "cube-outline",
+                                  label: "Km có hàng",
+                                  value: fmt(
+                                      detail?.total_km_loaded ??
+                                          trip?.total_km_loaded,
+                                  ),
+                                  color: "#3B82F6",
+                                  bg: "#EFF6FF",
+                              },
+                              {
+                                  icon: "arrow-undo-outline",
+                                  label: "Km rỗng",
+                                  value: fmt(
+                                      detail?.total_km_empty ??
+                                          trip?.total_km_empty,
+                                  ),
+                                  color: "#F59E0B",
+                                  bg: "#FFFBEB",
+                              },
+                          ]
+                    ).map((st2: any, i: number) => (
+                        <View
+                            key={i}
+                            style={[
+                                s.statCard,
+                                st2.fullWidth ? { width: "100%" } : null,
+                            ]}
+                        >
                             <View
                                 style={[
                                     s.statIcon,
@@ -463,13 +515,6 @@ export default function TripDetailScreen() {
                         </View>
                     ))}
                 </View>
-                {(detail?.is_multi_driver || isSwapped) && (detail?.total_km || trip?.total_km) && (
-                    <View style={{ flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: 4, marginTop: -6, marginBottom: 12 }}>
-                        <Text style={{ fontSize: 12, color: "#6B7280" }}>
-                            Toàn chuyến: <Text style={{ fontWeight: "600", color: "#374151" }}>{fmt(detail?.total_km ?? trip?.total_km)} km</Text>
-                        </Text>
-                    </View>
-                )}
 
                 {/* Thời gian */}
                 {detail?.started_at && (
@@ -502,112 +547,6 @@ export default function TripDetailScreen() {
                                 </Text>
                             </View>
                         )}
-                    </View>
-                )}
-
-                {/* Lộ trình & Khoảng cách các chặng */}
-                {detail?.legs && detail.legs.length > 0 && (
-                    <View style={s.legsCard}>
-                        <Text style={s.sectionTitle}>
-                            🛣️ Khoảng cách các chặng ({detail.legs.length})
-                        </Text>
-                        <View style={{ marginTop: 10 }}>
-                            {detail.legs.map((leg: any, idx: number) => {
-                                const isLoaded = leg.is_loaded;
-                                return (
-                                    <View key={idx} style={s.legItem}>
-                                        <View style={s.legIndicator}>
-                                            <View
-                                                style={[
-                                                    s.legDot,
-                                                    {
-                                                        backgroundColor:
-                                                            isLoaded
-                                                                ? "#10B981"
-                                                                : "#F59E0B",
-                                                    },
-                                                ]}
-                                            />
-                                            {idx < detail.legs.length - 1 && (
-                                                <View style={s.legLine} />
-                                            )}
-                                        </View>
-                                        <View style={s.legContent}>
-                                            <View style={s.legTitleRow}>
-                                                <Text
-                                                    style={s.legTitle}
-                                                    numberOfLines={2}
-                                                >
-                                                    Chặng {leg.leg_index}:{" "}
-                                                    {leg.from_name} ➔{" "}
-                                                    {leg.to_name}
-                                                </Text>
-                                            </View>
-                                            <View style={s.legMetaRow}>
-                                                <View
-                                                    style={[
-                                                        s.legBadge,
-                                                        {
-                                                            backgroundColor:
-                                                                isLoaded
-                                                                    ? "#D1FAE5"
-                                                                    : "#FEF3C7",
-                                                        },
-                                                    ]}
-                                                >
-                                                    <Text
-                                                        style={[
-                                                            s.legBadgeText,
-                                                            {
-                                                                color: isLoaded
-                                                                    ? "#059669"
-                                                                    : "#D97706",
-                                                            },
-                                                        ]}
-                                                    >
-                                                        {isLoaded
-                                                            ? "Có hàng"
-                                                            : "Xe rỗng"}
-                                                    </Text>
-                                                </View>
-                                                <Text style={s.legKmText}>
-                                                    📏 {leg.distance_km} km
-                                                </Text>
-                                                {leg.is_adjusted ? (
-                                                    <Text
-                                                        style={[
-                                                            s.legSourceText,
-                                                            {
-                                                                color: "#D97706",
-                                                                fontWeight:
-                                                                    "600",
-                                                            },
-                                                        ]}
-                                                    >
-                                                        (Đã sửa)
-                                                    </Text>
-                                                ) : (
-                                                    leg.source && (
-                                                        <Text
-                                                            style={
-                                                                s.legSourceText
-                                                            }
-                                                        >
-                                                            (
-                                                            {leg.source ===
-                                                            "osrm"
-                                                                ? "Lộ trình đường bộ"
-                                                                : "GPS"}
-                                                            )
-                                                        </Text>
-                                                    )
-                                                )}
-                                            </View>
-                                        </View>
-                                    </View>
-                                );
-                            })}
-                        </View>
                     </View>
                 )}
 

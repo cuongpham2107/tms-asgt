@@ -1,3 +1,4 @@
+import { formatKm } from "../../src/lib/format";
 import { useState, useMemo, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -5,7 +6,7 @@ import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 
-const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "—";
+const fmt = formatKm;
 
 const statusBadge: Record<string, { label: string; bg: string; color: string; border: string }> = {
   completed: { label: "Hoàn thành", bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },

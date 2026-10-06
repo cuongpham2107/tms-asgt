@@ -70,7 +70,7 @@ export default function LoginScreen() {
 
       setMinAppVersion(res.min_app_version);
       const shift = res.shift;
-      setAuth(res.token, shift?.id ? String(shift.id) : undefined, shift);
+      setAuth(res.token, shift?.id ? String(shift.id) : undefined, shift, res.user);
       router.replace("/");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không thể kết nối đến máy chủ");

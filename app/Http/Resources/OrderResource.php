@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Enums\TripStatus;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Services\Trip\TripLegService;
 use App\Services\Trip\TripStateMachine;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -113,7 +114,22 @@ class OrderResource extends JsonResource
             'delivery_points' => OrderDeliveryPointResource::collection($this->whenLoaded('deliveryPoints')),
             // Trip checkpoints (only when loaded)
             /** Danh sách checkpoint hành trình (nếu được load). */
-            'trip_checkpoints' => TripCheckpointResource::collection($this->whenLoaded('tripCheckpoints')),
+            'trip_checkpoints' => $this->whenLoaded('tripCheckpoints', function () {
+                $trip = $this->relationLoaded('trip') ? $this->trip : $this->trip()->first();
+                if ($trip) {
+                    $distances = app(TripLegService::class)->checkpointDistances($trip);
+                    foreach ($this->tripCheckpoints as $cp) {
+                        if (isset($distances[$cp->id])) {
+                            $cp->distance_km = $distances[$cp->id]['distance_km'];
+                            $cp->is_loaded = $distances[$cp->id]['is_loaded'];
+                            $cp->is_adjusted = $distances[$cp->id]['is_adjusted'];
+                            $cp->source = $distances[$cp->id]['source'];
+                        }
+                    }
+                }
+
+                return TripCheckpointResource::collection($this->tripCheckpoints);
+            }),
             // Latest checkpoint time (progress indicator)
             /** Thời điểm ghi nhận checkpoint mới nhất (ISO 8601, nếu được load). */
             'last_checkpoint_at' => $this->when(

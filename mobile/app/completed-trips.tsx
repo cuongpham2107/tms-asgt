@@ -1,3 +1,4 @@
+import { formatKm } from "../src/lib/format";
 import { useState, useCallback } from "react";
 import { View, Text, StyleSheet, FlatList, RefreshControl } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -5,7 +6,7 @@ import { api } from "../src/lib/api";
 import { useAuth } from "../src/lib/auth";
 import { Ionicons } from "@expo/vector-icons";
 
-const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "—";
+const fmt = formatKm;
 
 export default function CompletedTripsScreen() {
   const { token } = useAuth();

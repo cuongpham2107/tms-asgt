@@ -33,6 +33,14 @@ class TripCheckpointResource extends JsonResource
             /** @var float|null GPS longitude */
             'gps_lng' => $this->gps_lng,
             'voice_note' => $this->voice_note,
+            /** Khoảng cách từ mốc trước tới mốc này (km). */
+            'distance_km' => isset($this->distance_km) ? (float) $this->distance_km : null,
+            /** Có chở hàng trong chặng này hay không. */
+            'is_loaded' => isset($this->is_loaded) ? (bool) $this->is_loaded : null,
+            /** Nguồn tính km (phone_gps, osrm, manual). */
+            'source' => $this->source ?? null,
+            /** Đã được điều phối sửa km thủ công hay chưa. */
+            'is_adjusted' => isset($this->is_adjusted) ? (bool) $this->is_adjusted : null,
             /** Ảnh chụp tại checkpoint này (nếu được load). */
             'photos' => $this->whenLoaded('photos', fn () => $this->photos->map(fn ($photo) => [
                 'id' => $photo->id,

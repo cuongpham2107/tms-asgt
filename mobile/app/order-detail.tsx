@@ -1,3 +1,4 @@
+import { formatKm } from "../src/lib/format";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import {
     View,
@@ -89,8 +90,11 @@ const localISO = (d: Date = new Date()) => {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 };
 
+const fmt = formatKm;
+
 export default function OrderDetailScreen() {
-    const { token, shift } = useAuth();
+    const { token, shift, user } = useAuth();
+    const currentUserId = user?.id || shift?.driver?.id;
     const { showLoading, hideLoading } = useLoading();
     const params = useLocalSearchParams<{ id: string; order: string }>();
     const order = useMemo(() => {
@@ -1203,36 +1207,101 @@ export default function OrderDetailScreen() {
                                             style={{
                                                 flexDirection: "row",
                                                 alignItems: "center",
+                                                justifyContent: "space-between",
                                                 gap: 6,
                                             }}
                                         >
-                                            <Ionicons
-                                                name={ci.icon as any}
-                                                size={14}
-                                                color={ci.color}
-                                            />
-                                            <Text
-                                                style={[
-                                                    s.tlLabel,
-                                                    { color: ci.color },
-                                                ]}
+                                            <View
+                                                style={{
+                                                    flexDirection: "row",
+                                                    alignItems: "center",
+                                                    gap: 6,
+                                                    flex: 1,
+                                                }}
                                             >
-                                                {ci.label}
-                                                {cp.delivery_point_id &&
-                                                dpCodeMap[
-                                                    cp.delivery_point_id
-                                                ] &&
-                                                deliveryPoints.length > 1
-                                                    ? ` (${dpCodeMap[cp.delivery_point_id]})`
-                                                    : ""}
-                                            </Text>
+                                                <Ionicons
+                                                    name={ci.icon as any}
+                                                    size={14}
+                                                    color={ci.color}
+                                                />
+                                                <Text
+                                                    style={[
+                                                        s.tlLabel,
+                                                        { color: ci.color },
+                                                    ]}
+                                                >
+                                                    {ci.label}
+                                                    {cp.delivery_point_id &&
+                                                    dpCodeMap[
+                                                        cp.delivery_point_id
+                                                    ] &&
+                                                    deliveryPoints.length > 1
+                                                        ? ` (${dpCodeMap[cp.delivery_point_id]})`
+                                                        : ""}
+                                                </Text>
+                                            </View>
+                                            {cp.distance_km != null && (
+                                                <View
+                                                    style={{
+                                                        flexDirection: "row",
+                                                        alignItems: "center",
+                                                        gap: 5,
+                                                    }}
+                                                >
+                                                    <View
+                                                        style={{
+                                                            backgroundColor:
+                                                                cp.is_loaded
+                                                                    ? "#D1FAE5"
+                                                                    : "#FEF3C7",
+                                                            paddingHorizontal: 6,
+                                                            paddingVertical: 1.5,
+                                                            borderRadius: 6,
+                                                        }}
+                                                    >
+                                                        <Text
+                                                            style={{
+                                                                fontSize: 10,
+                                                                fontWeight: "600",
+                                                                color: cp.is_loaded
+                                                                    ? "#059669"
+                                                                    : "#D97706",
+                                                            }}
+                                                        >
+                                                            {cp.is_loaded
+                                                                ? "Có hàng"
+                                                                : "Xe rỗng"}
+                                                        </Text>
+                                                    </View>
+                                                    <Text
+                                                        style={{
+                                                            fontSize: 12,
+                                                            fontWeight: "700",
+                                                            color: "#1F2937",
+                                                        }}
+                                                    >
+                                                        +{fmt(cp.distance_km)} km
+                                                    </Text>
+                                                    {cp.is_adjusted && (
+                                                        <Text
+                                                            style={{
+                                                                fontSize: 10,
+                                                                color: "#D97706",
+                                                                fontWeight: "600",
+                                                            }}
+                                                        >
+                                                            (Đã sửa)
+                                                        </Text>
+                                                    )}
+                                                </View>
+                                            )}
                                         </View>
                                         <Text style={s.tlInfo}>
                                             {new Date(
                                                 cp.occurred_at,
                                             ).toLocaleString("vi-VN")}
                                             {cp.driver_name
-                                                ? ` • ${cp.driver_id === shift?.driver?.id ? "Tôi" : cp.driver_name}`
+                                                ? ` • ${cp.driver_name}${currentUserId && Number(cp.driver_id) === Number(currentUserId) ? " (Bạn)" : ""}`
                                                 : ""}
                                         </Text>
                                         {cp.voice_note ? (
