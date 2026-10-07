@@ -79,6 +79,8 @@ export const api = {
 
     // Trips
     trips: {
+        current: (t: string) =>
+            fetchApi<{ data: { trip: any; vehicle_mileage?: number | null } | null }>("/trips/current", t),
         active: (t: string) => fetchApi<{ data: any[] }>("/trips/active", t),
         history: (params: { page?: number; per_page?: number; from_date?: string; to_date?: string; status?: string; vehicle_id?: number }, t: string) => {
             const qs = new URLSearchParams();

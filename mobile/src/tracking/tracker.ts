@@ -13,6 +13,7 @@ const isWeb = Platform.OS === "web";
 export interface TrackingContext {
     shiftId: number;
     vehicleId: number | null;
+    tripId?: number | null;
 }
 
 let context: TrackingContext | null = null;
@@ -42,8 +43,15 @@ export async function isTracking(): Promise<boolean> {
 /** Bắt đầu (hoặc cập nhật ca/xe cho) việc ghi GPS nền. Idempotent. Trả false nếu thiếu quyền. */
 export async function startTracking(next: TrackingContext): Promise<boolean> {
     if (isWeb) return false;
+    const oldContext = context;
     context = next;
     await AsyncStorage.setItem(CONTEXT_KEY, JSON.stringify(next));
+
+    // Nếu đổi xe hoặc đổi chuyến khi đang ghi dở, đẩy nốt batch cũ để phân định rõ ràng
+    if (oldContext && (oldContext.vehicleId !== next.vehicleId || oldContext.tripId !== next.tripId)) {
+        await flush(true).catch(() => {});
+    }
+
     if (!(await hasAlwaysPermission())) return false;
     if (await isTracking()) return true;
     await Location.startLocationUpdatesAsync(LOCATION_TASK, {

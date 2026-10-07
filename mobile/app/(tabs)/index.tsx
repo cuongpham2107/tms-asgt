@@ -7,6 +7,7 @@ import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 import { getGpsStatus, type GpsStatus } from "../../src/tracking/tracker";
+import { getTrackingMachineState, type TrackingState } from "../../src/tracking/stateMachine";
 
 const GPS_POLL_MS = 5000;
 const gpsPillConfig = {
@@ -18,13 +19,30 @@ const gpsPillConfig = {
 /** Thanh trạng thái ghi GPS khi đang trong ca. Ẩn trên web. */
 function GpsStatusPill({ onFix }: { onFix: () => void }) {
   const [status, setStatus] = useState<GpsStatus | null>(null);
+  const [machineState, setMachineState] = useState<TrackingState>("OFF");
+
   useFocusEffect(useCallback(() => {
-    const tick = () => getGpsStatus().then(setStatus).catch(() => {});
+    const tick = () => {
+      getGpsStatus().then(setStatus).catch(() => {});
+      setMachineState(getTrackingMachineState());
+    };
     tick();
     const timer = setInterval(tick, GPS_POLL_MS);
     return () => clearInterval(timer);
   }, []));
+
   if (!status) return null;
+
+  // Nếu đang trong ca nhưng chưa có chuyến chạy (chờ chuyến, đã hoàn thành, hoặc vừa đảo lái)
+  if (machineState === "WAITING_TRIP") {
+    return (
+      <View style={[st.gpsPill, { backgroundColor: "#F3F4F6" }]}>
+        <Text style={[st.gpsPillText, { color: "#4B5563" }]}>⚪ GPS: Chờ bắt đầu chuyến</Text>
+        <Text style={[st.gpsPillText, { color: "#6B7280" }]}>Tự bật khi chạy chuyến</Text>
+      </View>
+    );
+  }
+
   const cfg = gpsPillConfig[status.level];
   return (
     <TouchableOpacity

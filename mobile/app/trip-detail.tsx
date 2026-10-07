@@ -37,6 +37,11 @@ import {
     FakePoint,
 } from "../src/lib/fakeLocation";
 import { flushBeforeCheckpoint } from "../src/tracking/tracker";
+import {
+    onTripStarted,
+    onTripSwapped,
+    onTripCompleted,
+} from "../src/tracking/stateMachine";
 import FakeLocationPicker from "../src/components/FakeLocationPicker";
 
 const statusConfig: Record<string, { icon: string; bg: string; text: string }> =
@@ -352,6 +357,10 @@ export default function TripDetailScreen() {
                 body.gps_lng = gps.gps_lng;
             }
             await api.trips.checkpoint(String(tripId), body, token);
+            const vId = detail?.vehicle_id ?? detail?.vehicle?.id ?? trip?.vehicle_id ?? shift?.vehicle_id ?? null;
+            if (shift?.id) {
+                await onTripStarted(detail || trip, Number(shift.id), vId).catch(() => {});
+            }
             await load();
             showAlert("Thành công", "Đã bắt đầu chuyến");
         } catch (e: any) {
@@ -386,6 +395,7 @@ export default function TripDetailScreen() {
                         token,
                         gps ?? undefined,
                     );
+                    await onTripCompleted().catch(() => {});
                     showAlert("Thành công", "Đã kết thúc chuyến");
                     await load();
                 } catch (e: any) {
@@ -417,6 +427,7 @@ export default function TripDetailScreen() {
                 },
                 token,
             );
+            await onTripSwapped().catch(() => {});
             setShowSwapModal(false);
             setSwapNote("");
             showAlert(

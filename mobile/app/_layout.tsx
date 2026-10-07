@@ -7,8 +7,10 @@ import { LoadingProvider, useLoading } from "../src/lib/loading";
 import { usePushNotifications } from "../src/lib/notifications";
 import LoadingOverlay from "../src/components/LoadingOverlay";
 import UpdateRequired, { APP_VERSION, isVersionOlder } from "../src/components/UpdateRequired";
+import { AppState } from "react-native";
 import { api } from "../src/lib/api";
-import { startTracking } from "../src/tracking/tracker";
+import { flushAndStop } from "../src/tracking/tracker";
+import { reconcileTrackingState } from "../src/tracking/stateMachine";
 import { setUploadToken, startUploader } from "../src/tracking/uploader";
 
 function AuthGuard() {
@@ -37,11 +39,13 @@ function NotificationManager() {
   return null;
 }
 
-/** Ca đang mở → đảm bảo đang ghi GPS (tự chạy lại khi mở app), và gửi điểm khi đã đăng nhập. */
+/**
+ * Quản lý máy trạng thái GPS Tracking:
+ * - CHỈ BẬT GPS khi đang trong ca VÀ đang trực tiếp lái một chuyến active (started -> delivered).
+ * - TỰ ĐỘNG TẮT GPS khi chưa có chuyến, chuyến kết thúc, hoặc vừa đảo lái (kể cả khi đổi lái từ CMS).
+ */
 function TrackingManager() {
-  const { token, shift } = useAuth();
-  const shiftOpen = !!shift?.id && !shift?.end_time;
-  const vehicleId = shift?.vehicle_id ?? shift?.vehicle?.id ?? null;
+  const { token, shift, user } = useAuth();
 
   useEffect(() => {
     setUploadToken(token);
@@ -50,11 +54,33 @@ function TrackingManager() {
   }, [token]);
 
   useEffect(() => {
-    if (!token || !shiftOpen) return;
-    startTracking({ shiftId: Number(shift.id), vehicleId }).catch((e) =>
-      console.log("startTracking failed:", e),
+    if (!token || !shift?.id || shift?.end_time) {
+      flushAndStop().catch(() => {});
+      return;
+    }
+
+    // Reconcile ngay khi mount hoặc khi thông tin ca / tài xế thay đổi
+    reconcileTrackingState({ token, shift, user }).catch((e) =>
+      console.log("reconcileTrackingState init error:", e),
     );
-  }, [token, shiftOpen, shift?.id, vehicleId]);
+
+    // Polling định kỳ mỗi 20s (bắt các sự kiện điều hành đổi lái, gán lái mới trên CMS)
+    const interval = setInterval(() => {
+      reconcileTrackingState({ token, shift, user }).catch(() => {});
+    }, 20_000);
+
+    // Đồng bộ khi app active trở lại từ background
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        reconcileTrackingState({ token, shift, user }).catch(() => {});
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, [token, shift?.id, shift?.end_time, user?.id]);
 
   return null;
 }
