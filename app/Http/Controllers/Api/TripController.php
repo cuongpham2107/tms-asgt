@@ -290,7 +290,10 @@ class TripController extends Controller
             $trip->completed_at = Carbon::parse($validated['completed_at']);
         }
 
-        app(TripStateMachine::class)->complete($trip);
+        $gpsLat = isset($validated['gps_lat']) ? (float) $validated['gps_lat'] : null;
+        $gpsLng = isset($validated['gps_lng']) ? (float) $validated['gps_lng'] : null;
+
+        app(TripStateMachine::class)->complete($trip, $gpsLat, $gpsLng);
 
         try {
             app(TripKmCalculatorService::class)->calculate($trip);

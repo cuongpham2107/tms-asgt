@@ -16,6 +16,7 @@ use App\Models\TripCheckpoint;
 use App\Models\TripDriverAssignment;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Models\VehicleGpsPoint;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -415,7 +416,7 @@ class TripStateMachine
         return $order->refresh();
     }
 
-    public function complete(Trip $trip): Trip
+    public function complete(Trip $trip, ?float $gpsLat = null, ?float $gpsLng = null): Trip
     {
         if ($trip->status === TripStatus::Completed) {
             return $trip;
@@ -430,7 +431,7 @@ class TripStateMachine
             throw new InvalidTransitionException('Còn đơn hàng chưa giao, không thể hoàn thành chuyến.');
         }
 
-        return DB::transaction(function () use ($trip) {
+        return DB::transaction(function () use ($trip, $gpsLat, $gpsLng) {
             $trip->status = TripStatus::Completed;
             if ($trip->completed_at === null) {
                 $trip->completed_at = now();
@@ -442,6 +443,34 @@ class TripStateMachine
             $completedOrderIds = $trip->orders()
                 ->where('status', OrderStatus::Completed->value)
                 ->pluck('id');
+
+            // Xác định toạ độ kết thúc chuyến
+            $fallbackLat = $gpsLat ?? $trip->endLocation?->latitude ?? $trip->vehicle?->gps_lat;
+            $fallbackLng = $gpsLng ?? $trip->endLocation?->longitude ?? $trip->vehicle?->gps_lng;
+
+            if ($fallbackLat === null || $fallbackLng === null) {
+                $lastGps = VehicleGpsPoint::where('vehicle_id', $trip->vehicle_id)
+                    ->where('source', VehicleGpsPoint::SOURCE_PHONE)
+                    ->where('recorded_at', '<=', $trip->completed_at ?? now())
+                    ->latest('recorded_at')
+                    ->first();
+                if ($lastGps !== null) {
+                    $fallbackLat ??= $lastGps->lat;
+                    $fallbackLng ??= $lastGps->lng;
+                }
+            }
+
+            if ($fallbackLat === null || $fallbackLng === null) {
+                $lastCp = $trip->checkpoints()
+                    ->whereNotNull('gps_lat')
+                    ->whereNotNull('gps_lng')
+                    ->latest('occurred_at')
+                    ->first();
+                if ($lastCp !== null) {
+                    $fallbackLat ??= $lastCp->gps_lat;
+                    $fallbackLng ??= $lastCp->gps_lng;
+                }
+            }
 
             if ($completedOrderIds->isNotEmpty()) {
                 $existingEndOrderIds = TripCheckpoint::whereIn('order_id', $completedOrderIds)
@@ -458,6 +487,28 @@ class TripStateMachine
                         'occurred_at' => $trip->completed_at,
                         'driver_id' => $trip->driver_id,
                         'shift_id' => $trip->shift_id,
+                        'vehicle_id' => $trip->vehicle_id,
+                        'gps_lat' => $fallbackLat,
+                        'gps_lng' => $fallbackLng,
+                    ]);
+                }
+            } else {
+                $hasEnd = TripCheckpoint::where('trip_id', $trip->id)
+                    ->where('checkpoint_type', CheckpointType::End->value)
+                    ->whereNull('order_id')
+                    ->exists();
+
+                if (! $hasEnd) {
+                    TripCheckpoint::create([
+                        'checkpoint_type' => CheckpointType::End->value,
+                        'trip_id' => $trip->id,
+                        'order_id' => null,
+                        'occurred_at' => $trip->completed_at,
+                        'driver_id' => $trip->driver_id,
+                        'shift_id' => $trip->shift_id,
+                        'vehicle_id' => $trip->vehicle_id,
+                        'gps_lat' => $fallbackLat,
+                        'gps_lng' => $fallbackLng,
                     ]);
                 }
             }

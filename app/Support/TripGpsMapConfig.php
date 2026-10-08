@@ -3,7 +3,9 @@
 namespace App\Support;
 
 use App\Enums\CheckpointType;
+use App\Enums\TripStatus;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\VehicleGpsPoint;
 use EduardoRibeiroDev\FilamentLeaflet\Concerns\HasMapConfig;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
@@ -188,9 +190,68 @@ class TripGpsMapConfig
             }
         }
 
+        // Đảm bảo mốc End luôn có toạ độ để hiển thị trên bản đồ (fallback nếu trong DB chưa có)
+        $checkpoints = $this->trip->checkpoints->map(function ($cp) {
+            if ($cp->gps_lat !== null && $cp->gps_lng !== null) {
+                return $cp;
+            }
+
+            if ($cp->checkpoint_type === CheckpointType::End) {
+                $lat = $this->trip->endLocation?->latitude;
+                $lng = $this->trip->endLocation?->longitude;
+
+                if ($lat === null || $lng === null) {
+                    $lastGps = $this->gpsPoints()->last();
+                    if ($lastGps !== null) {
+                        $lat = $lastGps->lat;
+                        $lng = $lastGps->lng;
+                    }
+                }
+
+                if ($lat === null || $lng === null) {
+                    $prev = $this->trip->checkpoints
+                        ->filter(fn ($c) => $c->id !== $cp->id && $c->gps_lat !== null && $c->gps_lng !== null)
+                        ->sortByDesc('occurred_at')
+                        ->first();
+                    if ($prev !== null) {
+                        $lat = $prev->gps_lat;
+                        $lng = $prev->gps_lng;
+                    }
+                }
+
+                if ($lat !== null && $lng !== null) {
+                    $cp->gps_lat = $lat;
+                    $cp->gps_lng = $lng;
+                }
+            }
+
+            return $cp;
+        });
+
+        // Nếu chuyến đã hoàn thành nhưng chưa có mốc End trong danh sách mốc:
+        if ($this->trip->status === TripStatus::Completed && ! $checkpoints->contains(fn ($cp) => $cp->checkpoint_type === CheckpointType::End)) {
+            $endLat = $this->trip->endLocation?->latitude ?? $this->gpsPoints()->last()?->lat;
+            $endLng = $this->trip->endLocation?->longitude ?? $this->gpsPoints()->last()?->lng;
+            if ($endLat === null || $endLng === null) {
+                $prev = $checkpoints->filter(fn ($c) => $c->gps_lat !== null && $c->gps_lng !== null)->sortByDesc('occurred_at')->first();
+                $endLat = $prev?->gps_lat;
+                $endLng = $prev?->gps_lng;
+            }
+
+            if ($endLat !== null && $endLng !== null) {
+                $checkpoints->push(new TripCheckpoint([
+                    'checkpoint_type' => CheckpointType::End,
+                    'trip_id' => $this->trip->id,
+                    'occurred_at' => $this->trip->completed_at ?? now(),
+                    'gps_lat' => $endLat,
+                    'gps_lng' => $endLng,
+                ]));
+            }
+        }
+
         // Gộp các mốc TRÙNG toạ độ (ví dụ Xuất phát + Đến lấy hàng cùng ở kho) vào 1 marker,
         // tooltip liệt kê đủ để vẫn biết có những mốc nào ở đó. Màu: bắt đầu = xanh, kết thúc = đỏ.
-        $byLocation = $this->trip->checkpoints
+        $byLocation = $checkpoints
             ->filter(fn ($cp) => $cp->gps_lat !== null && $cp->gps_lng !== null)
             ->groupBy(fn ($cp) => round((float) $cp->gps_lat, 5).','.round((float) $cp->gps_lng, 5));
 
@@ -200,17 +261,19 @@ class TripGpsMapConfig
             $types = $sorted->pluck('checkpoint_type');
 
             [$fillColor, $strokeColor] = match (true) {
-                $types->contains(CheckpointType::Started) => ['#22c55e', '#14532d'],
+                $types->contains(CheckpointType::Started) && $types->contains(CheckpointType::End) => ['#8b5cf6', '#5b21b6'],
                 $types->contains(CheckpointType::End) => ['#ef4444', '#7f1d1d'],
+                $types->contains(CheckpointType::Started) => ['#22c55e', '#14532d'],
                 default => ['#f59e0b', '#1f2937'],
             };
 
             $labels = $sorted
                 ->map(fn ($cp) => $cp->checkpoint_type->getLabel().' ('.($cp->occurred_at?->format('H:i') ?? '').')')
+                ->unique()
                 ->implode(', ');
 
             $shapes[] = CircleMarker::make((float) $first->gps_lat, (float) $first->gps_lng)
-                ->id('cp-'.$first->id)
+                ->id('cp-'.($first->id ?? 'end-'.$this->trip->id))
                 ->radius(8)
                 ->color($strokeColor)
                 ->fillColor($fillColor)
