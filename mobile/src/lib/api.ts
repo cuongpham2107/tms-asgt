@@ -165,10 +165,11 @@ export const api = {
         fetchApi<{ last_seq: number }>("/gps-points", t, { method: "POST", body: JSON.stringify(body) }),
 
     // Locations
-    locations: (params: { search?: string; area_id?: number }, t: string) => {
+    locations: (params: { search?: string; area_id?: number; limit?: number }, t: string) => {
         const qs = new URLSearchParams();
         if (params.search) qs.set("search", params.search);
         if (params.area_id) qs.set("area_id", String(params.area_id));
+        if (params.limit) qs.set("limit", String(params.limit));
         return fetchApi<{ data: any[] }>(`/locations?${qs}`, t);
     },
 

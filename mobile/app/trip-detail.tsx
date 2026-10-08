@@ -43,6 +43,7 @@ import {
     onTripCompleted,
 } from "../src/tracking/stateMachine";
 import FakeLocationPicker from "../src/components/FakeLocationPicker";
+import LocationPickerModal, { LocationItem } from "../src/components/LocationPickerModal";
 
 const statusConfig: Record<string, { icon: string; bg: string; text: string }> =
     {
@@ -114,6 +115,12 @@ export default function TripDetailScreen() {
     const [swapReason, setSwapReason] = useState<SwapReason>("shift_handover");
     const [swapNote, setSwapNote] = useState("");
     const [swapping, setSwapping] = useState(false);
+
+    // Location picking for orders without delivery points
+    const [orderPendingLocs, setOrderPendingLocs] = useState<Record<number, LocationItem>>({});
+    const [showLocPicker, setShowLocPicker] = useState(false);
+    const [locPickerTargetOrderId, setLocPickerTargetOrderId] = useState<number | null>(null);
+    const [locPickerAreaId, setLocPickerAreaId] = useState<number | null>(null);
 
     // Quick action checkpoint modal
     const [quickActionModal, setQuickActionModal] = useState<NextAction | null>(null);
@@ -206,17 +213,40 @@ export default function TripDetailScreen() {
             if (quickNote.trim().length > 0) {
                 body.voice_note = quickNote.trim();
             }
+            const modalOrderId = act.orderId;
+            const assignedLoc = modalOrderId ? orderPendingLocs[modalOrderId] : null;
+
+            if (act.type === "arrived_delivery" || act.type === "completed") {
+                if (!act.deliveryPointId && !act.targetLocation?.id && !assignedLoc?.id) {
+                    showAlert(
+                        "Chưa chọn điểm hạ hàng",
+                        "Đơn hàng này chưa có điểm đến. Vui lòng chọn điểm hạ hàng trước khi xác nhận cập nhật.",
+                    );
+                    setSubmittingQuick(false);
+                    hideLoading();
+                    return;
+                }
+            }
+
             if (act.orderId) body.order_id = act.orderId;
             if (act.deliveryPointId) {
                 body.delivery_point_id = act.deliveryPointId;
             } else if (
                 (act.type === "arrived_delivery" || act.type === "completed") &&
-                act.targetLocation?.id
+                (assignedLoc?.id || act.targetLocation?.id)
             ) {
-                body.new_delivery_location_id = act.targetLocation.id;
+                body.new_delivery_location_id = assignedLoc?.id || act.targetLocation?.id;
             }
 
             await api.trips.checkpoint(String(tripId), body, token);
+
+            if (modalOrderId) {
+                setOrderPendingLocs((prev) => {
+                    const next = { ...prev };
+                    delete next[modalOrderId];
+                    return next;
+                });
+            }
 
             showAlert("Thành công", `Đã cập nhật: ${act.label}`);
             setQuickActionModal(null);
@@ -268,8 +298,8 @@ export default function TripDetailScreen() {
     const isEmptyRun =
         (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true;
     const orders: any[] = detail?.orders || trip?.orders || [];
-    const nextAct = resolveNextAction(detail || trip, userId);
-    const deliveryStops = getPhysicalDeliveryStops(detail || trip);
+    const deliveryStops = getPhysicalDeliveryStops(detail || trip, orderPendingLocs);
+    const nextAct = resolveNextAction(detail || trip, userId, orderPendingLocs);
 
     const legs: any[] = detail?.legs || trip?.legs || [];
     const legsTotalKm =
@@ -974,6 +1004,44 @@ export default function TripDetailScreen() {
                                             })}
                                         </View>
                                     )}
+
+                                    {/* Đơn chưa có điểm hạ hàng */}
+                                    {(o.delivery_points || []).length === 0 && (
+                                        <View style={s.orderNoDpCard}>
+                                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                                                <Ionicons
+                                                    name={orderPendingLocs[o.id] ? "location" : "alert-circle-outline"}
+                                                    size={18}
+                                                    color={orderPendingLocs[o.id] ? "#4F46E5" : "#D97706"}
+                                                />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={s.orderNoDpTitle}>
+                                                        {orderPendingLocs[o.id] ? "Điểm hạ hàng đã chọn:" : "Chưa có điểm hạ hàng"}
+                                                    </Text>
+                                                    <Text style={s.orderNoDpSub} numberOfLines={1}>
+                                                        {orderPendingLocs[o.id]
+                                                            ? `${orderPendingLocs[o.id].code ? `[${orderPendingLocs[o.id].code}] ` : ""}${orderPendingLocs[o.id].name}`
+                                                            : (o.delivery_address || "Chạm 'Chọn điểm' để gán điểm hạ hàng")}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <TouchableOpacity
+                                                style={s.orderNoDpBtn}
+                                                onPress={(e) => {
+                                                    e.stopPropagation?.();
+                                                    setLocPickerTargetOrderId(o.id);
+                                                    setLocPickerAreaId(o.area_id ?? null);
+                                                    setShowLocPicker(true);
+                                                }}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Text style={s.orderNoDpBtnText}>
+                                                    {orderPendingLocs[o.id] ? "Đổi" : "Chọn điểm"}
+                                                </Text>
+                                                <Ionicons name="chevron-forward" size={13} color="#4F46E5" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
                                 </View>
                                 <Ionicons
                                     name="chevron-forward"
@@ -1121,6 +1189,98 @@ export default function TripDetailScreen() {
                                 <Ionicons name="close" size={20} color="#64748B" />
                             </TouchableOpacity>
                         </View>
+
+                        {/* Bộ chọn điểm hạ hàng (khi đơn chưa có điểm đến) */}
+                        {(quickActionModal?.type === "arrived_delivery" || quickActionModal?.type === "completed") &&
+                            !quickActionModal.deliveryPointId &&
+                            !quickActionModal.targetLocation?.id && (
+                                <View style={{ marginBottom: 14 }}>
+                                    <View
+                                        style={{
+                                            flexDirection: "row",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            marginBottom: 6,
+                                        }}
+                                    >
+                                        <Text style={s.quickSectionLabel}>
+                                            📍 ĐIỂM HẠ HÀNG (BẮT BUỘC)
+                                        </Text>
+                                        {quickActionModal.orderId && orderPendingLocs[quickActionModal.orderId] ? (
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    const oId = quickActionModal.orderId!;
+                                                    setOrderPendingLocs((prev) => {
+                                                        const next = { ...prev };
+                                                        delete next[oId];
+                                                        return next;
+                                                    });
+                                                }}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        fontSize: 11,
+                                                        color: "#EF4444",
+                                                        fontWeight: "600",
+                                                    }}
+                                                >
+                                                    Xóa chọn
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ) : null}
+                                    </View>
+                                    {quickActionModal.orderId && orderPendingLocs[quickActionModal.orderId] ? (
+                                        <TouchableOpacity
+                                            style={s.selectedLocCard}
+                                            onPress={() => {
+                                                const oId = quickActionModal.orderId!;
+                                                setLocPickerTargetOrderId(oId);
+                                                const ord = (detail?.orders || trip?.orders || []).find(
+                                                    (o: any) => o.id === oId,
+                                                );
+                                                setLocPickerAreaId(ord?.area_id ?? null);
+                                                setShowLocPicker(true);
+                                            }}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="location" size={20} color="#4F46E5" />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={s.selectedLocCode}>
+                                                    {orderPendingLocs[quickActionModal.orderId].code
+                                                        ? `[${orderPendingLocs[quickActionModal.orderId].code}] `
+                                                        : ""}
+                                                    {orderPendingLocs[quickActionModal.orderId].name}
+                                                </Text>
+                                                <Text style={s.selectedLocAddr} numberOfLines={1}>
+                                                    {orderPendingLocs[quickActionModal.orderId].address ||
+                                                        orderPendingLocs[quickActionModal.orderId].name}
+                                                </Text>
+                                            </View>
+                                            <Text style={s.changeLocBtnText}>Đổi điểm</Text>
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity
+                                            style={s.pickLocBtn}
+                                            onPress={() => {
+                                                const oId = quickActionModal.orderId ?? null;
+                                                setLocPickerTargetOrderId(oId);
+                                                const ord = (detail?.orders || trip?.orders || []).find(
+                                                    (o: any) => o.id === oId,
+                                                );
+                                                setLocPickerAreaId(ord?.area_id ?? null);
+                                                setShowLocPicker(true);
+                                            }}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="location-outline" size={18} color="#4F46E5" />
+                                            <Text style={s.pickLocBtnText}>
+                                                Chạm để chọn điểm hạ hàng...
+                                            </Text>
+                                            <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            )}
 
                         {/* Bộ chọn điểm giao hàng (khi có nhiều hơn 1 điểm và đang ở bước giao hàng) */}
                         {(quickActionModal?.type === "arrived_delivery" || quickActionModal?.type === "completed") &&
@@ -1430,6 +1590,29 @@ export default function TripDetailScreen() {
                     </View>
                 </Pressable>
             </Modal>
+
+            {/* Modal Chọn Điểm Hạ Hàng */}
+            <LocationPickerModal
+                visible={showLocPicker}
+                onClose={() => {
+                    setShowLocPicker(false);
+                    setLocPickerTargetOrderId(null);
+                    setLocPickerAreaId(null);
+                }}
+                onSelect={(loc) => {
+                    if (locPickerTargetOrderId) {
+                        setOrderPendingLocs((prev) => ({
+                            ...prev,
+                            [locPickerTargetOrderId]: loc,
+                        }));
+                    }
+                }}
+                selectedLocationId={
+                    locPickerTargetOrderId ? orderPendingLocs[locPickerTargetOrderId]?.id : null
+                }
+                areaId={locPickerAreaId}
+                title="Chọn điểm hạ hàng"
+            />
         </KeyboardAvoidingView>
     );
 }
@@ -2023,5 +2206,90 @@ const s = StyleSheet.create({
         fontSize: 11,
         fontWeight: "700",
         color: "#FFFFFF",
+    },
+    orderNoDpCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: "#FFFBEB",
+        padding: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: "#FDE68A",
+        marginTop: 8,
+        gap: 8,
+    },
+    orderNoDpTitle: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#92400E",
+    },
+    orderNoDpSub: {
+        fontSize: 11,
+        color: "#B45309",
+        marginTop: 1,
+    },
+    orderNoDpBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 3,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 7,
+        backgroundColor: "#EEF2FF",
+    },
+    orderNoDpBtnText: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#4F46E5",
+    },
+    pickLocBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: "#CBD5E1",
+        borderStyle: "dashed",
+        backgroundColor: "#F8FAFC",
+    },
+    pickLocBtnText: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#4F46E5",
+        flex: 1,
+    },
+    selectedLocCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: "#4F46E5",
+        backgroundColor: "#EEF2FF",
+    },
+    selectedLocCode: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: "#4F46E5",
+    },
+    selectedLocAddr: {
+        fontSize: 12,
+        color: "#475569",
+        marginTop: 2,
+    },
+    changeLocBtnText: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#4F46E5",
+        backgroundColor: "#FFFFFF",
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: "#CBD5E1",
     },
 });

@@ -36,7 +36,10 @@ export interface PhysicalDeliveryStop {
     anyArrived: boolean;
 }
 
-export function getPhysicalDeliveryStops(trip: any): PhysicalDeliveryStop[] {
+export function getPhysicalDeliveryStops(
+    trip: any,
+    pendingLocations?: Record<number, any>
+): PhysicalDeliveryStop[] {
     if (!trip) return [];
     const checkpoints: any[] = trip.checkpoints || [];
     const orders: any[] = trip.orders || [];
@@ -102,9 +105,10 @@ export function getPhysicalDeliveryStops(trip: any): PhysicalDeliveryStop[] {
                 }
             }
         } else {
-            // Đơn không có delivery_points con -> dùng destination_location của đơn
-            const loc = order.destination_location;
-            const locId = order.destination_location_id || loc?.id;
+            // Đơn không có delivery_points con -> kiểm tra điểm hạ hàng đã gán trước đó (pendingLocations)
+            const assignedLoc = pendingLocations?.[order.id];
+            const loc = assignedLoc || null;
+            const locId = assignedLoc?.id || null;
             const stopKey = locId ? `loc_${locId}` : `ord_${order.id}`;
             const seq = (oIdx + 1) * 10;
 
@@ -129,10 +133,10 @@ export function getPhysicalDeliveryStops(trip: any): PhysicalDeliveryStop[] {
                     key: stopKey,
                     sequence: seq,
                     locationId: locId,
-                    locationCode: loc?.code || order.order_code || `Đơn #${order.id}`,
-                    locationName: loc?.name || order.delivery_address,
+                    locationCode: loc?.code || loc?.name || order.order_code || `Đơn #${order.id}`,
+                    locationName: loc?.name || order.delivery_address || "Chưa có điểm hạ hàng",
                     location: loc,
-                    address: order.delivery_address || loc?.address || loc?.name,
+                    address: loc?.address || order.delivery_address || loc?.name || "Chưa chọn điểm hạ hàng",
                     orderIds: [order.id],
                     orderCodes: order.order_code ? [order.order_code] : [],
                     deliveryPointIds: [],
@@ -165,8 +169,10 @@ export function createActionForDeliveryStop(stop: PhysicalDeliveryStop): NextAct
     if (!stop.anyArrived) {
         return {
             type: "arrived_delivery",
-            label: `Đến giao hàng (${stopLabel})`,
-            sub: `${multiOrderPrefix}${stop.address || "Đến điểm giao hàng"}`,
+            label: stop.locationId ? `Đến giao hàng (${stopLabel})` : `Đến hạ hàng (${stopLabel})`,
+            sub: stop.locationId
+                ? `${multiOrderPrefix}${stop.address || "Đến điểm giao hàng"}`
+                : `${multiOrderPrefix}Chưa có điểm đến • Chạm để chọn điểm hạ hàng`,
             icon: "location",
             color: "#3B82F6",
             bg: "#EFF6FF",
@@ -181,10 +187,10 @@ export function createActionForDeliveryStop(stop: PhysicalDeliveryStop): NextAct
     } else {
         return {
             type: "completed",
-            label: `Hoàn thành giao (${stopLabel})`,
+            label: stop.locationId ? `Hoàn thành giao (${stopLabel})` : `Giao xong (${stopLabel})`,
             sub: hasMultipleOrdersAtStop
                 ? `Xác nhận giao xong ${stop.orderIds.length} đơn (${stop.orderCodes.join(", ")})`
-                : (nextStopSubtitle(stop)),
+                : (stop.locationId ? nextStopSubtitle(stop) : "Giao hàng xong tại điểm hạ hàng"),
             icon: "checkmark-circle",
             color: "#10B981",
             bg: "#ECFDF5",
@@ -203,7 +209,11 @@ function nextStopSubtitle(stop: PhysicalDeliveryStop): string {
     return stop.locationName || stop.address || "Đã giao hàng xong";
 }
 
-export function resolveNextAction(trip: any, userId?: number | null): NextAction | null {
+export function resolveNextAction(
+    trip: any,
+    userId?: number | null,
+    pendingLocations?: Record<number, any>
+): NextAction | null {
     if (!trip) return null;
 
     // Đã hoàn thành hoặc đã huỷ
@@ -303,7 +313,7 @@ export function resolveNextAction(trip: any, userId?: number | null): NextAction
     }
 
     // 4. Trả hàng: Lấy danh sách điểm dừng vật lý
-    const sortedStops = getPhysicalDeliveryStops(trip);
+    const sortedStops = getPhysicalDeliveryStops(trip, pendingLocations);
 
     // Tìm điểm dừng chưa hoàn thành đầu tiên
     const nextStop = sortedStops.find((s) => !s.allCompleted);

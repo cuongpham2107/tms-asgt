@@ -15,7 +15,7 @@ import {
     Platform,
     Linking,
 } from "react-native";
-import { useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useLocalSearchParams, useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
@@ -93,6 +93,7 @@ const localISO = (d: Date = new Date()) => {
 const fmt = formatKm;
 
 export default function OrderDetailScreen() {
+    const router = useRouter();
     const { token, shift, user } = useAuth();
     const currentUserId = user?.id || shift?.driver?.id;
     const { showLoading, hideLoading } = useLoading();
@@ -110,17 +111,8 @@ export default function OrderDetailScreen() {
     const [detail, setDetail] = useState<any>(null);
     const [refreshing, setRefreshing] = useState(false);
 
-    // Location picker for orders without delivery point
-    const [locSearch, setLocSearch] = useState("");
-    const [locations, setLocations] = useState<any[]>([]);
-    const [showLocPicker, setShowLocPicker] = useState(false);
-    const [selectedLoc, setSelectedLoc] = useState<any>(null);
-
     // Delivery point selection (for multi-DP orders)
     const [selectedDpId, setSelectedDpId] = useState<number | null>(null);
-
-    // Photo capture
-    const [photos, setPhotos] = useState<string[]>([]);
 
     // Fetch full order detail with checkpoints from API
     const loadDetail = async () => {
@@ -140,26 +132,6 @@ export default function OrderDetailScreen() {
         setRefreshing(true);
         await loadDetail();
         setRefreshing(false);
-    };
-
-    // Search locations for delivery point selection
-    const searchLocations = async (q: string) => {
-        setLocSearch(q);
-        if (!token) return;
-        try {
-            // Thử với area_id trước
-            let r = await api.locations(
-                { search: q || undefined, area_id: order?.area_id },
-                token,
-            );
-            let data = r.data || [];
-            // Nếu không có kết quả, fallback bỏ area_id filter
-            if (data.length === 0 && order?.area_id) {
-                r = await api.locations({ search: q || undefined }, token);
-                data = r.data || [];
-            }
-            setLocations(data);
-        } catch {}
     };
 
     if (!order) return null;
@@ -340,7 +312,7 @@ export default function OrderDetailScreen() {
 
     // Nút theo available_actions của đơn (server tính); điểm giao vẫn đi tuần tự đến → giao xong
     const actions: string[] = d.available_actions ?? [];
-    const hasDpTarget = !!activeDpId || !!selectedLoc;
+    const hasDpTarget = !!activeDpId;
     const canArrivePickup = actions.includes("arrived_pickup");
     const canLeftPickup = actions.includes("left_pickup");
     const canArriveDelivery =
@@ -353,73 +325,6 @@ export default function OrderDetailScreen() {
         hasArrivedDelivery &&
         !hasCompleted;
     const canEnd = actions.includes("end");
-
-    async function pickImage() {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== "granted") {
-            showAlert("Quyền", "Cần cấp quyền camera");
-            return;
-        }
-        const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-        if (!result.canceled && result.assets[0].uri) {
-            setPhotos((prev) => [...prev, result.assets[0].uri]);
-        }
-    }
-
-    async function submitCheckpoint(type: string) {
-        if (!tripId || !token || !d.id) return;
-        const body: any = {
-            checkpoint_type: type,
-            occurred_at: localISO(),
-        };
-        // Capture GPS coordinates (bản test có thể giả lập theo địa điểm của bước đang bấm)
-        const isDeliveryStep = ["arrived_delivery", "completed", "end"].includes(type);
-        const autoPoint = isDeliveryStep
-            ? toFakePoint("Điểm giao", activeDp?.location ?? selectedLoc)
-            : pickupFakePoint;
-        const gps = await getCheckpointGps(autoPoint);
-        if (gps) {
-            body.gps_lat = gps.gps_lat;
-            body.gps_lng = gps.gps_lng;
-        }
-        if (note) body.voice_note = note;
-        if (d.id) body.order_id = d.id;
-        if (photos.length > 0) body.photos = photos;
-
-        // Nếu có delivery_point_id thì dùng, nếu không có nhưng đã chọn location thì gửi new_delivery_location_id
-        if (
-            activeDpId &&
-            ["arrived_delivery", "completed", "end"].includes(type)
-        ) {
-            body.delivery_point_id = activeDpId;
-        } else if (
-            !hasDeliveryPoint &&
-            selectedLoc &&
-            ["arrived_delivery", "completed", "end"].includes(type)
-        ) {
-            body.new_delivery_location_id = selectedLoc.id;
-        }
-
-        setLoading(true);
-        showLoading();
-        try {
-            await flushBeforeCheckpoint();
-            await api.trips.checkpoint(String(tripId), body, token);
-            showAlert(
-                "Thành công",
-                `Đã cập nhật: ${cpInfo[type]?.label || type}`,
-            );
-            setNote("");
-            setPhotos([]);
-            setSelectedLoc(null);
-            await loadDetail(); // refresh
-        } catch (e: any) {
-            showAlert("Lỗi", e.message);
-        } finally {
-            setLoading(false);
-            hideLoading();
-        }
-    }
 
     return (
         <KeyboardAvoidingView
@@ -467,6 +372,39 @@ export default function OrderDetailScreen() {
                                 )}
                             </View>
                         </View>
+                        {deliveryPoints.length === 0 && (
+                            <View>
+                                <View style={s.routeArrow}>
+                                    <Ionicons
+                                        name="arrow-down"
+                                        size={14}
+                                        color="#D1D5DB"
+                                    />
+                                </View>
+                                <View style={s.routeRow}>
+                                    <View
+                                        style={[
+                                            s.routeDot,
+                                            { backgroundColor: "#F59E0B" },
+                                        ]}
+                                    />
+                                    <View style={{ flex: 1 }}>
+                                        <Text
+                                            style={[
+                                                s.routeCode,
+                                                { color: "#D97706" },
+                                            ]}
+                                        >
+                                            Chưa có điểm hạ hàng
+                                        </Text>
+                                        <Text style={s.routeAddr}>
+                                            {d.delivery_address ||
+                                                "Điểm hạ hàng sẽ được chọn tại Chi tiết chuyến khi đến giao"}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
                         {deliveryPoints.map((dp: any, i: number) => (
                             <View key={i}>
                                 <View style={s.routeArrow}>
@@ -651,147 +589,47 @@ export default function OrderDetailScreen() {
                     ))}
                 </View>
 
-                {/* Location picker — chỉ hiện khi trạng thái tiếp theo là đến điểm giao hàng */}
-                {actions.includes("arrived_delivery") &&
-                    !hasDeliveryPoint &&
-                    !hasArrivedDelivery && (
-                        <>
-                            <Text style={s.sectionTitle}>📍 Chọn điểm đến</Text>
-                            <View style={s.formCard}>
-                                {selectedLoc ? (
-                                    <View style={s.selectedLoc}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={s.selectedLocName}>
-                                                {selectedLoc.name}
-                                            </Text>
-                                            <Text style={s.selectedLocAddr}>
-                                                {selectedLoc.address ||
-                                                    selectedLoc.code}
-                                            </Text>
-                                        </View>
-                                        <TouchableOpacity
-                                            onPress={() => {
-                                                setSelectedLoc(null);
-                                            }}
-                                        >
-                                            <Ionicons
-                                                name="close-circle"
-                                                size={20}
-                                                color="#EF4444"
-                                            />
-                                        </TouchableOpacity>
-                                    </View>
-                                ) : (
+                {/* Banner thông báo chưa có điểm hạ hàng */}
+                {deliveryPoints.length === 0 && d.status !== "completed" && (
+                    <View style={s.noDpNoticeCard}>
+                        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                            <Ionicons
+                                name="alert-circle"
+                                size={22}
+                                color="#D97706"
+                            />
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.noDpNoticeTitle}>
+                                    Đơn hàng chưa có điểm đến
+                                </Text>
+                                <Text style={s.noDpNoticeText}>
+                                    Điểm hạ hàng thực tế sẽ được chọn tại màn hình Chi tiết chuyến khi thực hiện bước Đến giao hàng / Giao xong.
+                                </Text>
+                                {tripId ? (
                                     <TouchableOpacity
-                                        style={s.pickerBtn}
+                                        style={s.goToTripBtn}
                                         onPress={() => {
-                                            setShowLocPicker(true);
-                                            searchLocations("");
+                                            router.push({
+                                                pathname: "/trip-detail",
+                                                params: { id: String(tripId) },
+                                            });
                                         }}
+                                        activeOpacity={0.8}
                                     >
                                         <Ionicons
-                                            name="location-outline"
-                                            size={18}
+                                            name="navigate-outline"
+                                            size={16}
                                             color="#4F46E5"
                                         />
-                                        <Text style={s.pickerBtnText}>
-                                            Chạm để chọn điểm đến
+                                        <Text style={s.goToTripBtnText}>
+                                            Mở chi tiết chuyến xe
                                         </Text>
-                                        <Ionicons
-                                            name="chevron-down"
-                                            size={16}
-                                            color="#9CA3AF"
-                                        />
                                     </TouchableOpacity>
-                                )}
+                                ) : null}
                             </View>
-                        </>
-                    )}
-
-                {/* Modal chọn điểm đến */}
-                <Modal
-                    visible={showLocPicker}
-                    animationType="slide"
-                    presentationStyle="pageSheet"
-                >
-                    <View style={s.modalContainer}>
-                        <View style={s.modalHeader}>
-                            <Text style={s.modalTitle}>Chọn điểm đến</Text>
-                            <TouchableOpacity
-                                onPress={() => setShowLocPicker(false)}
-                            >
-                                <Ionicons
-                                    name="close"
-                                    size={24}
-                                    color="#111827"
-                                />
-                            </TouchableOpacity>
                         </View>
-                        <View style={s.searchWrap}>
-                            <Ionicons
-                                name="search-outline"
-                                size={18}
-                                color="#9CA3AF"
-                            />
-                            <TextInput
-                                style={s.searchInput}
-                                placeholder="Tìm kiếm..."
-                                placeholderTextColor="#9CA3AF"
-                                value={locSearch}
-                                onChangeText={searchLocations}
-                                autoFocus
-                            />
-                        </View>
-                        <FlatList
-                            data={locations}
-                            keyExtractor={(loc: any) => String(loc.id)}
-                            keyboardShouldPersistTaps="handled"
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={s.modalLocItem}
-                                    onPress={() => {
-                                        setSelectedLoc(item);
-                                        setShowLocPicker(false);
-                                    }}
-                                >
-                                    <Ionicons
-                                        name="location-outline"
-                                        size={20}
-                                        color="#4F46E5"
-                                    />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={s.modalLocName}>
-                                            {item.name}
-                                        </Text>
-                                        <Text
-                                            style={s.modalLocAddr}
-                                            numberOfLines={1}
-                                        >
-                                            {item.address || item.code}
-                                        </Text>
-                                    </View>
-                                    <Ionicons
-                                        name="chevron-forward"
-                                        size={16}
-                                        color="#D1D5DB"
-                                    />
-                                </TouchableOpacity>
-                            )}
-                            ListEmptyComponent={
-                                <View
-                                    style={{
-                                        alignItems: "center",
-                                        padding: 32,
-                                    }}
-                                >
-                                    <Text style={{ color: "#9CA3AF" }}>
-                                        Không tìm thấy điểm đến
-                                    </Text>
-                                </View>
-                            }
-                        />
                     </View>
-                </Modal>
+                )}
 
                 {/* Delivery point selector (multi-DP, only during delivery stage) */}
                 {deliveryPoints.length > 1 &&
@@ -1371,4 +1209,42 @@ const s = StyleSheet.create({
     },
     modalLocName: { fontSize: 15, fontWeight: "600", color: "#111827" },
     modalLocAddr: { fontSize: 12, color: "#9CA3AF", marginTop: 2 },
+    noDpNoticeCard: {
+        backgroundColor: "#FFFBEB",
+        marginHorizontal: 16,
+        marginBottom: 16,
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#FDE68A",
+    },
+    noDpNoticeTitle: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#92400E",
+        marginBottom: 4,
+    },
+    noDpNoticeText: {
+        fontSize: 12,
+        color: "#B45309",
+        lineHeight: 17,
+    },
+    goToTripBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        alignSelf: "flex-start",
+        backgroundColor: "#EEF2FF",
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 8,
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: "#C7D2FE",
+    },
+    goToTripBtnText: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#4F46E5",
+    },
 });
