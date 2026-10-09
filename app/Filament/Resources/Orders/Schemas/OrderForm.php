@@ -328,14 +328,22 @@ class OrderForm extends CreatesOrderTransportCards
                                         self::isHhhkOrder($get) ? self::normalizeInteger($get('pickup_location_id')) : null,
                                         self::normalizeInteger($get('vehicle_id')),
                                     ))
-                                    ->searchPlaceholder('Tìm biển số, loại xe...'),
+                                    ->searchPlaceholder('Tìm biển số, loại xe...')
+                                    ->required(fn (Get $get): bool => filled($get('driver_id')))
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng chọn phương tiện khi đã chọn lái xe.',
+                                    ]),
 
                                 DriverPicker::make('driver_id')
                                     ->label('Lái xe')
                                     ->live()
                                     ->afterStateUpdated(fn (Set $set, $state) => self::handleDriverStateUpdated($set, $state))
                                     ->cards(fn (): array => self::resolveDriverCards())
-                                    ->searchPlaceholder('Tìm tên, email...'),
+                                    ->searchPlaceholder('Tìm tên, email...')
+                                    ->required(fn (Get $get): bool => self::isDriverRequiredForVehicle($get('vehicle_id')))
+                                    ->validationMessages([
+                                        'required' => 'Vui lòng chọn lái xe cho phương tiện này.',
+                                    ]),
 
                             ]),
                     ])

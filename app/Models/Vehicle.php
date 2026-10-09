@@ -246,4 +246,18 @@ class Vehicle extends Model
             ? $type->getLabel()
             : 'Khác';
     }
+
+    public function isRent(): bool
+    {
+        return $this->type === VehicleOwnerType::Rent
+            || $this->type === VehicleOwnerType::Rent->value
+            || $this->type === 'rent';
+    }
+
+    public function isCompany(): bool
+    {
+        return $this->type === VehicleOwnerType::Company
+            || $this->type === VehicleOwnerType::Company->value
+            || $this->type === 'company';
+    }
 }

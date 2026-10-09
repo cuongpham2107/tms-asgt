@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\OrderType;
+use App\Enums\VehicleOwnerType;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Orders\Actions\CreateBulkOrdersAction;
 use App\Filament\Resources\Orders\Actions\CreateOrderHHHKAction;
@@ -10,6 +11,7 @@ use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -187,4 +189,97 @@ test('OrderForm chứa trường is_return_trip toggle', function () {
     OrderForm::configure($schema);
 
     expect($components)->not->toBeEmpty();
+});
+
+test('CreatesOrderTransportCards::isRentVehicle và isDriverRequiredForVehicle hoạt động chính xác', function () {
+    $companyVehicle = Vehicle::factory()->create([
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $rentVehicle = Vehicle::factory()->create([
+        'type' => VehicleOwnerType::Rent,
+    ]);
+
+    expect(CreatesOrderTransportCards::isRentVehicle($companyVehicle->id))->toBeFalse()
+        ->and(CreatesOrderTransportCards::isRentVehicle($rentVehicle->id))->toBeTrue()
+        ->and(CreatesOrderTransportCards::isDriverRequiredForVehicle($companyVehicle->id))->toBeTrue()
+        ->and(CreatesOrderTransportCards::isDriverRequiredForVehicle($rentVehicle->id))->toBeFalse()
+        ->and(CreatesOrderTransportCards::isDriverRequiredForVehicle(null))->toBeFalse();
+});
+
+test('tạo đơn HHHK có xe công ty nhưng thiếu lái xe thì ném ngoại lệ InvalidArgumentException', function () {
+    $companyVehicle = Vehicle::factory()->create([
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $schema = Mockery::mock(Schema::class);
+    $schema->shouldReceive('getRawState')->andReturn(['deliveryPoints' => []]);
+
+    $data = [
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'cargo_name' => 'Hàng không test thiếu lái xe',
+        'vehicle_id' => $companyVehicle->id,
+        'driver_id' => null,
+    ];
+
+    expect(fn () => CreatesOrderTransportCards::createSingleOrder($data, $schema, 'HHHK', true, $this->user->id))
+        ->toThrow(InvalidArgumentException::class, 'Vui lòng chọn lái xe cho phương tiện công ty.');
+});
+
+test('tạo đơn HHHK với xe thuê ngoài không cần lái xe và tạo đơn thành công', function () {
+    $rentVehicle = Vehicle::factory()->create([
+        'type' => VehicleOwnerType::Rent,
+    ]);
+
+    $schema = Mockery::mock(Schema::class);
+    $schema->shouldReceive('getRawState')->andReturn(['deliveryPoints' => []]);
+
+    $data = [
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'cargo_name' => 'Hàng không test xe thuê không lái',
+        'vehicle_id' => $rentVehicle->id,
+        'driver_id' => null,
+    ];
+
+    $order = CreatesOrderTransportCards::createSingleOrder($data, $schema, 'HHHK', true, $this->user->id);
+
+    expect($order)->toBeInstanceOf(Order::class)
+        ->and($order->trip_id)->not->toBeNull();
+
+    $trip = $order->trip;
+    expect($trip->vehicle_id)->toBe($rentVehicle->id)
+        ->and($trip->driver_id)->toBeNull();
+});
+
+test('tạo đơn HHHK với xe công ty và có lái xe thành công', function () {
+    $companyVehicle = Vehicle::factory()->create([
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $driver = User::factory()->create(['name' => 'Tài Xế Test']);
+
+    $schema = Mockery::mock(Schema::class);
+    $schema->shouldReceive('getRawState')->andReturn(['deliveryPoints' => []]);
+
+    $data = [
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'cargo_name' => 'Hàng không test đủ xe và lái',
+        'vehicle_id' => $companyVehicle->id,
+        'driver_id' => $driver->id,
+    ];
+
+    $order = CreatesOrderTransportCards::createSingleOrder($data, $schema, 'HHHK', true, $this->user->id);
+
+    expect($order)->toBeInstanceOf(Order::class)
+        ->and($order->trip_id)->not->toBeNull();
+
+    $trip = $order->trip;
+    expect($trip->vehicle_id)->toBe($companyVehicle->id)
+        ->and($trip->driver_id)->toBe($driver->id);
 });

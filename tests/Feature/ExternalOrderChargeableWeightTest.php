@@ -25,6 +25,9 @@ test('external order without chargeable_weight requires input when assigning tra
     $user = User::factory()->create();
     $this->actingAs($user);
 
+    $driver = User::factory()->create();
+    $driver->assignRole('driver');
+
     $vehicle = Vehicle::factory()->create(['status' => VehicleStatus::On]);
     $area = Area::create(['code' => 'HN', 'name' => 'Hà Nội', 'type' => 'external']);
     $customer = Customer::create(['code' => 'CUST01', 'name' => 'Khách A']);
@@ -48,6 +51,7 @@ test('external order without chargeable_weight requires input when assigning tra
     ])
         ->callTableAction('assign_transport', $externalOrder, [
             'vehicle_id' => $vehicle->id,
+            'driver_id' => $driver->id,
             'chargeable_weight' => 3.5,
         ])
         ->assertHasNoTableActionErrors();

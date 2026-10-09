@@ -8,7 +8,6 @@ use App\Enums\LocationType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Enums\TripStatus;
-use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
@@ -43,6 +42,13 @@ abstract class CreatesOrderTransportCards
     {
         if ($state) {
             $vehicle = Vehicle::query()->with(['evenDriver', 'oddDriver', 'drivers'])->find($state);
+
+            if ($vehicle?->isRent()) {
+                $set('driver_id', null);
+
+                return;
+            }
+
             $todayShift = ShiftScheduleService::determineShift();
             $driverForToday = $vehicle?->getDriverForShift($todayShift);
 
@@ -59,6 +65,30 @@ abstract class CreatesOrderTransportCards
     public static function handleDriverStateUpdated(Set $set, mixed $state): void
     {
         // Không tự động chọn lại xe khi chọn lái xe
+    }
+
+    public static function isRentVehicle(mixed $vehicle): bool
+    {
+        if (blank($vehicle)) {
+            return false;
+        }
+
+        if ($vehicle instanceof Vehicle) {
+            return $vehicle->isRent();
+        }
+
+        $vehicleModel = Vehicle::query()->select(['id', 'type'])->find($vehicle);
+
+        return $vehicleModel?->isRent() ?? false;
+    }
+
+    public static function isDriverRequiredForVehicle(mixed $vehicleId): bool
+    {
+        if (blank($vehicleId)) {
+            return false;
+        }
+
+        return ! static::isRentVehicle($vehicleId);
     }
 
     /**
@@ -122,8 +152,6 @@ abstract class CreatesOrderTransportCards
                         : ($shiftScheduleLabel ? "{$shiftScheduleLabel} · Nghỉ ca" : 'Chưa xếp ca');
 
                     $licenseStatus = $driver->getLicenseExpiryStatus();
-                    $anhkStatus = $driver->getAviationSecurityCertStatus();
-                    $dgStatus = $driver->getDangerousGoodsCertStatus();
                     $hasExpired = $driver->hasExpiredCertificates();
 
                     $driverLocation = null;
@@ -167,8 +195,6 @@ abstract class CreatesOrderTransportCards
                         'details' => array_values(array_filter([
                             ['icon' => 'heroicon-m-calendar-days', 'label' => 'Lịch ca', 'value' => $shiftScheduleText],
                             ['icon' => 'heroicon-m-identification', 'label' => 'GPLX', 'value' => $driver->license_class ? ($driver->license_class.($driver->license_number ? ' · '.$driver->license_number : '').' ('.$licenseStatus['label'].')') : 'Chưa cập nhật'],
-                            ['icon' => 'heroicon-m-shield-check', 'label' => 'ANHK', 'value' => $anhkStatus['label']],
-                            ['icon' => 'heroicon-m-exclamation-triangle', 'label' => 'Hàng nguy hiểm', 'value' => $dgStatus['label']],
                             ['icon' => 'heroicon-m-truck', 'label' => 'Xe gán', 'value' => $assignedVehicle?->plate_number ?? 'Chưa gán xe'],
                             ['icon' => 'heroicon-m-clock', 'label' => 'Ca trực', 'value' => $hasActiveShift ? ('Đang '.$latestShift->shift_type?->getLabel()) : ($latestShift?->shift_type?->getLabel() ?? 'Chưa có ca')],
                             ['icon' => 'heroicon-m-map-pin', 'label' => 'Vị trí', 'value' => $driverLocation['name'] ?? 'Chưa xác định'],
@@ -972,6 +998,12 @@ abstract class CreatesOrderTransportCards
             }
 
             if ($forceAssignedWhenTransportProvided && filled($data['vehicle_id'] ?? null)) {
+                $vehicle = Vehicle::query()->find($data['vehicle_id']);
+
+                if ($vehicle !== null && ! static::isRentVehicle($vehicle) && blank($data['driver_id'] ?? null)) {
+                    throw new \InvalidArgumentException('Vui lòng chọn lái xe cho phương tiện công ty.');
+                }
+
                 $trip = Trip::create([
                     'trip_code' => Trip::generateTripCode(),
                     'vehicle_id' => $data['vehicle_id'],
@@ -1010,8 +1042,6 @@ abstract class CreatesOrderTransportCards
                     }
                 }
 
-                $vehicle = Vehicle::query()->find($data['vehicle_id']);
-
                 if ($vehicle !== null) {
                     $vehicle->update(['status' => VehicleStatus::Running]);
                 }
@@ -1027,7 +1057,7 @@ abstract class CreatesOrderTransportCards
     {
         $vehicle = $trip->vehicle;
 
-        if ($vehicle?->type !== VehicleOwnerType::Rent) {
+        if (! static::isRentVehicle($vehicle)) {
             return;
         }
 

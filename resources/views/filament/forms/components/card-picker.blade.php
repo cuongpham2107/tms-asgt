@@ -44,10 +44,6 @@
         ensureSelectedCardVisible() {
             if (!this.state) return;
 
-            if (!this.scopedCards().some(c => String(c.value) === String(this.state))) {
-                this.activeTab = 'all';
-            }
-
             const cards = this.allFilteredCards();
             const index = cards.findIndex(c => String(c.value) === String(this.state));
 

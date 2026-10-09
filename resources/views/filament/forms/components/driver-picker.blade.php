@@ -11,42 +11,19 @@
         displayLimit: 24,
         batchSize: 24,
         init() {
-            if (this.state) {
-                if (!this.scopedCards().some(c => String(c.value) === String(this.state))) {
-                    this.activeTab = 'all';
-                }
-            } else if (this.hasSuggestionTab()) {
-                this.activeTab = 'suggested';
-            }
-
             this.ensureSelectedCardVisible();
 
             this.$watch('state', (val) => {
-                if (val && !this.scopedCards().some(c => String(c.value) === String(val))) {
-                    this.activeTab = 'all';
-                }
                 this.ensureSelectedCardVisible();
             });
 
             this.$watch('search', (val) => {
-                this.displayLimit = this.batchSize;
-                if (val.length === 0 && this.hasSuggestionTab()) {
-                    this.activeTab = 'suggested';
-                }
-                this.ensureSelectedCardVisible();
-            });
-
-            this.$watch('activeTab', () => {
                 this.displayLimit = this.batchSize;
                 this.ensureSelectedCardVisible();
             });
         },
         ensureSelectedCardVisible() {
             if (!this.state) return;
-
-            if (!this.scopedCards().some(c => String(c.value) === String(this.state))) {
-                this.activeTab = 'all';
-            }
 
             const cards = this.allFilteredCards();
             const index = cards.findIndex(c => String(c.value) === String(this.state));
@@ -55,57 +32,22 @@
                 this.displayLimit = Math.ceil((index + 1) / this.batchSize) * this.batchSize;
             }
         },
-        getNestedValue(obj, path) {
-            return path.split('.').reduce((acc, part) => {
-                if (acc === null || acc === undefined) return undefined;
-                return acc[part];
-            }, obj);
-        },
-        hasSuggestionTab() {
-            return this.cards.some(card => card.isSuggested === true);
-        },
-        setTab(tab) {
-            this.activeTab = tab;
-            this.search = '';
-        },
-
-        bestSuggestedCard() {
-            const suggestions = this.cards.filter(card => card.isSuggested === true);
-    
-            if (!suggestions.length) {
-                return null;
-            }
-    
-            return suggestions
-                .slice()
-                .sort((a, b) => (b.suggestionScore ?? 0) - (a.suggestionScore ?? 0))[0];
-        },
-        suggestedCards() {
-            return this.cards
-                .filter(card => card.isSuggested === true)
-                .slice()
-                .sort((a, b) => (b.suggestionScore ?? 0) - (a.suggestionScore ?? 0))
-                .slice(0, 3);
-        },
         scopedCards() {
-            if (this.hasSuggestionTab() && this.activeTab === 'suggested') {
-                return this.search ? this.cards : this.suggestedCards();
-            }
             return this.cards;
         },
         matches(card) {
             if (!this.search) {
                 return true;
             }
-    
+
             const searchable = [card.title, card.subtitle, ...(card.meta ?? [])];
-    
+
             if (Array.isArray(card.details)) {
                 card.details.forEach(d => {
                     if (d && d.value) searchable.push(d.value);
                 });
             }
-    
+
             return searchable
                 .filter(Boolean)
                 .join(' ')
@@ -141,33 +83,15 @@
             return colors[dot] ?? 'bg-gray-400';
         },
     }" class="space-y-3">
-        {{-- Tabs + Search --}}
+        {{-- Header + Search --}}
         <div class="flex items-center justify-between gap-3">
-            <div x-show="hasSuggestionTab()" x-cloak
-                class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
-                <button type="button" x-on:click="setTab('suggested')"
-                    class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
-                    :class="activeTab === 'suggested'
-                        ?
-                        'bg-primary-500/10 text-primary-600 dark:text-primary-400' :
-                        'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'">
-                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                    </svg>
-                    Gợi ý
-                </button>
-                <button type="button" x-on:click="setTab('all')"
-                    class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
-                    :class="activeTab === 'all'
-                        ?
-                        'bg-primary-500/10 text-primary-600 dark:text-primary-400' :
-                        'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'">
-                    Tất cả
+            <div class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
+                <div class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Tất cả lái xe
                     <span
                         class="rounded-full bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-600 dark:bg-gray-700 dark:text-gray-300"
                         x-text="cards.length"></span>
-                </button>
+                </div>
             </div>
 
             <div class="relative ml-auto w-full max-w-xs">
@@ -236,15 +160,8 @@
                             {{-- Badge --}}
                             <span x-show="card.badge"
                                 class="shrink-0 rounded-xl px-2 py-1 text-[8px] font-semibold uppercase"
-                                :class="activeTab === 'suggested' && card.isSuggested ?
-                                    (card.suggestedBadgeClasses ?? card.badgeClasses ??
-                                        'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200') :
-                                    (card.badgeClasses ??
-                                        'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'
-                                    )"
-                                x-text="activeTab === 'suggested' && card.isSuggested
-                                    ? (card.suggestedBadge ?? card.badge)
-                                    : card.badge"></span>
+                                :class="card.badgeClasses ?? 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'"
+                                x-text="card.badge"></span>
                         </div>
 
                         {{-- Card Body: Details --}}
@@ -263,18 +180,6 @@
                                     </div>
                                 </div>
                             </template>
-                        </div>
-
-                        {{-- Suggestion highlight bar --}}
-                        <div x-show="activeTab === 'suggested' && card.isSuggested"
-                            class="mt-auto flex items-center gap-2 rounded-b-[10px] bg-primary-50 px-3.5 py-2 dark:bg-primary-950/30">
-                            <svg class="h-3.5 w-3.5 text-primary-500" fill="none" viewBox="0 0 24 24"
-                                stroke-width="2" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                            </svg>
-                            <span class="text-[11px] font-semibold text-primary-600 dark:text-primary-400">Phù hợp
-                                nhất cho đơn hàng này</span>
                         </div>
                     </button>
                 </div>

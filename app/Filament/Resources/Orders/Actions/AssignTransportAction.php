@@ -18,6 +18,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\Width;
 use Filament\Support\RawJs;
@@ -76,7 +77,11 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             ->live()
                             ->afterStateUpdated(fn (Set $set, $state) => self::handleDriverStateUpdated($set, $state))
                             ->cards(fn (): array => self::resolveDriverCards())
-                            ->searchPlaceholder('Tìm tên, email...'),
+                            ->searchPlaceholder('Tìm tên, email...')
+                            ->required(fn (Get $get): bool => self::isDriverRequiredForVehicle($get('vehicle_id')))
+                            ->validationMessages([
+                                'required' => 'Vui lòng chọn lái xe cho phương tiện này.',
+                            ]),
                     ]),
             ])
             ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
