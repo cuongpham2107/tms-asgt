@@ -1,0 +1,173 @@
+import { AppState, Platform } from "react-native";
+import * as Notifications from "expo-notifications";
+import * as Device from "expo-device";
+import Constants from "expo-constants";
+import { useEffect, useRef } from "react";
+import { useRouter } from "expo-router";
+import { api } from "./api";
+import { showAlert } from "./alert";
+
+// Cấu hình cách hiển thị thông báo khi app đang mở (Foreground)
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false, // Khi app đang mở thì không cần giữ badge icon ngoài màn hình
+        shouldShowBanner: true,
+        shouldShowList: true,
+    }),
+});
+
+/**
+ * Xóa số lượng thông báo (badge) trên biểu tượng ứng dụng ngoài màn hình chính.
+ */
+export async function clearNotificationBadge(): Promise<void> {
+    if (Platform.OS === "web") return;
+    try {
+        await Notifications.setBadgeCountAsync(0);
+    } catch (error) {
+        console.log("Failed to clear notification badge:", error);
+    }
+}
+
+/**
+ * Đăng ký quyền và lấy Push Token của thiết bị (hỗ trợ cả máy thật & Simulator).
+ */
+export async function registerForPushNotificationsAsync(): Promise<string | null> {
+    if (Platform.OS === "web") {
+        return null;
+    }
+
+    // Cấu hình Android Notification Channel
+    if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("orders", {
+            name: "Đơn hàng & Chuyến đi",
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: "#4F46E5",
+            sound: "default",
+        });
+    }
+
+    // Kiểm tra quyền nhận thông báo
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+    }
+
+    if (finalStatus !== "granted") {
+        console.log("Push notification permission not granted.");
+        return null;
+    }
+
+    const projectId =
+        Constants?.expoConfig?.extra?.eas?.projectId ??
+        Constants?.easConfig?.projectId ??
+        "4a73c5d5-0135-4373-a36e-8e0b2009c779";
+
+    // Luôn dùng Expo Push Token cho cả Simulator và máy thật.
+    // Expo tự xử lý bridge APNs/FCM phía server, đảm bảo token luôn hợp lệ.
+    // KHÔNG dùng getDevicePushTokenAsync() vì trên iOS nó trả về raw APNs device token
+    // (hex 64 ký tự) — không phải FCM registration token, Firebase Admin SDK sẽ reject.
+    try {
+        const expoTokenData = await Notifications.getExpoPushTokenAsync({
+            projectId,
+        });
+        if (expoTokenData?.data) {
+            return expoTokenData.data;
+        }
+    } catch (error) {
+        console.log("Error getting Expo push token:", error);
+    }
+
+    return null;
+}
+
+/**
+ * Hook lắng nghe thông báo và xử lý điều hướng khi bấm vào thông báo.
+ */
+export function usePushNotifications(authToken: string | null) {
+    const router = useRouter();
+    const notificationListener = useRef<Notifications.Subscription | null>(null);
+    const responseListener = useRef<Notifications.Subscription | null>(null);
+
+    // Xóa số thông báo (badge) trên icon khi mở app hoặc khi quay lại từ background
+    useEffect(() => {
+        if (Platform.OS === "web") return;
+
+        clearNotificationBadge();
+
+        const subscription = AppState.addEventListener("change", (nextAppState) => {
+            if (nextAppState === "active") {
+                clearNotificationBadge();
+            }
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!authToken || Platform.OS === "web") return;
+
+        // Đăng ký token với máy chủ Laravel
+        registerForPushNotificationsAsync()
+            .then((fcmToken) => {
+                if (fcmToken) {
+                    console.log("FCM Token obtained:", fcmToken);
+                    api.updateFcmToken(fcmToken, authToken)
+                        .then(() => {
+                            console.log("Successfully synced FCM token to server!");
+                        })
+                        .catch((err) => {
+                            console.log("Failed to sync FCM token to server:", err);
+                        });
+                }
+            })
+            .catch((err) => {
+                console.log("Error during registerForPushNotificationsAsync:", err);
+            });
+
+        // Lắng nghe khi thông báo tới lúc đang mở app (Foreground)
+        notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
+            console.log("Notification received in foreground:", notification);
+            const title = notification.request.content.title;
+            const body = notification.request.content.body;
+            if (title) {
+                showAlert(title, body ?? "");
+            }
+        });
+
+        // Lắng nghe khi người dùng bấm vào thông báo -> Xóa badge và mở thẳng vào Chi tiết chuyến đi
+        responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+            console.log("Notification response received (tapped):", response);
+            clearNotificationBadge();
+            const data = response.notification.request.content.data as Record<string, any> | undefined;
+
+            if (!data) return;
+
+            const tripId = data.trip_id || data.tripId;
+            if (tripId) {
+                router.push({
+                    pathname: "/trip-detail",
+                    params: { id: String(tripId) },
+                });
+            } else {
+                router.push("/(tabs)/trips");
+            }
+        });
+
+        return () => {
+            if (notificationListener.current) {
+                notificationListener.current.remove();
+            }
+            if (responseListener.current) {
+                responseListener.current.remove();
+            }
+        };
+    }, [authToken]);
+}

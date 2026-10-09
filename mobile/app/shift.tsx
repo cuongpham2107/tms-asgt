@@ -6,6 +6,7 @@ import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { getFastGpsCoordinates } from "../src/lib/location";
 
 const shiftOptions = [
   { key: "full", label: "Cả ca (X)", desc: "Làm việc toàn thời gian" },
@@ -67,10 +68,9 @@ export default function ShiftScreen() {
     try {
       let gps = null;
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === "granted") {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-          gps = { start_gps_lat: pos.coords.latitude, start_gps_lng: pos.coords.longitude };
+        const coords = await getFastGpsCoordinates();
+        if (coords) {
+          gps = { start_gps_lat: coords.gps_lat, start_gps_lng: coords.gps_lng };
         }
       } catch {}
       const res = await api.shifts.start({ shift_type: type, ...(gps || {}) }, token!);

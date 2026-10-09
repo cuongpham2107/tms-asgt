@@ -21,6 +21,7 @@ import { api } from "../src/lib/api";
 import { showAlert } from "../src/lib/alert";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import { getFastGpsCoordinates } from "../src/lib/location";
 import { Ionicons } from "@expo/vector-icons";
 
 const statusConfig: Record<
@@ -378,23 +379,6 @@ export default function OrderDetailScreen() {
         }
     }
 
-    async function getGpsCoordinates() {
-        try {
-            const { status } =
-                await Location.requestForegroundPermissionsAsync();
-            if (status !== "granted") return null;
-            const pos = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.High,
-            });
-            return {
-                gps_lat: pos.coords.latitude,
-                gps_lng: pos.coords.longitude,
-            };
-        } catch {
-            return null;
-        }
-    }
-
     async function submitCheckpoint(type: string) {
         if (!tripId || !token || !d.id) return;
         if (
@@ -406,38 +390,41 @@ export default function OrderDetailScreen() {
             showAlert("Thiếu", "Vui lòng nhập số Km");
             return;
         }
-        const body: any = {
-            checkpoint_type: type,
-            occurred_at: localISO(),
-        };
-        // Capture GPS coordinates
-        const gps = await getGpsCoordinates();
-        if (gps) {
-            body.gps_lat = gps.gps_lat;
-            body.gps_lng = gps.gps_lng;
-        }
-        if (km) body.km_reading = parseFloat(km);
-        if (note) body.voice_note = note;
-        if (d.id) body.order_id = d.id;
-        if (photos.length > 0) body.photos = photos;
 
-        // Nếu có delivery_point_id thì dùng, nếu không có nhưng đã chọn location thì gửi new_delivery_location_id
-        if (
-            activeDpId &&
-            ["arrived_delivery", "completed", "end"].includes(type)
-        ) {
-            body.delivery_point_id = activeDpId;
-        } else if (
-            !hasDeliveryPoint &&
-            selectedLoc &&
-            ["arrived_delivery", "completed", "end"].includes(type)
-        ) {
-            body.new_delivery_location_id = selectedLoc.id;
-        }
-
+        // Bật loading ngay lập tức để người dùng có phản hồi trực quan
         setLoading(true);
         showLoading();
+
         try {
+            const body: any = {
+                checkpoint_type: type,
+                occurred_at: localISO(),
+            };
+            // Lấy toạ độ GPS nhanh (kèm timeout và cache fallback)
+            const gps = await getFastGpsCoordinates();
+            if (gps) {
+                body.gps_lat = gps.gps_lat;
+                body.gps_lng = gps.gps_lng;
+            }
+            if (km) body.km_reading = parseFloat(km);
+            if (note) body.voice_note = note;
+            if (d.id) body.order_id = d.id;
+            if (photos.length > 0) body.photos = photos;
+
+            // Nếu có delivery_point_id thì dùng, nếu không có nhưng đã chọn location thì gửi new_delivery_location_id
+            if (
+                activeDpId &&
+                ["arrived_delivery", "completed", "end"].includes(type)
+            ) {
+                body.delivery_point_id = activeDpId;
+            } else if (
+                !hasDeliveryPoint &&
+                selectedLoc &&
+                ["arrived_delivery", "completed", "end"].includes(type)
+            ) {
+                body.new_delivery_location_id = selectedLoc.id;
+            }
+
             await api.trips.checkpoint(String(tripId), body, token);
             showAlert(
                 "Thành công",

@@ -22,6 +22,7 @@ import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { clearNotificationBadge } from "../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { getFastGpsCoordinates } from "../src/lib/location";
 import * as ImagePicker from "expo-image-picker";
 
 const statusConfig: Record<
@@ -160,10 +161,7 @@ export default function TripDetailScreen() {
             return {
                 id: undefined,
                 name: "Bắt đầu chuyến",
-                km:
-                    detail?.start_km != null
-                        ? Number(detail.start_km)
-                        : null,
+                km: detail?.start_km != null ? Number(detail.start_km) : null,
             };
         }
 
@@ -234,7 +232,9 @@ export default function TripDetailScreen() {
                 {
                     reported_km: km,
                     checkpoint_id: currentStep.id,
-                    note: reportNote ? `${reportReason}: ${reportNote}` : reportReason,
+                    note: reportNote
+                        ? `${reportReason}: ${reportNote}`
+                        : reportReason,
                     photo: reportPhoto || undefined,
                 },
                 token,
@@ -258,18 +258,7 @@ export default function TripDetailScreen() {
     };
 
     const getGps = async () => {
-        try {
-            await Location.requestForegroundPermissionsAsync();
-            const pos = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.High,
-            });
-            return {
-                gps_lat: pos.coords.latitude,
-                gps_lng: pos.coords.longitude,
-            };
-        } catch {
-            return null;
-        }
+        return getFastGpsCoordinates();
     };
 
     const load = async () => {
@@ -351,8 +340,11 @@ export default function TripDetailScreen() {
             }
             await api.trips.checkpoint(String(trip.id), body, token);
             const updated = await load();
-            const currentOrders: any[] = updated?.orders || detail?.orders || trip?.orders || [];
-            const targetOrder = currentOrders.find((o: any) => o.status !== "completed") || currentOrders[0];
+            const currentOrders: any[] =
+                updated?.orders || detail?.orders || trip?.orders || [];
+            const targetOrder =
+                currentOrders.find((o: any) => o.status !== "completed") ||
+                currentOrders[0];
             if (targetOrder) {
                 router.push({
                     pathname: "/order-detail",
@@ -361,7 +353,10 @@ export default function TripDetailScreen() {
                         order: JSON.stringify({
                             ...targetOrder,
                             trip_id: trip?.id || params.id,
-                            vehicle: updated?.vehicle || detail?.vehicle || trip?.vehicle,
+                            vehicle:
+                                updated?.vehicle ||
+                                detail?.vehicle ||
+                                trip?.vehicle,
                             is_swapped: isSwapped,
                         }),
                     },
