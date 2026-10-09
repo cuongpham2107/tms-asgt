@@ -11,6 +11,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -127,29 +128,33 @@ class VehicleForm
                                 ->toArray())
                             ->required()
                             ->maxLength(255),
-                        Select::make('even_driver_id')
-                            ->label('Lái xe ca chẵn')
-                            ->native(false)
-                            ->relationship('evenDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Even)->orWhereNull('work_shift')))
-                            ->searchable()
-                            ->preload()
-                            ->placeholder('Chọn lái xe ca chẵn'),
+                        Grid::make(3)
+                            ->schema([
+                                Select::make('even_driver_id')
+                                    ->label('Lái xe ca chẵn')
+                                    ->native(false)
+                                    ->relationship('evenDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Even)->orWhereNull('work_shift')))
+                                    ->searchable()
+                                    ->preload()
+                                    ->placeholder('Chọn lái xe ca chẵn'),
 
-                        Select::make('odd_driver_id')
-                            ->label('Lái xe ca lẻ')
-                            ->native(false)
-                            ->relationship('oddDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Odd)->orWhereNull('work_shift')))
-                            ->searchable()
-                            ->preload()
-                            ->placeholder('Chọn lái xe ca lẻ'),
+                                Select::make('odd_driver_id')
+                                    ->label('Lái xe ca lẻ')
+                                    ->native(false)
+                                    ->relationship('oddDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Odd)->orWhereNull('work_shift')))
+                                    ->searchable()
+                                    ->preload()
+                                    ->placeholder('Chọn lái xe ca lẻ'),
 
-                        Select::make('current_driver_id')
-                            ->label('Lái xe hiện tại (Tùy chọn)')
-                            ->native(false)
-                            ->relationship('driver', 'name', fn ($query) => $query->role('driver'))
-                            ->searchable()
-                            ->preload()
-                            ->helperText('Hệ thống tự động ưu tiên tài xế đúng ca chẵn/lẻ hôm nay nếu để trống'),
+                                Select::make('current_driver_id')
+                                    ->label('Lái xe hiện tại (Tùy chọn)')
+                                    ->native(false)
+                                    ->relationship('driver', 'name', fn ($query) => $query->role('driver'))
+                                    ->searchable()
+                                    ->preload()
+                                    ->helperText('Hệ thống tự động ưu tiên tài xế đúng ca chẵn/lẻ hôm nay nếu để trống'),
+                            ])
+                            ->columnSpanFull(),
 
                         Select::make('status')
                             ->label('Trạng thái')
