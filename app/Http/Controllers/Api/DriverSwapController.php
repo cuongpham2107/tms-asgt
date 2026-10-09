@@ -18,6 +18,7 @@ use App\Services\ShiftKmCalculatorService;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -103,7 +104,7 @@ class DriverSwapController extends Controller
             if ($request->hasFile('photos')) {
                 $files = Arr::wrap($request->file('photos'));
                 foreach ($files as $file) {
-                    if ($file === null) {
+                    if (! $file instanceof UploadedFile || ! $file->isValid() || $file->getSize() <= 0) {
                         continue;
                     }
 

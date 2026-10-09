@@ -4,8 +4,8 @@ import { Platform } from "react-native";
 // Thay IP này thành IP máy chạy Laravel backend
 const API = Platform.select({
     ios: "https://tms.asgl.net.vn/api/driver",
-    android: "http://tms.asgl.net.vn/api/driver",
-    default: "http://tms.asgl.net.vn/api/driver",
+    android: "https://tms.asgl.net.vn/api/driver",
+    default: "https://tms.asgl.net.vn/api/driver",
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -87,20 +87,29 @@ export const api = {
             const hasPhotos = body.photos && Array.isArray(body.photos) && body.photos.length > 0;
             if (hasPhotos) {
                 const fd = new FormData();
-                // Upload photos as Blobs (avoids "Unsupported FormDataPart" on RN)
-                const photoBlobs = await Promise.all(
-                    (body.photos as string[]).map(async (uri, i) => {
-                        const res = await fetch(uri);
-                        const blob = await res.blob();
-                        return { blob, i };
-                    }),
-                );
+                if (Platform.OS === "web") {
+                    const photoBlobs = await Promise.all(
+                        (body.photos as string[]).map(async (uri, i) => {
+                            const res = await fetch(uri);
+                            const blob = await res.blob();
+                            return { blob, i };
+                        }),
+                    );
+                    photoBlobs.forEach(({ blob, i }) =>
+                        fd.append(`photos[${i}]`, blob, `photo_${i}.jpg`),
+                    );
+                } else {
+                    (body.photos as string[]).forEach((uri, i) => {
+                        fd.append(`photos[${i}]`, {
+                            uri,
+                            name: `photo_${i}.jpg`,
+                            type: "image/jpeg",
+                        } as any);
+                    });
+                }
+
                 Object.entries(body).forEach(([k, v]) => {
-                    if (k === "photos") {
-                        photoBlobs.forEach(({ blob, i }) =>
-                            fd.append(`photos[${i}]`, blob, `photo_${i}.jpg`),
-                        );
-                    } else if (v !== undefined && v !== null) {
+                    if (k !== "photos" && v !== undefined && v !== null) {
                         fd.append(k, String(v));
                     }
                 });
@@ -111,9 +120,17 @@ export const api = {
         reportKmIssue: async (tripId: string, body: { reported_km: number; checkpoint_id?: number; note?: string; photo?: string }, t: string) => {
             if (body.photo) {
                 const fd = new FormData();
-                const res = await fetch(body.photo);
-                const blob = await res.blob();
-                fd.append("photo", blob, "km_report.jpg");
+                if (Platform.OS === "web") {
+                    const res = await fetch(body.photo);
+                    const blob = await res.blob();
+                    fd.append("photo", blob, "km_report.jpg");
+                } else {
+                    fd.append("photo", {
+                        uri: body.photo,
+                        name: "km_report.jpg",
+                        type: "image/jpeg",
+                    } as any);
+                }
                 fd.append("reported_km", String(body.reported_km));
                 if (body.checkpoint_id) {
                     fd.append("checkpoint_id", String(body.checkpoint_id));

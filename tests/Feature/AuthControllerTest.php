@@ -229,3 +229,42 @@ test('driver can change password', function () {
     $driver->refresh();
     expect(Hash::check('newPassword456', $driver->password))->toBeTrue();
 });
+
+test('login prioritizes driver account when multiple users share the same phone number', function () {
+    $nonDriver = User::factory()->create([
+        'email' => 'regular_user@example.com',
+        'phone' => '0964181383',
+        'password' => bcrypt('password_nondriver'),
+    ]);
+
+    $driver = User::factory()->create([
+        'email' => 'driver_user@example.com',
+        'phone' => '0964181383',
+        'password' => bcrypt('password_driver'),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    $response = $this->postJson('/api/driver/login', [
+        'login' => '0964181383',
+        'password' => 'password_driver',
+    ]);
+
+    $response->assertSuccessful()
+        ->assertJsonPath('user.id', $driver->id);
+});
+
+test('login rejects user without driver role', function () {
+    $nonDriver = User::factory()->create([
+        'email' => 'nondriver@example.com',
+        'phone' => '0988888888',
+        'password' => bcrypt('password123'),
+    ]);
+
+    $response = $this->postJson('/api/driver/login', [
+        'login' => '0988888888',
+        'password' => 'password123',
+    ]);
+
+    $response->assertStatus(403)
+        ->assertJsonPath('message', 'Tài khoản này không có quyền tài xế');
+});

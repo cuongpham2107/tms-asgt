@@ -23,7 +23,7 @@ class TripPhotoAttacher
         $disk = Storage::disk('public');
 
         foreach ($files as $file) {
-            if (! $file instanceof UploadedFile) {
+            if (! $file instanceof UploadedFile || ! $file->isValid() || $file->getSize() <= 0) {
                 continue;
             }
 

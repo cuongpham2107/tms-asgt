@@ -30,6 +30,8 @@ class ReassignDriverAction
         return Action::make('reassign_driver')
             ->label('Gán lại tài xế')
             ->icon('heroicon-o-arrow-path')
+            ->button()
+            ->size('xs')
             ->color('warning')
             ->visible(fn (Trip $record): bool => $record->status === TripStatus::DriverSwap)
             ->modalHeading('Gán lại tài xế mới')

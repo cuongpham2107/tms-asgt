@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\DriverWorkShift;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Services\ShiftScheduleService;
 use Database\Factories\VehicleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +23,37 @@ class Vehicle extends Model
     protected $attributes = [
         'current_mileage' => 10000,
     ];
+
+    protected static function booted(): void
+    {
+        static::saved(function (Vehicle $vehicle) {
+            if ($vehicle->wasChanged('even_driver_id')) {
+                $oldDriverId = $vehicle->getOriginal('even_driver_id');
+                if ($oldDriverId && $oldDriverId !== $vehicle->even_driver_id) {
+                    User::where('id', $oldDriverId)->where('vehicle_id', $vehicle->id)->update(['vehicle_id' => null]);
+                }
+                if ($vehicle->even_driver_id) {
+                    User::where('id', $vehicle->even_driver_id)->update([
+                        'vehicle_id' => $vehicle->id,
+                        'work_shift' => DriverWorkShift::Even->value,
+                    ]);
+                }
+            }
+
+            if ($vehicle->wasChanged('odd_driver_id')) {
+                $oldDriverId = $vehicle->getOriginal('odd_driver_id');
+                if ($oldDriverId && $oldDriverId !== $vehicle->odd_driver_id) {
+                    User::where('id', $oldDriverId)->where('vehicle_id', $vehicle->id)->update(['vehicle_id' => null]);
+                }
+                if ($vehicle->odd_driver_id) {
+                    User::where('id', $vehicle->odd_driver_id)->update([
+                        'vehicle_id' => $vehicle->id,
+                        'work_shift' => DriverWorkShift::Odd->value,
+                    ]);
+                }
+            }
+        });
+    }
 
     protected $fillable = [
         'plate_number',
@@ -45,6 +78,8 @@ class Vehicle extends Model
         'gps_address',
         'last_gps_update',
         'current_driver_id',
+        'even_driver_id',
+        'odd_driver_id',
         'is_active',
         'status',
         'off_reason',
@@ -102,6 +137,37 @@ class Vehicle extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'current_driver_id');
+    }
+
+    public function evenDriver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'even_driver_id');
+    }
+
+    public function oddDriver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'odd_driver_id');
+    }
+
+    public function drivers(): HasMany
+    {
+        return $this->hasMany(User::class, 'vehicle_id');
+    }
+
+    public function getDriverForShift(DriverWorkShift $shift): ?User
+    {
+        if ($shift === DriverWorkShift::Even) {
+            return $this->evenDriver ?? $this->drivers->firstWhere('work_shift', DriverWorkShift::Even);
+        }
+
+        return $this->oddDriver ?? $this->drivers->firstWhere('work_shift', DriverWorkShift::Odd);
+    }
+
+    public function getDriverForToday(): ?User
+    {
+        $shift = ShiftScheduleService::determineShift();
+
+        return $this->getDriverForShift($shift) ?? $this->driver;
     }
 
     public function trips(): HasMany

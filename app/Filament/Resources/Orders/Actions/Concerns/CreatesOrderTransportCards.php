@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Actions\Concerns;
 
 use App\Enums\CheckpointType;
+use App\Enums\DriverWorkShift;
 use App\Enums\LocationType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
@@ -20,6 +21,7 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\ShiftScheduleService;
 use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -40,8 +42,15 @@ abstract class CreatesOrderTransportCards
     public static function handleVehicleStateUpdated(Set $set, mixed $state): void
     {
         if ($state) {
-            $vehicle = Vehicle::query()->find($state);
-            $set('driver_id', $vehicle?->current_driver_id ?? null);
+            $vehicle = Vehicle::query()->with(['evenDriver', 'oddDriver', 'drivers'])->find($state);
+            $todayShift = ShiftScheduleService::determineShift();
+            $driverForToday = $vehicle?->getDriverForShift($todayShift);
+
+            $selectedDriverId = $driverForToday?->id
+                ?? ($todayShift === DriverWorkShift::Even ? $vehicle?->even_driver_id : $vehicle?->odd_driver_id)
+                ?? $vehicle?->current_driver_id;
+
+            $set('driver_id', $selectedDriverId);
         } else {
             $set('driver_id', null);
         }
@@ -58,6 +67,8 @@ abstract class CreatesOrderTransportCards
     protected static function resolveDriverCards(): array
     {
         return Cache::remember('resolve-driver-cards', now()->addMinutes(5), function (): array {
+            $todayShift = ShiftScheduleService::determineShift();
+
             return User::query()
                 ->role('driver')
                 ->select([
@@ -65,6 +76,7 @@ abstract class CreatesOrderTransportCards
                     'name',
                     'phone',
                     'email',
+                    'work_shift',
                     'license_class',
                     'license_number',
                     'license_expiry_date',
@@ -89,12 +101,25 @@ abstract class CreatesOrderTransportCards
                 ])
                 ->orderBy('name')
                 ->get()
-                ->map(function (User $driver): array {
+                ->map(function (User $driver) use ($todayShift): array {
                     $latestShift = $driver->driverShifts->first();
                     $hasActiveShift = $latestShift && $latestShift->end_time === null;
                     $assignedVehicle = $driver->vehiclesAsDriver->first();
                     $activeOrders = (int) $driver->active_orders_count;
                     $isAvailable = $activeOrders === 0;
+
+                    $driverWorkShift = $driver->work_shift;
+                    $isTodayShift = $driverWorkShift !== null && $driverWorkShift === $todayShift;
+
+                    $shiftScheduleLabel = match ($driverWorkShift) {
+                        DriverWorkShift::Even => 'Ca chẵn',
+                        DriverWorkShift::Odd => 'Ca lẻ',
+                        default => null,
+                    };
+
+                    $shiftScheduleText = $isTodayShift
+                        ? "{$shiftScheduleLabel} · Hôm nay"
+                        : ($shiftScheduleLabel ? "{$shiftScheduleLabel} · Nghỉ ca" : 'Chưa xếp ca');
 
                     $licenseStatus = $driver->getLicenseExpiryStatus();
                     $anhkStatus = $driver->getAviationSecurityCertStatus();
@@ -121,18 +146,26 @@ abstract class CreatesOrderTransportCards
 
                     $statusDot = $hasExpired ? 'danger' : ($isAvailable ? 'success' : 'warning');
 
-                    $isSuggested = ! $hasExpired && $isAvailable && $hasActiveShift;
-                    $suggestionScore = ! $hasExpired && $isAvailable ? ($hasActiveShift ? 1000 : 500) : 0;
+                    $isSuggested = ! $hasExpired && $isAvailable && ($hasActiveShift || $isTodayShift);
+                    $shiftBonus = $isTodayShift ? 250 : ($driverWorkShift !== null ? -100 : 0);
+                    $suggestionScore = ! $hasExpired && $isAvailable ? (($hasActiveShift ? 1000 : 500) + $shiftBonus) : 0;
+
+                    $subtitleParts = array_filter([
+                        $driver->phone ?: ($driver->email ?? ''),
+                        $shiftScheduleLabel ? ($isTodayShift ? "{$shiftScheduleLabel} (Hôm nay)" : "{$shiftScheduleLabel} (Nghỉ ca)") : null,
+                    ]);
+                    $subtitle = implode(' · ', $subtitleParts);
 
                     return [
                         'value' => $driver->id,
                         'leading' => '👤',
                         'title' => $driver->name,
-                        'subtitle' => $driver->phone ?: ($driver->email ?? ''),
+                        'subtitle' => $subtitle,
                         'badge' => $badgeText,
                         'badgeClasses' => $badgeClasses,
                         'statusDot' => $statusDot,
                         'details' => array_values(array_filter([
+                            ['icon' => 'heroicon-m-calendar-days', 'label' => 'Lịch ca', 'value' => $shiftScheduleText],
                             ['icon' => 'heroicon-m-identification', 'label' => 'GPLX', 'value' => $driver->license_class ? ($driver->license_class.($driver->license_number ? ' · '.$driver->license_number : '').' ('.$licenseStatus['label'].')') : 'Chưa cập nhật'],
                             ['icon' => 'heroicon-m-shield-check', 'label' => 'ANHK', 'value' => $anhkStatus['label']],
                             ['icon' => 'heroicon-m-exclamation-triangle', 'label' => 'Hàng nguy hiểm', 'value' => $dgStatus['label']],
@@ -147,6 +180,8 @@ abstract class CreatesOrderTransportCards
                             $driver->aviation_security_cert_number ?? '',
                             $driver->dangerous_goods_cert_number ?? '',
                             $assignedVehicle?->plate_number ?? '',
+                            $shiftScheduleLabel ?? '',
+                            $isTodayShift ? 'Hôm nay' : '',
                         ],
                         'isSuggested' => $isSuggested,
                         'suggestionScore' => $suggestionScore,

@@ -3,12 +3,14 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\DriverWorkShift;
 use App\Enums\OnDutyLocation;
 use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -45,6 +47,8 @@ use Spatie\Permission\Traits\HasRoles;
     'email_verified_at',
     'fcm_token',
     'fcm_token_updated_at',
+    'work_shift',
+    'vehicle_id',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -53,6 +57,38 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     use HasRoles;
+
+    protected static function booted(): void
+    {
+        static::saved(function (User $user) {
+            if ($user->wasChanged('vehicle_id') || $user->wasChanged('work_shift')) {
+                $oldVehicleId = $user->getOriginal('vehicle_id');
+
+                if ($oldVehicleId && $oldVehicleId !== $user->vehicle_id) {
+                    $oldVehicle = Vehicle::find($oldVehicleId);
+                    if ($oldVehicle) {
+                        if ($oldVehicle->even_driver_id === $user->id) {
+                            $oldVehicle->update(['even_driver_id' => null]);
+                        }
+                        if ($oldVehicle->odd_driver_id === $user->id) {
+                            $oldVehicle->update(['odd_driver_id' => null]);
+                        }
+                    }
+                }
+
+                if ($user->vehicle_id) {
+                    $vehicle = Vehicle::find($user->vehicle_id);
+                    if ($vehicle) {
+                        if ($user->work_shift === DriverWorkShift::Even && $vehicle->even_driver_id !== $user->id) {
+                            $vehicle->update(['even_driver_id' => $user->id]);
+                        } elseif ($user->work_shift === DriverWorkShift::Odd && $vehicle->odd_driver_id !== $user->id) {
+                            $vehicle->update(['odd_driver_id' => $user->id]);
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -65,6 +101,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'station' => OnDutyLocation::class,
+            'work_shift' => DriverWorkShift::class,
+            'vehicle_id' => 'integer',
             'date_of_birth' => 'date',
             'cccd_issue_date' => 'date',
             'license_issue_date' => 'date',
@@ -167,6 +205,11 @@ class User extends Authenticatable
             $this->getAviationSecurityCertStatus()['status'],
             $this->getDangerousGoodsCertStatus()['status'],
         ], true);
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'vehicle_id');
     }
 
     public function vehiclesAsDriver(): HasMany

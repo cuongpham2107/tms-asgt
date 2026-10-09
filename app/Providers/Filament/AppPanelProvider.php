@@ -36,9 +36,11 @@ class AppPanelProvider extends PanelProvider
             ->default()
             ->id('app')
             ->path('app')
+            ->brandName('TMS - ASGT')
             ->viteTheme('resources/css/filament/app/theme.css')
             ->brandLogo(asset('images/ASG.png'))
-            ->favicon(asset('favicon.ico'))
+            ->brandLogoHeight('2rem')
+            ->favicon(asset('favicon.png'))
             ->login()
             ->colors([
                 'primary' => Color::Blue,

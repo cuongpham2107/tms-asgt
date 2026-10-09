@@ -43,7 +43,7 @@ class AuthController extends Controller
             $cleanPhone = '0'.substr($cleanPhone, 2);
         }
 
-        $user = User::query()
+        $candidates = User::query()
             ->where(function ($query) use ($account, $cleanPhone) {
                 $query->where('email', $account)
                     ->orWhere('phone', $account);
@@ -51,11 +51,24 @@ class AuthController extends Controller
                     $query->orWhere('phone', $cleanPhone);
                 }
             })
-            ->first();
+            ->with('roles')
+            ->get()
+            ->sortByDesc(function ($u) {
+                return (method_exists($u, 'hasRole') && $u->hasRole('driver')) ? 1 : 0;
+            });
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        $user = $candidates->first(function ($candidate) use ($request) {
+            return Hash::check($request->password, $candidate->password);
+        });
+
+        if (! $user) {
             /** @status 401 */
             return response()->json(['message' => 'Thông tin đăng nhập không hợp lệ'], 401);
+        }
+
+        if (! method_exists($user, 'hasRole') || ! $user->hasRole('driver')) {
+            /** @status 403 */
+            return response()->json(['message' => 'Tài khoản này không có quyền tài xế'], 403);
         }
 
         Auth::setUser($user);

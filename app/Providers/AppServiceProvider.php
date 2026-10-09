@@ -11,6 +11,9 @@ use App\Observers\TripObserver;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
+use Illuminate\Database\Events\ConnectionEstablished;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -42,11 +45,40 @@ class AppServiceProvider extends ServiceProvider
         Order::observe(OrderObserver::class);
         Trip::observe(TripObserver::class);
 
+        set_error_handler(function ($severity, $message, $file) {
+            if (str_contains($message, 'touch(): Utime failed') || (str_contains($file, 'BladeCompiler.php') && str_contains($message, 'touch()'))) {
+                return true;
+            }
+
+            return false;
+        }, E_WARNING);
+
         Scramble::configure()
             ->withDocumentTransformers(function (OpenApi $openApi): void {
                 $openApi->secure(
                     SecurityScheme::http('bearer')
                 );
             });
+
+        $registerSqliteFunctions = static function ($connection): void {
+            if ($connection->getDriverName() === 'sqlite') {
+                $pdo = $connection->getPdo();
+                if (method_exists($pdo, 'sqliteCreateFunction')) {
+                    $pdo->sqliteCreateFunction('LOWER', fn ($str) => $str !== null ? mb_strtolower((string) $str, 'UTF-8') : null);
+                    $pdo->sqliteCreateFunction('UPPER', fn ($str) => $str !== null ? mb_strtoupper((string) $str, 'UTF-8') : null);
+                }
+            }
+        };
+
+        Event::listen(
+            ConnectionEstablished::class,
+            fn (ConnectionEstablished $event) => $registerSqliteFunctions($event->connection)
+        );
+
+        try {
+            $registerSqliteFunctions(DB::connection());
+        } catch (\Throwable) {
+            // Ignore connection initialization exceptions during boot
+        }
     }
 }

@@ -18,6 +18,7 @@ use App\Models\Trip;
 use App\Models\User;
 use App\Services\Notification\DriverNotificationService;
 use App\Services\ShiftKmCalculatorService;
+use App\Services\Trip\TripCheckpointOsmValidationService;
 use App\Services\TripKmAdjustmentService;
 use App\Services\TripKmCalculatorService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
@@ -205,6 +206,7 @@ class TripsTable extends BaseTable
             ->recordActions([
                 SendTripAction::make(),
                 ReassignTransportAction::make(),
+                ReassignDriverAction::make(),
                 ActionGroup::make([
                     Action::make('view_timeline')
                         ->label('Hành trình')
@@ -213,9 +215,14 @@ class TripsTable extends BaseTable
                         ->modal()
                         ->modalWidth(Width::MaxContent)
                         ->modalHeading(fn (Trip $record): string => 'Hành trình — '.$record->vehicle?->plate_number)
-                        ->modalContent(fn (Trip $record) => view('filament.resources.trips.components.trip-timeline-popup', [
-                            'trip' => $record,
-                        ]))
+                        ->modalContent(function (Trip $record) {
+                            $osmValidation = app(TripCheckpointOsmValidationService::class)->validateTrip($record);
+
+                            return view('filament.resources.trips.components.trip-timeline-popup', [
+                                'trip' => $record,
+                                'osmValidation' => $osmValidation,
+                            ]);
+                        })
                         ->modalSubmitAction(false)
                         ->modalCancelActionLabel('Đóng'),
 
@@ -427,7 +434,7 @@ class TripsTable extends BaseTable
                             }
                         })
                         ->modalSubmitActionLabel('Xác nhận xử lý'),
-                    ReassignDriverAction::make(),
+
                     CancelTripAction::make(),
                     DeleteAction::make(),
                     ActivityLogTimelineTableAction::make('Activities')

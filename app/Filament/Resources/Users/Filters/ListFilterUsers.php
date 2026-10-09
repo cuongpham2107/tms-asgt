@@ -64,8 +64,9 @@ class ListFilterUsers extends Filter
                     ->when(
                         $data['search'] ?? null,
                         fn (Builder $query, $search): Builder => $query->where(function (Builder $q) use ($search) {
-                            $q->where('name', 'like', "%{$search}%")
-                                ->orWhere('email', 'like', "%{$search}%")
+                            $lowerSearch = '%'.mb_strtolower((string) $search, 'UTF-8').'%';
+                            $q->whereRaw('LOWER(name) LIKE ?', [$lowerSearch])
+                                ->orWhereRaw('LOWER(email) LIKE ?', [$lowerSearch])
                                 ->orWhere('phone', 'like', "%{$search}%")
                                 ->orWhere('cccd', 'like', "%{$search}%");
                         })

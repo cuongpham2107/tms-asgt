@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Vehicles\Schemas;
 
+use App\Enums\DriverWorkShift;
 use App\Models\Vehicle;
 use CodeWithDennis\FilamentAdvancedChoice\Filament\Forms\Components\RadioCard;
 use Filament\Forms\Components\DatePicker;
@@ -126,12 +127,29 @@ class VehicleForm
                                 ->toArray())
                             ->required()
                             ->maxLength(255),
-                        Select::make('current_driver_id')
-                            ->label('Lái xe hiện tại')
+                        Select::make('even_driver_id')
+                            ->label('Lái xe ca chẵn')
                             ->native(false)
-                            ->relationship('driver', 'name')
+                            ->relationship('evenDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Even)->orWhereNull('work_shift')))
                             ->searchable()
-                            ->preload(),
+                            ->preload()
+                            ->placeholder('Chọn lái xe ca chẵn'),
+
+                        Select::make('odd_driver_id')
+                            ->label('Lái xe ca lẻ')
+                            ->native(false)
+                            ->relationship('oddDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Odd)->orWhereNull('work_shift')))
+                            ->searchable()
+                            ->preload()
+                            ->placeholder('Chọn lái xe ca lẻ'),
+
+                        Select::make('current_driver_id')
+                            ->label('Lái xe hiện tại (Tùy chọn)')
+                            ->native(false)
+                            ->relationship('driver', 'name', fn ($query) => $query->role('driver'))
+                            ->searchable()
+                            ->preload()
+                            ->helperText('Hệ thống tự động ưu tiên tài xế đúng ca chẵn/lẻ hôm nay nếu để trống'),
 
                         Select::make('status')
                             ->label('Trạng thái')

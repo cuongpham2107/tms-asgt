@@ -72,7 +72,12 @@ export default function LoginScreen() {
       setAuth(res.token, shift?.id ? String(shift.id) : undefined, shift);
       router.replace("/");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không thể kết nối đến máy chủ");
+      const errorMsg = e instanceof Error ? e.message : "Không thể kết nối đến máy chủ";
+      if (errorMsg === "Network request failed" || errorMsg.includes("Network request failed")) {
+        setError("Lỗi kết nối mạng: Không thể kết nối tới máy chủ. Vui lòng kiểm tra lại kết nối 4G / Wifi.");
+      } else {
+        setError(errorMsg);
+      }
     } finally {
       setLoading(false);
       hideLoading();

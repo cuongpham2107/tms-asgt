@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users\Schemas;
 
+use App\Enums\DriverWorkShift;
 use App\Enums\OnDutyLocation;
 use App\Models\User;
 use Filament\Forms\Components\DatePicker;
@@ -15,6 +16,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 
 class UserForm
 {
@@ -76,6 +78,19 @@ class UserForm
                         Select::make('station')
                             ->label('Điểm trực')
                             ->options(OnDutyLocation::class),
+                        Select::make('work_shift')
+                            ->label('Lịch ca trực')
+                            ->options(DriverWorkShift::class)
+                            ->native(false)
+                            ->placeholder('Chọn ca trực (Chẵn / Lẻ)'),
+                        Select::make('vehicle_id')
+                            ->label('Xe phụ trách')
+                            ->relationship('vehicle', 'plate_number')
+                            ->searchable()
+                            ->preload()
+                            ->native(false)
+                            ->placeholder('Chọn xe phụ trách')
+                            ->columnSpanFull(),
                     ]),
 
                 Section::make('Căn cước công dân & Định danh')
@@ -173,6 +188,7 @@ class UserForm
                             ->label('Vai trò')
                             ->relationship('roles', 'name')
                             ->multiple()
+                            ->default(fn () => Role::where('name', 'driver')->pluck('id')->all())
                             ->preload()
                             ->searchable()
                             ->columnSpanFull(),
