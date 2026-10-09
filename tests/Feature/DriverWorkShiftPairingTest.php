@@ -24,13 +24,17 @@ test('determines correct work shift based on 8am cut-off', function (): void {
         ->and(ShiftScheduleService::isTodayShift(DriverWorkShift::Odd, $after8am))->toBeTrue()
         ->and(ShiftScheduleService::isTodayShift(DriverWorkShift::Even, $after8am))->toBeFalse();
 
-    // 31st October at 10:00 -> Shift belongs to 31st (Odd)
+    // 1st October (Base date) at 10:00 -> Shift is Odd (A = 0)
+    $oct1 = Carbon::create(2026, 10, 1, 10, 0, 0);
+    expect(ShiftScheduleService::determineShift($oct1))->toBe(DriverWorkShift::Odd);
+
+    // 31st October at 10:00 -> Shift belongs to 31st (Odd, A = 30)
     $oct31 = Carbon::create(2026, 10, 31, 10, 0, 0);
     expect(ShiftScheduleService::determineShift($oct31))->toBe(DriverWorkShift::Odd);
 
-    // 1st November at 10:00 -> Shift belongs to 1st (Odd)
+    // 1st November at 10:00 -> Shift alternates to Even (A = 31)
     $nov1 = Carbon::create(2026, 11, 1, 10, 0, 0);
-    expect(ShiftScheduleService::determineShift($nov1))->toBe(DriverWorkShift::Odd);
+    expect(ShiftScheduleService::determineShift($nov1))->toBe(DriverWorkShift::Even);
 });
 
 test('syncs driver assignment two-way between vehicle and users', function (): void {
