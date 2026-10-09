@@ -67,11 +67,15 @@ class User extends Authenticatable
                 if ($oldVehicleId && $oldVehicleId !== $user->vehicle_id) {
                     $oldVehicle = Vehicle::find($oldVehicleId);
                     if ($oldVehicle) {
+                        $oldUpdates = [];
                         if ($oldVehicle->even_driver_id === $user->id) {
-                            $oldVehicle->update(['even_driver_id' => null]);
+                            $oldUpdates['even_driver_id'] = null;
                         }
                         if ($oldVehicle->odd_driver_id === $user->id) {
-                            $oldVehicle->update(['odd_driver_id' => null]);
+                            $oldUpdates['odd_driver_id'] = null;
+                        }
+                        if (! empty($oldUpdates)) {
+                            $oldVehicle->update($oldUpdates);
                         }
                     }
                 }
@@ -79,10 +83,39 @@ class User extends Authenticatable
                 if ($user->vehicle_id) {
                     $vehicle = Vehicle::find($user->vehicle_id);
                     if ($vehicle) {
-                        if ($user->work_shift === DriverWorkShift::Even && $vehicle->even_driver_id !== $user->id) {
-                            $vehicle->update(['even_driver_id' => $user->id]);
-                        } elseif ($user->work_shift === DriverWorkShift::Odd && $vehicle->odd_driver_id !== $user->id) {
-                            $vehicle->update(['odd_driver_id' => $user->id]);
+                        if ($user->work_shift === DriverWorkShift::Even) {
+                            $updates = [];
+                            if ($vehicle->even_driver_id !== $user->id) {
+                                $updates['even_driver_id'] = $user->id;
+                            }
+                            if ($vehicle->odd_driver_id === $user->id) {
+                                $updates['odd_driver_id'] = null;
+                            }
+                            if (! empty($updates)) {
+                                $vehicle->update($updates);
+                            }
+                        } elseif ($user->work_shift === DriverWorkShift::Odd) {
+                            $updates = [];
+                            if ($vehicle->odd_driver_id !== $user->id) {
+                                $updates['odd_driver_id'] = $user->id;
+                            }
+                            if ($vehicle->even_driver_id === $user->id) {
+                                $updates['even_driver_id'] = null;
+                            }
+                            if (! empty($updates)) {
+                                $vehicle->update($updates);
+                            }
+                        } else {
+                            $updates = [];
+                            if ($vehicle->even_driver_id === $user->id) {
+                                $updates['even_driver_id'] = null;
+                            }
+                            if ($vehicle->odd_driver_id === $user->id) {
+                                $updates['odd_driver_id'] = null;
+                            }
+                            if (! empty($updates)) {
+                                $vehicle->update($updates);
+                            }
                         }
                     }
                 }

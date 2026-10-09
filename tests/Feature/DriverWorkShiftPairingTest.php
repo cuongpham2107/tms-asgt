@@ -70,5 +70,26 @@ test('syncs driver assignment two-way between vehicle and users', function (): v
     Carbon::setTestNow(Carbon::create(2026, 10, 10, 10, 0, 0)); // Day 10 -> Even shift
     expect($vehicle->getDriverForToday()->id)->toBe($evenDriver->id);
 
+    // Test assigning from User side
+    $newDriver = User::factory()->create(['name' => 'Lái Xe Mới']);
+    $newVehicle = Vehicle::factory()->create(['plate_number' => '29C-88888']);
+
+    // Assign vehicle and even shift on user
+    $newDriver->update([
+        'vehicle_id' => $newVehicle->id,
+        'work_shift' => DriverWorkShift::Even,
+    ]);
+
+    expect($newVehicle->fresh()->even_driver_id)->toBe($newDriver->id)
+        ->and($newVehicle->fresh()->odd_driver_id)->toBeNull();
+
+    // Change shift to odd on user
+    $newDriver->update([
+        'work_shift' => DriverWorkShift::Odd,
+    ]);
+
+    expect($newVehicle->fresh()->odd_driver_id)->toBe($newDriver->id)
+        ->and($newVehicle->fresh()->even_driver_id)->toBeNull();
+
     Carbon::setTestNow(); // Reset Carbon
 });
