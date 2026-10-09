@@ -11,7 +11,6 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -25,6 +24,8 @@ class VehicleForm
         return $schema
             ->components([
                 Section::make('Thông tin xe')
+                    ->columns(['default' => 1, 'md' => 2, 'lg' => 3])
+                    ->columnSpanFull()
                     ->schema([
                         RadioCard::make('type')
                             ->label('Phân loại')
@@ -66,6 +67,7 @@ class VehicleForm
                                 'bat_wing' => 'Cánh dơi',
                                 'other' => 'Khác',
                             ]),
+
                         Select::make('make')
                             ->label('Hãng xe')
                             ->prefixIcon(Heroicon::OutlinedBuildingOffice)
@@ -83,16 +85,10 @@ class VehicleForm
                                 'MITSUBISHI' => 'MITSUBISHI',
                                 'OTHER' => 'KHÁC',
                             ]),
-                        TextInput::make('model_year')
-                            ->label('Năm sản xuất')
-                            ->mask(RawJs::make('$money($input)'))
-                            ->stripCharacters(',')
-                            ->numeric()
-                            ->minValue(1900)
-                            ->maxValue(date('Y') + 1)
-                            ->step(1),
+
                         TextInput::make('load_capacity')
                             ->label('Tải trọng (tấn)')
+                            ->prefixIcon('heroicon-o-scale')
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
                             ->numeric()
@@ -101,26 +97,57 @@ class VehicleForm
                             ->step(0.1)
                             ->dataList(['1.25', '1.5', '2.5', '3.5', '5', '7', '8', '10', '14'])
                             ->suffix(' tấn'),
-                        // Select::make('fuel_type')
-                        //     ->label('Loại nhiên liệu')
-                        //     ->native(false)
-                        //     ->options([
-                        //         'Diesel' => 'Diesel',
-                        //         'Gasoline' => 'Xăng',
-                        //         'Electric' => 'Điện',
-                        //         'Hybrid' => 'Hybrid',
-                        //         'Other' => 'Khác',
-                        //     ]),
+
                         TextInput::make('current_mileage')
                             ->label('Số km hiện tại')
+                            ->prefixIcon('heroicon-o-variable')
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
                             ->numeric()
                             ->minValue(0)
                             ->step(0.1)
                             ->suffix(' km'),
+
+                        TextInput::make('model_year')
+                            ->label('Năm sản xuất')
+                            ->prefixIcon('heroicon-o-calendar')
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
+                            ->numeric()
+                            ->minValue(1900)
+                            ->maxValue(date('Y') + 1)
+                            ->step(1),
+
+                        Select::make('even_driver_id')
+                            ->label('Lái xe ca chẵn')
+                            ->prefixIcon('heroicon-o-user')
+                            ->native(false)
+                            ->relationship('evenDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Even)->orWhereNull('work_shift')))
+                            ->searchable()
+                            ->preload()
+                            ->placeholder('Chọn lái xe ca chẵn'),
+
+                        Select::make('odd_driver_id')
+                            ->label('Lái xe ca lẻ')
+                            ->prefixIcon('heroicon-o-user')
+                            ->native(false)
+                            ->relationship('oddDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Odd)->orWhereNull('work_shift')))
+                            ->searchable()
+                            ->preload()
+                            ->placeholder('Chọn lái xe ca lẻ'),
+
+                        Select::make('current_driver_id')
+                            ->label('Lái xe hiện tại (Tùy chọn)')
+                            ->prefixIcon('heroicon-o-user-circle')
+                            ->native(false)
+                            ->relationship('driver', 'name', fn ($query) => $query->role('driver'))
+                            ->searchable()
+                            ->preload()
+                            ->helperText('Tự động theo ca hôm nay nếu để trống'),
+
                         TextInput::make('owner')
                             ->label('Chủ xe')
+                            ->prefixIcon('heroicon-o-identification')
                             ->datalist(fn (): array => Vehicle::distinct()
                                 ->whereNotNull('owner')
                                 ->where('owner', '!=', '')
@@ -128,36 +155,10 @@ class VehicleForm
                                 ->toArray())
                             ->required()
                             ->maxLength(255),
-                        Grid::make(3)
-                            ->schema([
-                                Select::make('even_driver_id')
-                                    ->label('Lái xe ca chẵn')
-                                    ->native(false)
-                                    ->relationship('evenDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Even)->orWhereNull('work_shift')))
-                                    ->searchable()
-                                    ->preload()
-                                    ->placeholder('Chọn lái xe ca chẵn'),
-
-                                Select::make('odd_driver_id')
-                                    ->label('Lái xe ca lẻ')
-                                    ->native(false)
-                                    ->relationship('oddDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Odd)->orWhereNull('work_shift')))
-                                    ->searchable()
-                                    ->preload()
-                                    ->placeholder('Chọn lái xe ca lẻ'),
-
-                                Select::make('current_driver_id')
-                                    ->label('Lái xe hiện tại (Tùy chọn)')
-                                    ->native(false)
-                                    ->relationship('driver', 'name', fn ($query) => $query->role('driver'))
-                                    ->searchable()
-                                    ->preload()
-                                    ->helperText('Hệ thống tự động ưu tiên tài xế đúng ca chẵn/lẻ hôm nay nếu để trống'),
-                            ])
-                            ->columnSpanFull(),
 
                         Select::make('status')
                             ->label('Trạng thái')
+                            ->prefixIcon('heroicon-o-check-circle')
                             ->native(false)
                             ->options([
                                 'on' => 'Sẵn sàng',
@@ -169,26 +170,31 @@ class VehicleForm
 
                         Toggle::make('is_active')
                             ->label('Trạng thái hoạt động')
+                            ->helperText('Cho phép xe hoạt động')
                             ->default(true)
                             ->inline(false),
+
                         Textarea::make('notes')
                             ->label('Ghi chú')
                             ->maxLength(1000)
                             ->columnSpanFull(),
-                    ])->columnSpanFull()->columns(2),
+                    ]),
 
                 Section::make('Giấy phép Vận chuyển Hàng nguy hiểm')
                     ->icon('heroicon-o-shield-exclamation')
-                    ->columns(2)
+                    ->columns(['default' => 1, 'md' => 3])
                     ->columnSpanFull()
                     ->collapsible()
                     ->schema([
                         TextInput::make('dangerous_goods_permit_number')
-                            ->label('Số giấy phép Hàng nguy hiểm'),
+                            ->label('Số giấy phép Hàng nguy hiểm')
+                            ->prefixIcon('heroicon-o-document-text'),
                         DatePicker::make('dangerous_goods_permit_issue_date')
-                            ->label('Ngày cấp giấy phép'),
+                            ->label('Ngày cấp giấy phép')
+                            ->prefixIcon('heroicon-o-calendar'),
                         DatePicker::make('dangerous_goods_permit_expiry_date')
                             ->label('Ngày hết hạn giấy phép')
+                            ->prefixIcon('heroicon-o-calendar')
                             ->helperText(fn (?Vehicle $record): ?string => $record?->getDangerousGoodsPermitStatus()['label']),
                         FileUpload::make('dangerous_goods_permit_image')
                             ->label('Ảnh / File giấy phép')
