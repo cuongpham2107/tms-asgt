@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Enums\TripStatus;
 use App\Filament\Resources\Trips\TripResource;
 use App\Models\Trip;
+use App\Models\TripKmReport;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -21,6 +22,10 @@ class TripObserver
         if ($trip->status === TripStatus::Delivered) {
             $this->notifyUsersTripDelivered($trip);
         }
+
+        if ($trip->status === TripStatus::DriverSwap) {
+            $this->notifyUsersDriverSwap($trip);
+        }
     }
 
     /**
@@ -28,27 +33,111 @@ class TripObserver
      */
     public function updated(Trip $trip): void
     {
-        if ($trip->wasChanged('status') && $trip->status === TripStatus::Delivered) {
-            $this->notifyUsersTripDelivered($trip);
+        if ($trip->wasChanged('status')) {
+            if ($trip->status === TripStatus::Delivered) {
+                $this->notifyUsersTripDelivered($trip);
+            }
+
+            if ($trip->status === TripStatus::DriverSwap) {
+                $this->notifyUsersDriverSwap($trip);
+            }
         }
     }
 
     /**
-     * Gửi thông báo đến toàn bộ user khi chuyến chuyển sang trạng thái đã giao.
+     * 1. Gửi thông báo đến toàn bộ user khi chuyến chuyển sang trạng thái đã giao.
      */
-    protected function notifyUsersTripDelivered(Trip $trip): void
+    public function notifyUsersTripDelivered(Trip $trip): void
     {
-        DB::afterCommit(function () use ($trip): void {
-            $trip->loadMissing(['driver', 'vehicle']);
-
+        $this->sendTripNotification($trip, function (Trip $trip): array {
             $driverName = $trip->driver?->name ?? 'Chưa gán tài xế';
             $plateNumber = $trip->vehicle?->plate_number;
+
+            $title = filled($plateNumber)
+                ? "Chuyến xe {$plateNumber} đã giao hàng"
+                : 'Chuyến xe đã giao hàng';
+
+            return [
+                'title' => $title,
+                'body' => "Tài xế {$driverName} đã hoàn thành giao hàng.",
+                'icon' => 'heroicon-o-check-circle',
+                'status' => 'success',
+            ];
+        });
+    }
+
+    /**
+     * 2. Gửi thông báo đến toàn bộ user khi xe báo sai lệch số Km.
+     */
+    public function notifyUsersTripKmReported(Trip $trip, ?TripKmReport $report = null): void
+    {
+        $this->sendTripNotification($trip, function (Trip $trip) use ($report): array {
+            $report = $report ?? $trip->latestPendingKmReport;
+            $report?->loadMissing(['driver', 'vehicle']);
+
+            $driverName = $report?->driver?->name ?? $trip->driver?->name ?? 'Chưa gán tài xế';
+            $plateNumber = $report?->vehicle?->plate_number ?? $trip->vehicle?->plate_number;
+
+            $title = filled($plateNumber)
+                ? "Chuyến xe {$plateNumber} báo sai Km"
+                : 'Chuyến xe báo sai Km';
+
+            $body = "Tài xế {$driverName} đã báo sai lệch số Km.";
+            if ($report && $report->reported_km !== null) {
+                $reportedKmFormatted = number_format((float) $report->reported_km, 1, ',', '.');
+                $body = "Tài xế {$driverName} báo sai lệch số Km: {$reportedKmFormatted} km.";
+            }
+
+            return [
+                'title' => $title,
+                'body' => $body,
+                'icon' => 'heroicon-o-exclamation-triangle',
+                'status' => 'warning',
+            ];
+        });
+    }
+
+    /**
+     * 3. Gửi thông báo đến toàn bộ user khi xe báo đảo lái.
+     */
+    public function notifyUsersDriverSwap(Trip $trip): void
+    {
+        $this->sendTripNotification($trip, function (Trip $trip): array {
+            $latestSwap = $trip->driverSwaps()->latest('id')->first();
+            $fromDriver = $latestSwap?->fromDriver;
+            $driverName = $fromDriver?->name ?? $trip->driver?->name ?? 'Chưa gán tài xế';
+            $plateNumber = $trip->vehicle?->plate_number;
+
+            $title = filled($plateNumber)
+                ? "Chuyến xe {$plateNumber} báo đảo lái"
+                : 'Chuyến xe báo đảo lái';
+
+            return [
+                'title' => $title,
+                'body' => "Tài xế {$driverName} đã báo đảo lái.",
+                'icon' => 'heroicon-o-arrows-right-left',
+                'status' => 'info',
+            ];
+        });
+    }
+
+    /**
+     * Gửi notification chung tới toàn bộ user kèm timeline action.
+     *
+     * @param  callable(Trip): array{title: string, body: string, icon: string, status: string}  $contentResolver
+     */
+    protected function sendTripNotification(Trip $trip, callable $contentResolver): void
+    {
+        DB::afterCommit(function () use ($trip, $contentResolver): void {
+            $trip->loadMissing(['driver', 'vehicle']);
 
             $users = User::all();
 
             if ($users->isEmpty()) {
                 return;
             }
+
+            $content = $contentResolver($trip);
 
             $actions = [];
 
@@ -64,15 +153,12 @@ class TripObserver
                 // Route may not be resolvable in non-HTTP/isolated test contexts
             }
 
-            $title = filled($plateNumber)
-                ? "Chuyến xe {$plateNumber} đã giao hàng"
-                : 'Chuyến xe đã giao hàng';
-
             $notification = Notification::make()
-                ->title($title)
-                ->body("Tài xế {$driverName} đã hoàn thành giao hàng.")
-                ->icon('heroicon-o-check-circle')
-                ->status('success');
+                ->title($content['title'])
+                ->body($content['body'])
+                ->icon($content['icon'])
+                ->duration(5000)
+                ->status($content['status']);
 
             if (! empty($actions)) {
                 $notification->actions($actions);

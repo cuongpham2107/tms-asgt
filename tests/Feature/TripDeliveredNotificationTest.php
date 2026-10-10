@@ -15,6 +15,7 @@ use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Trip\TripCheckpointService;
@@ -205,4 +206,86 @@ it('formats notification title using vehicle plate number', function () {
     $data = json_decode($userNotification->data, true);
     expect($data['title'])->toBe('Chuyến xe 30F-888.88 đã giao hàng')
         ->and($data['title'])->not->toContain('CD-CUSTOM-PLATE');
+});
+
+it('sends database notification to all users when trip status transitions to driver swap', function () {
+    $trip = Trip::create([
+        'trip_code' => 'CD-SWAP-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Delivering,
+    ]);
+
+    expect(DB::table('notifications')->count())->toBe(0);
+
+    $trip->status = TripStatus::DriverSwap;
+    $trip->save();
+
+    $notifications = DB::table('notifications')->get();
+    expect($notifications)->toHaveCount(2);
+
+    $userNotification = DB::table('notifications')
+        ->where('notifiable_id', $this->manager->id)
+        ->first();
+
+    expect($userNotification)->not->toBeNull();
+
+    $data = json_decode($userNotification->data, true);
+    expect($data['title'])->toBe('Chuyến xe 29C-123.45 báo đảo lái')
+        ->and($data['body'])->toContain('Tài xế Nguyễn Văn A đã báo đảo lái.')
+        ->and($data['status'])->toBe('info')
+        ->and($data['actions'])->toHaveCount(1)
+        ->and($data['actions'][0]['name'])->toBe('view')
+        ->and($data['actions'][0]['url'])->toContain(TripResource::getUrl('timeline', ['record' => $trip]));
+});
+
+it('sends database notification to all users when trip is created with driver swap status', function () {
+    expect(DB::table('notifications')->count())->toBe(0);
+
+    Trip::create([
+        'trip_code' => 'CD-SWAP-02',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::DriverSwap,
+    ]);
+
+    expect(DB::table('notifications')->count())->toBe(2);
+});
+
+it('sends database notification to all users when driver reports km discrepancy', function () {
+    $trip = Trip::create([
+        'trip_code' => 'CD-KM-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Delivering,
+    ]);
+
+    expect(DB::table('notifications')->count())->toBe(0);
+
+    TripKmReport::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 105500.5,
+        'system_km' => 105000.0,
+        'note' => 'Đồng hồ xe chạy nhanh hơn',
+        'status' => 'pending',
+    ]);
+
+    $notifications = DB::table('notifications')->get();
+    expect($notifications)->toHaveCount(2);
+
+    $userNotification = DB::table('notifications')
+        ->where('notifiable_id', $this->manager->id)
+        ->first();
+
+    expect($userNotification)->not->toBeNull();
+
+    $data = json_decode($userNotification->data, true);
+    expect($data['title'])->toBe('Chuyến xe 29C-123.45 báo sai Km')
+        ->and($data['body'])->toContain('Tài xế Nguyễn Văn A báo sai lệch số Km: 105.500,5 km.')
+        ->and($data['status'])->toBe('warning')
+        ->and($data['actions'])->toHaveCount(1)
+        ->and($data['actions'][0]['name'])->toBe('view')
+        ->and($data['actions'][0]['url'])->toContain(TripResource::getUrl('timeline', ['record' => $trip]));
 });
