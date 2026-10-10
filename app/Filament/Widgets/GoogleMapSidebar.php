@@ -28,6 +28,11 @@ class GoogleMapSidebar extends Widget
 
     public int $perPage = 30;
 
+    public function mount(array $selectedVehicleIds = []): void
+    {
+        $this->selectedVehicleIds = array_map('intval', $selectedVehicleIds);
+    }
+
     public function loadMore(): void
     {
         $this->perPage += 30;
@@ -36,14 +41,26 @@ class GoogleMapSidebar extends Widget
     #[On('vehicleSelectionChanged')]
     public function onVehicleSelectionChanged(array $selectedIds = []): void
     {
-        $this->selectedVehicleIds = $selectedIds;
+        $this->selectedVehicleIds = array_values(array_map('intval', $selectedIds));
+
+        if (! empty($this->selectedVehicleIds)) {
+            $vehicles = $this->getFilteredVehicles();
+            foreach ($this->selectedVehicleIds as $selId) {
+                $idx = $vehicles->search(fn ($v) => (int) $v->id === (int) $selId);
+                if ($idx !== false && $idx >= $this->perPage) {
+                    $this->perPage = $idx + 10;
+                }
+            }
+        }
     }
 
     public function getVehicles(): array
     {
+        $selectedSet = array_flip(array_map('intval', $this->selectedVehicleIds));
+
         return $this->getFilteredVehicles()
             ->take($this->perPage)
-            ->map(function (Vehicle $vehicle): array {
+            ->map(function (Vehicle $vehicle) use ($selectedSet): array {
                 $status = $vehicle->status instanceof VehicleStatus ? $vehicle->status : VehicleStatus::tryFrom($vehicle->status ?? '');
 
                 $color = match ($status) {
@@ -69,7 +86,7 @@ class GoogleMapSidebar extends Widget
                     'status' => $status?->value ?? 'off',
                     'status_label' => $vehicle->getStatusLabel(),
                     'status_color' => $color,
-                    'selected' => in_array($vehicle->id, $this->selectedVehicleIds, true),
+                    'selected' => isset($selectedSet[(int) $vehicle->id]),
                     'active_trip_code' => $activeTrip?->trip_code,
                     'active_orders_count' => $activeOrdersCount,
                     'gps_speed' => $vehicle->gps_speed ? (float) $vehicle->gps_speed : null,
@@ -90,18 +107,35 @@ class GoogleMapSidebar extends Widget
         return $this->getTotalFilteredCount() > $this->perPage;
     }
 
-    public function toggleVehicle(int $id): void
+    public function selectVehicle(int $id): void
     {
-        $this->selectedVehicleIds = in_array($id, $this->selectedVehicleIds, true)
-            ? array_values(array_filter($this->selectedVehicleIds, fn (int $v) => $v !== $id))
-            : [...$this->selectedVehicleIds, $id];
+        $id = (int) $id;
+        $current = array_map('intval', $this->selectedVehicleIds);
+        // If clicking the only selected vehicle, deselect it; otherwise focus on this single vehicle
+        $this->selectedVehicleIds = ($current === [$id]) ? [] : [$id];
 
         $this->dispatch('vehicleSelectionChanged', selectedIds: $this->selectedVehicleIds);
     }
 
+    public function toggleCheckbox(int $id): void
+    {
+        $id = (int) $id;
+        $current = array_map('intval', $this->selectedVehicleIds);
+        $this->selectedVehicleIds = in_array($id, $current, true)
+            ? array_values(array_filter($current, fn (int $v) => $v !== $id))
+            : [...$current, $id];
+
+        $this->dispatch('vehicleSelectionChanged', selectedIds: $this->selectedVehicleIds);
+    }
+
+    public function toggleVehicle(int $id): void
+    {
+        $this->selectVehicle($id);
+    }
+
     public function selectAll(): void
     {
-        $this->selectedVehicleIds = $this->getFilteredVehicles()->pluck('id')->values()->all();
+        $this->selectedVehicleIds = array_map('intval', $this->getFilteredVehicles()->pluck('id')->values()->all());
         $this->dispatch('vehicleSelectionChanged', selectedIds: $this->selectedVehicleIds);
     }
 
@@ -113,11 +147,11 @@ class GoogleMapSidebar extends Widget
 
     public function selectRunningOnly(): void
     {
-        $this->selectedVehicleIds = $this->getRawVehicles()
+        $this->selectedVehicleIds = array_map('intval', $this->getRawVehicles()
             ->where('status', VehicleStatus::Running)
             ->pluck('id')
             ->values()
-            ->all();
+            ->all());
 
         $this->dispatch('vehicleSelectionChanged', selectedIds: $this->selectedVehicleIds);
     }

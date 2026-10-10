@@ -141,17 +141,23 @@
                     $style = $sc[$v['status_color']] ?? $sc['gray'];
                 @endphp
                 <div
-                    wire:click="toggleVehicle({{ $v['id'] }})"
+                    id="sidebar-vehicle-{{ $v['id'] }}"
+                    wire:click="selectVehicle({{ $v['id'] }})"
                     class="group relative flex cursor-pointer flex-col gap-1.5 rounded-lg border p-2.5 transition-all {{ $v['selected'] ? $style['border'] . ' border-l-4 ' . $style['active_bg'] . ' shadow-xs' : 'bg-white border-gray-200 hover:border-primary-400 hover:bg-gray-50/80 dark:bg-gray-850 dark:border-gray-700 dark:hover:bg-gray-800' }}"
                 >
                     {{-- Row 1: Checkbox + Plate + Status Badge --}}
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="flex h-4 w-4 shrink-0 items-center justify-center rounded border {{ $v['selected'] ? 'border-primary-600 bg-primary-600' : 'border-gray-400 bg-white dark:border-gray-500 dark:bg-gray-800' }} transition-colors">
+                            <button
+                                type="button"
+                                wire:click.stop="toggleCheckbox({{ $v['id'] }})"
+                                class="flex h-4 w-4 shrink-0 items-center justify-center rounded border {{ $v['selected'] ? 'border-primary-600 bg-primary-600' : 'border-gray-400 bg-white dark:border-gray-500 dark:bg-gray-800 hover:border-primary-500' }} transition-colors"
+                                title="Chọn/Bỏ chọn để so sánh nhiều xe"
+                            >
                                 @if($v['selected'])
                                     <x-filament::icon icon="heroicon-o-check" class="h-3.5 w-3.5 text-white stroke-[3]" />
                                 @endif
-                            </div>
+                            </button>
                             <span class="truncate text-xs font-black text-gray-950 group-hover:text-primary-600 dark:text-white dark:group-hover:text-primary-400 tracking-tight">
                                 {{ $v['plate'] }}
                             </span>

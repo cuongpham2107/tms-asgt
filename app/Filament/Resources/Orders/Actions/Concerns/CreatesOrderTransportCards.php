@@ -247,6 +247,8 @@ abstract class CreatesOrderTransportCards
                     'make',
                     'load_capacity',
                     'current_driver_id',
+                    'even_driver_id',
+                    'odd_driver_id',
                     'status',
                     'current_mileage',
                     'type',
@@ -273,6 +275,18 @@ abstract class CreatesOrderTransportCards
                         ->with(['driverShifts' => fn ($q) => $q
                             ->whereNull('end_time'),
                         ]),
+                    'evenDriver' => fn ($q) => $q
+                        ->with(['driverShifts' => fn ($q) => $q
+                            ->whereNull('end_time'),
+                        ]),
+                    'oddDriver' => fn ($q) => $q
+                        ->with(['driverShifts' => fn ($q) => $q
+                            ->whereNull('end_time'),
+                        ]),
+                    'drivers' => fn ($q) => $q
+                        ->with(['driverShifts' => fn ($q) => $q
+                            ->whereNull('end_time'),
+                        ]),
                 ])
                 ->orderBy('plate_number')
                 ->get();
@@ -282,6 +296,53 @@ abstract class CreatesOrderTransportCards
             return $vehicles
                 ->map(function (Vehicle $vehicle) use ($vehicleLocations): array {
                     $currentLocation = $vehicleLocations[$vehicle->id] ?? ['id' => null, 'name' => null];
+
+                    $driversList = collect();
+                    $rawDriverNames = [];
+
+                    if ($vehicle->evenDriver) {
+                        $hasBoth = $vehicle->oddDriver && $vehicle->oddDriver->id !== $vehicle->evenDriver->id;
+                        $driversList->put($vehicle->evenDriver->id, $vehicle->evenDriver->name.($hasBoth ? ' (Chẵn)' : ''));
+                        $rawDriverNames[] = $vehicle->evenDriver->name;
+                    }
+
+                    if ($vehicle->oddDriver) {
+                        if ($driversList->has($vehicle->oddDriver->id)) {
+                            $driversList->put($vehicle->oddDriver->id, $vehicle->oddDriver->name);
+                        } else {
+                            $hasBoth = $vehicle->evenDriver && $vehicle->evenDriver->id !== $vehicle->oddDriver->id;
+                            $driversList->put($vehicle->oddDriver->id, $vehicle->oddDriver->name.($hasBoth ? ' (Lẻ)' : ''));
+                            $rawDriverNames[] = $vehicle->oddDriver->name;
+                        }
+                    }
+
+                    if ($driversList->isEmpty()) {
+                        if ($vehicle->driver) {
+                            $driversList->put($vehicle->driver->id, $vehicle->driver->name);
+                            $rawDriverNames[] = $vehicle->driver->name;
+                        }
+
+                        foreach ($vehicle->drivers as $d) {
+                            if (! $driversList->has($d->id)) {
+                                $shiftLabel = match ($d->work_shift) {
+                                    DriverWorkShift::Even => ' (Chẵn)',
+                                    DriverWorkShift::Odd => ' (Lẻ)',
+                                    default => '',
+                                };
+                                $driversList->put($d->id, $d->name.$shiftLabel);
+                                $rawDriverNames[] = $d->name;
+                            }
+                        }
+                    }
+
+                    $driverNameText = $driversList->isNotEmpty()
+                        ? $driversList->values()->implode(', ')
+                        : 'Chưa phân lái';
+
+                    $hasDriver = $driversList->isNotEmpty();
+                    $todayDriver = $vehicle->getDriverForToday() ?? $vehicle->driver ?? $vehicle->evenDriver ?? $vehicle->oddDriver;
+                    $hasActiveShift = $todayDriver?->driverShifts?->isNotEmpty() ?? false;
+                    $ordersInShift = (int) ($todayDriver?->driverShifts?->first()?->orders_in_shift ?? 0);
 
                     return [
                         'id' => $vehicle->id,
@@ -296,10 +357,11 @@ abstract class CreatesOrderTransportCards
                         'status_color' => $vehicle->getStatusColor(),
                         'current_mileage' => $vehicle->current_mileage,
                         'type' => $vehicle->type?->value,
-                        'driver_name' => $vehicle->driver?->name ?? 'Chưa phân lái',
-                        'has_driver' => $vehicle->current_driver_id !== null,
-                        'has_active_shift' => $vehicle->driver?->driverShifts->isNotEmpty() ?? false,
-                        'orders_in_shift' => (int) ($vehicle->driver?->driverShifts->first()?->orders_in_shift ?? 0),
+                        'driver_name' => $driverNameText,
+                        'driver_names_raw' => array_values(array_unique($rawDriverNames)),
+                        'has_driver' => $hasDriver,
+                        'has_active_shift' => $hasActiveShift,
+                        'orders_in_shift' => $ordersInShift,
                         'dg_permit_status' => $vehicle->getDangerousGoodsPermitStatus(),
                     ];
                 })
@@ -341,19 +403,20 @@ abstract class CreatesOrderTransportCards
             'statusDot' => $card['status_color'],
             'details' => array_values(array_filter([
                 ['icon' => 'heroicon-m-scale', 'label' => 'Tải trọng', 'value' => $loadCapacity.' tấn'.($requiredWeight > 0 ? ($isCapacityMatch ? ' ✓' : ' ✗') : '')],
-                ['icon' => 'heroicon-m-user', 'label' => 'Lái xe', 'value' => $card['driver_name']],
                 ['icon' => 'heroicon-m-map-pin', 'label' => 'Vị trí', 'value' => $card['current_location_name'] ?? 'Chưa xác định'],
+                ['icon' => 'heroicon-m-user', 'label' => 'Lái xe', 'value' => $card['driver_name'], 'fullWidth' => true],
                 ['icon' => 'heroicon-m-shield-exclamation', 'label' => 'GP Hàng nguy hiểm', 'value' => $dgStatus['label']],
                 ['icon' => 'heroicon-m-cog-6-tooth', 'label' => 'ODO', 'value' => $mileage],
                 $card['active_orders_count'] > 0 ? ['icon' => 'heroicon-m-document-text', 'label' => 'Đơn đang chạy', 'value' => (string) $card['active_orders_count']] : null,
                 ['icon' => 'heroicon-m-document-text', 'label' => 'Đơn trong ca', 'value' => (string) $card['orders_in_shift']],
             ])),
-            'meta' => [
+            'meta' => array_values(array_filter([
                 $card['driver_name'],
+                ...($card['driver_names_raw'] ?? []),
                 $card['vehicle_type_label'],
                 $loadCapacity.' tấn',
                 $card['current_location_name'] ?? '',
-            ],
+            ])),
             'suggestedBadgeClasses' => 'border border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800/40 dark:bg-primary-900/30 dark:text-primary-200',
             'isSuggested' => $isSuggested,
             'suggestionScore' => $suggestionScore,

@@ -52,7 +52,8 @@ class OsrmService
 
         return Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function () use ($coordsString): array {
             try {
-                $response = Http::timeout(10)
+                $response = Http::timeout(3)
+                    ->connectTimeout(2)
                     ->get(self::OSRM_BASE_URL.$coordsString, [
                         'overview' => 'full',
                         'geometries' => 'geojson',
@@ -95,6 +96,22 @@ class OsrmService
                 return self::error('Lỗi kết nối đến dịch vụ định tuyến.', $e->getMessage());
             }
         });
+    }
+
+    /**
+     * Kiểm tra xem tuyến đường đã có trong cache chưa.
+     */
+    public function hasCachedRoute(float $originLat, float $originLng, float $destinationLat, float $destinationLng, array $waypoints = []): bool
+    {
+        $coords = [];
+        $coords[] = $originLng.','.$originLat;
+        foreach ($waypoints as $wp) {
+            $coords[] = $wp['lng'].','.$wp['lat'];
+        }
+        $coords[] = $destinationLng.','.$destinationLat;
+        $coordsString = implode(';', $coords);
+
+        return Cache::has('osrm_route_'.md5($coordsString));
     }
 
     /**

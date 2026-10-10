@@ -81,10 +81,44 @@ class GoogleMapTracking extends Page
         }
     }
 
+    public function handleMapClick(float $latitude, float $longitude): void
+    {
+        // Safe no-op: clicking map background or dragging should not cancel selection
+        // to prevent race conditions with marker clicks and maintain selection while panning.
+    }
+
+    public function clearSelectedVehicles(): void
+    {
+        $this->selectedVehicleIds = [];
+        $this->dispatch('vehicleSelectionChanged', selectedIds: []);
+        $this->cachedVehicles = null;
+        $this->cachedLayerData = null;
+        $this->refreshMap();
+    }
+
+    public function getSelectedVehiclePlatesString(): string
+    {
+        if (empty($this->selectedVehicleIds)) {
+            return '';
+        }
+
+        $vehicles = $this->getRawVehicles()->whereIn('id', $this->selectedVehicleIds);
+        if ($vehicles->isEmpty()) {
+            return '';
+        }
+
+        return $vehicles->pluck('plate_number')->implode(', ');
+    }
+
     #[On('vehicleSelectionChanged')]
     public function updateSelectedVehicles(array $selectedIds = []): void
     {
-        $this->selectedVehicleIds = $selectedIds;
+        $newIds = array_values(array_map('intval', $selectedIds));
+        if ($this->selectedVehicleIds === $newIds) {
+            return;
+        }
+
+        $this->selectedVehicleIds = $newIds;
         $this->cachedVehicles = null;
         $this->cachedLayerData = null;
         $this->refreshMap();
@@ -155,7 +189,7 @@ class GoogleMapTracking extends Page
 
     protected function getFitBounds(): bool
     {
-        return true;
+        return empty($this->selectedVehicleIds);
     }
 
     protected function hasFullscreenControl(): bool
@@ -177,8 +211,24 @@ class GoogleMapTracking extends Page
     {
         return [
             'Bản đồ đường' => TileLayer::OpenStreetMap,
-            'Vệ tinh' => TileLayer::GoogleSatellite,
+            'Vệ tinh' => 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+            'Bản đồ nhanh (Carto)' => 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
         ];
+    }
+
+    /**
+     * Tính khoảng cách đường chim bay nhanh bằng công thức Haversine (km).
+     */
+    private function calculateHaversineDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadius = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+            sin($dLon / 2) * sin($dLon / 2);
+
+        return $earthRadius * (2 * atan2(sqrt($a), sqrt(1 - $a)));
     }
 
     /**
@@ -233,7 +283,7 @@ class GoogleMapTracking extends Page
             $driverName = $activeTrip?->driver?->name ?? $vehicle->driver?->name ?? 'Chưa gán lái xe';
             $driverPhone = $activeTrip?->driver?->phone ?? $vehicle->driver?->phone ?? null;
 
-            // Route ETA & Distance calculation if running
+            // Route ETA & Distance calculation if running (only fetch OSRM if selected or cached to prevent blocking)
             $etaText = null;
             $distanceText = null;
             if ($vehicle->status === VehicleStatus::Running && $hasActiveTrip) {
@@ -243,25 +293,36 @@ class GoogleMapTracking extends Page
                     $destination = $routePoints->last();
                     $waypoints = $routePoints->slice(1, $routePoints->count() - 2)->map(fn ($p) => ['lat' => $p['lat'], 'lng' => $p['lng']])->values()->all();
 
-                    $osrmInfo = app(OsrmService::class)->getRoute(
-                        $origin['lat'],
-                        $origin['lng'],
-                        $destination['lat'],
-                        $destination['lng'],
-                        $waypoints,
-                    );
+                    $isSelected = in_array($vehicle->id, $this->selectedVehicleIds, true);
+                    $osrmService = app(OsrmService::class);
 
-                    if (! empty($osrmInfo['success']) && ! empty($osrmInfo['data'])) {
-                        $duration = $osrmInfo['data']['duration'] ?? null;
-                        $distance = $osrmInfo['data']['distance'] ?? null;
+                    if ($isSelected || $osrmService->hasCachedRoute($origin['lat'], $origin['lng'], $destination['lat'], $destination['lng'], $waypoints)) {
+                        $osrmInfo = $osrmService->getRoute(
+                            $origin['lat'],
+                            $origin['lng'],
+                            $destination['lat'],
+                            $destination['lng'],
+                            $waypoints,
+                        );
 
-                        if ($duration !== null) {
-                            $eta = now()->addSeconds($duration);
-                            $etaText = $eta->format('H:i');
+                        if (! empty($osrmInfo['success']) && ! empty($osrmInfo['data'])) {
+                            $duration = $osrmInfo['data']['duration'] ?? null;
+                            $distance = $osrmInfo['data']['distance'] ?? null;
+
+                            if ($duration !== null) {
+                                $eta = now()->addSeconds($duration);
+                                $etaText = $eta->format('H:i');
+                            }
+
+                            if ($distance !== null) {
+                                $distanceText = round($distance / 1000, 1).' km';
+                            }
                         }
-
-                        if ($distance !== null) {
-                            $distanceText = round($distance / 1000, 1).' km';
+                    } else {
+                        // Fast approximate distance using Haversine calculation (instant, 0ms overhead)
+                        $approxDist = $this->calculateHaversineDistance($origin['lat'], $origin['lng'], $destination['lat'], $destination['lng']) * 1.35;
+                        if ($approxDist > 0) {
+                            $distanceText = '~'.round($approxDist, 1).' km';
                         }
                     }
                 }
@@ -269,19 +330,19 @@ class GoogleMapTracking extends Page
 
             $ordersHtml = '';
             if ($activeOrders->isNotEmpty()) {
-                $ordersHtml = $activeOrders->take(3)->map(function (Order $o) {
+                $ordersHtml = $activeOrders->take(2)->map(function (Order $o) {
                     $pickup = $o->pickup_address ?? $o->pickupLocation?->name ?? 'Điểm nhận';
                     $delivery = $o->deliveryPoints?->sortBy('sequence')->first()?->address ?? 'Điểm giao';
                     $weight = $o->chargeable_weight ? ($o->chargeable_weight.'T') : ($o->total_weight ? ($o->total_weight.'T') : null);
 
                     return sprintf(
-                        '<div style="margin-bottom:6px;padding:7px 10px;background:#f8fafc;border-radius:8px;border-left:3px solid #3b82f6;box-shadow:0 1px 2px rgba(0,0,0,0.03);">'
+                        '<div class="trk-order-item">'
                         .'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">'
-                            .'<span style="font-weight:700;font-size:12px;color:#1e293b;">#%s</span>'
-                            .'<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:#e0f2fe;color:#0369a1;">%s</span>'
+                            .'<span style="font-weight:700;font-size:11px;color:#1e293b;">#%s</span>'
+                            .'<span style="font-size:10px;font-weight:600;padding:1px 5px;border-radius:4px;background:#e0f2fe;color:#0369a1;">%s</span>'
                         .'</div>'
-                        .'<div style="font-size:11px;color:#475569;margin-bottom:2px;">%s %s</div>'
-                        .'<div style="font-size:10px;color:#64748b;display:flex;align-items:center;gap:4px;">📍 %s → %s</div>'
+                        .'<div style="color:#475569;margin-bottom:1px;">%s %s</div>'
+                        .'<div style="font-size:10px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📍 %s → %s</div>'
                         .'</div>',
                         e($o->order_code),
                         e($o->status->getLabel()),
@@ -296,7 +357,7 @@ class GoogleMapTracking extends Page
             $speedHtml = '';
             if ($vehicle->gps_speed !== null && (float) $vehicle->gps_speed > 0) {
                 $speedHtml = sprintf(
-                    '<span style="display:inline-flex;align-items:center;gap:3px;color:#d97706;font-weight:700;font-size:11px;">⚡ %s km/h</span>',
+                    '<span class="trk-speed">⚡ %s km/h</span>',
                     round((float) $vehicle->gps_speed, 1)
                 );
             }
@@ -306,22 +367,20 @@ class GoogleMapTracking extends Page
                 : '';
 
             $popupContent = sprintf(
-                '<div style="font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;min-width:280px;max-width:360px;line-height:1.4;color:#0f172a;">'
-                .'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #f1f5f9;">'
+                '<div class="trk-popup">'
+                .'<div class="trk-popup-head">'
                     .'<div>'
-                        .'<div style="font-weight:800;font-size:16px;color:#0f172a;letter-spacing:-0.02em;">%s</div>'
+                        .'<div class="trk-popup-plate">%s</div>'
                         .'%s'
-                        .'<div style="font-size:11px;color:#64748b;margin-top:2px;">%s%s</div>'
+                        .'<div class="trk-popup-sub">%s%s</div>'
                     .'</div>'
-                    .'<span style="background:%s;color:#ffffff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap;">%s</span>'
+                    .'<span class="trk-popup-badge" style="background:%s;">%s</span>'
                 .'</div>'
-
-                .'<div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-size:11px;color:#334155;">'
+                .'<div class="trk-popup-driver">'
                     .'<div>👤 <strong>%s</strong>%s</div>'
                     .'%s'
                 .'</div>'
-
-                .'<div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.04em;">Đơn hàng vận chuyển</div>'
+                .'<div class="trk-popup-order-title">Đơn hàng vận chuyển</div>'
                 .'%s'
                 .'</div>',
                 e($vehicle->plate_number),
@@ -333,7 +392,7 @@ class GoogleMapTracking extends Page
                 e($driverName),
                 $driverPhone ? (' ('.e($driverPhone).')') : '',
                 $speedHtml,
-                $ordersHtml ?: '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px 0;">Không có đơn hàng nào đang chạy</div>',
+                $ordersHtml ?: '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:6px 0;">Không có đơn hàng nào đang chạy</div>',
             );
 
             return Marker::make((float) $lat, (float) $lng)
@@ -345,20 +404,12 @@ class GoogleMapTracking extends Page
                 ->popupOptions(['maxWidth' => 380]);
         });
 
-        // If user selected specific vehicles, only show those
-        if (! empty($this->selectedVehicleIds)) {
-            return $allMarkers->filter(fn (Marker $m) => in_array(
-                (int) str_replace('vehicle-', '', $m->getId()),
-                $this->selectedVehicleIds,
-                true,
-            ))->values()->all();
-        }
-
-        // Clustering for large fleet
-        if ($allMarkers->count() > 50) {
+        // Always keep all markers visible so users can view and click other vehicles!
+        // Keep clustering consistent to avoid recreating layers and closing open popups on selection.
+        if ($allMarkers->count() > 25) {
             return [
                 MarkerCluster::make($allMarkers->all())
-                    ->maxClusterRadius(70)
+                    ->maxClusterRadius(60)
                     ->spiderfyOnMaxZoom(true)
                     ->removeOutsideVisibleBounds(true)
                     ->zoomToBoundsOnClick(true),
