@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AppVersionController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DriverFcmTokenController;
 use App\Http\Controllers\Api\DriverShiftController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Api\VehicleSearchController;
 use App\Http\Middleware\EnsureRoleVehicle;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/driver/version', [AppVersionController::class, 'show']);
 Route::post('/driver/login', [AuthController::class, 'login']);
 
 // OSRM routing – dùng chung cho admin backend (Filament map) và mobile app

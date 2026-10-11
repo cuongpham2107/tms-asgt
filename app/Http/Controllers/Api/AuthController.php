@@ -92,6 +92,15 @@ class AuthController extends Controller
             'shift' => $activeShift
                 ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')]))
                 : null,
+            'app_version' => [
+                'latest_version' => (string) config('app.mobile_latest_version', '1.0.3'),
+                'min_version' => (string) config('app.mobile_min_version', '1.0.0'),
+                'release_notes' => (string) config('app.mobile_release_notes', 'Cập nhật tính năng và cải thiện hiệu năng hệ thống.'),
+                'store_urls' => [
+                    'android' => (string) config('app.mobile_android_url', 'https://play.google.com/store/apps/details?id=vn.asgt.tmsdriver'),
+                    'ios' => (string) config('app.mobile_ios_url', 'https://apps.apple.com/app/id6810122889'),
+                ],
+            ],
         ]);
     }
 

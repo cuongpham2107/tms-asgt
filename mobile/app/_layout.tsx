@@ -5,6 +5,15 @@ import { AuthProvider, useAuth } from "../src/lib/auth";
 import { LoadingProvider, useLoading } from "../src/lib/loading";
 import { usePushNotifications } from "../src/lib/notifications";
 import LoadingOverlay from "../src/components/LoadingOverlay";
+import VersionUpdateModal from "../src/components/VersionUpdateModal";
+import { api } from "../src/lib/api";
+import {
+  CURRENT_APP_VERSION,
+  compareSemver,
+  shouldShowSoftUpdate,
+  snoozeSoftUpdate,
+  type AppVersionInfo,
+} from "../src/lib/version";
 
 function AuthGuard() {
   const { token, shiftId } = useAuth();
@@ -37,6 +46,62 @@ function LoadingLayer() {
   return <LoadingOverlay visible={visible} />;
 }
 
+function VersionGate() {
+  const [versionInfo, setVersionInfo] = useState<AppVersionInfo | null>(null);
+  const [isForce, setIsForce] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    api
+      .version()
+      .then(async (info) => {
+        if (!mounted || !info) return;
+        setVersionInfo(info);
+
+        // 1. Kiểm tra Force Update: phiên bản hiện tại < min_version
+        if (compareSemver(CURRENT_APP_VERSION, info.min_version) < 0) {
+          setIsForce(true);
+          setVisible(true);
+          return;
+        }
+
+        // 2. Kiểm tra Soft Update: phiên bản hiện tại < latest_version
+        if (compareSemver(CURRENT_APP_VERSION, info.latest_version) < 0) {
+          const shouldShow = await shouldShowSoftUpdate(info.latest_version);
+          if (shouldShow && mounted) {
+            setIsForce(false);
+            setVisible(true);
+          }
+        }
+      })
+      .catch((err) => {
+        // Lỗi kết nối -> không block app để tài xế vẫn thao tác được
+        console.warn("[VersionCheck] Failed to check app version:", err);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleDismiss = async () => {
+    if (versionInfo?.latest_version) {
+      await snoozeSoftUpdate(versionInfo.latest_version);
+    }
+    setVisible(false);
+  };
+
+  return (
+    <VersionUpdateModal
+      visible={visible}
+      isForce={isForce}
+      versionInfo={versionInfo}
+      onDismiss={handleDismiss}
+    />
+  );
+}
+
 export default function RootLayout() {
   return (
     <AuthProvider>
@@ -45,6 +110,7 @@ export default function RootLayout() {
         <AuthGuard />
         <NotificationManager />
         <LoadingLayer />
+        <VersionGate />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="login" />
           <Stack.Screen

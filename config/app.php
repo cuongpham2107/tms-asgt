@@ -123,4 +123,15 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mobile App Version Configuration
+    |--------------------------------------------------------------------------
+    */
+    'mobile_latest_version' => env('MOBILE_LATEST_VERSION', '1.0.3'),
+    'mobile_min_version' => env('MOBILE_MIN_VERSION', '1.0.0'),
+    'mobile_android_url' => env('MOBILE_ANDROID_URL', 'https://play.google.com/store/apps/details?id=vn.asgt.tmsdriver'),
+    'mobile_ios_url' => env('MOBILE_IOS_URL', 'https://apps.apple.com/app/id6810122889'),
+    'mobile_release_notes' => env('MOBILE_RELEASE_NOTES', 'Cập nhật tính năng và cải thiện hiệu năng hệ thống.'),
+
 ];

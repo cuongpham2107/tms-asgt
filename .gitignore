@@ -34,5 +34,4 @@ database/database_backup_*
 /storage/app/firebase/
 /.claude/
 *.xlsx
-
-
+/version-2/

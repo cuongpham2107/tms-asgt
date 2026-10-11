@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import type { AppVersionInfo } from "./version";
 
 // ─── Cấu hình API Laravel ───────────────────────────────────────────
 // Thay IP này thành IP máy chạy Laravel backend
@@ -32,7 +33,7 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
 // ─── Auth ────────────────────────────────────────────────────────────
 
 export function login(account: string, password: string) {
-    return fetchApi<{ token: string; shift?: any }>("/login", undefined, {
+    return fetchApi<{ token: string; shift?: any; app_version?: AppVersionInfo }>("/login", undefined, {
         method: "POST",
         body: JSON.stringify({ email: account, login: account, phone: account, password }),
     });
@@ -51,6 +52,7 @@ export function changePassword(
 // ─── API endpoints ───────────────────────────────────────────────────
 
 export const api = {
+    version: () => fetchApi<AppVersionInfo>("/version"),
     auth: {
         changePassword: (
             body: { current_password: string; new_password: string; new_password_confirmation: string },
