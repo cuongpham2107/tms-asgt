@@ -22,7 +22,7 @@ class AppVersionController extends Controller
     public function show(Request $request): JsonResponse
     {
         return response()->json([
-            'latest_version' => (string) config('app.mobile_latest_version', '1.0.3'),
+            'latest_version' => (string) config('app.mobile_latest_version', '1.1.0'),
             'min_version' => (string) config('app.mobile_min_version', '1.0.0'),
             'release_notes' => (string) config('app.mobile_release_notes', 'Cập nhật tính năng và cải thiện hiệu năng hệ thống.'),
             'store_urls' => [
