@@ -21,6 +21,13 @@ class UsersTable
     {
         return $table
             ->columns([
+                TextColumn::make('employee_code')
+                    ->label('Mã NV')
+                    ->searchable()
+                    ->sortable()
+                    ->copyable()
+                    ->badge()
+                    ->color('info'),
                 TextColumn::make('name')
                     ->label('Họ và tên')
                     ->weight('bold')

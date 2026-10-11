@@ -268,3 +268,45 @@ test('login rejects user without driver role', function () {
     $response->assertStatus(403)
         ->assertJsonPath('message', 'Tài khoản này không có quyền tài xế');
 });
+
+test('login revokes previous device tokens ensuring single device login', function () {
+    $driver = User::factory()->create([
+        'email' => 'driver_single_device@example.com',
+        'password' => bcrypt('password123'),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    // Device A logs in
+    $responseA = $this->postJson('/api/driver/login', [
+        'email' => 'driver_single_device@example.com',
+        'password' => 'password123',
+    ]);
+    $responseA->assertSuccessful();
+    $tokenA = $responseA->json('token');
+
+    // Device A can access protected endpoint
+    $this->withHeader('Authorization', 'Bearer '.$tokenA)
+        ->getJson('/api/driver/shifts/active')
+        ->assertSuccessful();
+
+    // Device B logs in with the same account
+    $responseB = $this->postJson('/api/driver/login', [
+        'email' => 'driver_single_device@example.com',
+        'password' => 'password123',
+    ]);
+    $responseB->assertSuccessful();
+    $tokenB = $responseB->json('token');
+
+    expect($tokenA)->not->toBe($tokenB);
+
+    // Device B can access protected endpoint
+    $this->withHeader('Authorization', 'Bearer '.$tokenB)
+        ->getJson('/api/driver/shifts/active')
+        ->assertSuccessful();
+
+    // Device A old token is now invalidated (401 Unauthorized)
+    app('auth')->forgetGuards();
+    $this->withHeader('Authorization', 'Bearer '.$tokenA)
+        ->getJson('/api/driver/shifts/active')
+        ->assertStatus(401);
+});

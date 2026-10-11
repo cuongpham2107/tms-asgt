@@ -19,6 +19,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable([
+    'employee_code',
     'name',
     'email',
     'password',

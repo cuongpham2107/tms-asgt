@@ -171,6 +171,7 @@ class ImportDriversCommand extends Command
                 $vehicle = $cleanPlate ? Vehicle::query()->where('plate_number', $cleanPlate)->first() : null;
 
                 $user = User::query()->create([
+                    'employee_code' => $d['code'] ?? null,
                     'name' => $d['name'],
                     'email' => $d['email'],
                     'password' => $defaultPassword,

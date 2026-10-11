@@ -11,6 +11,12 @@ const API = Platform.select({
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+    unauthorizedHandler = handler;
+}
+
 async function fetchApi<T>(path: string, token?: string, options?: RequestInit): Promise<T> {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -20,6 +26,9 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
     const json = await res.json().catch(() => null);
 
     if (!res.ok) {
+        if (res.status === 401 && unauthorizedHandler) {
+            unauthorizedHandler();
+        }
         let msg = json?.message || json?.error || `HTTP ${res.status}`;
         // Laravel validation errors: { field: [msg1, msg2, ...] }
         if (typeof msg === "object" && !Array.isArray(msg)) {

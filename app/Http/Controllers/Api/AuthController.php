@@ -10,8 +10,8 @@ use App\Models\User;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
@@ -31,6 +31,7 @@ class AuthController extends Controller
             'login' => 'nullable|string',
             'phone' => 'nullable|string',
             'password' => 'required|string',
+            'fcm_token' => 'nullable|string|max:1000',
         ]);
 
         $account = trim((string) ($request->input('login') ?? $request->input('email') ?? $request->input('phone')));
@@ -46,7 +47,8 @@ class AuthController extends Controller
         $candidates = User::query()
             ->where(function ($query) use ($account, $cleanPhone) {
                 $query->where('email', $account)
-                    ->orWhere('phone', $account);
+                    ->orWhere('phone', $account)
+                    ->orWhere('employee_code', $account);
                 if ($cleanPhone !== '' && $cleanPhone !== $account) {
                     $query->orWhere('phone', $cleanPhone);
                 }
@@ -61,6 +63,66 @@ class AuthController extends Controller
             return Hash::check($request->password, $candidate->password);
         });
 
+        // Lớp 2: Nếu mật khẩu nội bộ không khớp, thử xác thực qua API của ASGL ID
+        if (! $user) {
+            try {
+                $asglResponse = Http::timeout(8)->withHeaders([
+                    'Content-Type' => 'application/json',
+                ])->post('https://id.asgl.net.vn/api/auth/login', [
+                    'login' => $account,
+                    'password' => $request->password,
+                ]);
+
+                if ($asglResponse->successful()) {
+                    $userResponse = $asglResponse->json('data.user') ?? [];
+                    $asglUsername = trim((string) ($userResponse['username'] ?? ''));
+                    $asglEmployeeCode = trim((string) ($userResponse['employee_code'] ?? $userResponse['code'] ?? ''));
+                    $asglEmail = trim((string) ($userResponse['email'] ?? ''));
+                    $asglMobile = trim((string) ($userResponse['mobile_phone'] ?? ''));
+                    $cleanAsglPhone = preg_replace('/\D/', '', $asglMobile);
+                    if (str_starts_with($cleanAsglPhone, '84') && strlen($cleanAsglPhone) >= 11) {
+                        $cleanAsglPhone = '0'.substr($cleanAsglPhone, 2);
+                    }
+
+                    // Tìm user dựa trên mã nhân viên, username, email hoặc SĐT từ ASGL
+                    $user = User::query()
+                        ->where(function ($q) use ($asglUsername, $asglEmployeeCode, $asglEmail, $cleanAsglPhone) {
+                            $hasCondition = false;
+                            if ($asglEmployeeCode !== '') {
+                                $q->where('employee_code', $asglEmployeeCode);
+                                $hasCondition = true;
+                            }
+                            if ($asglUsername !== '') {
+                                $method = $hasCondition ? 'orWhere' : 'where';
+                                $q->{$method}('employee_code', $asglUsername)
+                                    ->orWhere('email', $asglUsername);
+                                $hasCondition = true;
+                            }
+                            if ($asglEmail !== '') {
+                                $method = $hasCondition ? 'orWhere' : 'where';
+                                $q->{$method}('email', $asglEmail);
+                                $hasCondition = true;
+                            }
+                            if ($cleanAsglPhone !== '') {
+                                $method = $hasCondition ? 'orWhere' : 'where';
+                                $q->{$method}('phone', $cleanAsglPhone);
+                            }
+                        })
+                        ->with('roles')
+                        ->first();
+
+                    if ($user) {
+                        // Tự động đồng bộ mật khẩu mới từ ASGL vào DB nội bộ TMS
+                        $user->update([
+                            'password' => Hash::make($request->password),
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Lỗi kết nối ASGL ID: '.$e->getMessage());
+            }
+        }
+
         if (! $user) {
             /** @status 401 */
             return response()->json(['message' => 'Thông tin đăng nhập không hợp lệ'], 401);
@@ -71,12 +133,17 @@ class AuthController extends Controller
             return response()->json(['message' => 'Tài khoản này không có quyền tài xế'], 403);
         }
 
-        Auth::setUser($user);
-
-        /** @var User $user */
-        $user = Auth::user();
+        // Thu hồi toàn bộ token cũ để đảm bảo chỉ đăng nhập trên 1 thiết bị duy nhất
+        $user->tokens()->delete();
 
         $token = $user->createToken('mobile')->plainTextToken;
+
+        if ($request->filled('fcm_token')) {
+            $user->update([
+                'fcm_token' => $request->input('fcm_token'),
+                'fcm_token_updated_at' => now(),
+            ]);
+        }
 
         // Lấy ca đang active của lái xe (nếu có)
         $activeShift = DriverShift::query()

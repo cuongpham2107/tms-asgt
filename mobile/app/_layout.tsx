@@ -6,7 +6,7 @@ import { LoadingProvider, useLoading } from "../src/lib/loading";
 import { usePushNotifications } from "../src/lib/notifications";
 import LoadingOverlay from "../src/components/LoadingOverlay";
 import VersionUpdateModal from "../src/components/VersionUpdateModal";
-import { api } from "../src/lib/api";
+import { api, setUnauthorizedHandler } from "../src/lib/api";
 import {
   CURRENT_APP_VERSION,
   compareSemver,
@@ -16,7 +16,7 @@ import {
 } from "../src/lib/version";
 
 function AuthGuard() {
-  const { token, shiftId } = useAuth();
+  const { token, shiftId, logout } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const [isReady, setIsReady] = useState(false);
@@ -24,6 +24,14 @@ function AuthGuard() {
   useEffect(() => {
     setIsReady(true);
   }, []);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      logout();
+      router.replace("/login");
+    });
+    return () => setUnauthorizedHandler(null);
+  }, [logout, router]);
 
   useEffect(() => {
     if (!isReady) return;

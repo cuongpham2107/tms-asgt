@@ -27,6 +27,11 @@ class UserForm
                 Section::make('Thông tin tài khoản')
                     ->columns(2)
                     ->schema([
+                        TextInput::make('employee_code')
+                            ->label('Mã nhân viên')
+                            ->placeholder('VD: ASGT-60006')
+                            ->unique(ignoreRecord: true)
+                            ->maxLength(50),
                         TextInput::make('name')
                             ->label('Họ và tên')
                             ->required(),
@@ -45,9 +50,9 @@ class UserForm
                         DateTimePicker::make('email_verified_at')
                             ->label('Xác thực email lúc'),
                         Toggle::make('is_active')
+                            ->inline(false)
                             ->label('Đang hoạt động')
-                            ->required()
-                            ->columnSpanFull(),
+                            ->required(),
                     ]),
 
                 Section::make('Thông tin cá nhân')
