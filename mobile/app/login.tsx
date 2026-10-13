@@ -46,7 +46,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!email.trim() || !password) {
-      setError("Vui lòng nhập email hoặc số điện thoại và mật khẩu");
+      setError("Vui lòng nhập mã nhân viên, email hoặc số điện thoại và mật khẩu");
       return;
     }
 
@@ -97,14 +97,22 @@ export default function LoginScreen() {
         <Image source={require("../assets/icon.png")} style={s.logo} />
         <Text style={s.subtitle}>Đăng nhập tài xế</Text>
 
-        {error ? <Text style={s.error}>{error}</Text> : null}
+        {error ? (
+          <View style={s.errorBox}>
+            <Ionicons name="alert-circle" size={20} color="#DC2626" />
+            <Text style={s.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
         <TextInput
           style={s.input}
-          placeholder="Email hoặc Số điện thoại"
+          placeholder="Mã NV, Email hoặc Số điện thoại"
           placeholderTextColor="#9CA3AF"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(val) => {
+            setEmail(val);
+            if (error) setError("");
+          }}
           autoCapitalize="none"
           keyboardType="default"
           autoCorrect={false}
@@ -115,7 +123,10 @@ export default function LoginScreen() {
           placeholder="Mật khẩu"
           placeholderTextColor="#9CA3AF"
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(val) => {
+            setPassword(val);
+            if (error) setError("");
+          }}
           secureTextEntry
         />
 
@@ -186,5 +197,22 @@ const s = StyleSheet.create({
   btn: { backgroundColor: "#4F46E5", padding: 16, borderRadius: 12, alignItems: "center", marginTop: 8 },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  error: { color: "#EF4444", textAlign: "center", marginBottom: 12, fontSize: 14 },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    borderColor: "#FCA5A5",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    color: "#DC2626",
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
+  },
 });

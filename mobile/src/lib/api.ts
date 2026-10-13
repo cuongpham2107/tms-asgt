@@ -26,7 +26,7 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
     const json = await res.json().catch(() => null);
 
     if (!res.ok) {
-        if (res.status === 401 && unauthorizedHandler) {
+        if (res.status === 401 && unauthorizedHandler && Boolean(token) && path !== "/login") {
             unauthorizedHandler();
         }
         let msg = json?.message || json?.error || `HTTP ${res.status}`;
@@ -44,7 +44,7 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
 export function login(account: string, password: string) {
     return fetchApi<{ token: string; shift?: any; app_version?: AppVersionInfo }>("/login", undefined, {
         method: "POST",
-        body: JSON.stringify({ email: account, login: account, phone: account, password }),
+        body: JSON.stringify({ email: account, login: account, phone: account, employee_code: account, password }),
     });
 }
 

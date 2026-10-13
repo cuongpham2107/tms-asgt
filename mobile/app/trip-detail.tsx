@@ -313,6 +313,9 @@ export default function TripDetailScreen() {
         currentStatus === "return_trip";
     const hasStarted = detail?.start_km != null || trip?.start_km != null;
     const orders: any[] = detail?.orders || trip?.orders || [];
+    const hasIncompleteOrders =
+        orders.length > 0 &&
+        orders.some((o: any) => o.status !== "completed");
 
     // Auto lấy km hiện tại của xe
     const vehicleKm = detail?.vehicle?.km_reading ?? trip?.vehicle?.km_reading;
@@ -1224,7 +1227,9 @@ export default function TripDetailScreen() {
                         <TouchableOpacity
                             style={[
                                 {
-                                    backgroundColor: "#DC2626",
+                                    backgroundColor: hasIncompleteOrders
+                                        ? "#D97706"
+                                        : "#DC2626",
                                     flexDirection: "row",
                                     alignItems: "center",
                                     justifyContent: "center",
@@ -1245,7 +1250,15 @@ export default function TripDetailScreen() {
                             }}
                             activeOpacity={0.8}
                         >
-                            <Ionicons name="flag" size={20} color="#fff" />
+                            <Ionicons
+                                name={
+                                    hasIncompleteOrders
+                                        ? "swap-horizontal"
+                                        : "flag"
+                                }
+                                size={20}
+                                color="#fff"
+                            />
                             <Text
                                 style={{
                                     color: "#fff",
@@ -1253,7 +1266,9 @@ export default function TripDetailScreen() {
                                     fontWeight: "800",
                                 }}
                             >
-                                Kết thúc chuyến
+                                {hasIncompleteOrders
+                                    ? "Bàn giao chuyến chưa xong"
+                                    : "Kết thúc chuyến"}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -1545,7 +1560,11 @@ export default function TripDetailScreen() {
             >
                 <Pressable style={s.modalOverlay} onPress={Keyboard.dismiss}>
                     <View style={s.modalCard}>
-                        <Text style={s.modalTitle}>Kết thúc chuyến</Text>
+                        <Text style={s.modalTitle}>
+                            {hasIncompleteOrders
+                                ? "Bàn giao chuyến chưa xong"
+                                : "Kết thúc chuyến"}
+                        </Text>
 
                         <Text style={s.modalSectionLabel}>
                             Trạng thái đơn hàng ({orders.length})
@@ -1621,7 +1640,7 @@ export default function TripDetailScreen() {
                             autoFocus
                         />
 
-                        {orders.some((o: any) => o.status !== "completed") && (
+                        {hasIncompleteOrders && (
                             <View
                                 style={{
                                     backgroundColor: "#FEF3C7",
@@ -1637,7 +1656,7 @@ export default function TripDetailScreen() {
                                         textAlign: "center",
                                     }}
                                 >
-                                    ⚠️ Kết thúc chuyến sẽ tạo Đảo lái cho đơn
+                                    ⚠️ Bàn giao chuyến sẽ tạo Đảo lái cho đơn
                                     chưa xong
                                 </Text>
                             </View>
@@ -1697,7 +1716,11 @@ export default function TripDetailScreen() {
                             <TouchableOpacity
                                 style={[
                                     s.modalBtn,
-                                    { backgroundColor: "#DC2626" },
+                                    {
+                                        backgroundColor: hasIncompleteOrders
+                                            ? "#D97706"
+                                            : "#DC2626",
+                                    },
                                 ]}
                                 onPress={() => {
                                     const km = parseFloat(completeKm);
@@ -1721,7 +1744,11 @@ export default function TripDetailScreen() {
                                 <Text
                                     style={[s.modalBtnText, { color: "#fff" }]}
                                 >
-                                    {completing ? "Đang xử lý..." : "Kết thúc"}
+                                    {completing
+                                        ? "Đang xử lý..."
+                                        : hasIncompleteOrders
+                                          ? "Bàn giao"
+                                          : "Kết thúc"}
                                 </Text>
                             </TouchableOpacity>
                         </View>

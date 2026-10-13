@@ -310,3 +310,46 @@ test('login revokes previous device tokens ensuring single device login', functi
         ->getJson('/api/driver/shifts/active')
         ->assertStatus(401);
 });
+
+test('login with invalid employee_code or password returns 401', function () {
+    $driver = User::factory()->create([
+        'employee_code' => 'ASGT-99999',
+        'email' => 'driver_ec@example.com',
+        'password' => bcrypt('correct_password'),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    // Case 1: Wrong employee code
+    $responseWrongCode = $this->postJson('/api/driver/login', [
+        'employee_code' => 'WRONG-CODE',
+        'password' => 'correct_password',
+    ]);
+    $responseWrongCode->assertStatus(401)
+        ->assertJsonPath('message', 'Thông tin đăng nhập không hợp lệ');
+
+    // Case 2: Wrong password
+    $responseWrongPass = $this->postJson('/api/driver/login', [
+        'login' => 'ASGT-99999',
+        'password' => 'wrong_pass',
+    ]);
+    $responseWrongPass->assertStatus(401)
+        ->assertJsonPath('message', 'Thông tin đăng nhập không hợp lệ');
+});
+
+test('login with employee_code handles lowercase correctly', function () {
+    $driver = User::factory()->create([
+        'employee_code' => 'ASGT-88888',
+        'email' => 'driver_lower@example.com',
+        'password' => bcrypt('password123'),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    $response = $this->postJson('/api/driver/login', [
+        'login' => 'asgt-88888',
+        'password' => 'password123',
+    ]);
+
+    $response->assertSuccessful()
+        ->assertJsonPath('user.id', $driver->id)
+        ->assertJsonPath('user.employee_code', 'ASGT-88888');
+});

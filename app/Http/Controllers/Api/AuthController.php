@@ -30,13 +30,14 @@ class AuthController extends Controller
             'email' => 'nullable|string',
             'login' => 'nullable|string',
             'phone' => 'nullable|string',
+            'employee_code' => 'nullable|string',
             'password' => 'required|string',
             'fcm_token' => 'nullable|string|max:1000',
         ]);
 
-        $account = trim((string) ($request->input('login') ?? $request->input('email') ?? $request->input('phone')));
+        $account = trim((string) ($request->input('login') ?? $request->input('employee_code') ?? $request->input('email') ?? $request->input('phone')));
         if ($account === '') {
-            return response()->json(['message' => 'Vui lòng nhập email hoặc số điện thoại'], 422);
+            return response()->json(['message' => 'Vui lòng nhập mã nhân viên, email hoặc số điện thoại'], 422);
         }
 
         $cleanPhone = preg_replace('/\D/', '', $account);
@@ -44,11 +45,16 @@ class AuthController extends Controller
             $cleanPhone = '0'.substr($cleanPhone, 2);
         }
 
+        $upperAccount = strtoupper($account);
+
         $candidates = User::query()
-            ->where(function ($query) use ($account, $cleanPhone) {
+            ->where(function ($query) use ($account, $cleanPhone, $upperAccount) {
                 $query->where('email', $account)
                     ->orWhere('phone', $account)
                     ->orWhere('employee_code', $account);
+                if ($upperAccount !== $account) {
+                    $query->orWhere('employee_code', $upperAccount);
+                }
                 if ($cleanPhone !== '' && $cleanPhone !== $account) {
                     $query->orWhere('phone', $cleanPhone);
                 }
