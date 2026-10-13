@@ -6,6 +6,8 @@ use EduardoRibeiroDev\FilamentLeaflet\Tables\MapColumn;
 
 class UniqueMapColumn extends MapColumn
 {
+    protected string $view = 'filament.tables.columns.unique-map-column';
+
     /**
      * Get a unique ID for the map instance to prevent DOM ID collisions when multiple records
      * share the exact same coordinates.

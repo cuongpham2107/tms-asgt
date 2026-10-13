@@ -17,12 +17,15 @@ use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
 use App\Models\User;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\OsrmService;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\TripCheckpointOsmValidationService;
 use App\Services\TripKmAdjustmentService;
 use App\Services\TripKmCalculatorService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
+use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
+use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -140,44 +143,138 @@ class TripsTable extends BaseTable
                     ->height(72)
                     ->zoom(14)
                     ->static()
-                    ->state(fn (Trip $record): array => [
-                        'lat' => (float) ($record->vehicle?->gps_lat ?? 10.8231),
-                        'lng' => (float) ($record->vehicle?->gps_lng ?? 106.6297),
-                    ])
+                    ->placeholder('—')
+                    ->state(fn (Trip $record): ?array => ($record->vehicle?->gps_lat && $record->vehicle?->gps_lng)
+                        ? [
+                            'lat' => (float) $record->vehicle->gps_lat,
+                            'lng' => (float) $record->vehicle->gps_lng,
+                        ]
+                        : null
+                    )
                     ->action(
                         Action::make('select')
                             ->modal()
-                            ->modalWidth('4xl')
-                            ->modalHeading(fn (Trip $record): string => 'Vị trí xe — '.$record->vehicle?->plate_number)
+                            ->modalWidth(Width::SixExtraLarge)
+                            ->modalHeading(fn (Trip $record): string => 'Vị trí xe & Lộ trình chuyến — '.($record->vehicle?->plate_number ?? $record->trip_code))
                             ->modalSubmitAction(false)
                             ->modalCancelActionLabel('Đóng')
                             ->modalContent(fn (Trip $record): HtmlString => new HtmlString(Blade::render(<<<'BLADE'
                                 <div class="space-y-4">
-                                    <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-800">
-                                        @if ($trip->vehicle)
-                                            <div>
-                                                <span class="text-xs text-gray-500 dark:text-gray-400">Xe</span>
-                                                <span class="ml-2 text-sm font-bold text-amber-700 dark:text-amber-300">{{ $trip->vehicle->plate_number }}</span>
+                                    {{-- Thẻ thông tin xe, lái xe, GPS và đơn hàng --}}
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                        <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-3.5 dark:border-gray-700 dark:bg-gray-800/80">
+                                            <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Phương tiện & Lái xe</div>
+                                            <div class="mt-1.5 flex items-center gap-2">
+                                                <span class="text-base font-bold text-amber-700 dark:text-amber-400">
+                                                    {{ $trip->vehicle?->plate_number ?? 'Chưa gán xe' }}
+                                                </span>
+                                                @if ($trip->vehicle?->vehicle_type)
+                                                    <span class="text-[11px] font-medium rounded bg-gray-200/80 px-1.5 py-0.5 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                                        {{ $trip->vehicle->vehicle_type }}
+                                                    </span>
+                                                @endif
                                             </div>
-                                        @endif
-
-                                        @if ($trip->orders->isNotEmpty())
-                                            <div>
-                                                <span class="text-xs text-gray-500 dark:text-gray-400">Đơn</span>
-                                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $trip->orders->pluck('order_code')->implode(', ') }}</span>
+                                            <div class="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                                                Lái xe: <strong class="text-gray-900 dark:text-white">{{ $trip->driver?->name ?? 'Chưa gán' }}</strong>
+                                                @if ($trip->driver?->phone)
+                                                    <span class="text-gray-500">({{ $trip->driver->phone }})</span>
+                                                @endif
                                             </div>
-                                        @endif
+                                        </div>
 
-                                        <div>
-                                            <span class="text-xs text-gray-500 dark:text-gray-400">Cập nhật</span>
-                                            <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                {{ $trip->vehicle?->last_gps_update?->format('H:i d/m/Y') ?? '—' }}
-                                            </span>
+                                        <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-3.5 dark:border-gray-700 dark:bg-gray-800/80">
+                                            <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Trạng thái GPS</div>
+                                            <div class="mt-1.5 flex items-center gap-2">
+                                                @if ($trip->vehicle?->gps_lat && $trip->vehicle?->gps_lng)
+                                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                                        <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                        Có tín hiệu GPS
+                                                    </span>
+                                                    @if ($trip->vehicle->gps_speed !== null)
+                                                        <span class="text-xs font-bold text-blue-700 dark:text-blue-300">
+                                                            ⚡ {{ number_format((float) $trip->vehicle->gps_speed, 1) }} km/h
+                                                        </span>
+                                                    @endif
+                                                @else
+                                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-200/70 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                                                        Chưa có GPS
+                                                    </span>
+                                                @endif
+                                            </div>
+                                            <div class="text-xs text-gray-600 dark:text-gray-300 mt-1 truncate" title="{{ $trip->vehicle?->gps_address ?? 'Vị trí chưa xác định' }}">
+                                                📍 {{ $trip->vehicle?->gps_address ?? 'Vị trí chưa xác định' }}
+                                            </div>
+                                        </div>
+
+                                        <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-3.5 dark:border-gray-700 dark:bg-gray-800/80">
+                                            <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Cập nhật GPS lúc</div>
+                                            <div class="mt-1.5 text-sm font-bold text-gray-900 dark:text-white">
+                                                {{ $trip->vehicle?->last_gps_update?->format('H:i:s d/m/Y') ?? '—' }}
+                                            </div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                @if ($trip->vehicle?->last_gps_update)
+                                                    {{ $trip->vehicle->last_gps_update->diffForHumans() }}
+                                                @else
+                                                    Chưa có dữ liệu thời gian
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                        <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-3.5 dark:border-gray-700 dark:bg-gray-800/80">
+                                            <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Chuyến & Đơn hàng</div>
+                                            <div class="mt-1.5 flex items-center justify-between">
+                                                <span class="text-sm font-bold text-primary-600 dark:text-primary-400">{{ $trip->trip_code }}</span>
+                                                <span class="text-xs font-medium text-gray-500">{{ $trip->orders->count() }} đơn</span>
+                                            </div>
+                                            <div class="text-xs text-gray-600 dark:text-gray-300 mt-1 truncate" title="{{ $trip->orders->pluck('order_code')->implode(', ') }}">
+                                                {{ $trip->orders->isNotEmpty() ? $trip->orders->pluck('order_code')->implode(', ') : 'Chưa có đơn hàng' }}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                                    {{-- Khung bản đồ kèm bộ kích hoạt resize tự động tránh lỗi màn hình xám trên máy yếu --}}
+                                    <div 
+                                        x-data="{ 
+                                            init() { 
+                                                setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
+                                                setTimeout(() => window.dispatchEvent(new Event('resize')), 400);
+                                                setTimeout(() => window.dispatchEvent(new Event('resize')), 800);
+                                            } 
+                                        }" 
+                                        class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
+                                        style="min-height: 450px;"
+                                    >
                                         <x-filament-leaflet::map :config="$mapConfig" widget />
+                                    </div>
+
+                                    {{-- Chú thích các điểm trên bản đồ và lộ trình --}}
+                                    <div class="flex flex-col sm:flex-row flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-3 text-xs dark:border-gray-700 dark:bg-gray-800/80">
+                                        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                            <span class="font-bold text-gray-700 dark:text-gray-300">Chú thích:</span>
+                                            <span class="inline-flex items-center gap-1.5 font-semibold text-gray-800 dark:text-gray-200">
+                                                🚛 Vị trí xe hiện tại
+                                            </span>
+                                            <span class="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                                                <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span> Điểm xuất phát
+                                            </span>
+                                            <span class="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                                                <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span> Điểm lấy hàng
+                                            </span>
+                                            <span class="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                                                <span class="h-2.5 w-2.5 rounded-full bg-red-500"></span> Điểm giao hàng
+                                            </span>
+                                            <span class="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium">
+                                                ━━ Tuyến đường bám đường
+                                            </span>
+                                            @if ($trip->checkpoints->whereNotNull('gps_lat')->isNotEmpty())
+                                                <span class="inline-flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                                                    <span class="h-2.5 w-2.5 rounded-full bg-sky-400"></span> Mốc đã chạy qua
+                                                </span>
+                                            @endif
+                                        </div>
+                                        <div class="text-[11px] text-gray-500 dark:text-gray-400 italic">
+                                            * Bản đồ tự động định vị theo xe và lộ trình chuyến
+                                        </div>
                                     </div>
                                 </div>
                             BLADE, [
@@ -634,34 +731,230 @@ class TripsTable extends BaseTable
 
     private static function buildGpsMapConfig(Trip $record): array
     {
+        $record->loadMissing([
+            'vehicle',
+            'driver',
+            'startLocation',
+            'endLocation',
+            'orders.pickupLocation',
+            'orders.deliveryPoints.location',
+            'checkpoints',
+        ]);
+
         $vehicle = $record->vehicle;
-        $lat = (float) ($vehicle?->gps_lat ?? 10.8231);
-        $lng = (float) ($vehicle?->gps_lng ?? 106.6297);
+        $hasVehicleGps = $vehicle && $vehicle->gps_lat !== null && $vehicle->gps_lng !== null;
+        $vehicleLat = $hasVehicleGps ? (float) $vehicle->gps_lat : null;
+        $vehicleLng = $hasVehicleGps ? (float) $vehicle->gps_lng : null;
 
         $layers = [];
+        $routePoints = [];
+        $allCoordinates = [];
 
-        $layers[] = Marker::make($lat, $lng)
-            ->id('gps-vehicle-'.$record->getKey())
-            ->icon(asset('images/truck.png'), [38, 38])
-            ->title($vehicle?->plate_number ?? 'Xe')
-            ->popupContent(($vehicle?->plate_number ?? '').' — '.($record->driver?->name ?? 'Chưa phân lái xe'))
-            ->toArray();
+        // 1. Điểm xuất phát của chuyến (Kho đi)
+        if ($record->startLocation && $record->startLocation->lat !== null && $record->startLocation->lng !== null) {
+            $sLat = (float) $record->startLocation->lat;
+            $sLng = (float) $record->startLocation->lng;
+            $sName = $record->startLocation->name ?? 'Điểm xuất phát';
+            $sAddress = $record->startLocation->address ?? $sName;
+
+            $routePoints[] = [$sLat, $sLng];
+            $allCoordinates[] = [$sLat, $sLng];
+
+            $layers[] = Marker::make($sLat, $sLng)
+                ->id('start-'.$record->getKey())
+                ->green()
+                ->title('Xuất phát: '.$sName)
+                ->popupContent('<div class="p-1 space-y-1"><strong class="text-emerald-600 font-bold">🏁 Điểm xuất phát</strong><div class="text-xs font-semibold text-gray-800">'.$sName.'</div><div class="text-xs text-gray-500">'.$sAddress.'</div></div>')
+                ->tooltipContent('Xuất phát: '.$sName)
+                ->toArray();
+        }
+
+        // 2. Điểm nhận hàng (từ các đơn hàng trong chuyến)
+        foreach ($record->orders as $order) {
+            if ($order->pickupLocation && $order->pickupLocation->lat !== null && $order->pickupLocation->lng !== null) {
+                $pLat = (float) $order->pickupLocation->lat;
+                $pLng = (float) $order->pickupLocation->lng;
+                $pName = $order->pickupLocation->name ?? $order->pickup_address ?? 'Điểm lấy hàng';
+                $pAddress = $order->pickup_address ?? $order->pickupLocation->address ?? $pName;
+
+                $routePoints[] = [$pLat, $pLng];
+                $allCoordinates[] = [$pLat, $pLng];
+
+                $layers[] = Marker::make($pLat, $pLng)
+                    ->id('pickup-order-'.$order->getKey())
+                    ->orange()
+                    ->title('Lấy hàng: '.$pName)
+                    ->popupContent('<div class="p-1 space-y-1"><strong class="text-amber-600 font-bold">📦 Điểm lấy hàng (#'.$order->order_code.')</strong><div class="text-xs font-semibold text-gray-800">'.$pName.'</div><div class="text-xs text-gray-500">'.$pAddress.'</div></div>')
+                    ->tooltipContent('Lấy hàng: '.$pName.' (#'.$order->order_code.')')
+                    ->toArray();
+            }
+        }
+
+        // 3. Điểm giao hàng (theo thứ tự các chặng)
+        foreach ($record->orders as $order) {
+            $dps = $order->deliveryPoints->sortBy('sequence');
+            foreach ($dps as $dp) {
+                if ($dp->location && $dp->location->lat !== null && $dp->location->lng !== null) {
+                    $dLat = (float) $dp->location->lat;
+                    $dLng = (float) $dp->location->lng;
+                    $dName = $dp->address ?? $dp->location->name ?? ('Điểm giao '.$dp->sequence);
+
+                    $routePoints[] = [$dLat, $dLng];
+                    $allCoordinates[] = [$dLat, $dLng];
+
+                    $layers[] = Marker::make($dLat, $dLng)
+                        ->id('delivery-dp-'.$dp->getKey())
+                        ->red()
+                        ->title('Giao hàng: '.$dName)
+                        ->popupContent('<div class="p-1 space-y-1"><strong class="text-red-600 font-bold">🎯 Điểm giao hàng #'.$dp->sequence.' (#'.$order->order_code.')</strong><div class="text-xs font-semibold text-gray-800">'.$dName.'</div><div class="text-xs text-gray-500">Giao cho đơn '.$order->order_code.'</div></div>')
+                        ->tooltipContent('Giao #'.$dp->sequence.': '.$dName)
+                        ->toArray();
+                }
+            }
+        }
+
+        // 4. Điểm kết thúc của chuyến (Kho về)
+        if ($record->endLocation && $record->endLocation->lat !== null && $record->endLocation->lng !== null) {
+            $eLat = (float) $record->endLocation->lat;
+            $eLng = (float) $record->endLocation->lng;
+            $eName = $record->endLocation->name ?? 'Điểm kết thúc';
+            $eAddress = $record->endLocation->address ?? $eName;
+
+            $routePoints[] = [$eLat, $eLng];
+            $allCoordinates[] = [$eLat, $eLng];
+
+            $layers[] = Marker::make($eLat, $eLng)
+                ->id('end-'.$record->getKey())
+                ->blue()
+                ->title('Kết thúc: '.$eName)
+                ->popupContent('<div class="p-1 space-y-1"><strong class="text-blue-600 font-bold">🏁 Điểm kết thúc</strong><div class="text-xs font-semibold text-gray-800">'.$eName.'</div><div class="text-xs text-gray-500">'.$eAddress.'</div></div>')
+                ->tooltipContent('Kết thúc: '.$eName)
+                ->toArray();
+        }
+
+        // 5. Mốc checkpoint thực tế đã ghi nhận trong chuyến
+        $realCheckpoints = $record->checkpoints
+            ->filter(fn ($c) => $c->gps_lat !== null && $c->gps_lng !== null)
+            ->sortBy('occurred_at');
+
+        foreach ($realCheckpoints as $cp) {
+            $cpLat = (float) $cp->gps_lat;
+            $cpLng = (float) $cp->gps_lng;
+            $allCoordinates[] = [$cpLat, $cpLng];
+
+            $layers[] = CircleMarker::make($cpLat, $cpLng)
+                ->id('checkpoint-'.$cp->getKey())
+                ->radius(6)
+                ->color('#0284c7')
+                ->fillColor('#38bdf8')
+                ->fillOpacity(0.85)
+                ->weight(2)
+                ->tooltipContent(($cp->checkpoint_type?->getLabel() ?? 'Mốc').' ('.($cp->occurred_at?->format('H:i d/m') ?? '').')')
+                ->toArray();
+        }
+
+        // 6. Vẽ tuyến đường lộ trình (OSRM bám đường + fallback đường thẳng nét đứt)
+        if (count($routePoints) >= 2) {
+            // Tuyến đường dự kiến nét đứt
+            $layers[] = Polyline::make($routePoints)
+                ->id('route-planned-'.$record->getKey())
+                ->color('#94a3af')
+                ->weight(2)
+                ->opacity(0.4)
+                ->dashArray(5, 5)
+                ->fill(false)
+                ->toArray();
+
+            // Tuyến đường bám đường OSRM
+            $osrm = app(OsrmService::class);
+            $osrmRoute = $osrm->getRouteFromPoints($routePoints);
+
+            if (count($osrmRoute) >= 2) {
+                $layers[] = Polyline::make($osrmRoute)
+                    ->id('route-osrm-'.$record->getKey())
+                    ->color('#2563eb')
+                    ->weight(5)
+                    ->opacity(0.85)
+                    ->fill(false)
+                    ->tooltipContent('Tuyến đường bám đường')
+                    ->toArray();
+            } else {
+                $layers[] = Polyline::make($routePoints)
+                    ->id('route-direct-'.$record->getKey())
+                    ->color('#2563eb')
+                    ->weight(4)
+                    ->opacity(0.8)
+                    ->fill(false)
+                    ->toArray();
+            }
+        }
+
+        // 7. Vị trí thực tế của xe hiện tại (GPS xe)
+        if ($hasVehicleGps) {
+            $allCoordinates[] = [$vehicleLat, $vehicleLng];
+
+            // Vòng tròn halo xanh tỏa ra định vị xe
+            $layers[] = CircleMarker::make($vehicleLat, $vehicleLng)
+                ->id('vehicle-pulse-'.$record->getKey())
+                ->radius(20)
+                ->color('#2563eb')
+                ->fillColor('#60a5fa')
+                ->fillOpacity(0.35)
+                ->weight(2)
+                ->tooltipContent('Xe '.$vehicle->plate_number.' (Vị trí hiện tại)')
+                ->toArray();
+
+            // Marker xe tải
+            $driverName = $record->driver?->name ?? 'Chưa phân lái xe';
+            $driverPhone = $record->driver?->phone ? ' ('.$record->driver->phone.')' : '';
+            $speedText = $vehicle->gps_speed !== null ? number_format((float) $vehicle->gps_speed, 1).' km/h' : '0 km/h';
+            $updateTime = $vehicle->last_gps_update?->format('H:i:s d/m/Y') ?? '—';
+            $address = $vehicle->gps_address ?? 'Đang cập nhật địa chỉ';
+
+            $popupHtml = '<div class="p-2 space-y-1 text-xs" style="min-width: 220px;">'
+                .'<div class="font-bold text-sm text-blue-700">🚛 '.$vehicle->plate_number.'</div>'
+                .'<div><strong>Lái xe:</strong> '.$driverName.$driverPhone.'</div>'
+                .'<div><strong>Tốc độ:</strong> <span class="font-semibold text-emerald-600">⚡ '.$speedText.'</span></div>'
+                .'<div><strong>Địa chỉ GPS:</strong> '.$address.'</div>'
+                .'<div class="text-[11px] text-gray-500"><strong>Cập nhật:</strong> '.$updateTime.'</div>'
+                .'</div>';
+
+            $layers[] = Marker::make($vehicleLat, $vehicleLng)
+                ->id('gps-vehicle-'.$record->getKey())
+                ->icon(asset('images/truck.png'), [40, 40])
+                ->title('Xe '.$vehicle->plate_number)
+                ->popupContent($popupHtml)
+                ->toArray();
+        }
+
+        // Tọa độ tâm mặc định: ưu tiên xe -> điểm đầu tiên của lộ trình -> Hà Nội
+        $centerLat = $vehicleLat ?? ($routePoints[0][0] ?? 21.0285);
+        $centerLng = $vehicleLng ?? ($routePoints[0][1] ?? 105.8542);
+
+        $hasFitBounds = count($allCoordinates) >= 2;
 
         return [
             'mapId' => 'gps-map-'.$record->getKey(),
-            'mapHeight' => 340,
-            'defaultCoord' => [$lat, $lng],
-            'autoCenter' => true,
-            'fitBounds' => false,
-            'defaultZoom' => 15,
+            'mapHeight' => 450,
+            'defaultCoord' => [$centerLat, $centerLng],
+            'autoCenter' => false, // Không lấy vị trí trình duyệt của người điều hành
+            'fitBounds' => $hasFitBounds,
+            'defaultZoom' => $hasFitBounds ? 12 : 15,
             'geoJsonColors' => [],
             'geoJsonData' => [],
             'infoText' => '',
-            'tileLayersUrl' => [[
-                TileLayer::OpenStreetMap->getLabel(),
-                TileLayer::OpenStreetMap->getUrl(),
-                TileLayer::OpenStreetMap->getAttribution(),
-            ]],
+            'tileLayersUrl' => [
+                [
+                    TileLayer::OpenStreetMap->getLabel(),
+                    TileLayer::OpenStreetMap->getUrl(),
+                    TileLayer::OpenStreetMap->getAttribution(),
+                ],
+                [
+                    'Vệ tinh',
+                    'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+                    '&copy; Google Maps',
+                ],
+            ],
             'layerGroupsData' => [],
             'layersData' => $layers,
             'zoomConfig' => ['max' => 18, 'min' => 0],

@@ -84,8 +84,8 @@
         },
     }" class="space-y-3">
         {{-- Header + Search --}}
-        <div class="flex items-center justify-between gap-3">
-            <div class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
+        <div class="flex flex-wrap items-center justify-between gap-2.5 sm:flex-nowrap sm:gap-3">
+            <div class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900 shrink-0">
                 <div class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">
                     Tất cả lái xe
                     <span
@@ -94,17 +94,17 @@
                 </div>
             </div>
 
-            <div class="relative ml-auto w-full max-w-xs">
+            <div class="relative ml-auto w-full sm:w-64 max-w-xs">
                 <div class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                     <x-filament::icon icon="heroicon-m-magnifying-glass" class="h-4 w-4" />
                 </div>
-                <input type="search" x-model="search" placeholder="{{ $getSearchPlaceholder() }}"
+                <input type="search" x-model.debounce.200ms="search" placeholder="{{ $getSearchPlaceholder() }}"
                     class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500" />
             </div>
         </div>
 
         {{-- Cards Grid --}}
-        <div class="grid max-h-162.5 gap-2.5 overflow-y-auto p-1 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
+        <div class="grid max-h-[60vh] md:max-h-162.5 gap-2.5 overflow-y-auto p-1.5 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
             <template x-for="card in visibleCards()" :key="card.value">
                 <div x-show="matches(card)" x-cloak class="h-full">
                     <button type="button" x-on:click="select(card.value)"
@@ -123,7 +123,7 @@
                         </div>
 
                         {{-- Card Header --}}
-                        <div class="flex items-center gap-3 border-b border-gray-100 p-2 dark:border-gray-800">
+                        <div class="flex items-center gap-3 border-b border-gray-100 px-3.5 py-3 dark:border-gray-800">
                             {{-- Avatar / Icon --}}
                             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm"
                                 :class="isSelected(card.value) ?
@@ -159,7 +159,7 @@
 
                             {{-- Badge --}}
                             <span x-show="card.badge"
-                                class="shrink-0 rounded-xl px-2 py-1 text-[8px] font-semibold uppercase"
+                                class="shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
                                 :class="card.badgeClasses ?? 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'"
                                 x-text="card.badge"></span>
                         </div>
@@ -167,7 +167,7 @@
                         {{-- Card Body: Details --}}
                         <div x-show="Array.isArray(card.details) && card.details.length" class="grid grid-cols-2 gap-x-3 gap-y-2 px-3.5 py-3 border-t border-gray-50/50 bg-gray-50/20 dark:border-gray-800/50 dark:bg-gray-900/10">
                             <template x-for="(detail, idx) in card.details" :key="idx">
-                                <div x-show="detail" class="flex items-center gap-1.5 min-w-0">
+                                <div x-show="detail" class="flex items-center gap-1.5 min-w-0" :class="detail && detail.fullWidth ? 'col-span-2' : ''">
                                     <div x-show="detail && detail.icon" class="flex shrink-0 items-center justify-center p-1 rounded bg-gray-100/80 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
                                         <x-filament::icon x-bind:icon="detail.icon"
                                             class="h-3.5 w-3.5" />
@@ -176,6 +176,7 @@
                                         <span class="block text-[10px] text-gray-400 dark:text-gray-500 leading-tight"
                                             x-text="detail ? detail.label : ''"></span>
                                         <span class="block truncate text-xs font-semibold text-gray-700 dark:text-gray-300 leading-tight"
+                                            :title="detail ? detail.value : ''"
                                             x-text="detail ? detail.value : ''"></span>
                                     </div>
                                 </div>
@@ -199,7 +200,7 @@
 
         {{-- Empty state --}}
         <div x-show="allFilteredCards().length === 0" x-cloak
-            class="flex flex-col items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-6 py-8 dark:border-gray-700 dark:bg-gray-900/50">
+            class="flex flex-col items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 sm:px-6 sm:py-8 dark:border-gray-700 dark:bg-gray-900/50">
             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
                 <x-filament::icon icon="heroicon-o-magnifying-glass" class="h-5 w-5 text-gray-400" />
             </div>

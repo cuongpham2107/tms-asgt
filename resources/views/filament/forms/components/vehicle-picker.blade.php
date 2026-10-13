@@ -115,9 +115,9 @@
         },
     }" class="space-y-3">
         {{-- Tabs + Search --}}
-        <div class="flex items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-2.5 sm:flex-nowrap sm:gap-3">
             <div x-show="hasVehicleTypeFilters()" x-cloak
-                class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
+                class="inline-flex shrink-0 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-900">
                 <button type="button" x-on:click="setTab('company')"
                     class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition"
                     :class="activeTab === 'company'
@@ -150,24 +150,24 @@
                 </button>
             </div>
 
-            <div class="ml-auto flex items-center gap-2">
+            <div class="ml-auto flex flex-1 sm:flex-initial items-center justify-end gap-2">
                 @if ($getAction('createVehicle'))
                     <div class="shrink-0 w-max">
                         {{ $getAction('createVehicle') }}
                     </div>
                 @endif
-                <div class="relative w-full max-w-xs">
+                <div class="relative w-full sm:w-64 max-w-xs">
                     <div class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                         <x-filament::icon icon="heroicon-m-magnifying-glass" class="h-4 w-4" />
                     </div>
-                    <input type="search" x-model="search" placeholder="{{ $getSearchPlaceholder() }}"
+                    <input type="search" x-model.debounce.200ms="search" placeholder="{{ $getSearchPlaceholder() }}"
                         class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500" />
                 </div>
             </div>
         </div>
 
         {{-- Cards Grid --}}
-        <div class="grid max-h-162.5 gap-2.5 overflow-y-auto p-1 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
+        <div class="grid max-h-[60vh] md:max-h-162.5 gap-2.5 overflow-y-auto p-1.5 custom-scrollbar grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
             <template x-for="card in visibleCards()" :key="card.value">
                 <div x-show="matches(card)" x-cloak class="h-full">
                     <button type="button" x-on:click="select(card.value)"
@@ -186,7 +186,7 @@
                         </div>
 
                         {{-- Card Header --}}
-                        <div class="flex items-center gap-3 border-b border-gray-100 p-2 dark:border-gray-800">
+                        <div class="flex items-center gap-3 border-b border-gray-100 px-3.5 py-3 dark:border-gray-800">
                             {{-- Avatar / Icon --}}
                             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm"
                                 :class="isSelected(card.value) ?
@@ -222,7 +222,7 @@
 
                             {{-- Badge --}}
                             <span x-show="card.badge"
-                                class="shrink-0 rounded-lg px-2 py-1 text-[8px] font-semibold uppercase"
+                                class="shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
                                 :class="card.badgeClasses ?? 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'"
                                 x-text="card.badge"></span>
                         </div>
@@ -263,7 +263,7 @@
 
         {{-- Empty state --}}
         <div x-show="allFilteredCards().length === 0" x-cloak
-            class="flex flex-col items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-6 py-8 dark:border-gray-700 dark:bg-gray-900/50">
+            class="flex flex-col items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 sm:px-6 sm:py-8 dark:border-gray-700 dark:bg-gray-900/50">
             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
                 <x-filament::icon icon="heroicon-o-magnifying-glass" class="h-5 w-5 text-gray-400" />
             </div>
