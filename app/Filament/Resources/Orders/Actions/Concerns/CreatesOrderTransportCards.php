@@ -810,7 +810,7 @@ abstract class CreatesOrderTransportCards
             ->preload()
             ->columnSpanFull()
             ->live()
-            ->afterStateUpdated(function ($state, Set $set, Get $get) use ($setAreaId): void {
+            ->afterStateUpdated(function ($state, Set $set, Get $get): void {
                 if (blank($state)) {
                     $set('pickup_location_id', null);
 
@@ -851,9 +851,9 @@ abstract class CreatesOrderTransportCards
 
                 if ($location) {
                     $set('pickup_location_id', $location->id);
-                    if ($setAreaId && filled($location->area_id)) {
-                        $set('area_id', $location->area_id);
-                    }
+                    // if ($setAreaId && filled($location->area_id)) {
+                    //     $set('area_id', $location->area_id);
+                    // }
                 } else {
                     $set('pickup_location_id', null);
                 }
