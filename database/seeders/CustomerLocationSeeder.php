@@ -18,7 +18,9 @@ class CustomerLocationSeeder extends Seeder
 
     public function run(): void
     {
-        $excelPath = base_path(self::EXCEL_FILE);
+        $excelPath = file_exists(base_path('data/'.self::EXCEL_FILE))
+            ? base_path('data/'.self::EXCEL_FILE)
+            : base_path(self::EXCEL_FILE);
         if (! file_exists($excelPath)) {
             $this->command?->warn("File Excel not found at {$excelPath}. Skipping Excel import.");
 

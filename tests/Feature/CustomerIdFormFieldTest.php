@@ -110,7 +110,7 @@ test('it sets matching pickup_location_id based on current area_id', function ()
     expect($stateValues['pickup_location_id'])->toBe($this->loc2->id);
 });
 
-test('it sets both pickup_location_id and area_id when setAreaId is true', function () {
+test('it sets pickup_location_id but does not set area_id when setAreaId is true', function () {
     $field = CreatesOrderTransportCards::getCustomerIdFormField(true);
 
     $stateValues = [];
@@ -139,7 +139,7 @@ test('it sets both pickup_location_id and area_id when setAreaId is true', funct
     ($this->runAfterStateUpdated)($field, $this->customer->id, $mockSet, $mockGet);
 
     expect($stateValues['pickup_location_id'])->toBe($this->loc1->id);
-    expect($stateValues['area_id'])->toBe($this->area1->id);
+    expect($stateValues)->not->toHaveKey('area_id');
 });
 
 test('it resets pickup_location_id when customer state is blank', function () {
