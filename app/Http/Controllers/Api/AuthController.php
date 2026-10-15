@@ -139,6 +139,11 @@ class AuthController extends Controller
             return response()->json(['message' => 'Tài khoản này không có quyền tài xế'], 403);
         }
 
+        if (! $user->is_active) {
+            /** @status 403 */
+            return response()->json(['message' => 'Tài khoản của bạn đã ngừng hoạt động. Vui lòng liên hệ điều hành.'], 403);
+        }
+
         // Thu hồi toàn bộ token cũ để đảm bảo chỉ đăng nhập trên 1 thiết bị duy nhất
         $user->tokens()->delete();
 

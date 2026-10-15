@@ -353,3 +353,20 @@ test('login with employee_code handles lowercase correctly', function () {
         ->assertJsonPath('user.id', $driver->id)
         ->assertJsonPath('user.employee_code', 'ASGT-88888');
 });
+
+test('login with inactive driver account returns 403 with error message', function () {
+    $driver = User::factory()->inactive()->create([
+        'employee_code' => 'ASGT-00001',
+        'email' => 'inactive_driver@example.com',
+        'password' => bcrypt('password123'),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    $response = $this->postJson('/api/driver/login', [
+        'login' => 'ASGT-00001',
+        'password' => 'password123',
+    ]);
+
+    $response->assertStatus(403)
+        ->assertJsonPath('message', 'Tài khoản của bạn đã ngừng hoạt động. Vui lòng liên hệ điều hành.');
+});
