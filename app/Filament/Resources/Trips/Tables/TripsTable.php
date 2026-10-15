@@ -9,6 +9,7 @@ use App\Enums\VehicleOwnerType;
 use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Trips\Actions\CancelTripAction;
+use App\Filament\Resources\Trips\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
 use App\Filament\Resources\Trips\Actions\SendTripAction;
@@ -532,6 +533,7 @@ class TripsTable extends BaseTable
                         })
                         ->modalSubmitActionLabel('Xác nhận xử lý'),
 
+                    CopyTransportInfoAction::make(),
                     CancelTripAction::make(),
                     DeleteAction::make(),
                     ActivityLogTimelineTableAction::make('Activities')
