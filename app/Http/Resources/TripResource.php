@@ -29,6 +29,8 @@ class TripResource extends JsonResource
             'total_km_loaded' => $this->total_km_loaded,
             'total_km_empty' => $this->total_km_empty,
             'is_empty_run' => $this->is_empty_run,
+            'is_paused' => $this->isPaused(),
+            'pause_reason' => $this->isPaused() ? ($this->paused_reason ?? 'Chờ điều chỉnh báo sai số Km') : null,
             'note' => $this->note,
 
             'vehicle' => $this->whenLoaded('vehicle', fn () => [

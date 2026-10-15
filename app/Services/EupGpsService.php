@@ -28,7 +28,7 @@ class EupGpsService
         $this->apiKey = config('services.eup.api_key');
     }
 
-    public function sync(): array
+    public function sync(int $timeout = 10): array
     {
         $url = rtrim($this->baseUrl, '/').'/'.ltrim($this->endpoint, '/');
 
@@ -43,7 +43,7 @@ class EupGpsService
                 $body['password'] = $this->password;
             }
 
-            $request = Http::timeout(15)->asForm();
+            $request = Http::timeout($timeout)->asForm();
 
             if ($this->apiKey !== null) {
                 $request->withHeader('X-Eupfin-Api-Key', $this->apiKey);
@@ -100,6 +100,10 @@ class EupGpsService
                     $updateData['gps_speed'] = (float) $item['Speed'];
                 }
 
+                if (isset($item['CarStatus'])) {
+                    $updateData['car_status'] = (int) $item['CarStatus'];
+                }
+
                 if (isset($item['Direction'])) {
                     $updateData['gps_direction'] = (int) $item['Direction'];
                 }
@@ -108,7 +112,15 @@ class EupGpsService
                     $updateData['gps_address'] = $item['Address'];
                 }
 
-                $updateData['last_gps_update'] = Carbon::now();
+                if (! empty($item['OperateDate'])) {
+                    try {
+                        $updateData['last_gps_update'] = Carbon::parse($item['OperateDate']);
+                    } catch (\Throwable) {
+                        $updateData['last_gps_update'] = Carbon::now();
+                    }
+                } else {
+                    $updateData['last_gps_update'] = Carbon::now();
+                }
 
                 $vehicle->update($updateData);
                 $updated++;

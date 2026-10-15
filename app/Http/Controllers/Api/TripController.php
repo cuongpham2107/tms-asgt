@@ -237,6 +237,14 @@ class TripController extends Controller
             return response()->json(['message' => 'Bạn không phải tài xế được gán cho chuyến này'], 403);
         }
 
+        if ($trip->isPaused()) {
+            return response()->json([
+                'message' => 'Chuyến xe đang tạm dừng do có báo sai số Km đang chờ Điều hành xử lý. Vui lòng liên hệ Điều hành trước khi kết thúc chuyến.',
+                'is_paused' => true,
+                'pause_reason' => $trip->paused_reason ?? 'Chờ điều chỉnh báo sai số Km',
+            ], 422);
+        }
+
         if ($trip->isCompleted() || $trip->status === TripStatus::DriverSwap) {
             return response()->json(['message' => 'Chuyến đã kết thúc'], 422);
         }

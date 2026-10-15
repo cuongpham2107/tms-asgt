@@ -24,6 +24,14 @@ class TripCheckpointController extends Controller
             return response()->json(['message' => 'Bạn không phải tài xế được gán cho chuyến này'], 403);
         }
 
+        if ($trip->isPaused()) {
+            return response()->json([
+                'message' => 'Chuyến xe đang tạm dừng do có báo sai số Km đang chờ Điều hành xử lý. Vui lòng liên hệ Điều hành trước khi cập nhật mốc tiếp theo.',
+                'is_paused' => true,
+                'pause_reason' => $trip->paused_reason ?? 'Chờ điều chỉnh báo sai số Km',
+            ], 422);
+        }
+
         $activeShift = DriverShift::where('driver_id', $user->id)
             ->whereNull('end_time')
             ->first();

@@ -276,3 +276,132 @@ test('submitting again while pending updates existing pending report', function 
     expect((float) $report->reported_km)->toBe(100090.0)
         ->and($report->note)->toBe('Lần 2 sửa lại');
 });
+
+test('getKmBoundaries calculates correct min and max km between adjacent checkpoints', function () {
+    // Current trip has first checkpoint at 108000
+    $cp1 = $this->trip->checkpoints()->first(); // 108000
+
+    $cp2 = TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'km_reading' => 108050,
+        'occurred_at' => now()->addMinutes(30),
+    ]);
+
+    $cp3 = TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'km_reading' => 108100,
+        'occurred_at' => now()->addMinutes(60),
+    ]);
+
+    $service = app(TripKmAdjustmentService::class);
+
+    // Boundary for intermediate checkpoint cp2 (108050)
+    $b2 = $service->getKmBoundaries($this->trip, $cp2->id);
+    expect($b2['min_km'])->toBe(108000.0)
+        ->and($b2['max_km'])->toBe(108100.0)
+        ->and($b2['min_label'])->toContain('108000')
+        ->and($b2['max_label'])->toContain('108100');
+
+    // Boundary for first checkpoint cp1 (108000)
+    $b1 = $service->getKmBoundaries($this->trip, $cp1->id);
+    expect($b1['min_km'])->toBeNull()
+        ->and($b1['max_km'])->toBe(108050.0);
+
+    // Boundary for last checkpoint cp3 (108100)
+    $b3 = $service->getKmBoundaries($this->trip, $cp3->id);
+    expect($b3['min_km'])->toBe(108050.0)
+        ->and($b3['max_km'])->toBeNull();
+});
+
+test('driver reporting km issue pauses trip, blocks further checkpoints and completion', function () {
+    Sanctum::actingAs($this->driver);
+
+    // 1. Driver reports km discrepancy
+    $response = $this->postJson("/api/driver/trips/{$this->trip->id}/report-km-issue", [
+        'reported_km' => 100085,
+        'note' => 'Nhầm số km, chờ điều chỉnh',
+    ]);
+    $response->assertStatus(201);
+
+    $this->trip->refresh();
+    expect($this->trip->is_paused)->toBeTrue()
+        ->and($this->trip->isPaused())->toBeTrue()
+        ->and($this->trip->paused_reason)->toContain('Nhầm số km')
+        ->and($this->trip->getStatusLabel())->toBe('Tạm dừng (Sửa Km)')
+        ->and($this->trip->getStatusColor())->toBe('warning');
+
+    // 2. Driver attempts to record a checkpoint while paused -> BLOCKED (422)
+    $checkpointResponse = $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => CheckpointType::ArrivedPickup->value,
+        'km_reading' => 108020,
+    ]);
+    $checkpointResponse->assertStatus(422)
+        ->assertJsonPath('is_paused', true)
+        ->assertJsonFragment([
+            'message' => 'Chuyến xe đang tạm dừng do có báo sai số Km đang chờ Điều hành xử lý. Vui lòng liên hệ Điều hành trước khi cập nhật mốc tiếp theo.',
+        ]);
+
+    // 3. Driver attempts to complete the trip while paused -> BLOCKED (422)
+    $completeResponse = $this->postJson("/api/driver/trips/{$this->trip->id}/complete", [
+        'end_km' => 108050,
+    ]);
+    $completeResponse->assertStatus(422)
+        ->assertJsonPath('is_paused', true)
+        ->assertJsonFragment([
+            'message' => 'Chuyến xe đang tạm dừng do có báo sai số Km đang chờ Điều hành xử lý. Vui lòng liên hệ Điều hành trước khi kết thúc chuyến.',
+        ]);
+
+    // 4. Admin resolves the report -> trip is UNPAUSED
+    $report = TripKmReport::where('trip_id', $this->trip->id)->first();
+    app(TripKmAdjustmentService::class)->resolveReport(
+        $report,
+        100085.0,
+        null,
+        'Đã duyệt sửa km',
+        $this->admin->id
+    );
+
+    $this->trip->refresh();
+    expect($this->trip->is_paused)->toBeFalse()
+        ->and($this->trip->isPaused())->toBeFalse()
+        ->and($this->trip->paused_reason)->toBeNull();
+
+    // 5. Driver can now submit checkpoint successfully
+    $afterUnpauseResponse = $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => CheckpointType::ArrivedPickup->value,
+        'km_reading' => 100090,
+    ]);
+    $afterUnpauseResponse->assertStatus(200);
+});
+
+test('admin rejecting km report unpauses trip and allows driver to proceed', function () {
+    Sanctum::actingAs($this->driver);
+
+    // Driver reports km discrepancy
+    $this->postJson("/api/driver/trips/{$this->trip->id}/report-km-issue", [
+        'reported_km' => 100085,
+        'note' => 'Nhầm số km',
+    ])->assertStatus(201);
+
+    $this->trip->refresh();
+    expect($this->trip->is_paused)->toBeTrue();
+
+    // Admin rejects report
+    $report = TripKmReport::where('trip_id', $this->trip->id)->first();
+    app(TripKmAdjustmentService::class)->rejectReport(
+        $report,
+        'Không khớp taplo thực tế',
+        $this->admin->id
+    );
+
+    $this->trip->refresh();
+    expect($this->trip->is_paused)->toBeFalse()
+        ->and($this->trip->isPaused())->toBeFalse()
+        ->and($this->trip->paused_reason)->toBeNull();
+});

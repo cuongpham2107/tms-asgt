@@ -77,6 +77,14 @@ class TripKmReportController extends Controller
             ]);
         }
 
+        $note = $request->validated('note');
+        $pausedReason = 'Chờ điều chỉnh báo sai số Km'.($note ? ": {$note}" : '');
+
+        $trip->update([
+            'is_paused' => true,
+            'paused_reason' => $pausedReason,
+        ]);
+
         return response()->json([
             'data' => [
                 'id' => $report->id,

@@ -64,6 +64,8 @@ class Trip extends Model
         'note',
         'start_location_id',
         'end_location_id',
+        'is_paused',
+        'paused_reason',
     ];
 
     protected function casts(): array
@@ -78,6 +80,7 @@ class Trip extends Model
             'total_km_loaded' => 'decimal:1',
             'total_km_empty' => 'decimal:1',
             'is_empty_run' => 'boolean',
+            'is_paused' => 'boolean',
             'status' => TripStatus::class,
         ];
     }
@@ -147,8 +150,17 @@ class Trip extends Model
         return $this->hasOne(TripKmReport::class)->where('status', 'pending')->latestOfMany();
     }
 
+    public function isPaused(): bool
+    {
+        return (bool) $this->is_paused || $this->latestPendingKmReport !== null;
+    }
+
     public function getStatusLabel(): string
     {
+        if ($this->isPaused()) {
+            return 'Tạm dừng (Sửa Km)';
+        }
+
         if ($this->status === TripStatus::Pending) {
             $orders = $this->relationLoaded('orders') ? $this->orders : $this->orders()->get();
 
@@ -164,6 +176,10 @@ class Trip extends Model
 
     public function getStatusColor(): string
     {
+        if ($this->isPaused()) {
+            return 'warning';
+        }
+
         if ($this->status === TripStatus::Pending) {
             $orders = $this->relationLoaded('orders') ? $this->orders : $this->orders()->get();
 

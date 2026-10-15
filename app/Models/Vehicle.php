@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\DriverWorkShift;
+use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
@@ -74,6 +75,7 @@ class Vehicle extends Model
         'gps_lat',
         'gps_lng',
         'gps_speed',
+        'car_status',
         'gps_direction',
         'gps_address',
         'last_gps_update',
@@ -259,5 +261,20 @@ class Vehicle extends Model
         return $this->type === VehicleOwnerType::Company
             || $this->type === VehicleOwnerType::Company->value
             || $this->type === 'company';
+    }
+
+    public function getActiveTripAttribute(): ?Trip
+    {
+        if ($this->relationLoaded('trips')) {
+            return $this->trips
+                ->filter(fn ($t) => in_array($t->status, TripStatus::activeStatuses(), true))
+                ->sortByDesc('id')
+                ->first();
+        }
+
+        return $this->trips()
+            ->whereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
+            ->latest('id')
+            ->first();
     }
 }
