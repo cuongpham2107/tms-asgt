@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
@@ -114,6 +115,16 @@ class Trip extends Model
     public function checkpoints(): HasMany
     {
         return $this->hasMany(TripCheckpoint::class)->orderBy('occurred_at');
+    }
+
+    public function photos(): HasManyThrough
+    {
+        return $this->hasManyThrough(TripPhoto::class, TripCheckpoint::class, 'trip_id', 'trip_checkpoint_id');
+    }
+
+    public function tripPhotos(): HasManyThrough
+    {
+        return $this->photos();
     }
 
     public function driverSwaps(): HasMany

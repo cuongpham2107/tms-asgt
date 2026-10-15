@@ -13,6 +13,7 @@ use App\Filament\Resources\Trips\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
 use App\Filament\Resources\Trips\Actions\SendTripAction;
+use App\Filament\Resources\Trips\Actions\ViewTripPhotosAction;
 use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
@@ -68,6 +69,7 @@ class TripsTable extends BaseTable
                     'orders.area',
                     'latestPendingKmReport',
                 ])
+                ->withCount('photos')
             )
             ->columns([
                 TextColumn::make('vehicle.plate_number')
@@ -323,6 +325,8 @@ class TripsTable extends BaseTable
                         })
                         ->modalSubmitAction(false)
                         ->modalCancelActionLabel('Đóng'),
+
+                    ViewTripPhotosAction::make(),
 
                     EditAction::make()
                         ->stickyModalFooter()

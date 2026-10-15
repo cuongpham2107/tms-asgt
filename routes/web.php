@@ -1,8 +1,15 @@
 <?php
 
 use App\Http\Controllers\MapboxController;
+use App\Http\Controllers\TripPhotoDownloadController;
 use App\Services\EupGpsService;
 use Illuminate\Support\Facades\Route;
+
+// Tải tất cả ảnh của chuyến đi dạng file zip
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::get('/trips/{trip}/photos/download', [TripPhotoDownloadController::class, 'downloadAll'])
+        ->name('trips.photos.download-zip');
+});
 
 // Mapbox helper for map matching (server-side)
 Route::post('/mapbox/match', [MapboxController::class, 'match']);
