@@ -9,7 +9,6 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
@@ -47,6 +46,14 @@ class UserForm
                             ->dehydrateStateUsing(fn (string $state): string => Hash::make($state))
                             ->saved(fn (?string $state): bool => filled($state))
                             ->required(fn (string $operation): bool => $operation === 'create'),
+                        Select::make('roles')
+                            ->label('Vai trò')
+                            ->relationship('roles', 'name')
+                            ->multiple()
+                            ->default(fn () => Role::where('name', 'driver')->pluck('id')->all())
+                            ->preload()
+                            ->searchable()
+                            ->columnSpanFull(),
                         DateTimePicker::make('email_verified_at')
                             ->label('Xác thực email lúc'),
                         Toggle::make('is_active')
@@ -56,19 +63,21 @@ class UserForm
                     ]),
 
                 Section::make('Thông tin cá nhân')
-                    ->columns(2)
+                    ->columns(['default' => 1, 'md' => 2, 'lg' => 3])
                     ->schema([
-                        Grid::make()
+                        Grid::make(['default' => 1, 'sm' => 2])
+                            ->columnSpan(['default' => 1, 'md' => 2, 'lg' => 2])
                             ->schema([
-                                DatePicker::make('date_of_birth')
-                                    ->label('Ngày sinh')
-                                    ->columnSpanFull(),
                                 TextInput::make('phone')
                                     ->label('Số điện thoại')
-                                    ->tel()
-                                    ->columnSpanFull(),
-                            ])
-                            ->columns(2),
+                                    ->tel(),
+                                DatePicker::make('date_of_birth')
+                                    ->label('Ngày sinh'),
+                                TextInput::make('cccd')
+                                    ->label('Số CCCD'),
+                                DatePicker::make('cccd_issue_date')
+                                    ->label('Ngày cấp CCCD'),
+                            ]),
                         FileUpload::make('avatar')
                             ->label('Ảnh đại diện')
                             ->image()
@@ -76,7 +85,8 @@ class UserForm
                             ->imageEditor()
                             ->circleCropper()
                             ->disk('public')
-                            ->directory('avatars'),
+                            ->directory('avatars')
+                            ->columnSpan(['default' => 1, 'md' => 2, 'lg' => 1]),
                         TextInput::make('address')
                             ->label('Địa chỉ')
                             ->columnSpanFull(),
@@ -95,16 +105,7 @@ class UserForm
                             ->preload()
                             ->native(false)
                             ->placeholder('Chọn xe phụ trách')
-                            ->columnSpanFull(),
-                    ]),
-
-                Section::make('Căn cước công dân & Định danh')
-                    ->columns(2)
-                    ->schema([
-                        TextInput::make('cccd')
-                            ->label('Số CCCD'),
-                        DatePicker::make('cccd_issue_date')
-                            ->label('Ngày cấp CCCD'),
+                            ->columnSpan(['default' => 1, 'md' => 2, 'lg' => 1]),
                     ]),
 
                 Section::make('Giấy phép lái xe (GPLX)')
@@ -123,8 +124,11 @@ class UserForm
                             ->label('Ngày hết hạn GPLX')
                             ->helperText(fn (?User $record): ?string => $record?->getLicenseExpiryStatus()['label']),
                         FileUpload::make('license_image')
-                            ->label('Ảnh bằng lái')
+                            ->label('Ảnh bằng lái (Tối đa 2 ảnh: mặt trước & mặt sau)')
                             ->image()
+                            ->multiple()
+                            ->maxFiles(2)
+                            ->reorderable()
                             ->imageEditor()
                             ->directory('licenses')
                             ->openable()
@@ -147,8 +151,11 @@ class UserForm
                             ->label('Ngày hết hạn ANHK')
                             ->helperText(fn (?User $record): ?string => $record?->getAviationSecurityCertStatus()['label']),
                         FileUpload::make('aviation_security_cert_image')
-                            ->label('Ảnh chứng chỉ ANHK')
+                            ->label('Ảnh chứng chỉ ANHK (Tối đa 2 ảnh: mặt trước & mặt sau)')
                             ->image()
+                            ->multiple()
+                            ->maxFiles(2)
+                            ->reorderable()
                             ->imageEditor()
                             ->directory('certificates/aviation_security')
                             ->openable()
@@ -171,31 +178,17 @@ class UserForm
                             ->label('Ngày hết hạn chứng chỉ')
                             ->helperText(fn (?User $record): ?string => $record?->getDangerousGoodsCertStatus()['label']),
                         FileUpload::make('dangerous_goods_cert_image')
-                            ->label('Ảnh chứng chỉ Hàng nguy hiểm')
+                            ->label('Ảnh chứng chỉ Hàng nguy hiểm (Tối đa 2 ảnh: mặt trước & mặt sau)')
                             ->image()
+                            ->multiple()
+                            ->maxFiles(2)
+                            ->reorderable()
                             ->imageEditor()
                             ->directory('certificates/dangerous_goods')
                             ->openable()
                             ->downloadable()
                             ->disk('public')
                             ->previewable()
-                            ->columnSpanFull(),
-                    ]),
-
-                Grid::make()
-                    ->columns(2)
-                    ->schema([
-                        Textarea::make('certificates')
-                            ->label('Ghi chú chứng chỉ khác')
-                            ->placeholder('Nhập thông tin chứng chỉ bổ sung khác (nếu có)')
-                            ->columnSpanFull(),
-                        Select::make('roles')
-                            ->label('Vai trò')
-                            ->relationship('roles', 'name')
-                            ->multiple()
-                            ->default(fn () => Role::where('name', 'driver')->pluck('id')->all())
-                            ->preload()
-                            ->searchable()
                             ->columnSpanFull(),
                     ]),
             ]);

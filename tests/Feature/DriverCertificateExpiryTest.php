@@ -49,3 +49,17 @@ test('handles missing certificates gracefully', function () {
     expect($driver->hasExpiredCertificates())->toBeFalse();
     expect($driver->hasExpiringSoonCertificates())->toBeFalse();
 });
+
+test('stores multiple certificate images as array', function () {
+    $driver = User::factory()->create([
+        'license_image' => ['licenses/front.jpg', 'licenses/back.jpg'],
+        'aviation_security_cert_image' => ['certificates/aviation_security/front.jpg', 'certificates/aviation_security/back.jpg'],
+        'dangerous_goods_cert_image' => ['certificates/dangerous_goods/front.jpg', 'certificates/dangerous_goods/back.jpg'],
+    ]);
+
+    $driver->refresh();
+
+    expect($driver->license_image)->toBe(['licenses/front.jpg', 'licenses/back.jpg'])
+        ->and($driver->aviation_security_cert_image)->toBe(['certificates/aviation_security/front.jpg', 'certificates/aviation_security/back.jpg'])
+        ->and($driver->dangerous_goods_cert_image)->toBe(['certificates/dangerous_goods/front.jpg', 'certificates/dangerous_goods/back.jpg']);
+});

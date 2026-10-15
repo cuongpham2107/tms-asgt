@@ -147,6 +147,9 @@ class User extends Authenticatable
             'dangerous_goods_cert_issue_date' => 'date',
             'dangerous_goods_cert_expiry_date' => 'date',
             'fcm_token_updated_at' => 'datetime',
+            'license_image' => 'array',
+            'aviation_security_cert_image' => 'array',
+            'dangerous_goods_cert_image' => 'array',
         ];
     }
 
