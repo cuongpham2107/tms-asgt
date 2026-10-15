@@ -171,3 +171,55 @@ export function usePushNotifications(authToken: string | null) {
         };
     }, [authToken]);
 }
+
+/**
+ * Hook tự động gọi hàm refresh khi:
+ * 1. Ứng dụng nhận được thông báo đẩy (Push Notification) lúc đang mở (Foreground).
+ * 2. Ứng dụng quay lại trạng thái Active từ Background.
+ * 
+ * Có cơ chế debounce nhẹ để tránh spam API nếu nhiều thông báo tới liên tiếp.
+ */
+export function useRefreshOnNotification(onRefresh: () => void | Promise<void>, delay = 300) {
+    const refreshRef = useRef(onRefresh);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        refreshRef.current = onRefresh;
+    }, [onRefresh]);
+
+    useEffect(() => {
+        if (Platform.OS === "web") return;
+
+        const triggerRefresh = () => {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current);
+            }
+            timerRef.current = setTimeout(() => {
+                refreshRef.current();
+            }, delay);
+        };
+
+        // 1. Nhận thông báo khi app đang mở (Foreground)
+        const notifSub = Notifications.addNotificationReceivedListener((notification) => {
+            console.log("[useRefreshOnNotification] Push notification received, triggering refresh:", notification.request.content.data);
+            triggerRefresh();
+        });
+
+        // 2. Khi ứng dụng quay lại trạng thái Active từ Background
+        const appStateSub = AppState.addEventListener("change", (nextState) => {
+            if (nextState === "active") {
+                triggerRefresh();
+            }
+        });
+
+        return () => {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
+            notifSub.remove();
+            appStateSub.remove();
+        };
+    }, [delay]);
+}
+

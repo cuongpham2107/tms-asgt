@@ -13,7 +13,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
-import { clearNotificationBadge } from "../../src/lib/notifications";
+import { clearNotificationBadge, useRefreshOnNotification } from "../../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
 
 const statusConfig: Record<
@@ -183,6 +183,13 @@ export default function TripsScreen() {
     useFocusEffect(
         useCallback(() => {
             clearNotificationBadge();
+            load(activePeriod);
+        }, [token, activePeriod]),
+    );
+
+    // Tự động tải lại khi có Push Notification hoặc mở lại app
+    useRefreshOnNotification(
+        useCallback(() => {
             load(activePeriod);
         }, [token, activePeriod]),
     );

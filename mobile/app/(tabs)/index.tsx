@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } 
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
 import { api } from "../../src/lib/api";
+import { useRefreshOnNotification } from "../../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
 
 const shiftLabels: Record<string, string> = { full: "Cả ca (X)", morning_half: "Nửa ca ngày (X/2)", night_half: "Nửa ca đêm (Y/2)" };
@@ -32,32 +33,7 @@ export default function DashboardScreen() {
     if (authShift) setShiftState(authShift);
   }, [authShift]);
 
-  useEffect(() => {
-    if (!token) return;
-    (async () => {
-      const shiftRes = await api.shifts.current(token).catch(() => null);
-      if (shiftRes?.shift) {
-        setShiftState(shiftRes.shift);
-        setShift(shiftRes.shift);
-      }
-    })();
-  }, [token]);
-
-  useFocusEffect(useCallback(() => {
-    if (!token) return;
-    (async () => {
-      const [tRes, shiftRes] = await Promise.all([
-        api.trips.active(token).catch(() => ({ data: [] })),
-        api.shifts.current(token).catch(() => null),
-      ]);
-      setTrips(tRes.data || []);
-      if (shiftRes?.shift) {
-        setShiftState(shiftRes.shift);
-        setShift(shiftRes.shift);
-      }
-    })();
-  }, [token]));
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!token) return;
     const [tRes, shiftRes] = await Promise.all([
       api.trips.active(token).catch(() => ({ data: [] })),
@@ -68,8 +44,19 @@ export default function DashboardScreen() {
       setShiftState(shiftRes.shift);
       setShift(shiftRes.shift);
     }
-  };
+  }, [token, setShift]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
+
+  // Tự động tải lại khi có Push Notification (chuyến mới, đơn mới, đảo lái...) hoặc khi mở lại app
+  useRefreshOnNotification(refresh);
+
   const onRefresh = async () => { setRefreshing(true); await refresh(); setRefreshing(false); };
+
 
   const activeTrips = trips.filter((t) => t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap" && t.driver_id === userId);
   // Sort: current/active trips first, then pending

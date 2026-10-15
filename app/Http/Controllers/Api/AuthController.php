@@ -171,7 +171,7 @@ class AuthController extends Controller
                 ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')]))
                 : null,
             'app_version' => [
-                'latest_version' => (string) config('app.mobile_latest_version', '1.1.1'),
+                'latest_version' => (string) config('app.mobile_latest_version', '1.1.2'),
                 'min_version' => (string) config('app.mobile_min_version', '1.0.0'),
                 'release_notes' => (string) config('app.mobile_release_notes', 'Cập nhật tính năng và cải thiện hiệu năng hệ thống.'),
                 'store_urls' => [
