@@ -38,8 +38,16 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         return null;
     }
 
-    // Cấu hình Android Notification Channel
+    // Cấu hình Android Notification Channels (Bắt buộc từ Android 8.0+)
     if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+            name: "Thông báo chung",
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: "#4F46E5",
+            sound: "default",
+        });
+
         await Notifications.setNotificationChannelAsync("orders", {
             name: "Đơn hàng & Chuyến đi",
             importance: Notifications.AndroidImportance.MAX,
@@ -49,7 +57,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         });
     }
 
-    // Kiểm tra quyền nhận thông báo
+    // Kiểm tra và xin quyền nhận thông báo
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
@@ -68,19 +76,49 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         Constants?.easConfig?.projectId ??
         "4a73c5d5-0135-4373-a36e-8e0b2009c779";
 
-    // Luôn dùng Expo Push Token cho cả Simulator và máy thật.
-    // Expo tự xử lý bridge APNs/FCM phía server, đảm bảo token luôn hợp lệ.
-    // KHÔNG dùng getDevicePushTokenAsync() vì trên iOS nó trả về raw APNs device token
-    // (hex 64 ký tự) — không phải FCM registration token, Firebase Admin SDK sẽ reject.
-    try {
-        const expoTokenData = await Notifications.getExpoPushTokenAsync({
-            projectId,
-        });
-        if (expoTokenData?.data) {
-            return expoTokenData.data;
+    // 1. Trên iOS: Dùng Expo Push Token vì iOS device token thuần (APNs 64 ký tự)
+    // không phải FCM token và bị Firebase Admin SDK từ chối. Expo Push Server tự bridge APNs cho iOS.
+    if (Platform.OS === "ios") {
+        try {
+            const expoTokenData = await Notifications.getExpoPushTokenAsync({
+                projectId,
+            });
+            if (expoTokenData?.data) {
+                console.log("[PushNotifications] iOS Expo Push Token obtained:", expoTokenData.data);
+                return expoTokenData.data;
+            }
+        } catch (error) {
+            console.log("[PushNotifications] Error getting Expo push token on iOS:", error);
         }
-    } catch (error) {
-        console.log("Error getting Expo push token:", error);
+        return null;
+    }
+
+    // 2. Trên Android: Ưu tiên lấy Native Device Push Token (FCM token chuẩn của Firebase).
+    // Dự án đã có google-services.json và backend có Firebase Admin SDK gửi qua FCM v1 trực tiếp,
+    // hoạt động hoàn toàn độc lập, không phụ thuộc vào hạ tầng Expo Push Server hay EAS credentials.
+    if (Platform.OS === "android") {
+        try {
+            const deviceTokenData = await Notifications.getDevicePushTokenAsync();
+            if (deviceTokenData?.data) {
+                console.log("[PushNotifications] Android Native FCM Token obtained:", deviceTokenData.data);
+                return deviceTokenData.data;
+            }
+        } catch (err) {
+            console.log("[PushNotifications] Failed to get native FCM token, falling back to Expo token:", err);
+        }
+
+        // Fallback sang Expo Push Token nếu không lấy được native token (ví dụ chạy trên máy ảo hoặc thiết bị thiếu Google Play Services)
+        try {
+            const expoTokenData = await Notifications.getExpoPushTokenAsync({
+                projectId,
+            });
+            if (expoTokenData?.data) {
+                console.log("[PushNotifications] Android Expo Push Token fallback obtained:", expoTokenData.data);
+                return expoTokenData.data;
+            }
+        } catch (error) {
+            console.log("[PushNotifications] Error getting fallback Expo push token on Android:", error);
+        }
     }
 
     return null;
@@ -93,6 +131,7 @@ export function usePushNotifications(authToken: string | null) {
     const router = useRouter();
     const notificationListener = useRef<Notifications.Subscription | null>(null);
     const responseListener = useRef<Notifications.Subscription | null>(null);
+    const hasSyncedTokenRef = useRef(false);
 
     // Xóa số thông báo (badge) trên icon khi mở app hoặc khi quay lại từ background
     useEffect(() => {
@@ -114,23 +153,31 @@ export function usePushNotifications(authToken: string | null) {
     useEffect(() => {
         if (!authToken || Platform.OS === "web") return;
 
-        // Đăng ký token với máy chủ Laravel
-        registerForPushNotificationsAsync()
-            .then((fcmToken) => {
+        hasSyncedTokenRef.current = false;
+
+        const syncToken = async () => {
+            if (hasSyncedTokenRef.current) return;
+            try {
+                const fcmToken = await registerForPushNotificationsAsync();
                 if (fcmToken) {
-                    console.log("FCM Token obtained:", fcmToken);
-                    api.updateFcmToken(fcmToken, authToken)
-                        .then(() => {
-                            console.log("Successfully synced FCM token to server!");
-                        })
-                        .catch((err) => {
-                            console.log("Failed to sync FCM token to server:", err);
-                        });
+                    await api.updateFcmToken(fcmToken, authToken);
+                    hasSyncedTokenRef.current = true;
+                    console.log("[PushNotifications] Successfully synced push token to server!");
                 }
-            })
-            .catch((err) => {
-                console.log("Error during registerForPushNotificationsAsync:", err);
-            });
+            } catch (err) {
+                console.log("[PushNotifications] Failed to register/sync push token:", err);
+            }
+        };
+
+        // Đồng bộ ngay khi có token đăng nhập
+        syncToken();
+
+        // Tự động thử lại khi app quay về foreground nếu lần trước chưa sync thành công
+        const appStateSub = AppState.addEventListener("change", (nextAppState) => {
+            if (nextAppState === "active" && !hasSyncedTokenRef.current) {
+                syncToken();
+            }
+        });
 
         // Lắng nghe khi thông báo tới lúc đang mở app (Foreground)
         notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
@@ -162,6 +209,7 @@ export function usePushNotifications(authToken: string | null) {
         });
 
         return () => {
+            appStateSub.remove();
             if (notificationListener.current) {
                 notificationListener.current.remove();
             }
