@@ -15,7 +15,6 @@ use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
 use Filament\Actions\BulkAction;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Set;
@@ -70,16 +69,10 @@ class BulkAssignTransportAction extends CreatesOrderTransportCards
                             ->cards(fn (): array => self::resolveDriverCards())
                             ->searchPlaceholder('Tìm tên, email...'),
                     ]),
-                Toggle::make('send_immediately')
-                    ->label('Gửi chuyến ngay cho tài xế')
-                    ->helperText('Bật để chuyển trạng thái đơn hàng thành Đã gửi')
-                    ->default(false),
-
             ])
-            ->modalSubmitActionLabel('Tạo')
+            ->modalSubmitActionLabel('Gán và Gửi')
             ->action(function (Collection $records, array $data): void {
-                $status = ! empty($data['send_immediately']) ? OrderStatus::Sent : OrderStatus::Assigned;
-                self::createTripForOrders($records, $data, $status);
+                self::createTripForOrders($records, $data, OrderStatus::Sent);
             })
             ->deselectRecordsAfterCompletion();
     }

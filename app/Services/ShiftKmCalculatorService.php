@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\DriverShift;
-use App\Models\DriverSwap;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -15,10 +14,73 @@ class ShiftKmCalculatorService
      */
     public function calculateForTrip(Trip $trip): void
     {
+        // Auto-sync missing swaps if driver swap checkpoints exist
+        TripKmSplitService::syncMissingSwapsFromCheckpoints($trip);
+
+        // Ensure checkpoints have shift_id resolved if possible
+        foreach ($trip->checkpoints()->whereNull('shift_id')->whereNotNull('driver_id')->get() as $cp) {
+            $shiftId = DriverShift::where('driver_id', $cp->driver_id)
+                ->where('start_time', '<=', $cp->occurred_at ?? now())
+                ->where(fn ($q) => $q->whereNull('end_time')->orWhere('end_time', '>=', $cp->occurred_at ?? now()))
+                ->value('id')
+                ?? DriverShift::where('driver_id', $cp->driver_id)->whereNull('end_time')->latest('start_time')->value('id')
+                ?? DriverShift::where('driver_id', $cp->driver_id)->latest('start_time')->value('id');
+
+            if ($shiftId) {
+                $cp->update(['shift_id' => $shiftId]);
+            }
+        }
+
+        // If trip->shift_id is null, resolve it for trip->driver_id
+        if ($trip->shift_id === null && $trip->driver_id) {
+            $tripShiftId = DriverShift::where('driver_id', $trip->driver_id)
+                ->whereNull('end_time')
+                ->latest('start_time')
+                ->value('id')
+                ?? DriverShift::where('driver_id', $trip->driver_id)->latest('start_time')->value('id');
+
+            if ($tripShiftId) {
+                $trip->update(['shift_id' => $tripShiftId]);
+                $trip->refresh();
+            }
+        }
+
+        $allDriverIds = collect([$trip->driver_id])
+            ->merge($trip->driverSwaps()->pluck('from_driver_id'))
+            ->merge($trip->driverSwaps()->pluck('to_driver_id'))
+            ->merge($trip->checkpoints()->pluck('driver_id'))
+            ->filter()
+            ->unique();
+
+        $resolvedShiftIds = collect();
+        foreach ($allDriverIds as $dId) {
+            $shifts = DriverShift::where('driver_id', $dId)
+                ->where(function ($q) use ($trip) {
+                    $q->whereNull('end_time')
+                        ->orWhere(function ($sq) use ($trip) {
+                            if ($trip->started_at) {
+                                $sq->where('start_time', '<=', $trip->completed_at ?? now())
+                                    ->where('end_time', '>=', $trip->started_at);
+                            }
+                        });
+                })
+                ->pluck('id');
+
+            if ($shifts->isEmpty()) {
+                $latest = DriverShift::where('driver_id', $dId)->latest('start_time')->value('id');
+                if ($latest) {
+                    $shifts = collect([$latest]);
+                }
+            }
+
+            $resolvedShiftIds = $resolvedShiftIds->merge($shifts);
+        }
+
         $shiftIds = collect([$trip->shift_id])
             ->merge($trip->driverSwaps()->pluck('from_shift_id'))
             ->merge($trip->driverSwaps()->pluck('to_shift_id'))
             ->merge($trip->checkpoints()->whereNotNull('shift_id')->pluck('shift_id'))
+            ->merge($resolvedShiftIds)
             ->filter()
             ->unique();
 
@@ -46,24 +108,32 @@ class ShiftKmCalculatorService
         // Tổng hợp từ trip totals — gồm cả chuyến đang chạy (chưa có end_km)
         $allTrips = $shift->trips()->whereNotNull('start_km')->get();
 
-        // Thêm các chuyến đã swap ra khỏi ca này (from_shift_id = shift hiện tại)
-        // Chỉ tính nếu trip có ít nhất 1 checkpoint thuộc shift này
-        $swappedOutTripIds = DriverSwap::where('from_shift_id', $shift->id)
-            ->whereExists(fn ($q) => $q
-                ->selectRaw(1)
-                ->from('trip_checkpoints')
-                ->whereRaw('trip_checkpoints.trip_id = driver_swaps.trip_id')
-                ->where('trip_checkpoints.shift_id', $shift->id)
-            )
-            ->pluck('trip_id');
+        // Thêm các chuyến liên quan đến ca hoặc tài xế này:
+        // 1. Swap ra khỏi ca (from_shift_id = $shift->id hoặc from_driver_id = $shift->driver_id)
+        // 2. Swap vào ca (to_shift_id = $shift->id hoặc to_driver_id = $shift->driver_id)
+        // 3. Chuyến do tài xế này chạy (driver_id = $shift->driver_id) nhưng shift_id chưa gán hoặc khác
+        // 4. Chuyến có checkpoint thuộc ca hoặc tài xế này
+        $additionalTripIds = Trip::query()
+            ->whereNotNull('start_km')
+            ->whereNotIn('id', $allTrips->pluck('id'))
+            ->where(function ($query) use ($shift) {
+                $query->where('driver_id', $shift->driver_id)
+                    ->orWhereHas('driverSwaps', fn ($q) => $q
+                        ->where('from_shift_id', $shift->id)
+                        ->orWhere('to_shift_id', $shift->id)
+                        ->orWhere('from_driver_id', $shift->driver_id)
+                        ->orWhere('to_driver_id', $shift->driver_id)
+                    )
+                    ->orWhereHas('checkpoints', fn ($q) => $q
+                        ->where('shift_id', $shift->id)
+                        ->orWhere('driver_id', $shift->driver_id)
+                    );
+            })
+            ->pluck('id');
 
-        if ($swappedOutTripIds->isNotEmpty()) {
-            $swappedOutTrips = Trip::whereIn('id', $swappedOutTripIds)
-                ->whereNotNull('start_km')
-                ->whereNotIn('id', $allTrips->pluck('id'))
-                ->get();
-
-            $allTrips = $allTrips->concat($swappedOutTrips);
+        if ($additionalTripIds->isNotEmpty()) {
+            $additionalTrips = Trip::whereIn('id', $additionalTripIds)->get();
+            $allTrips = $allTrips->concat($additionalTrips);
         }
 
         $totalKm = 0.0;
@@ -105,9 +175,13 @@ class ShiftKmCalculatorService
     {
         $segments = TripKmSplitService::segments($trip);
 
-        // Không đảo lái → chuyến thuộc trọn ca này, dùng trực tiếp km của chuyến
+        // Không đảo lái → chuyến thuộc trọn ca này nếu tài xế khớp hoặc shift khớp
         if ($segments === []) {
-            return [(float) ($trip->total_km ?? 0), (float) ($trip->total_km_loaded ?? 0)];
+            if ((int) $trip->shift_id === (int) $shift->id || (int) $trip->driver_id === (int) $shift->driver_id) {
+                return [(float) ($trip->total_km ?? 0), (float) ($trip->total_km_loaded ?? 0)];
+            }
+
+            return [0.0, 0.0];
         }
 
         $loadedRanges = TripKmSplitService::loadedRanges($trip);
@@ -115,8 +189,11 @@ class ShiftKmCalculatorService
         $totalKm = 0.0;
         $loadedKm = 0.0;
 
-        foreach ($segments as [$segStart, $segEnd, $segShiftId]) {
-            if ((int) $segShiftId !== (int) $shift->id) {
+        foreach ($segments as [$segStart, $segEnd, $segShiftId, $segDriverId]) {
+            $matchesShift = $segShiftId !== null && (int) $segShiftId === (int) $shift->id;
+            $matchesDriver = $segDriverId !== null && (int) $segDriverId === (int) $shift->driver_id;
+
+            if (! $matchesShift && ! $matchesDriver) {
                 continue;
             }
 

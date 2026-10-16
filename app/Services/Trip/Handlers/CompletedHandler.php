@@ -103,7 +103,7 @@ class CompletedHandler implements CheckpointHandlerInterface
             'trip',
             fn ($q) => $q->where('vehicle_id', $trip->vehicle_id)
         )
-            ->whereIn('status', [OrderStatus::Assigned, OrderStatus::Sent])
+            ->whereIn('status', [OrderStatus::Sent, OrderStatus::InTransit])
             ->exists();
 
         if (! $vehicleStillActive) {

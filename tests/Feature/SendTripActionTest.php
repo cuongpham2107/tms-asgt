@@ -5,6 +5,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Filament\Resources\Trips\Actions\SendTripAction;
 use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Models\Area;
 use App\Models\Customer;
@@ -82,12 +83,10 @@ beforeEach(function () {
     $this->actingAs($this->admin);
 });
 
-test('can send trip and update all assigned orders to sent', function () {
-    Livewire::test(ListTrips::class)
-        ->set('orderType', 'all')
-        ->mountTableAction('send_trip', $this->trip)
-        ->callMountedTableAction()
-        ->assertHasNoTableActionErrors();
+test('can send trip directly and update orders to sent', function () {
+    $action = SendTripAction::make();
+    $action->record($this->trip);
+    $action->call();
 
     $this->order2->refresh();
 
@@ -95,13 +94,8 @@ test('can send trip and update all assigned orders to sent', function () {
     expect($this->order2->sent_at)->not->toBeNull();
 });
 
-test('send_trip action is hidden when trip has no un-sent orders', function () {
-    $this->order1->update(['status' => OrderStatus::Sent]);
-    $this->order2->update(['status' => OrderStatus::Sent]);
-
-    $this->trip->refresh();
-
+test('send_trip action does not exist on TripsTable', function () {
     Livewire::test(ListTrips::class)
         ->set('orderType', 'all')
-        ->assertTableActionHidden('send_trip', $this->trip);
+        ->assertTableActionDoesNotExist('send_trip');
 });

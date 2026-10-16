@@ -58,5 +58,5 @@ test('external order without chargeable_weight requires input when assigning tra
 
     $externalOrder->refresh();
     expect((float) $externalOrder->chargeable_weight)->toEqual(3.5)
-        ->and($externalOrder->status)->toBe(OrderStatus::Assigned);
+        ->and($externalOrder->status)->toBe(OrderStatus::Sent);
 });

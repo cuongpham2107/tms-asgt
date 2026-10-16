@@ -180,12 +180,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
             ->extraAttributes([
                 'class' => 'header-action-hn font-bold',
             ])
-            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
-            ->extraModalFooterActions(fn (Action $action): array => [
-                $action->makeModalSubmitAction('createAndSend', arguments: ['send_immediately' => true])
-                    ->label('Tạo và Gửi')
-                    ->color('primary'),
-            ])
+            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo và Gửi')->icon('heroicon-o-paper-airplane'))
             // ->slideOver()
             ->modal()
             ->modalWidth(Width::MaxContent)
@@ -197,10 +192,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                     ->tabs($tabs),
 
             ])
-            ->action(function (array $data, Schema $schema, array $arguments) use ($forceAssignedWhenTransportProvided): void {
-                if ($arguments['send_immediately'] ?? false) {
-                    $data['send_immediately'] = true;
-                }
+            ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided): void {
                 try {
                     self::createSingleOrder($data, $schema, 'external', $forceAssignedWhenTransportProvided);
 

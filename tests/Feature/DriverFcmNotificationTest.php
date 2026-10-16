@@ -764,5 +764,5 @@ test('unsend order action sends fcm notification to driver of order', function (
     $action->call();
 
     $order->refresh();
-    expect($order->status)->toBe(OrderStatus::Assigned);
+    expect($order->status)->toBe(OrderStatus::Draft);
 });

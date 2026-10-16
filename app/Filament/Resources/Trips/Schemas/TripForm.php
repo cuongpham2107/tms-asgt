@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Trips\Schemas;
 use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
+use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
@@ -58,7 +59,6 @@ class TripForm
                                 ->toArray()
                             )
                             ->prefixIcon(Heroicon::OutlinedUser)
-                            ->disabled()
                             ->searchable()
                             ->native(false)
                             ->columnSpan(['default' => 1, 'sm' => 3]),
@@ -242,13 +242,8 @@ class TripForm
                             ->addable()
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
-                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data, $get): array {
-                                $data['driver_id'] = $get('../../driver_id');
-                                $data['shift_id'] = $get('../../shift_id');
-                                $data['vehicle_id'] = $get('../../vehicle_id');
-
-                                return $data;
-                            })
+                            ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
+                            ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->columnSpanFull(),
 
                         // Repeater cho xe công ty (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm giao)
@@ -342,15 +337,44 @@ class TripForm
                             ->addable()
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
-                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data, $get): array {
-                                $data['driver_id'] = $get('../../driver_id');
-                                $data['shift_id'] = $get('../../shift_id');
-                                $data['vehicle_id'] = $get('../../vehicle_id');
-
-                                return $data;
-                            })
+                            ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
+                            ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->columnSpanFull(),
                     ]),
             ]);
+    }
+
+    private static function fillCheckpointRelationshipData(array $data, $get): array
+    {
+        $driverId = ! empty($data['driver_id']) ? $data['driver_id'] : $get('../../driver_id');
+        $data['driver_id'] = $driverId;
+
+        $vehicleId = ! empty($data['vehicle_id']) ? $data['vehicle_id'] : $get('../../vehicle_id');
+        $data['vehicle_id'] = $vehicleId;
+
+        if (empty($data['shift_id']) && $driverId) {
+            $shiftId = DriverShift::where('driver_id', $driverId)
+                ->when($vehicleId, fn ($q) => $q->where('vehicle_id', $vehicleId))
+                ->whereNull('end_time')
+                ->latest('start_time')
+                ->value('id')
+                ?? DriverShift::where('driver_id', $driverId)
+                    ->whereNull('end_time')
+                    ->latest('start_time')
+                    ->value('id')
+                ?? DriverShift::where('driver_id', $driverId)
+                    ->when($vehicleId, fn ($q) => $q->where('vehicle_id', $vehicleId))
+                    ->latest('start_time')
+                    ->value('id')
+                ?? DriverShift::where('driver_id', $driverId)
+                    ->latest('start_time')
+                    ->value('id');
+
+            if ($shiftId) {
+                $data['shift_id'] = $shiftId;
+            }
+        }
+
+        return $data;
     }
 }

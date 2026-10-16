@@ -67,7 +67,6 @@ class ExportTripsExcelAction
                         ->options([
                             'all' => 'Tất cả trạng thái (gồm hoàn thành & hủy)',
                             'active' => 'Đang chạy (trừ hoàn thành & hủy)',
-                            'unsent' => 'Chưa gửi',
                             'pending' => 'Chờ chạy',
                             'running' => 'Đang chạy',
                             'started' => 'Đã bắt đầu',

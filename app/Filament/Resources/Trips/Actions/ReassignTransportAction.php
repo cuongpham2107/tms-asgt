@@ -125,6 +125,8 @@ class ReassignTransportAction extends CreatesOrderTransportCards
                         }
                     });
 
+                    self::clearTransportCardsCache();
+
                     $newDriver = $newDriverId ? User::find($newDriverId) : null;
 
                     if ($newDriver !== null && ($oldDriver === null || $oldDriver->id !== $newDriver->id)) {

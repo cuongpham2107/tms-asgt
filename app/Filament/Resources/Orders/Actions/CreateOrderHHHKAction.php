@@ -152,12 +152,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
             ->extraAttributes([
                 'class' => 'header-action-hhhk font-bold',
             ])
-            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
-            ->extraModalFooterActions(fn (Action $action): array => [
-                $action->makeModalSubmitAction('createAndSend', arguments: ['send_immediately' => true])
-                    ->label('Tạo và Gửi')
-                    ->color('primary'),
-            ])
+            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo và Gửi')->icon('heroicon-o-paper-airplane'))
             // ->slideOver()
             ->modal()
             ->modalWidth(Width::MaxContent)
@@ -168,20 +163,7 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                 Tabs::make('Tabs')
                     ->tabs($tabs),
             ])
-            ->action(function (array $data, Schema $schema, array $arguments) use ($forceAssignedWhenTransportProvided) {
-                if ($arguments['send_immediately'] ?? false) {
-                    $data['send_immediately'] = true;
-                }
-
-                if (! empty($data['send_immediately']) && blank($data['vehicle_id'] ?? null)) {
-                    Notification::make()
-                        ->title('Chưa chọn phương tiện')
-                        ->body('Vui lòng chọn phương tiện để tạo và gửi đơn hàng.')
-                        ->danger()
-                        ->send();
-
-                    return;
-                }
+            ->action(function (array $data, Schema $schema) use ($forceAssignedWhenTransportProvided) {
                 try {
                     self::createSingleOrder($data, $schema, 'HHHK', $forceAssignedWhenTransportProvided);
 

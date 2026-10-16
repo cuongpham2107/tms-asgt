@@ -70,7 +70,7 @@ beforeEach(function () {
     $this->actingAs($this->admin);
 });
 
-test('trips with assigned orders are visible in ListTrips and can be reassigned and sent', function () {
+test('pending trips with sent orders are visible in ListTrips and can be reassigned', function () {
     $trip = Trip::create([
         'trip_code' => 'TRIP-PENDING-01',
         'vehicle_id' => $this->vehicleA->id,
@@ -85,26 +85,24 @@ test('trips with assigned orders are visible in ListTrips and can be reassigned 
         'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
         'trip_id' => $trip->id,
-        'status' => OrderStatus::Assigned,
+        'status' => OrderStatus::Sent,
         'created_by' => $this->admin->id,
     ]);
 
-    // 1. Chuyến đi hiển thị trên ListTrips và có nhãn Chưa gửi lệnh
+    // 1. Chuyến đi hiển thị trên ListTrips và có nhãn Chờ chạy
     $trip->load('orders');
-    expect($trip->getStatusLabel())->toBe('Chưa gửi lệnh');
-    expect($trip->getStatusColor())->toBe('warning');
+    expect($trip->getStatusLabel())->toBe('Chờ chạy');
+    expect($trip->getStatusColor())->toBe('gray');
 
     Livewire::test(ListTrips::class)
         ->assertCanSeeTableRecords([$trip])
-        ->call('filterStatus', 'unsent')
-        ->assertCanSeeTableRecords([$trip])
         ->call('filterStatus', 'pending')
-        ->assertCanNotSeeTableRecords([$trip]);
+        ->assertCanSeeTableRecords([$trip]);
 
-    // 2. Mobile API của tài xế không thấy chuyến này khi đơn chưa Sent
+    // 2. Mobile API của tài xế nhận thấy chuyến này khi đơn đã Sent
     Sanctum::actingAs($this->driverA);
     $mobileRes = $this->getJson('/api/driver/trips/active')->assertSuccessful();
-    expect($mobileRes->json('data'))->toBeNull();
+    expect($mobileRes->json('data'))->not->toBeNull();
 
     // 3. Điều hành có thể gán lại phương tiện & tài xế trên ListTrips
     $this->actingAs($this->admin);
@@ -121,26 +119,7 @@ test('trips with assigned orders are visible in ListTrips and can be reassigned 
     expect($trip->vehicle_id)->toBe($this->vehicleB->id);
     expect($trip->driver_id)->toBe($this->driverB->id);
 
-    // 4. Điều hành có thể bấm Gửi lệnh (SendTripAction) trên ListTrips
-    Livewire::test(ListTrips::class)
-        ->callTableAction('send_trip', $trip)
-        ->assertHasNoTableActionErrors();
-
-    $order->refresh();
-    expect($order->status)->toBe(OrderStatus::Sent);
-
-    $trip->refresh();
-    $trip->load('orders');
-    expect($trip->getStatusLabel())->toBe('Chờ chạy');
-    expect($trip->getStatusColor())->toBe('gray');
-
-    Livewire::test(ListTrips::class)
-        ->call('filterStatus', 'pending')
-        ->assertCanSeeTableRecords([$trip])
-        ->call('filterStatus', 'unsent')
-        ->assertCanNotSeeTableRecords([$trip]);
-
-    // 5. Sau khi gửi lệnh, tài xế B nhận được chuyến trên Mobile API
+    // 4. Sau khi gán lại, tài xế B nhận được chuyến trên Mobile API
     Sanctum::actingAs($this->driverB);
     $mobileSentRes = $this->getJson('/api/driver/trips/active')->assertSuccessful();
     expect($mobileSentRes->json('data'))->not->toBeNull();

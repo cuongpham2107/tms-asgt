@@ -41,14 +41,14 @@ class TripController extends Controller
             ->whereIn('status', TripStatus::activeStatuses())
             ->where(function ($q) {
                 $q->where('is_empty_run', true)
-                    ->orWhereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]));
+                    ->orWhereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft]));
             })
             ->with([
                 'vehicle',
                 'startLocation',
                 'endLocation',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
+                'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft])->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',
@@ -81,14 +81,14 @@ class TripController extends Controller
             ->whereIn('status', TripStatus::activeStatuses())
             ->where(function ($q) {
                 $q->where('is_empty_run', true)
-                    ->orWhereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned]));
+                    ->orWhereHas('orders', fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft]));
             })
             ->with([
                 'vehicle',
                 'startLocation',
                 'endLocation',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
+                'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft])->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',
@@ -136,7 +136,7 @@ class TripController extends Controller
             'startLocation',
             'endLocation',
             'driverSwaps.toDriver',
-            'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
+            'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft])->with([
                 'customer',
                 'pickupLocation',
                 'deliveryPoints.location',
@@ -190,7 +190,7 @@ class TripController extends Controller
                 'shift',
                 'driver',
                 'driverSwaps.toDriver',
-                'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft, OrderStatus::Assigned])->with([
+                'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft])->with([
                     'customer',
                     'pickupLocation',
                     'deliveryPoints.location',

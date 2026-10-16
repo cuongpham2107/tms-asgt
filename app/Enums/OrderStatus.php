@@ -48,7 +48,7 @@ enum OrderStatus: string implements HasColor, HasLabel
 
     public function canSend(): bool
     {
-        return $this === self::Assigned;
+        return false;
     }
 
     public function canRecall(): bool
@@ -58,17 +58,17 @@ enum OrderStatus: string implements HasColor, HasLabel
 
     public function canCancel(): bool
     {
-        return in_array($this, [self::Draft, self::Assigned, self::Sent, self::InTransit, self::DriverSwap]);
+        return in_array($this, [self::Draft, self::Sent, self::InTransit, self::DriverSwap]);
     }
 
     public function canEdit(): bool
     {
-        return in_array($this, [self::Draft, self::Assigned]);
+        return in_array($this, [self::Draft, self::Sent]);
     }
 
     public function canDelete(): bool
     {
-        return in_array($this, [self::Draft, self::Assigned, self::Sent]);
+        return in_array($this, [self::Draft, self::Sent]);
     }
 
     public function isClosed(): bool

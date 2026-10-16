@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Enums\CheckpointType;
+use App\Enums\DriverSwapReason;
+use App\Models\DriverShift;
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -16,6 +19,8 @@ class TripKmSplitService
      */
     public static function segments(Trip $trip): array
     {
+        self::syncMissingSwapsFromCheckpoints($trip);
+
         $swaps = DriverSwap::where('trip_id', $trip->id)
             ->orderBy('created_at')
             ->orderBy('id')
@@ -55,6 +60,23 @@ class TripKmSplitService
                 continue;
             }
 
+            // Backfill to_shift_id if missing
+            if ($swap->to_shift_id === null && $swap->to_driver_id !== null) {
+                $resolvedToShiftId = DriverShift::where('driver_id', $swap->to_driver_id)->whereNull('end_time')->latest('start_time')->value('id')
+                    ?? DriverShift::where('driver_id', $swap->to_driver_id)->latest('start_time')->value('id');
+                if ($resolvedToShiftId) {
+                    $swap->update(['to_shift_id' => $resolvedToShiftId]);
+                }
+            }
+
+            // Backfill from_shift_id if missing
+            if ($swap->from_shift_id === null && $swap->from_driver_id !== null) {
+                $resolvedFromShiftId = DriverShift::where('driver_id', $swap->from_driver_id)->latest('start_time')->value('id');
+                if ($resolvedFromShiftId) {
+                    $swap->update(['from_shift_id' => $resolvedFromShiftId]);
+                }
+            }
+
             $handoverKm = HandoverKmResolver::resolve($trip, $swap, useTripFallback: true);
             if ($handoverKm <= 0) {
                 continue;
@@ -63,6 +85,7 @@ class TripKmSplitService
             $segments[] = [(float) $prevKm, $handoverKm, $activeShiftId, $activeDriverId];
 
             $activeShiftId = $swap->to_shift_id
+                ?? DriverShift::where('driver_id', $swap->to_driver_id)->latest('start_time')->value('id')
                 ?? $swaps->get($index + 1)?->from_shift_id
                 ?? $trip->shift_id;
             $activeDriverId = $swap->to_driver_id
@@ -74,6 +97,62 @@ class TripKmSplitService
         $segments[] = [(float) $prevKm, $tripEndKm, $activeShiftId, $activeDriverId];
 
         return $segments;
+    }
+
+    /**
+     * Tự động đồng bộ các bản ghi DriverSwap nếu chuyến có mốc driver_swap hoặc đổi tài xế nhưng chưa có bản ghi swap.
+     */
+    public static function syncMissingSwapsFromCheckpoints(Trip $trip): void
+    {
+        $swapCheckpoints = TripCheckpoint::where('trip_id', $trip->id)
+            ->where('checkpoint_type', CheckpointType::DriverSwap)
+            ->whereNotNull('km_reading')
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($swapCheckpoints as $swapCp) {
+            $handoverKm = (float) $swapCp->km_reading;
+            if ($handoverKm <= 0) {
+                continue;
+            }
+
+            $exists = DriverSwap::where('trip_id', $trip->id)
+                ->where('handover_km', $handoverKm)
+                ->exists();
+
+            if (! $exists) {
+                $nextCheckpointDriver = TripCheckpoint::where('trip_id', $trip->id)
+                    ->where('occurred_at', '>=', $swapCp->occurred_at)
+                    ->where('id', '>', $swapCp->id)
+                    ->whereNotNull('driver_id')
+                    ->where('driver_id', '!=', $swapCp->driver_id)
+                    ->orderBy('occurred_at')
+                    ->orderBy('id')
+                    ->value('driver_id');
+
+                $toDriverId = $nextCheckpointDriver ?? $trip->driver_id;
+                $fromDriverId = $swapCp->driver_id ?? $trip->driver_id;
+
+                $fromShiftId = $swapCp->shift_id
+                    ?? DriverShift::where('driver_id', $fromDriverId)->where('start_time', '<=', $swapCp->occurred_at)->latest('start_time')->value('id')
+                    ?? DriverShift::where('driver_id', $fromDriverId)->latest('start_time')->value('id');
+
+                $toShiftId = DriverShift::where('driver_id', $toDriverId)->whereNull('end_time')->latest('start_time')->value('id')
+                    ?? DriverShift::where('driver_id', $toDriverId)->latest('start_time')->value('id');
+
+                DriverSwap::create([
+                    'trip_id' => $trip->id,
+                    'from_driver_id' => $fromDriverId,
+                    'to_driver_id' => $toDriverId,
+                    'from_shift_id' => $fromShiftId,
+                    'to_shift_id' => $toShiftId,
+                    'handover_km' => $handoverKm,
+                    'reason' => DriverSwapReason::CargoNotUnloaded,
+                    'created_by' => auth()->id() ?? $fromDriverId,
+                ]);
+            }
+        }
     }
 
     /**

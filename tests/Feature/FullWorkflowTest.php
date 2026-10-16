@@ -189,7 +189,8 @@ function fwAssignTripToOrder(Order $order, Vehicle $vehicle, User $driver): Trip
 
     $order->update([
         'trip_id' => $trip->id,
-        'status' => OrderStatus::Assigned,
+        'status' => OrderStatus::Sent,
+        'sent_at' => now(),
     ]);
 
     return $trip;
@@ -302,10 +303,8 @@ test('scenario 3: two HHHK orders in same trip delivered sequentially', function
         'status' => TripStatus::Pending,
     ]);
 
-    $order1->update(['trip_id' => $trip->id, 'status' => OrderStatus::Assigned, 'trip_sequence' => 0]);
-    $order2->update(['trip_id' => $trip->id, 'status' => OrderStatus::Assigned, 'trip_sequence' => 1]);
-    $order1->update(['status' => OrderStatus::Sent, 'sent_at' => now()]);
-    $order2->update(['status' => OrderStatus::Sent, 'sent_at' => now()]);
+    $order1->update(['trip_id' => $trip->id, 'status' => OrderStatus::Sent, 'sent_at' => now(), 'trip_sequence' => 0]);
+    $order2->update(['trip_id' => $trip->id, 'status' => OrderStatus::Sent, 'sent_at' => now(), 'trip_sequence' => 1]);
 
     fwStartShift($driver, $vehicle);
 

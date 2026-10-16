@@ -74,7 +74,7 @@ test('can bulk assign vehicle and driver to draft orders', function () {
         'type' => 'HHHK',
         'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
-        'status' => OrderStatus::Assigned,
+        'status' => OrderStatus::Sent,
         'created_by' => User::factory()->create()->id,
     ]);
 
@@ -92,7 +92,7 @@ test('can bulk assign vehicle and driver to draft orders', function () {
         $order->update([
             'trip_id' => $trip->id,
             'trip_sequence' => $i,
-            'status' => OrderStatus::Assigned,
+            'status' => OrderStatus::Sent,
         ]);
     }
 
@@ -109,15 +109,15 @@ test('can bulk assign vehicle and driver to draft orders', function () {
     expect($order1->trip)->not->toBeNull();
     expect($order1->trip->vehicle_id)->toBe($vehicle->id);
     expect($order1->trip->driver_id)->toBe($driver->id);
-    expect($order1->status)->toBe(OrderStatus::Assigned);
+    expect($order1->status)->toBe(OrderStatus::Sent);
 
     expect($order2->trip_id)->not->toBeNull();
     expect($order2->trip)->not->toBeNull();
     expect($order2->trip->vehicle_id)->toBe($vehicle->id);
     expect($order2->trip->driver_id)->toBe($driver->id);
-    expect($order2->status)->toBe(OrderStatus::Assigned);
+    expect($order2->status)->toBe(OrderStatus::Sent);
 
-    // Order3 is already Assigned, so it should not be affected by the bulk assign (only draft orders)
+    // Order3 is already Sent, so it should not be affected by the bulk assign (only draft orders)
     expect($order3->trip_id)->toBeNull();
     expect($order3->trip)->toBeNull();
 

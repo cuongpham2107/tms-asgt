@@ -162,12 +162,6 @@ class Trip extends Model
         }
 
         if ($this->status === TripStatus::Pending) {
-            $orders = $this->relationLoaded('orders') ? $this->orders : $this->orders()->get();
-
-            if ($orders->isNotEmpty() && $orders->contains(fn ($o) => in_array($o->status, [OrderStatus::Assigned, OrderStatus::Draft]))) {
-                return 'Chưa gửi lệnh';
-            }
-
             return 'Chờ chạy';
         }
 
@@ -181,12 +175,6 @@ class Trip extends Model
         }
 
         if ($this->status === TripStatus::Pending) {
-            $orders = $this->relationLoaded('orders') ? $this->orders : $this->orders()->get();
-
-            if ($orders->isNotEmpty() && $orders->contains(fn ($o) => in_array($o->status, [OrderStatus::Assigned, OrderStatus::Draft]))) {
-                return 'warning';
-            }
-
             return 'gray';
         }
 

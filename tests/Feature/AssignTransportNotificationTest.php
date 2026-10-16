@@ -6,7 +6,6 @@ use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
-use App\Filament\Resources\Orders\Actions\SendOrderAction;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Location;
@@ -67,43 +66,9 @@ beforeEach(function () {
     ]);
 });
 
-test('assigning rent vehicle with "Tao" does NOT send notification and sets status to Assigned', function () {
+test('assigning rent vehicle sends notification and sets status to Sent', function () {
     $order = Order::create([
         'order_code' => 'ORD-TEST-001',
-        'type' => OrderType::Hhhk,
-        'status' => OrderStatus::Draft,
-        'area_id' => $this->area->id,
-        'customer_id' => $this->customer->id,
-        'pickup_location_id' => $this->location->id,
-        'created_by' => $this->driver->id,
-    ]);
-
-    $mockMessaging = Mockery::mock(Messaging::class);
-    // Notification MUST NOT be sent
-    $mockMessaging->shouldReceive('send')->never();
-    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
-
-    $action = AssignTransportAction::make();
-    $action->record($order);
-    $action->call([
-        'data' => [
-            'vehicle_id' => $this->rentVehicle->id,
-            'driver_id' => $this->driver->id,
-        ],
-        'arguments' => [
-            'send_immediately' => false,
-        ],
-    ]);
-
-    $order->refresh();
-    expect($order->status)->toBe(OrderStatus::Assigned)
-        ->and($order->sent_at)->toBeNull()
-        ->and($order->trip_id)->not->toBeNull();
-});
-
-test('assigning rent vehicle with "Tao va Gui" sends notification and sets status to Sent', function () {
-    $order = Order::create([
-        'order_code' => 'ORD-TEST-002',
         'type' => OrderType::Hhhk,
         'status' => OrderStatus::Draft,
         'area_id' => $this->area->id,
@@ -124,9 +89,6 @@ test('assigning rent vehicle with "Tao va Gui" sends notification and sets statu
             'vehicle_id' => $this->rentVehicle->id,
             'driver_id' => $this->driver->id,
         ],
-        'arguments' => [
-            'send_immediately' => true,
-        ],
     ]);
 
     $order->refresh();
@@ -135,9 +97,9 @@ test('assigning rent vehicle with "Tao va Gui" sends notification and sets statu
         ->and($order->trip_id)->not->toBeNull();
 });
 
-test('assigning with "Tao" leaves order in Assigned and sending order later triggers notification', function () {
+test('assigning company vehicle sends notification and sets status to Sent', function () {
     $order = Order::create([
-        'order_code' => 'ORD-TEST-003',
+        'order_code' => 'ORD-TEST-002',
         'type' => OrderType::Hhhk,
         'status' => OrderStatus::Draft,
         'area_id' => $this->area->id,
@@ -146,37 +108,22 @@ test('assigning with "Tao" leaves order in Assigned and sending order later trig
         'created_by' => $this->driver->id,
     ]);
 
-    // Step 1: Assign with "Tao" -> no notification
-    $mockMessaging1 = Mockery::mock(Messaging::class);
-    $mockMessaging1->shouldReceive('send')->never();
-    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging1));
+    $mockMessaging = Mockery::mock(Messaging::class);
+    // Notification MUST be sent once
+    $mockMessaging->shouldReceive('send')->once()->andReturn([]);
+    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
 
-    $assignAction = AssignTransportAction::make();
-    $assignAction->record($order);
-    $assignAction->call([
+    $action = AssignTransportAction::make();
+    $action->record($order);
+    $action->call([
         'data' => [
-            'vehicle_id' => $this->rentVehicle->id,
+            'vehicle_id' => $this->companyVehicle->id,
             'driver_id' => $this->driver->id,
-        ],
-        'arguments' => [
-            'send_immediately' => false,
         ],
     ]);
 
     $order->refresh();
-    expect($order->status)->toBe(OrderStatus::Assigned)
-        ->and($order->sent_at)->toBeNull();
-
-    // Step 2: Click "Gui lenh" (SendOrderAction) -> notification sent
-    $mockMessaging2 = Mockery::mock(Messaging::class);
-    $mockMessaging2->shouldReceive('send')->once()->andReturn([]);
-    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging2));
-
-    $sendAction = SendOrderAction::make();
-    $sendAction->record($order);
-    $sendAction->call();
-
-    $order->refresh();
     expect($order->status)->toBe(OrderStatus::Sent)
-        ->and($order->sent_at)->not->toBeNull();
+        ->and($order->sent_at)->not->toBeNull()
+        ->and($order->trip_id)->not->toBeNull();
 });

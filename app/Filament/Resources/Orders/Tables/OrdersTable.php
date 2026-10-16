@@ -20,6 +20,7 @@ use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
+use App\Services\Notification\DriverNotificationService;
 use App\Services\OsrmService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
@@ -56,7 +57,6 @@ class OrdersTable extends BaseTable
                 'pickupLocation',
                 'trip.vehicle',
                 'trip.driver',
-                'tripCheckpoints' => fn ($q) => $q->orderByDesc('occurred_at'),
             ]))
             ->columns([
                 TextColumn::make('order_code')
@@ -284,10 +284,16 @@ class OrdersTable extends BaseTable
 
                                 $record->update([
                                     'trip_id' => $trip->id,
-                                    'status' => OrderStatus::Assigned,
+                                    'status' => OrderStatus::Sent,
+                                    'sent_at' => now(),
                                 ]);
 
                                 CreatesOrderTransportCards::createCheckpointsForExternalVehicle($trip, collect([$record]));
+
+                                try {
+                                    app(DriverNotificationService::class)->sendOrderAssigned($record, $trip);
+                                } catch (\Throwable) {
+                                }
 
                                 $vehicle = Vehicle::query()->find($vehicleId);
                                 if ($vehicle !== null) {

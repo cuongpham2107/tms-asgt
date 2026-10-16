@@ -62,7 +62,7 @@ class OrderController extends Controller
         }
 
         // Driver only sees orders that have been sent
-        if ($order->status === OrderStatus::Assigned) {
+        if (in_array($order->status, [OrderStatus::Draft, OrderStatus::Assigned])) {
             /** @status 403 */
             return response()->json(['message' => 'Order has not been sent yet'], 403);
         }
@@ -97,7 +97,7 @@ class OrderController extends Controller
             return response()->json(['message' => 'This order is not assigned to you'], 403);
         }
 
-        if ($order->status === OrderStatus::Assigned) {
+        if (in_array($order->status, [OrderStatus::Draft, OrderStatus::Assigned])) {
             /** @status 403 */
             return response()->json(['message' => 'Order has not been sent yet'], 403);
         }
@@ -166,8 +166,8 @@ class OrderController extends Controller
         $counts = Order::query()
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
             ->selectRaw("
-                SUM(CASE WHEN status IN ('assigned') THEN 1 ELSE 0 END) as assigned,
-                SUM(CASE WHEN status IN ('sent') THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status IN ('draft', 'assigned') THEN 1 ELSE 0 END) as assigned,
+                SUM(CASE WHEN status IN ('sent', 'in_transit', 'driver_swap') THEN 1 ELSE 0 END) as in_progress,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
             ")
             ->first();

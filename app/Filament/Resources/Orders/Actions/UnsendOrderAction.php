@@ -17,10 +17,10 @@ class UnsendOrderAction
             ->label('Thu hồi lệnh')
             ->icon('heroicon-o-arrow-uturn-left')
             ->color('warning')
-            ->hidden(fn (Order $record): bool => $record->status !== OrderStatus::Draft)
+            ->hidden(fn (Order $record): bool => ! $record->status->canRecall())
             ->requiresConfirmation()
             ->modalHeading('Xác nhận thu hồi lệnh')
-            ->modalDescription('Bạn chắc chắn muốn thu hồi lệnh cho đơn hàng này không?')
+            ->modalDescription('Bạn chắc chắn muốn thu hồi lệnh cho đơn hàng này không? Đơn sẽ quay lại trạng thái Nháp.')
             ->modalSubmitActionLabel('Thu hồi')
             ->modalCancelActionLabel('Hủy')
             ->action(function (Order $record): void {
@@ -35,10 +35,17 @@ class UnsendOrderAction
                         return;
                     }
 
+                    $trip = $record->trip;
+
                     Order::query()->whereKey($record->id)->update([
-                        'status' => OrderStatus::Assigned->value,
+                        'status' => OrderStatus::Draft->value,
+                        'trip_id' => null,
                         'sent_at' => null,
                     ]);
+
+                    if ($trip && $trip->orders()->count() === 0) {
+                        $trip->delete();
+                    }
 
                     try {
                         app(DriverNotificationService::class)->sendOrderRecalled($record);
@@ -47,7 +54,7 @@ class UnsendOrderAction
 
                     Notification::make()
                         ->title('Thu hồi thành công')
-                        ->body('Đơn hàng đã được thu hồi, quay lại trạng thái gán xe.')
+                        ->body('Đơn hàng đã được thu hồi về trạng thái Nháp.')
                         ->success()
                         ->send();
                 } catch (Throwable $e) {

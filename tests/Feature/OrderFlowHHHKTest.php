@@ -130,9 +130,9 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
 
     // ============================================
     // 2. ĐIỀU HÀNG: GẮN TÀI XẾ + XE CHO ĐƠN HÀNG
-    //    Draft -> Assigned -> Sent
+    //    Draft -> Sent
     // ============================================
-    // 2a. Tạo chuyến (Trip) và gán tài xế + xe (Draft -> Assigned)
+    // 2a. Tạo chuyến (Trip) và gán tài xế + xe (Draft -> Sent)
     $trip = Trip::create([
         'trip_code' => 'TRIP-HHHK-001',
         'vehicle_id' => $this->vehicle->id,
@@ -141,20 +141,13 @@ test('luồng đơn hàng HHHK từ A->B: tạo order, ca trực, điều hàng,
 
     $order->update([
         'trip_id' => $trip->id,
-        'status' => OrderStatus::Assigned,
-    ]);
-
-    expect($order->fresh()->status)->toBe(OrderStatus::Assigned);
-    expect($order->fresh()->trip->vehicle_id)->toBe($this->vehicle->id);
-    expect($order->fresh()->trip->driver_id)->toBe($this->driver->id);
-
-    // 2b. Gửi lệnh cho tài xế (Assigned -> Sent)
-    $order->update([
         'status' => OrderStatus::Sent,
         'sent_at' => now(),
     ]);
 
     expect($order->fresh()->status)->toBe(OrderStatus::Sent);
+    expect($order->fresh()->trip->vehicle_id)->toBe($this->vehicle->id);
+    expect($order->fresh()->trip->driver_id)->toBe($this->driver->id);
 
     // ============================================
     // 3. TẠO CA TRỰC CHO TÀI XẾ

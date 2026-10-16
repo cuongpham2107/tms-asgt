@@ -91,15 +91,21 @@ abstract class CreatesOrderTransportCards
         return ! static::isRentVehicle($vehicleId);
     }
 
+    public static function clearTransportCardsCache(): void
+    {
+        Cache::forget('resolve-vehicle-cards-base');
+        Cache::forget('resolve-driver-cards');
+    }
+
     /**
      * @return array<int, array<string, mixed>>
      */
     protected static function resolveDriverCards(): array
     {
-        return Cache::remember('resolve-driver-cards', now()->addMinutes(5), function (): array {
+        return Cache::remember('resolve-driver-cards', now()->addMinutes(15), function (): array {
             $todayShift = ShiftScheduleService::determineShift();
 
-            return User::query()
+            $drivers = User::query()
                 ->role('driver')
                 ->select([
                     'id',
@@ -115,27 +121,36 @@ abstract class CreatesOrderTransportCards
                     'dangerous_goods_cert_number',
                     'dangerous_goods_cert_expiry_date',
                 ])
-                ->selectSub(
-                    Order::selectRaw('COUNT(*)')
-                        ->whereIn('trip_id', Trip::select('id')->whereColumn('trips.driver_id', 'users.id'))
-                        ->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Sent->value]),
-                    'active_orders_count'
-                )
-                ->selectSub(
-                    Trip::selectRaw('COUNT(*)')->whereColumn('trips.driver_id', 'users.id'),
-                    'orders_count'
-                )
                 ->with([
                     'driverShifts' => fn ($query) => $query->latest('start_time')->limit(1),
                     'vehiclesAsDriver' => fn ($query) => $query->select('id', 'current_driver_id', 'plate_number', 'gps_lat', 'gps_lng'),
                 ])
                 ->orderBy('name')
-                ->get()
-                ->map(function (User $driver) use ($todayShift): array {
+                ->get();
+
+            $driverIds = $drivers->pluck('id')->all();
+
+            $activeOrdersByDriver = Order::query()
+                ->join('trips', 'orders.trip_id', '=', 'trips.id')
+                ->whereIn('orders.status', [OrderStatus::Assigned->value, OrderStatus::Sent->value])
+                ->whereIn('trips.driver_id', $driverIds)
+                ->groupBy('trips.driver_id')
+                ->selectRaw('trips.driver_id, count(*) as count')
+                ->pluck('count', 'trips.driver_id');
+
+            $totalTripsByDriver = Trip::query()
+                ->whereIn('driver_id', $driverIds)
+                ->groupBy('driver_id')
+                ->selectRaw('driver_id, count(*) as count')
+                ->pluck('count', 'driver_id');
+
+            return $drivers
+                ->map(function (User $driver) use ($todayShift, $activeOrdersByDriver, $totalTripsByDriver): array {
                     $latestShift = $driver->driverShifts->first();
                     $hasActiveShift = $latestShift && $latestShift->end_time === null;
                     $assignedVehicle = $driver->vehiclesAsDriver->first();
-                    $activeOrders = (int) $driver->active_orders_count;
+                    $activeOrders = (int) ($activeOrdersByDriver[$driver->id] ?? 0);
+                    $totalTrips = (int) ($totalTripsByDriver[$driver->id] ?? 0);
                     $isAvailable = $activeOrders === 0;
 
                     $driverWorkShift = $driver->work_shift;
@@ -198,7 +213,7 @@ abstract class CreatesOrderTransportCards
                             ['icon' => 'heroicon-m-truck', 'label' => 'Xe gán', 'value' => $assignedVehicle?->plate_number ?? 'Chưa gán xe'],
                             ['icon' => 'heroicon-m-clock', 'label' => 'Ca trực', 'value' => $hasActiveShift ? ('Đang '.$latestShift->shift_type?->getLabel()) : ($latestShift?->shift_type?->getLabel() ?? 'Chưa có ca')],
                             ['icon' => 'heroicon-m-map-pin', 'label' => 'Vị trí', 'value' => $driverLocation['name'] ?? 'Chưa xác định'],
-                            ['icon' => 'heroicon-m-document-text', 'label' => 'Tổng chuyến', 'value' => number_format((int) $driver->orders_count, 0, ',', '.')],
+                            ['icon' => 'heroicon-m-document-text', 'label' => 'Tổng chuyến', 'value' => number_format($totalTrips, 0, ',', '.')],
                         ])),
                         'meta' => [
                             $driver->license_class ?? '',
@@ -236,9 +251,9 @@ abstract class CreatesOrderTransportCards
      */
     private static function resolveVehicleCardsBase(?int $selectedVehicleId = null): array
     {
-        $cacheKey = 'resolve-vehicle-cards-base'.($selectedVehicleId ? "-{$selectedVehicleId}" : '');
+        $cacheKey = 'resolve-vehicle-cards-base';
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($selectedVehicleId): array {
+        $cards = Cache::remember($cacheKey, now()->addMinutes(15), function (): array {
             $vehicles = Vehicle::query()
                 ->select([
                     'id',
@@ -257,116 +272,166 @@ abstract class CreatesOrderTransportCards
                     'dangerous_goods_permit_number',
                     'dangerous_goods_permit_expiry_date',
                 ])
-                ->where(function ($query) use ($selectedVehicleId): void {
-                    $query->whereIn('status', ['on', 'running']);
-
-                    if ($selectedVehicleId) {
-                        $query->orWhere('id', $selectedVehicleId);
-                    }
-                })
-                ->selectSub(
-                    Order::selectRaw('COUNT(*)')
-                        ->whereIn('trip_id', Trip::select('id')->whereColumn('trips.vehicle_id', 'vehicles.id'))
-                        ->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Sent->value]),
-                    'active_orders_count'
-                )
+                ->whereIn('status', ['on', 'running'])
                 ->with([
-                    'driver' => fn ($q) => $q
-                        ->with(['driverShifts' => fn ($q) => $q
-                            ->whereNull('end_time'),
-                        ]),
-                    'evenDriver' => fn ($q) => $q
-                        ->with(['driverShifts' => fn ($q) => $q
-                            ->whereNull('end_time'),
-                        ]),
-                    'oddDriver' => fn ($q) => $q
-                        ->with(['driverShifts' => fn ($q) => $q
-                            ->whereNull('end_time'),
-                        ]),
-                    'drivers' => fn ($q) => $q
-                        ->with(['driverShifts' => fn ($q) => $q
-                            ->whereNull('end_time'),
-                        ]),
+                    'driver.driverShifts' => fn ($q) => $q->whereNull('end_time'),
+                    'evenDriver.driverShifts' => fn ($q) => $q->whereNull('end_time'),
+                    'oddDriver.driverShifts' => fn ($q) => $q->whereNull('end_time'),
+                    'drivers.driverShifts' => fn ($q) => $q->whereNull('end_time'),
                 ])
                 ->orderBy('plate_number')
                 ->get();
 
+            $vehicleIds = $vehicles->pluck('id')->all();
+
+            $activeOrdersByVehicle = Order::query()
+                ->join('trips', 'orders.trip_id', '=', 'trips.id')
+                ->whereIn('orders.status', [OrderStatus::Assigned->value, OrderStatus::Sent->value])
+                ->whereIn('trips.vehicle_id', $vehicleIds)
+                ->groupBy('trips.vehicle_id')
+                ->selectRaw('trips.vehicle_id, count(*) as count')
+                ->pluck('count', 'trips.vehicle_id');
+
             $vehicleLocations = self::resolveVehicleLocations($vehicles);
 
             return $vehicles
-                ->map(function (Vehicle $vehicle) use ($vehicleLocations): array {
-                    $currentLocation = $vehicleLocations[$vehicle->id] ?? ['id' => null, 'name' => null];
-
-                    $driversList = collect();
-                    $rawDriverNames = [];
-
-                    if ($vehicle->evenDriver) {
-                        $hasBoth = $vehicle->oddDriver && $vehicle->oddDriver->id !== $vehicle->evenDriver->id;
-                        $driversList->put($vehicle->evenDriver->id, $vehicle->evenDriver->name.($hasBoth ? ' (Chẵn)' : ''));
-                        $rawDriverNames[] = $vehicle->evenDriver->name;
-                    }
-
-                    if ($vehicle->oddDriver) {
-                        if ($driversList->has($vehicle->oddDriver->id)) {
-                            $driversList->put($vehicle->oddDriver->id, $vehicle->oddDriver->name);
-                        } else {
-                            $hasBoth = $vehicle->evenDriver && $vehicle->evenDriver->id !== $vehicle->oddDriver->id;
-                            $driversList->put($vehicle->oddDriver->id, $vehicle->oddDriver->name.($hasBoth ? ' (Lẻ)' : ''));
-                            $rawDriverNames[] = $vehicle->oddDriver->name;
-                        }
-                    }
-
-                    if ($driversList->isEmpty()) {
-                        if ($vehicle->driver) {
-                            $driversList->put($vehicle->driver->id, $vehicle->driver->name);
-                            $rawDriverNames[] = $vehicle->driver->name;
-                        }
-
-                        foreach ($vehicle->drivers as $d) {
-                            if (! $driversList->has($d->id)) {
-                                $shiftLabel = match ($d->work_shift) {
-                                    DriverWorkShift::Even => ' (Chẵn)',
-                                    DriverWorkShift::Odd => ' (Lẻ)',
-                                    default => '',
-                                };
-                                $driversList->put($d->id, $d->name.$shiftLabel);
-                                $rawDriverNames[] = $d->name;
-                            }
-                        }
-                    }
-
-                    $driverNameText = $driversList->isNotEmpty()
-                        ? $driversList->values()->implode(', ')
-                        : 'Chưa phân lái';
-
-                    $hasDriver = $driversList->isNotEmpty();
-                    $todayDriver = $vehicle->getDriverForToday() ?? $vehicle->driver ?? $vehicle->evenDriver ?? $vehicle->oddDriver;
-                    $hasActiveShift = $todayDriver?->driverShifts?->isNotEmpty() ?? false;
-                    $ordersInShift = (int) ($todayDriver?->driverShifts?->first()?->orders_in_shift ?? 0);
-
-                    return [
-                        'id' => $vehicle->id,
-                        'load_capacity' => (float) $vehicle->load_capacity,
-                        'active_orders_count' => (int) $vehicle->active_orders_count,
-                        'current_location_id' => $currentLocation['id'] ?? null,
-                        'current_location_name' => $currentLocation['name'] ?? null,
-                        'make' => $vehicle->make ?: 'Chưa rõ hãng',
-                        'plate_number' => $vehicle->plate_number,
-                        'vehicle_type_label' => $vehicle->getVehicleTypeLabel(),
-                        'status_label' => $vehicle->getStatusLabel(),
-                        'status_color' => $vehicle->getStatusColor(),
-                        'current_mileage' => $vehicle->current_mileage,
-                        'type' => $vehicle->type?->value,
-                        'driver_name' => $driverNameText,
-                        'driver_names_raw' => array_values(array_unique($rawDriverNames)),
-                        'has_driver' => $hasDriver,
-                        'has_active_shift' => $hasActiveShift,
-                        'orders_in_shift' => $ordersInShift,
-                        'dg_permit_status' => $vehicle->getDangerousGoodsPermitStatus(),
-                    ];
+                ->map(function (Vehicle $vehicle) use ($vehicleLocations, $activeOrdersByVehicle): array {
+                    return self::formatVehicleCardBase(
+                        $vehicle,
+                        $vehicleLocations[$vehicle->id] ?? null,
+                        (int) ($activeOrdersByVehicle[$vehicle->id] ?? 0)
+                    );
                 })
                 ->all();
         });
+
+        if ($selectedVehicleId) {
+            $found = false;
+            foreach ($cards as $c) {
+                if ($c['id'] === $selectedVehicleId) {
+                    $found = true;
+                    break;
+                }
+            }
+
+            if (! $found) {
+                $vehicle = Vehicle::query()
+                    ->select([
+                        'id',
+                        'plate_number',
+                        'vehicle_type',
+                        'make',
+                        'load_capacity',
+                        'current_driver_id',
+                        'even_driver_id',
+                        'odd_driver_id',
+                        'status',
+                        'current_mileage',
+                        'type',
+                        'gps_lat',
+                        'gps_lng',
+                        'dangerous_goods_permit_number',
+                        'dangerous_goods_permit_expiry_date',
+                    ])
+                    ->with([
+                        'driver.driverShifts' => fn ($q) => $q->whereNull('end_time'),
+                        'evenDriver.driverShifts' => fn ($q) => $q->whereNull('end_time'),
+                        'oddDriver.driverShifts' => fn ($q) => $q->whereNull('end_time'),
+                        'drivers.driverShifts' => fn ($q) => $q->whereNull('end_time'),
+                    ])
+                    ->find($selectedVehicleId);
+
+                if ($vehicle) {
+                    $activeCount = Order::query()
+                        ->join('trips', 'orders.trip_id', '=', 'trips.id')
+                        ->whereIn('orders.status', [OrderStatus::Assigned->value, OrderStatus::Sent->value])
+                        ->where('trips.vehicle_id', $selectedVehicleId)
+                        ->count();
+
+                    $loc = self::resolveVehicleGpsLocation($vehicle);
+                    $extraCard = self::formatVehicleCardBase($vehicle, $loc, $activeCount);
+                    array_unshift($cards, $extraCard);
+                }
+            }
+        }
+
+        return $cards;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected static function formatVehicleCardBase(Vehicle $vehicle, ?array $currentLocation, int $activeOrdersCount): array
+    {
+        $currentLocation = $currentLocation ?? ['id' => null, 'name' => null];
+
+        $driversList = collect();
+        $rawDriverNames = [];
+
+        if ($vehicle->evenDriver) {
+            $hasBoth = $vehicle->oddDriver && $vehicle->oddDriver->id !== $vehicle->evenDriver->id;
+            $driversList->put($vehicle->evenDriver->id, $vehicle->evenDriver->name.($hasBoth ? ' (Chẵn)' : ''));
+            $rawDriverNames[] = $vehicle->evenDriver->name;
+        }
+
+        if ($vehicle->oddDriver) {
+            if ($driversList->has($vehicle->oddDriver->id)) {
+                $driversList->put($vehicle->oddDriver->id, $vehicle->oddDriver->name);
+            } else {
+                $hasBoth = $vehicle->evenDriver && $vehicle->evenDriver->id !== $vehicle->oddDriver->id;
+                $driversList->put($vehicle->oddDriver->id, $vehicle->oddDriver->name.($hasBoth ? ' (Lẻ)' : ''));
+                $rawDriverNames[] = $vehicle->oddDriver->name;
+            }
+        }
+
+        if ($driversList->isEmpty()) {
+            if ($vehicle->driver) {
+                $driversList->put($vehicle->driver->id, $vehicle->driver->name);
+                $rawDriverNames[] = $vehicle->driver->name;
+            }
+
+            foreach ($vehicle->drivers as $d) {
+                if (! $driversList->has($d->id)) {
+                    $shiftLabel = match ($d->work_shift) {
+                        DriverWorkShift::Even => ' (Chẵn)',
+                        DriverWorkShift::Odd => ' (Lẻ)',
+                        default => '',
+                    };
+                    $driversList->put($d->id, $d->name.$shiftLabel);
+                    $rawDriverNames[] = $d->name;
+                }
+            }
+        }
+
+        $driverNameText = $driversList->isNotEmpty()
+            ? $driversList->values()->implode(', ')
+            : 'Chưa phân lái';
+
+        $hasDriver = $driversList->isNotEmpty();
+        $todayDriver = $vehicle->getDriverForToday() ?? $vehicle->driver ?? $vehicle->evenDriver ?? $vehicle->oddDriver;
+        $hasActiveShift = $todayDriver?->driverShifts?->isNotEmpty() ?? false;
+        $ordersInShift = (int) ($todayDriver?->driverShifts?->first()?->orders_in_shift ?? 0);
+
+        return [
+            'id' => $vehicle->id,
+            'load_capacity' => (float) $vehicle->load_capacity,
+            'active_orders_count' => $activeOrdersCount,
+            'current_location_id' => $currentLocation['id'] ?? null,
+            'current_location_name' => $currentLocation['name'] ?? null,
+            'make' => $vehicle->make ?: 'Chưa rõ hãng',
+            'plate_number' => $vehicle->plate_number,
+            'vehicle_type_label' => $vehicle->getVehicleTypeLabel(),
+            'status_label' => $vehicle->getStatusLabel(),
+            'status_color' => $vehicle->getStatusColor(),
+            'current_mileage' => $vehicle->current_mileage,
+            'type' => $vehicle->type?->value,
+            'driver_name' => $driverNameText,
+            'driver_names_raw' => array_values(array_unique($rawDriverNames)),
+            'has_driver' => $hasDriver,
+            'has_active_shift' => $hasActiveShift,
+            'orders_in_shift' => $ordersInShift,
+            'dg_permit_status' => $vehicle->getDangerousGoodsPermitStatus(),
+        ];
     }
 
     /**
@@ -411,13 +476,8 @@ abstract class CreatesOrderTransportCards
                 ['icon' => 'heroicon-m-document-text', 'label' => 'Đơn trong ca', 'value' => (string) $card['orders_in_shift']],
             ])),
             'meta' => array_values(array_filter([
-                $card['driver_name'],
                 ...($card['driver_names_raw'] ?? []),
-                $card['vehicle_type_label'],
-                $loadCapacity.' tấn',
-                $card['current_location_name'] ?? '',
             ])),
-            'suggestedBadgeClasses' => 'border border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800/40 dark:bg-primary-900/30 dark:text-primary-200',
             'isSuggested' => $isSuggested,
             'suggestionScore' => $suggestionScore,
             'capacityMatch' => $isCapacityMatch,
@@ -437,30 +497,20 @@ abstract class CreatesOrderTransportCards
             return [];
         }
 
-        $tripVehicleMap = Trip::query()
-            ->whereIn('vehicle_id', $vehicleIds)
-            ->select('id', 'vehicle_id')
-            ->pluck('vehicle_id', 'id');
-
-        $tripIds = $tripVehicleMap->keys()->all();
-
-        $ordersByVehicle = collect();
-        if ($tripIds !== []) {
-            $ordersByVehicle = Order::query()
-                ->select('orders.id', 'orders.pickup_location_id', 'trips.vehicle_id', 'orders.created_at')
-                ->join('trips', 'orders.trip_id', '=', 'trips.id')
-                ->whereIn('trips.vehicle_id', $vehicleIds)
-                ->whereIn('orders.status', [
-                    OrderStatus::Assigned->value,
-                    OrderStatus::Sent->value,
-                ])
-                ->with(['pickupLocation' => fn ($q) => $q->select('id', 'name')])
-                ->orderBy('orders.created_at', 'desc')
-                ->get()
-                ->groupBy('vehicle_id')
-                ->map
-                ->first();
-        }
+        $ordersByVehicle = Order::query()
+            ->select('orders.id', 'orders.pickup_location_id', 'trips.vehicle_id', 'orders.created_at')
+            ->join('trips', 'orders.trip_id', '=', 'trips.id')
+            ->whereIn('trips.vehicle_id', $vehicleIds)
+            ->whereIn('orders.status', [
+                OrderStatus::Assigned->value,
+                OrderStatus::Sent->value,
+            ])
+            ->with(['pickupLocation' => fn ($q) => $q->select('id', 'name')])
+            ->orderBy('orders.created_at', 'desc')
+            ->get()
+            ->groupBy('vehicle_id')
+            ->map
+            ->first();
 
         $orderIds = $ordersByVehicle->pluck('id')->filter()->all();
 
@@ -575,15 +625,21 @@ abstract class CreatesOrderTransportCards
      */
     public static function findNearestLocation(float $lat, float $lng): array
     {
-        /** @var array<int, array<string, mixed>> $locations */
-        $locations = Cache::remember('active-locations-with-coords-v2', now()->addHour(), function (): array {
-            return Location::query()
-                ->whereNotNull('lat')
-                ->whereNotNull('lng')
-                ->where('is_active', true)
-                ->get(['id', 'name', 'code', 'lat', 'lng'])
-                ->toArray();
-        });
+        static $memoryLocations = null;
+
+        if ($memoryLocations === null) {
+            /** @var array<int, array<string, mixed>> $locations */
+            $memoryLocations = Cache::remember('active-locations-with-coords-v2', now()->addHour(), function (): array {
+                return Location::query()
+                    ->whereNotNull('lat')
+                    ->whereNotNull('lng')
+                    ->where('is_active', true)
+                    ->get(['id', 'name', 'code', 'lat', 'lng'])
+                    ->toArray();
+            });
+        }
+
+        $locations = $memoryLocations;
 
         $nearest = null;
         $minDistance = PHP_FLOAT_MAX;
@@ -1016,7 +1072,7 @@ abstract class CreatesOrderTransportCards
                         'pickup_phone' => $data['pickup_phone'] ?? null,
                         'planned_loading_at' => $data['planned_loading_at'] ?? null,
                         'status' => filled($data['vehicle_id'] ?? null)
-                            ? OrderStatus::Assigned->value
+                            ? OrderStatus::Sent->value
                             : OrderStatus::Draft->value,
                         'priority' => $data['priority'] ?? Priority::Medium->value,
                         'is_return_trip' => (bool) ($data['is_return_trip'] ?? false),
@@ -1078,16 +1134,11 @@ abstract class CreatesOrderTransportCards
                         ->first()?->location_id,
                 ]);
 
-                $status = ! empty($data['send_immediately']) ? OrderStatus::Sent->value : OrderStatus::Assigned->value;
-
                 $orderUpdates = [
                     'trip_id' => $trip->id,
-                    'status' => $status,
+                    'status' => OrderStatus::Sent->value,
+                    'sent_at' => now(),
                 ];
-
-                if (! empty($data['send_immediately'])) {
-                    $orderUpdates['sent_at'] = now();
-                }
 
                 $updated = $order->update($orderUpdates);
 
@@ -1097,12 +1148,10 @@ abstract class CreatesOrderTransportCards
 
                 static::createCheckpointsForExternalVehicle($trip, collect([$order]));
 
-                if (! empty($data['send_immediately'])) {
-                    try {
-                        app(DriverNotificationService::class)->sendOrderAssigned($order, $trip);
-                    } catch (Throwable $e) {
-                        Log::warning('Lỗi gửi push notification khi tạo đơn: '.$e->getMessage(), ['exception' => $e]);
-                    }
+                try {
+                    app(DriverNotificationService::class)->sendOrderAssigned($order, $trip);
+                } catch (Throwable $e) {
+                    Log::warning('Lỗi gửi push notification khi tạo đơn: '.$e->getMessage(), ['exception' => $e]);
                 }
 
                 if ($vehicle !== null) {
@@ -1110,6 +1159,8 @@ abstract class CreatesOrderTransportCards
                 }
             }
         });
+
+        self::clearTransportCardsCache();
 
         assert($order !== null);
 

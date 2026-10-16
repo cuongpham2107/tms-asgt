@@ -66,7 +66,6 @@ class ExportOrdersExcelAction
                             'all' => 'Tất cả (gồm hoàn thành & hủy)',
                             'active' => 'Đang xử lý (trừ hoàn thành & hủy)',
                             'draft' => 'Nháp',
-                            'assigned' => 'Đã gán xe',
                             'sent' => 'Đã gửi',
                             'in_transit' => 'Đang vận chuyển',
                             'driver_swap' => 'Đảo lái',

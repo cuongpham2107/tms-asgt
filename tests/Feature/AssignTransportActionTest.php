@@ -78,7 +78,7 @@ test('can assign vehicle and driver to order and update vehicle current driver',
     expect($order->trip)->not->toBeNull();
     expect($order->trip->vehicle_id)->toBe($vehicle->id);
     expect($order->trip->driver_id)->toBe($driver->id);
-    expect($order->status)->toBe(OrderStatus::Assigned);
+    expect($order->status)->toBe(OrderStatus::Sent);
 
     $vehicle->refresh();
     expect($vehicle->current_driver_id)->not->toBe($driver->id);
@@ -129,7 +129,7 @@ test('assigns successfully when driver has active shift', function () {
     expect($order->trip)->not->toBeNull();
     expect($order->trip->vehicle_id)->toBe($vehicle->id);
     expect($order->trip->driver_id)->toBe($driver->id);
-    expect($order->status)->toBe(OrderStatus::Assigned);
+    expect($order->status)->toBe(OrderStatus::Sent);
 });
 
 test('selecting vehicle automatically sets driver_id in form state', function () {

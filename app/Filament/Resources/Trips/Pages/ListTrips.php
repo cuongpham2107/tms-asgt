@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Trips\Pages;
 
-use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Filament\Forms\Components\OrderDateRangePicker;
 use App\Filament\Forms\Components\PillFilter;
@@ -78,14 +77,8 @@ class ListTrips extends ListRecords
 
     public array $tripStatusFilters = [
         'all' => ['label' => 'Tất cả', 'color' => 'bg-blue-600'],
-        'unsent' => ['label' => 'Chưa gửi', 'color' => 'bg-amber-500'],
         'pending' => ['label' => 'Chờ chạy', 'color' => 'bg-sky-500'],
         'running' => ['label' => 'Đang chạy', 'color' => 'bg-sky-500'],
-        'started' => ['label' => 'Đã bắt đầu', 'color' => 'bg-blue-500'],
-        'arrived_pickup' => ['label' => 'Đến lấy hàng', 'color' => 'bg-orange-500'],
-        'delivering' => ['label' => 'Đang giao', 'color' => 'bg-sky-500'],
-        'arrived_delivery' => ['label' => 'Đến giao hàng', 'color' => 'bg-amber-500'],
-        'delivered' => ['label' => 'Đã giao', 'color' => 'bg-teal-500'],
         'completed' => ['label' => 'Hoàn thành', 'color' => 'bg-emerald-500'],
         'return_trip' => ['label' => 'Chuyến không hàng', 'color' => 'bg-violet-500'],
         'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
@@ -109,6 +102,7 @@ class ListTrips extends ListRecords
         parent::mount();
 
         $this->orderPlaceFilters = Area::query()
+            ->where('is_active', true)
             ->orderBy('sort_order', 'asc')
             ->pluck('code', 'code')
             ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
@@ -131,53 +125,106 @@ class ListTrips extends ListRecords
     }
 
     /**
-     * @return array<int, array{key: string, label: string, value: int, icon: string, color: string, bg: string, border: string, filter: ?string}>
+     * @var array<string, mixed>
      */
-    public function getTripStats(): array
+    protected array $memoizedCounts = [];
+
+    protected function getMemoized(string $group, callable $callback): mixed
     {
-        $baseQuery = $this->applyActiveFilters(Trip::query(), except: 'status');
+        $key = $group.':'.md5(json_encode([
+            $this->dateFrom,
+            $this->dateTo,
+            $this->activeStatusFilter,
+            $this->vehicleOwner,
+            $this->orderType,
+            $this->activePlaceFilter,
+        ]));
 
-        $total = (clone $baseQuery)->count();
+        return $this->memoizedCounts[$key] ??= $callback();
+    }
 
-        $unsent = (clone $baseQuery)
-            ->where('status', TripStatus::Pending->value)
-            ->whereHas('orders', fn (Builder $q) => $q->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Draft->value]))
-            ->count();
+    /**
+     * @return array<string, int>
+     */
+    protected function getTripStatusCounts(): array
+    {
+        return $this->getMemoized('trip_status_counts', function (): array {
+            $baseQuery = $this->applyActiveFilters(Trip::query(), except: 'status');
 
-        $runningStatuses = [
-            TripStatus::Started->value,
-            TripStatus::ArrivedPickup->value,
-            TripStatus::Delivering->value,
-            TripStatus::ArrivedDelivery->value,
-            TripStatus::Delivered->value,
-            TripStatus::DriverSwap->value,
-            TripStatus::ReturnTrip->value,
-        ];
+            $statusCounts = (clone $baseQuery)
+                ->selectRaw('trips.status, count(*) as count')
+                ->groupBy('trips.status')
+                ->pluck('count', 'status')
+                ->map(fn ($c): int => (int) $c)
+                ->toArray();
 
-        $running = (clone $baseQuery)
-            ->whereIn('status', $runningStatuses)
-            ->count();
+            $total = (int) array_sum($statusCounts);
+            $pending = (int) ($statusCounts[TripStatus::Pending->value] ?? 0);
 
-        $completed = (clone $baseQuery)
-            ->where('status', TripStatus::Completed->value)
-            ->count();
-
-        $delayed = (clone $baseQuery)
-            ->whereIn('status', [
+            $runningStatuses = [
                 TripStatus::Started->value,
                 TripStatus::ArrivedPickup->value,
                 TripStatus::Delivering->value,
                 TripStatus::ArrivedDelivery->value,
-            ])
-            ->whereHas('orders', fn (Builder $q) => $q
-                ->where('planned_loading_at', '<', now())
-            )->count();
+                TripStatus::Delivered->value,
+                TripStatus::DriverSwap->value,
+                TripStatus::ReturnTrip->value,
+            ];
+            $running = 0;
+            foreach ($runningStatuses as $rs) {
+                $running += (int) ($statusCounts[$rs] ?? 0);
+            }
+
+            $completed = (int) ($statusCounts[TripStatus::Completed->value] ?? 0);
+            $cancelled = (int) ($statusCounts[TripStatus::Cancelled->value] ?? 0);
+            $returnTrip = (int) ($statusCounts[TripStatus::ReturnTrip->value] ?? 0);
+            $driverSwap = (int) ($statusCounts[TripStatus::DriverSwap->value] ?? 0);
+
+            $delayed = (int) (clone $baseQuery)
+                ->whereIn('trips.status', [
+                    TripStatus::Started->value,
+                    TripStatus::ArrivedPickup->value,
+                    TripStatus::Delivering->value,
+                    TripStatus::ArrivedDelivery->value,
+                ])
+                ->whereHas('orders', fn (Builder $q) => $q
+                    ->where('planned_loading_at', '<', now())
+                )->count();
+
+            // Active total excluding completed and cancelled
+            $activeTotal = $total - $completed - $cancelled;
+
+            return [
+                'total' => $total,
+                'all' => $activeTotal,
+                'pending' => $pending,
+                'running' => $running,
+                'started' => (int) ($statusCounts[TripStatus::Started->value] ?? 0),
+                'arrived_pickup' => (int) ($statusCounts[TripStatus::ArrivedPickup->value] ?? 0),
+                'delivering' => (int) ($statusCounts[TripStatus::Delivering->value] ?? 0),
+                'arrived_delivery' => (int) ($statusCounts[TripStatus::ArrivedDelivery->value] ?? 0),
+                'delivered' => (int) ($statusCounts[TripStatus::Delivered->value] ?? 0),
+                'completed' => $completed,
+                'return_trip' => $returnTrip,
+                'driver_swap' => $driverSwap,
+                'delayed' => $delayed,
+                'cancelled' => $cancelled,
+            ];
+        });
+    }
+
+    /**
+     * @return array<int, array{key: string, label: string, value: int, icon: string, color: string, bg: string, border: string, filter: ?string}>
+     */
+    public function getTripStats(): array
+    {
+        $counts = $this->getTripStatusCounts();
 
         return [
             [
                 'key' => 'all',
                 'label' => 'Tổng chuyến',
-                'value' => $total,
+                'value' => $counts['total'],
                 'icon' => 'heroicon-o-truck',
                 'color' => 'text-blue-600 dark:text-blue-400',
                 'bg' => 'bg-blue-50 dark:bg-blue-950/40',
@@ -185,19 +232,19 @@ class ListTrips extends ListRecords
                 'filter' => 'all',
             ],
             [
-                'key' => 'unsent',
-                'label' => 'Chưa gửi',
-                'value' => $unsent,
-                'icon' => 'heroicon-o-paper-airplane',
+                'key' => 'pending',
+                'label' => 'Chờ chạy',
+                'value' => $counts['pending'],
+                'icon' => 'heroicon-o-clock',
                 'color' => 'text-amber-600 dark:text-amber-400',
                 'bg' => 'bg-amber-50 dark:bg-amber-950/40',
                 'border' => 'border-amber-100 dark:border-amber-900/40',
-                'filter' => 'unsent',
+                'filter' => 'pending',
             ],
             [
                 'key' => 'running',
                 'label' => 'Đang chạy',
-                'value' => $running,
+                'value' => $counts['running'],
                 'icon' => 'heroicon-o-play-circle',
                 'color' => 'text-sky-600 dark:text-sky-400',
                 'bg' => 'bg-sky-50 dark:bg-sky-950/40',
@@ -207,7 +254,7 @@ class ListTrips extends ListRecords
             [
                 'key' => 'completed',
                 'label' => 'Hoàn thành',
-                'value' => $completed,
+                'value' => $counts['completed'],
                 'icon' => 'heroicon-o-check-circle',
                 'color' => 'text-emerald-600 dark:text-emerald-400',
                 'bg' => 'bg-emerald-50 dark:bg-emerald-950/40',
@@ -217,7 +264,7 @@ class ListTrips extends ListRecords
             [
                 'key' => 'delayed',
                 'label' => 'Trễ giờ',
-                'value' => $delayed,
+                'value' => $counts['delayed'],
                 'icon' => 'heroicon-o-exclamation-triangle',
                 'color' => 'text-rose-600 dark:text-rose-400',
                 'bg' => 'bg-rose-50 dark:bg-rose-950/40',
@@ -255,51 +302,99 @@ class ListTrips extends ListRecords
         $this->resetPage();
     }
 
-    public function getOrderTypeCount(string $key): int
-    {
-        return $this->applyActiveFilters(Trip::query(), except: 'orderType')
-            ->when(
-                $key !== 'all',
-                fn (Builder $query): Builder => $query->whereHas(
-                    'orders',
-                    fn (Builder $q) => $q->where('type', $key),
-                ),
-            )
-            ->count();
-    }
-
     public function getTripStatusCount(string $key): int
     {
-        return $this->applyActiveFilters(Trip::query(), except: 'status')
-            ->when(
-                $key !== 'all',
-                fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $key),
-                fn (Builder $query): Builder => $query->whereNotIn('status', [TripStatus::Completed->value, TripStatus::Cancelled->value]),
-            )
-            ->count();
+        $counts = $this->getTripStatusCounts();
+
+        return $counts[$key] ?? 0;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function getOrderTypeCounts(): array
+    {
+        return $this->getMemoized('order_type_counts', function (): array {
+            $base = $this->applyActiveFilters(Trip::query(), except: 'orderType');
+
+            $counts = (clone $base)
+                ->join('orders', 'trips.id', '=', 'orders.trip_id')
+                ->selectRaw('orders.type, count(distinct trips.id) as count')
+                ->groupBy('orders.type')
+                ->pluck('count', 'type')
+                ->map(fn ($c): int => (int) $c)
+                ->toArray();
+
+            $counts['all'] = (int) (clone $base)->count();
+
+            return $counts;
+        });
+    }
+
+    public function getOrderTypeCount(string $key): int
+    {
+        $counts = $this->getOrderTypeCounts();
+
+        return $counts[$key] ?? 0;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function getVehicleOwnerCounts(): array
+    {
+        return $this->getMemoized('vehicle_owner_counts', function (): array {
+            $base = $this->applyActiveFilters(Trip::query(), except: 'vehicleOwner');
+
+            $counts = (clone $base)
+                ->join('vehicles', 'trips.vehicle_id', '=', 'vehicles.id')
+                ->selectRaw('vehicles.type, count(distinct trips.id) as count')
+                ->groupBy('vehicles.type')
+                ->pluck('count', 'type')
+                ->map(fn ($c): int => (int) $c)
+                ->toArray();
+
+            $counts['all'] = (int) (clone $base)->count();
+
+            return $counts;
+        });
     }
 
     public function getVehicleOwnerCount(string $key): int
     {
-        return $this->applyActiveFilters(Trip::query(), except: 'vehicleOwner')
-            ->when(
-                $key !== 'all',
-                fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $key)),
-            )
-            ->count();
+        $counts = $this->getVehicleOwnerCounts();
+
+        return $counts[$key] ?? 0;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function getOrderPlaceCounts(): array
+    {
+        return $this->getMemoized('order_place_counts', function (): array {
+            $base = $this->applyActiveFilters(Trip::query(), except: 'place');
+
+            $counts = (clone $base)
+                ->join('orders', 'trips.id', '=', 'orders.trip_id')
+                ->join('areas', 'orders.area_id', '=', 'areas.id')
+                ->selectRaw('areas.code, count(distinct trips.id) as count')
+                ->groupBy('areas.code')
+                ->pluck('count', 'code')
+                ->map(fn ($c): int => (int) $c)
+                ->toArray();
+
+            $counts['all'] = (int) (clone $base)->count();
+
+            return $counts;
+        });
     }
 
     public function getOrderPlaceCount(string $place): int
     {
-        return $this->applyActiveFilters(Trip::query(), except: 'place')
-            ->when(
-                $place !== 'all',
-                fn (Builder $query): Builder => $query->whereHas(
-                    'orders.area',
-                    fn (Builder $aq) => $aq->where('code', $place),
-                ),
-            )
-            ->count();
+        $counts = $this->getOrderPlaceCounts();
+
+        return $counts[$place] ?? 0;
     }
 
     private function applyActiveFilters(Builder $query, string $except = ''): Builder
@@ -307,20 +402,20 @@ class ListTrips extends ListRecords
         return $query
             ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
                 if (filled($this->dateFrom) && filled($this->dateTo)) {
-                    return $query->whereBetween('started_at', [
+                    return $query->whereBetween('trips.started_at', [
                         Carbon::parse($this->dateFrom)->startOfDay(),
                         Carbon::parse($this->dateTo)->endOfDay(),
                     ]);
                 }
 
                 if (filled($this->dateFrom)) {
-                    return $query->where('started_at', '>=', Carbon::parse($this->dateFrom)->startOfDay());
+                    return $query->where('trips.started_at', '>=', Carbon::parse($this->dateFrom)->startOfDay());
                 }
 
-                return $query->where('started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
+                return $query->where('trips.started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
             })
             ->when($except !== 'status' && $this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
-            ->when($except !== 'status' && $this->activeStatusFilter === 'all', fn (Builder $query): Builder => $query->whereNotIn('status', [TripStatus::Completed->value, TripStatus::Cancelled->value]))
+            ->when($except !== 'status' && $this->activeStatusFilter === 'all', fn (Builder $query): Builder => $query->whereNotIn('trips.status', [TripStatus::Completed->value, TripStatus::Cancelled->value]))
             ->when($except !== 'vehicleOwner' && $this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
             ->when($except !== 'orderType' && $this->orderType !== 'all', fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q) => $q->where('type', $this->orderType)))
             ->when($except !== 'place' && $this->activePlaceFilter !== 'all', fn (Builder $query): Builder => $query->whereHas('orders.area', fn (Builder $q) => $q->where('code', $this->activePlaceFilter)));
@@ -346,12 +441,7 @@ class ListTrips extends ListRecords
                     ->activeValue(fn ($livewire) => $livewire->vehicleOwner)
                     ->clickAction('filterVehicleOwner'),
                 PillFilter::make('activePlaceFilter')
-                    ->options(fn (): array => Area::query()
-                        ->where('is_active', true)
-                        ->orderBy('sort_order', 'asc')
-                        ->pluck('code', 'code')
-                        ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
-                        ->toArray() + ['all' => 'Tất cả'])
+                    ->options(fn (): array => $this->orderPlaceFilters + ['all' => 'Tất cả'])
                     ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
                     ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
                     ->clickAction('filterPlace'),
@@ -502,7 +592,6 @@ class ListTrips extends ListRecords
                 'orders.area',
                 'orders.pickupLocation',
                 'orders.deliveryPoints.location',
-                'orders.tripCheckpoints.deliveryPoint.location',
             ])
             ->when(
                 $this->activeStatusFilter !== 'all',
@@ -517,17 +606,17 @@ class ListTrips extends ListRecords
             )
             ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
                 if (filled($this->dateFrom) && filled($this->dateTo)) {
-                    return $query->whereBetween('started_at', [
+                    return $query->whereBetween('trips.started_at', [
                         Carbon::parse($this->dateFrom)->startOfDay(),
                         Carbon::parse($this->dateTo)->endOfDay(),
                     ]);
                 }
 
                 if (filled($this->dateFrom)) {
-                    return $query->where('started_at', '>=', Carbon::parse($this->dateFrom)->startOfDay());
+                    return $query->where('trips.started_at', '>=', Carbon::parse($this->dateFrom)->startOfDay());
                 }
 
-                return $query->where('started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
+                return $query->where('trips.started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
             })
             ->when(filled($this->tripSearch), function (Builder $query): Builder {
                 $search = trim((string) $this->tripSearch);
@@ -549,14 +638,8 @@ class ListTrips extends ListRecords
     private function applyStatusFilterByKey(Builder $query, string $key): Builder
     {
         return match ($key) {
-            'unsent' => $query->where('status', TripStatus::Pending->value)
-                ->whereHas('orders', fn (Builder $q) => $q->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Draft->value])),
-            'pending' => $query->where('status', TripStatus::Pending->value)
-                ->where(fn (Builder $q) => $q
-                    ->where('is_empty_run', true)
-                    ->orWhereDoesntHave('orders', fn (Builder $sq) => $sq->whereIn('status', [OrderStatus::Assigned->value, OrderStatus::Draft->value]))
-                ),
-            'running' => $query->whereIn('status', [
+            'pending' => $query->where('trips.status', TripStatus::Pending->value),
+            'running' => $query->whereIn('trips.status', [
                 TripStatus::Started->value,
                 TripStatus::ArrivedPickup->value,
                 TripStatus::Delivering->value,
@@ -565,16 +648,16 @@ class ListTrips extends ListRecords
                 TripStatus::DriverSwap->value,
                 TripStatus::ReturnTrip->value,
             ]),
-            'started' => $query->where('status', TripStatus::Started->value),
-            'arrived_pickup' => $query->where('status', TripStatus::ArrivedPickup->value),
-            'delivering' => $query->where('status', TripStatus::Delivering->value),
-            'arrived_delivery' => $query->where('status', TripStatus::ArrivedDelivery->value),
-            'delivered' => $query->where('status', TripStatus::Delivered->value),
-            'driver_swap' => $query->where('status', TripStatus::DriverSwap->value),
-            'return_trip' => $query->where('status', TripStatus::ReturnTrip->value),
-            'completed' => $query->where('status', TripStatus::Completed->value),
-            'cancelled' => $query->where('status', TripStatus::Cancelled->value),
-            'delayed' => $query->whereIn('status', [
+            'started' => $query->where('trips.status', TripStatus::Started->value),
+            'arrived_pickup' => $query->where('trips.status', TripStatus::ArrivedPickup->value),
+            'delivering' => $query->where('trips.status', TripStatus::Delivering->value),
+            'arrived_delivery' => $query->where('trips.status', TripStatus::ArrivedDelivery->value),
+            'delivered' => $query->where('trips.status', TripStatus::Delivered->value),
+            'driver_swap' => $query->where('trips.status', TripStatus::DriverSwap->value),
+            'return_trip' => $query->where('trips.status', TripStatus::ReturnTrip->value),
+            'completed' => $query->where('trips.status', TripStatus::Completed->value),
+            'cancelled' => $query->where('trips.status', TripStatus::Cancelled->value),
+            'delayed' => $query->whereIn('trips.status', [
                 TripStatus::Started->value,
                 TripStatus::ArrivedPickup->value,
                 TripStatus::Delivering->value,

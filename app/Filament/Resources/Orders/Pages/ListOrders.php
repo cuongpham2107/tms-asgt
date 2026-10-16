@@ -101,10 +101,6 @@ class ListOrders extends ListRecords
             'label' => 'Nháp',
             'color' => 'bg-gray-400',
         ],
-        'assigned' => [
-            'label' => 'Đã gán xe',
-            'color' => 'bg-orange-400',
-        ],
         'sent' => [
             'label' => 'Đã gửi',
             'color' => 'bg-sky-500',
@@ -137,6 +133,7 @@ class ListOrders extends ListRecords
         parent::mount();
 
         $this->orderPlaceFilters = Area::query()
+            ->where('is_active', true)
             ->orderBy('sort_order', 'asc')
             ->pluck('code', 'code')
             ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
@@ -316,12 +313,7 @@ class ListOrders extends ListRecords
 
                 PillFilter::make('activePlaceFilter')
                     // ->labelPrefix('Khu vực')
-                    ->options(fn (): array => Area::query()
-                        ->where('is_active', true)
-                        ->orderBy('sort_order', 'asc')
-                        ->pluck('code', 'code')
-                        ->map(fn (string $code): string => $code === 'PROVINCE' ? 'Điểm khác' : $code)
-                        ->toArray() + ['all' => 'Tất cả'])
+                    ->options(fn (): array => $this->orderPlaceFilters + ['all' => 'Tất cả'])
                     ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
                     ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
                     ->clickAction('filterPlace'),
@@ -344,6 +336,25 @@ class ListOrders extends ListRecords
     }
 
     /**
+     * @var array<string, mixed>
+     */
+    protected array $memoizedCounts = [];
+
+    protected function getMemoized(string $group, callable $callback): mixed
+    {
+        $key = $group.':'.md5(json_encode([
+            $this->activeOrderTypeFilter,
+            $this->activeStatusFilter,
+            $this->activePlaceFilter,
+            $this->startDate,
+            $this->endDate,
+            $this->showMineOnly,
+        ]));
+
+        return $this->memoizedCounts[$key] ??= $callback();
+    }
+
+    /**
      * Base query with cross-filters for a specific pill type.
      * Includes all active filters EXCEPT the one being counted.
      *
@@ -355,69 +366,130 @@ class ListOrders extends ListRecords
             ->when(
                 ! in_array('status', $excludeFilters) && $this->activeStatusFilter === 'all',
                 fn (Builder $q): Builder => $q
-                    ->whereNotIn('status', [OrderStatus::Completed->value, OrderStatus::Cancelled->value]),
+                    ->whereNotIn('orders.status', [OrderStatus::Completed->value, OrderStatus::Cancelled->value]),
             )
             ->when(
                 ! in_array('type', $excludeFilters) && $this->activeOrderTypeFilter !== 'all',
-                fn (Builder $q): Builder => $q->where('type', $this->activeOrderTypeFilter),
+                fn (Builder $q): Builder => $q->where('orders.type', $this->activeOrderTypeFilter),
             )
             ->when(
                 ! in_array('status', $excludeFilters) && $this->activeStatusFilter !== 'all',
-                fn (Builder $q): Builder => $q->whereIn('status', $this->resolveStatusValues($this->activeStatusFilter)),
+                fn (Builder $q): Builder => $q->whereIn('orders.status', $this->resolveStatusValues($this->activeStatusFilter)),
             )
             ->when(
                 ! in_array('place', $excludeFilters) && $this->activePlaceFilter !== 'all',
                 fn (Builder $q): Builder => $q->whereHas('area', fn (Builder $aq): Builder => $aq->where('code', $this->activePlaceFilter)),
             )
-            ->when($this->showMineOnly, fn (Builder $q): Builder => $q->where('created_by', Auth::id()))
+            ->when($this->showMineOnly, fn (Builder $q): Builder => $q->where('orders.created_by', Auth::id()))
             ->when(filled($this->startDate) || filled($this->endDate), function (Builder $q): Builder {
                 if (filled($this->startDate) && filled($this->endDate)) {
-                    return $q->whereBetween('planned_loading_at', [
+                    return $q->whereBetween('orders.planned_loading_at', [
                         Carbon::parse($this->startDate)->startOfDay(),
                         Carbon::parse($this->endDate)->endOfDay(),
                     ]);
                 }
 
                 if (filled($this->startDate)) {
-                    return $q->where('planned_loading_at', '>=', Carbon::parse($this->startDate)->startOfDay());
+                    return $q->where('orders.planned_loading_at', '>=', Carbon::parse($this->startDate)->startOfDay());
                 }
 
-                return $q->where('planned_loading_at', '<=', Carbon::parse($this->endDate)->endOfDay());
+                return $q->where('orders.planned_loading_at', '<=', Carbon::parse($this->endDate)->endOfDay());
             });
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function getOrderTypeCounts(): array
+    {
+        return $this->getMemoized('order_type_counts', function (): array {
+            $counts = $this->crossFilteredQuery(['type'])
+                ->selectRaw('orders.type, count(*) as count')
+                ->groupBy('orders.type')
+                ->pluck('count', 'type')
+                ->toArray();
+
+            return [
+                'HHHK' => (int) ($counts['HHHK'] ?? 0),
+                'external' => (int) ($counts['external'] ?? 0),
+                'all' => (int) array_sum($counts),
+            ];
+        });
     }
 
     public function getOrderTypeCount(string $type): int
     {
-        return $this->crossFilteredQuery(['type'])
-            ->when(
-                $type !== 'all',
-                fn (Builder $query): Builder => $query->where('type', $type),
-            )
-            ->count();
+        $counts = $this->getOrderTypeCounts();
+
+        return $counts[$type] ?? 0;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function getOrderStatusCounts(): array
+    {
+        return $this->getMemoized('order_status_counts', function (): array {
+            $counts = $this->crossFilteredQuery(['status'])
+                ->selectRaw('orders.status, count(*) as count')
+                ->groupBy('orders.status')
+                ->pluck('count', 'status')
+                ->toArray();
+
+            $activeCount = 0;
+            foreach ($counts as $st => $cnt) {
+                if ($st !== OrderStatus::Completed->value && $st !== OrderStatus::Cancelled->value) {
+                    $activeCount += (int) $cnt;
+                }
+            }
+
+            return [
+                'all' => $activeCount,
+                'draft' => (int) ($counts[OrderStatus::Draft->value] ?? 0),
+                'assigned' => (int) ($counts[OrderStatus::Assigned->value] ?? 0),
+                'sent' => (int) ($counts[OrderStatus::Sent->value] ?? 0),
+                'in_transit' => (int) ($counts[OrderStatus::InTransit->value] ?? 0),
+                'driver_swap' => (int) ($counts[OrderStatus::DriverSwap->value] ?? 0),
+                'completed' => (int) ($counts[OrderStatus::Completed->value] ?? 0),
+                'cancelled' => (int) ($counts[OrderStatus::Cancelled->value] ?? 0),
+            ];
+        });
     }
 
     public function getOrderStatusCount(string $status): int
     {
-        return $this->crossFilteredQuery(['status'])
-            ->when(
-                $status !== 'all',
-                fn (Builder $query): Builder => $query->whereIn('status', $this->resolveStatusValues($status)),
-                fn (Builder $query): Builder => $query->whereNotIn('status', [OrderStatus::Completed->value, OrderStatus::Cancelled->value]),
-            )
-            ->count();
+        $counts = $this->getOrderStatusCounts();
+
+        return $counts[$status] ?? 0;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    protected function getOrderPlaceCounts(): array
+    {
+        return $this->getMemoized('order_place_counts', function (): array {
+            $base = $this->crossFilteredQuery(['place']);
+
+            $counts = (clone $base)
+                ->join('areas', 'orders.area_id', '=', 'areas.id')
+                ->selectRaw('areas.code, count(*) as count')
+                ->groupBy('areas.code')
+                ->pluck('count', 'code')
+                ->map(fn ($c): int => (int) $c)
+                ->toArray();
+
+            $counts['all'] = (int) (clone $base)->count();
+
+            return $counts;
+        });
     }
 
     public function getOrderPlaceCount(string $place): int
     {
-        return $this->crossFilteredQuery(['place'])
-            ->when(
-                $place !== 'all',
-                fn (Builder $query): Builder => $query->whereHas(
-                    'area',
-                    fn (Builder $categoryQuery): Builder => $categoryQuery->where('code', $place),
-                ),
-            )
-            ->count();
+        $counts = $this->getOrderPlaceCounts();
+
+        return $counts[$place] ?? 0;
     }
 
     protected function getTableQuery(): Builder

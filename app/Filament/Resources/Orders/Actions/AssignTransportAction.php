@@ -84,16 +84,9 @@ class AssignTransportAction extends CreatesOrderTransportCards
                             ]),
                     ]),
             ])
-            ->modalSubmitAction(fn (Action $action): Action => $action->label('Tạo'))
-            ->extraModalFooterActions(fn (Action $action): array => [
-                $action->makeModalSubmitAction('createAndSend', arguments: ['send_immediately' => true])
-                    ->label('Tạo và Gửi')
-                    ->color('primary'),
-            ])
-            ->action(function (Order $record, array $data, array $arguments): void {
-                $sendImmediately = (bool) ($arguments['send_immediately'] ?? false);
-                $status = $sendImmediately ? OrderStatus::Sent : OrderStatus::Assigned;
-                self::createTripForOrder($record, $data, $status);
+            ->modalSubmitAction(fn (Action $action): Action => $action->label('Gán và Gửi')->icon('heroicon-o-paper-airplane'))
+            ->action(function (Order $record, array $data): void {
+                self::createTripForOrder($record, $data, OrderStatus::Sent);
             });
     }
 

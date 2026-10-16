@@ -312,8 +312,8 @@ test('end vehicle with km less than current mileage is rejected', function () {
     $response->assertStatus(422);
 });
 
-// === TEST 8: End shift succeeds when driver has pending trips with assigned orders ===
-test('end shift succeeds when driver has pending trips with assigned orders', function () {
+// === TEST 8: End shift succeeds when driver has pending trips with sent orders ===
+test('end shift succeeds when driver has pending trips with sent orders', function () {
     $shift = endMakeShift($this->driver);
     $trip1 = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
     $order1 = endMakeOrder($trip1, $this->driver, $this->area, $this->customer);
@@ -329,7 +329,7 @@ test('end shift succeeds when driver has pending trips with assigned orders', fu
         'occurred_at' => now(),
     ]);
 
-    // Another trip in Pending status with only Assigned order
+    // Another trip in Pending status with only Sent order
     $trip2 = Trip::create([
         'trip_code' => 'TRIP-PENDING-1',
         'driver_id' => $this->driver->id,
@@ -342,7 +342,7 @@ test('end shift succeeds when driver has pending trips with assigned orders', fu
         'type' => OrderType::Hhhk,
         'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
-        'status' => OrderStatus::Assigned,
+        'status' => OrderStatus::Sent,
         'trip_id' => $trip2->id,
         'created_by' => $this->driver->id,
     ]);
@@ -396,7 +396,7 @@ test('driver can start a new trip when having another pending trip', function ()
         'type' => OrderType::Hhhk,
         'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
-        'status' => OrderStatus::Assigned,
+        'status' => OrderStatus::Sent,
         'trip_id' => $pendingTrip->id,
         'created_by' => $this->driver->id,
     ]);

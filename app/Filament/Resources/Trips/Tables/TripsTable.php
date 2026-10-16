@@ -12,10 +12,10 @@ use App\Filament\Resources\Trips\Actions\CancelTripAction;
 use App\Filament\Resources\Trips\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
-use App\Filament\Resources\Trips\Actions\SendTripAction;
 use App\Filament\Resources\Trips\Actions\ViewTripPhotosAction;
 use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
+use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\User;
 use App\Services\Notification\DriverNotificationService;
@@ -308,7 +308,6 @@ class TripsTable extends BaseTable
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(50)
             ->recordActions([
-                SendTripAction::make(),
                 ReassignTransportAction::make(),
                 ReassignDriverAction::make(),
                 ActionGroup::make([
@@ -360,6 +359,30 @@ class TripsTable extends BaseTable
 
                             $oldDriverId = $record->driver_id;
                             $newDriverId = $data['driver_id'] ?? null;
+
+                            $effectiveDriverId = $newDriverId ?: $record->driver_id;
+                            if ($effectiveDriverId && (empty($record->shift_id) || ($newDriverId && (int) $oldDriverId !== (int) $newDriverId))) {
+                                $shiftId = DriverShift::where('driver_id', $effectiveDriverId)
+                                    ->when($record->vehicle_id, fn ($q) => $q->where('vehicle_id', $record->vehicle_id))
+                                    ->whereNull('end_time')
+                                    ->latest('start_time')
+                                    ->value('id')
+                                    ?? DriverShift::where('driver_id', $effectiveDriverId)
+                                        ->whereNull('end_time')
+                                        ->latest('start_time')
+                                        ->value('id')
+                                    ?? DriverShift::where('driver_id', $effectiveDriverId)
+                                        ->when($record->vehicle_id, fn ($q) => $q->where('vehicle_id', $record->vehicle_id))
+                                        ->latest('start_time')
+                                        ->value('id')
+                                    ?? DriverShift::where('driver_id', $effectiveDriverId)
+                                        ->latest('start_time')
+                                        ->value('id');
+
+                                if ($shiftId) {
+                                    $data['shift_id'] = $shiftId;
+                                }
+                            }
 
                             $record->update($data);
 

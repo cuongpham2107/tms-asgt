@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\TripStatus;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -26,16 +27,14 @@ class TripKmCalculatorService
             }
         }
 
-        if ($endKmValue <= 0) {
-            $lastCheckpoint = TripCheckpoint::where('trip_id', $trip->id)
-                ->whereNotNull('km_reading')
-                ->orderByDesc('occurred_at')
-                ->orderByDesc('id')
-                ->first();
+        $lastCheckpoint = TripCheckpoint::where('trip_id', $trip->id)
+            ->whereNotNull('km_reading')
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->first();
 
-            if ($lastCheckpoint !== null && (float) $lastCheckpoint->km_reading > 0) {
-                $endKmValue = (float) $lastCheckpoint->km_reading;
-            }
+        if ($lastCheckpoint !== null && (float) $lastCheckpoint->km_reading > 0) {
+            $endKmValue = max($endKmValue, (float) $lastCheckpoint->km_reading);
         }
 
         if ($startKm <= 0 || $endKmValue <= 0) {
@@ -120,9 +119,19 @@ class TripKmCalculatorService
         $trip->total_km = $totalKm;
         $trip->total_km_loaded = $totalLoadedKm;
         $trip->total_km_empty = max(0, $totalKm - $totalLoadedKm);
+
+        if ($trip->start_km === null || (float) $trip->start_km <= 0) {
+            $trip->start_km = $startKm;
+        }
+
         if ($endKm !== null) {
             $trip->end_km = $endKm;
+        } elseif ($trip->status === TripStatus::Completed) {
+            $trip->end_km = $endKmValue;
+        } elseif ($trip->end_km !== null && $endKmValue > (float) $trip->end_km) {
+            $trip->end_km = $endKmValue;
         }
+
         $trip->save();
     }
 }

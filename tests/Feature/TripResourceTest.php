@@ -403,7 +403,7 @@ test('trips list filters by order area place correctly', function () {
         'customer_id' => $customer->id,
         'created_by' => $driver->id,
         'pickup_address' => 'Nội Bài Airport',
-        'status' => OrderStatus::Assigned,
+        'status' => OrderStatus::Sent,
     ]);
 
     $tripHni = Trip::create([
@@ -419,7 +419,7 @@ test('trips list filters by order area place correctly', function () {
         'customer_id' => $customer->id,
         'created_by' => $driver->id,
         'pickup_address' => 'Hà Nội Center',
-        'status' => OrderStatus::Assigned,
+        'status' => OrderStatus::Sent,
     ]);
 
     // When filtering by NBA
@@ -457,20 +457,20 @@ test('trip stat cards calculate correct metrics and filter by status properly', 
     $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài']);
     $customer = Customer::create(['code' => 'CUST-STAT', 'name' => 'Customer Stat']);
 
-    // 1. Unsent trip (Pending with Assigned order)
-    $unsentTrip = Trip::create([
-        'trip_code' => 'TRIP-STAT-UNSENT',
+    // 1. Pending trip (Pending with Sent order)
+    $pendingTrip = Trip::create([
+        'trip_code' => 'TRIP-STAT-PENDING',
         'vehicle_id' => $vehicle->id,
         'status' => TripStatus::Pending,
         'started_at' => now(),
     ]);
     Order::create([
-        'order_code' => 'ORD-STAT-UNSENT',
-        'trip_id' => $unsentTrip->id,
+        'order_code' => 'ORD-STAT-PENDING',
+        'trip_id' => $pendingTrip->id,
         'area_id' => $area->id,
         'customer_id' => $customer->id,
         'created_by' => $driver->id,
-        'status' => OrderStatus::Assigned,
+        'status' => OrderStatus::Sent,
     ]);
 
     // 2. Running trip (Started)
@@ -527,9 +527,9 @@ test('trip stat cards calculate correct metrics and filter by status properly', 
     expect($statsByKey->get('all')['label'])->toBe('Tổng chuyến');
     expect($statsByKey->get('all')['value'])->toBe(4);
 
-    expect($statsByKey->has('unsent'))->toBeTrue();
-    expect($statsByKey->get('unsent')['label'])->toBe('Chưa gửi');
-    expect($statsByKey->get('unsent')['value'])->toBe(1);
+    expect($statsByKey->has('pending'))->toBeTrue();
+    expect($statsByKey->get('pending')['label'])->toBe('Chờ chạy');
+    expect($statsByKey->get('pending')['value'])->toBe(1);
 
     expect($statsByKey->has('running'))->toBeTrue();
     expect($statsByKey->get('running')['label'])->toBe('Đang chạy');
@@ -543,20 +543,20 @@ test('trip stat cards calculate correct metrics and filter by status properly', 
     expect($statsByKey->get('delayed')['label'])->toBe('Trễ giờ');
     expect($statsByKey->get('delayed')['value'])->toBe(1);
 
-    // Test filtering by 'unsent'
-    $component->call('filterStatus', 'unsent')
-        ->assertCanSeeTableRecords([$unsentTrip])
+    // Test filtering by 'pending'
+    $component->call('filterStatus', 'pending')
+        ->assertCanSeeTableRecords([$pendingTrip])
         ->assertCanNotSeeTableRecords([$runningTrip, $completedTrip, $delayedTrip]);
 
     // Test filtering by 'running'
     $component->call('filterStatus', 'running')
         ->assertCanSeeTableRecords([$runningTrip, $delayedTrip])
-        ->assertCanNotSeeTableRecords([$unsentTrip, $completedTrip]);
+        ->assertCanNotSeeTableRecords([$pendingTrip, $completedTrip]);
 
     // Test filtering by 'delayed'
     $component->call('filterStatus', 'delayed')
         ->assertCanSeeTableRecords([$delayedTrip])
-        ->assertCanNotSeeTableRecords([$unsentTrip, $runningTrip, $completedTrip]);
+        ->assertCanNotSeeTableRecords([$pendingTrip, $runningTrip, $completedTrip]);
 });
 
 test('trips list handles map click and layer events without throwing MethodNotFoundException', function () {
