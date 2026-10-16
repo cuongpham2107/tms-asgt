@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Filament\Resources\Trips\TripResource;
 use App\Models\Trip;
@@ -88,13 +89,108 @@ class TripObserver
                 $body = "Tài xế {$driverName} báo sai lệch số Km: {$reportedKmFormatted} km.";
             }
 
+            $actions = [];
+            $isPending = $report ? $report->status === TripKmReportStatus::Pending : ($trip->latestPendingKmReport !== null);
+
+            if ($isPending) {
+                try {
+                    $resolveUrl = TripResource::getUrl('index', [
+                        'tableAction' => 'resolve_km_report',
+                        'tableActionRecord' => $trip->getKey(),
+                        'tripSearch' => $trip->trip_code,
+                        'activeStatusFilter' => 'all',
+                        'orderType' => 'all',
+                        'activePlaceFilter' => 'all',
+                        'vehicleOwner' => 'all',
+                    ]);
+
+                    if ($resolveUrl) {
+                        $actions[] = Action::make('resolve_km_report')
+                            ->label('Xử lý báo sai Km')
+                            ->icon('heroicon-o-exclamation-triangle')
+                            ->color('warning')
+                            ->button()
+                            ->url($resolveUrl)
+                            ->markAsRead();
+                    }
+
+                    $timelineUrl = TripResource::getUrl('timeline', ['record' => $trip]);
+                    if ($timelineUrl) {
+                        $actions[] = Action::make('view')
+                            ->label('Xem chi tiết')
+                            ->url($timelineUrl)
+                            ->markAsRead();
+                    }
+                } catch (Throwable) {
+                }
+            }
+
             return [
                 'title' => $title,
                 'body' => $body,
                 'icon' => 'heroicon-o-exclamation-triangle',
                 'status' => 'warning',
+                'actions' => $actions,
             ];
         });
+    }
+
+    /**
+     * Dọn dẹp / bỏ các action (Xử lý báo sai Km & Xem chi tiết) trong thông báo khi báo sai Km đã được xử lý.
+     */
+    public function clearKmReportNotificationActions(Trip $trip, ?TripKmReport $report = null): void
+    {
+        $tripId = (string) $trip->getKey();
+
+        $notifications = DB::table('notifications')
+            ->where('data', 'like', '%resolve_km_report%')
+            ->where(function ($query) use ($tripId) {
+                $query->where('data', 'like', "%tableActionRecord={$tripId}%")
+                    ->orWhere('data', 'like', "%tableActionRecord%{$tripId}%")
+                    ->orWhere('data', 'like', "%/trips/{$tripId}/%")
+                    ->orWhere('data', 'like', "%/trips/{$tripId}?");
+            })
+            ->get();
+
+        if ($notifications->isEmpty()) {
+            return;
+        }
+
+        $reportStatus = $report?->status ?? $trip->kmReports()->latest('id')->value('status');
+
+        foreach ($notifications as $notificationRecord) {
+            $data = json_decode($notificationRecord->data, true);
+            if (! is_array($data)) {
+                continue;
+            }
+
+            // Xóa bỏ toàn bộ action trong notification
+            $data['actions'] = [];
+
+            if ($reportStatus === TripKmReportStatus::Resolved) {
+                if (! str_contains($data['body'] ?? '', '[Đã')) {
+                    $data['body'] = rtrim($data['body'] ?? '').' [Đã duyệt điều chỉnh]';
+                }
+                $data['status'] = 'success';
+                $data['icon'] = 'heroicon-o-check-circle';
+                $data['iconColor'] = 'success';
+            } elseif ($reportStatus === TripKmReportStatus::Rejected) {
+                if (! str_contains($data['body'] ?? '', '[Đã')) {
+                    $data['body'] = rtrim($data['body'] ?? '').' [Đã từ chối]';
+                }
+                $data['status'] = 'danger';
+                $data['icon'] = 'heroicon-o-x-circle';
+                $data['iconColor'] = 'danger';
+            }
+
+            DB::table('notifications')
+                ->where('id', $notificationRecord->id)
+                ->update([
+                    'data' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'read_at' => $notificationRecord->read_at ?? now(),
+                    'updated_at' => now(),
+                ]);
+        }
     }
 
     /**
@@ -124,11 +220,11 @@ class TripObserver
     /**
      * Gửi notification chung tới toàn bộ user kèm timeline action.
      *
-     * @param  callable(Trip): array{title: string, body: string, icon: string, status: string}  $contentResolver
+     * @param  callable(Trip): array{title: string, body: string, icon: string, status: string, actions?: array}  $contentResolver
      */
     protected function sendTripNotification(Trip $trip, callable $contentResolver): void
     {
-        DB::afterCommit(function () use ($trip, $contentResolver): void {
+        $send = function () use ($trip, $contentResolver): void {
             $trip->loadMissing(['driver', 'vehicle']);
 
             $users = User::all();
@@ -141,16 +237,20 @@ class TripObserver
 
             $actions = [];
 
-            try {
-                $timelineUrl = TripResource::getUrl('timeline', ['record' => $trip]);
-                if ($timelineUrl) {
-                    $actions[] = Action::make('view')
-                        ->label('Xem chi tiết')
-                        ->url($timelineUrl)
-                        ->markAsRead();
+            if (! empty($content['actions'])) {
+                $actions = $content['actions'];
+            } else {
+                try {
+                    $timelineUrl = TripResource::getUrl('timeline', ['record' => $trip]);
+                    if ($timelineUrl) {
+                        $actions[] = Action::make('view')
+                            ->label('Xem chi tiết')
+                            ->url($timelineUrl)
+                            ->markAsRead();
+                    }
+                } catch (Throwable) {
+                    // Route may not be resolvable in non-HTTP/isolated test contexts
                 }
-            } catch (Throwable) {
-                // Route may not be resolvable in non-HTTP/isolated test contexts
             }
 
             $notification = Notification::make()
@@ -171,6 +271,12 @@ class TripObserver
             } catch (Throwable) {
                 // Continue gracefully if broadcasting server is not reachable
             }
-        });
+        };
+
+        if (app()->runningUnitTests()) {
+            $send();
+        } else {
+            DB::afterCommit($send);
+        }
     }
 }

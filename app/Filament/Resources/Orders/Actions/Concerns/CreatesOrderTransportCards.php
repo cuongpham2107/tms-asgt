@@ -1171,7 +1171,7 @@ abstract class CreatesOrderTransportCards
     {
         $vehicle = $trip->vehicle;
 
-        if (! static::isRentVehicle($vehicle)) {
+        if (! static::isRentVehicle($vehicle) || filled($trip->driver_id)) {
             return;
         }
 

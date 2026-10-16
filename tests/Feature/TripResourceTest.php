@@ -3,6 +3,7 @@
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
+use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
@@ -18,6 +19,7 @@ use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -342,25 +344,101 @@ test('trips list hides completed and cancelled trips by default and only shows t
         'started_at' => now()->subHours(3),
     ]);
 
-    // Default view: shows pending, hides completed & cancelled
+    $deliveredTrip = Trip::create([
+        'trip_code' => 'TRIP-DELIVERED-HIDDEN',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Delivered,
+        'started_at' => now()->subHours(1),
+    ]);
+
+    // Default view: shows pending, hides completed, delivered & cancelled
     Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$pendingTrip])
-        ->assertCanNotSeeTableRecords([$completedTrip, $cancelledTrip]);
+        ->assertCanNotSeeTableRecords([$completedTrip, $deliveredTrip, $cancelledTrip]);
 
-    // Filter by completed: shows completed, hides pending & cancelled
+    // Filter by running: shows running/pending-running, does not show delivered
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])
+        ->call('filterStatus', 'running')
+        ->assertStatus(200)
+        ->assertCanNotSeeTableRecords([$deliveredTrip, $completedTrip, $cancelledTrip]);
+
+    // Filter by completed: shows completed & delivered, hides pending & cancelled
     Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])
         ->call('filterStatus', 'completed')
         ->assertStatus(200)
-        ->assertCanSeeTableRecords([$completedTrip])
+        ->assertCanSeeTableRecords([$completedTrip, $deliveredTrip])
         ->assertCanNotSeeTableRecords([$pendingTrip, $cancelledTrip]);
 
-    // Filter by cancelled: shows cancelled, hides pending & completed
+    // Filter by cancelled: shows cancelled, hides pending, delivered & completed
     Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])
         ->call('filterStatus', 'cancelled')
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$cancelledTrip])
-        ->assertCanNotSeeTableRecords([$pendingTrip, $completedTrip]);
+        ->assertCanNotSeeTableRecords([$pendingTrip, $completedTrip, $deliveredTrip]);
+});
+
+test('trips list filters by km_report status correctly', function () {
+    $vehicle = Vehicle::create([
+        'plate_number' => '51P-555.55',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $driver = User::factory()->create();
+
+    $kmReportTrip = Trip::create([
+        'trip_code' => 'TRIP-KM-REPORT',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now(),
+        'is_paused' => true,
+    ]);
+
+    TripKmReport::create([
+        'trip_id' => $kmReportTrip->id,
+        'driver_id' => $driver->id,
+        'vehicle_id' => $vehicle->id,
+        'reported_km' => 150.0,
+        'system_km' => 100.0,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    $normalTrip = Trip::create([
+        'trip_code' => 'TRIP-NORMAL',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now(),
+    ]);
+
+    $resolvedTrip = Trip::create([
+        'trip_code' => 'TRIP-RESOLVED',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now(),
+    ]);
+
+    TripKmReport::create([
+        'trip_id' => $resolvedTrip->id,
+        'driver_id' => $driver->id,
+        'vehicle_id' => $vehicle->id,
+        'reported_km' => 120.0,
+        'system_km' => 100.0,
+        'status' => TripKmReportStatus::Resolved,
+    ]);
+
+    $component = Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all']);
+
+    expect($component->instance()->getTripStatusCount('km_report'))->toBe(1);
+
+    $component
+        ->call('filterStatus', 'km_report')
+        ->assertStatus(200)
+        ->assertCanSeeTableRecords([$kmReportTrip])
+        ->assertCanNotSeeTableRecords([$normalTrip, $resolvedTrip]);
 });
 
 test('trips list filters by order area place correctly', function () {
@@ -539,9 +617,7 @@ test('trip stat cards calculate correct metrics and filter by status properly', 
     expect($statsByKey->get('completed')['label'])->toBe('Hoàn thành');
     expect($statsByKey->get('completed')['value'])->toBe(1);
 
-    expect($statsByKey->has('delayed'))->toBeTrue();
-    expect($statsByKey->get('delayed')['label'])->toBe('Trễ giờ');
-    expect($statsByKey->get('delayed')['value'])->toBe(1);
+    expect($statsByKey->has('delayed'))->toBeFalse();
 
     // Test filtering by 'pending'
     $component->call('filterStatus', 'pending')
@@ -552,11 +628,6 @@ test('trip stat cards calculate correct metrics and filter by status properly', 
     $component->call('filterStatus', 'running')
         ->assertCanSeeTableRecords([$runningTrip, $delayedTrip])
         ->assertCanNotSeeTableRecords([$pendingTrip, $completedTrip]);
-
-    // Test filtering by 'delayed'
-    $component->call('filterStatus', 'delayed')
-        ->assertCanSeeTableRecords([$delayedTrip])
-        ->assertCanNotSeeTableRecords([$pendingTrip, $runningTrip, $completedTrip]);
 });
 
 test('trips list handles map click and layer events without throwing MethodNotFoundException', function () {
@@ -566,4 +637,43 @@ test('trips list handles map click and layer events without throwing MethodNotFo
         ->call('handleLayerUpdated', 'layer-123', ['lat' => 10.8231, 'lng' => 106.6297])
         ->assertStatus(200)
         ->assertHasNoErrors();
+});
+
+test('trips table does not have manual recalculate_km action', function () {
+    Livewire::test(ListTrips::class)
+        ->assertTableActionDoesNotExist('recalculate_km');
+});
+
+test('ListTrips resets filters and displays target trip when tableActionRecord is present', function () {
+    $vehicle = Vehicle::create([
+        'plate_number' => '29C-999.99',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-RESOLVE-DIRECT',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subDays(5),
+    ]);
+
+    Livewire::withQueryParams([
+        'tableAction' => 'resolve_km_report',
+        'tableActionRecord' => (string) $trip->id,
+        'tripSearch' => $trip->trip_code,
+        'activeStatusFilter' => 'all',
+        'orderType' => 'all',
+        'activePlaceFilter' => 'all',
+        'vehicleOwner' => 'all',
+    ])
+        ->test(ListTrips::class)
+        ->assertSet('activeStatusFilter', 'all')
+        ->assertSet('orderType', 'all')
+        ->assertSet('activePlaceFilter', 'all')
+        ->assertSet('tripSearch', $trip->trip_code)
+        ->assertCanSeeTableRecords([$trip]);
 });

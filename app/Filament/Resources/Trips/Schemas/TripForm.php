@@ -35,13 +35,13 @@ class TripForm
                         TextInput::make('trip_code')
                             ->label('Mã chuyến')
                             ->prefixIcon(Heroicon::OutlinedIdentification)
-                            ->columnSpan(['default' => 1, 'sm' => fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent ? 4 : 3])
+                            ->columnSpan(['default' => 1, 'sm' => 3])
                             ->disabled(),
                         Select::make('status')
                             ->label('Trạng thái')
                             ->prefixIcon(Heroicon::OutlinedSignal)
                             ->options(TripStatus::class)
-                            ->columnSpan(['default' => 1, 'sm' => fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent ? 4 : 3]),
+                            ->columnSpan(['default' => 1, 'sm' => 3]),
                         Select::make('vehicle_id')
                             ->label('Phương tiện')
                             ->relationship('vehicle', 'plate_number')
@@ -49,10 +49,9 @@ class TripForm
                             ->disabled()
                             ->searchable()
                             ->native(false)
-                            ->columnSpan(['default' => 1, 'sm' => fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent ? 4 : 3]),
+                            ->columnSpan(['default' => 1, 'sm' => 3]),
                         Select::make('driver_id')
                             ->label('Lái xe')
-                            ->hidden(fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent)
                             ->options(fn (): array => User::query()
                                 ->whereHas('roles', fn ($q) => $q->where('name', 'driver'))
                                 ->pluck('name', 'id')
@@ -61,6 +60,8 @@ class TripForm
                             ->prefixIcon(Heroicon::OutlinedUser)
                             ->searchable()
                             ->native(false)
+                            ->nullable()
+                            ->placeholder('Chọn lái xe')
                             ->columnSpan(['default' => 1, 'sm' => 3]),
                     ]),
                 Section::make('Km & Thời gian')
@@ -169,11 +170,11 @@ class TripForm
                     ->columnSpanFull()
                     ->hidden(fn (?Model $record) => $record?->is_empty_run || $record?->checkpoints->isEmpty())
                     ->schema([
-                        // Repeater cho xe thuê ngoài (4 cột: Loại, Đơn hàng, Giờ, Điểm giao)
+                        // Repeater cho xe thuê ngoài không có lái xe (4 cột: Loại, Đơn hàng, Giờ, Điểm giao)
                         Repeater::make('checkpoints_rent')
                             ->relationship('checkpoints')
                             ->label('Danh sách mốc hành trình')
-                            ->visible(fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent)
+                            ->visible(fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent && blank($record?->driver_id))
                             ->table([
                                 TableColumn::make('Loại')->width('220px'),
                                 TableColumn::make('Đơn hàng')->width('180px'),
@@ -246,11 +247,11 @@ class TripForm
                             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->columnSpanFull(),
 
-                        // Repeater cho xe công ty (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm giao)
+                        // Repeater cho xe công ty hoặc xe thuê ngoài có tài xế (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm giao)
                         Repeater::make('checkpoints')
                             ->relationship('checkpoints')
                             ->label('Danh sách mốc hành trình')
-                            ->visible(fn (?Model $record) => $record?->vehicle?->type !== VehicleOwnerType::Rent)
+                            ->visible(fn (?Model $record) => $record?->vehicle?->type !== VehicleOwnerType::Rent || filled($record?->driver_id))
                             ->table([
                                 TableColumn::make('Loại')->width('160px'),
                                 TableColumn::make('Đơn hàng')->width('110px'),

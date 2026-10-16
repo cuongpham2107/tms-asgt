@@ -7,6 +7,8 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Filament\Resources\Trips\Actions\ResolveKmReportAction;
+use App\Filament\Resources\Trips\TripResource;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -16,6 +18,7 @@ use App\Models\Vehicle;
 use App\Services\TripKmAdjustmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
@@ -404,4 +407,99 @@ test('admin rejecting km report unpauses trip and allows driver to proceed', fun
     expect($this->trip->is_paused)->toBeFalse()
         ->and($this->trip->isPaused())->toBeFalse()
         ->and($this->trip->paused_reason)->toBeNull();
+});
+
+test('ResolveKmReportAction is configured and TripObserver sends direct resolve action url in notification', function () {
+    $action = ResolveKmReportAction::make();
+    expect($action->getName())->toBe('resolve_km_report');
+
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 100090,
+        'system_km' => 100000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    $expectedUrl = TripResource::getUrl('index', [
+        'tableAction' => 'resolve_km_report',
+        'tableActionRecord' => $this->trip->getKey(),
+        'tripSearch' => $this->trip->trip_code,
+        'activeStatusFilter' => 'all',
+        'orderType' => 'all',
+        'activePlaceFilter' => 'all',
+        'vehicleOwner' => 'all',
+    ]);
+
+    expect($expectedUrl)->toContain('tableAction=resolve_km_report')
+        ->and($expectedUrl)->toContain('tableActionRecord='.$this->trip->getKey())
+        ->and($expectedUrl)->toContain('activeStatusFilter=all')
+        ->and($expectedUrl)->toContain('orderType=all');
+});
+
+test('notification actions are cleared when km discrepancy report is resolved', function () {
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108050,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    $notification = DB::table('notifications')
+        ->where('data', 'like', '%resolve_km_report%')
+        ->where('data', 'like', '%tableActionRecord='.$this->trip->id.'%')
+        ->first();
+
+    expect($notification)->not->toBeNull();
+    $data = json_decode($notification->data, true);
+    expect($data['actions'])->toHaveCount(2);
+
+    app(TripKmAdjustmentService::class)->resolveReport(
+        $report,
+        108050,
+        null,
+        'Đã kiểm tra taplo đúng',
+        $this->admin->id
+    );
+
+    $notificationAfterResolve = DB::table('notifications')->where('id', $notification->id)->first();
+    $dataResolved = json_decode($notificationAfterResolve->data, true);
+
+    expect($dataResolved['actions'])->toBeEmpty()
+        ->and($dataResolved['status'])->toBe('success')
+        ->and($dataResolved['body'])->toContain('[Đã duyệt điều chỉnh]');
+});
+
+test('notification actions are cleared when km discrepancy report is rejected', function () {
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108050,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    $notification = DB::table('notifications')
+        ->where('data', 'like', '%resolve_km_report%')
+        ->where('data', 'like', '%tableActionRecord='.$this->trip->id.'%')
+        ->first();
+
+    expect($notification)->not->toBeNull();
+
+    app(TripKmAdjustmentService::class)->rejectReport(
+        $report,
+        'Không đúng taplo',
+        $this->admin->id
+    );
+
+    $notificationAfterReject = DB::table('notifications')->where('id', $notification->id)->first();
+    $dataRejected = json_decode($notificationAfterReject->data, true);
+
+    expect($dataRejected['actions'])->toBeEmpty()
+        ->and($dataRejected['status'])->toBe('danger')
+        ->and($dataRejected['body'])->toContain('[Đã từ chối]');
 });

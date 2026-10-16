@@ -23,6 +23,10 @@ class TripKmReportObserver
         if ($report->wasChanged('reported_km') && $report->status === TripKmReportStatus::Pending) {
             $this->notify($report);
         }
+
+        if ($report->wasChanged('status') && in_array($report->status, [TripKmReportStatus::Resolved, TripKmReportStatus::Rejected], true)) {
+            $this->clearNotificationActions($report);
+        }
     }
 
     /**
@@ -34,6 +38,18 @@ class TripKmReportObserver
 
         if ($report->trip) {
             app(TripObserver::class)->notifyUsersTripKmReported($report->trip, $report);
+        }
+    }
+
+    /**
+     * Xóa các action trong notification khi báo sai Km đã được xử lý.
+     */
+    protected function clearNotificationActions(TripKmReport $report): void
+    {
+        $report->loadMissing('trip');
+
+        if ($report->trip) {
+            app(TripObserver::class)->clearKmReportNotificationActions($report->trip, $report);
         }
     }
 }

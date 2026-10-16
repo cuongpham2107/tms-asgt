@@ -7,15 +7,14 @@ use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Filament\Traits\InteractsWithPageTable;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
-use Illuminate\Database\Eloquent\Builder;
 
 class TripStatsOverviewWidget extends StatsOverviewWidget
 {
     use InteractsWithPageTable;
 
-    protected int|string|array $columnSpan = 5;
+    protected int|string|array $columnSpan = 4;
 
-    protected int|array|null $columns = 5;
+    protected int|array|null $columns = 4;
 
     protected function getTablePage(): string
     {
@@ -31,7 +30,14 @@ class TripStatsOverviewWidget extends StatsOverviewWidget
         $activeStatuses = TripStatus::activeStatuses();
 
         $running = (clone $baseQuery)
-            ->whereIn('status', array_map(fn ($s) => $s->value, $activeStatuses))
+            ->whereIn('status', [
+                TripStatus::Started->value,
+                TripStatus::ArrivedPickup->value,
+                TripStatus::Delivering->value,
+                TripStatus::ArrivedDelivery->value,
+                TripStatus::DriverSwap->value,
+                TripStatus::ReturnTrip->value,
+            ])
             ->count();
 
         $pending = (clone $baseQuery)
@@ -39,19 +45,8 @@ class TripStatsOverviewWidget extends StatsOverviewWidget
             ->count();
 
         $completed = (clone $baseQuery)
-            ->where('status', TripStatus::Completed->value)
+            ->whereIn('status', [TripStatus::Completed->value, TripStatus::Delivered->value])
             ->count();
-
-        $delayed = (clone $baseQuery)
-            ->whereIn('status', [
-                TripStatus::Started->value,
-                TripStatus::ArrivedPickup->value,
-                TripStatus::Delivering->value,
-                TripStatus::ArrivedDelivery->value,
-            ])
-            ->whereHas('orders', fn (Builder $q) => $q
-                ->where('planned_loading_at', '<', now())
-            )->count();
 
         return [
             Stat::make('Tổng chuyến', $total)
@@ -69,10 +64,6 @@ class TripStatsOverviewWidget extends StatsOverviewWidget
             Stat::make('Hoàn thành', $completed)
                 ->icon('heroicon-o-check-circle')
                 ->color('success'),
-
-            Stat::make('Trễ giờ', $delayed)
-                ->icon('heroicon-o-exclamation-triangle')
-                ->color('danger'),
         ];
     }
 }

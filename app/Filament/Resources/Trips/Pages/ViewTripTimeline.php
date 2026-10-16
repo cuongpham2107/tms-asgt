@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Trips\Pages;
 
+use App\Filament\Resources\Trips\Actions\ResolveKmReportAction;
 use App\Filament\Resources\Trips\TripResource;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -20,6 +21,13 @@ class ViewTripTimeline extends Page
     protected static ?string $breadcrumb = 'Hành trình';
 
     protected string $view = 'filament.resources.trips.pages.view-trip-timeline';
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            ResolveKmReportAction::make(),
+        ];
+    }
 
     public function mount(int|string $record): void
     {

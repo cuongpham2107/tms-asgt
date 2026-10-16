@@ -21,7 +21,7 @@
     @php
         $stats = $this->getTripStats();
     @endphp
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-4">
         @foreach ($stats as $stat)
             <div
                 @if (!empty($stat['filter']))
