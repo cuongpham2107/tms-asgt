@@ -269,3 +269,24 @@ test('legacy swap without checkpoint is ordered by its UTC created_at converted 
         [1090.0, 1300.0, $this->drivers['D']->id],
     ]);
 });
+
+test('editing one handover row updates its companion rows of the same handover', function () {
+    $secondOrder = Order::create([
+        'order_code' => 'ORD-SWAP5-B',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->order->area_id,
+        'customer_id' => $this->order->customer_id,
+        'trip_id' => $this->trip->id,
+        'status' => OrderStatus::Completed,
+        'created_by' => $this->drivers['A']->id,
+    ]);
+
+    $companion = TripCheckpoint::create([
+        ...$this->handovers['B->C']->only(['trip_id', 'driver_id', 'shift_id', 'checkpoint_type', 'km_reading', 'occurred_at']),
+        'order_id' => $secondOrder->id,
+    ]);
+
+    $this->handovers['B->C']->update(['km_reading' => 1105]);
+
+    expect((float) $companion->fresh()->km_reading)->toBe(1105.0);
+});

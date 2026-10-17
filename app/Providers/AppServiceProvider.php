@@ -6,8 +6,10 @@ use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\Plugins\ActivitylogPlugin;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
 use App\Observers\OrderObserver;
+use App\Observers\TripCheckpointObserver;
 use App\Observers\TripKmReportObserver;
 use App\Observers\TripObserver;
 use Dedoc\Scramble\Scramble;
@@ -47,6 +49,7 @@ class AppServiceProvider extends ServiceProvider
         Order::observe(OrderObserver::class);
         Trip::observe(TripObserver::class);
         TripKmReport::observe(TripKmReportObserver::class);
+        TripCheckpoint::observe(TripCheckpointObserver::class);
 
         set_error_handler(function ($severity, $message, $file) {
             if (str_contains($message, 'touch(): Utime failed') || (str_contains($file, 'BladeCompiler.php') && str_contains($message, 'touch()'))) {
