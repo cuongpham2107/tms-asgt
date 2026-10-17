@@ -9,7 +9,6 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
-use App\Filament\Resources\Trips\Tables\TripsTable;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
@@ -19,6 +18,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\TripKmAdjustmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
@@ -74,13 +74,11 @@ beforeEach(function () {
 });
 
 /**
- * Helper to invoke private static recalculateKm on TripsTable.
+ * Helper to run the same recalculation the trip edit action performs.
  */
 function callTripsTableRecalculateKm(Trip $trip): void
 {
-    $method = new ReflectionMethod(TripsTable::class, 'recalculateKm');
-    $method->setAccessible(true);
-    $method->invoke(null, $trip);
+    app(TripKmAdjustmentService::class)->recalculateAfterEdit($trip->refresh());
 }
 
 test('Scenario 1: Driver phone breaks mid-trip, admin completes trip on web and recalculates km', function () {

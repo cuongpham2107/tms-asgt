@@ -6,6 +6,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
@@ -14,6 +15,8 @@ use App\Models\Vehicle;
 use App\Services\TripKmAdjustmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -23,6 +26,10 @@ beforeEach(function () {
     $this->driver = User::factory()->create();
     $this->driver->assignRole($role);
     $this->admin = User::factory()->create();
+    foreach (['ViewAny:Trip', 'View:Trip', 'Update:Trip'] as $permission) {
+        $this->admin->givePermissionTo(Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']));
+    }
+    $this->actingAs($this->admin);
 
     $this->vehicle = Vehicle::create([
         'plate_number' => 'EDIT-001',
@@ -122,4 +129,51 @@ test('closing pending reports after an edit resolves them and unpauses the trip'
         ->and($report->fresh()->resolved_by)->toBe($this->admin->id)
         ->and($report->fresh()->admin_note)->toBe('Đã sửa km qua form sửa chuyến')
         ->and($this->oldTrip->fresh()->is_paused)->toBeFalse();
+});
+
+function editTripTable()
+{
+    return Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all']);
+}
+
+test('editing a trip without km changes does not recalculate', function () {
+    $this->oldTrip->updateQuietly(['total_km' => 999]);
+
+    editTripTable()->callTableAction('edit', $this->oldTrip, data: ['trip_code' => 'TRIP-OLD-RENAMED'])
+        ->assertHasNoTableActionErrors();
+
+    expect((float) $this->oldTrip->fresh()->total_km)->toBe(999.0)
+        ->and((float) $this->vehicle->fresh()->current_mileage)->toBe(102000.0);
+});
+
+test('editing checkpoint km of an old trip recalculates it without touching vehicle km', function () {
+    editTripTable()->mountTableAction('edit', $this->oldTrip)
+        ->fillForm(['checkpoints.record-'.$this->deliveryCheckpoint->id.'.km_reading' => 100150])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect((float) $this->oldTrip->fresh()->total_km)->toBe(150.0)
+        ->and((float) $this->vehicle->fresh()->current_mileage)->toBe(102000.0);
+});
+
+test('editing km closes a pending km report', function () {
+    $report = TripKmReport::create([
+        'trip_id' => $this->oldTrip->id, 'driver_id' => $this->driver->id, 'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 100150, 'system_km' => 100120, 'status' => TripKmReportStatus::Pending,
+    ]);
+
+    editTripTable()->mountTableAction('edit', $this->oldTrip)
+        ->fillForm(['checkpoints.record-'.$this->deliveryCheckpoint->id.'.km_reading' => 100150])
+        ->callMountedTableAction();
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Resolved);
+});
+
+test('start and end km inputs are read-only and not saved from the form', function () {
+    editTripTable()->mountTableAction('edit', $this->oldTrip)
+        ->assertTableActionDataSet(['start_km' => 100000.0])
+        ->fillForm(['end_km' => 555555])
+        ->callMountedTableAction();
+
+    expect((float) $this->oldTrip->fresh()->end_km)->toBe(100120.0);
 });

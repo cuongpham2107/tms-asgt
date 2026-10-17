@@ -21,9 +21,8 @@ use App\Models\Trip;
 use App\Models\User;
 use App\Services\Notification\DriverNotificationService;
 use App\Services\OsrmService;
-use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\TripCheckpointOsmValidationService;
-use App\Services\TripKmCalculatorService;
+use App\Services\TripKmAdjustmentService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
@@ -41,6 +40,7 @@ use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
 
@@ -48,6 +48,8 @@ class TripsTable extends BaseTable
 {
     public static function configure(Table $table): Table
     {
+        $kmSnapshotBeforeEdit = null;
+
         return parent::applyDefaults($table)
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with([
@@ -333,6 +335,9 @@ class TripsTable extends BaseTable
                             return $data;
                         })
                         ->schema(fn (Schema $schema): Schema => TripForm::configure($schema))
+                        ->before(function (Trip $record) use (&$kmSnapshotBeforeEdit): void {
+                            $kmSnapshotBeforeEdit = app(TripKmAdjustmentService::class)->kmSnapshot($record);
+                        })
                         ->using(function (Model $record, array $data): Model {
                             $record->loadMissing(['vehicle', 'orders']);
 
@@ -398,8 +403,15 @@ class TripsTable extends BaseTable
 
                             return $record;
                         })
-                        ->after(function (Trip $record): void {
-                            self::recalculateKm($record);
+                        ->after(function (Trip $record) use (&$kmSnapshotBeforeEdit): void {
+                            $service = app(TripKmAdjustmentService::class);
+
+                            if ($kmSnapshotBeforeEdit === $service->kmSnapshot($record)) {
+                                return;
+                            }
+
+                            $service->recalculateAfterEdit($record);
+                            $service->closePendingReportsAfterEdit($record, Auth::id());
                         }),
 
                     ResolveKmReportAction::make(),
@@ -838,18 +850,5 @@ class TripsTable extends BaseTable
             'customStyles' => '',
             'customScripts' => '',
         ];
-    }
-
-    private static function recalculateKm(Trip $record): void
-    {
-        $record->refresh();
-        app(TripKmCalculatorService::class)->calculate($record);
-        $record->refresh();
-
-        if ($record->end_km > 0 && $record->vehicle) {
-            $record->vehicle->update(['current_mileage' => $record->end_km]);
-        }
-
-        app(ShiftKmCalculatorService::class)->calculateForTrip($record);
     }
 }

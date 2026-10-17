@@ -97,6 +97,8 @@ class TripForm
                             ->columnSpan(['default' => 1, 'sm' => 6]),
                         TextInput::make('start_km')
                             ->label('Km bắt đầu')
+                            ->disabled()
+                            ->helperText('Tự lấy từ km mốc sớm nhất')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
@@ -118,6 +120,8 @@ class TripForm
                             }),
                         TextInput::make('end_km')
                             ->label('Km kết thúc')
+                            ->disabled()
+                            ->helperText('Tự lấy từ km mốc muộn nhất')
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
