@@ -15,6 +15,7 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\TripKmSplitService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
@@ -89,7 +90,7 @@ class ReassignDriverAction
                         $handover = static::latestHandoverCheckpoint($record);
 
                         return $handover
-                            ? number_format((float) $handover->km_reading, 1, ',', '.').' km lúc '.$handover->occurred_at->format('H:i d/m')
+                            ? number_format((float) $handover->km_reading, 1, ',', '.').' km lúc '.($handover->occurred_at?->format('H:i d/m') ?? '')
                             : 'Chưa có mốc bàn giao';
                     }),
                 Select::make('reason')
@@ -190,7 +191,7 @@ class ReassignDriverAction
                     Notification::make()
                         ->danger()
                         ->title('Chuyến chưa có mốc bàn giao')
-                        ->body('Hãy dùng chức năng Đảo lái để ghi km bàn giao trước.')
+                        ->body('Tài xế cần bấm "Bàn giao chuyến chưa xong" trên app để ghi km bàn giao trước.')
                         ->send();
 
                     return;
@@ -203,6 +204,15 @@ class ReassignDriverAction
                     ->pluck('id');
 
                 $existingSwap = DriverSwap::where('trip_id', $record->id)->whereIn('checkpoint_id', $companionIds)->first();
+
+                if ($existingSwap === null) {
+                    $unlinkedId = array_search(true, array_map(
+                        fn (int $checkpointId): bool => $companionIds->contains($checkpointId),
+                        TripKmSplitService::matchUnlinkedSwaps($record),
+                    ), true);
+                    $existingSwap = $unlinkedId === false ? null : DriverSwap::find($unlinkedId);
+                }
+
                 $receiverStarted = $existingSwap !== null && TripCheckpoint::where('trip_id', $record->id)
                     ->where('driver_id', $existingSwap->to_driver_id)
                     ->where('occurred_at', '>', $handover->occurred_at)
@@ -212,7 +222,7 @@ class ReassignDriverAction
                     Notification::make()
                         ->danger()
                         ->title('Chuyến chưa có mốc bàn giao mới')
-                        ->body('Hãy dùng chức năng Đảo lái để ghi km bàn giao trước.')
+                        ->body('Tài xế cần bấm "Bàn giao chuyến chưa xong" trên app để ghi km bàn giao trước.')
                         ->send();
 
                     return;
@@ -234,7 +244,7 @@ class ReassignDriverAction
                 ];
 
                 if ($existingSwap !== null) {
-                    $existingSwap->update($swapData);
+                    $existingSwap->update([...$swapData, 'checkpoint_id' => $handover->id]);
                 } else {
                     DriverSwap::create([
                         ...$swapData,

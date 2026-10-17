@@ -68,12 +68,11 @@ class TripKmSplitService
 
         foreach ($groups as $group) {
             $ids = $group->pluck('id')->all();
-            $swap = $swaps->first(fn (DriverSwap $s): bool => in_array($s->checkpoint_id ?? $matched[$s->id] ?? null, $ids, true));
+            $inGroup = $swaps->filter(fn (DriverSwap $s): bool => in_array($s->checkpoint_id ?? $matched[$s->id] ?? null, $ids, true));
+            $swap = $inGroup->last();
+            $firstSwap = $inGroup->first();
             $anchor = $swap ? $group->firstWhere('id', $swap->checkpoint_id ?? $matched[$swap->id]) : $group->first();
-
-            if ($swap) {
-                $usedSwapIds[] = $swap->id;
-            }
+            $usedSwapIds = [...$usedSwapIds, ...$inGroup->pluck('id')->all()];
 
             $next = ($swap || ! $anchor->occurred_at) ? null : TripCheckpoint::where('trip_id', $trip->id)
                 ->where('checkpoint_type', '!=', CheckpointType::DriverSwap)
@@ -86,9 +85,9 @@ class TripKmSplitService
             $points[] = [
                 'km' => (float) $anchor->km_reading,
                 'at' => $anchor->occurred_at ?? now(),
-                'from_driver_id' => $swap?->from_driver_id ?? $anchor->driver_id,
+                'from_driver_id' => $firstSwap?->from_driver_id ?? $anchor->driver_id,
                 'to_driver_id' => $swap ? $swap->to_driver_id : $next?->driver_id,
-                'from_shift_id' => $swap?->from_shift_id ?? $anchor->shift_id,
+                'from_shift_id' => $anchor->shift_id ?? $firstSwap?->from_shift_id,
                 'to_shift_id' => $swap ? $swap->to_shift_id : $next?->shift_id,
             ];
         }

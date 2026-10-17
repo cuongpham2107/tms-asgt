@@ -290,3 +290,27 @@ test('editing one handover row updates its companion rows of the same handover',
 
     expect((float) $companion->fresh()->km_reading)->toBe(1105.0);
 });
+
+test('two swaps linked to the same handover do not create a phantom point', function () {
+    DriverSwap::create([
+        'trip_id' => $this->trip->id,
+        'checkpoint_id' => $this->handovers['A->B']->id,
+        'from_driver_id' => $this->drivers['A']->id,
+        'to_driver_id' => $this->drivers['B']->id,
+        'from_shift_id' => $this->shifts['A']->id,
+        'to_shift_id' => $this->shifts['B']->id,
+        'handover_km' => 1050,
+        'reason' => DriverSwapReason::CargoNotUnloaded,
+        'created_by' => $this->drivers['A']->id,
+    ]);
+
+    $byDriver = swapTestKmByDriver($this);
+
+    expect($byDriver)->toEqual(swapTestExpected([
+        'A' => [80, 40],
+        'B' => [50, 50],
+        'C' => [100, 50],
+        'D' => [30, 0],
+        'E' => [40, 0],
+    ]))->and(array_sum(array_column($byDriver, 'total')))->toEqual(300.0);
+});

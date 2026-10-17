@@ -166,3 +166,23 @@ test('web driver swap creates the handover checkpoint and links the swap to it',
     expect($swap->checkpoint)->not->toBeNull()
         ->and((float) $swap->checkpoint->km_reading)->toBe(1080.0);
 });
+
+test('reassigning adopts an unlinked legacy swap instead of inserting a second one', function () {
+    $legacy = DriverSwap::create([
+        'trip_id' => $this->trip->id,
+        'checkpoint_id' => null,
+        'from_driver_id' => $this->driverA->id,
+        'to_driver_id' => $this->driverB->id,
+        'handover_km' => 1050,
+        'reason' => DriverSwapReason::CargoNotUnloaded,
+        'created_by' => $this->driverA->id,
+    ]);
+
+    reassignTestCall($this, $this->driverC);
+
+    $swap = DriverSwap::where('trip_id', $this->trip->id)->sole();
+
+    expect($swap->id)->toBe($legacy->id)
+        ->and($swap->checkpoint_id)->toBe($this->handoverCheckpoint->id)
+        ->and($swap->to_driver_id)->toBe($this->driverC->id);
+});
