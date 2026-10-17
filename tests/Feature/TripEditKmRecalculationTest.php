@@ -177,3 +177,21 @@ test('start and end km inputs are read-only and not saved from the form', functi
 
     expect((float) $this->oldTrip->fresh()->end_km)->toBe(100120.0);
 });
+
+test('saving checkpoints whose km goes backwards in time is rejected', function () {
+    editTripTable()->mountTableAction('edit', $this->oldTrip)
+        ->fillForm(['checkpoints.record-'.$this->pickupCheckpoint->id.'.km_reading' => 10050])
+        ->callMountedTableAction()
+        ->assertHasTableActionErrors(['checkpoints']);
+
+    expect((float) $this->pickupCheckpoint->fresh()->km_reading)->toBe(100050.0);
+});
+
+test('checkpoints at the same minute may carry different km', function () {
+    $this->pickupCheckpoint->update(['occurred_at' => $this->deliveryCheckpoint->occurred_at]);
+
+    editTripTable()->mountTableAction('edit', $this->oldTrip)
+        ->fillForm(['trip_code' => 'SAME-MINUTE'])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+});

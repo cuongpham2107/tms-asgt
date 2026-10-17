@@ -11,6 +11,8 @@ use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
+use Carbon\Carbon;
+use Closure;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
@@ -342,11 +344,48 @@ class TripForm
                             ->addable()
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
+                            ->rules([fn (): Closure => self::checkpointKmIncreasingRule()])
                             ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->columnSpanFull(),
                     ]),
             ]);
+    }
+
+    /**
+     * Km các mốc phải tăng dần theo thời gian; các mốc cùng thời điểm được phép lệch nhau.
+     */
+    public static function checkpointKmIncreasingRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            $rows = collect(is_array($value) ? $value : [])
+                ->filter(fn ($row): bool => is_array($row) && filled($row['km_reading'] ?? null) && filled($row['occurred_at'] ?? null))
+                ->map(fn (array $row): array => [
+                    'km' => (float) str_replace(',', '', (string) $row['km_reading']),
+                    'at' => Carbon::parse($row['occurred_at']),
+                ])
+                ->sortBy(fn (array $row): int => $row['at']->getTimestamp());
+
+            $highest = null;
+
+            foreach ($rows as $row) {
+                if ($highest !== null && $row['at']->gt($highest['at']) && $row['km'] < $highest['km']) {
+                    $fail(sprintf(
+                        'Km mốc lúc %s (%s km) nhỏ hơn mốc lúc %s (%s km). Km phải tăng dần theo thời gian.',
+                        $row['at']->format('H:i d/m'),
+                        number_format($row['km'], 1, ',', '.'),
+                        $highest['at']->format('H:i d/m'),
+                        number_format($highest['km'], 1, ',', '.'),
+                    ));
+
+                    return;
+                }
+
+                if ($highest === null || $row['km'] >= $highest['km']) {
+                    $highest = $row;
+                }
+            }
+        };
     }
 
     private static function fillCheckpointRelationshipData(array $data, $get): array
