@@ -15,6 +15,7 @@ use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Observers\TripObserver;
 use App\Services\TripKmAdjustmentService;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Cancel;
@@ -594,4 +595,57 @@ test('resolve_km_report action visibility reflects pending status', function () 
 
     $this->trip->refresh();
     expect($action->record($this->trip)->isVisible())->toBeFalse();
+});
+
+test('trip notifications go to every user except drivers', function () {
+    $dispatcher = User::factory()->create();
+
+    app(TripObserver::class)->notifyUsersTripKmReported($this->trip);
+
+    expect(DB::table('notifications')->where('notifiable_id', $dispatcher->id)->count())->toBe(1)
+        ->and(DB::table('notifications')->whereIn('notifiable_id', User::role('driver')->pluck('id'))->count())->toBe(0);
+});
+
+test('resolving a report only clears notifications of that report', function () {
+    $newReport = fn (Trip $trip) => TripKmReport::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108050,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    $other = null;
+    for ($i = 0; $i < 20; $i++) {
+        $candidate = Trip::create([
+            'trip_code' => "CD-2026-08-17-{$i}",
+            'vehicle_id' => $this->vehicle->id,
+            'driver_id' => $this->driver->id,
+            'shift_id' => $this->shift->id,
+            'status' => TripStatus::Started,
+            'start_km' => 108000,
+            'started_at' => now(),
+        ]);
+
+        if (str_starts_with((string) $candidate->id, (string) $this->trip->id)) {
+            $other = $candidate;
+            break;
+        }
+    }
+    expect($other)->not->toBeNull();
+
+    $report1 = $newReport($this->trip);
+    $newReport($other);
+
+    app(TripKmAdjustmentService::class)->rejectReport($report1, 'x', null);
+
+    $otherNotifications = DB::table('notifications')->where('data', 'like', "%tableActionRecord={$other->id}&%")->get();
+
+    expect($otherNotifications)->not->toBeEmpty();
+    foreach ($otherNotifications as $row) {
+        $data = json_decode($row->data, true);
+        expect($data['actions'])->not->toBeEmpty()
+            ->and($row->data)->not->toContain('[Đã');
+    }
 });

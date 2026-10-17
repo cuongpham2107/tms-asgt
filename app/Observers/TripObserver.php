@@ -10,6 +10,7 @@ use App\Models\TripKmReport;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -130,6 +131,7 @@ class TripObserver
                 'icon' => 'heroicon-o-exclamation-triangle',
                 'status' => 'warning',
                 'actions' => $actions,
+                'viewData' => ['km_report_id' => $report?->id, 'trip_id' => $trip->id],
             ];
         });
     }
@@ -139,17 +141,7 @@ class TripObserver
      */
     public function clearKmReportNotificationActions(Trip $trip, ?TripKmReport $report = null): void
     {
-        $tripId = (string) $trip->getKey();
-
-        $notifications = DB::table('notifications')
-            ->where('data', 'like', '%resolve_km_report%')
-            ->where(function ($query) use ($tripId) {
-                $query->where('data', 'like', "%tableActionRecord={$tripId}%")
-                    ->orWhere('data', 'like', "%tableActionRecord%{$tripId}%")
-                    ->orWhere('data', 'like', "%/trips/{$tripId}/%")
-                    ->orWhere('data', 'like', "%/trips/{$tripId}?");
-            })
-            ->get();
+        $notifications = $this->kmReportNotifications($trip, $report);
 
         if ($notifications->isEmpty()) {
             return;
@@ -193,6 +185,27 @@ class TripObserver
     }
 
     /**
+     * Thông báo báo sai km của đúng báo cáo (viewData.km_report_id), hoặc thông báo cũ chưa có viewData của đúng chuyến.
+     */
+    private function kmReportNotifications(Trip $trip, ?TripKmReport $report): Collection
+    {
+        $tripId = (int) $trip->getKey();
+
+        return DB::table('notifications')
+            ->where('data', 'like', '%resolve_km_report%')
+            ->where(function ($query) use ($tripId, $report) {
+                if ($report !== null) {
+                    $query->orWhere('data->viewData->km_report_id', $report->id);
+                }
+
+                $query->orWhere(fn ($legacy) => $legacy
+                    ->whereNull('data->viewData->km_report_id')
+                    ->where('data', 'like', "%tableActionRecord={$tripId}&%"));
+            })
+            ->get();
+    }
+
+    /**
      * 3. Gửi thông báo đến toàn bộ user khi xe báo đảo lái.
      */
     public function notifyUsersDriverSwap(Trip $trip): void
@@ -219,14 +232,16 @@ class TripObserver
     /**
      * Gửi notification chung tới toàn bộ user kèm timeline action.
      *
-     * @param  callable(Trip): array{title: string, body: string, icon: string, status: string, actions?: array}  $contentResolver
+     * @param  callable(Trip): array{title: string, body: string, icon: string, status: string, actions?: array, viewData?: array}  $contentResolver
      */
     protected function sendTripNotification(Trip $trip, callable $contentResolver): void
     {
         $send = function () use ($trip, $contentResolver): void {
             $trip->loadMissing(['driver', 'vehicle']);
 
-            $users = User::all();
+            $users = User::query()
+                ->whereDoesntHave('roles', fn ($query) => $query->where('name', 'driver'))
+                ->get();
 
             if ($users->isEmpty()) {
                 return;
@@ -261,6 +276,10 @@ class TripObserver
 
             if (! empty($actions)) {
                 $notification->actions($actions);
+            }
+
+            if (! empty($content['viewData'])) {
+                $notification->viewData($content['viewData']);
             }
 
             $notification->sendToDatabase($users, isEventDispatched: true);
