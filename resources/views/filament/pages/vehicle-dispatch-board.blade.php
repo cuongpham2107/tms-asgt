@@ -70,8 +70,11 @@
                                     default => 'bg-white text-gray-800 dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-600',
                                 };
 
-                                $xeCho = \App\Filament\Pages\VehicleDispatchBoard::getXeCho($vehicle);
-                                $isXeChoAlert = str_contains($xeCho, 'Chuyến') || str_contains($xeCho, 'quá');
+                                $xeChoData = \App\Filament\Pages\VehicleDispatchBoard::getXeChoData($vehicle);
+                                $xeCho = $xeChoData['text'];
+                                $xeChoTooltip = $xeChoData['tooltip'];
+                                $isXeChoAlert = $xeChoData['isAlert'];
+                                $isXeChoWarning = $xeChoData['isWarning'];
 
                                 $pickup = \App\Filament\Pages\VehicleDispatchBoard::getPickupPoint($vehicle);
                                 $dest = \App\Filament\Pages\VehicleDispatchBoard::getDeliveryPoint($vehicle);
@@ -153,20 +156,32 @@
                                 </td>
 
                                 {{-- 7. Xe chờ --}}
-                                <td class="border border-[rgb(30_58_95)]/30 dark:border-slate-800 px-1.5 py-1 text-center whitespace-nowrap font-medium">
+                                <td class="border border-[rgb(30_58_95)]/30 dark:border-slate-800 px-1.5 py-1 text-center whitespace-nowrap font-medium" title="{{ $xeChoTooltip }}">
                                     @if ($isXeChoAlert)
-                                        <span class="bg-[#c00000] text-white font-bold px-1.5 py-0.5 rounded text-[10px]">{{ $xeCho }}</span>
+                                        <span class="bg-[#c00000] text-white font-bold px-1.5 py-0.5 rounded text-[10px] inline-block animate-pulse">
+                                            {{ $xeCho }}
+                                        </span>
+                                    @elseif ($isXeChoWarning)
+                                        <span class="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 font-bold px-1.5 py-0.5 rounded text-[10px] inline-block">
+                                            {{ $xeCho }}
+                                        </span>
+                                    @elseif ($xeCho === 'Sẵn sàng')
+                                        <span class="text-emerald-700 dark:text-emerald-400 font-semibold text-[11px]">
+                                            Sẵn sàng
+                                        </span>
                                     @else
-                                        <span class="text-gray-800 dark:text-gray-200 font-mono">{{ $xeCho }}</span>
+                                        <span class="text-gray-800 dark:text-gray-200 font-mono text-[11px]">
+                                            {{ $xeCho }}
+                                        </span>
                                     @endif
                                 </td>
 
                                 {{-- 8. Vị trí thực tế trên GPS --}}
                                 <td class="border border-[rgb(30_58_95)]/30 dark:border-slate-800 px-2 py-1 whitespace-nowrap text-gray-700 dark:text-gray-300">
                                     <span 
-                                        class="cursor-pointer hover:underline hover:text-blue-600 dark:hover:text-blue-400"
+                                        class="cursor-pointer hover:underline hover:text-blue-600 dark:hover:text-blue-400 font-medium"
                                         wire:click="openGpsModal({{ $vehicle->id }})"
-                                        title="Bấm để xem trên bản đồ"
+                                        title="{{ $vehicle->gps_address ? $vehicle->gps_address : 'Bấm để xem trên bản đồ' }}"
                                     >
                                         {{ $gpsLoc }}
                                     </span>

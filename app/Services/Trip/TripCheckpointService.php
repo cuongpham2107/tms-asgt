@@ -187,7 +187,7 @@ class TripCheckpointService
             $activeTripQuery->where('is_empty_run', false);
         }
 
-        $activeTrip = $activeTripQuery->first();
+        $activeTrip = $activeTripQuery->with(['vehicle', 'driver'])->first();
 
         if ($activeTrip === null) {
             return;
@@ -195,8 +195,9 @@ class TripCheckpointService
 
         throw ValidationException::withMessages([
             'checkpoint_type' => sprintf(
-                'Xe biển số %s đang chạy chuyến (trạng thái: %s). Vui lòng đợi chuyến hiện tại hoàn tất.',
+                'Xe biển số %s đang chạy chuyến (tài xế: %s, trạng thái: %s). Vui lòng đợi chuyến hiện tại hoàn tất.',
                 $activeTrip->vehicle?->plate_number ?? ('#'.$activeTrip->id),
+                $activeTrip->driver?->name ?? 'Chưa gán tài xế',
                 $activeTrip->status->label(),
             ),
         ]);

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Enums\CheckpointType;
 use App\Enums\DriverWorkShift;
 use App\Enums\ShiftType;
 use App\Enums\TripStatus;
@@ -130,15 +131,18 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'evenDriver.driverShifts',
                 'oddDriver.driverShifts',
                 'trips' => function ($q) {
-                    $q->whereDate('started_at', today())
-                        ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
-                        ->with([
-                            'driver',
-                            'startLocation',
-                            'endLocation',
-                            'orders.pickupLocation',
-                            'orders.deliveryPoints.location',
-                        ]);
+                    $q->where(function ($sub) {
+                        $sub->whereDate('started_at', today())
+                            ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
+                            ->orWhere('completed_at', '>=', now()->subHours(48));
+                    })->with([
+                        'checkpoints',
+                        'driver',
+                        'startLocation',
+                        'endLocation',
+                        'orders.pickupLocation',
+                        'orders.deliveryPoints.location',
+                    ]);
                 },
             ])
             ->get();
@@ -314,12 +318,14 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->label('Xe chờ')
                     ->alignCenter()
                     ->html()
+                    ->tooltip(fn (Vehicle $record): string => self::getXeChoTooltip($record))
                     ->state(fn (Vehicle $record): string => self::getXeCho($record)),
 
                 // 7. Vị trí thực tế trên GPS
                 TextColumn::make('gps_address')
                     ->label('Vị trí thực tế trên GPS')
                     ->wrap()
+                    ->tooltip(fn (Vehicle $record): ?string => $record->gps_address)
                     ->state(fn (Vehicle $record): string => self::getGpsLocation($record)),
 
                 // 8. Tốc độ
@@ -432,16 +438,19 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'evenDriver.driverShifts',
                 'oddDriver.driverShifts',
                 'trips' => function ($q) {
-                    $q->whereDate('started_at', today())
-                        ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
-                        ->with([
-                            'driver',
-                            'startLocation',
-                            'endLocation',
-                            'orders.pickupLocation',
-                            'orders.deliveryPoints.location',
-                            'latestPendingKmReport',
-                        ]);
+                    $q->where(function ($sub) {
+                        $sub->whereDate('started_at', today())
+                            ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
+                            ->orWhere('completed_at', '>=', now()->subHours(48));
+                    })->with([
+                        'checkpoints',
+                        'driver',
+                        'startLocation',
+                        'endLocation',
+                        'orders.pickupLocation',
+                        'orders.deliveryPoints.location',
+                        'latestPendingKmReport',
+                    ]);
                 },
             ])
             ->where('vehicles.is_active', true)
@@ -479,29 +488,31 @@ class VehicleDispatchBoard extends Page implements HasTable
     {
         $plate = e($record->plate_number);
         $tonnage = '';
+
         if ($record->load_capacity) {
             $val = (float) $record->load_capacity;
-            $tonnage = ($val == (int) $val ? (string) (int) $val : number_format($val, 1, ',', '.')).'T';
+            if ($val > 0) {
+                $ton = match (true) {
+                    $val >= 13.0 && $val <= 14.5 => '14',
+                    $val >= 4.5 && $val <= 5.8 => '5',
+                    $val >= 6.0 && $val <= 7.5 => '7',
+                    $val >= 2.0 && $val <= 2.6 => '2.5',
+                    $val >= 1.0 && $val <= 1.5 => '1.25',
+                    default => (string) round($val),
+                };
+                $tonnage = "{$ton}T";
+            }
         }
 
-        $door = $record->door_count ? " {$record->door_count}C" : '';
         $extra = '';
-
         if ($record->vehicle_type?->value === 'cold') {
             $extra .= ' <span class="text-blue-500 font-normal text-xs">cool</span>';
         }
-
         if ($record->vehicle_type?->value === 'flatbed') {
             $extra .= ' <span class="text-amber-500 font-normal text-xs">mâm</span>';
         }
 
-        if ($record->box_length && (int) $record->box_length >= 6000) {
-            $extra .= ' <span class="text-gray-500 font-normal text-xs">dài</span>';
-        }
-
-        $info = trim("{$tonnage}{$door}");
-
-        return "<div><span class='font-bold'>{$plate}</span>".($info ? " <span class='text-xs text-gray-500 font-medium'>{$info}</span>" : '').$extra.'</div>';
+        return "<div><span class='font-bold'>{$plate}</span>".($tonnage ? " <span class='text-xs text-gray-500 font-medium'>{$tonnage}</span>" : '').$extra.'</div>';
     }
 
     public static function getTripStatusLabel(Vehicle $record): string
@@ -666,44 +677,179 @@ class VehicleDispatchBoard extends Page implements HasTable
         return $activeTrip->endLocation?->name;
     }
 
-    public static function getXeCho(Vehicle $record): string
+    public static function formatDurationMinutes(int $minutes): string
     {
+        if ($minutes < 1) {
+            return '< 1p';
+        }
+
+        if ($minutes < 60) {
+            return "{$minutes}p";
+        }
+
+        $hours = intdiv($minutes, 60);
+        $remMinutes = $minutes % 60;
+
+        if ($hours >= 24) {
+            $days = intdiv($hours, 24);
+            $remHours = $hours % 24;
+
+            return $remHours > 0 ? "{$days}d {$remHours}h" : "{$days}d";
+        }
+
+        if ($remMinutes === 0) {
+            return "{$hours}h";
+        }
+
+        return "{$hours}h {$remMinutes}p";
+    }
+
+    /**
+     * Dữ liệu chi tiết thời gian xe chờ từ lúc bấm mốc trạng thái gần nhất hoặc lúc hạ xong đến hiện tại.
+     *
+     * @return array{text: string, tooltip: string, minutes: int, isAlert: bool, isWarning: bool}
+     */
+    public static function getXeChoData(Vehicle $record): array
+    {
+        if ($record->status === VehicleStatus::Off) {
+            return ['text' => '—', 'tooltip' => 'Xe nghỉ', 'minutes' => 0, 'isAlert' => false, 'isWarning' => false];
+        }
+
+        if ($record->status === VehicleStatus::Bdsc) {
+            return ['text' => '—', 'tooltip' => 'Xe bảo dưỡng', 'minutes' => 0, 'isAlert' => false, 'isWarning' => false];
+        }
+
         $activeTrip = $record->active_trip;
 
+        // 1. Xe đang có chuyến hoạt động: tính từ lúc bấm mốc trạng thái gần nhất
         if ($activeTrip !== null) {
-            $firstOrder = $activeTrip->orders->first();
-            if ($firstOrder?->planned_loading_at) {
-                return $firstOrder->planned_loading_at->format('H:i');
+            $checkpoints = $activeTrip->relationLoaded('checkpoints')
+                ? $activeTrip->checkpoints
+                : $activeTrip->checkpoints;
+
+            $latestCp = $checkpoints
+                ->sortByDesc(fn ($c) => $c->occurred_at ?? $c->created_at)
+                ->first();
+
+            if ($latestCp) {
+                $time = $latestCp->occurred_at ?? $latestCp->created_at;
+                $diff = $time->isFuture() ? 0 : (int) $time->diffInMinutes(now());
+                $cpLabel = $latestCp->checkpoint_type instanceof CheckpointType
+                    ? $latestCp->checkpoint_type->getLabel()
+                    : ($latestCp->checkpoint_type ? CheckpointType::tryFrom($latestCp->checkpoint_type)?->getLabel() ?? $latestCp->checkpoint_type : 'Mốc gần nhất');
+
+                return [
+                    'text' => self::formatDurationMinutes($diff),
+                    'tooltip' => "Mốc: {$cpLabel} lúc {$time->format('H:i')} (Chuyến {$activeTrip->trip_code}) — Đã chờ {$diff} phút",
+                    'minutes' => $diff,
+                    'isAlert' => $diff >= 120, // Chờ trên 2 tiếng
+                    'isWarning' => $diff >= 60 && $diff < 120, // Chờ 1 - 2 tiếng
+                ];
             }
 
-            if ($activeTrip->started_at) {
-                return $activeTrip->started_at->format('H:i');
+            // Nếu chuyến chưa có checkpoint nào (vừa bắt đầu hoặc đang pending)
+            $startTime = $activeTrip->started_at ?? $activeTrip->created_at;
+            if ($startTime) {
+                $diff = $startTime->isFuture() ? 0 : (int) $startTime->diffInMinutes(now());
+                $tripStatusLabel = $activeTrip->status instanceof TripStatus ? $activeTrip->status->getLabel() : (string) $activeTrip->status;
+
+                return [
+                    'text' => self::formatDurationMinutes($diff),
+                    'tooltip' => "Trạng thái: {$tripStatusLabel} từ {$startTime->format('H:i')} (Chuyến {$activeTrip->trip_code}) — Đã chờ {$diff} phút",
+                    'minutes' => $diff,
+                    'isAlert' => $diff >= 120,
+                    'isWarning' => $diff >= 60 && $diff < 120,
+                ];
             }
 
+            return [
+                'text' => '—',
+                'tooltip' => "Chuyến {$activeTrip->trip_code}",
+                'minutes' => 0,
+                'isAlert' => false,
+                'isWarning' => false,
+            ];
+        }
+
+        // 2. Xe KHÔNG có chuyến hoạt động: tính từ lúc xe hạ xong chuyến gần nhất
+        $completedTrips = $record->trips->where('status', TripStatus::Completed);
+        $lastCompletedTrip = $completedTrips->sortByDesc(fn ($t) => $t->completed_at ?? $t->updated_at)->first();
+
+        if ($lastCompletedTrip && ($lastCompletedTrip->completed_at ?? $lastCompletedTrip->updated_at)) {
+            $completedTime = $lastCompletedTrip->completed_at ?? $lastCompletedTrip->updated_at;
+            $diff = $completedTime->isFuture() ? 0 : (int) $completedTime->diffInMinutes(now());
+
+            // Trong vòng 48h từ lúc hạ xong
+            if ($diff <= 2880) {
+                return [
+                    'text' => self::formatDurationMinutes($diff),
+                    'tooltip' => "Hạ xong lúc {$completedTime->format('H:i d/m')} (Chuyến {$lastCompletedTrip->trip_code}) — Chưa gán chuyến mới ({$diff} phút)",
+                    'minutes' => $diff,
+                    'isAlert' => $diff >= 180, // Hạ xong quá 3 tiếng chưa gán chuyến mới
+                    'isWarning' => $diff >= 90 && $diff < 180, // Hạ xong từ 1.5 - 3 tiếng
+                ];
+            }
+        }
+
+        // 3. Xe sẵn sàng (chưa có chuyến mới hoặc rảnh từ lâu)
+        return [
+            'text' => 'Sẵn sàng',
+            'tooltip' => 'Xe sẵn sàng (chưa có chuyến mới)',
+            'minutes' => 0,
+            'isAlert' => false,
+            'isWarning' => false,
+        ];
+    }
+
+    public static function getXeCho(Vehicle $record): string
+    {
+        return self::getXeChoData($record)['text'];
+    }
+
+    public static function getXeChoTooltip(Vehicle $record): string
+    {
+        return self::getXeChoData($record)['tooltip'];
+    }
+
+    /**
+     * Rút gọn địa chỉ GPS thành "xã/phường/quận/huyện, tỉnh/thành phố" (ví dụ: "Phổ Yên, Thái Nguyên").
+     */
+    public static function formatShortAddress(?string $address): string
+    {
+        if (empty($address)) {
             return '—';
         }
 
-        // Xe chưa có chuyến active: kiểm tra chuyến sắp tới hoặc thời gian chờ
-        $pendingTrip = $record->trips
-            ->where('status', TripStatus::Pending)
-            ->first();
+        $parts = array_map('trim', explode(',', $address));
+        $parts = array_values(array_filter($parts, fn ($p) => $p !== ''));
 
-        if ($pendingTrip !== null) {
-            $order = $pendingTrip->orders->first();
-            if ($order?->planned_loading_at) {
-                return 'Dự kiến '.$order->planned_loading_at->format('H:i');
-            }
-
-            return 'Chờ chạy';
+        if (empty($parts)) {
+            return '—';
         }
 
-        return 'Sẵn sàng';
+        $last = end($parts);
+        if (in_array(mb_strtolower($last, 'UTF-8'), ['việt nam', 'viet nam', 'vietnam'], true)) {
+            array_pop($parts);
+        }
+
+        if (empty($parts)) {
+            return $address;
+        }
+
+        if (count($parts) === 1) {
+            return $parts[0];
+        }
+
+        // Lấy 2 phần cuối: xã/huyện/thị xã và tỉnh/thành phố
+        $shortParts = array_slice($parts, -2);
+
+        return implode(', ', $shortParts);
     }
 
     public static function getGpsLocation(Vehicle $record): string
     {
         if (! empty($record->gps_address)) {
-            return $record->gps_address;
+            return self::formatShortAddress($record->gps_address);
         }
 
         if ($record->gps_lat && $record->gps_lng) {

@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Filament\Resources\Trips\TripResource;
+use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripKmReport;
 use App\Models\User;
@@ -44,6 +45,22 @@ class TripObserver
                 $this->notifyUsersDriverSwap($trip);
             }
         }
+    }
+
+    /**
+     * Handle the Trip "deleting" event.
+     * Khi xoá chuyến, xoá luôn tất cả các đơn hàng thuộc chuyến và dữ liệu liên quan.
+     */
+    public function deleting(Trip $trip): void
+    {
+        foreach ($trip->orders as $order) {
+            OrderDeliveryPoint::query()->where('order_id', $order->id)->delete();
+            $order->delete();
+        }
+
+        $trip->kmReports()->getQuery()->delete();
+        $trip->driverSwaps()->getQuery()->delete();
+        $trip->checkpoints()->getQuery()->delete();
     }
 
     /**

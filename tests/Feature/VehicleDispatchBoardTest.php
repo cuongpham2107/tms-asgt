@@ -118,7 +118,11 @@ test('vehicle helpers format BSX, status and driver information correctly', func
 
     $bsx = VehicleDispatchBoard::renderBsx($vehicle);
     expect($bsx)->toContain('99H-00902')
-        ->and($bsx)->toContain('7T 3C');
+        ->and($bsx)->toContain('7T')
+        ->and($bsx)->not->toContain('3C');
+
+    expect(VehicleDispatchBoard::formatShortAddress('ALS Bắc Ninh, KCN Yên Phong, đường YP6, Yên Phong, Bắc Ninh, Việt Nam'))
+        ->toBe('Yên Phong, Bắc Ninh');
 
     expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Nguyễn Văn Test')
         ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('BN')
