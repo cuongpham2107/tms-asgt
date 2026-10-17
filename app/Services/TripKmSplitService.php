@@ -3,156 +3,170 @@
 namespace App\Services;
 
 use App\Enums\CheckpointType;
-use App\Enums\DriverSwapReason;
-use App\Models\DriverShift;
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 class TripKmSplitService
 {
     /**
-     * Chia chuyến đi thành các đoạn km theo đúng thứ tự bàn giao (đảo lái).
+     * Chia chuyến đi thành các đoạn km theo các điểm bàn giao (mốc driver_swap có km).
      * Hỗ trợ đảo lái qua lại nhiều lần; self-swap (cùng tài xế + cùng ca) bị bỏ qua.
      *
      * @return list<array{0: float, 1: float, 2: ?int, 3: ?int}> [startKm, endKm, shiftId, driverId]
      */
     public static function segments(Trip $trip): array
     {
-        self::syncMissingSwapsFromCheckpoints($trip);
+        $points = self::handoverPoints($trip);
 
-        $swaps = DriverSwap::where('trip_id', $trip->id)
-            ->orderBy('created_at')
-            ->orderBy('id')
-            ->get();
-
-        if ($swaps->isEmpty()) {
+        if ($points === []) {
             return [];
         }
 
         $startKm = (float) ($trip->start_km ?? 0);
-
         $tripEndKm = self::effectiveEndKm($trip, $startKm);
 
-        // Ca/tài xế nắm chuyến lúc bắt đầu: của checkpoint đầu tiên
         $firstCheckpoint = TripCheckpoint::where('trip_id', $trip->id)
-            ->whereNotNull('shift_id')
-            ->orderBy('occurred_at')
-            ->first();
-
-        $initialShiftId = $firstCheckpoint?->shift_id ?? $swaps->first()->from_shift_id ?? $trip->shift_id;
-        $initialDriverId = TripCheckpoint::where('trip_id', $trip->id)
             ->whereNotNull('driver_id')
             ->orderBy('occurred_at')
-            ->value('driver_id')
-            ?? $swaps->first()->from_driver_id
-            ?? $trip->driver_id;
+            ->orderBy('id')
+            ->first();
 
-        $segments = [];
-        $activeShiftId = $initialShiftId;
-        $activeDriverId = $initialDriverId;
+        $activeDriverId = $points[0]['from_driver_id'] ?? $firstCheckpoint?->driver_id ?? $trip->driver_id;
+        $activeShiftId = $points[0]['from_shift_id'] ?? $firstCheckpoint?->shift_id ?? $trip->shift_id;
         $prevKm = $startKm;
+        $segments = [];
 
-        foreach ($swaps as $index => $swap) {
-            // Bỏ qua self-swap vô nghĩa (cùng tài xế + cùng ca)
-            if ($swap->from_driver_id === $swap->to_driver_id
-                && $swap->from_shift_id === $swap->to_shift_id) {
-                continue;
-            }
-
-            // Backfill to_shift_id if missing
-            if ($swap->to_shift_id === null && $swap->to_driver_id !== null) {
-                $resolvedToShiftId = DriverShift::where('driver_id', $swap->to_driver_id)->whereNull('end_time')->latest('start_time')->value('id')
-                    ?? DriverShift::where('driver_id', $swap->to_driver_id)->latest('start_time')->value('id');
-                if ($resolvedToShiftId) {
-                    $swap->update(['to_shift_id' => $resolvedToShiftId]);
-                }
-            }
-
-            // Backfill from_shift_id if missing
-            if ($swap->from_shift_id === null && $swap->from_driver_id !== null) {
-                $resolvedFromShiftId = DriverShift::where('driver_id', $swap->from_driver_id)->latest('start_time')->value('id');
-                if ($resolvedFromShiftId) {
-                    $swap->update(['from_shift_id' => $resolvedFromShiftId]);
-                }
-            }
-
-            $handoverKm = HandoverKmResolver::resolve($trip, $swap, useTripFallback: true);
-            if ($handoverKm <= 0) {
-                continue;
-            }
-
-            $segments[] = [(float) $prevKm, $handoverKm, $activeShiftId, $activeDriverId];
-
-            $activeShiftId = $swap->to_shift_id
-                ?? DriverShift::where('driver_id', $swap->to_driver_id)->latest('start_time')->value('id')
-                ?? $swaps->get($index + 1)?->from_shift_id
-                ?? $trip->shift_id;
-            $activeDriverId = $swap->to_driver_id
-                ?? $swaps->get($index + 1)?->from_driver_id
-                ?? $trip->driver_id;
-            $prevKm = $handoverKm;
+        foreach ($points as $point) {
+            $segments[] = [$prevKm, $point['km'], $activeShiftId, $activeDriverId];
+            $activeDriverId = $point['to_driver_id'];
+            $activeShiftId = $point['to_shift_id'];
+            $prevKm = $point['km'];
         }
 
-        $segments[] = [(float) $prevKm, $tripEndKm, $activeShiftId, $activeDriverId];
+        $segments[] = [$prevKm, $tripEndKm, $activeShiftId, $activeDriverId];
 
         return $segments;
     }
 
     /**
-     * Tự động đồng bộ các bản ghi DriverSwap nếu chuyến có mốc driver_swap hoặc đổi tài xế nhưng chưa có bản ghi swap.
+     * Các điểm bàn giao của chuyến, sắp theo giờ.
+     *
+     * @return list<array{km: float, at: Carbon, from_driver_id: ?int, to_driver_id: ?int, from_shift_id: ?int, to_shift_id: ?int}>
      */
-    public static function syncMissingSwapsFromCheckpoints(Trip $trip): void
+    private static function handoverPoints(Trip $trip): array
     {
-        $swapCheckpoints = TripCheckpoint::where('trip_id', $trip->id)
+        $swaps = DriverSwap::where('trip_id', $trip->id)->orderBy('id')->get();
+        $matched = self::matchUnlinkedSwaps($trip);
+
+        $groups = self::swapCheckpointGroups($trip);
+
+        $points = [];
+        $usedSwapIds = [];
+
+        foreach ($groups as $group) {
+            $ids = $group->pluck('id')->all();
+            $swap = $swaps->first(fn (DriverSwap $s): bool => in_array($s->checkpoint_id ?? $matched[$s->id] ?? null, $ids, true));
+            $anchor = $swap ? $group->firstWhere('id', $swap->checkpoint_id ?? $matched[$swap->id]) : $group->first();
+
+            if ($swap) {
+                $usedSwapIds[] = $swap->id;
+            }
+
+            $next = ($swap || ! $anchor->occurred_at) ? null : TripCheckpoint::where('trip_id', $trip->id)
+                ->where('checkpoint_type', '!=', CheckpointType::DriverSwap)
+                ->where('occurred_at', '>', $anchor->occurred_at)
+                ->whereNotNull('driver_id')
+                ->orderBy('occurred_at')
+                ->orderBy('id')
+                ->first();
+
+            $points[] = [
+                'km' => (float) $anchor->km_reading,
+                'at' => $anchor->occurred_at ?? now(),
+                'from_driver_id' => $swap?->from_driver_id ?? $anchor->driver_id,
+                'to_driver_id' => $swap ? $swap->to_driver_id : $next?->driver_id,
+                'from_shift_id' => $swap?->from_shift_id ?? $anchor->shift_id,
+                'to_shift_id' => $swap ? $swap->to_shift_id : $next?->shift_id,
+            ];
+        }
+
+        foreach ($swaps->whereNotIn('id', $usedSwapIds) as $swap) {
+            $km = (float) ($swap->handover_km ?: HandoverKmResolver::resolve($trip, $swap));
+
+            if ($km <= 0) {
+                continue;
+            }
+
+            // driver_swaps.created_at do DB ghi (CURRENT_TIMESTAMP) là UTC, còn occurred_at của mốc theo giờ app.
+            $points[] = [
+                'km' => $km,
+                'at' => $swap->created_at
+                    ? Carbon::parse($swap->created_at->format('Y-m-d H:i:s'), 'UTC')->setTimezone(config('app.timezone'))
+                    : now(),
+                'from_driver_id' => $swap->from_driver_id,
+                'to_driver_id' => $swap->to_driver_id,
+                'from_shift_id' => $swap->from_shift_id,
+                'to_shift_id' => $swap->to_shift_id,
+            ];
+        }
+
+        $points = array_values(array_filter(
+            $points,
+            fn (array $p): bool => ! ($p['from_driver_id'] === $p['to_driver_id'] && $p['from_shift_id'] === $p['to_shift_id']),
+        ));
+
+        usort($points, fn (array $a, array $b): int => [$a['at']->getTimestamp(), $a['km']] <=> [$b['at']->getTimestamp(), $b['km']]);
+
+        return $points;
+    }
+
+    /**
+     * Mốc driver_swap có km, nhóm theo giờ (đến giây); mỗi nhóm là một điểm bàn giao.
+     *
+     * @return Collection<string, Collection<int, TripCheckpoint>>
+     */
+    private static function swapCheckpointGroups(Trip $trip): Collection
+    {
+        return TripCheckpoint::where('trip_id', $trip->id)
             ->where('checkpoint_type', CheckpointType::DriverSwap)
             ->whereNotNull('km_reading')
             ->orderBy('occurred_at')
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->groupBy(fn (TripCheckpoint $cp): string => $cp->occurred_at?->format('Y-m-d H:i:s') ?? '');
+    }
 
-        foreach ($swapCheckpoints as $swapCp) {
-            $handoverKm = (float) $swapCp->km_reading;
-            if ($handoverKm <= 0) {
+    /**
+     * Ghép swap chưa có checkpoint_id với nhóm mốc driver_swap chưa gắn, cùng km, theo thứ tự thời gian.
+     *
+     * @return array<int, int> driver_swap_id => checkpoint_id
+     */
+    public static function matchUnlinkedSwaps(Trip $trip): array
+    {
+        $linkedIds = DriverSwap::where('trip_id', $trip->id)->whereNotNull('checkpoint_id')->pluck('checkpoint_id')->all();
+
+        $freeAnchors = self::swapCheckpointGroups($trip)
+            ->reject(fn ($group): bool => $group->pluck('id')->intersect($linkedIds)->isNotEmpty())
+            ->map(fn ($group): TripCheckpoint => $group->first())
+            ->values();
+
+        $matches = [];
+
+        foreach (DriverSwap::where('trip_id', $trip->id)->whereNull('checkpoint_id')->orderBy('id')->get() as $swap) {
+            $index = $freeAnchors->search(fn (TripCheckpoint $cp): bool => abs((float) $cp->km_reading - (float) $swap->handover_km) <= 0.05);
+
+            if ($index === false) {
                 continue;
             }
 
-            $exists = DriverSwap::where('trip_id', $trip->id)
-                ->where('handover_km', $handoverKm)
-                ->exists();
-
-            if (! $exists) {
-                $nextCheckpointDriver = TripCheckpoint::where('trip_id', $trip->id)
-                    ->where('occurred_at', '>=', $swapCp->occurred_at)
-                    ->where('id', '>', $swapCp->id)
-                    ->whereNotNull('driver_id')
-                    ->where('driver_id', '!=', $swapCp->driver_id)
-                    ->orderBy('occurred_at')
-                    ->orderBy('id')
-                    ->value('driver_id');
-
-                $toDriverId = $nextCheckpointDriver ?? $trip->driver_id;
-                $fromDriverId = $swapCp->driver_id ?? $trip->driver_id;
-
-                $fromShiftId = $swapCp->shift_id
-                    ?? DriverShift::where('driver_id', $fromDriverId)->where('start_time', '<=', $swapCp->occurred_at)->latest('start_time')->value('id')
-                    ?? DriverShift::where('driver_id', $fromDriverId)->latest('start_time')->value('id');
-
-                $toShiftId = DriverShift::where('driver_id', $toDriverId)->whereNull('end_time')->latest('start_time')->value('id')
-                    ?? DriverShift::where('driver_id', $toDriverId)->latest('start_time')->value('id');
-
-                DriverSwap::create([
-                    'trip_id' => $trip->id,
-                    'from_driver_id' => $fromDriverId,
-                    'to_driver_id' => $toDriverId,
-                    'from_shift_id' => $fromShiftId,
-                    'to_shift_id' => $toShiftId,
-                    'handover_km' => $handoverKm,
-                    'reason' => DriverSwapReason::CargoNotUnloaded,
-                    'created_by' => auth()->id() ?? $fromDriverId,
-                ]);
-            }
+            $matches[$swap->id] = $freeAnchors[$index]->id;
+            $freeAnchors->forget($index);
         }
+
+        return $matches;
     }
 
     /**

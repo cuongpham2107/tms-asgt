@@ -21,6 +21,7 @@ use App\Models\Vehicle;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\TripKmSplitService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -232,4 +233,39 @@ test('swap record links to its handover checkpoint', function () {
 
     expect($swap->checkpoint)->not->toBeNull()
         ->and($swap->checkpoint->is($this->handovers['B->C']))->toBeTrue();
+});
+
+test('legacy swap without checkpoint is ordered by its UTC created_at converted to app time', function () {
+    $trip = $this->trip;
+    DriverSwap::where('trip_id', $trip->id)->delete();
+    TripCheckpoint::where('trip_id', $trip->id)->where('checkpoint_type', CheckpointType::DriverSwap)->delete();
+
+    // Mốc bàn giao B->C ở phút 120, có swap gắn mốc
+    $linked = swapTestCheckpoint($this, CheckpointType::DriverSwap, 1070, 'B', 120);
+    $swapAttributes = fn (string $from, string $to, float $km): array => [
+        'trip_id' => $trip->id,
+        'from_driver_id' => $this->drivers[$from]->id,
+        'to_driver_id' => $this->drivers[$to]->id,
+        'from_shift_id' => $this->shifts[$from]->id,
+        'to_shift_id' => $this->shifts[$to]->id,
+        'handover_km' => $km,
+        'reason' => DriverSwapReason::CargoNotUnloaded,
+        'created_by' => $this->drivers[$from]->id,
+    ];
+    DriverSwap::create($swapAttributes('B', 'C', 1070) + ['checkpoint_id' => $linked->id]);
+
+    // Swap cũ C->D không có mốc: thực tế xảy ra ở phút 180 (sau mốc trên) nhưng DB lưu UTC,
+    // nên số giờ ghi trong created_at nhỏ hơn giờ app 7 tiếng. Nếu hiểu nhầm là giờ app nó sẽ bị xếp trước mốc phút 120.
+    $legacy = DriverSwap::create($swapAttributes('C', 'D', 1090));
+    DB::table('driver_swaps')->where('id', $legacy->id)->update([
+        'created_at' => $this->tripStart->copy()->addMinutes(180)->setTimezone('UTC')->format('Y-m-d H:i:s'),
+    ]);
+
+    $segments = TripKmSplitService::segments($trip->fresh());
+
+    expect(array_map(fn (array $s): array => [$s[0], $s[1], $s[3]], $segments))->toEqual([
+        [1000.0, 1070.0, $this->drivers['B']->id],
+        [1070.0, 1090.0, $this->drivers['C']->id],
+        [1090.0, 1300.0, $this->drivers['D']->id],
+    ]);
 });

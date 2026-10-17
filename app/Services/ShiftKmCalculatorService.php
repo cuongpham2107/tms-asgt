@@ -14,9 +14,6 @@ class ShiftKmCalculatorService
      */
     public function calculateForTrip(Trip $trip): void
     {
-        // Auto-sync missing swaps if driver swap checkpoints exist
-        TripKmSplitService::syncMissingSwapsFromCheckpoints($trip);
-
         // Ensure checkpoints have shift_id resolved if possible
         foreach ($trip->checkpoints()->whereNull('shift_id')->whereNotNull('driver_id')->get() as $cp) {
             $shiftId = DriverShift::where('driver_id', $cp->driver_id)
