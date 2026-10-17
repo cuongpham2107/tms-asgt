@@ -304,6 +304,35 @@ test('reporting again while pending keeps one report, records the previous value
         ->and($notification->read_at)->toBeNull();
 });
 
+test('re-reporting after dispatchers deleted the notifications alerts them again', function () {
+    $url = "/api/driver/trips/{$this->trip->id}/report-km-issue";
+    Sanctum::actingAs($this->driver);
+
+    $this->postJson($url, ['reported_km' => 10500, 'note' => 'lần 1'])->assertCreated();
+    DB::table('notifications')->delete();
+
+    $this->postJson($url, ['reported_km' => 10550, 'note' => 'lần 2'])->assertCreated();
+
+    $rows = DB::table('notifications')->where('notifiable_id', $this->admin->id)->get();
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()->data)->toContain('10.550');
+});
+
+test('re-reporting with the same km but a new note refreshes the notification as unread', function () {
+    $url = "/api/driver/trips/{$this->trip->id}/report-km-issue";
+    Sanctum::actingAs($this->driver);
+
+    $this->postJson($url, ['reported_km' => 10500, 'note' => 'lần 1'])->assertCreated();
+    DB::table('notifications')->update(['read_at' => now()]);
+    $count = DB::table('notifications')->where('notifiable_id', $this->admin->id)->count();
+
+    $this->postJson($url, ['reported_km' => 10500, 'note' => 'ghi chú mới'])->assertCreated();
+
+    $notifications = DB::table('notifications')->where('notifiable_id', $this->admin->id)->get();
+    expect($notifications)->toHaveCount($count)
+        ->and($notifications->every(fn ($n) => $n->read_at === null))->toBeTrue();
+});
+
 test('getKmBoundaries calculates correct min and max km between adjacent checkpoints', function () {
     // Current trip has first checkpoint at 108000
     $cp1 = $this->trip->checkpoints()->first(); // 108000

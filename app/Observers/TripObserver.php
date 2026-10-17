@@ -134,9 +134,12 @@ class TripObserver
 
     /**
      * Tài xế báo lại khi báo cáo còn chờ: cập nhật nội dung thông báo cũ và đánh dấu chưa đọc thay vì gửi thông báo mới.
+     *
+     * @return int số thông báo đã cập nhật (0 nếu thông báo cũ đã bị xóa)
      */
-    public function refreshKmReportNotifications(Trip $trip, TripKmReport $report): void
+    public function refreshKmReportNotifications(Trip $trip, TripKmReport $report): int
     {
+        $updated = 0;
         $body = $this->kmReportBody($trip, $report).' (báo lại lúc '.now()->format('H:i').')';
 
         foreach ($this->kmReportNotifications($trip, $report) as $notificationRecord) {
@@ -153,7 +156,10 @@ class TripObserver
                 'read_at' => null,
                 'updated_at' => now(),
             ]);
+            $updated++;
         }
+
+        return $updated;
     }
 
     private function kmReportBody(Trip $trip, ?TripKmReport $report): string

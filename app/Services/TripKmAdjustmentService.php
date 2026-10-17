@@ -294,6 +294,7 @@ class TripKmAdjustmentService
 
         return [
             'trip' => [
+                'status' => $row?->getRawOriginal('status'),
                 'start_km' => $km($row?->start_km),
                 'end_km' => $km($row?->end_km),
                 'driver_id' => $id($row?->driver_id),

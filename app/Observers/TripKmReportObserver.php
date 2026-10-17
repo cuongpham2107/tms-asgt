@@ -20,11 +20,13 @@ class TripKmReportObserver
      */
     public function updated(TripKmReport $report): void
     {
-        if ($report->wasChanged('reported_km') && $report->status === TripKmReportStatus::Pending) {
+        if ($report->status === TripKmReportStatus::Pending && $report->wasChanged(['reported_km', 'note', 'photo_path'])) {
             $report->loadMissing(['trip', 'driver', 'vehicle']);
 
             if ($report->trip) {
-                app(TripObserver::class)->refreshKmReportNotifications($report->trip, $report);
+                if (app(TripObserver::class)->refreshKmReportNotifications($report->trip, $report) === 0) {
+                    $this->notify($report);
+                }
             }
         }
 
