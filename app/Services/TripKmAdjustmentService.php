@@ -135,10 +135,15 @@ class TripKmAdjustmentService
         ?int $adminId = null
     ): void {
         DB::transaction(function () use ($report, $correctedKm, $targetCheckpointId, $adminNote, $adminId) {
-            $trip = $report->trip;
+            $freshReport = TripKmReport::where('id', $report->id)->lockForUpdate()->first();
+            if (! $freshReport || $freshReport->status !== TripKmReportStatus::Pending) {
+                return;
+            }
+
+            $trip = $freshReport->trip;
 
             // 1. Xác định checkpoint mục tiêu (từ Admin chọn, hoặc lưu sẵn trong report, hoặc mới nhất)
-            $targetCp = $this->resolveTargetCheckpoint($trip, $targetCheckpointId, $report);
+            $targetCp = $this->resolveTargetCheckpoint($trip, $targetCheckpointId, $freshReport);
 
             if ($targetCp) {
                 $oldKm = (float) $targetCp->km_reading;
@@ -182,9 +187,9 @@ class TripKmAdjustmentService
             ]);
 
             // 6. Đánh dấu report đã xử lý
-            $report->update([
+            $freshReport->update([
                 'status' => TripKmReportStatus::Resolved,
-                'checkpoint_id' => $targetCp?->id ?? $report->checkpoint_id,
+                'checkpoint_id' => $targetCp?->id ?? $freshReport->checkpoint_id,
                 'admin_note' => $adminNote,
                 'resolved_by' => $adminId,
                 'resolved_at' => now(),
@@ -198,14 +203,19 @@ class TripKmAdjustmentService
     public function rejectReport(TripKmReport $report, ?string $adminNote, ?int $adminId = null): void
     {
         DB::transaction(function () use ($report, $adminNote, $adminId) {
-            $report->update([
+            $freshReport = TripKmReport::where('id', $report->id)->lockForUpdate()->first();
+            if (! $freshReport || $freshReport->status !== TripKmReportStatus::Pending) {
+                return;
+            }
+
+            $freshReport->update([
                 'status' => TripKmReportStatus::Rejected,
                 'admin_note' => $adminNote,
                 'resolved_by' => $adminId,
                 'resolved_at' => now(),
             ]);
 
-            $report->trip?->update([
+            $freshReport->trip?->update([
                 'is_paused' => false,
                 'paused_reason' => null,
             ]);

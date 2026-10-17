@@ -285,7 +285,8 @@ it('sends database notification to all users when driver reports km discrepancy'
     expect($data['title'])->toBe('Chuyến xe 29C-123.45 báo sai Km')
         ->and($data['body'])->toContain('Tài xế Nguyễn Văn A báo sai lệch số Km: 105.500,5 km.')
         ->and($data['status'])->toBe('warning')
-        ->and($data['actions'])->toHaveCount(1)
-        ->and($data['actions'][0]['name'])->toBe('view')
-        ->and($data['actions'][0]['url'])->toContain(TripResource::getUrl('timeline', ['record' => $trip]));
+        ->and($data['actions'])->toHaveCount(2)
+        ->and($data['actions'][0]['name'])->toBe('resolve_km_report')
+        ->and($data['actions'][1]['name'])->toBe('view')
+        ->and($data['actions'][1]['url'])->toContain(TripResource::getUrl('timeline', ['record' => $trip]));
 });

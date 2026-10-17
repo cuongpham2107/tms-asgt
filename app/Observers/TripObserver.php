@@ -98,10 +98,9 @@ class TripObserver
                         'tableAction' => 'resolve_km_report',
                         'tableActionRecord' => $trip->getKey(),
                         'tripSearch' => $trip->trip_code,
-                        'activeStatusFilter' => 'all',
+                        'activeStatusFilter' => 'km_report',
                         'orderType' => 'all',
                         'activePlaceFilter' => 'all',
-                        'vehicleOwner' => 'all',
                     ]);
 
                     if ($resolveUrl) {

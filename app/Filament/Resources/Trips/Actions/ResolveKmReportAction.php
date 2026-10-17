@@ -2,9 +2,12 @@
 
 namespace App\Filament\Resources\Trips\Actions;
 
+use App\Enums\TripKmReportStatus;
 use App\Models\Trip;
+use App\Models\TripKmReport;
 use App\Services\TripKmAdjustmentService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -15,6 +18,7 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 
@@ -27,6 +31,30 @@ class ResolveKmReportAction
             ->icon('heroicon-o-exclamation-triangle')
             ->color('warning')
             ->visible(fn (?Trip $record, $livewire = null): bool => static::resolveRecord($record, $livewire)?->latestPendingKmReport !== null)
+            ->beforeFormFilled(function (Action $action, ?Trip $record = null, $livewire = null) {
+                $trip = static::resolveRecord($record, $livewire, $action);
+                if (! $trip) {
+                    $action->cancel();
+
+                    return;
+                }
+
+                $pendingReport = $trip->kmReports()->where('status', TripKmReportStatus::Pending)->latest('id')->first();
+                if ($pendingReport === null) {
+                    $lastReport = $trip->kmReports()->with('resolver')->latest('id')->first();
+                    $resolverName = $lastReport?->resolver?->name ?? 'Người dùng khác';
+                    $timeStr = $lastReport?->resolved_at ? ' vào lúc '.$lastReport->resolved_at->format('H:i d/m/Y') : '';
+                    $statusLabel = $lastReport?->status?->getLabel() ?? 'Đã xử lý';
+
+                    Notification::make()
+                        ->warning()
+                        ->title('Báo cáo sai Km đã được xử lý')
+                        ->body("Báo cáo sai lệch Km của chuyến này đã được {$resolverName} xử lý ({$statusLabel}){$timeStr}. Không cần thao tác lại.")
+                        ->send();
+
+                    $action->cancel();
+                }
+            })
             ->modal()
             ->modalWidth(Width::ExtraLarge)
             ->modalHeading(fn (?Trip $record, $livewire = null): string => 'Xử lý báo sai Km — '.(static::resolveRecord($record, $livewire)?->trip_code ?? ''))
@@ -38,7 +66,28 @@ class ResolveKmReportAction
 
                 $report = $trip->latestPendingKmReport?->loadMissing(['checkpoint', 'driver']);
                 if ($report === null) {
-                    return new HtmlString('<p>Không có báo cáo nào.</p>');
+                    $lastReport = $trip->kmReports()->with(['resolver', 'checkpoint', 'driver'])->latest('id')->first();
+                    if ($lastReport) {
+                        $resolverName = e($lastReport->resolver?->name ?? 'Người dùng khác');
+                        $timeStr = $lastReport->resolved_at ? ' vào lúc '.$lastReport->resolved_at->format('H:i d/m/Y') : '';
+                        $statusLabel = $lastReport->status?->getLabel() ?? 'Đã xử lý';
+                        $adminNote = e($lastReport->admin_note ?? '—');
+
+                        return new HtmlString(<<<HTML
+                            <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-800 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-200 space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                    </svg>
+                                    <span class="font-bold text-base">Báo cáo sai Km đã được xử lý</span>
+                                </div>
+                                <p class="text-sm">Báo cáo sai lệch Km của chuyến này đã được <strong>{$resolverName}</strong> xử lý (<strong>{$statusLabel}</strong>){$timeStr}.</p>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">Ghi chú: {$adminNote}</p>
+                            </div>
+                        HTML);
+                    }
+
+                    return new HtmlString('<p>Không có báo cáo nào cần xử lý.</p>');
                 }
 
                 $photoHtml = '';
@@ -102,6 +151,9 @@ class ResolveKmReportAction
                 HTML);
             })
             ->schema([
+                Hidden::make('report_id')
+                    ->default(fn (?Trip $record, $livewire = null, ?Action $action = null) => static::resolveRecord($record, $livewire, $action)?->latestPendingKmReport?->id),
+
                 ToggleButtons::make('decision')
                     ->label('Lựa chọn xử lý')
                     ->options([
@@ -266,37 +318,79 @@ class ResolveKmReportAction
                     ->placeholder(fn (Get $get) => $get('decision') === 'reject' ? 'Nhập lý do từ chối báo cáo...' : 'Ghi chú nội bộ (không bắt buộc)...')
                     ->rows(2),
             ])
-            ->action(function (array $data, ?Trip $record = null, $livewire = null) {
-                $trip = static::resolveRecord($record, $livewire);
-                $report = $trip?->latestPendingKmReport;
-                if ($report === null) {
+            ->action(function (array $data, Action $action, ?Trip $record = null, $livewire = null) {
+                $trip = static::resolveRecord($record, $livewire, $action);
+                if ($trip === null) {
+                    $action->cancel();
+
+                    return;
+                }
+
+                $alreadyProcessedReport = null;
+
+                $resolved = DB::transaction(function () use ($trip, $data, &$alreadyProcessedReport) {
+                    $reportId = ! empty($data['report_id']) ? (int) $data['report_id'] : null;
+
+                    $reportQuery = TripKmReport::where('trip_id', $trip->id)->lockForUpdate();
+                    if ($reportId) {
+                        $report = (clone $reportQuery)->where('id', $reportId)->first()
+                            ?? $reportQuery->latest('id')->first();
+                    } else {
+                        $report = $reportQuery->latest('id')->first();
+                    }
+
+                    if (! $report || $report->status !== TripKmReportStatus::Pending) {
+                        $alreadyProcessedReport = $report;
+
+                        return false;
+                    }
+
+                    if (($data['decision'] ?? 'ok') === 'reject') {
+                        app(TripKmAdjustmentService::class)->rejectReport(
+                            $report,
+                            $data['admin_note'] ?? 'Từ chối báo cáo',
+                            Auth::id(),
+                        );
+                    } else {
+                        $targetCpId = ! empty($data['target_checkpoint_id']) && (int) $data['target_checkpoint_id'] > 0
+                            ? (int) $data['target_checkpoint_id']
+                            : $report->checkpoint_id;
+
+                        app(TripKmAdjustmentService::class)->resolveReport(
+                            $report,
+                            (float) $data['corrected_km'],
+                            $targetCpId,
+                            $data['admin_note'] ?? null,
+                            Auth::id(),
+                        );
+                    }
+
+                    return true;
+                });
+
+                if (! $resolved) {
+                    $alreadyProcessedReport?->loadMissing('resolver');
+                    $resolverName = $alreadyProcessedReport?->resolver?->name ?? 'Người dùng khác';
+                    $timeStr = $alreadyProcessedReport?->resolved_at ? ' vào lúc '.$alreadyProcessedReport->resolved_at->format('H:i d/m/Y') : '';
+                    $statusLabel = $alreadyProcessedReport?->status?->getLabel() ?? 'Đã xử lý';
+
+                    Notification::make()
+                        ->warning()
+                        ->title('Báo cáo sai Km đã được xử lý')
+                        ->body("Báo cáo sai lệch Km này vừa được {$resolverName} xử lý ({$statusLabel}){$timeStr}. Thao tác của bạn không được thực hiện để tránh cập nhật trùng lặp.")
+                        ->send();
+
+                    $action->cancel();
+
                     return;
                 }
 
                 if (($data['decision'] ?? 'ok') === 'reject') {
-                    app(TripKmAdjustmentService::class)->rejectReport(
-                        $report,
-                        $data['admin_note'] ?? 'Từ chối báo cáo',
-                        Auth::id(),
-                    );
-
                     Notification::make()
                         ->danger()
                         ->title('Đã từ chối báo cáo sai km')
                         ->send();
                 } else {
-                    $targetCpId = ! empty($data['target_checkpoint_id']) && (int) $data['target_checkpoint_id'] > 0
-                        ? (int) $data['target_checkpoint_id']
-                        : $report->checkpoint_id;
-
-                    app(TripKmAdjustmentService::class)->resolveReport(
-                        $report,
-                        (float) $data['corrected_km'],
-                        $targetCpId,
-                        $data['admin_note'] ?? null,
-                        Auth::id(),
-                    );
-
                     Notification::make()
                         ->success()
                         ->title('Đã điều chỉnh km mốc hành trình và tính lại chuyến')
@@ -306,10 +400,14 @@ class ResolveKmReportAction
             ->modalSubmitActionLabel('Xác nhận xử lý');
     }
 
-    protected static function resolveRecord(?Trip $record, mixed $livewire): ?Trip
+    protected static function resolveRecord(?Trip $record, mixed $livewire, ?Action $action = null): ?Trip
     {
         if ($record instanceof Trip) {
             return $record;
+        }
+
+        if ($action && $action->getRecord() instanceof Trip) {
+            return $action->getRecord();
         }
 
         if ($livewire && method_exists($livewire, 'getRecord')) {

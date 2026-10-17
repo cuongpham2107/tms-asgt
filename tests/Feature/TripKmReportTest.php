@@ -16,6 +16,8 @@ use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\TripKmAdjustmentService;
+use Filament\Notifications\Notification;
+use Filament\Support\Exceptions\Cancel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -502,4 +504,94 @@ test('notification actions are cleared when km discrepancy report is rejected', 
     expect($dataRejected['actions'])->toBeEmpty()
         ->and($dataRejected['status'])->toBe('danger')
         ->and($dataRejected['body'])->toContain('[Đã từ chối]');
+});
+
+test('ResolveKmReportAction cancels and sends warning notification if report was already resolved before opening modal', function () {
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108050,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    app(TripKmAdjustmentService::class)->resolveReport(
+        $report,
+        108050,
+        null,
+        'Admin 1 đã xử lý',
+        $this->admin->id
+    );
+
+    $action = ResolveKmReportAction::make();
+    $action->record($this->trip);
+
+    expect(fn () => $action->callBeforeFormFilled())->toThrow(Cancel::class);
+
+    Notification::assertNotified('Báo cáo sai Km đã được xử lý');
+});
+
+test('ResolveKmReportAction prevents concurrent submission if report was already resolved', function () {
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108050,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    // Admin 1 resolves report
+    app(TripKmAdjustmentService::class)->resolveReport(
+        $report,
+        108050,
+        null,
+        'Admin 1 giải quyết',
+        $this->admin->id
+    );
+
+    // Admin 2 who already had form open tries to submit
+    $action = ResolveKmReportAction::make();
+    $action->record($this->trip);
+
+    expect(fn () => $action->call([
+        'report_id' => $report->id,
+        'decision' => 'ok',
+        'corrected_km' => 108099,
+    ]))->toThrow(Cancel::class);
+
+    Notification::assertNotified('Báo cáo sai Km đã được xử lý');
+
+    // Confirm start_km was NOT overwritten to 108099
+    $this->trip->refresh();
+    expect((float) $this->trip->start_km)->toBe(108050.0);
+});
+
+test('resolve_km_report action visibility reflects pending status', function () {
+    $action = ResolveKmReportAction::make();
+    expect($action->record($this->trip)->isVisible())->toBeFalse();
+
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108050,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    $this->trip->refresh();
+    expect($action->record($this->trip)->isVisible())->toBeTrue();
+
+    app(TripKmAdjustmentService::class)->resolveReport(
+        $report,
+        108050,
+        null,
+        'Xong bởi admin',
+        $this->admin->id
+    );
+
+    $this->trip->refresh();
+    expect($action->record($this->trip)->isVisible())->toBeFalse();
 });

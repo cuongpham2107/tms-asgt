@@ -100,7 +100,8 @@ class ListTrips extends ListRecords
         if (filled($actionRecordId)) {
             $targetTrip = Trip::find($actionRecordId);
             if ($targetTrip) {
-                $this->activeStatusFilter = 'all';
+                $requestedStatus = Request::query('activeStatusFilter');
+                $this->activeStatusFilter = filled($requestedStatus) ? $requestedStatus : 'all';
                 $this->orderType = 'all';
                 $this->activePlaceFilter = 'all';
                 $this->vehicleOwner = 'all';
@@ -599,7 +600,14 @@ class ListTrips extends ListRecords
             ])
             ->when(
                 $this->activeStatusFilter !== 'all',
-                fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter),
+                function (Builder $query) use ($actionRecordId): Builder {
+                    return $query->where(function (Builder $q) use ($actionRecordId) {
+                        $this->applyStatusFilterByKey($q, $this->activeStatusFilter);
+                        if ($actionRecordId) {
+                            $q->orWhere('trips.id', $actionRecordId);
+                        }
+                    });
+                },
                 function (Builder $query) use ($actionRecordId): Builder {
                     return $query->where(function (Builder $q) use ($actionRecordId) {
                         $q->whereNotIn('trips.status', [TripStatus::Completed->value, TripStatus::Delivered->value, TripStatus::Cancelled->value]);
