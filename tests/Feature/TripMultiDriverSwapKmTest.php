@@ -223,3 +223,13 @@ test('shift km of each driver follows a corrected handover checkpoint', function
         'E' => [40.0, 0.0],
     ]);
 });
+
+test('swap record links to its handover checkpoint', function () {
+    $swap = DriverSwap::query()
+        ->where('trip_id', $this->trip->id)
+        ->where('from_driver_id', $this->drivers['B']->id)
+        ->first();
+
+    expect($swap->checkpoint)->not->toBeNull()
+        ->and($swap->checkpoint->is($this->handovers['B->C']))->toBeTrue();
+});

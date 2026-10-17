@@ -10,6 +10,7 @@ class DriverSwap extends Model
 {
     protected $fillable = [
         'trip_id',
+        'checkpoint_id',
         'from_driver_id',
         'to_driver_id',
         'from_shift_id',
@@ -34,6 +35,11 @@ class DriverSwap extends Model
     public function trip(): BelongsTo
     {
         return $this->belongsTo(Trip::class);
+    }
+
+    public function checkpoint(): BelongsTo
+    {
+        return $this->belongsTo(TripCheckpoint::class, 'checkpoint_id');
     }
 
     public function fromDriver(): BelongsTo
