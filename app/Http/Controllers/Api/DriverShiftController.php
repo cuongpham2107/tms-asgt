@@ -81,13 +81,7 @@ class DriverShiftController extends Controller
                     ->first();
 
                 if ($pendingSwap) {
-                    $handoverKm = (float) ($pendingSwap->handover_km ?? 0);
-                    if ($handoverKm <= 0) {
-                        $handoverKm = (float) TripCheckpoint::where('trip_id', $pendingSwap->trip_id)
-                            ->where('checkpoint_type', 'driver_swap')
-                            ->whereNotNull('km_reading')
-                            ->value('km_reading') ?? 0;
-                    }
+                    $handoverKm = (float) ($pendingSwap->checkpoint?->km_reading ?? $pendingSwap->handover_km ?? 0);
                     if ($handoverKm > 0) {
                         $shift->start_km = $handoverKm;
                         $shift->save();
