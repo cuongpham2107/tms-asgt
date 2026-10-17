@@ -280,7 +280,28 @@ test('submitting again while pending updates existing pending report', function 
     expect(TripKmReport::count())->toBe(1);
     $report = TripKmReport::first();
     expect((float) $report->reported_km)->toBe(100090.0)
-        ->and($report->note)->toBe('Lần 2 sửa lại');
+        ->and($report->note)->toContain('Lần 2 sửa lại');
+});
+
+test('reporting again while pending keeps one report, records the previous value and does not send new notifications', function () {
+    $url = "/api/driver/trips/{$this->trip->id}/report-km-issue";
+    Sanctum::actingAs($this->driver);
+
+    $this->postJson($url, ['reported_km' => 10500, 'note' => 'lần 1'])->assertCreated();
+    $countAfterFirst = DB::table('notifications')->where('notifiable_id', $this->admin->id)->count();
+
+    $this->postJson($url, ['reported_km' => 10550, 'note' => 'lần 2'])->assertCreated();
+
+    $report = TripKmReport::where('trip_id', $this->trip->id)->sole();
+    $notification = DB::table('notifications')->where('notifiable_id', $this->admin->id)->latest('created_at')->first();
+
+    expect($countAfterFirst)->toBeGreaterThan(0)
+        ->and((float) $report->reported_km)->toBe(10550.0)
+        ->and($report->note)->toContain('lần 2')
+        ->and($report->note)->toContain('10.500')
+        ->and(DB::table('notifications')->where('notifiable_id', $this->admin->id)->count())->toBe($countAfterFirst)
+        ->and($notification->data)->toContain('10.550')
+        ->and($notification->read_at)->toBeNull();
 });
 
 test('getKmBoundaries calculates correct min and max km between adjacent checkpoints', function () {

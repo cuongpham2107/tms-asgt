@@ -84,11 +84,7 @@ class TripObserver
                 ? "Chuyến xe {$plateNumber} báo sai Km"
                 : 'Chuyến xe báo sai Km';
 
-            $body = "Tài xế {$driverName} đã báo sai lệch số Km.";
-            if ($report && $report->reported_km !== null) {
-                $reportedKmFormatted = number_format((float) $report->reported_km, 1, ',', '.');
-                $body = "Tài xế {$driverName} báo sai lệch số Km: {$reportedKmFormatted} km.";
-            }
+            $body = $this->kmReportBody($trip, $report);
 
             $actions = [];
             $isPending = $report ? $report->status === TripKmReportStatus::Pending : ($trip->latestPendingKmReport !== null);
@@ -134,6 +130,46 @@ class TripObserver
                 'viewData' => ['km_report_id' => $report?->id, 'trip_id' => $trip->id],
             ];
         });
+    }
+
+    /**
+     * Tài xế báo lại khi báo cáo còn chờ: cập nhật nội dung thông báo cũ và đánh dấu chưa đọc thay vì gửi thông báo mới.
+     */
+    public function refreshKmReportNotifications(Trip $trip, TripKmReport $report): void
+    {
+        $body = $this->kmReportBody($trip, $report).' (báo lại lúc '.now()->format('H:i').')';
+
+        foreach ($this->kmReportNotifications($trip, $report) as $notificationRecord) {
+            $data = json_decode($notificationRecord->data, true);
+
+            if (! is_array($data)) {
+                continue;
+            }
+
+            $data['body'] = $body;
+
+            DB::table('notifications')->where('id', $notificationRecord->id)->update([
+                'data' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'read_at' => null,
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
+    private function kmReportBody(Trip $trip, ?TripKmReport $report): string
+    {
+        $report = $report ?? $trip->latestPendingKmReport;
+        $report?->loadMissing(['driver']);
+
+        $driverName = $report?->driver?->name ?? $trip->driver?->name ?? 'Chưa gán tài xế';
+
+        if ($report && $report->reported_km !== null) {
+            $reportedKmFormatted = number_format((float) $report->reported_km, 1, ',', '.');
+
+            return "Tài xế {$driverName} báo sai lệch số Km: {$reportedKmFormatted} km.";
+        }
+
+        return "Tài xế {$driverName} đã báo sai lệch số Km.";
     }
 
     /**

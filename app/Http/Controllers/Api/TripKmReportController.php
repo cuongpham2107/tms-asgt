@@ -53,6 +53,13 @@ class TripKmReportController extends Controller
 
         $existingPending = $trip->kmReports()->where('status', 'pending')->first();
         if ($existingPending) {
+            $previous = sprintf(
+                'Lần báo trước (%s): %s km%s',
+                $existingPending->updated_at?->format('H:i d/m') ?? '',
+                number_format((float) $existingPending->reported_km, 1, ',', '.'),
+                filled($existingPending->note) ? ' — '.$existingPending->note : '',
+            );
+
             $existingPending->update([
                 'checkpoint_id' => $checkpointId,
                 'driver_id' => $user->id,
@@ -60,7 +67,7 @@ class TripKmReportController extends Controller
                 'reported_km' => $request->validated('reported_km'),
                 'system_km' => $systemKm,
                 'photo_path' => $photoPath ?? $existingPending->photo_path,
-                'note' => $request->validated('note'),
+                'note' => trim(($request->validated('note') ?? '')."\n".$previous),
             ]);
             $report = $existingPending;
         } else {
