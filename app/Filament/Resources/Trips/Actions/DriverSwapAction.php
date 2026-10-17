@@ -141,8 +141,15 @@ class DriverSwapAction
                     return;
                 }
 
+                $handoverCheckpoints = app(CheckpointFactory::class)->create(
+                    $record,
+                    ['occurred_at' => now(), 'km_reading' => $handoverKm],
+                    CheckpointType::DriverSwap,
+                );
+
                 DriverSwap::create([
                     'trip_id' => $record->id,
+                    'checkpoint_id' => $handoverCheckpoints->min('id'),
                     'from_driver_id' => $record->driver_id,
                     'to_driver_id' => $toDriverId,
                     'from_shift_id' => $record->shift_id,
@@ -153,12 +160,6 @@ class DriverSwapAction
                 ]);
 
                 $record->vehicle->update(['current_mileage' => $handoverKm]);
-
-                app(CheckpointFactory::class)->create(
-                    $record,
-                    ['occurred_at' => now(), 'km_reading' => $handoverKm],
-                    CheckpointType::DriverSwap,
-                );
 
                 $oldDriver = $record->driver ?? User::query()->find($record->driver_id);
                 $newDriver = User::query()->find($toDriverId);

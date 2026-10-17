@@ -2,12 +2,18 @@
 
 use App\Enums\CheckpointType;
 use App\Enums\DriverSwapReason;
+use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Filament\Resources\Trips\Actions\DriverSwapAction;
 use App\Filament\Resources\Trips\Pages\ListTrips;
+use App\Models\Area;
+use App\Models\Customer;
 use App\Models\DriverSwap;
+use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
@@ -132,4 +138,31 @@ test('reassigning a trip without any handover checkpoint is refused', function (
     reassignTestCall($this, $this->driverB);
 
     expect(DriverSwap::where('trip_id', $this->trip->id)->exists())->toBeFalse();
+});
+
+test('web driver swap creates the handover checkpoint and links the swap to it', function () {
+    $this->handoverCheckpoint->delete();
+    $this->trip->update(['status' => TripStatus::Delivering, 'driver_id' => $this->driverA->id]);
+    Order::create([
+        'order_code' => 'REASSIGN-ORD-1',
+        'type' => OrderType::Hhhk,
+        'area_id' => Area::create(['type' => OrderType::Hhhk, 'code' => 'RA-TEST', 'name' => 'Reassign Area'])->id,
+        'customer_id' => Customer::create(['code' => 'RA-CUST', 'name' => 'Reassign Customer', 'is_active' => true])->id,
+        'trip_id' => $this->trip->id,
+        'status' => OrderStatus::InTransit,
+        'created_by' => $this->driverA->id,
+    ]);
+
+    $action = DriverSwapAction::make();
+    $action->record($this->trip);
+    $action->call(['data' => [
+        'to_driver_id' => $this->driverB->id,
+        'handover_km' => 1080,
+        'reason' => DriverSwapReason::ShiftHandover->value,
+    ]]);
+
+    $swap = DriverSwap::where('trip_id', $this->trip->id)->sole();
+
+    expect($swap->checkpoint)->not->toBeNull()
+        ->and((float) $swap->checkpoint->km_reading)->toBe(1080.0);
 });
