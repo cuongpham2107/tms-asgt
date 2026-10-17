@@ -161,10 +161,7 @@ export default function TripDetailScreen() {
             return {
                 id: undefined,
                 name: "Bắt đầu chuyến",
-                km:
-                    detail?.start_km != null
-                        ? Number(detail.start_km)
-                        : null,
+                km: detail?.start_km != null ? Number(detail.start_km) : null,
             };
         }
 
@@ -235,7 +232,9 @@ export default function TripDetailScreen() {
                 {
                     reported_km: km,
                     checkpoint_id: currentStep.id,
-                    note: reportNote ? `${reportReason}: ${reportNote}` : reportReason,
+                    note: reportNote
+                        ? `${reportReason}: ${reportNote}`
+                        : reportReason,
                     photo: reportPhoto || undefined,
                 },
                 token,
@@ -314,8 +313,7 @@ export default function TripDetailScreen() {
     const hasStarted = detail?.start_km != null || trip?.start_km != null;
     const orders: any[] = detail?.orders || trip?.orders || [];
     const hasIncompleteOrders =
-        orders.length > 0 &&
-        orders.some((o: any) => o.status !== "completed");
+        orders.length > 0 && orders.some((o: any) => o.status !== "completed");
 
     // Auto lấy km hiện tại của xe
     const vehicleKm = detail?.vehicle?.km_reading ?? trip?.vehicle?.km_reading;
@@ -344,8 +342,11 @@ export default function TripDetailScreen() {
             }
             await api.trips.checkpoint(String(trip.id), body, token);
             const updated = await load();
-            const currentOrders: any[] = updated?.orders || detail?.orders || trip?.orders || [];
-            const targetOrder = currentOrders.find((o: any) => o.status !== "completed") || currentOrders[0];
+            const currentOrders: any[] =
+                updated?.orders || detail?.orders || trip?.orders || [];
+            const targetOrder =
+                currentOrders.find((o: any) => o.status !== "completed") ||
+                currentOrders[0];
             if (targetOrder) {
                 router.push({
                     pathname: "/order-detail",
@@ -354,7 +355,10 @@ export default function TripDetailScreen() {
                         order: JSON.stringify({
                             ...targetOrder,
                             trip_id: trip?.id || params.id,
-                            vehicle: updated?.vehicle || detail?.vehicle || trip?.vehicle,
+                            vehicle:
+                                updated?.vehicle ||
+                                detail?.vehicle ||
+                                trip?.vehicle,
                             is_swapped: isSwapped,
                         }),
                     },
@@ -616,6 +620,41 @@ export default function TripDetailScreen() {
                             />
                             <Text style={s.actionBtnText}>
                                 {starting ? "Đang xử lý..." : "Bắt đầu chuyến"}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                    {canComplete && hasIncompleteOrders && !isReturnTrip && (
+                        <TouchableOpacity
+                            style={[
+                                s.actionBtn,
+                                {
+                                    backgroundColor: "#D97706",
+                                    marginTop:
+                                        detail?.route || trip?.route ? 6 : 12,
+                                },
+                            ]}
+                            onPress={() => {
+                                setCompleteKm(
+                                    String(
+                                        vehicleKm != null
+                                            ? Math.round(vehicleKm)
+                                            : "",
+                                    ),
+                                );
+                                setShowCompleteModal(true);
+                            }}
+                            disabled={completing}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons
+                                name="swap-horizontal"
+                                size={20}
+                                color="#fff"
+                            />
+                            <Text style={s.actionBtnText}>
+                                {completing
+                                    ? "Đang xử lý..."
+                                    : "Bàn giao chuyến chưa xong"}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -1187,11 +1226,19 @@ export default function TripDetailScreen() {
                     </>
                 )}
 
-                <View style={{ height: 100 }} />
+                <View
+                    style={{
+                        height:
+                            canComplete &&
+                            (!hasIncompleteOrders || isReturnTrip)
+                                ? 100
+                                : 32,
+                    }}
+                />
             </ScrollView>
 
             {/* Sticky bottom — Kết thúc chuyến */}
-            {canComplete && (
+            {canComplete && (!hasIncompleteOrders || isReturnTrip) && (
                 <View style={s.stickyBar}>
                     {isReturnTrip && (returnStarted || hasStarted) ? (
                         <TouchableOpacity
@@ -1227,9 +1274,7 @@ export default function TripDetailScreen() {
                         <TouchableOpacity
                             style={[
                                 {
-                                    backgroundColor: hasIncompleteOrders
-                                        ? "#D97706"
-                                        : "#DC2626",
+                                    backgroundColor: "#DC2626",
                                     flexDirection: "row",
                                     alignItems: "center",
                                     justifyContent: "center",
@@ -1248,17 +1293,10 @@ export default function TripDetailScreen() {
                                 );
                                 setShowCompleteModal(true);
                             }}
+                            disabled={completing}
                             activeOpacity={0.8}
                         >
-                            <Ionicons
-                                name={
-                                    hasIncompleteOrders
-                                        ? "swap-horizontal"
-                                        : "flag"
-                                }
-                                size={20}
-                                color="#fff"
-                            />
+                            <Ionicons name="flag" size={20} color="#fff" />
                             <Text
                                 style={{
                                     color: "#fff",
@@ -1266,8 +1304,8 @@ export default function TripDetailScreen() {
                                     fontWeight: "800",
                                 }}
                             >
-                                {hasIncompleteOrders
-                                    ? "Bàn giao chuyến chưa xong"
+                                {completing
+                                    ? "Đang xử lý..."
                                     : "Kết thúc chuyến"}
                             </Text>
                         </TouchableOpacity>
