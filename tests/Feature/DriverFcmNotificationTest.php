@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CheckpointType;
 use App\Enums\DriverSwapReason;
 use App\Enums\OrderStatus;
 use App\Enums\ShiftType;
@@ -22,6 +23,7 @@ use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
@@ -571,6 +573,15 @@ test('reassign driver action sends fcm notification to new driver and return tri
         'start_km' => 20000,
     ]);
 
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'checkpoint_type' => CheckpointType::DriverSwap->value,
+        'occurred_at' => now(),
+        'km_reading' => 20050,
+        'driver_id' => $oldDriver->id,
+        'vehicle_id' => $vehicle1->id,
+    ]);
+
     $mockMessaging = Mockery::mock(Messaging::class);
     $mockMessaging->shouldReceive('send')->twice()->andReturn([]);
     app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
@@ -579,7 +590,6 @@ test('reassign driver action sends fcm notification to new driver and return tri
     $action->record($trip);
     $action->call(['data' => [
         'new_driver_id' => $newDriver->id,
-        'handover_km' => 20050,
         'reason' => DriverSwapReason::CargoNotUnloaded->value,
         'create_return_trip' => true,
         'return_vehicle_id' => $vehicle2->id,

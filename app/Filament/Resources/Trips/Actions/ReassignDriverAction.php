@@ -19,9 +19,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Filament\Support\RawJs;
 
 class ReassignDriverAction
 {
@@ -85,16 +83,15 @@ class ReassignDriverAction
                         ->all())
                     ->searchable()
                     ->required(),
-                TextInput::make('handover_km')
-                    ->label('Km chuyển giao')
-                    ->mask(RawJs::make('$money($input)'))
-                    ->stripCharacters(',')
-                    ->numeric()
-                    ->required()
-                    ->hidden()
-                    ->dehydratedWhenHidden()
-                    ->default(fn (Trip $record): ?float => $record->vehicle?->current_mileage !== null ? (float) $record->vehicle->current_mileage : null)
-                    ->helperText('Mặc định lấy km hiện tại của xe, có thể sửa lại nếu cần'),
+                Placeholder::make('handover_info')
+                    ->label('Km bàn giao')
+                    ->content(function (Trip $record): string {
+                        $handover = static::latestHandoverCheckpoint($record);
+
+                        return $handover
+                            ? number_format((float) $handover->km_reading, 1, ',', '.').' km lúc '.$handover->occurred_at->format('H:i d/m')
+                            : 'Chưa có mốc bàn giao';
+                    }),
                 Select::make('reason')
                     ->label('Lý do')
                     ->options(DriverSwapReason::class)
@@ -187,12 +184,35 @@ class ReassignDriverAction
                 //     return;
                 // }
 
-                $handoverKm = (float) $data['handover_km'];
-                if ($handoverKm <= 0) {
+                $handover = static::latestHandoverCheckpoint($record);
+
+                if ($handover === null) {
                     Notification::make()
                         ->danger()
-                        ->title('Km chuyển giao không hợp lệ')
-                        ->body('Vui lòng nhập km chuyển giao lớn hơn 0.')
+                        ->title('Chuyến chưa có mốc bàn giao')
+                        ->body('Hãy dùng chức năng Đảo lái để ghi km bàn giao trước.')
+                        ->send();
+
+                    return;
+                }
+
+                $handoverKm = (float) $handover->km_reading;
+                $companionIds = TripCheckpoint::where('trip_id', $record->id)
+                    ->where('checkpoint_type', CheckpointType::DriverSwap)
+                    ->where('occurred_at', $handover->occurred_at)
+                    ->pluck('id');
+
+                $existingSwap = DriverSwap::where('trip_id', $record->id)->whereIn('checkpoint_id', $companionIds)->first();
+                $receiverStarted = $existingSwap !== null && TripCheckpoint::where('trip_id', $record->id)
+                    ->where('driver_id', $existingSwap->to_driver_id)
+                    ->where('occurred_at', '>', $handover->occurred_at)
+                    ->exists();
+
+                if ($receiverStarted) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Chuyến chưa có mốc bàn giao mới')
+                        ->body('Hãy dùng chức năng Đảo lái để ghi km bàn giao trước.')
                         ->send();
 
                     return;
@@ -206,19 +226,24 @@ class ReassignDriverAction
                     ->whereNull('end_time')
                     ->first();
 
-                DriverSwap::create([
-                    'trip_id' => $record->id,
-                    'from_driver_id' => $record->driver_id,
+                $swapData = [
                     'to_driver_id' => $data['new_driver_id'],
-                    'from_shift_id' => $oldShift?->id,
                     'to_shift_id' => $newShift?->id,
-                    'handover_km' => $handoverKm,
                     'reason' => $data['reason'],
                     'created_by' => auth()->id(),
-                ]);
+                ];
 
-                if ($record->vehicle) {
-                    $record->vehicle->update(['current_mileage' => $handoverKm]);
+                if ($existingSwap !== null) {
+                    $existingSwap->update($swapData);
+                } else {
+                    DriverSwap::create([
+                        ...$swapData,
+                        'trip_id' => $record->id,
+                        'checkpoint_id' => $handover->id,
+                        'from_driver_id' => $record->driver_id,
+                        'from_shift_id' => $oldShift?->id,
+                        'handover_km' => $handoverKm,
+                    ]);
                 }
 
                 $lastCheckpoint = TripCheckpoint::query()
@@ -328,5 +353,27 @@ class ReassignDriverAction
                         ->send();
                 }
             });
+    }
+
+    /**
+     * Mốc driver_swap mới nhất (mốc đầu của nhóm đồng hành) của chuyến.
+     */
+    protected static function latestHandoverCheckpoint(Trip $trip): ?TripCheckpoint
+    {
+        $latest = TripCheckpoint::where('trip_id', $trip->id)
+            ->where('checkpoint_type', CheckpointType::DriverSwap)
+            ->whereNotNull('km_reading')
+            ->latest('occurred_at')
+            ->first();
+
+        if ($latest === null) {
+            return null;
+        }
+
+        return TripCheckpoint::where('trip_id', $trip->id)
+            ->where('checkpoint_type', CheckpointType::DriverSwap)
+            ->where('occurred_at', $latest->occurred_at)
+            ->orderBy('id')
+            ->first();
     }
 }
