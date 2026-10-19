@@ -7,27 +7,31 @@ use Filament\Widgets\ChartWidget;
 
 class OrderTypeChartWidget extends ChartWidget
 {
-    protected ?string $heading = 'Tỷ lệ đơn hàng theo loại';
+    protected ?string $heading = 'Cơ cấu Loại Hàng hoá';
 
-    protected ?string $maxHeight = '280px';
+    protected ?string $description = 'Tỷ lệ giữa Hàng không (HHHK) và Hàng ngoài';
+
+    protected ?string $maxHeight = '320px';
+
+    public ?string $filter = 'month';
 
     protected function getFilters(): ?array
     {
         return [
-            'today' => 'Hôm nay',
-            'week' => 'Tuần này',
             'month' => 'Tháng này',
-            'year' => 'Năm nay',
+            'week' => 'Tuần này',
+            'today' => 'Hôm nay',
+            'all' => 'Toàn bộ thời gian',
         ];
     }
 
     protected function getData(): array
     {
-        $activeFilter = $this->filter ?: 'today';
+        $activeFilter = $this->filter ?: 'month';
 
         $query = Order::query();
-
         $now = now();
+
         $query = match ($activeFilter) {
             'today' => $query->whereDate('planned_loading_at', $now->toDateString()),
             'week' => $query->whereBetween('planned_loading_at', [
@@ -36,8 +40,9 @@ class OrderTypeChartWidget extends ChartWidget
             ]),
             'month' => $query->whereMonth('planned_loading_at', $now->month)
                 ->whereYear('planned_loading_at', $now->year),
-            'year' => $query->whereYear('planned_loading_at', $now->year),
-            default => $query->whereDate('planned_loading_at', $now->toDateString()),
+            'all' => $query,
+            default => $query->whereMonth('planned_loading_at', $now->month)
+                ->whereYear('planned_loading_at', $now->year),
         };
 
         $counts = $query->selectRaw('type, count(*) as count')
@@ -45,18 +50,54 @@ class OrderTypeChartWidget extends ChartWidget
             ->pluck('count', 'type')
             ->toArray();
 
-        $hhhkCount = $counts['HHHK'] ?? 0;
-        $externalCount = $counts['external'] ?? 0;
+        $hhhkCount = (int) ($counts['HHHK'] ?? 0);
+        $externalCount = (int) ($counts['external'] ?? 0);
+        $total = $hhhkCount + $externalCount;
+
+        $hhhkPercent = $total > 0 ? round(($hhhkCount / $total) * 100) : 0;
+        $externalPercent = $total > 0 ? round(($externalCount / $total) * 100) : 0;
 
         return [
             'datasets' => [
                 [
                     'label' => 'Số lượng đơn hàng',
                     'data' => [$hhhkCount, $externalCount],
-                    'backgroundColor' => ['#008fd5', '#4CAF50'],
+                    'backgroundColor' => ['#0284c7', '#10b981'],
+                    'borderWidth' => 2,
+                    'borderColor' => '#ffffff',
+                    'hoverOffset' => 6,
                 ],
             ],
-            'labels' => ['Hàng không (HHHK)', 'Hàng ngoài'],
+            'labels' => [
+                "Hàng không ({$hhhkCount} - {$hhhkPercent}%)",
+                "Hàng ngoài ({$externalCount} - {$externalPercent}%)",
+            ],
+        ];
+    }
+
+    protected function getOptions(): array
+    {
+        return [
+            'plugins' => [
+                'legend' => [
+                    'display' => true,
+                    'position' => 'bottom',
+                    'labels' => [
+                        'usePointStyle' => true,
+                        'boxWidth' => 8,
+                        'padding' => 14,
+                        'font' => [
+                            'size' => 11,
+                            'weight' => '500',
+                        ],
+                    ],
+                ],
+                'tooltip' => [
+                    'padding' => 12,
+                    'cornerRadius' => 8,
+                ],
+            ],
+            'cutout' => '72%',
         ];
     }
 
