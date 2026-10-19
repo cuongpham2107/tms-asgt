@@ -43,14 +43,14 @@ class Login extends BaseLogin
     protected function getCredentialsFromFormData(#[SensitiveParameter] array $data): array
     {
         $login = trim((string) ($data['email'] ?? ''));
-        $cleanLogin = str_replace('-', '', strtoupper($login));
+        $cleanLogin = str_replace(['-', ' ', '.'], '', strtoupper($login));
 
         $user = User::query()
             ->where('email', $login)
             ->orWhereRaw('LOWER(email) = ?', [strtolower($login)])
             ->orWhere('employee_code', $login)
             ->orWhereRaw('UPPER(employee_code) = ?', [strtoupper($login)])
-            ->orWhereRaw('REPLACE(UPPER(employee_code), "-", "") = ?', [$cleanLogin])
+            ->orWhereRaw("REPLACE(REPLACE(UPPER(employee_code), '-', ''), ' ', '') = ?", [$cleanLogin])
             ->first();
 
         if ($user) {

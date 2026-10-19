@@ -41,7 +41,6 @@ class AppPanelProvider extends PanelProvider
             ->viteTheme('resources/css/filament/app/theme.css')
             ->brandLogo(asset('images/ASG.png'))
             ->brandLogoHeight('2rem')
-            ->favicon(asset('favicon.png'))
             ->login(Login::class)
             ->colors([
                 'primary' => Color::Blue,

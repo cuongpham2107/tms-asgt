@@ -5,7 +5,6 @@ namespace App\Filament\Pages;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -16,6 +15,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Hash;
@@ -64,10 +64,10 @@ class StaffAccounts extends Page implements HasTable
                     ->with('roles')
             )
             ->columns([
-                TextColumn::make('index')
-                    ->label('STT')
-                    ->rowIndex()
-                    ->alignCenter(),
+                // TextColumn::make('index')
+                //     ->label('STT')
+                //     ->rowIndex()
+                //     ->alignCenter(),
                 TextColumn::make('employee_code')
                     ->label('Mã NV')
                     ->badge()
@@ -205,12 +205,7 @@ class StaffAccounts extends Page implements HasTable
                         Toggle::make('is_active')
                             ->label('Đang hoạt động'),
                     ]),
-                DeleteAction::make()
-                    ->label('Xóa')
-                    ->iconButton()
-                    ->modalHeading('Xóa tài khoản nhân viên')
-                    ->hidden(fn (User $record): bool => $record->id === auth()->id()),
-            ])
+            ], position: RecordActionsPosition::BeforeColumns)
             ->defaultSort('id', 'desc')
             ->paginated([10, 25, 50]);
     }
