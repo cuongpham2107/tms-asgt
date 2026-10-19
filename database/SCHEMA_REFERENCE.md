@@ -354,24 +354,7 @@
 
 ---
 
-## 15. `order_templates` — Mẫu đơn định kỳ
-
-| Column         | Type         | Nullable | Default | Notes                              |
-|----------------|--------------|----------|---------|-------------------------------------|
-| id             | int (PK)     | NO       | auto    |                                     |
-| name           | string(255)  | NO       |         | Tên mẫu đơn                        |
-| order_data     | json         | NO       |         | JSON đủ các trường của orders       |
-| quantity       | int          | NO       | 1       | Số lượng đơn tạo mỗi lần           |
-| cron_expression| string(100)  | YES      |         | Biểu thức cron                     |
-| daily_run_at   | time         | YES      |         | Giờ chạy hàng ngày                  |
-| is_active      | boolean      | NO       | true    |                                     |
-| created_by     | int          | NO       |         | FK → users.id                       |
-| created_at     | datetime     | YES      |         |                                     |
-| updated_at     | datetime     | YES      |         |                                     |
-
----
-
-## 16. `empty_kilometers` — Km không hàng
+## 15. `empty_kilometers` — Km không hàng
 
 | Column        | Type           | Nullable | Default | Notes                          |
 |---------------|----------------|----------|---------|--------------------------------|
@@ -394,7 +377,7 @@
 
 ---
 
-## 17. `trip_checkpoints` — Checkpoint / Mốc chuyến
+## 16. `trip_checkpoints` — Checkpoint / Mốc chuyến
 
 | Column            | Type           | Nullable | Default | Notes                              |
 |-------------------|----------------|----------|---------|------------------------------------|
@@ -414,7 +397,7 @@
 
 ---
 
-## 18. `trip_photos` — Ảnh chuyến xe
+## 17. `trip_photos` — Ảnh chuyến xe
 
 | Column             | Type        | Nullable | Default | Notes                                  |
 |--------------------|-------------|----------|---------|----------------------------------------|
@@ -426,7 +409,7 @@
 
 ---
 
-## 19. `driver_swaps` — Đảo lái
+## 18. `driver_swaps` — Đảo lái
 
 | Column        | Type           | Nullable | Default | Notes                          |
 |---------------|----------------|----------|---------|--------------------------------|
@@ -455,7 +438,7 @@ customers ─── orders                  │── orders.created_by
                                       │── trip_checkpoints.driver_id
                                       │── vehicle_maintenance_*.created_by
                                       │── vehicle_documents.created_by
-locations ─── order_delivery_points   │── order_templates.created_by
+locations ─── order_delivery_points   │── vehicles.current_driver_id
           ─── orders.pickup_location   │── vehicles.current_driver_id
           ─── customer_location
                                       vehicles ──┬── vehicle_documents

@@ -7,6 +7,8 @@ use App\Enums\DriverWorkShift;
 use App\Enums\OnDutyLocation;
 use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -52,12 +54,21 @@ use Spatie\Permission\Traits\HasRoles;
     'vehicle_id',
 ])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
     use HasRoles;
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        if ($this->hasRole('super_admin')) {
+            return true;
+        }
+
+        return (bool) $this->is_active && ! $this->hasRole('driver');
+    }
 
     protected static function booted(): void
     {
@@ -308,11 +319,6 @@ class User extends Authenticatable
     public function driverSwapsCreated(): HasMany
     {
         return $this->hasMany(DriverSwap::class, 'created_by');
-    }
-
-    public function orderTemplates(): HasMany
-    {
-        return $this->hasMany(OrderTemplate::class, 'created_by');
     }
 
     public function overtimeRegistrations(): HasMany
