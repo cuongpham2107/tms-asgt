@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\CheckpointType;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
@@ -879,9 +880,124 @@ test('adding a new checkpoint in trip form pre-fills values from previous checkp
     $newRow = end($schemas);
     $flat = $newRow->getFlatComponents();
 
-    expect($flat['order_id']->getState())->toBe($order->id)
+    expect($flat['checkpoint_type']->getState())->toEqual(CheckpointType::ArrivedPickup)
+        ->and($flat['order_id']->getState())->toBe($order->id)
         ->and($flat['driver_id']->getState())->toBe($this->driver->id)
         ->and((float) $flat['km_reading']->getState())->toBe(50010.5)
         ->and($flat['occurred_at']->getState())->toBe('2026-10-19 09:00')
         ->and($flat['delivery_point_id']->getState())->toBe($dp->id);
+});
+
+test('adding a new checkpoint advances checkpoint_type correctly and skips driver_swap', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TEST-TRIP-ADVANCE',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Started,
+        'start_km' => 50000,
+        'started_at' => now(),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'TEST-ORD-ADVANCE',
+        'type' => OrderType::Hhhk,
+        'trip_id' => $trip->id,
+        'customer_id' => $this->customer->id,
+        'area_id' => $this->area->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'status' => OrderStatus::InTransit,
+        'created_by' => $this->driver->id,
+    ]);
+
+    $trip->checkpoints()->create([
+        'checkpoint_type' => 'left_pickup',
+        'order_id' => $order->id,
+        'driver_id' => $this->driver->id,
+        'occurred_at' => now()->subMinutes(10),
+    ]);
+    $trip->checkpoints()->create([
+        'checkpoint_type' => 'driver_swap',
+        'order_id' => $order->id,
+        'driver_id' => $this->driver->id,
+        'occurred_at' => now()->subMinutes(5),
+    ]);
+
+    $form = Schema::make(Livewire::new(ListTrips::class));
+    TripForm::configure($form);
+    $form->record($trip);
+    $form->loadStateFromRelationships();
+
+    // Case 1: LeftPickup -> DriverSwap -> next row defaults to ArrivedDelivery
+    $comp = $form->getFlatComponents()['checkpoints'];
+    $comp->getAddAction()->call(['component' => $comp]);
+    $schemas = $comp->getChildSchemas();
+    $newRow = end($schemas);
+    expect($newRow->getFlatComponents()['checkpoint_type']->getState())->toEqual(CheckpointType::ArrivedDelivery);
+
+    // Case 2: ArrivedDelivery -> next row defaults to Completed
+    $trip2 = Trip::create([
+        'trip_code' => 'TEST-TRIP-ADVANCE-2',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Started,
+        'start_km' => 50000,
+        'started_at' => now(),
+    ]);
+    $trip2->checkpoints()->create([
+        'checkpoint_type' => 'arrived_delivery',
+        'order_id' => $order->id,
+        'driver_id' => $this->driver->id,
+        'occurred_at' => now(),
+    ]);
+
+    $form2 = Schema::make(Livewire::new(ListTrips::class));
+    TripForm::configure($form2);
+    $form2->record($trip2);
+    $form2->loadStateFromRelationships();
+
+    $comp2 = $form2->getFlatComponents()['checkpoints'];
+    $comp2->getAddAction()->call(['component' => $comp2]);
+    $schemas2 = $comp2->getChildSchemas();
+    $newRow2 = end($schemas2);
+    expect($newRow2->getFlatComponents()['checkpoint_type']->getState())->toEqual(CheckpointType::Completed);
+});
+
+test('adding a new checkpoint in rental trip form advances checkpoint_type correctly', function () {
+    $rentVehicle = Vehicle::create([
+        'plate_number' => '29C-RENT-001',
+        'type' => VehicleOwnerType::Rent,
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'RENTAL',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TEST-TRIP-RENT-ADVANCE',
+        'vehicle_id' => $rentVehicle->id,
+        'driver_id' => null,
+        'status' => TripStatus::Started,
+        'started_at' => now(),
+    ]);
+
+    $trip->checkpoints()->create([
+        'checkpoint_type' => 'left_pickup',
+        'occurred_at' => now()->subMinutes(10),
+    ]);
+    $trip->checkpoints()->create([
+        'checkpoint_type' => 'driver_swap',
+        'occurred_at' => now()->subMinutes(5),
+    ]);
+
+    $form = Schema::make(Livewire::new(ListTrips::class));
+    TripForm::configure($form);
+    $form->record($trip);
+    $form->loadStateFromRelationships();
+
+    // From left_pickup -> driver_swap -> next should be arrived_delivery
+    $comp = $form->getFlatComponents()['checkpoints_rent'];
+    $comp->getAddAction()->call(['component' => $comp]);
+    $schemas = $comp->getChildSchemas();
+    $newRow = end($schemas);
+    expect($newRow->getFlatComponents()['checkpoint_type']->getState())->toEqual(CheckpointType::ArrivedDelivery);
 });

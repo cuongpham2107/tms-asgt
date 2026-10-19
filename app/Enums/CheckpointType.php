@@ -43,4 +43,16 @@ enum CheckpointType: string implements HasColor, HasLabel
             self::Cancelled => 'danger',
         };
     }
+
+    public function getNextType(): ?self
+    {
+        return match ($this) {
+            self::Started => self::ArrivedPickup,
+            self::ArrivedPickup => self::LeftPickup,
+            self::LeftPickup => self::ArrivedDelivery,
+            self::ArrivedDelivery => self::Completed,
+            self::Completed => self::End,
+            default => null,
+        };
+    }
 }

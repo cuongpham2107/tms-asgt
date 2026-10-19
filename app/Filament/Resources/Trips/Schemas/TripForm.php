@@ -195,7 +195,8 @@ class TripForm
                                     ->label('Loại')
                                     ->options(CheckpointType::class)
                                     ->required()
-                                    ->native(false),
+                                    ->native(false)
+                                    ->default(fn ($get) => self::getNextCheckpointType($get, 'checkpoints_rent')),
                                 Select::make('order_id')
                                     ->label('Đơn hàng')
                                     ->options(function ($get): array {
@@ -292,7 +293,8 @@ class TripForm
                                     ->label('Loại')
                                     ->options(CheckpointType::class)
                                     ->required()
-                                    ->native(false),
+                                    ->native(false)
+                                    ->default(fn ($get) => self::getNextCheckpointType($get, 'checkpoints')),
                                 Select::make('order_id')
                                     ->label('Đơn hàng')
                                     ->options(function ($get): array {
@@ -495,5 +497,44 @@ class TripForm
         }
 
         return $fallbackVal;
+    }
+
+    /**
+     * Xác định loại mốc hành trình tiếp theo dựa trên lịch sử các mốc trước đó.
+     * Nếu mốc gần nhất là đảo lái (driver_swap) hoặc huỷ chuyến (cancelled),
+     * bỏ qua và lấy trạng thái tiếp theo của mốc hợp lệ trước đó.
+     */
+    private static function getNextCheckpointType(callable $get, string $repeaterName): ?CheckpointType
+    {
+        $checkpoints = $get("../../{$repeaterName}");
+        if (! is_array($checkpoints) || empty($checkpoints)) {
+            return CheckpointType::Started;
+        }
+
+        $lastCheckpoint = collect($checkpoints)
+            ->reverse()
+            ->first(function ($item): bool {
+                if (! is_array($item) || blank($item['checkpoint_type'] ?? null)) {
+                    return false;
+                }
+
+                $raw = $item['checkpoint_type'];
+                $type = $raw instanceof CheckpointType
+                    ? $raw
+                    : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
+
+                return $type !== null && $type !== CheckpointType::DriverSwap && $type !== CheckpointType::Cancelled;
+            });
+
+        if (! $lastCheckpoint) {
+            return CheckpointType::Started;
+        }
+
+        $raw = $lastCheckpoint['checkpoint_type'];
+        $type = $raw instanceof CheckpointType
+            ? $raw
+            : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
+
+        return $type?->getNextType();
     }
 }
