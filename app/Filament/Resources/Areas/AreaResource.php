@@ -29,7 +29,7 @@ class AreaResource extends BaseResource
 
     protected static ?string $modelLabel = 'Khu vực';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Cấu hình';
+    protected static string|UnitEnum|null $navigationGroup = 'Quản lý';
 
     protected static ?int $navigationSort = 2;
 

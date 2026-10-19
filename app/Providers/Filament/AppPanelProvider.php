@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\Login;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Enums\UserMenuPosition;
 use Filament\Http\Middleware\Authenticate;
@@ -21,9 +22,9 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
-use Illuminate\View\Middleware\ShareErrorsFromSession;
 // use Openplain\FilamentShadcnTheme\Color;
 
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 use RmsRamos\Activitylog\ActivitylogPlugin;
 use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
 use WatheqAlshowaiter\FilamentStickyTableHeader\StickyTableHeaderPlugin;
@@ -41,7 +42,7 @@ class AppPanelProvider extends PanelProvider
             ->brandLogo(asset('images/ASG.png'))
             ->brandLogoHeight('2rem')
             ->favicon(asset('favicon.png'))
-            ->login()
+            ->login(Login::class)
             ->colors([
                 'primary' => Color::Blue,
             ])
