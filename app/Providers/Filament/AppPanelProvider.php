@@ -41,7 +41,7 @@ class AppPanelProvider extends PanelProvider
             ->brandLogo(asset('images/ASG.png'))
             ->brandLogoHeight('2rem')
             ->favicon(asset('favicon.png'))
-            ->login()
+            ->login(\App\Filament\Pages\Auth\Login::class)
             ->colors([
                 'primary' => Color::Blue,
             ])
