@@ -10,13 +10,30 @@ use SensitiveParameter;
 
 class Login extends BaseLogin
 {
+    protected static string $layout = 'filament.pages.auth.split-layout';
+
+    protected string $view = 'filament.pages.auth.login';
+
+    public function hasLogo(): bool
+    {
+        return false;
+    }
+
     protected function getEmailFormComponent(): Component
     {
         return TextInput::make('email')
             ->label('Email hoặc Mã nhân viên')
+            ->placeholder('VD: ASGT-00123 hoặc name@asgl.net.vn')
             ->required()
-            ->autocomplete()
+            ->autocomplete('username')
             ->autofocus();
+    }
+
+    protected function getPasswordFormComponent(): Component
+    {
+        return parent::getPasswordFormComponent()
+            ->label('Mật khẩu')
+            ->placeholder('Nhập mật khẩu của bạn');
     }
 
     /**

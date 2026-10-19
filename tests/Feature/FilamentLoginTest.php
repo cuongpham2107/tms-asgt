@@ -13,10 +13,13 @@ beforeEach(function () {
     Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
 });
 
-test('login page can be rendered', function () {
+test('login page can be rendered with split screen banner', function () {
     $this->get('/app/login')
         ->assertSuccessful()
-        ->assertSee('Email hoặc Mã nhân viên');
+        ->assertSee('Email hoặc Mã nhân viên')
+        ->assertSee('Đăng nhập tài khoản')
+        ->assertSee('login-banner.jpg')
+        ->assertSee('Đội xe ASG Logistics');
 });
 
 test('user can authenticate using email', function () {
