@@ -45,6 +45,7 @@ class AppPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Blue,
             ])
+            ->spa()
             ->sidebarWidth('220px')
             ->sidebarCollapsibleOnDesktop()
             ->globalSearch(false)

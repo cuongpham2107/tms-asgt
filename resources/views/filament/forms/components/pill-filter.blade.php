@@ -44,6 +44,7 @@
         .pill-filter-btn.is-active.bg-sky-500 { background-color: #0ea5e9 !important; }
         .pill-filter-btn.is-active.bg-orange-400 { background-color: #fb923c !important; }
         .pill-filter-btn.is-active.bg-red-500, .pill-filter-btn.is-active.bg-red-600 { background-color: #ef4444 !important; }
+        .pill-filter-btn.is-active.bg-violet-500 { background-color: #8b5cf6 !important; }
         .pill-filter-btn.is-active.bg-gray-400, .pill-filter-btn.is-active.bg-gray-500 { background-color: #6b7280 !important; }
     </style>
     <div class="flex items-center overflow-x-auto scrollbar-none">

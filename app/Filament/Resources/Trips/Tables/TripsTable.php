@@ -56,6 +56,7 @@ class TripsTable extends BaseTable
                     'vehicle',
                     'driver',
                     'driverSwaps.toDriver',
+                    'driverSwaps.fromDriver',
                     'driverSwapCheckpoints' => fn ($q) => $q->where('checkpoint_type', 'driver_swap'),
                     'shift',
                     'startLocation',
@@ -299,7 +300,7 @@ class TripsTable extends BaseTable
             ->searchable(false)
 
             ->paginated([10, 25, 50, 100])
-            ->defaultPaginationPageOption(50)
+            ->defaultPaginationPageOption(25)
             ->recordActions([
                 ReassignTransportAction::make(),
                 ReassignDriverAction::make(),

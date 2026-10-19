@@ -52,6 +52,8 @@ class OrdersTable extends BaseTable
     {
         return parent::applyDefaults($table)
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
+                'customer',
+                'createdBy',
                 'deliveryPoints.location',
                 'area',
                 'pickupLocation',
@@ -389,7 +391,8 @@ class OrdersTable extends BaseTable
                     ->getTitleFromRecordUsing(fn (Order $record): string => $record->trip?->trip_code ?? 'Chưa có chuyến đi')
                     ->collapsible(),
             ])
-            ->defaultPaginationPageOption(50)
+            ->paginated([10, 25, 50, 100])
+            ->defaultPaginationPageOption(25)
             // ->defaultGroup('area.code')
             ->toolbarActions([
                 BulkActionGroup::make([

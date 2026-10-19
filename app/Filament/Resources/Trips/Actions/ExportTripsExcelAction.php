@@ -61,6 +61,7 @@ class ExportTripsExcelAction
                             'all' => 'Tất cả',
                             'HHHK' => 'HHHK',
                             'external' => 'Hàng ngoài',
+                            'empty' => 'Chuyến không hàng',
                         ]),
                     Select::make('status')
                         ->label('Trạng thái chuyến')

@@ -71,9 +71,9 @@ class ListTrips extends ListRecords
     public array $orderPlaceFilters = [];
 
     public array $orderTypeFilters = [
-
         'HHHK' => ['label' => 'HHHK', 'color' => 'bg-blue-500'],
         'external' => ['label' => 'Hàng ngoài', 'color' => 'bg-amber-500'],
+        'empty' => ['label' => 'Chuyến không hàng', 'color' => 'bg-violet-500'],
         'all' => ['label' => 'Tất cả', 'color' => 'bg-blue-600'],
     ];
 
@@ -328,6 +328,8 @@ class ListTrips extends ListRecords
                 ->map(fn ($c): int => (int) $c)
                 ->toArray();
 
+            $counts['empty'] = (int) (clone $base)->whereDoesntHave('orders')->count();
+
             $counts['all'] = (int) (clone $base)->count();
 
             return $counts;
@@ -420,7 +422,13 @@ class ListTrips extends ListRecords
             ->when($except !== 'status' && $this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
             ->when($except !== 'status' && $this->activeStatusFilter === 'all', fn (Builder $query): Builder => $query->whereNotIn('trips.status', [TripStatus::Completed->value, TripStatus::Delivered->value, TripStatus::Cancelled->value]))
             ->when($except !== 'vehicleOwner' && $this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
-            ->when($except !== 'orderType' && $this->orderType !== 'all', fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q) => $q->where('type', $this->orderType)))
+            ->when($except !== 'orderType' && $this->orderType !== 'all', function (Builder $query): Builder {
+                if ($this->orderType === 'empty') {
+                    return $query->whereDoesntHave('orders');
+                }
+
+                return $query->whereHas('orders', fn (Builder $q): Builder => $q->where('type', $this->orderType));
+            })
             ->when($except !== 'place' && $this->activePlaceFilter !== 'all', fn (Builder $query): Builder => $query->whereHas('orders.area', fn (Builder $q) => $q->where('code', $this->activePlaceFilter)));
     }
 
@@ -497,7 +505,13 @@ class ListTrips extends ListRecords
             )
             ->when(
                 $orderType !== 'all',
-                fn (Builder $query): Builder => $query->whereHas('orders', fn (Builder $q): Builder => $q->where('type', $orderType)),
+                function (Builder $query) use ($orderType): Builder {
+                    if ($orderType === 'empty') {
+                        return $query->whereDoesntHave('orders');
+                    }
+
+                    return $query->whereHas('orders', fn (Builder $q): Builder => $q->where('type', $orderType));
+                },
             )
             ->when(
                 $place !== 'all',
@@ -627,7 +641,11 @@ class ListTrips extends ListRecords
             })
             ->when($this->orderType !== 'all', function (Builder $query) use ($actionRecordId): Builder {
                 return $query->where(function (Builder $q) use ($actionRecordId) {
-                    $q->whereHas('orders', fn (Builder $sq) => $sq->where('type', $this->orderType));
+                    if ($this->orderType === 'empty') {
+                        $q->whereDoesntHave('orders');
+                    } else {
+                        $q->whereHas('orders', fn (Builder $sq) => $sq->where('type', $this->orderType));
+                    }
                     if ($actionRecordId) {
                         $q->orWhere('trips.id', $actionRecordId);
                     }
