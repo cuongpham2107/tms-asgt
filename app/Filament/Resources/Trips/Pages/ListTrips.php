@@ -19,6 +19,7 @@ use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Request;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -27,6 +28,33 @@ class ListTrips extends ListRecords
     protected static string $resource = TripResource::class;
 
     protected string $view = 'filament.resources.trips.pages.list-trips';
+
+    /**
+     * Fallback polling interval (60s) nếu kết nối WebSocket bị gián đoạn.
+     */
+    public function getTablePollingInterval(): ?string
+    {
+        return '60s';
+    }
+
+    /**
+     * Lắng nghe broadcast event realtime qua Laravel Reverb / Echo.
+     * Khi tài xế cập nhật chuyến (checkpoint, hoàn thành, báo sai km, ...)
+     * hoặc chuyến bị thay đổi, giao diện tự động làm mới thẻ thống kê và bảng chuyến xe.
+     *
+     * @param  array<string, mixed>|null  $event
+     */
+    #[On('echo:trips,TripUpdated')]
+    #[On('echo:trips,.TripUpdated')]
+    public function onTripUpdated(?array $event = null): void
+    {
+        if (filled($this->mountedActions ?? [])) {
+            return;
+        }
+
+        $this->memoizedCounts = [];
+        $this->flushCachedTableRecords();
+    }
 
     #[Url(keep: true)]
     public ?string $dateFrom = null;
@@ -82,7 +110,6 @@ class ListTrips extends ListRecords
         'pending' => ['label' => 'Chờ chạy', 'color' => 'bg-sky-500'],
         'running' => ['label' => 'Đang chạy', 'color' => 'bg-sky-500'],
         'completed' => ['label' => 'Hoàn thành', 'color' => 'bg-emerald-500'],
-        'return_trip' => ['label' => 'Chuyến không hàng', 'color' => 'bg-violet-500'],
         'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
         'km_report' => ['label' => 'Báo sai km', 'color' => 'bg-amber-500'],
         'cancelled' => ['label' => 'Đã huỷ', 'color' => 'bg-red-500'],

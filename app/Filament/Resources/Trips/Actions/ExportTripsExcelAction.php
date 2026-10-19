@@ -77,7 +77,6 @@ class ExportTripsExcelAction
                             'delivered' => 'Đã giao',
                             'completed' => 'Hoàn thành',
                             'driver_swap' => 'Đảo lái',
-                            'return_trip' => 'Chuyến không hàng',
                             'km_report' => 'Báo sai km',
                             'cancelled' => 'Đã huỷ',
                         ]),

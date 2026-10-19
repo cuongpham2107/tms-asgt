@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
+use App\Events\TripUpdated;
 use App\Filament\Resources\Trips\TripResource;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
@@ -22,6 +23,8 @@ class TripObserver
      */
     public function created(Trip $trip): void
     {
+        $this->broadcastTripChange($trip, 'created');
+
         if ($trip->status === TripStatus::Delivered) {
             $this->notifyUsersTripDelivered($trip);
         }
@@ -36,6 +39,8 @@ class TripObserver
      */
     public function updated(Trip $trip): void
     {
+        $this->broadcastTripChange($trip, 'updated');
+
         if ($trip->wasChanged('status')) {
             if ($trip->status === TripStatus::Delivered) {
                 $this->notifyUsersTripDelivered($trip);
@@ -45,6 +50,14 @@ class TripObserver
                 $this->notifyUsersDriverSwap($trip);
             }
         }
+    }
+
+    /**
+     * Handle the Trip "deleted" event.
+     */
+    public function deleted(Trip $trip): void
+    {
+        $this->broadcastTripChange($trip, 'deleted');
     }
 
     /**
@@ -354,6 +367,26 @@ class TripObserver
             $send();
         } else {
             DB::afterCommit($send);
+        }
+    }
+
+    /**
+     * Phát broadcast event TripUpdated realtime qua Reverb.
+     */
+    protected function broadcastTripChange(Trip $trip, string $action): void
+    {
+        $broadcast = function () use ($trip, $action): void {
+            try {
+                TripUpdated::dispatch($trip, $action);
+            } catch (Throwable) {
+                // Continue gracefully if broadcasting server is not reachable
+            }
+        };
+
+        if (app()->runningUnitTests()) {
+            $broadcast();
+        } else {
+            DB::afterCommit($broadcast);
         }
     }
 }
