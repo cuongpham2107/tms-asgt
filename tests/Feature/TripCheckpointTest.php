@@ -8,6 +8,8 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Filament\Resources\Trips\Pages\ListTrips;
+use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
@@ -17,9 +19,11 @@ use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
+use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -810,4 +814,74 @@ test('arrived_delivery and completed handle order with repeated locations in rou
 
     expect($dp3->fresh()->status)->toBe(OrderDeliveryPointStatus::Delivered);
     expect($order->fresh()->status)->toBe(OrderStatus::Completed);
+});
+
+test('adding a new checkpoint in trip form pre-fills values from previous checkpoint', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TEST-TRIP-PREFILL',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Started,
+        'start_km' => 50000,
+        'started_at' => now(),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'TEST-ORD-PREFILL',
+        'type' => OrderType::Hhhk,
+        'trip_id' => $trip->id,
+        'customer_id' => $this->customer->id,
+        'area_id' => $this->area->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'status' => OrderStatus::InTransit,
+        'created_by' => $this->driver->id,
+    ]);
+
+    $dp = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->deliveryLocation->id,
+        'sequence' => 1,
+        'status' => OrderDeliveryPointStatus::Pending,
+    ]);
+
+    $trip->checkpoints()->create([
+        'checkpoint_type' => 'started',
+        'order_id' => $order->id,
+        'driver_id' => $this->driver->id,
+        'km_reading' => 50010.5,
+        'occurred_at' => '2026-10-19 09:00',
+        'delivery_point_id' => $dp->id,
+    ]);
+
+    $form = Schema::make(Livewire::new(ListTrips::class));
+    TripForm::configure($form);
+    $form->record($trip);
+    $form->fill([
+        'checkpoints' => [
+            'row-1' => [
+                'checkpoint_type' => 'started',
+                'order_id' => $order->id,
+                'driver_id' => $this->driver->id,
+                'km_reading' => 50010.5,
+                'occurred_at' => '2026-10-19 09:00',
+                'delivery_point_id' => $dp->id,
+            ],
+        ],
+    ]);
+
+    $comp = $form->getFlatComponents()['checkpoints'];
+    $addAction = $comp->getAddAction();
+    $addAction->call(['component' => $comp]);
+
+    $schemas = $comp->getChildSchemas();
+    expect($schemas)->toHaveCount(2);
+
+    $newRow = end($schemas);
+    $flat = $newRow->getFlatComponents();
+
+    expect($flat['order_id']->getState())->toBe($order->id)
+        ->and($flat['driver_id']->getState())->toBe($this->driver->id)
+        ->and((float) $flat['km_reading']->getState())->toBe(50010.5)
+        ->and($flat['occurred_at']->getState())->toBe('2026-10-19 09:00')
+        ->and($flat['delivery_point_id']->getState())->toBe($dp->id);
 });

@@ -13,6 +13,7 @@ use App\Models\Trip;
 use App\Models\User;
 use Carbon\Carbon;
 use Closure;
+use DateTimeInterface;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
@@ -208,7 +209,13 @@ class TripForm
                                             ->toArray();
                                     })
                                     ->searchable()
-                                    ->native(false),
+                                    ->native(false)
+                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                        $get,
+                                        'checkpoints_rent',
+                                        'order_id',
+                                        fn () => Order::where('trip_id', $get('../../id'))->value('id'),
+                                    )),
                                 DateTimePicker::make('occurred_at')
                                     ->label('Thời gian')
                                     ->required()
@@ -221,7 +228,13 @@ class TripForm
                                             $set('../../status', TripStatus::Completed);
                                         }
                                     })
-                                    ->native(true),
+                                    ->native(true)
+                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                        $get,
+                                        'checkpoints_rent',
+                                        'occurred_at',
+                                        fn () => $get('../../started_at') ?? now()->format('Y-m-d H:i'),
+                                    )),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')
                                     ->options(function ($get): array {
@@ -244,7 +257,13 @@ class TripForm
                                     ->placeholder('Chọn điểm')
                                     ->searchable()
                                     ->native(false)
-                                    ->nullable(),
+                                    ->nullable()
+                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                        $get,
+                                        'checkpoints_rent',
+                                        'delivery_point_id',
+                                        null,
+                                    )),
                             ])
                             ->addable()
                             ->deletable()
@@ -287,7 +306,13 @@ class TripForm
                                             ->toArray();
                                     })
                                     ->searchable()
-                                    ->native(false),
+                                    ->native(false)
+                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                        $get,
+                                        'checkpoints',
+                                        'order_id',
+                                        fn () => Order::where('trip_id', $get('../../id'))->value('id'),
+                                    )),
                                 Select::make('driver_id')
                                     ->label('Tài xế')
                                     ->options(fn () => User::query()
@@ -297,14 +322,26 @@ class TripForm
                                         ->toArray())
                                     ->searchable()
                                     ->native(false)
-                                    ->nullable(),
+                                    ->nullable()
+                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                        $get,
+                                        'checkpoints',
+                                        'driver_id',
+                                        fn () => $get('../../driver_id'),
+                                    )),
                                 TextInput::make('km_reading')
                                     ->label('Km')
                                     ->mask(RawJs::make('$money($input)'))
                                     ->stripCharacters(',')
                                     ->numeric()
                                     ->step(0.1)
-                                    ->nullable(),
+                                    ->nullable()
+                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                        $get,
+                                        'checkpoints',
+                                        'km_reading',
+                                        fn () => $get('../../start_km'),
+                                    )),
                                 DateTimePicker::make('occurred_at')
                                     ->label('Thời gian')
                                     ->required()
@@ -316,7 +353,13 @@ class TripForm
                                             $set('../../completed_at', $state);
                                         }
                                     })
-                                    ->native(true),
+                                    ->native(true)
+                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                        $get,
+                                        'checkpoints',
+                                        'occurred_at',
+                                        fn () => $get('../../started_at') ?? now()->format('Y-m-d H:i'),
+                                    )),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')
                                     ->options(function ($get): array {
@@ -339,7 +382,13 @@ class TripForm
                                     ->placeholder('Chọn điểm')
                                     ->searchable()
                                     ->native(false)
-                                    ->nullable(),
+                                    ->nullable()
+                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                        $get,
+                                        'checkpoints',
+                                        'delivery_point_id',
+                                        null,
+                                    )),
                             ])
                             ->addable()
                             ->deletable()
@@ -420,5 +469,31 @@ class TripForm
         }
 
         return $data;
+    }
+
+    /**
+     * Lấy giá trị từ mốc hành trình liền trước (dòng phía trên) để gợi ý cho mốc mới.
+     */
+    private static function getPreviousCheckpointValue(callable $get, string $repeaterName, string $field, mixed $fallback = null): mixed
+    {
+        $checkpoints = $get("../../{$repeaterName}");
+        if (is_array($checkpoints) && ! empty($checkpoints)) {
+            $prev = collect($checkpoints)->reverse()->first(fn ($item): bool => is_array($item) && filled($item[$field] ?? null));
+            if ($prev && isset($prev[$field])) {
+                $val = $prev[$field];
+                if ($val instanceof DateTimeInterface) {
+                    return $val->format('Y-m-d H:i');
+                }
+
+                return $val;
+            }
+        }
+
+        $fallbackVal = value($fallback);
+        if ($fallbackVal instanceof DateTimeInterface) {
+            return $fallbackVal->format('Y-m-d H:i');
+        }
+
+        return $fallbackVal;
     }
 }
