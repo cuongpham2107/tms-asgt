@@ -15,6 +15,7 @@ use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
@@ -54,6 +55,33 @@ class ListTrips extends ListRecords
 
         $this->memoizedCounts = [];
         $this->flushCachedTableRecords();
+
+        if ($event) {
+            $plate = $event['vehicle_plate'] ?? null;
+            $driver = $event['driver_name'] ?? null;
+            $action = $event['action'] ?? 'updated';
+            $status = $event['status'] ?? null;
+
+            $statusEnum = $status ? TripStatus::tryFrom($status) : null;
+            $statusLabel = $statusEnum?->getLabel() ?? $status;
+
+            $title = $plate ? "Chuyến xe {$plate}" : 'Cập nhật chuyến xe';
+            $body = match ($action) {
+                'checkpoint' => $driver ? "Tài xế {$driver} vừa ghi nhận mốc hành trình mới." : 'Vừa có mốc hành trình mới.',
+                'created' => 'Chuyến xe mới vừa được khởi tạo.',
+                'deleted' => 'Chuyến xe vừa được xóa khỏi hệ thống.',
+                'km_reported' => $driver ? "Tài xế {$driver} vừa báo sai lệch số Km." : 'Vừa có báo cáo sai lệch Km.',
+                'km_resolved' => 'Số Km của chuyến xe đã được xử lý cập nhật.',
+                default => $statusLabel ? "Trạng thái mới: {$statusLabel}." : 'Dữ liệu chuyến xe vừa được cập nhật.',
+            };
+
+            Notification::make()
+                ->title($title)
+                ->body($body)
+                ->info()
+                ->duration(4000)
+                ->send();
+        }
     }
 
     #[Url(keep: true)]

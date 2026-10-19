@@ -4,6 +4,7 @@ use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\ShiftType;
+use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
@@ -16,6 +17,7 @@ use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -171,6 +173,38 @@ test('ListTrips page reacts to echo TripUpdated event by refreshing memoized cou
     ]);
 
     Livewire::test(ListTrips::class)
-        ->call('onTripUpdated', ['trip_id' => $trip->id, 'action' => 'updated'])
-        ->assertSuccessful();
+        ->call('onTripUpdated', ['trip_id' => $trip->id, 'action' => 'updated', 'vehicle_plate' => '29A-99999', 'status' => 'delivering'])
+        ->assertSuccessful()
+        ->assertNotified();
+});
+
+test('TripKmReport creation and resolution dispatches TripUpdated event', function () {
+    Event::fake([TripUpdated::class]);
+
+    $trip = Trip::create([
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'start_location_id' => $this->startLocation->id,
+        'status' => TripStatus::Delivering,
+        'trip_code' => 'TRIP-RT-KM',
+    ]);
+
+    $report = TripKmReport::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 150000,
+        'system_km' => 140000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    Event::assertDispatched(TripUpdated::class, function ($event) use ($trip) {
+        return $event->tripId === $trip->id && $event->action === 'km_reported';
+    });
+
+    $report->update(['status' => TripKmReportStatus::Resolved]);
+
+    Event::assertDispatched(TripUpdated::class, function ($event) use ($trip) {
+        return $event->tripId === $trip->id && $event->action === 'km_resolved';
+    });
 });

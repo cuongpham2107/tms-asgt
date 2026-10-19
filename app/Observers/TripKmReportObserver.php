@@ -3,7 +3,9 @@
 namespace App\Observers;
 
 use App\Enums\TripKmReportStatus;
+use App\Events\TripUpdated;
 use App\Models\TripKmReport;
+use Throwable;
 
 class TripKmReportObserver
 {
@@ -13,6 +15,13 @@ class TripKmReportObserver
     public function created(TripKmReport $report): void
     {
         $this->notify($report);
+
+        if ($report->trip) {
+            try {
+                TripUpdated::dispatch($report->trip, 'km_reported');
+            } catch (Throwable) {
+            }
+        }
     }
 
     /**
@@ -27,11 +36,23 @@ class TripKmReportObserver
                 if (app(TripObserver::class)->refreshKmReportNotifications($report->trip, $report) === 0) {
                     $this->notify($report);
                 }
+
+                try {
+                    TripUpdated::dispatch($report->trip, 'km_reported');
+                } catch (Throwable) {
+                }
             }
         }
 
         if ($report->wasChanged('status') && in_array($report->status, [TripKmReportStatus::Resolved, TripKmReportStatus::Rejected], true)) {
             $this->clearNotificationActions($report);
+
+            if ($report->trip) {
+                try {
+                    TripUpdated::dispatch($report->trip, 'km_resolved');
+                } catch (Throwable) {
+                }
+            }
         }
     }
 

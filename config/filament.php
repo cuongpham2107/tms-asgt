@@ -19,7 +19,7 @@ return [
         'echo' => [
             'broadcaster' => 'reverb',
             'key' => env('VITE_REVERB_APP_KEY', env('REVERB_APP_KEY')),
-            'wsHost' => env('VITE_REVERB_HOST') ?: (isset($_SERVER['HTTP_HOST']) ? explode(':', $_SERVER['HTTP_HOST'])[0] : 'localhost'),
+            'wsHost' => env('VITE_REVERB_HOST') ?: parse_url(env('APP_URL', 'https://tms.asgl.net.vn'), PHP_URL_HOST) ?: (isset($_SERVER['HTTP_HOST']) ? explode(':', $_SERVER['HTTP_HOST'])[0] : 'tms.asgl.net.vn'),
             'wsPort' => (int) env('VITE_REVERB_PORT', env('REVERB_PORT', 8085)),
             'wssPort' => (int) env('VITE_REVERB_PORT', env('REVERB_PORT', 8085)),
             'forceTLS' => (bool) (env('VITE_REVERB_SCHEME') ? (env('VITE_REVERB_SCHEME') === 'https') : ((! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443))),
