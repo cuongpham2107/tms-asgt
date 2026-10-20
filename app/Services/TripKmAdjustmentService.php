@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\CheckpointType;
+use App\Enums\OrderStatus;
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
+use App\Enums\VehicleStatus;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
@@ -30,6 +33,11 @@ class TripKmAdjustmentService
             if ($cp) {
                 return $cp;
             }
+        }
+
+        // Chuyến chưa bắt đầu (pending): mục tiêu là mốc bắt đầu chuyến (start_km)
+        if ($trip->status === TripStatus::Pending || ! $trip->started_at) {
+            return null;
         }
 
         return TripCheckpoint::where('trip_id', $trip->id)
@@ -60,16 +68,25 @@ class TripKmAdjustmentService
         if (! $targetCp) {
             $startKm = $trip->start_km !== null ? (float) $trip->start_km : null;
             $endKm = $trip->end_km !== null ? (float) $trip->end_km : null;
+            $firstCp = TripCheckpoint::where('trip_id', $trip->id)
+                ->whereNotNull('km_reading')
+                ->orderBy('occurred_at')
+                ->orderBy('id')
+                ->first();
+            $maxKm = $firstCp ? (float) $firstCp->km_reading : $endKm;
+            $maxLabel = $firstCp
+                ? "Mốc kế tiếp ({$maxKm} km)"
+                : ($endKm ? "Km kết thúc chuyến ({$endKm} km)" : null);
 
             return [
                 'target_checkpoint' => null,
                 'target_label' => 'Bắt đầu chuyến (start_km)',
                 'min_km' => 0.0,
                 'min_label' => 'Số dương (> 0)',
-                'max_km' => $endKm,
-                'max_label' => $endKm ? "Km kết thúc chuyến ({$endKm} km)" : null,
+                'max_km' => $maxKm,
+                'max_label' => $maxLabel,
                 'prev_checkpoint' => null,
-                'next_checkpoint' => null,
+                'next_checkpoint' => $firstCp,
             ];
         }
 
@@ -165,8 +182,11 @@ class TripKmAdjustmentService
                 // Cập nhật start_km / end_km của trip nếu checkpoint nằm ở mốc biên
                 $this->syncTripBoundary($trip, $targetCp, $correctedKm);
             } else {
-                if ($trip->start_km !== null) {
-                    $trip->update(['start_km' => $correctedKm]);
+                // Điều chỉnh mốc bắt đầu chuyến (start_km)
+                $trip->update(['start_km' => $correctedKm]);
+
+                if ($trip->shift && $trip->shift->trips()->orderBy('id')->first()?->id === $trip->id) {
+                    $trip->shift->update(['start_km' => $correctedKm]);
                 }
             }
 
@@ -178,7 +198,7 @@ class TripKmAdjustmentService
             $this->recalculateAllShifts($trip);
 
             // 4. Đồng bộ số km xe an toàn
-            $this->syncVehicleMileageIfLatest($trip);
+            $this->syncVehicleMileageIfLatest($trip, $correctedKm);
 
             // 5. Mở lại chuyến xe (unpause)
             $trip->update([
@@ -344,7 +364,7 @@ class TripKmAdjustmentService
      */
     private function syncBoundariesFromCheckpoints(Trip $trip): void
     {
-        $trip->loadMissing('vehicle');
+        $trip->loadMissing(['vehicle', 'orders']);
 
         if ($trip->vehicle?->type === VehicleOwnerType::Rent) {
             return;
@@ -363,8 +383,25 @@ class TripKmAdjustmentService
 
         $trip->start_km = $first->km_reading;
 
-        if ($trip->end_km !== null || $trip->status === TripStatus::Completed) {
+        $hasEnd = (clone $kmCheckpoints)->where('checkpoint_type', CheckpointType::End->value)->exists();
+        $hasCompleted = (clone $kmCheckpoints)->where('checkpoint_type', CheckpointType::Completed->value)->exists();
+        $allOrdersCompleted = $trip->orders()->where('status', '!=', OrderStatus::Completed->value)->doesntExist();
+
+        $shouldFinalizeEndKm = $trip->end_km !== null
+            || $trip->status === TripStatus::Completed
+            || $hasEnd
+            || ($hasCompleted && $allOrdersCompleted);
+
+        if ($shouldFinalizeEndKm && $last !== null) {
             $trip->end_km = $last->km_reading;
+
+            if (($hasEnd || ($hasCompleted && $allOrdersCompleted)) && $trip->status !== TripStatus::Completed) {
+                $trip->status = TripStatus::Completed;
+            }
+
+            if ($trip->completed_at === null && $last->occurred_at !== null) {
+                $trip->completed_at = $last->occurred_at;
+            }
         }
 
         $trip->save();
@@ -373,31 +410,57 @@ class TripKmAdjustmentService
     /**
      * Km xe chỉ đi theo chuyến mới nhất của xe; sửa chuyến cũ không đụng km xe.
      */
-    private function syncVehicleMileageIfLatest(Trip $trip): void
+    private function syncVehicleMileageIfLatest(Trip $trip, ?float $correctedKm = null): void
     {
         $vehicle = $trip->vehicle;
 
-        if ($vehicle === null || $trip->started_at === null) {
+        if ($vehicle === null) {
             return;
         }
 
-        $hasLaterTrip = Trip::where('vehicle_id', $vehicle->id)
-            ->whereKeyNot($trip->id)
-            ->whereNotNull('started_at')
-            ->where('started_at', '>', $trip->started_at)
-            ->exists();
+        if ($trip->started_at !== null) {
+            $hasLaterTrip = Trip::where('vehicle_id', $vehicle->id)
+                ->whereKeyNot($trip->id)
+                ->whereNotNull('started_at')
+                ->where('started_at', '>', $trip->started_at)
+                ->exists();
 
-        if ($hasLaterTrip) {
-            return;
+            if ($hasLaterTrip) {
+                return;
+            }
+        } else {
+            // Chuyến chưa bắt đầu (pending): nếu xe đã có chuyến khác bắt đầu sau thời điểm tạo chuyến này, không ghi đè km xe
+            $hasActiveOrLaterTrip = Trip::where('vehicle_id', $vehicle->id)
+                ->whereKeyNot($trip->id)
+                ->whereNotNull('started_at')
+                ->where('started_at', '>', $trip->created_at ?? now())
+                ->exists();
+
+            if ($hasActiveOrLaterTrip) {
+                return;
+            }
         }
 
         $finalKm = max(
             (float) ($trip->end_km ?? 0),
+            (float) ($trip->start_km ?? 0),
             (float) (TripCheckpoint::where('trip_id', $trip->id)->max('km_reading') ?? 0),
+            (float) ($correctedKm ?? 0),
         );
 
         if ($finalKm > 0) {
             $vehicle->update(['current_mileage' => $finalKm]);
+        }
+
+        if ($trip->status === TripStatus::Completed && $vehicle->status === VehicleStatus::Running) {
+            $hasOtherActiveTrip = Trip::where('vehicle_id', $vehicle->id)
+                ->whereKeyNot($trip->id)
+                ->whereIn('status', TripStatus::activeStatuses())
+                ->exists();
+
+            if (! $hasOtherActiveTrip) {
+                $vehicle->update(['status' => VehicleStatus::On]);
+            }
         }
     }
 }

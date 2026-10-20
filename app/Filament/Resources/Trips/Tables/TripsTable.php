@@ -132,6 +132,7 @@ class TripsTable extends BaseTable
                         ? number_format((float) $record->latestPendingKmReport->reported_km, 1, ',', '.').' km'
                         : null
                     )
+                    ->action(ResolveKmReportAction::make('resolve_km_report_column'))
                     ->toggleable(),
                 TextColumn::make('gps_speed')
                     ->label('Tốc độ')

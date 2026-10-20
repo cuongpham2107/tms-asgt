@@ -137,7 +137,9 @@ class TripObserver
                             ->color('warning')
                             ->button()
                             ->url($resolveUrl)
-                            ->markAsRead();
+                            ->markAsRead()
+                            ->close()
+                            ->alpineClickHandler("\$dispatch('close-modal', { id: 'database-notifications' }); markAsRead(); close(true);");
                     }
 
                     $timelineUrl = TripResource::getUrl('timeline', ['record' => $trip]);
@@ -145,7 +147,9 @@ class TripObserver
                         $actions[] = Action::make('view')
                             ->label('Xem chi tiết')
                             ->url($timelineUrl)
-                            ->markAsRead();
+                            ->markAsRead()
+                            ->close()
+                            ->alpineClickHandler("\$dispatch('close-modal', { id: 'database-notifications' }); markAsRead(); close(true);");
                     }
                 } catch (Throwable) {
                 }
@@ -332,7 +336,9 @@ class TripObserver
                         $actions[] = Action::make('view')
                             ->label('Xem chi tiết')
                             ->url($timelineUrl)
-                            ->markAsRead();
+                            ->markAsRead()
+                            ->close()
+                            ->alpineClickHandler("\$dispatch('close-modal', { id: 'database-notifications' }); markAsRead(); close(true);");
                     }
                 } catch (Throwable) {
                     // Route may not be resolvable in non-HTTP/isolated test contexts

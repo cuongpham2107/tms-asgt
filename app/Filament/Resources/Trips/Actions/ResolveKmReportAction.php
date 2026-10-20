@@ -9,7 +9,6 @@ use App\Services\TripKmAdjustmentService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -106,7 +105,7 @@ class ResolveKmReportAction
                 $noteStr = e($report->note ?? '—');
 
                 $cp = $report->checkpoint;
-                $cpName = 'Mốc hiện tại';
+                $cpName = 'Bắt đầu chuyến (start_km)';
                 if ($cp) {
                     $typeLabel = $cp->checkpoint_type?->getLabel() ?? $cp->checkpoint_type->value;
                     $timeStr = $cp->occurred_at ? $cp->occurred_at->format('H:i d/m') : '';
@@ -173,56 +172,19 @@ class ResolveKmReportAction
                     ->required()
                     ->live(),
 
-                Select::make('target_checkpoint_id')
-                    ->label('Mốc hành trình cần điều chỉnh')
-                    ->options(function (?Trip $record, $livewire = null): array {
-                        $trip = static::resolveRecord($record, $livewire);
-                        if (! $trip) {
-                            return [];
-                        }
-                        $checkpoints = $trip->checkpoints()
-                            ->whereNotNull('km_reading')
-                            ->orderBy('occurred_at')
-                            ->orderBy('id')
-                            ->get();
-
-                        if ($checkpoints->isEmpty()) {
-                            return ['0' => 'Bắt đầu chuyến (start_km)'];
-                        }
-
-                        return $checkpoints->mapWithKeys(function ($cp) {
-                            $time = $cp->occurred_at ? $cp->occurred_at->format('H:i d/m') : '';
-                            $type = $cp->checkpoint_type?->getLabel() ?? $cp->checkpoint_type?->value;
-                            $km = number_format((float) $cp->km_reading, 1, ',', '.').' km';
-
-                            return [$cp->id => "[{$time}] {$type} ({$km})"];
-                        })->all();
-                    })
-                    ->default(function (?Trip $record, $livewire = null) {
-                        $trip = static::resolveRecord($record, $livewire);
-                        $report = $trip?->latestPendingKmReport;
-                        $targetCp = $trip ? app(TripKmAdjustmentService::class)->resolveTargetCheckpoint($trip, $report?->checkpoint_id, $report) : null;
-
-                        return $targetCp?->id ?? '0';
-                    })
-                    ->required(fn (Get $get) => $get('decision') === 'ok')
-                    ->visible(fn (Get $get) => $get('decision') === 'ok')
-                    ->live(),
-
                 TextInput::make('corrected_km')
                     ->label('Số km điều chỉnh')
                     ->numeric()
                     ->required(fn (Get $get) => $get('decision') === 'ok')
                     ->visible(fn (Get $get) => $get('decision') === 'ok')
-                    ->default(fn (?Trip $record, $livewire = null) => static::resolveRecord($record, $livewire)?->latestPendingKmReport?->reported_km)
-                    ->helperText(function (Get $get, ?Trip $record, $livewire = null): string {
-                        $trip = static::resolveRecord($record, $livewire);
+                    ->default(fn (?Trip $record, $livewire = null, ?Action $action = null) => static::resolveRecord($record, $livewire, $action)?->latestPendingKmReport?->reported_km)
+                    ->helperText(function (Get $get, ?Trip $record, $livewire = null, ?Action $action = null): string {
+                        $trip = static::resolveRecord($record, $livewire, $action);
                         if (! $trip) {
                             return 'Nhập số km thực tế trên taplo.';
                         }
-                        $targetId = $get('target_checkpoint_id');
-                        $targetIdInt = is_numeric($targetId) && (int) $targetId > 0 ? (int) $targetId : null;
-                        $boundaries = app(TripKmAdjustmentService::class)->getKmBoundaries($trip, $targetIdInt, $trip->latestPendingKmReport);
+                        $report = $trip->latestPendingKmReport;
+                        $boundaries = app(TripKmAdjustmentService::class)->getKmBoundaries($trip, $report?->checkpoint_id, $report);
 
                         $parts = [];
                         if ($boundaries['min_km'] !== null) {
@@ -241,31 +203,30 @@ class ResolveKmReportAction
                         return 'Giới hạn hợp lệ: '.implode(' — ', $parts).'.';
                     })
                     ->rules([
-                        fn (Get $get, ?Trip $record, $livewire = null) => function (string $attribute, $value, \Closure $fail) use ($record, $livewire, $get) {
+                        fn (Get $get, ?Trip $record, $livewire = null, ?Action $action = null) => function (string $attribute, $value, \Closure $fail) use ($record, $livewire, $action, $get) {
                             if ($get('decision') !== 'ok') {
                                 return;
                             }
                             if ($get('allow_boundary_override')) {
                                 return;
                             }
-                            $trip = static::resolveRecord($record, $livewire);
+                            $trip = static::resolveRecord($record, $livewire, $action);
                             if (! $trip || ! is_numeric($value)) {
                                 return;
                             }
 
                             $val = (float) $value;
-                            $targetId = $get('target_checkpoint_id');
-                            $targetIdInt = is_numeric($targetId) && (int) $targetId > 0 ? (int) $targetId : null;
-                            $boundaries = app(TripKmAdjustmentService::class)->getKmBoundaries($trip, $targetIdInt, $trip->latestPendingKmReport);
+                            $report = $trip->latestPendingKmReport;
+                            $boundaries = app(TripKmAdjustmentService::class)->getKmBoundaries($trip, $report?->checkpoint_id, $report);
 
                             if ($boundaries['min_km'] !== null && $val < $boundaries['min_km']) {
                                 $minFmt = number_format($boundaries['min_km'], 1, ',', '.');
-                                $fail("Số km điều chỉnh ({$value} km) không được nhỏ hơn {$boundaries['min_label']} ({$minFmt} km). Hãy kiểm tra lại hoặc bật 'Bỏ qua kiểm tra giới hạn' nếu muốn ghi đè.");
+                                $fail("Số km điều chỉnh ({$value} km) không được nhỏ hơn {$boundaries['min_label']} ({$minFmt} km). Hãy kiểm tra lại hoặc bật 'Xác nhận ghi đè số Km' bên dưới nếu chắc chắn số Km taplo là đúng.");
                             }
 
                             if ($boundaries['max_km'] !== null && $val > $boundaries['max_km']) {
                                 $maxFmt = number_format($boundaries['max_km'], 1, ',', '.');
-                                $fail("Số km điều chỉnh ({$value} km) không được lớn hơn {$boundaries['max_label']} ({$maxFmt} km). Hãy kiểm tra lại hoặc bật 'Bỏ qua kiểm tra giới hạn' nếu muốn ghi đè.");
+                                $fail("Số km điều chỉnh ({$value} km) không được lớn hơn {$boundaries['max_label']} ({$maxFmt} km). Hãy kiểm tra lại hoặc bật 'Xác nhận ghi đè số Km' bên dưới nếu chắc chắn số Km taplo là đúng.");
                             }
                         },
                     ])
@@ -306,8 +267,8 @@ class ResolveKmReportAction
                     }),
 
                 Toggle::make('allow_boundary_override')
-                    ->label('Bỏ qua kiểm tra giới hạn mốc trước/sau')
-                    ->helperText('Chỉ bật khi các mốc xung quanh cũng bị sai số km và cần điều chỉnh toàn bộ chuỗi.')
+                    ->label('Xác nhận ghi đè số Km (bỏ qua ràng buộc mốc trước/sau)')
+                    ->helperText('Bật khi bạn chắc chắn số Km taplo là đúng, kể cả khi số này nhỏ hơn mốc trước hoặc lớn hơn mốc sau. Sau khi xử lý, bạn có thể vào Sửa chuyến để chỉnh lại các mốc còn lại nếu cần.')
                     ->default(false)
                     ->visible(fn (Get $get) => $get('decision') === 'ok')
                     ->live(),
@@ -352,9 +313,11 @@ class ResolveKmReportAction
                             Auth::id(),
                         );
                     } else {
-                        $targetCpId = ! empty($data['target_checkpoint_id']) && (int) $data['target_checkpoint_id'] > 0
-                            ? (int) $data['target_checkpoint_id']
-                            : $report->checkpoint_id;
+                        $targetCpId = match (true) {
+                            isset($data['target_checkpoint_id']) && (string) $data['target_checkpoint_id'] === '0' => null,
+                            ! empty($data['target_checkpoint_id']) && (int) $data['target_checkpoint_id'] > 0 => (int) $data['target_checkpoint_id'],
+                            default => $report->checkpoint_id,
+                        };
 
                         app(TripKmAdjustmentService::class)->resolveReport(
                             $report,
@@ -383,6 +346,10 @@ class ResolveKmReportAction
                     $action->cancel();
 
                     return;
+                }
+
+                if ($livewire && method_exists($livewire, 'getRecord')) {
+                    $livewire->getRecord()?->refresh();
                 }
 
                 if (($data['decision'] ?? 'ok') === 'reject') {

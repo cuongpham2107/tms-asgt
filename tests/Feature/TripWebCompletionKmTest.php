@@ -384,3 +384,64 @@ test('Scenario 3: Driver swap checkpoint exists without DriverSwap row, recalcul
     $this->shiftB->refresh();
     expect((float) $this->shiftB->total_km)->toBe(100.0);
 });
+
+test('Scenario 5: Adding End checkpoint (Kết thúc xe) auto-finalizes end_km, status, completed_at and updates vehicle mileage', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-END-CP-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $this->shiftA->id,
+        'status' => TripStatus::Delivering,
+        'start_km' => 100000,
+        'end_km' => null,
+        'started_at' => now()->subHours(2),
+        'completed_at' => null,
+    ]);
+
+    $this->vehicle->update(['status' => VehicleStatus::Running, 'current_mileage' => 100000]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-END-01',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::InTransit,
+        'created_by' => $this->driverA->id,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $this->shiftA->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'occurred_at' => now()->subHours(2),
+        'km_reading' => 100000,
+    ]);
+
+    $endOccurredAt = now()->subMinutes(15);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $this->shiftA->id,
+        'checkpoint_type' => CheckpointType::End->value,
+        'occurred_at' => $endOccurredAt,
+        'km_reading' => 100120,
+    ]);
+
+    // Operator saves trip or triggers recalculation
+    callTripsTableRecalculateKm($trip);
+
+    $trip->refresh();
+    expect((float) $trip->end_km)->toBe(100120.0);
+    expect($trip->status)->toBe(TripStatus::Completed);
+    expect($trip->completed_at)->not->toBeNull();
+    expect((float) $trip->total_km)->toBe(120.0);
+
+    // Vehicle mileage is updated to 100120 and status freed back to On
+    $this->vehicle->refresh();
+    expect((float) $this->vehicle->current_mileage)->toBe(100120.0);
+    expect($this->vehicle->status)->toBe(VehicleStatus::On);
+});

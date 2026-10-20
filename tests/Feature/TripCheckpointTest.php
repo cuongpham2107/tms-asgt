@@ -663,6 +663,108 @@ test('cannot auto-start trip via arrived_pickup when driver has active trip', fu
     expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
 });
 
+test('cannot start new trip when vehicle has previous trip in driver_swap status', function () {
+    $this->trip->update([
+        'status' => TripStatus::DriverSwap,
+    ]);
+
+    $driver2 = User::factory()->create([
+        'is_active' => true,
+    ]);
+    $driver2->assignRole('driver');
+
+    $otherTrip = Trip::create([
+        'trip_code' => 'TRIP-TEST-SWAP-VEHICLE',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $driver2->id,
+        'status' => TripStatus::Pending,
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-TEST-SWAP',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $otherTrip->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'pickup_address' => 'Pickup address',
+        'status' => OrderStatus::Sent,
+        'created_by' => $driver2->id,
+    ]);
+
+    DriverShift::create([
+        'driver_id' => $driver2->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now(),
+        'start_km' => 50000,
+    ]);
+
+    Sanctum::actingAs($driver2);
+
+    $this->postJson("/api/driver/trips/{$otherTrip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'km_reading' => 50050,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertStatus(422)
+        ->assertJsonPath('errors.checkpoint_type.0', function ($msg) {
+            return str_contains($msg, 'Xe biển số TEST-001')
+                && str_contains($msg, 'Đảo lái');
+        });
+
+    expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
+});
+
+test('cannot auto-start new trip via arrived_pickup when vehicle has previous trip in driver_swap status', function () {
+    $this->trip->update([
+        'status' => TripStatus::DriverSwap,
+    ]);
+
+    $driver2 = User::factory()->create([
+        'is_active' => true,
+    ]);
+    $driver2->assignRole('driver');
+
+    $otherTrip = Trip::create([
+        'trip_code' => 'TRIP-TEST-SWAP-VEHICLE-AUTO',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $driver2->id,
+        'status' => TripStatus::Pending,
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-TEST-SWAP-AUTO',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $otherTrip->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'pickup_address' => 'Pickup address',
+        'status' => OrderStatus::Sent,
+        'created_by' => $driver2->id,
+    ]);
+
+    DriverShift::create([
+        'driver_id' => $driver2->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now(),
+        'start_km' => 50000,
+    ]);
+
+    Sanctum::actingAs($driver2);
+
+    $this->postJson("/api/driver/trips/{$otherTrip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'km_reading' => 50050,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertStatus(422)
+        ->assertJsonPath('errors.checkpoint_type.0', function ($msg) {
+            return str_contains($msg, 'Xe biển số TEST-001')
+                && str_contains($msg, 'Đảo lái');
+        });
+
+    expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
+});
+
 test('arrived_delivery and completed handle order with repeated locations in route (A -> B -> A)', function () {
     $locA = Location::create([
         'code' => 'ACSV',

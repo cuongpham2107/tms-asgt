@@ -19,6 +19,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Request;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -172,6 +173,8 @@ class ListTrips extends ListRecords
         ];
 
         parent::mount();
+
+        $this->mountedActions ??= [];
 
         $this->orderPlaceFilters = Area::query()
             ->where('is_active', true)
@@ -633,6 +636,25 @@ class ListTrips extends ListRecords
                 OrderDateRangePicker::make()
                     ->syncWithProperties('dateFrom', 'dateTo'),
             ]);
+    }
+
+    protected function resolveTableRecord(?string $key): Model|array|null
+    {
+        if ($key === null) {
+            return null;
+        }
+
+        return TripResource::getEloquentQuery()
+            ->with([
+                'vehicle',
+                'driver',
+                'orders.customer',
+                'orders.area',
+                'orders.pickupLocation',
+                'orders.deliveryPoints.location',
+                'latestPendingKmReport',
+            ])
+            ->find($key);
     }
 
     protected function getTableQuery(): Builder

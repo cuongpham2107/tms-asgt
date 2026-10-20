@@ -1,6 +1,8 @@
 <?php
 
 use App\Enums\CheckpointType;
+use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\ShiftType;
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
@@ -8,8 +10,12 @@ use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Filament\Resources\Trips\Actions\ResolveKmReportAction;
+use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Filament\Resources\Trips\TripResource;
+use App\Models\Area;
+use App\Models\Customer;
 use App\Models\DriverShift;
+use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
@@ -24,6 +30,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -489,6 +497,19 @@ test('ResolveKmReportAction is configured and TripObserver sends direct resolve 
         ->and($expectedUrl)->toContain('tableActionRecord='.$this->trip->getKey())
         ->and($expectedUrl)->toContain('activeStatusFilter=all')
         ->and($expectedUrl)->toContain('orderType=all');
+
+    $notification = DB::table('notifications')
+        ->where('data', 'like', '%resolve_km_report%')
+        ->where('data', 'like', '%tableActionRecord='.$this->trip->id.'%')
+        ->first();
+
+    expect($notification)->not->toBeNull();
+    $data = json_decode($notification->data, true);
+    $resolveAction = collect($data['actions'])->firstWhere('name', 'resolve_km_report');
+    expect($resolveAction['shouldClose'])->toBeTrue()
+        ->and($resolveAction['shouldMarkAsRead'])->toBeTrue()
+        ->and($resolveAction['alpineClickHandler'])->toContain('close-modal')
+        ->and($resolveAction['alpineClickHandler'])->toContain('database-notifications');
 });
 
 test('notification actions are cleared when km discrepancy report is resolved', function () {
@@ -698,4 +719,159 @@ test('resolving a report only clears notifications of that report', function () 
         expect($data['actions'])->not->toBeEmpty()
             ->and($row->data)->not->toContain('[Đã');
     }
+});
+
+test('resolving km report for pending trip updates start_km, shift start_km, vehicle mileage and allows trip to start with corrected km', function () {
+    $shift = DriverShift::create([
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now(),
+        'start_km' => 108000,
+    ]);
+
+    $pendingTrip = Trip::create([
+        'trip_code' => 'CD-PENDING-TEST-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $shift->id,
+        'status' => TripStatus::Pending,
+        'start_km' => null,
+        'started_at' => null,
+        'is_paused' => true,
+        'paused_reason' => 'Chờ điều chỉnh km',
+    ]);
+
+    $report = TripKmReport::create([
+        'trip_id' => $pendingTrip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108150,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    app(TripKmAdjustmentService::class)->resolveReport(
+        $report,
+        108150.0,
+        null,
+        'Duyệt km khởi hành trước khi chạy',
+        $this->admin->id
+    );
+
+    $pendingTrip->refresh();
+    $this->vehicle->refresh();
+    $shift->refresh();
+    $report->refresh();
+
+    expect($report->status)->toBe(TripKmReportStatus::Resolved)
+        ->and($pendingTrip->is_paused)->toBeFalse()
+        ->and((float) $pendingTrip->start_km)->toBe(108150.0)
+        ->and((float) $shift->start_km)->toBe(108150.0)
+        ->and((float) $this->vehicle->current_mileage)->toBe(108150.0);
+
+    // Complete prior trip on the vehicle so driver can start the pending trip
+    $this->trip->update([
+        'status' => TripStatus::Completed,
+        'completed_at' => now(),
+        'end_km' => 108000,
+    ]);
+
+    // Now driver starts the trip
+    Sanctum::actingAs($this->driver);
+    $startResponse = $this->postJson("/api/driver/trips/{$pendingTrip->id}/checkpoints", [
+        'checkpoint_type' => CheckpointType::Started->value,
+        'km_reading' => 108150,
+    ]);
+    $startResponse->assertStatus(200);
+
+    $pendingTrip->refresh();
+    expect((float) $pendingTrip->start_km)->toBe(108150.0);
+});
+
+test('ResolveKmReportAction works on ListTrips table even when UI filter tabs mismatch the trip', function () {
+    $admin = User::factory()->create();
+    $adminRole = Role::firstOrCreate(['name' => 'admin_test', 'guard_name' => 'web']);
+    foreach (['ViewAny:Trip', 'View:Trip', 'Update:Trip'] as $permission) {
+        Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
+        $adminRole->givePermissionTo($permission);
+    }
+    $admin->assignRole($adminRole);
+
+    $areaASG = Area::firstOrCreate(['code' => 'ASG'], ['name' => 'ASG Logistics', 'sort_order' => 1, 'is_active' => true]);
+    $customer = Customer::firstOrCreate(['code' => 'CUST_TEST'], ['name' => 'Khách hàng test']);
+
+    $order = Order::create([
+        'trip_id' => $this->trip->id,
+        'customer_id' => $customer->id,
+        'created_by' => $admin->id,
+        'area_id' => $areaASG->id,
+        'order_code' => 'TEST-ORD-01',
+        'status' => OrderStatus::Assigned,
+        'type' => OrderType::Hhhk,
+    ]);
+
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108080,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    $this->trip->update(['is_paused' => true, 'paused_reason' => 'Báo sai km']);
+
+    // When admin is filtered on NBA tab (mismatching ASG area of the order)
+    $this->actingAs($admin);
+
+    Livewire::test(ListTrips::class, ['activePlaceFilter' => 'NBA', 'orderType' => 'all', 'activeStatusFilter' => 'all'])
+        ->callTableAction('resolve_km_report', $this->trip, data: [
+            'decision' => 'ok',
+            'corrected_km' => 108080,
+        ])
+        ->assertHasNoTableActionErrors();
+
+    $report->refresh();
+    $this->trip->refresh();
+
+    expect($report->status)->toBe(TripKmReportStatus::Resolved)
+        ->and($this->trip->is_paused)->toBeFalse()
+        ->and((float) $this->trip->start_km)->toBe(108080.0)
+        ->and((float) $this->vehicle->fresh()->current_mileage)->toBe(108080.0);
+});
+
+test('resolve_km_report_column action on trip table resolves report directly', function () {
+    $admin = User::factory()->create();
+    $adminRole = Role::firstOrCreate(['name' => 'admin_test', 'guard_name' => 'web']);
+    foreach (['ViewAny:Trip', 'View:Trip', 'Update:Trip'] as $permission) {
+        Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
+        $adminRole->givePermissionTo($permission);
+    }
+    $admin->assignRole($adminRole);
+
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108090,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    $this->trip->update(['is_paused' => true, 'paused_reason' => 'Báo sai km']);
+
+    $this->actingAs($admin);
+
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+        ->callTableAction('resolve_km_report_column', $this->trip, data: [
+            'decision' => 'ok',
+            'corrected_km' => 108090,
+        ])
+        ->assertHasNoTableActionErrors();
+
+    $report->refresh();
+    expect($report->status)->toBe(TripKmReportStatus::Resolved)
+        ->and((float) $this->trip->fresh()->start_km)->toBe(108090.0)
+        ->and((float) $this->vehicle->fresh()->current_mileage)->toBe(108090.0);
 });
