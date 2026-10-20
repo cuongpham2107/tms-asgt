@@ -161,10 +161,9 @@ test('empty run cannot be completed while a cargo trip is in progress', function
         'end_km' => 20080,
     ]);
 
-    $response->assertStatus(422)
-        ->assertJson([
-            'message' => 'Xe 29C-222.22 đang có chuyến hàng thực hiện. Vui lòng hoàn thành hoặc đảo lái trước khi kết thúc chuyến không hàng.',
-        ]);
+    $response->assertStatus(422);
+    $response->assertJsonPath('message', fn ($msg) => str_contains($msg, 'chưa hoàn thiện chuyến'));
+    $response->assertJsonPath('active_trip_id', $cargoTrip->id);
 
     $emptyTrip->refresh();
     expect($emptyTrip->status)->toBe(TripStatus::ReturnTrip);

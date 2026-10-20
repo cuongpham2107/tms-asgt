@@ -21,73 +21,82 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Model;
 
 class ReassignDriverAction
 {
-    public static function make(): Action
+    public static function make(?string $name = null): Action
     {
-        return Action::make('reassign_driver')
+        return Action::make($name ?? 'reassign_driver')
             ->label('Gán lại tài xế')
             ->icon('heroicon-o-arrow-path')
             ->button()
             ->size('xs')
             ->color('warning')
-            ->visible(fn (Trip $record): bool => $record->status === TripStatus::DriverSwap)
-            ->modalHeading('Gán lại tài xế mới')
+            ->visible(fn (?Model $record): bool => static::resolveTrip($record)?->status === TripStatus::DriverSwap)
+            ->modalHeading(fn (?Model $record): string => 'Gán lại tài xế mới'.(static::resolveTrip($record)?->trip_code ? ' — '.static::resolveTrip($record)->trip_code : ''))
             ->modalDescription('Chuyến đi đang yêu cầu đảo tài xế. Chọn tài xế mới để tiếp tục xử lý.')
             ->form([
                 Select::make('new_driver_id')
                     ->label('Tài xế mới')
-                    ->options(fn (Trip $record): array => User::query()
-                        ->where('is_active', true)
-                        // ->where('id', '!=', $record->driver_id)
-                        ->with([
-                            'vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng'),
-                            'driverShifts' => fn ($q) => $q->whereNull('end_time'),
-                        ])
-                        ->get()
-                        ->sortByDesc(fn (User $driver): bool => $driver->driverShifts->isNotEmpty())
-                        ->mapWithKeys(function (User $driver): array {
-                            $parts = [$driver->name];
+                    ->options(function (?Model $record): array {
+                        $trip = static::resolveTrip($record);
 
-                            $assignedVehicle = $driver->vehiclesAsDriver->first();
-                            if ($assignedVehicle) {
-                                $parts[] = $assignedVehicle->plate_number;
-                            }
+                        return User::query()
+                            ->where('is_active', true)
+                            // ->where('id', '!=', $trip?->driver_id)
+                            ->with([
+                                'vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng'),
+                                'driverShifts' => fn ($q) => $q->whereNull('end_time'),
+                            ])
+                            ->get()
+                            ->sortByDesc(fn (User $driver): bool => $driver->driverShifts->isNotEmpty())
+                            ->mapWithKeys(function (User $driver): array {
+                                $parts = [$driver->name];
 
-                            if ($driver->phone) {
-                                $parts[] = $driver->phone;
-                            }
-
-                            $activeShift = $driver->driverShifts->first();
-                            if ($activeShift && $activeShift->shift_type) {
-                                $shiftLabel = $activeShift->shift_type->getLabel();
-                                $startTime = $activeShift->start_time?->format('H:i');
-                                $parts[] = "Ca: {$shiftLabel}";
-                                if ($startTime) {
-                                    $parts[] = $startTime;
+                                $assignedVehicle = $driver->vehiclesAsDriver->first();
+                                if ($assignedVehicle) {
+                                    $parts[] = $assignedVehicle->plate_number;
                                 }
-                            }
 
-                            if ($assignedVehicle?->gps_lat && $assignedVehicle?->gps_lng) {
-                                $location = CreatesOrderTransportCards::findNearestLocation(
-                                    (float) $assignedVehicle->gps_lat,
-                                    (float) $assignedVehicle->gps_lng,
-                                );
-                                if ($location['name']) {
-                                    $parts[] = $location['name'];
+                                if ($driver->phone) {
+                                    $parts[] = $driver->phone;
                                 }
-                            }
 
-                            return [$driver->id => implode(' · ', $parts)];
-                        })
-                        ->all())
+                                $activeShift = $driver->driverShifts->first();
+                                if ($activeShift && $activeShift->shift_type) {
+                                    $shiftLabel = $activeShift->shift_type->getLabel();
+                                    $startTime = $activeShift->start_time?->format('H:i');
+                                    $parts[] = "Ca: {$shiftLabel}";
+                                    if ($startTime) {
+                                        $parts[] = $startTime;
+                                    }
+                                }
+
+                                if ($assignedVehicle?->gps_lat && $assignedVehicle?->gps_lng) {
+                                    $location = CreatesOrderTransportCards::findNearestLocation(
+                                        (float) $assignedVehicle->gps_lat,
+                                        (float) $assignedVehicle->gps_lng,
+                                    );
+                                    if ($location['name']) {
+                                        $parts[] = $location['name'];
+                                    }
+                                }
+
+                                return [$driver->id => implode(' · ', $parts)];
+                            })
+                            ->all();
+                    })
                     ->searchable()
                     ->required(),
                 Placeholder::make('handover_info')
                     ->label('Km bàn giao')
-                    ->content(function (Trip $record): string {
-                        $handover = static::latestHandoverCheckpoint($record);
+                    ->content(function (?Model $record): string {
+                        $trip = static::resolveTrip($record);
+                        if (! $trip) {
+                            return 'Chưa có thông tin chuyến';
+                        }
+                        $handover = static::latestHandoverCheckpoint($trip);
 
                         return $handover
                             ? number_format((float) $handover->km_reading, 1, ',', '.').' km lúc '.($handover->occurred_at?->format('H:i d/m') ?? '')
@@ -152,8 +161,15 @@ class ReassignDriverAction
                     ->visible(fn (callable $get): bool => (bool) $get('create_return_trip'))
                     ->searchable(),
             ])
-            ->action(function (Trip $record, array $data): void {
-                $oldDriver = $record->driver;
+            ->action(function (?Model $record, array $data, Action $action): void {
+                $trip = static::resolveTrip($record);
+                if (! $trip) {
+                    $action->cancel();
+
+                    return;
+                }
+
+                $oldDriver = $trip->driver;
                 if (! $oldDriver) {
                     Notification::make()
                         ->danger()
@@ -175,7 +191,7 @@ class ReassignDriverAction
                     return;
                 }
 
-                // if ($data['new_driver_id'] == $record->driver_id) {
+                // if ($data['new_driver_id'] == $trip->driver_id) {
                 //     Notification::make()
                 //         ->danger()
                 //         ->title('Không thể gán lại tài xế')
@@ -185,7 +201,7 @@ class ReassignDriverAction
                 //     return;
                 // }
 
-                $handover = static::latestHandoverCheckpoint($record);
+                $handover = static::latestHandoverCheckpoint($trip);
 
                 if ($handover === null) {
                     Notification::make()
@@ -198,22 +214,22 @@ class ReassignDriverAction
                 }
 
                 $handoverKm = (float) $handover->km_reading;
-                $companionIds = TripCheckpoint::where('trip_id', $record->id)
+                $companionIds = TripCheckpoint::where('trip_id', $trip->id)
                     ->where('checkpoint_type', CheckpointType::DriverSwap)
                     ->where('occurred_at', $handover->occurred_at)
                     ->pluck('id');
 
-                $existingSwap = DriverSwap::where('trip_id', $record->id)->whereIn('checkpoint_id', $companionIds)->first();
+                $existingSwap = DriverSwap::where('trip_id', $trip->id)->whereIn('checkpoint_id', $companionIds)->first();
 
                 if ($existingSwap === null) {
                     $unlinkedId = array_search(true, array_map(
                         fn (int $checkpointId): bool => $companionIds->contains($checkpointId),
-                        TripKmSplitService::matchUnlinkedSwaps($record),
+                        TripKmSplitService::matchUnlinkedSwaps($trip),
                     ), true);
                     $existingSwap = $unlinkedId === false ? null : DriverSwap::find($unlinkedId);
                 }
 
-                $receiverStarted = $existingSwap !== null && TripCheckpoint::where('trip_id', $record->id)
+                $receiverStarted = $existingSwap !== null && TripCheckpoint::where('trip_id', $trip->id)
                     ->where('driver_id', $existingSwap->to_driver_id)
                     ->where('occurred_at', '>', $handover->occurred_at)
                     ->exists();
@@ -248,16 +264,16 @@ class ReassignDriverAction
                 } else {
                     DriverSwap::create([
                         ...$swapData,
-                        'trip_id' => $record->id,
+                        'trip_id' => $trip->id,
                         'checkpoint_id' => $handover->id,
-                        'from_driver_id' => $record->driver_id,
+                        'from_driver_id' => $trip->driver_id,
                         'from_shift_id' => $oldShift?->id,
                         'handover_km' => $handoverKm,
                     ]);
                 }
 
                 $lastCheckpoint = TripCheckpoint::query()
-                    ->where('trip_id', $record->id)
+                    ->where('trip_id', $trip->id)
                     ->where('checkpoint_type', '!=', CheckpointType::DriverSwap)
                     ->latest('occurred_at')
                     ->first();
@@ -271,12 +287,12 @@ class ReassignDriverAction
                     default => TripStatus::Pending,
                 };
 
-                $record->update([
+                $trip->update([
                     'driver_id' => $data['new_driver_id'],
                     'shift_id' => $newShift?->id,
                     'status' => $status,
-                    'start_km' => $record->start_km ?? $record->vehicle?->current_mileage,
-                    'started_at' => $record->started_at ?? now(),
+                    'start_km' => $trip->start_km ?? $trip->vehicle?->current_mileage,
+                    'started_at' => $trip->started_at ?? now(),
                 ]);
 
                 $restoredStatus = in_array($status, [
@@ -285,13 +301,13 @@ class ReassignDriverAction
                     TripStatus::Delivered,
                 ]) ? OrderStatus::InTransit : OrderStatus::Sent;
 
-                $record->orders()
+                $trip->orders()
                     ->where('status', OrderStatus::DriverSwap->value)
                     ->update(['status' => $restoredStatus->value]);
 
                 if ($newDriver !== null) {
                     try {
-                        app(DriverNotificationService::class)->sendTripDriverSwapped($record, $newDriver, $oldDriver, $handoverKm);
+                        app(DriverNotificationService::class)->sendTripDriverSwapped($trip, $newDriver, $oldDriver, $handoverKm);
                     } catch (\Throwable) {
                     }
                 }
@@ -301,7 +317,7 @@ class ReassignDriverAction
                     ->title('Đã gán lại tài xế')
                     ->body(sprintf(
                         'Chuyến #%s đã được gán lại từ %s sang %s',
-                        $record->trip_code,
+                        $trip->trip_code,
                         $oldDriver?->name ?? 'N/A',
                         $newDriver->name ?? 'N/A',
                     ))
@@ -385,5 +401,18 @@ class ReassignDriverAction
             ->where('occurred_at', $latest->occurred_at)
             ->orderBy('id')
             ->first();
+    }
+
+    public static function resolveTrip(?Model $record): ?Trip
+    {
+        if ($record instanceof Trip) {
+            return $record;
+        }
+
+        if ($record instanceof Vehicle) {
+            return $record->active_trip;
+        }
+
+        return null;
     }
 }

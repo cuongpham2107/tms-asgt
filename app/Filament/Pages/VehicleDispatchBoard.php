@@ -8,6 +8,8 @@ use App\Enums\ShiftType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
+use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
+use App\Filament\Resources\Trips\Actions\ResolveKmReportAction;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -299,7 +301,30 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->badge()
                     ->alignCenter()
                     ->color(fn (Vehicle $record): string => self::getStatusBadgeColor($record))
-                    ->state(fn (Vehicle $record): string => self::getTripStatusLabel($record)),
+                    ->state(fn (Vehicle $record): string => self::getTripStatusLabel($record))
+                    ->icon(fn (Vehicle $record): ?string => match (true) {
+                        $record->active_trip?->isPaused() => 'heroicon-m-exclamation-triangle',
+                        $record->active_trip?->status === TripStatus::DriverSwap => 'heroicon-m-arrow-path',
+                        default => null,
+                    })
+                    ->tooltip(fn (Vehicle $record): ?string => match (true) {
+                        $record->active_trip?->isPaused() => 'Bấm để xử lý báo sai Km',
+                        $record->active_trip?->status === TripStatus::DriverSwap => 'Bấm để gán lại tài xế (Đảo lái)',
+                        default => null,
+                    })
+                    ->disabledClick(fn (Vehicle $record): bool => ! self::canClickTripStatus($record))
+                    ->action(function (Vehicle $record, HasTable $livewire): void {
+                        $trip = $record->active_trip;
+                        if (! $trip) {
+                            return;
+                        }
+
+                        if ($trip->isPaused()) {
+                            $livewire->mountTableAction('resolve_km_report', (string) $record->getKey());
+                        } elseif ($trip->status === TripStatus::DriverSwap) {
+                            $livewire->mountTableAction('reassign_driver', (string) $record->getKey());
+                        }
+                    }),
 
                 // 4. Điểm đi
                 TextColumn::make('pickup_location')
@@ -391,6 +416,9 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->state(fn (Vehicle $record): string => self::getShiftLabel($record)),
             ])
             ->recordActions([
+                ReassignDriverAction::make('reassign_driver'),
+                ResolveKmReportAction::make('resolve_km_report'),
+
                 Action::make('view_trip')
                     ->label('Chuyến xe')
                     ->icon('heroicon-o-truck')
@@ -596,6 +624,17 @@ class VehicleDispatchBoard extends Page implements HasTable
             TripStatus::ReturnTrip => 'bg-indigo-600 text-white font-semibold',
             default => 'bg-blue-600 text-white font-bold',
         };
+    }
+
+    public static function canClickTripStatus(Vehicle $record): bool
+    {
+        $activeTrip = $record->active_trip;
+
+        if ($activeTrip === null) {
+            return false;
+        }
+
+        return $activeTrip->status === TripStatus::DriverSwap || $activeTrip->isPaused();
     }
 
     public static function getPickupPoint(Vehicle $record): string

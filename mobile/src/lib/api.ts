@@ -34,7 +34,11 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
         if (typeof msg === "object" && !Array.isArray(msg)) {
             msg = Object.values(msg).flat().join("\n");
         }
-        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+        const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg)) as any;
+        if (json?.active_trip_id) {
+            err.active_trip_id = json.active_trip_id;
+        }
+        throw err;
     }
     return json as T;
 }

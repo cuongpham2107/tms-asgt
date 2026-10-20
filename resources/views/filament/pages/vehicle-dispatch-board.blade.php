@@ -136,9 +136,37 @@
 
                                 {{-- 4. Trạng thái --}}
                                 <td class="border border-[rgb(30_58_95)]/30 dark:border-slate-800 px-1.5 py-1 text-center whitespace-nowrap">
-                                    <span class="px-2 py-0.5 rounded text-[11px] shadow-xs inline-block {{ $statusColor }}">
-                                        {{ $statusLabel }}
-                                    </span>
+                                    @php
+                                        $activeTrip = $vehicle->active_trip;
+                                        $isKmPaused = $activeTrip && $activeTrip->isPaused();
+                                        $isDriverSwap = $activeTrip && ! $isKmPaused && $activeTrip->status === \App\Enums\TripStatus::DriverSwap;
+                                    @endphp
+
+                                    @if ($isKmPaused)
+                                        <button 
+                                            type="button"
+                                            wire:click="mountTableAction('resolve_km_report', '{{ $vehicle->id }}')"
+                                            title="Bấm để xử lý báo sai Km"
+                                            class="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded text-[11px] shadow-xs cursor-pointer hover:opacity-85 hover:ring-2 hover:ring-amber-400 font-bold transition {{ $statusColor }}"
+                                        >
+                                            <x-filament::icon icon="heroicon-m-exclamation-triangle" class="w-3.5 h-3.5 shrink-0" />
+                                            <span>{{ $statusLabel }}</span>
+                                        </button>
+                                    @elseif ($isDriverSwap)
+                                        <button 
+                                            type="button"
+                                            wire:click="mountTableAction('reassign_driver', '{{ $vehicle->id }}')"
+                                            title="Bấm để gán lại tài xế (Đảo lái)"
+                                            class="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded text-[11px] shadow-xs cursor-pointer hover:opacity-85 hover:ring-2 hover:ring-rose-400 font-bold transition {{ $statusColor }}"
+                                        >
+                                            <x-filament::icon icon="heroicon-m-arrow-path" class="w-3.5 h-3.5 shrink-0" />
+                                            <span>{{ $statusLabel }}</span>
+                                        </button>
+                                    @else
+                                        <span class="px-2 py-0.5 rounded text-[11px] shadow-xs inline-block {{ $statusColor }}">
+                                            {{ $statusLabel }}
+                                        </span>
+                                    @endif
                                 </td>
 
                                 {{-- 5. Điểm đi (Hiển thị code) --}}
@@ -283,4 +311,7 @@
             ])
         @endif
     </x-filament::modal>
+
+    {{-- Filament Action Modals (cho ReassignDriverAction và ResolveKmReportAction) --}}
+    <x-filament-actions::modals />
 </x-filament-panels::page>

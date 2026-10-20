@@ -55,6 +55,10 @@ class DriverShiftResource extends JsonResource
                     'id' => $trip->vehicle->id,
                     'plate_number' => $trip->vehicle->plate_number,
                 ] : null,
+                'orders' => $trip->relationLoaded('orders') ? $trip->orders->map(fn ($o) => [
+                    'id' => $o->id,
+                    'order_code' => $o->order_code,
+                ]) : [],
                 'started_at' => $trip->started_at?->toDateTimeString(),
                 'completed_at' => $trip->completed_at?->toDateTimeString(),
                 'start_km' => $trip->start_km,

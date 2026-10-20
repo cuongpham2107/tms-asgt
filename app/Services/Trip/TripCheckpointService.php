@@ -52,8 +52,15 @@ class TripCheckpointService
             $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id);
             if ($activeCargoTrip !== null) {
                 $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);
+                $orderCodes = $activeCargoTrip->orders()->pluck('order_code')->filter()->join(', ');
+                $driverName = $activeCargoTrip->driver?->name ?? 'Không xác định';
                 throw ValidationException::withMessages([
-                    'checkpoint_type' => "Xe {$plateNumber} đang có chuyến hàng thực hiện. Vui lòng hoàn thành hoặc đảo lái trước khi thực hiện chuyến không hàng.",
+                    'checkpoint_type' => sprintf(
+                        'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi thực hiện chuyến không hàng.',
+                        $plateNumber,
+                        $orderCodes,
+                        $driverName
+                    ),
                 ]);
             }
 
@@ -130,8 +137,15 @@ class TripCheckpointService
             $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id);
             if ($activeCargoTrip !== null) {
                 $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);
+                $orderCodes = $activeCargoTrip->orders()->pluck('order_code')->filter()->join(', ');
+                $driverName = $activeCargoTrip->driver?->name ?? 'Không xác định';
                 throw ValidationException::withMessages([
-                    'checkpoint_type' => "Xe {$plateNumber} đang có chuyến hàng thực hiện. Vui lòng hoàn thành hoặc đảo lái trước khi bắt đầu chuyến không hàng.",
+                    'checkpoint_type' => sprintf(
+                        'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi bắt đầu chuyến không hàng.',
+                        $plateNumber,
+                        $orderCodes,
+                        $driverName
+                    ),
                 ]);
             }
         }

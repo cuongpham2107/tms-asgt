@@ -1,6 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
+import { Text, TextInput } from "react-native";
 import { AuthProvider, useAuth } from "../src/lib/auth";
 import { LoadingProvider, useLoading } from "../src/lib/loading";
 import { usePushNotifications } from "../src/lib/notifications";
@@ -14,6 +15,32 @@ import {
   snoozeSoftUpdate,
   type AppVersionInfo,
 } from "../src/lib/version";
+
+// Khóa cố định cỡ chữ toàn app (bỏ qua phóng to cỡ chữ theo hệ thống để chống vỡ giao diện)
+interface ComponentWithRender {
+  render?: (props: any, ref: any) => any;
+  defaultProps?: any;
+}
+
+const customText = Text as unknown as ComponentWithRender;
+if (customText.defaultProps == null) customText.defaultProps = {};
+customText.defaultProps.allowFontScaling = false;
+const oldTextRender = customText.render;
+if (oldTextRender) {
+  customText.render = function (props: any, ref: any) {
+    return oldTextRender({ ...props, allowFontScaling: false }, ref);
+  };
+}
+
+const customInput = TextInput as unknown as ComponentWithRender;
+if (customInput.defaultProps == null) customInput.defaultProps = {};
+customInput.defaultProps.allowFontScaling = false;
+const oldInputRender = customInput.render;
+if (oldInputRender) {
+  customInput.render = function (props: any, ref: any) {
+    return oldInputRender({ ...props, allowFontScaling: false }, ref);
+  };
+}
 
 function AuthGuard() {
   const { token, shiftId, logout } = useAuth();

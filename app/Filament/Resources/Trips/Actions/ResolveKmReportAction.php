@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Trips\Actions;
 use App\Enums\TripKmReportStatus;
 use App\Models\Trip;
 use App\Models\TripKmReport;
+use App\Models\Vehicle;
 use App\Services\TripKmAdjustmentService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
@@ -16,6 +17,7 @@ use Filament\Forms\Components\ToggleButtons;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Enums\Width;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -29,8 +31,8 @@ class ResolveKmReportAction
             ->label('Xử lý báo sai Km')
             ->icon('heroicon-o-exclamation-triangle')
             ->color('warning')
-            ->visible(fn (?Trip $record, $livewire = null): bool => static::resolveRecord($record, $livewire)?->latestPendingKmReport !== null)
-            ->beforeFormFilled(function (Action $action, ?Trip $record = null, $livewire = null) {
+            ->visible(fn (?Model $record, $livewire = null): bool => static::resolveRecord($record, $livewire)?->latestPendingKmReport !== null)
+            ->beforeFormFilled(function (Action $action, ?Model $record = null, $livewire = null) {
                 $trip = static::resolveRecord($record, $livewire, $action);
                 if (! $trip) {
                     $action->cancel();
@@ -56,8 +58,8 @@ class ResolveKmReportAction
             })
             ->modal()
             ->modalWidth(Width::ExtraLarge)
-            ->modalHeading(fn (?Trip $record, $livewire = null): string => 'Xử lý báo sai Km — '.(static::resolveRecord($record, $livewire)?->trip_code ?? ''))
-            ->modalContent(function (?Trip $record, $livewire = null): HtmlString {
+            ->modalHeading(fn (?Model $record, $livewire = null): string => 'Xử lý báo sai Km — '.(static::resolveRecord($record, $livewire)?->trip_code ?? ''))
+            ->modalContent(function (?Model $record, $livewire = null): HtmlString {
                 $trip = static::resolveRecord($record, $livewire);
                 if ($trip === null) {
                     return new HtmlString('<p>Không tìm thấy chuyến đi.</p>');
@@ -151,7 +153,7 @@ class ResolveKmReportAction
             })
             ->schema([
                 Hidden::make('report_id')
-                    ->default(fn (?Trip $record, $livewire = null, ?Action $action = null) => static::resolveRecord($record, $livewire, $action)?->latestPendingKmReport?->id),
+                    ->default(fn (?Model $record, $livewire = null, ?Action $action = null) => static::resolveRecord($record, $livewire, $action)?->latestPendingKmReport?->id),
 
                 ToggleButtons::make('decision')
                     ->label('Lựa chọn xử lý')
@@ -177,8 +179,8 @@ class ResolveKmReportAction
                     ->numeric()
                     ->required(fn (Get $get) => $get('decision') === 'ok')
                     ->visible(fn (Get $get) => $get('decision') === 'ok')
-                    ->default(fn (?Trip $record, $livewire = null, ?Action $action = null) => static::resolveRecord($record, $livewire, $action)?->latestPendingKmReport?->reported_km)
-                    ->helperText(function (Get $get, ?Trip $record, $livewire = null, ?Action $action = null): string {
+                    ->default(fn (?Model $record, $livewire = null, ?Action $action = null) => static::resolveRecord($record, $livewire, $action)?->latestPendingKmReport?->reported_km)
+                    ->helperText(function (Get $get, ?Model $record, $livewire = null, ?Action $action = null): string {
                         $trip = static::resolveRecord($record, $livewire, $action);
                         if (! $trip) {
                             return 'Nhập số km thực tế trên taplo.';
@@ -203,7 +205,7 @@ class ResolveKmReportAction
                         return 'Giới hạn hợp lệ: '.implode(' — ', $parts).'.';
                     })
                     ->rules([
-                        fn (Get $get, ?Trip $record, $livewire = null, ?Action $action = null) => function (string $attribute, $value, \Closure $fail) use ($record, $livewire, $action, $get) {
+                        fn (Get $get, ?Model $record, $livewire = null, ?Action $action = null) => function (string $attribute, $value, \Closure $fail) use ($record, $livewire, $action, $get) {
                             if ($get('decision') !== 'ok') {
                                 return;
                             }
@@ -234,7 +236,7 @@ class ResolveKmReportAction
 
                 Placeholder::make('km_deviation_warning')
                     ->label('')
-                    ->visible(function (Get $get, ?Trip $record, $livewire = null): bool {
+                    ->visible(function (Get $get, ?Model $record, $livewire = null): bool {
                         if ($get('decision') !== 'ok') {
                             return false;
                         }
@@ -248,7 +250,7 @@ class ResolveKmReportAction
 
                         return $sysKm > 0 && abs($val - $sysKm) >= 50.0;
                     })
-                    ->content(function (Get $get, ?Trip $record, $livewire = null): HtmlString {
+                    ->content(function (Get $get, ?Model $record, $livewire = null): HtmlString {
                         $val = (float) $get('corrected_km');
                         $trip = static::resolveRecord($record, $livewire);
                         $report = $trip?->latestPendingKmReport;
@@ -279,7 +281,7 @@ class ResolveKmReportAction
                     ->placeholder(fn (Get $get) => $get('decision') === 'reject' ? 'Nhập lý do từ chối báo cáo...' : 'Ghi chú nội bộ (không bắt buộc)...')
                     ->rows(2),
             ])
-            ->action(function (array $data, Action $action, ?Trip $record = null, $livewire = null) {
+            ->action(function (array $data, Action $action, ?Model $record = null, $livewire = null) {
                 $trip = static::resolveRecord($record, $livewire, $action);
                 if ($trip === null) {
                     $action->cancel();
@@ -367,20 +369,33 @@ class ResolveKmReportAction
             ->modalSubmitActionLabel('Xác nhận xử lý');
     }
 
-    protected static function resolveRecord(?Trip $record, mixed $livewire, ?Action $action = null): ?Trip
+    protected static function resolveRecord(?Model $record, mixed $livewire, ?Action $action = null): ?Trip
     {
         if ($record instanceof Trip) {
             return $record;
         }
 
-        if ($action && $action->getRecord() instanceof Trip) {
-            return $action->getRecord();
+        if ($record instanceof Vehicle) {
+            return $record->active_trip;
+        }
+
+        if ($action) {
+            $actionRecord = $action->getRecord();
+            if ($actionRecord instanceof Trip) {
+                return $actionRecord;
+            }
+            if ($actionRecord instanceof Vehicle) {
+                return $actionRecord->active_trip;
+            }
         }
 
         if ($livewire && method_exists($livewire, 'getRecord')) {
             $livewireRecord = $livewire->getRecord();
             if ($livewireRecord instanceof Trip) {
                 return $livewireRecord;
+            }
+            if ($livewireRecord instanceof Vehicle) {
+                return $livewireRecord->active_trip;
             }
         }
 

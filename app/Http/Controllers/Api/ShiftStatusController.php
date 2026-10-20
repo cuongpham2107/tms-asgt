@@ -43,7 +43,7 @@ class ShiftStatusController extends Controller
             ->value('end_km');
 
         return response()->json([
-            'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')])) : null,
+            'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with(['vehicle', 'orders'])])) : null,
             'last_km' => $lastKm,
             'app_version' => [
                 'latest_version' => (string) config('app.mobile_latest_version', '1.1.0'),

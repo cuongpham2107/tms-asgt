@@ -1,12 +1,16 @@
 <?php
 
+use App\Enums\CheckpointType;
 use App\Enums\DriverWorkShift;
 use App\Enums\OnDutyLocation;
+use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
+use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -171,4 +175,141 @@ test('syncEupGps handles corrupted cache gracefully without error', function () 
     $page->syncEupGps();
 
     expect(true)->toBeTrue();
+});
+
+test('vehicle dispatch board allows clicking trip status when driver swap is active', function () {
+    $driver = User::factory()->create(['name' => 'Tài xế Cũ']);
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '20C-SWAP1',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'is_active' => true,
+    ]);
+
+    $trip = Trip::factory()->create([
+        'trip_code' => 'TRIP-SWAP-001',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::DriverSwap,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'checkpoint_type' => CheckpointType::DriverSwap,
+        'km_reading' => 12500,
+        'occurred_at' => now(),
+    ]);
+
+    $vehicle->load('trips');
+
+    expect(VehicleDispatchBoard::canClickTripStatus($vehicle))->toBeTrue()
+        ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đảo lái');
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertStatus(200)
+        ->assertSee('mountTableAction(\'reassign_driver\', \''.$vehicle->id.'\')', false)
+        ->assertSee('Đảo lái')
+        ->mountTableAction('reassign_driver', $vehicle)
+        ->assertHasNoTableActionErrors();
+});
+
+test('vehicle dispatch board allows clicking trip status when trip is paused due to km report', function () {
+    $driver = User::factory()->create(['name' => 'Tài xế Báo Sai']);
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '99C-PAUSE1',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'is_active' => true,
+    ]);
+
+    $trip = Trip::factory()->create([
+        'trip_code' => 'TRIP-PAUSE-001',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Started,
+        'is_paused' => true,
+    ]);
+
+    $report = TripKmReport::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $driver->id,
+        'reported_km' => 54321,
+        'system_km' => 54000,
+        'status' => TripKmReportStatus::Pending,
+        'note' => 'Taplo hiển thị khác',
+    ]);
+
+    $vehicle->load('trips.latestPendingKmReport');
+
+    expect(VehicleDispatchBoard::canClickTripStatus($vehicle))->toBeTrue()
+        ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Tạm dừng (Sửa Km)');
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertStatus(200)
+        ->assertSee('mountTableAction(\'resolve_km_report\', \''.$vehicle->id.'\')', false)
+        ->assertSee('Tạm dừng (Sửa Km)')
+        ->mountTableAction('resolve_km_report', $vehicle)
+        ->assertHasNoTableActionErrors();
+});
+
+test('vehicle dispatch board does not make status clickable for normal trips or vehicles without trip', function () {
+    $vehicleWithNormalTrip = Vehicle::factory()->create([
+        'plate_number' => '20C-NORMAL',
+        'type' => VehicleOwnerType::Company,
+        'is_active' => true,
+    ]);
+
+    Trip::factory()->create([
+        'vehicle_id' => $vehicleWithNormalTrip->id,
+        'status' => TripStatus::Delivering,
+    ]);
+
+    $vehicleWithoutTrip = Vehicle::factory()->create([
+        'plate_number' => '20C-NOTRIP',
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    $vehicleWithNormalTrip->load('trips');
+    $vehicleWithoutTrip->load('trips');
+
+    expect(VehicleDispatchBoard::canClickTripStatus($vehicleWithNormalTrip))->toBeFalse()
+        ->and(VehicleDispatchBoard::canClickTripStatus($vehicleWithoutTrip))->toBeFalse();
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertStatus(200)
+        ->assertDontSee('mountTableAction(\'reassign_driver\', \''.$vehicleWithNormalTrip->id.'\')', false)
+        ->assertDontSee('mountTableAction(\'resolve_km_report\', \''.$vehicleWithNormalTrip->id.'\')', false)
+        ->assertDontSee('mountTableAction(\'reassign_driver\', \''.$vehicleWithoutTrip->id.'\')', false)
+        ->assertDontSee('mountTableAction(\'resolve_km_report\', \''.$vehicleWithoutTrip->id.'\')', false);
+});
+
+test('vehicle dispatch board prioritizes resolve_km_report when a driver swap trip is paused', function () {
+    $driver = User::factory()->create(['name' => 'Tài xế Đảo Lái']);
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '20C-SWAPPAUSE',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'is_active' => true,
+    ]);
+
+    $trip = Trip::factory()->create([
+        'trip_code' => 'TRIP-SP-001',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::DriverSwap,
+        'is_paused' => true,
+    ]);
+
+    $vehicle->load('trips');
+
+    expect(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Tạm dừng (Sửa Km)');
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertStatus(200)
+        ->assertSee('mountTableAction(\'resolve_km_report\', \''.$vehicle->id.'\')', false)
+        ->assertDontSee('mountTableAction(\'reassign_driver\', \''.$vehicle->id.'\')', false)
+        ->mountTableAction('resolve_km_report', $vehicle)
+        ->assertHasNoTableActionErrors();
 });

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TripCheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
@@ -9,6 +10,7 @@ use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Services\Trip\TripCheckpointService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 
 class TripCheckpointController extends Controller
 {
@@ -47,7 +49,31 @@ class TripCheckpointController extends Controller
             default => null,
         };
 
-        $result = $this->service->recordCheckpoint($trip, $request->validated(), $photosArray);
+        try {
+            $result = $this->service->recordCheckpoint($trip, $request->validated(), $photosArray);
+        } catch (ValidationException $e) {
+            $response = [
+                'message' => $e->validator->errors()->first(),
+                'errors' => $e->errors(),
+            ];
+
+            // Attach active_trip_id if driver has an active trip
+            $activeTrip = Trip::getActiveCargoTripForDriver($user->id, $trip->id);
+            if (! $activeTrip) {
+                $activeTrip = Trip::where('driver_id', $user->id)
+                    ->where('id', '!=', $trip->id)
+                    ->whereIn('status', array_filter(
+                        TripStatus::activeStatuses(),
+                        fn (TripStatus $s) => ! in_array($s, [TripStatus::Pending, TripStatus::DriverSwap]),
+                    ))
+                    ->first();
+            }
+            if ($activeTrip) {
+                $response['active_trip_id'] = $activeTrip->id;
+            }
+
+            return response()->json($response, 422);
+        }
 
         return response()->json([
             'checkpoints' => TripCheckpointResource::collection($result),

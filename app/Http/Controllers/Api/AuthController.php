@@ -168,10 +168,10 @@ class AuthController extends Controller
             'user' => UserResource::make($user),
             'token' => $token,
             'shift' => $activeShift
-                ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')]))
+                ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with(['vehicle', 'orders'])]))
                 : null,
             'app_version' => [
-                'latest_version' => (string) config('app.mobile_latest_version', '1.1.4'),
+                'latest_version' => (string) config('app.mobile_latest_version', '1.1.5'),
                 'min_version' => (string) config('app.mobile_min_version', '1.0.0'),
                 'release_notes' => (string) config('app.mobile_release_notes', 'Cập nhật tính năng và cải thiện hiệu năng hệ thống.'),
                 'store_urls' => [

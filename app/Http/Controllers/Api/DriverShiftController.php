@@ -91,7 +91,7 @@ class DriverShiftController extends Controller
 
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle']))]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle', 'trips.orders']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -214,18 +214,36 @@ class DriverShiftController extends Controller
                 TripStatus::Delivered,
                 TripStatus::ReturnTrip,
             ])
+            ->with(['vehicle', 'orders'])
             ->get();
 
         if ($incompleteTrips->isNotEmpty()) {
-            $codes = $incompleteTrips->pluck('trip_code')->filter()->implode(', ');
-            $orderCount = $incompleteTrips->sum(function (Trip $trip) {
-                return $trip->orders()
-                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
-                    ->count();
-            });
+            $plates = $incompleteTrips->map(fn (Trip $t) => $t->vehicle?->plate_number)
+                ->filter()
+                ->unique()
+                ->implode(', ');
+            if (empty($plates)) {
+                $plates = $user->vehiclesAsDriver()->first()?->plate_number ?? ('#'.$incompleteTrips->first()->id);
+            }
+
+            $orderCodes = $incompleteTrips->flatMap(fn (Trip $t) => $t->orders->pluck('order_code'))
+                ->filter()
+                ->unique()
+                ->implode(', ');
+            if (empty($orderCodes)) {
+                $orderCodes = $incompleteTrips->pluck('trip_code')->filter()->implode(', ');
+            }
+
+            $driverName = $user->name ?? 'Không xác định';
 
             return response()->json([
-                'message' => "Bạn có {$incompleteTrips->count()} chuyến đang hoạt động ({$codes}) với {$orderCount} đơn hàng chưa hoàn thành. Vui lòng hoàn thành tất cả đơn hàng hoặc kết thúc đơn hàng trước khi kết thúc ca.",
+                'message' => sprintf(
+                    'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi kết thúc ca.',
+                    $plates,
+                    $orderCodes,
+                    $driverName
+                ),
+                'active_trip_id' => $incompleteTrips->first()->id,
             ], 422);
         }
 
@@ -268,7 +286,7 @@ class DriverShiftController extends Controller
 
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle']))]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle', 'trips.orders']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -297,7 +315,7 @@ class DriverShiftController extends Controller
             app(ShiftKmCalculatorService::class)->calculate($shift);
         }
 
-        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with('vehicle')])) : null]);
+        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with(['vehicle', 'orders'])])) : null]);
     }
 
     /**
@@ -347,7 +365,7 @@ class DriverShiftController extends Controller
             DB::commit();
 
             return response()->json([
-                'shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle'])),
+                'shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle', 'trips.orders'])),
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();

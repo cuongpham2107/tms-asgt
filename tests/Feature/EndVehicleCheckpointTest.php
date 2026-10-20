@@ -376,7 +376,7 @@ test('end shift is rejected when driver has in-progress trip with sent orders', 
     $response = $this->postJson('/api/driver/shifts/end', []);
 
     $response->assertStatus(422);
-    $response->assertJsonPath('message', fn ($msg) => str_contains($msg, 'chuyến đang hoạt động'));
+    $response->assertJsonPath('message', fn ($msg) => str_contains($msg, 'chưa hoàn thiện chuyến'));
 });
 
 // === TEST 10: Driver can start a new trip when having another pending trip ===

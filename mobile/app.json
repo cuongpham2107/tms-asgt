@@ -1,85 +1,88 @@
 {
-    "expo": {
-        "name": "ASGT Vận Tải",
-        "slug": "asgt",
-        "owner": "cuongpham99s-team",
-        "version": "1.1.4",
-        "orientation": "portrait",
-        "icon": "./assets/icon.png",
-        "userInterfaceStyle": "light",
-        "scheme": "tms-driver",
-        "plugins": [
-            "./plugins/withAndroidManifest.js",
-            "expo-router",
-            "expo-image-picker",
-            [
-                "expo-location",
-                {
-                    "locationAlwaysAndWhenInUsePermission": "Cần GPS để ghi nhận vị trí chốt chặng"
-                }
-            ],
-            "expo-font",
-            [
-                "expo-notifications",
-                {
-                    "icon": "./assets/android-icon-monochrome.png",
-                    "color": "#4F46E5",
-                    "defaultChannel": "orders",
-                    "sounds": []
-                }
-            ],
-            [
-                "expo-build-properties",
-                {
-                    "android": {
-                        "compileSdkVersion": 36,
-                        "targetSdkVersion": 36
-                    }
-                }
-            ]
-        ],
-        "ios": {
-            "supportsTablet": true,
-            "bundleIdentifier": "vn.asgt.tmsdriver",
-            "googleServicesFile": "./GoogleService-Info.plist",
-            "entitlements": {
-                "aps-environment": "production"
-            },
-            "infoPlist": {
-                "NSCameraUsageDescription": "Ứng dụng cần sử dụng camera để tài xế chụp ảnh hàng hóa và biên bản giao nhận tại các chốt kiểm tra.",
-                "NSPhotoLibraryUsageDescription": "Ứng dụng cần truy cập thư viện ảnh để tài xế tải lên hình ảnh biên bản giao nhận và chứng từ vận chuyển.",
-                "NSLocationWhenInUseUsageDescription": "Ứng dụng cần truy cập vị trí khi sử dụng để xác thực vị trí tài xế tại điểm lấy hàng, giao hàng và ghi nhận lộ trình chuyến đi.",
-                "UIDesignRequiresCompatibility": true,
-                "NSAppTransportSecurity": {
-                    "NSAllowsArbitraryLoads": true,
-                    "NSAllowsLocalNetworking": true
-                },
-                "ITSAppUsesNonExemptEncryption": false
-            }
-        },
-        "android": {
-            "googleServicesFile": "./google-services.json",
-            "adaptiveIcon": {
-                "backgroundColor": "#FFFFFF",
-                "foregroundImage": "./assets/android-icon-foreground.png",
-                "backgroundImage": "./assets/android-icon-background.png",
-                "monochromeImage": "./assets/android-icon-monochrome.png"
-            },
-            "permissions": [
-                "android.permission.ACCESS_COARSE_LOCATION",
-                "android.permission.ACCESS_FINE_LOCATION",
-                "android.permission.POST_NOTIFICATIONS"
-            ],
-            "package": "vn.asgt.tmsdriver"
-        },
-        "web": {
-            "favicon": "./assets/favicon.png"
-        },
-        "extra": {
-            "router": {},
-            "eas": {
-                "projectId": "4a73c5d5-0135-4373-a36e-8e0b2009c779"
-            }
+  "expo": {
+    "name": "ASGT Vận Tải",
+    "slug": "asgt",
+    "owner": "asgl",
+    "version": "1.1.5",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "tms-driver",
+    "plugins": [
+      "./plugins/withAndroidManifest.js",
+      "expo-router",
+      "expo-image-picker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Cần GPS để ghi nhận vị trí chốt chặng"
         }
+      ],
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#4F46E5",
+          "defaultChannel": "orders",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36
+          }
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "vn.asgt.tmsdriver",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "aps-environment": "production"
+      },
+      "infoPlist": {
+        "NSCameraUsageDescription": "Ứng dụng cần sử dụng camera để tài xế chụp ảnh hàng hóa và biên bản giao nhận tại các chốt kiểm tra.",
+        "NSPhotoLibraryUsageDescription": "Ứng dụng cần truy cập thư viện ảnh để tài xế tải lên hình ảnh biên bản giao nhận và chứng từ vận chuyển.",
+        "NSLocationWhenInUseUsageDescription": "Ứng dụng cần truy cập vị trí khi sử dụng để xác thực vị trí tài xế tại điểm lấy hàng, giao hàng và ghi nhận lộ trình chuyến đi.",
+        "UIDesignRequiresCompatibility": true,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "vn.asgt.tmsdriver"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "6f998364-07b3-4def-867b-e074dcd6373d"
+      }
     }
+  }
 }

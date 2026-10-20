@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useRouter } from "expo-router";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Modal, TextInput, KeyboardAvoidingView, Platform } from "react-native";
 import { useAuth } from "../../src/lib/auth";
 import { useLoading } from "../../src/lib/loading";
@@ -63,6 +63,22 @@ export default function ProfileScreen() {
     if (shift?.driver) setLocalDriver(shift.driver);
   }, [shift?.driver]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (token) {
+        api.shifts
+          .current(token)
+          .then((res) => {
+            if (res?.shift) {
+              setShift(res.shift);
+              if (res.shift.driver) setLocalDriver(res.shift.driver);
+            }
+          })
+          .catch(() => null);
+      }
+    }, [token, setShift])
+  );
+
   const driver = localDriver;
   const shiftTrips: any[] = shift?.trips || [];
   const activeTrips = shiftTrips.filter((t: any) => t.status !== "completed" && t.status !== "driver_swap" && t.status !== "cancelled");
@@ -71,10 +87,48 @@ export default function ProfileScreen() {
     if (!shift?.id) { showAlert("Không có ca", "Bạn chưa vào ca"); return; }
 
     if (activeTrips.length > 0) {
-      const codes = activeTrips.map((t: any) => t.trip_code).join(", ");
+      const plate =
+        Array.from(
+          new Set(
+            activeTrips
+              .map((t: any) => t.vehicle?.plate_number)
+              .filter(Boolean)
+          )
+        ).join(", ") ||
+        shift?.vehicle?.plate_number ||
+        "—";
+
+      const orderCodes =
+        Array.from(
+          new Set(
+            activeTrips
+              .flatMap((t: any) =>
+                Array.isArray(t.orders) && t.orders.length > 0
+                  ? t.orders.map((o: any) => o.order_code).filter(Boolean)
+                  : [t.trip_code]
+              )
+              .filter(Boolean)
+          )
+        ).join(", ") || "—";
+
+      const driverName =
+        driver?.name ||
+        shift?.driver?.name ||
+        activeTrips[0]?.driver?.name ||
+        "lái xe";
+
+      const targetTrip = activeTrips[0];
       showAlert(
-        "Chưa thể kết thúc ca",
-        `Bạn có ${activeTrips.length} chuyến đang hoạt động (${codes}). Vui lòng hoàn thành tất cả đơn hàng hoặc kết thúc đơn hàng trước khi kết thúc ca.`,
+        "Không thể kết thúc ca",
+        `Xe ${plate}, mã đơn ${orderCodes}, lái xe ${driverName} chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi kết thúc ca.`,
+        () => {
+          if (targetTrip?.id) {
+            router.push({
+              pathname: "/trip-detail",
+              params: { id: String(targetTrip.id) },
+            });
+          }
+        }
       );
       return;
     }
@@ -98,7 +152,19 @@ export default function ProfileScreen() {
       setLocalDriver(res?.shift?.driver || localDriver);
       showAlert("Thành công", "Đã kết thúc ca");
       router.replace("/");
-    } catch (e: any) { showAlert("Lỗi", e.message); }
+    } catch (e: any) {
+      const msg = e.message || "Không thể kết thúc ca";
+      const title = msg.includes("chưa hoàn thiện chuyến") ? "Không thể kết thúc ca" : "Lỗi";
+      const targetId = e.active_trip_id || activeTrips[0]?.id;
+      showAlert(title, msg, () => {
+        if (targetId && msg.includes("chưa hoàn thiện chuyến")) {
+          router.push({
+            pathname: "/trip-detail",
+            params: { id: String(targetId) },
+          });
+        }
+      });
+    }
     finally { setEnding(false); hideLoading(); }
   };
 

@@ -4,6 +4,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
+import { showAlert } from "../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { getFastGpsCoordinates } from "../src/lib/location";
@@ -24,6 +25,7 @@ export default function ShiftScreen() {
   const [endKm, setEndKm] = useState("");
   const [ending, setEnding] = useState(false);
   const [activeWarning, setActiveWarning] = useState<string | null>(null);
+  const [activeWarningTripId, setActiveWarningTripId] = useState<string | number | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (!token || !shift) return;
@@ -43,24 +45,30 @@ export default function ShiftScreen() {
       const trips = res?.data;
       if (!trips || !Array.isArray(trips) || trips.length === 0) {
         setActiveWarning(null);
+        setActiveWarningTripId(null);
         return;
       }
-      const incompleteOrders: { tripCode: string; count: number }[] = [];
+      const incompleteOrders: { tripId: number | string; tripCode: string; count: number }[] = [];
       trips.forEach((trip: any) => {
         const cnt = (trip.orders || []).filter((o: any) =>
           INCOMPLETE_ORDER_STATUSES.includes(o.status)
         ).length;
-        if (cnt > 0) incompleteOrders.push({ tripCode: trip.trip_code, count: cnt });
+        if (cnt > 0) incompleteOrders.push({ tripId: trip.id, tripCode: trip.trip_code, count: cnt });
       });
       if (incompleteOrders.length > 0) {
+        setActiveWarningTripId(incompleteOrders[0].tripId);
         const lines = incompleteOrders
           .map((item) => `${item.tripCode}: ${item.count} đơn chưa xong`)
           .join(", ");
         setActiveWarning(`${trips.length} chuyến đang hoạt động — ${lines}`);
       } else {
         setActiveWarning(null);
+        setActiveWarningTripId(null);
       }
-    }).catch(() => setActiveWarning(null));
+    }).catch(() => {
+      setActiveWarning(null);
+      setActiveWarningTripId(null);
+    });
   }, [token]));
 
   async function startShift(type: string) {
@@ -99,7 +107,24 @@ export default function ShiftScreen() {
       setShowEnd(false);
       Alert.alert("Thành công", "Đã kết thúc ca");
     } catch (e: any) {
-      Alert.alert("Chưa thể kết thúc ca", e.message);
+      const msg = e.message || "Không thể kết thúc ca";
+      const title = msg.includes("chưa hoàn thiện chuyến") ? "Không thể kết thúc ca" : "Lỗi";
+      let targetTripId: string | number | undefined = e.active_trip_id || activeWarningTripId || undefined;
+      if (!targetTripId && msg.includes("chưa hoàn thiện chuyến")) {
+        try {
+          const activeRes = await api.trips.active(token!);
+          const data: any = activeRes?.data;
+          targetTripId = Array.isArray(data) ? data[0]?.id : data?.id;
+        } catch {}
+      }
+      showAlert(title, msg, () => {
+        if (targetTripId) {
+          router.push({
+            pathname: "/trip-detail",
+            params: { id: String(targetTripId) },
+          });
+        }
+      });
     } finally {
       setEnding(false);
       hideLoading();
@@ -126,13 +151,26 @@ export default function ShiftScreen() {
           <Text style={s.subtitle}>Ca đang hoạt động — nhập Km đồng hồ để kết thúc</Text>
 
           {activeWarning && (
-            <View style={s.warnBox}>
+            <TouchableOpacity
+              style={s.warnBox}
+              activeOpacity={0.8}
+              onPress={() => {
+                if (activeWarningTripId) {
+                  router.push({
+                    pathname: "/trip-detail",
+                    params: { id: String(activeWarningTripId) },
+                  });
+                }
+              }}
+            >
               <View style={s.warnHeader}>
                 <Ionicons name="information-circle" size={18} color="#2563EB" />
                 <Text style={s.warnTitle}>Chú ý</Text>
+                <Ionicons name="chevron-forward" size={16} color="#2563EB" style={{ marginLeft: "auto" }} />
               </View>
               <Text style={s.warnText}>{activeWarning}</Text>
-            </View>
+              <Text style={s.warnHint}>Nhấn vào đây để xem chi tiết chuyến dở dang</Text>
+            </TouchableOpacity>
           )}
 
           <View style={s.endCard}>
@@ -173,4 +211,5 @@ const s = StyleSheet.create({
   warnHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
   warnTitle: { fontSize: 15, fontWeight: "700", color: "#1E40AF" },
   warnText: { fontSize: 13, color: "#1E3A8A", lineHeight: 20 },
+  warnHint: { fontSize: 12, color: "#2563EB", fontWeight: "600", marginTop: 6 },
 });

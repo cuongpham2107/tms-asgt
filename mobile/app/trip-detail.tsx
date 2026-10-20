@@ -368,13 +368,30 @@ export default function TripDetailScreen() {
             }
         } catch (e: any) {
             const msg = e.message || "";
-            const match = msg.match(/#(\d+)/);
+            let targetTripId: string | number | undefined = e.active_trip_id;
+            if (
+                !targetTripId &&
+                (msg.includes("chưa hoàn thiện chuyến") ||
+                    msg.includes("đang có chuyến hàng") ||
+                    msg.includes("đang chạy chuyến"))
+            ) {
+                try {
+                    const activeRes = await api.trips.active(token!);
+                    const data: any = activeRes?.data;
+                    targetTripId = Array.isArray(data) ? data[0]?.id : data?.id;
+                } catch {}
+            }
+            if (!targetTripId) {
+                const match = msg.match(/#(\d+)/);
+                if (match) targetTripId = match[1];
+            }
             showAlert("Không thể bắt đầu", msg, () => {
-                if (match)
+                if (targetTripId) {
                     router.push({
                         pathname: "/trip-detail",
-                        params: { id: match[1] },
+                        params: { id: String(targetTripId) },
                     });
+                }
             });
         } finally {
             setStarting(false);
@@ -626,11 +643,10 @@ export default function TripDetailScreen() {
                     {canComplete && hasIncompleteOrders && !isReturnTrip && (
                         <TouchableOpacity
                             style={[
-                                s.actionBtn,
+                                s.actionBtnHandoff,
                                 {
-                                    backgroundColor: "#D97706",
                                     marginTop:
-                                        detail?.route || trip?.route ? 6 : 12,
+                                        detail?.route || trip?.route ? 8 : 12,
                                 },
                             ]}
                             onPress={() => {
@@ -648,10 +664,10 @@ export default function TripDetailScreen() {
                         >
                             <Ionicons
                                 name="swap-horizontal"
-                                size={20}
-                                color="#fff"
+                                size={16}
+                                color="#B45309"
                             />
-                            <Text style={s.actionBtnText}>
+                            <Text style={s.actionBtnHandoffText}>
                                 {completing
                                     ? "Đang xử lý..."
                                     : "Bàn giao chuyến chưa xong"}
@@ -1031,6 +1047,19 @@ export default function TripDetailScreen() {
                                 📦 Đơn hàng ({orders.length})
                             </Text>
                         </View>
+                        {hasIncompleteOrders && (
+                            <View style={s.orderGuideBanner}>
+                                <Ionicons
+                                    name="arrow-down-circle"
+                                    size={16}
+                                    color="#4F46E5"
+                                />
+                                <Text style={s.orderGuideText}>
+                                    Bấm vào đơn hàng bên dưới để tiến hành
+                                    lấy/giao hàng
+                                </Text>
+                            </View>
+                        )}
                         {orders.length === 0 ? (
                             <View style={s.empty}>
                                 <Ionicons
@@ -1053,20 +1082,26 @@ export default function TripDetailScreen() {
                                           ? "#D97706"
                                           : o.status === "driver_swap"
                                             ? "#8B5CF6"
-                                            : "#6B7280";
-                                const hasEndCk = (
-                                    o.trip_checkpoints || []
-                                ).some(
-                                    (cp: any) => cp.checkpoint_type === "end",
-                                );
+                                            : "#4F46E5";
+                                const isCardActive = o.status !== "completed";
                                 return (
                                     <TouchableOpacity
                                         key={o.id}
                                         style={[
                                             s.orderCard,
-                                            { borderColor: osColor + "20" },
+                                            o.status === "in_transit"
+                                                ? {
+                                                      borderColor: "#F59E0B",
+                                                      borderWidth: 1.5,
+                                                  }
+                                                : o.status === "sent"
+                                                  ? {
+                                                        borderColor: "#6366F1",
+                                                        borderWidth: 1.5,
+                                                    }
+                                                  : { borderColor: "#E5E7EB" },
                                         ]}
-                                        activeOpacity={0.7}
+                                        activeOpacity={0.8}
                                         onPress={() => {
                                             router.push({
                                                 pathname: "/order-detail",
@@ -1086,139 +1121,265 @@ export default function TripDetailScreen() {
                                             });
                                         }}
                                     >
-                                        <View style={{ flex: 1 }}>
-                                            {(() => {
-                                                const codes: string[] = [];
-                                                if (o.pickup_location?.code)
-                                                    codes.push(
-                                                        o.pickup_location.code,
-                                                    );
-                                                (
-                                                    o.delivery_points || []
-                                                ).forEach((dp: any) => {
+                                        {/* Tuyến đường nếu có */}
+                                        {(() => {
+                                            const codes: string[] = [];
+                                            if (o.pickup_location?.code)
+                                                codes.push(
+                                                    o.pickup_location.code,
+                                                );
+                                            (o.delivery_points || []).forEach(
+                                                (dp: any) => {
                                                     if (dp.location?.code)
                                                         codes.push(
                                                             dp.location.code,
                                                         );
-                                                });
-                                                if (codes.length > 0)
-                                                    return (
-                                                        <View
-                                                            style={s.routeWrap}
+                                                },
+                                            );
+                                            if (codes.length > 0)
+                                                return (
+                                                    <View style={s.routeWrap}>
+                                                        <Ionicons
+                                                            name="navigate"
+                                                            size={12}
+                                                            color="#4F46E5"
+                                                        />
+                                                        <Text
+                                                            style={s.orderRoute}
                                                         >
-                                                            <Ionicons
-                                                                name="navigate"
-                                                                size={12}
-                                                                color="#4F46E5"
-                                                            />
-                                                            <Text
-                                                                style={
-                                                                    s.orderRoute
-                                                                }
-                                                            >
-                                                                {codes.join(
-                                                                    "  →  ",
-                                                                )}
-                                                            </Text>
-                                                        </View>
-                                                    );
-                                                return null;
-                                            })()}
+                                                            {codes.join(
+                                                                "  →  ",
+                                                            )}
+                                                        </Text>
+                                                    </View>
+                                                );
+                                            return null;
+                                        })()}
+
+                                        {/* Mã đơn và Badges */}
+                                        <View
+                                            style={{
+                                                flexDirection: "row",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                            }}
+                                        >
                                             <View
                                                 style={{
                                                     flexDirection: "row",
-                                                    justifyContent:
-                                                        "space-between",
                                                     alignItems: "center",
+                                                    flex: 1,
                                                 }}
                                             >
+                                                <Text style={s.orderCode}>
+                                                    {o.order_code}
+                                                </Text>
                                                 <View
                                                     style={{
-                                                        flexDirection: "row",
-                                                        alignItems: "center",
-                                                        flex: 1,
+                                                        paddingHorizontal: 5,
+                                                        paddingVertical: 2,
+                                                        borderRadius: 4,
+                                                        backgroundColor:
+                                                            o.type === "HHHK"
+                                                                ? "#E0F2FE"
+                                                                : "#FEF3C7",
+                                                        marginLeft: 6,
                                                     }}
                                                 >
-                                                    <Text style={s.orderCode}>
-                                                        {o.order_code}
-                                                    </Text>
-                                                    <View
+                                                    <Text
                                                         style={{
-                                                            paddingHorizontal: 4,
-                                                            paddingVertical: 1,
-                                                            borderRadius: 4,
-                                                            backgroundColor:
+                                                            fontSize: 10,
+                                                            fontWeight: "700",
+                                                            color:
                                                                 o.type ===
                                                                 "HHHK"
-                                                                    ? "#E0F2FE"
-                                                                    : "#FEF3C7",
-                                                            marginLeft: 6,
+                                                                    ? "#0369A1"
+                                                                    : "#B45309",
                                                         }}
                                                     >
-                                                        <Text
-                                                            style={{
-                                                                fontSize: 10,
-                                                                fontWeight:
-                                                                    "600",
-                                                                color:
-                                                                    o.type ===
-                                                                    "HHHK"
-                                                                        ? "#0369A1"
-                                                                        : "#B45309",
-                                                            }}
-                                                        >
-                                                            {o.type_label ||
-                                                                o.type}
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                                <View
-                                                    style={[
-                                                        s.orderBadge,
-                                                        {
-                                                            backgroundColor:
-                                                                osColor + "20",
-                                                        },
-                                                    ]}
-                                                >
-                                                    <Text
-                                                        style={[
-                                                            s.orderBadgeText,
-                                                            { color: osColor },
-                                                        ]}
-                                                    >
-                                                        {osText}
+                                                        {o.type_label || o.type}
                                                     </Text>
                                                 </View>
                                             </View>
-                                            <Text
-                                                style={s.orderCargo}
-                                                numberOfLines={1}
+                                            <View
+                                                style={[
+                                                    s.orderBadge,
+                                                    {
+                                                        backgroundColor:
+                                                            osColor + "20",
+                                                    },
+                                                ]}
                                             >
-                                                {o.cargo_name || "Chưa có tên"}
-                                            </Text>
-                                            {o.customer?.name && (
-                                                <Text style={s.orderCustomer}>
-                                                    {o.customer.name}
+                                                <Text
+                                                    style={[
+                                                        s.orderBadgeText,
+                                                        { color: osColor },
+                                                    ]}
+                                                >
+                                                    {osText}
                                                 </Text>
-                                            )}
-                                            {o.planned_loading_at && (
-                                                <Text style={s.orderLoading}>
-                                                    🕐 Đóng hàng:{" "}
-                                                    {new Date(
-                                                        o.planned_loading_at,
-                                                    ).toLocaleString("vi-VN")}
-                                                </Text>
-                                            )}
-                                            <Text style={s.orderKm}>
-                                                📏 loaded: {fmt(o.loaded_km)} km
-                                            </Text>
+                                            </View>
                                         </View>
-                                        <Ionicons
-                                            name="chevron-forward"
-                                            size={16}
-                                            color="#D1D5DB"
-                                        />
+
+                                        {/* Thông tin đơn hàng */}
+                                        <Text
+                                            style={s.orderCargo}
+                                            numberOfLines={1}
+                                        >
+                                            {o.cargo_name || "Chưa có tên hàng"}
+                                        </Text>
+                                        {o.customer?.name && (
+                                            <Text style={s.orderCustomer}>
+                                                {o.customer.name}
+                                            </Text>
+                                        )}
+                                        {o.planned_loading_at && (
+                                            <Text style={s.orderLoading}>
+                                                🕐 Đóng hàng:{" "}
+                                                {new Date(
+                                                    o.planned_loading_at,
+                                                ).toLocaleString("vi-VN")}
+                                            </Text>
+                                        )}
+                                        <Text style={s.orderKm}>
+                                            📏 loaded: {fmt(o.loaded_km)} km
+                                        </Text>
+
+                                        {/* CTA Action Button */}
+                                        {o.status === "sent" ? (
+                                            <View
+                                                style={[
+                                                    s.orderCtaBtn,
+                                                    {
+                                                        backgroundColor:
+                                                            "#4F46E5",
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name="location"
+                                                    size={16}
+                                                    color="#fff"
+                                                />
+                                                <Text style={s.orderCtaText}>
+                                                    Bấm để cập nhật mốc lấy hàng
+                                                </Text>
+                                                <Ionicons
+                                                    name="arrow-forward"
+                                                    size={15}
+                                                    color="#fff"
+                                                />
+                                            </View>
+                                        ) : o.status === "in_transit" ? (
+                                            <View
+                                                style={[
+                                                    s.orderCtaBtn,
+                                                    {
+                                                        backgroundColor:
+                                                            "#D97706",
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name="car"
+                                                    size={16}
+                                                    color="#fff"
+                                                />
+                                                <Text style={s.orderCtaText}>
+                                                    Bấm để cập nhật mốc giao
+                                                    hàng
+                                                </Text>
+                                                <Ionicons
+                                                    name="arrow-forward"
+                                                    size={15}
+                                                    color="#fff"
+                                                />
+                                            </View>
+                                        ) : o.status === "driver_swap" ? (
+                                            <View
+                                                style={[
+                                                    s.orderCtaBtn,
+                                                    {
+                                                        backgroundColor:
+                                                            "#8B5CF6",
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name="swap-horizontal"
+                                                    size={16}
+                                                    color="#fff"
+                                                />
+                                                <Text style={s.orderCtaText}>
+                                                    Đơn đảo lái — Xem chi tiết
+                                                </Text>
+                                                <Ionicons
+                                                    name="chevron-forward"
+                                                    size={15}
+                                                    color="#fff"
+                                                />
+                                            </View>
+                                        ) : o.status === "completed" ? (
+                                            <View
+                                                style={[
+                                                    s.orderCtaBtn,
+                                                    {
+                                                        backgroundColor:
+                                                            "#ECFDF5",
+                                                        borderWidth: 1,
+                                                        borderColor: "#A7F3D0",
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name="checkmark-circle"
+                                                    size={16}
+                                                    color="#059669"
+                                                />
+                                                <Text
+                                                    style={[
+                                                        s.orderCtaText,
+                                                        { color: "#059669" },
+                                                    ]}
+                                                >
+                                                    Đã hoàn thành các mốc
+                                                </Text>
+                                                <Ionicons
+                                                    name="chevron-forward"
+                                                    size={14}
+                                                    color="#059669"
+                                                />
+                                            </View>
+                                        ) : (
+                                            <View
+                                                style={[
+                                                    s.orderCtaBtn,
+                                                    {
+                                                        backgroundColor:
+                                                            "#F3F4F6",
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name="eye-outline"
+                                                    size={16}
+                                                    color="#4B5563"
+                                                />
+                                                <Text
+                                                    style={[
+                                                        s.orderCtaText,
+                                                        { color: "#4B5563" },
+                                                    ]}
+                                                >
+                                                    Xem chi tiết đơn hàng
+                                                </Text>
+                                                <Ionicons
+                                                    name="chevron-forward"
+                                                    size={14}
+                                                    color="#4B5563"
+                                                />
+                                            </View>
+                                        )}
                                     </TouchableOpacity>
                                 );
                             })
@@ -1908,21 +2069,69 @@ const s = StyleSheet.create({
     },
     sectionTitle: { fontSize: 16, fontWeight: "700", color: "#111827" },
     orderCard: {
-        flexDirection: "row",
-        alignItems: "center",
         backgroundColor: "#fff",
         marginHorizontal: 16,
-        marginBottom: 8,
-        padding: 12,
-        borderRadius: 12,
+        marginBottom: 10,
+        padding: 14,
+        borderRadius: 14,
         borderWidth: 1,
-        borderColor: "#F3F4F6",
-        gap: 12,
+        borderColor: "#E5E7EB",
         shadowColor: "#000",
         shadowOpacity: 0.04,
         shadowRadius: 6,
         shadowOffset: { width: 0, height: 1 },
         elevation: 1,
+    },
+    orderGuideBanner: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#EEF2FF",
+        marginHorizontal: 16,
+        marginBottom: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#C7D2FE",
+        gap: 6,
+    },
+    orderGuideText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#4338CA",
+        flex: 1,
+    },
+    orderCtaBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        marginTop: 12,
+    },
+    orderCtaText: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: "#fff",
+    },
+    actionBtnHandoff: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        backgroundColor: "#FFFBEB",
+        borderWidth: 1,
+        borderColor: "#FCD34D",
+    },
+    actionBtnHandoffText: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#B45309",
     },
     orderSeq: {
         width: 28,
