@@ -19,6 +19,7 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
 use Filament\Support\Enums\FontWeight;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -26,6 +27,7 @@ use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 use UnitEnum;
 
@@ -79,7 +81,70 @@ class VehicleDispatchBoard extends Page implements HasTable
             return null;
         }
 
-        return Vehicle::with(['trips.orders.deliveryPoints.location', 'trips.orders.pickupLocation', 'trips.driver'])->find($this->selectedVehicleIdForTrip);
+        $today = today();
+
+        return Vehicle::with([
+            'driver',
+            'evenDriver',
+            'oddDriver',
+            'trips' => function ($q) use ($today) {
+                $q->where(function (Builder $sub) use ($today) {
+                    $sub->whereDate('started_at', $today)
+                        ->orWhereDate('created_at', $today)
+                        ->orWhereDate('completed_at', $today)
+                        ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()));
+                })
+                    ->with([
+                        'driver',
+                        'startLocation',
+                        'endLocation',
+                        'checkpoints',
+                        'latestPendingKmReport',
+                        'orders.pickupLocation',
+                        'orders.deliveryPoints.location',
+                        'orders.customer',
+                    ])
+                    ->orderByRaw('COALESCE(started_at, created_at) ASC')
+                    ->orderBy('id', 'asc');
+            },
+        ])->find($this->selectedVehicleIdForTrip);
+    }
+
+    public function getTodayTripsForVehicle(Vehicle $vehicle): Collection
+    {
+        $today = today();
+
+        return Trip::query()
+            ->where('vehicle_id', $vehicle->id)
+            ->where(function (Builder $q) use ($today) {
+                $q->whereDate('started_at', $today)
+                    ->orWhereDate('created_at', $today)
+                    ->orWhereDate('completed_at', $today)
+                    ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()));
+            })
+            ->with([
+                'driver',
+                'startLocation',
+                'endLocation',
+                'checkpoints',
+                'latestPendingKmReport',
+                'orders.pickupLocation',
+                'orders.deliveryPoints.location',
+                'orders.customer',
+            ])
+            ->orderByRaw('COALESCE(started_at, created_at) ASC')
+            ->orderBy('id', 'asc')
+            ->get();
+    }
+
+    public function getTodayTripsForSelectedVehicle(): Collection
+    {
+        $vehicle = $this->getSelectedVehicleForTrip();
+        if (! $vehicle) {
+            return collect();
+        }
+
+        return $vehicle->trips ?? $this->getTodayTripsForVehicle($vehicle);
     }
 
     public function getSelectedVehicleForGps(): ?Vehicle
@@ -285,7 +350,8 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->weight(FontWeight::Bold)
                     ->searchable()
                     ->html()
-                    ->state(fn (Vehicle $record): string => self::renderBsx($record)),
+                    ->state(fn (Vehicle $record): string => self::renderBsx($record))
+                    ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
 
                 // 2. STT (CH / KH)
                 TextColumn::make('type')
@@ -376,7 +442,8 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->label('Chuyến')
                     ->alignCenter()
                     ->weight(FontWeight::Bold)
-                    ->state(fn (Vehicle $record): int => self::getTodayTripsCount($record)),
+                    ->state(fn (Vehicle $record): int => self::getTodayTripsCount($record))
+                    ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
 
                 // 11. KM over
                 TextColumn::make('km_over')
@@ -423,12 +490,13 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->label('Chuyến xe')
                     ->icon('heroicon-o-truck')
                     ->color('primary')
-                    ->visible(fn (Vehicle $record): bool => $record->active_trip !== null)
+                    ->visible(fn (Vehicle $record): bool => self::getTodayTripsCount($record) > 0 || $record->active_trip !== null)
                     ->modal()
-                    ->modalHeading(fn (Vehicle $record): string => 'Chuyến xe — '.($record->active_trip?->trip_code ?? ''))
-                    ->modalContent(fn (Vehicle $record) => view('filament.pages.partials.vehicle-trip-modal', [
+                    ->modalWidth(Width::FourExtraLarge)
+                    ->modalHeading(fn (Vehicle $record): string => 'Danh sách chuyến xe trong ngày — '.$record->plate_number.' ('.today()->format('d/m/Y').')')
+                    ->modalContent(fn (Vehicle $record, VehicleDispatchBoard $livewire) => view('filament.pages.partials.vehicle-trip-modal', [
                         'vehicle' => $record,
-                        'trip' => $record->active_trip,
+                        'trips' => $livewire->getTodayTripsForVehicle($record),
                     ]))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Đóng'),
@@ -936,8 +1004,24 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function getTodayTripsCount(Vehicle $record): int
     {
+        if (! $record->relationLoaded('trips')) {
+            $today = today();
+
+            return $record->trips()
+                ->where(function (Builder $q) use ($today) {
+                    $q->whereDate('started_at', $today)
+                        ->orWhereDate('created_at', $today)
+                        ->orWhereDate('completed_at', $today)
+                        ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()));
+                })
+                ->count();
+        }
+
         return $record->trips
-            ->filter(fn (Trip $t) => $t->started_at && $t->started_at->isToday())
+            ->filter(fn (Trip $t) => ($t->started_at && $t->started_at->isToday())
+                || ($t->completed_at && $t->completed_at->isToday())
+                || ($t->created_at && $t->created_at->isToday())
+                || in_array($t->status, TripStatus::activeStatuses(), true))
             ->count();
     }
 

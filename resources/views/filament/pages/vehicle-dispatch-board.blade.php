@@ -231,7 +231,14 @@
 
                                 {{-- 11. Chuyến --}}
                                 <td class="border border-[rgb(30_58_95)]/30 dark:border-slate-800 px-1 py-1 text-center whitespace-nowrap font-bold text-gray-800 dark:text-gray-200">
-                                    <span>{{ \App\Filament\Pages\VehicleDispatchBoard::getTodayTripsCount($vehicle) }}</span>
+                                    <button 
+                                        type="button" 
+                                        wire:click="openTripModal({{ $vehicle->id }})" 
+                                        title="Bấm để xem danh sách chuyến trong ngày của xe {{ $vehicle->plate_number }}"
+                                        class="cursor-pointer hover:underline text-blue-700 dark:text-blue-300 hover:text-blue-800"
+                                    >
+                                        {{ \App\Filament\Pages\VehicleDispatchBoard::getTodayTripsCount($vehicle) }}
+                                    </button>
                                 </td>
 
                                 {{-- 12. KM over --}}
@@ -281,20 +288,20 @@
         $gpsVehicle = $this->getSelectedVehicleForGps();
     @endphp
 
-    {{-- Modal xem chuyến xe --}}
-    <x-filament::modal id="vehicle-trip-modal" width="2xl">
+    {{-- Modal xem danh sách chuyến xe trong ngày --}}
+    <x-filament::modal id="vehicle-trip-modal" width="4xl">
         <x-slot name="heading">
-            Chuyến xe — {{ $tripVehicle?->plate_number }}
+            Danh sách chuyến xe trong ngày — {{ $tripVehicle?->plate_number }} ({{ today()->format('d/m/Y') }})
         </x-slot>
 
-        @if ($tripVehicle && $tripVehicle->active_trip)
+        @if ($tripVehicle)
             @include('filament.pages.partials.vehicle-trip-modal', [
                 'vehicle' => $tripVehicle,
-                'trip' => $tripVehicle->active_trip,
+                'trips' => $this->getTodayTripsForSelectedVehicle(),
             ])
         @else
             <div class="text-sm text-gray-500 italic p-4 text-center">
-                Xe {{ $tripVehicle?->plate_number }} hiện tại chưa có chuyến xe nào đang hoạt động.
+                Vui lòng chọn xe để xem thông tin chuyến xe.
             </div>
         @endif
     </x-filament::modal>

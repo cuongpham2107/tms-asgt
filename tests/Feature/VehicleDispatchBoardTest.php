@@ -313,3 +313,83 @@ test('vehicle dispatch board prioritizes resolve_km_report when a driver swap tr
         ->mountTableAction('resolve_km_report', $vehicle)
         ->assertHasNoTableActionErrors();
 });
+
+test('vehicle dispatch board shows list of all trips in the day when clicking vehicle plate', function () {
+    $driver = User::factory()->create(['name' => 'Lái Xe Ca Sáng']);
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '29H-TRIPS-TODAY',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'is_active' => true,
+    ]);
+
+    // Trip 1: Morning trip, completed
+    $trip1 = Trip::factory()->create([
+        'trip_code' => 'TRIP-TODAY-001',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->startOfDay()->addHours(7),
+        'completed_at' => now()->startOfDay()->addHours(10),
+        'start_km' => 1000,
+        'end_km' => 1050,
+        'total_km' => 50,
+    ]);
+
+    // Trip 2: Afternoon trip, delivering
+    $trip2 = Trip::factory()->create([
+        'trip_code' => 'TRIP-TODAY-002',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now()->startOfDay()->addHours(13),
+        'start_km' => 1050,
+    ]);
+
+    // Trip 3: Yesterday trip, should NOT be in today's list
+    $yesterdayTrip = Trip::factory()->create([
+        'trip_code' => 'TRIP-YESTERDAY-999',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subDays(2)->setTime(8, 0),
+        'completed_at' => now()->subDays(2)->setTime(11, 0),
+        'created_at' => now()->subDays(2),
+    ]);
+
+    $page = new VehicleDispatchBoard;
+    $todayTrips = $page->getTodayTripsForVehicle($vehicle);
+
+    expect($todayTrips)->toHaveCount(2)
+        ->and($todayTrips->first()->trip_code)->toBe('TRIP-TODAY-001')
+        ->and($todayTrips->last()->trip_code)->toBe('TRIP-TODAY-002')
+        ->and(VehicleDispatchBoard::getTodayTripsCount($vehicle))->toBe(2);
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->call('openTripModal', $vehicle->id)
+        ->assertDispatched('open-modal', id: 'vehicle-trip-modal')
+        ->assertSee('TRIP-TODAY-001')
+        ->assertSee('TRIP-TODAY-002')
+        ->assertDontSee('TRIP-YESTERDAY-999')
+        ->assertSee('Chuyến 1')
+        ->assertSee('Chuyến 2')
+        ->assertSee('Tổng: 2 chuyến');
+});
+
+test('vehicle dispatch board shows friendly empty state when vehicle has no trips today', function () {
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '29H-NO-TRIP',
+        'type' => VehicleOwnerType::Company,
+        'is_active' => true,
+    ]);
+
+    $page = new VehicleDispatchBoard;
+    $todayTrips = $page->getTodayTripsForVehicle($vehicle);
+
+    expect($todayTrips)->toHaveCount(0);
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->call('openTripModal', $vehicle->id)
+        ->assertDispatched('open-modal', id: 'vehicle-trip-modal')
+        ->assertSee('Không có chuyến xe nào trong ngày hôm nay');
+});
