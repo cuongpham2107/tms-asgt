@@ -23,6 +23,7 @@
         "buildType": "app-bundle"
       },
       "ios": {
+        "credentialsSource": "local",
         "image": "macos-sequoia-15.6-xcode-26.0"
       }
     }
