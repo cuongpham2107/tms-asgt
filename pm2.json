@@ -1,0 +1,52 @@
+{
+  "apps": [
+    {
+      "name": "tms-scheduler",
+      "script": "/usr/bin/php",
+      "args": "/var/www/tms-asgt/artisan schedule:work",
+      "interpreter": "none",
+      "cwd": "/var/www/tms-asgt",
+      "exec_mode": "fork",
+      "autorestart": true,
+      "restart_delay": 5000,
+      "max_restarts": 100,
+      "watch": false,
+      "max_memory_restart": "200M",
+      "error_file": "/var/www/tms-asgt/storage/logs/pm2-scheduler-error.log",
+      "out_file": "/var/www/tms-asgt/storage/logs/pm2-scheduler-out.log",
+      "merge_logs": true
+    },
+    {
+      "name": "tms-queue",
+      "script": "/usr/bin/php",
+      "args": "/var/www/tms-asgt/artisan queue:work --tries=3 --timeout=90",
+      "interpreter": "none",
+      "cwd": "/var/www/tms-asgt",
+      "exec_mode": "fork",
+      "autorestart": true,
+      "restart_delay": 5000,
+      "max_restarts": 100,
+      "watch": false,
+      "max_memory_restart": "500M",
+      "error_file": "/var/www/tms-asgt/storage/logs/pm2-queue-error.log",
+      "out_file": "/var/www/tms-asgt/storage/logs/pm2-queue-out.log",
+      "merge_logs": true
+    },
+    {
+      "name": "tms-reverb",
+      "script": "/usr/bin/php",
+      "args": "/var/www/tms-asgt/artisan reverb:start --debug",
+      "interpreter": "none",
+      "cwd": "/var/www/tms-asgt",
+      "exec_mode": "fork",
+      "autorestart": true,
+      "restart_delay": 5000,
+      "max_restarts": 100,
+      "watch": false,
+      "max_memory_restart": "300M",
+      "error_file": "/var/www/tms-asgt/storage/logs/pm2-reverb-error.log",
+      "out_file": "/var/www/tms-asgt/storage/logs/pm2-reverb-out.log",
+      "merge_logs": true
+    }
+  ]
+}

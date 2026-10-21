@@ -68,7 +68,7 @@ class VehicleDispatchBoard extends Page implements HasTable
     public string $sortBy = 'status'; // status, plate_number
 
     #[Url]
-    public string $sortDirection = 'asc'; // asc, desc
+    public string $sortDirection = 'desc'; // asc, desc
 
     public ?int $selectedVehicleIdForTrip = null;
 

@@ -16,3 +16,11 @@ Schedule::call(fn () => app(EupGpsService::class)->sync())
 Schedule::command('vehicles:snapshot-monthly-km')
     ->monthlyOn(23, '00:00')
     ->name('snapshot-monthly-vehicle-km');
+
+Schedule::command('shifts:auto-end')
+    ->dailyAt('08:05')
+    ->name('auto-end-driver-shifts-morning');
+
+Schedule::command('shifts:auto-end')
+    ->dailyAt('20:05')
+    ->name('auto-end-driver-shifts-evening');

@@ -63,12 +63,30 @@
             .dark .dispatch-row.dispatch-group-end:hover td {
                 border-bottom: 2px solid #475569 !important;
             }
+            /* Sticky header cho bảng kiểm soát xe */
+            .dispatch-table-container {
+                max-height: calc(100vh - 9rem);
+                overflow: auto;
+            }
+            .dispatch-table thead {
+                position: sticky;
+                top: 0;
+                z-index: 20;
+            }
+            .dispatch-table thead tr,
+            .dispatch-table thead th {
+                background-color: rgb(30 58 95) !important;
+            }
+            .dark .dispatch-table thead tr,
+            .dark .dispatch-table thead th {
+                background-color: rgb(2 6 23) !important;
+            }
         </style>
 
         {{-- Bảng Kiểm Soát Tình Trạng Xe theo mẫu thực tế --}}
-        <div class="overflow-x-auto rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10 bg-white dark:bg-gray-900 shadow-xs">
-            <table class="w-full text-xs border-collapse font-sans">
-                <thead>
+        <div class="dispatch-table-container overflow-auto rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10 bg-white dark:bg-gray-900 shadow-xs max-h-[calc(100vh-9rem)]">
+            <table class="dispatch-table w-full text-xs border-collapse font-sans">
+                <thead class="sticky top-0 z-20 shadow-sm">
                     {{-- Dòng tiêu đề chính màu navy theo theme table --}}
                     <tr class="dark:bg-slate-950" style="background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));">
                         <th 
