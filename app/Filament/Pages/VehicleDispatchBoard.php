@@ -368,7 +368,7 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         foreach ($vehicles as $vehicle) {
-            $code = self::getDriverStation($vehicle);
+            $code = self::resolveVehicleLocationGroup($vehicle);
 
             if (! isset($grouped[$code])) {
                 $code = 'OTHER';
@@ -1351,16 +1351,78 @@ class VehicleDispatchBoard extends Page implements HasTable
         return 'OTHER';
     }
 
+    public static function resolveVehicleLocationGroup(Vehicle $vehicle): string
+    {
+        // 1. Chỉ tìm chuyến ĐANG CHẠY / CHƯA KẾT THÚC (Started, Delivering, ArrivedDelivery, Pending, v.v.)
+        // Tuyệt đối không lấy chuyến đã Hoàn thành (Completed), Đã huỷ (Cancelled) hoặc Đã kết thúc (hasEnded)
+        // vì xe đã xong chuyến, không còn di chuyển đến điểm đó nữa.
+        $activeTrip = null;
+        if ($vehicle->relationLoaded('trips')) {
+            $activeTrip = $vehicle->trips
+                ->filter(function (Trip $t): bool {
+                    if ($t->status === TripStatus::Cancelled || $t->status === TripStatus::Completed) {
+                        return false;
+                    }
+
+                    if ($t->hasEnded()) {
+                        return false;
+                    }
+
+                    return in_array($t->status, TripStatus::activeStatuses(), true) || $t->isPaused();
+                })
+                ->sortByDesc('id')
+                ->first();
+        } else {
+            $trip = $vehicle->active_trip;
+            if ($trip && $trip->status !== TripStatus::Completed && $trip->status !== TripStatus::Cancelled && ! $trip->hasEnded()) {
+                $activeTrip = $trip;
+            }
+        }
+
+        // Ưu tiên 1: Nếu xe ĐANG CÓ CHUYẾN CHẠY -> Gom nhóm theo điểm đến của chuyến đó (NB, BN, TN, Province)
+        if ($activeTrip !== null) {
+            $destStation = self::resolveStationFromTripDestination($activeTrip);
+            if ($destStation !== null) {
+                return $destStation;
+            }
+        }
+
+        // Ưu tiên 2: Nếu xe KHÔNG CÓ CHUYẾN (xe chờ, chuyến đã xong, xe dừng...) -> vị trí GPS ở đâu thì ở địa điểm đó
+        $gpsStation = self::resolveStationFromGps($vehicle);
+        if ($gpsStation !== null) {
+            return $gpsStation;
+        }
+
+        // Fallback 1: Điểm trực của tài xế (users.station)
+        $driverStation = self::getDriverStation($vehicle);
+        if ($driverStation !== 'OTHER' && $driverStation !== '—' && ! empty($driverStation)) {
+            return $driverStation;
+        }
+
+        // Fallback 2: Tiền tố biển số xe (20 -> TN, 99 -> BN, 29/30 -> NB)
+        $prefix = substr($vehicle->plate_number ?? '', 0, 2);
+        $prefixStation = match ($prefix) {
+            '20' => 'TN',
+            '99' => 'BN',
+            '29', '30' => 'NB',
+            default => null,
+        };
+        if ($prefixStation !== null) {
+            return $prefixStation;
+        }
+
+        return 'OTHER';
+    }
+
     public static function resolveStationFromTripDestination(Trip $trip): ?string
     {
-        // 1. Kiểm tra các điểm giao hàng (delivery points) của các đơn hàng trong chuyến
+        // 1. Kiểm tra các điểm giao hàng (delivery points) của các đơn hàng trong chuyến theo thứ tự ngược lại (điểm cuối trước)
         $deliveryPoints = $trip->orders
             ->flatMap(fn (Order $o) => $o->deliveryPoints)
             ->filter();
 
-        $lastDp = $deliveryPoints->sortBy('sequence')->last() ?? $deliveryPoints->last();
-        if ($lastDp) {
-            $station = self::mapLocationOrAddressToStation($lastDp->location, $lastDp->address);
+        foreach ($deliveryPoints->sortByDesc('sequence') as $dp) {
+            $station = self::mapLocationOrAddressToStation($dp->location, $dp->address);
             if ($station !== null) {
                 return $station;
             }
@@ -1412,10 +1474,10 @@ class VehicleDispatchBoard extends Page implements HasTable
             if (str_contains($address, 'Thái Nguyên') || str_contains($address, 'Phổ Yên') || str_contains($address, 'Sông Công')) {
                 return 'TN';
             }
-            if (str_contains($address, 'Bắc Ninh') || str_contains($address, 'Yên Phong') || str_contains($address, 'Quế Võ') || str_contains($address, 'Từ Sơn')) {
+            if (str_contains($address, 'Bắc Ninh') || str_contains($address, 'Yên Phong') || str_contains($address, 'Quế Võ') || str_contains($address, 'Từ Sơn') || str_contains($address, 'Tiên Du') || str_contains($address, 'Thuận Thành')) {
                 return 'BN';
             }
-            if (str_contains($address, 'Hà Nội') || str_contains($address, 'Nội Bài') || str_contains($address, 'Sóc Sơn') || str_contains($address, 'Mê Linh')) {
+            if (str_contains($address, 'Hà Nội') || str_contains($address, 'Nội Bài') || str_contains($address, 'Sóc Sơn') || str_contains($address, 'Mê Linh') || str_contains($address, 'Đông Anh')) {
                 return 'NB';
             }
 
@@ -1429,17 +1491,15 @@ class VehicleDispatchBoard extends Page implements HasTable
     {
         $addr = $record->gps_address;
         if (! empty($addr)) {
-            if (str_contains($addr, 'Thái Nguyên')) {
+            if (str_contains($addr, 'Thái Nguyên') || str_contains($addr, 'Phổ Yên') || str_contains($addr, 'Sông Công')) {
                 return 'TN';
             }
-            if (str_contains($addr, 'Bắc Ninh')) {
+            if (str_contains($addr, 'Bắc Ninh') || str_contains($addr, 'Yên Phong') || str_contains($addr, 'Quế Võ') || str_contains($addr, 'Từ Sơn') || str_contains($addr, 'Tiên Du') || str_contains($addr, 'Thuận Thành')) {
                 return 'BN';
             }
-            if (str_contains($addr, 'Hà Nội') || str_contains($addr, 'Nội Bài') || str_contains($addr, 'Sóc Sơn')) {
+            if (str_contains($addr, 'Hà Nội') || str_contains($addr, 'Nội Bài') || str_contains($addr, 'Sóc Sơn') || str_contains($addr, 'Mê Linh') || str_contains($addr, 'Đông Anh')) {
                 return 'NB';
             }
-
-            return 'Province';
         }
 
         $lat = (float) $record->gps_lat;
@@ -1455,6 +1515,10 @@ class VehicleDispatchBoard extends Page implements HasTable
                 return 'NB';
             }
 
+            return 'Province';
+        }
+
+        if (! empty($addr)) {
             return 'Province';
         }
 

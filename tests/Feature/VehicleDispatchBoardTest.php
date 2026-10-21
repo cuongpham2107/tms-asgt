@@ -13,6 +13,7 @@ use App\Filament\Pages\VehicleDispatchBoard;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -1060,4 +1061,203 @@ test('vehicle dispatch board renders loading overlay and spam click protection f
         ->assertDispatched('open-modal', id: 'vehicle-gps-modal')
         ->call('openTripModal', $vehicle->id)
         ->assertDispatched('open-modal', id: 'vehicle-trip-modal');
+});
+
+test('resolveStationFromGps accurately resolves station from address and coordinates', function () {
+    // 1. Theo địa chỉ
+    $vTN = Vehicle::factory()->create(['gps_address' => 'KCN Yên Bình, Phổ Yên, Thái Nguyên']);
+    expect(VehicleDispatchBoard::resolveStationFromGps($vTN))->toBe('TN');
+
+    $vBN = Vehicle::factory()->create(['gps_address' => 'KCN Yên Phong, Bắc Ninh']);
+    expect(VehicleDispatchBoard::resolveStationFromGps($vBN))->toBe('BN');
+
+    $vNB = Vehicle::factory()->create(['gps_address' => 'Sân bay Quốc tế Nội Bài, Sóc Sơn, Hà Nội']);
+    expect(VehicleDispatchBoard::resolveStationFromGps($vNB))->toBe('NB');
+
+    $vProv = Vehicle::factory()->create(['gps_address' => 'KCN Tràng Duệ, An Dương, Hải Phòng']);
+    expect(VehicleDispatchBoard::resolveStationFromGps($vProv))->toBe('Province');
+
+    // 2. Theo toạ độ GPS khi không có địa chỉ
+    $vCoordTN = Vehicle::factory()->create([
+        'gps_address' => null,
+        'gps_lat' => 21.50,
+        'gps_lng' => 105.80,
+    ]);
+    expect(VehicleDispatchBoard::resolveStationFromGps($vCoordTN))->toBe('TN');
+
+    $vCoordBN = Vehicle::factory()->create([
+        'gps_address' => null,
+        'gps_lat' => 21.20,
+        'gps_lng' => 106.05,
+    ]);
+    expect(VehicleDispatchBoard::resolveStationFromGps($vCoordBN))->toBe('BN');
+
+    $vCoordNB = Vehicle::factory()->create([
+        'gps_address' => null,
+        'gps_lat' => 21.22,
+        'gps_lng' => 105.80,
+    ]);
+    expect(VehicleDispatchBoard::resolveStationFromGps($vCoordNB))->toBe('NB');
+
+    $vCoordProv = Vehicle::factory()->create([
+        'gps_address' => null,
+        'gps_lat' => 20.85,
+        'gps_lng' => 106.68,
+    ]);
+    expect(VehicleDispatchBoard::resolveStationFromGps($vCoordProv))->toBe('Province');
+
+    // 3. Không có dữ liệu GPS
+    $vNoGps = Vehicle::factory()->create([
+        'gps_address' => null,
+        'gps_lat' => null,
+        'gps_lng' => null,
+    ]);
+    expect(VehicleDispatchBoard::resolveStationFromGps($vNoGps))->toBeNull();
+});
+
+test('vehicle location group priority: destination first, GPS second, driver station third', function () {
+    $driverNB = User::factory()->create([
+        'name' => 'Lái xe trực NBA',
+        'station' => OnDutyLocation::Nba,
+    ]);
+
+    // Case 1: Xe có tài xế trực tại NBA, xe đang đỗ ở Hà Nội (GPS = NB),
+    // NHƯNG có chuyến đang chạy đến Bắc Ninh -> Phải gom vào nhóm 'BN' theo Ưu tiên 1 (Điểm đến của chuyến)
+    $locBN = Location::create([
+        'code' => 'ALSB',
+        'name' => 'Kho ALSB Bắc Ninh',
+        'address' => 'KCN Yên Phong, Bắc Ninh',
+    ]);
+    $vWithTrip = Vehicle::factory()->create([
+        'plate_number' => '29C-TRIP-DEST-BN',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driverNB->id,
+        'gps_address' => 'Sóc Sơn, Hà Nội',
+        'is_active' => true,
+    ]);
+
+    $trip = Trip::factory()->create([
+        'vehicle_id' => $vWithTrip->id,
+        'driver_id' => $driverNB->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now()->subHour(),
+        'end_location_id' => $locBN->id,
+    ]);
+
+    $vWithTrip->load('trips.orders.deliveryPoints.location.area', 'trips.endLocation.area');
+
+    // Ưu tiên 1: Điểm đến của chuyến là Bắc Ninh (BN)
+    expect(VehicleDispatchBoard::resolveVehicleLocationGroup($vWithTrip))->toBe('BN')
+        // Nhưng cột Trực vẫn là NB theo tài xế
+        ->and(VehicleDispatchBoard::getDriverStation($vWithTrip))->toBe('NB');
+
+    // Case 2: Xe chưa có điểm đến (xe chờ/không có chuyến), nhưng có GPS ở Thái Nguyên -> Phải gom vào 'TN' theo Ưu tiên 2 (GPS)
+    $vWithGps = Vehicle::factory()->create([
+        'plate_number' => '29C-WAIT-TN',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driverNB->id,
+        'gps_address' => 'KCN Yên Bình, Phổ Yên, Thái Nguyên',
+        'is_active' => true,
+    ]);
+
+    expect(VehicleDispatchBoard::resolveVehicleLocationGroup($vWithGps))->toBe('TN')
+        // Cột Trực vẫn hiển thị điểm trực của lái xe (NB)
+        ->and(VehicleDispatchBoard::getDriverStation($vWithGps))->toBe('NB');
+
+    // Case 3: Xe không có chuyến, mất GPS -> Fallback theo điểm trực của tài xế (NB)
+    $vFallbackStation = Vehicle::factory()->create([
+        'plate_number' => '20C-FALLBACK',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driverNB->id,
+        'gps_address' => null,
+        'gps_lat' => null,
+        'gps_lng' => null,
+        'is_active' => true,
+    ]);
+
+    expect(VehicleDispatchBoard::resolveVehicleLocationGroup($vFallbackStation))->toBe('NB');
+});
+
+test('getGroupedVehicles groups vehicles by location destination/GPS while maintaining driver station', function () {
+    $driverNB = User::factory()->create(['name' => 'Lái Xe NBA', 'station' => OnDutyLocation::Nba]);
+    $driverBN = User::factory()->create(['name' => 'Lái Xe BN', 'station' => OnDutyLocation::Bn]);
+
+    // Xe 1: Tài xế BN, nhưng GPS ở Thái Nguyên -> Group TN, Cột Trực: BN
+    $v1 = Vehicle::factory()->create([
+        'plate_number' => '99C-GPS-TN',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driverBN->id,
+        'gps_address' => 'Sông Công, Thái Nguyên',
+        'is_active' => true,
+    ]);
+
+    // Xe 2: Tài xế NB, nhưng có chuyến đến Bắc Ninh -> Group BN, Cột Trực: NB
+    $locBN = Location::create([
+        'code' => 'SEV',
+        'name' => 'SEV Bắc Ninh',
+        'address' => 'Yên Phong, Bắc Ninh',
+    ]);
+    $v2 = Vehicle::factory()->create([
+        'plate_number' => '29C-TRIP-BN',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driverNB->id,
+        'gps_address' => 'Nội Bài, Hà Nội',
+        'is_active' => true,
+    ]);
+    Trip::factory()->create([
+        'vehicle_id' => $v2->id,
+        'driver_id' => $driverNB->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now()->subMinutes(30),
+        'end_location_id' => $locBN->id,
+    ]);
+
+    $board = new VehicleDispatchBoard;
+    $grouped = $board->getGroupedVehicles();
+
+    expect(isset($grouped['TN']))->toBeTrue()
+        ->and($grouped['TN']['vehicles']->pluck('plate_number')->all())->toContain('99C-GPS-TN')
+        ->and(isset($grouped['BN']))->toBeTrue()
+        ->and($grouped['BN']['vehicles']->pluck('plate_number')->all())->toContain('29C-TRIP-BN')
+        ->and(VehicleDispatchBoard::getDriverStation($v1))->toBe('BN')
+        ->and(VehicleDispatchBoard::getDriverStation($v2))->toBe('NB');
+});
+
+test('vehicle with completed past trip is grouped by current GPS location when currently idle', function () {
+    $driver = User::factory()->create(['name' => 'Đinh Văn Thanh', 'station' => OnDutyLocation::Bn]);
+
+    // Xe 20C-08846: Chuyến trước đã completed ở Nội Bài, nhưng hiện tại là xe chờ và GPS ở Tam Đa, Bắc Ninh
+    $locNB = Location::create([
+        'code' => 'ACSV',
+        'name' => 'Kho ACSV Nội Bài',
+        'address' => 'Sân bay Nội Bài, Sóc Sơn, Hà Nội',
+    ]);
+
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '20C08846',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'gps_address' => 'Bắc Ninh, Tam Đa, Bắc Ninh, Việt Nam',
+        'gps_lat' => 21.194458,
+        'gps_lng' => 106.010436,
+        'is_active' => true,
+    ]);
+
+    // Chuyến đã hoàn thành
+    Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subHours(5),
+        'completed_at' => now()->subHours(2),
+        'end_location_id' => $locNB->id,
+    ]);
+
+    $board = new VehicleDispatchBoard;
+    $grouped = $board->getGroupedVehicles();
+
+    // Xe không có chuyến đang chạy -> Phải thuộc nhóm BN theo GPS Tam Đa, Bắc Ninh chứ KHÔNG PHẢI nhóm NB!
+    expect(VehicleDispatchBoard::resolveVehicleLocationGroup($vehicle))->toBe('BN')
+        ->and(isset($grouped['BN']))->toBeTrue()
+        ->and($grouped['BN']['vehicles']->pluck('plate_number')->all())->toContain('20C08846');
 });
