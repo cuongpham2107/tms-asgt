@@ -59,9 +59,18 @@ export default function DashboardScreen() {
 
 
   const activeTrips = trips.filter((t) => t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap" && t.driver_id === userId);
-  // Sort: current/active trips first, then pending
+  // Sort: current/active trips first, then pending sorted FIFO by sent_at/created_at
   const isCurrentTrip = (t: any) => t.status !== "pending";
-  const sortedTrips = [...activeTrips].sort((a, b) => (isCurrentTrip(b) ? 1 : 0) - (isCurrentTrip(a) ? 1 : 0));
+  const sortedTrips = [...activeTrips].sort((a, b) => {
+    const curA = isCurrentTrip(a) ? 1 : 0;
+    const curB = isCurrentTrip(b) ? 1 : 0;
+    if (curA !== curB) return curB - curA;
+
+    // FIFO: Chuyến gửi lệnh trước (hoặc tạo trước) nằm trên cùng
+    const timeA = new Date(a.sent_at || a.created_at || 0).getTime();
+    const timeB = new Date(b.sent_at || b.created_at || 0).getTime();
+    return timeA - timeB;
+  });
 
   const tripsInShift: any[] = shift?.trips || [];
   const activeInShift = (trips || []).filter((t: any) => (t.shift_id === shift?.id || t.shift_id === null) && t.status !== "completed" && t.status !== "cancelled" && t.status !== "driver_swap");
@@ -84,6 +93,14 @@ export default function DashboardScreen() {
 
   // Hiển thị km ca: từ DB nếu đã tính, nếu không tổng hợp từ trips
   const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
+
+  const formatDateTimeHM = (val: string | null | undefined) => {
+    if (!val) return "";
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  };
 
   return (
     <ScrollView style={st.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}>
@@ -183,26 +200,33 @@ export default function DashboardScreen() {
                 <Ionicons name="car" size={20} color={sc.text} />
               </View>
               <View style={{ flex: 1 }}>
-                 {(() => {
-                  const codes: string[] = [];
-                  (t.orders || []).forEach((o: any) => {
-                    if (o.pickup_location?.code) codes.push(o.pickup_location.code);
-                    (o.delivery_points || []).forEach((dp: any) => {
-                      if (dp.location?.code) codes.push(dp.location.code);
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                  {(() => {
+                    const codes: string[] = [];
+                    (t.orders || []).forEach((o: any) => {
+                      if (o.pickup_location?.code) codes.push(o.pickup_location.code);
+                      (o.delivery_points || []).forEach((dp: any) => {
+                        if (dp.location?.code) codes.push(dp.location.code);
+                      });
                     });
-                  });
-                  if (codes.length === 0 && t.route) {
-                    codes.push(...t.route.split(' → '));
-                  }
-                  const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
-                  if (deduped.length > 0) return (
-                    <View style={st.routeWrap}>
-                      <Ionicons name="navigate" size={11} color="#4F46E5" />
-                      <Text style={st.routeText} numberOfLines={1}>{deduped.join("  →  ")}</Text>
-                    </View>
-                  );
-                  return null;
-                })()}
+                    if (codes.length === 0 && t.route) {
+                      codes.push(...t.route.split(' → '));
+                    }
+                    const deduped = codes.filter((c, i) => i === 0 || c !== codes[i - 1]);
+                    if (deduped.length > 0) return (
+                      <View style={[st.routeWrap, { flex: 1, marginRight: 8, marginBottom: 0 }]}>
+                        <Ionicons name="navigate" size={11} color="#4F46E5" />
+                        <Text style={st.routeText} numberOfLines={1}>{deduped.join("  →  ")}</Text>
+                      </View>
+                    );
+                    return <View />;
+                  })()}
+                  {t.sent_at ? (
+                    <Text style={st.sentTimeTop}>
+                      📤 Gửi: {formatDateTimeHM(t.sent_at)}
+                    </Text>
+                  ) : null}
+                </View>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text style={st.tripCode}>{t.vehicle?.plate_number || "Chưa gán xe"}</Text>
@@ -219,7 +243,7 @@ export default function DashboardScreen() {
                 {(() => {
                   const loadingTimes = (t.orders || []).map((o: any) => o.planned_loading_at).filter(Boolean);
                   if (loadingTimes.length === 0) return null;
-                  return <Text style={st.loadingTime}>🕐 Đóng hàng: {new Date(loadingTimes[0]).toLocaleString("vi-VN")}</Text>;
+                  return <Text style={st.loadingTime}>🕐 Đóng hàng: {formatDateTimeHM(loadingTimes[0])}</Text>;
                 })()}
               </View>
               <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
@@ -310,5 +334,10 @@ const st = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginTop: 2,
+  },
+  sentTimeTop: {
+    fontSize: 11,
+    color: "#4F46E5",
+    fontWeight: "600",
   },
 });

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Modal, TextInput, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Modal, TextInput, KeyboardAvoidingView, Platform, Pressable, Keyboard } from "react-native";
 import { useAuth } from "../../src/lib/auth";
 import { useLoading } from "../../src/lib/loading";
 import { api, PRIVACY_POLICY_URL } from "../../src/lib/api";
@@ -13,11 +13,22 @@ export default function ProfileScreen() {
   const [ending, setEnding] = useState(false);
   const [localDriver, setLocalDriver] = useState<any>(shift?.driver || null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+
+  const closePasswordModal = () => {
+    setShowPasswordModal(false);
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+    setPasswordError("");
+  };
 
   const handleChangePassword = async () => {
     if (!currentPassword) {
@@ -46,7 +57,7 @@ export default function ProfileScreen() {
         },
         token,
       );
-      setShowPasswordModal(false);
+      closePasswordModal();
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -298,7 +309,7 @@ export default function ProfileScreen() {
           <Ionicons name="open-outline" size={18} color="#9CA3AF" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.menuItem} onPress={() => { setPasswordError(""); setShowPasswordModal(true); }}>
+        <TouchableOpacity style={s.menuItem} onPress={() => { closePasswordModal(); setShowPasswordModal(true); }}>
           <View style={[s.menuIcon, { backgroundColor: "#FFFBEB" }]}>
             <Ionicons name="key-outline" size={20} color="#D97706" />
           </View>
@@ -328,48 +339,121 @@ export default function ProfileScreen() {
         visible={showPasswordModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowPasswordModal(false)}
+        onRequestClose={closePasswordModal}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={s.modalOverlay}
         >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              Keyboard.dismiss();
+              closePasswordModal();
+            }}
+          />
           <View style={s.modalContent}>
-            <Text style={s.modalTitle}>Đổi mật khẩu</Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 16,
+              }}
+            >
+              <Text style={[s.modalTitle, { marginBottom: 0, textAlign: "left" }]}>
+                Đổi mật khẩu
+              </Text>
+              <TouchableOpacity
+                onPress={closePasswordModal}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={22} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
 
-            {passwordError ? <Text style={s.modalError}>{passwordError}</Text> : null}
+            <ScrollView
+              style={{ flexShrink: 1 }}
+              contentContainerStyle={{ paddingBottom: 8 }}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {passwordError ? <Text style={s.modalError}>{passwordError}</Text> : null}
 
-            <TextInput
-              style={s.modalInput}
-              placeholder="Mật khẩu hiện tại"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-            />
+              {/* Mật khẩu hiện tại */}
+              <View style={s.passwordInputWrap}>
+                <TextInput
+                  style={s.modalPasswordInput}
+                  placeholder="Mật khẩu hiện tại"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showCurrentPassword}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                />
+                <TouchableOpacity
+                  style={s.eyeBtn}
+                  onPress={() => setShowCurrentPassword((prev) => !prev)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={showCurrentPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#6B7280"
+                  />
+                </TouchableOpacity>
+              </View>
 
-            <TextInput
-              style={s.modalInput}
-              placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry
-              value={newPassword}
-              onChangeText={setNewPassword}
-            />
+              {/* Mật khẩu mới */}
+              <View style={s.passwordInputWrap}>
+                <TextInput
+                  style={s.modalPasswordInput}
+                  placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showNewPassword}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                />
+                <TouchableOpacity
+                  style={s.eyeBtn}
+                  onPress={() => setShowNewPassword((prev) => !prev)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#6B7280"
+                  />
+                </TouchableOpacity>
+              </View>
 
-            <TextInput
-              style={s.modalInput}
-              placeholder="Xác nhận mật khẩu mới"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
+              {/* Xác nhận mật khẩu mới */}
+              <View style={s.passwordInputWrap}>
+                <TextInput
+                  style={s.modalPasswordInput}
+                  placeholder="Xác nhận mật khẩu mới"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showConfirmPassword}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                />
+                <TouchableOpacity
+                  style={s.eyeBtn}
+                  onPress={() => setShowConfirmPassword((prev) => !prev)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#6B7280"
+                  />
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
 
             <View style={s.modalActions}>
               <TouchableOpacity
                 style={s.modalCancelBtn}
-                onPress={() => setShowPasswordModal(false)}
+                onPress={closePasswordModal}
                 disabled={changingPassword}
               >
                 <Text style={s.modalCancelText}>Hủy</Text>
@@ -435,12 +519,58 @@ const s = StyleSheet.create({
   menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", padding: 16, borderRadius: 14, gap: 14 },
   menuIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   menuText: { fontSize: 15, fontWeight: "600", color: "#111827", flex: 1 },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 20 },
-  modalContent: { backgroundColor: "#fff", borderRadius: 20, padding: 20, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    width: "100%",
+    maxWidth: 400,
+    maxHeight: "82%",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
   modalTitle: { fontSize: 18, fontWeight: "700", color: "#111827", marginBottom: 16, textAlign: "center" },
   modalInput: { backgroundColor: "#F3F4F6", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#111827", marginBottom: 12, borderWidth: 1, borderColor: "#E5E7EB" },
+  passwordInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  modalPasswordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#111827",
+  },
+  eyeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   modalError: { color: "#EF4444", fontSize: 13, marginBottom: 12, textAlign: "center" },
-  modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
   modalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: "#F3F4F6", alignItems: "center" },
   modalCancelText: { fontSize: 15, fontWeight: "600", color: "#6B7280" },
   modalSubmitBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: "#4F46E5", alignItems: "center" },

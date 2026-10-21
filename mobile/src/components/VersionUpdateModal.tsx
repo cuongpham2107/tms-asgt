@@ -55,38 +55,49 @@ export default function VersionUpdateModal({
     // ─── Force Update: Toàn màn hình, không thể thoát ───
     return (
       <View style={s.forceContainer}>
-        <View style={s.card}>
-          <View style={[s.iconCircle, { backgroundColor: "#EEF2FF" }]}>
-            <Ionicons name="cloud-download" size={48} color="#4F46E5" />
-          </View>
-
-          <Text style={s.forceTitle}>Yêu cầu cập nhật</Text>
-          <Text style={s.badge}>
-            Phiên bản hiện tại: v{CURRENT_APP_VERSION} → Mới nhất: v{versionInfo.latest_version}
-          </Text>
-
-          <Text style={s.desc}>
-            Phiên bản ứng dụng đang dùng đã quá cũ và không còn tương thích với hệ thống máy chủ. Vui lòng cập nhật để tiếp tục làm việc.
-          </Text>
-
-          {versionInfo.release_notes ? (
-            <View style={s.notesBox}>
-              <Text style={s.notesTitle}>Nội dung cập nhật:</Text>
-              <ScrollView style={{ maxHeight: 120 }}>
-                <Text style={s.notesText}>{versionInfo.release_notes}</Text>
-              </ScrollView>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            paddingVertical: 24,
+            paddingHorizontal: 16,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={s.card}>
+            <View style={[s.iconCircle, { backgroundColor: "#EEF2FF" }]}>
+              <Ionicons name="cloud-download" size={48} color="#4F46E5" />
             </View>
-          ) : null}
 
-          <TouchableOpacity
-            style={s.primaryBtn}
-            onPress={handleUpdatePress}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="arrow-up-circle-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={s.primaryBtnText}>Cập nhật ngay</Text>
-          </TouchableOpacity>
-        </View>
+            <Text style={s.forceTitle}>Yêu cầu cập nhật</Text>
+            <Text style={s.badge}>
+              Phiên bản hiện tại: v{CURRENT_APP_VERSION} → Mới nhất: v{versionInfo.latest_version}
+            </Text>
+
+            <Text style={s.desc}>
+              Phiên bản ứng dụng đang dùng đã quá cũ và không còn tương thích với hệ thống máy chủ. Vui lòng cập nhật để tiếp tục làm việc.
+            </Text>
+
+            {versionInfo.release_notes ? (
+              <View style={s.notesBox}>
+                <Text style={s.notesTitle}>Nội dung cập nhật:</Text>
+                <ScrollView style={{ maxHeight: 120 }}>
+                  <Text style={s.notesText}>{versionInfo.release_notes}</Text>
+                </ScrollView>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={s.primaryBtn}
+              onPress={handleUpdatePress}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="arrow-up-circle-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={s.primaryBtnText}>Cập nhật ngay</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -100,28 +111,32 @@ export default function VersionUpdateModal({
       onRequestClose={onDismiss}
     >
       <View style={s.backdrop}>
-        <View style={s.modalCard}>
-          <View style={[s.iconCircle, { backgroundColor: "#ECFDF5" }]}>
-            <Ionicons name="sparkles" size={40} color="#10B981" />
-          </View>
-
-          <Text style={s.softTitle}>Đã có phiên bản mới!</Text>
-          <Text style={s.softSubtitle}>
-            Phiên bản v{versionInfo.latest_version} đã sẵn sàng
-          </Text>
-
-          {versionInfo.release_notes ? (
-            <View style={s.notesBox}>
-              <Text style={s.notesTitle}>Có gì mới?</Text>
-              <ScrollView style={{ maxHeight: 100 }}>
-                <Text style={s.notesText}>{versionInfo.release_notes}</Text>
-              </ScrollView>
+        <View style={[s.modalCard, { maxHeight: "82%" }]}>
+          <ScrollView
+            style={{ flexShrink: 1, width: "100%" }}
+            contentContainerStyle={{ alignItems: "center", paddingBottom: 8 }}
+            showsVerticalScrollIndicator={true}
+          >
+            <View style={[s.iconCircle, { backgroundColor: "#ECFDF5" }]}>
+              <Ionicons name="sparkles" size={40} color="#10B981" />
             </View>
-          ) : (
-            <Text style={s.desc}>
-              Bản cập nhật mới giúp tăng cường độ ổn định và cải thiện trải nghiệm lái xe.
+
+            <Text style={s.softTitle}>Đã có phiên bản mới!</Text>
+            <Text style={s.softSubtitle}>
+              Phiên bản v{versionInfo.latest_version} đã sẵn sàng
             </Text>
-          )}
+
+            {versionInfo.release_notes ? (
+              <View style={[s.notesBox, { width: "100%" }]}>
+                <Text style={s.notesTitle}>Có gì mới?</Text>
+                <Text style={s.notesText}>{versionInfo.release_notes}</Text>
+              </View>
+            ) : (
+              <Text style={s.desc}>
+                Bản cập nhật mới giúp tăng cường độ ổn định và cải thiện trải nghiệm lái xe.
+              </Text>
+            )}
+          </ScrollView>
 
           <View style={s.btnRow}>
             <TouchableOpacity
@@ -152,9 +167,6 @@ const s = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#F3F4F6",
     zIndex: 99999,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
   },
   card: {
     backgroundColor: "#FFFFFF",
@@ -250,12 +262,13 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.55)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
   },
   modalCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
-    padding: 24,
+    padding: 20,
     width: "100%",
     maxWidth: 380,
     alignItems: "center",
@@ -282,7 +295,10 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     width: "100%",
-    marginTop: 6,
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
   },
   secondaryBtn: {
     flex: 1,

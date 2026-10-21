@@ -108,6 +108,13 @@ const periods = [
 ];
 
 const fmt = (v: any) => (v != null ? parseInt(v).toLocaleString("vi-VN") : "-");
+const formatDateTimeHM = (val: string | null | undefined) => {
+    if (!val) return "";
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+};
 
 export default function TripsScreen() {
     const { token, shift } = useAuth();
@@ -269,17 +276,31 @@ export default function TripsScreen() {
                     (t.vehicle?.plate_number || "").toLowerCase().includes(q),
             );
         }
-        // Sort: current/active trips first, then by date descending
-        const isCurrent = (t: any) =>
-            t.status !== "completed" &&
-            t.status !== "cancelled" &&
-            t.status !== "driver_swap";
+        // Sort:
+        // Priority 0: Đang chạy (started, delivering, return_trip, ...)
+        // Priority 1: Chờ chạy (pending)
+        // Priority 2: Đã kết thúc / huỷ / đổi lái (completed, cancelled, driver_swap)
+        const getPriority = (t: any) => {
+            if (["completed", "cancelled", "driver_swap"].includes(t.status)) return 2;
+            if (t.status === "pending") return 1;
+            return 0; // Chuyến đang thực hiện
+        };
+
         return result.sort((a: any, b: any) => {
-            const curA = isCurrent(a) ? 1 : 0;
-            const curB = isCurrent(b) ? 1 : 0;
-            if (curA !== curB) return curB - curA;
-            const timeA = new Date(a.started_at || a.created_at || 0).getTime();
-            const timeB = new Date(b.started_at || b.created_at || 0).getTime();
+            const pA = getPriority(a);
+            const pB = getPriority(b);
+            if (pA !== pB) return pA - pB;
+
+            // Chuyến active (đang chạy hoặc chờ chạy): sắp xếp FIFO theo thời gian gửi lệnh (sent_at || created_at)
+            if (pA < 2) {
+                const timeA = new Date(a.sent_at || a.created_at || 0).getTime();
+                const timeB = new Date(b.sent_at || b.created_at || 0).getTime();
+                return timeA - timeB;
+            }
+
+            // Chuyến lịch sử (đã kết thúc / huỷ): mới nhất lên trên
+            const timeA = new Date(a.completed_at || a.started_at || a.created_at || 0).getTime();
+            const timeB = new Date(b.completed_at || b.started_at || b.created_at || 0).getTime();
             return timeB - timeA;
         });
     }, [trips, activeTab, activePeriod, search]);
@@ -491,42 +512,51 @@ export default function TripsScreen() {
                                 })
                             }
                         >
-                            {(() => {
-                                const codes: string[] = [];
-                                (item.orders || []).forEach((o: any) => {
-                                    if (o.pickup_location?.code)
-                                        codes.push(o.pickup_location.code);
-                                    (o.delivery_points || []).forEach(
-                                        (dp: any) => {
-                                            if (dp.location?.code)
-                                                codes.push(dp.location.code);
-                                        },
+                            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                {(() => {
+                                    const codes: string[] = [];
+                                    (item.orders || []).forEach((o: any) => {
+                                        if (o.pickup_location?.code)
+                                            codes.push(o.pickup_location.code);
+                                        (o.delivery_points || []).forEach(
+                                            (dp: any) => {
+                                                if (dp.location?.code)
+                                                    codes.push(
+                                                        dp.location.code,
+                                                    );
+                                            },
+                                        );
+                                    });
+                                    if (codes.length === 0 && item.route) {
+                                        codes.push(...item.route.split(" → "));
+                                    }
+                                    const deduped = codes.filter(
+                                        (c, i) => i === 0 || c !== codes[i - 1],
                                     );
-                                });
-                                if (codes.length === 0 && item.route) {
-                                    codes.push(...item.route.split(" → "));
-                                }
-                                const deduped = codes.filter(
-                                    (c, i) => i === 0 || c !== codes[i - 1],
-                                );
-                                if (deduped.length > 0)
-                                    return (
-                                        <View style={s.routeWrap}>
-                                            <Ionicons
-                                                name="navigate"
-                                                size={11}
-                                                color="#4F46E5"
-                                            />
-                                            <Text
-                                                style={s.routeText}
-                                                numberOfLines={1}
-                                            >
-                                                {deduped.join("  →  ")}
-                                            </Text>
-                                        </View>
-                                    );
-                                return null;
-                            })()}
+                                    if (deduped.length > 0)
+                                        return (
+                                            <View style={[s.routeWrap, { flex: 1, marginRight: 8, marginBottom: 0 }]}>
+                                                <Ionicons
+                                                    name="navigate"
+                                                    size={11}
+                                                    color="#4F46E5"
+                                                />
+                                                <Text
+                                                    style={s.routeText}
+                                                    numberOfLines={1}
+                                                >
+                                                    {deduped.join("  →  ")}
+                                                </Text>
+                                            </View>
+                                        );
+                                    return <View />;
+                                })()}
+                                {item.sent_at ? (
+                                    <Text style={s.sentTimeTop}>
+                                        📤 Gửi: {formatDateTimeHM(item.sent_at)}
+                                    </Text>
+                                ) : null}
+                            </View>
                             <View style={s.topRow}>
                                 <View
                                     style={[
@@ -625,9 +655,7 @@ export default function TripsScreen() {
                                 return (
                                     <Text style={s.loadingTime}>
                                         🕐 Đóng hàng:{" "}
-                                        {new Date(
-                                            loadingTimes[0],
-                                        ).toLocaleString("vi-VN")}
+                                        {formatDateTimeHM(loadingTimes[0])}
                                     </Text>
                                 );
                             })()}
@@ -766,6 +794,11 @@ const s = StyleSheet.create({
     },
     routeText: { fontSize: 11, color: "#4F46E5", fontWeight: "600", flex: 1 },
     loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 4 },
+    sentTimeTop: {
+        fontSize: 11,
+        color: "#4F46E5",
+        fontWeight: "600",
+    },
     empty: { alignItems: "center", paddingVertical: 48 },
     emptyText: {
         fontSize: 16,

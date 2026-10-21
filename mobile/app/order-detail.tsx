@@ -23,6 +23,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { getFastGpsCoordinates } from "../src/lib/location";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const statusConfig: Record<
     string,
@@ -92,6 +93,14 @@ const cpInfo: Record<string, { icon: string; color: string; label: string }> = {
 const localISO = (d: Date = new Date()) => {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
+const formatDateTimeHM = (val: string | null | undefined) => {
+    if (!val) return "";
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 };
 
 export default function OrderDetailScreen() {
@@ -639,12 +648,15 @@ export default function OrderDetailScreen() {
                                 : "-",
                         },
                         {
+                            icon: "paper-plane",
+                            label: "Gửi lệnh",
+                            value: d.sent_at ? formatDateTimeHM(d.sent_at) : "-",
+                        },
+                        {
                             icon: "time",
                             label: "Đóng hàng",
                             value: d.planned_loading_at
-                                ? new Date(d.planned_loading_at).toLocaleString(
-                                      "vi-VN",
-                                  )
+                                ? formatDateTimeHM(d.planned_loading_at)
                                 : "-",
                         },
                         {
@@ -658,7 +670,21 @@ export default function OrderDetailScreen() {
                     ].map((t, i) => (
                         <View
                             key={i}
-                            style={[s.tile, i >= 3 && { width: "48%" }]}
+                            style={[
+                                s.tile,
+                                i < 3
+                                    ? { width: "30%" }
+                                    : i < 5
+                                      ? { width: "48%" }
+                                      : {
+                                            width: "100%",
+                                            flexDirection: "row",
+                                            justifyContent: "center",
+                                            alignItems: "center",
+                                            gap: 8,
+                                            paddingVertical: 10,
+                                        },
+                            ]}
                         >
                             <Ionicons
                                 name={t.icon as any}
@@ -736,12 +762,14 @@ export default function OrderDetailScreen() {
                     visible={showLocPicker}
                     animationType="slide"
                     presentationStyle="pageSheet"
+                    onRequestClose={() => setShowLocPicker(false)}
                 >
-                    <View style={s.modalContainer}>
+                    <SafeAreaView style={s.modalContainer} edges={["top", "bottom"]}>
                         <View style={s.modalHeader}>
                             <Text style={s.modalTitle}>Chọn điểm đến</Text>
                             <TouchableOpacity
                                 onPress={() => setShowLocPicker(false)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             >
                                 <Ionicons
                                     name="close"
@@ -769,6 +797,7 @@ export default function OrderDetailScreen() {
                             data={locations}
                             keyExtractor={(loc: any) => String(loc.id)}
                             keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={{ paddingBottom: 24 }}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
                                     style={s.modalLocItem}
@@ -813,7 +842,7 @@ export default function OrderDetailScreen() {
                                 </View>
                             }
                         />
-                    </View>
+                    </SafeAreaView>
                 </Modal>
 
                 {/* Delivery point selector (multi-DP, only during delivery stage) */}
