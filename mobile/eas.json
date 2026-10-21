@@ -30,8 +30,10 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "hoa.tt@asgl.vn",
-        "ascAppId": "6810122889"
+        "ascAppId": "6810122889",
+        "ascApiKeyPath": "./certs/AuthKey_9W3A248RM9.p8",
+        "ascApiKeyId": "9W3A248RM9",
+        "ascApiKeyIssuerId": "31199a66-7789-437c-9ee1-5ebb3288acc8"
       }
     }
   }
