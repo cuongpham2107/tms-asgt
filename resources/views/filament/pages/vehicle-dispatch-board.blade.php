@@ -83,9 +83,31 @@
                     {{-- Dòng tiêu đề các cột màu navy theo theme table --}}
                     <tr class="text-white text-[11px] font-bold tracking-wide uppercase dark:bg-slate-950" style="background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));">
                         <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[100px]">Địa điểm</th>
-                        <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[125px]">BSX</th>
+                        <th 
+                            wire:click="sortTable('plate_number')"
+                            class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[125px] cursor-pointer hover:bg-white/10 select-none transition"
+                            title="Bấm để sắp xếp theo BSX"
+                        >
+                            <span class="inline-flex items-center justify-center gap-1">
+                                <span>BSX</span>
+                                @if ($this->sortBy === 'plate_number')
+                                    <span class="text-[9px] text-amber-300 font-bold">{{ $this->sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                                @endif
+                            </span>
+                        </th>
                         <th class="border-r border-b border-white/10 py-2 px-1 text-center whitespace-nowrap min-w-[55px]">Sở hữu</th>
-                        <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[85px]">Trạng thái</th>
+                        <th 
+                            wire:click="sortTable('status')"
+                            class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[85px] cursor-pointer hover:bg-white/10 select-none transition"
+                            title="Bấm để sắp xếp theo Trạng thái"
+                        >
+                            <span class="inline-flex items-center justify-center gap-1">
+                                <span>Trạng thái</span>
+                                @if ($this->sortBy === 'status')
+                                    <span class="text-[9px] text-amber-300 font-bold">{{ $this->sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                                @endif
+                            </span>
+                        </th>
                         <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[65px]">Điểm đi</th>
                         <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[100px]">Điểm đến</th>
                         <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[70px]">Xe chờ</th>

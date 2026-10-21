@@ -64,6 +64,12 @@ class VehicleDispatchBoard extends Page implements HasTable
     #[Url]
     public ?string $searchQuery = null;
 
+    #[Url]
+    public string $sortBy = 'status'; // status, plate_number
+
+    #[Url]
+    public string $sortDirection = 'asc'; // asc, desc
+
     public ?int $selectedVehicleIdForTrip = null;
 
     public ?int $selectedVehicleIdForGps = null;
@@ -378,10 +384,42 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         foreach ($grouped as $code => &$group) {
-            $group['vehicles'] = $group['vehicles']->sortBy('plate_number')->values();
+            $group['vehicles'] = $group['vehicles']
+                ->sort(function (Vehicle $a, Vehicle $b) {
+                    if ($this->sortBy === 'plate_number') {
+                        $cmp = strnatcasecmp($a->plate_number, $b->plate_number);
+
+                        return $this->sortDirection === 'desc' ? -$cmp : $cmp;
+                    }
+
+                    // Mặc định hoặc khi sắp xếp theo status: gom theo nhóm trạng thái trước, cùng trạng thái thì theo BSX
+                    $prioA = self::getTripStatusSortPriority($a);
+                    $prioB = self::getTripStatusSortPriority($b);
+
+                    if ($prioA !== $prioB) {
+                        return $this->sortDirection === 'desc'
+                            ? ($prioB <=> $prioA)
+                            : ($prioA <=> $prioB);
+                    }
+
+                    return strnatcasecmp($a->plate_number, $b->plate_number);
+                })
+                ->values();
         }
 
         return array_filter($grouped, fn ($g) => $g['vehicles']->isNotEmpty());
+    }
+
+    public function sortTable(string $column): void
+    {
+        if ($this->sortBy === $column) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDirection = 'asc';
+        }
+
+        $this->resetPage();
     }
 
     public function filterOwnerType(string $value): void
@@ -798,6 +836,33 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         return TripStatus::tryFrom((string) $activeTrip->status)?->getLabel() ?? (string) $activeTrip->status;
+    }
+
+    /**
+     * Thứ tự ưu tiên sắp xếp theo nhóm trạng thái trên bảng điều phối.
+     * Cùng nhóm trạng thái sẽ được gom lại với nhau, giữ nguyên nhóm địa điểm.
+     */
+    public static function getTripStatusSortPriority(Vehicle $record): int
+    {
+        $label = self::getTripStatusLabel($record);
+
+        return match ($label) {
+            'Tạm dừng (Sửa Km)' => 0,
+            'Đảo lái' => 1,
+            'Xe chờ' => 2,
+            'Chờ chạy' => 3,
+            'Đã bắt đầu' => 4,
+            'Đến lấy hàng' => 5,
+            'Đang giao' => 6,
+            'Đến giao hàng' => 7,
+            'Đã giao' => 8,
+            'Chuyến không hàng' => 9,
+            'Hoàn thành' => 10,
+            'Bảo dưỡng' => 11,
+            'Nghỉ' => 12,
+            'Đã huỷ' => 13,
+            default => 99,
+        };
     }
 
     public static function getStatusBadgeColor(Vehicle $record): string

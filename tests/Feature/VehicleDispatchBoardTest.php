@@ -1261,3 +1261,105 @@ test('vehicle with completed past trip is grouped by current GPS location when c
         ->and(isset($grouped['BN']))->toBeTrue()
         ->and($grouped['BN']['vehicles']->pluck('plate_number')->all())->toContain('20C08846');
 });
+
+test('getGroupedVehicles sorts vehicles by status priority within each location group by default', function () {
+    $driver = User::factory()->create(['name' => 'Lái Xe BN', 'station' => OnDutyLocation::Bn]);
+
+    $locBN = Location::create([
+        'code' => 'SEV-SORT',
+        'name' => 'SEV Bắc Ninh Sort',
+        'address' => 'Yên Phong, Bắc Ninh',
+    ]);
+
+    // Xe 1: Đang giao (Delivering - Priority 6), BSX nhỏ nhất
+    $vDelivering = Vehicle::factory()->create([
+        'plate_number' => '20C-00001',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'gps_address' => 'Bắc Ninh',
+        'is_active' => true,
+    ]);
+    Trip::factory()->create([
+        'vehicle_id' => $vDelivering->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now()->subMinutes(30),
+        'end_location_id' => $locBN->id,
+    ]);
+
+    // Xe 2: Chờ chạy (Pending - Priority 3)
+    $vPending = Vehicle::factory()->create([
+        'plate_number' => '20C-00002',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'gps_address' => 'Bắc Ninh',
+        'is_active' => true,
+    ]);
+    Trip::factory()->create([
+        'vehicle_id' => $vPending->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Pending,
+        'started_at' => null,
+        'end_location_id' => $locBN->id,
+    ]);
+
+    // Xe 3: Xe chờ (No trip - Priority 2), BSX 20C-00003
+    $vWaitingB = Vehicle::factory()->create([
+        'plate_number' => '20C-00004',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'gps_address' => 'Bắc Ninh',
+        'is_active' => true,
+    ]);
+
+    // Xe 4: Xe chờ (No trip - Priority 2), BSX 20C-00003
+    $vWaitingA = Vehicle::factory()->create([
+        'plate_number' => '20C-00003',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'gps_address' => 'Bắc Ninh',
+        'is_active' => true,
+    ]);
+
+    $board = new VehicleDispatchBoard;
+    $grouped = $board->getGroupedVehicles();
+
+    expect(isset($grouped['BN']))->toBeTrue();
+
+    // Nhóm BN phải giữ nguyên các xe, nhưng thứ tự phải là:
+    // 1. Xe chờ: 20C-00003 (Priority 2)
+    // 2. Xe chờ: 20C-00004 (Priority 2)
+    // 3. Chờ chạy: 20C-00002 (Priority 3)
+    // 4. Đang giao: 20C-00001 (Priority 6)
+    $platesInGroup = $grouped['BN']['vehicles']->pluck('plate_number')->all();
+
+    expect($platesInGroup)->toBe([
+        '20C-00003',
+        '20C-00004',
+        '20C-00002',
+        '20C-00001',
+    ]);
+});
+
+test('VehicleDispatchBoard sortTable toggles sorting between status and plate_number', function () {
+    $component = Livewire::test(VehicleDispatchBoard::class);
+
+    // Mặc định sortBy là status, sortDirection là asc
+    expect($component->get('sortBy'))->toBe('status')
+        ->and($component->get('sortDirection'))->toBe('asc');
+
+    // Bấm sort BSX
+    $component->call('sortTable', 'plate_number');
+    expect($component->get('sortBy'))->toBe('plate_number')
+        ->and($component->get('sortDirection'))->toBe('asc');
+
+    // Bấm sort BSX lần 2 -> desc
+    $component->call('sortTable', 'plate_number');
+    expect($component->get('sortBy'))->toBe('plate_number')
+        ->and($component->get('sortDirection'))->toBe('desc');
+
+    // Bấm sort status -> status asc
+    $component->call('sortTable', 'status');
+    expect($component->get('sortBy'))->toBe('status')
+        ->and($component->get('sortDirection'))->toBe('asc');
+});
