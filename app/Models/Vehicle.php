@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CheckpointType;
 use App\Enums\DriverWorkShift;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
@@ -9,6 +10,7 @@ use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Services\ShiftScheduleService;
 use Database\Factories\VehicleFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,6 +29,12 @@ class Vehicle extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (Vehicle $vehicle) {
+            if ($vehicle->monthly_start_km === null && $vehicle->current_mileage !== null) {
+                $vehicle->monthly_start_km = $vehicle->current_mileage;
+            }
+        });
+
         static::saved(function (Vehicle $vehicle) {
             if ($vehicle->wasChanged('even_driver_id')) {
                 $oldDriverId = $vehicle->getOriginal('even_driver_id');
@@ -72,6 +80,7 @@ class Vehicle extends Model
         'door_count',
         'fuel_type',
         'current_mileage',
+        'monthly_start_km',
         'gps_lat',
         'gps_lng',
         'gps_speed',
@@ -104,6 +113,7 @@ class Vehicle extends Model
             'box_width' => 'integer',
             'box_height' => 'integer',
             'current_mileage' => 'decimal:2',
+            'monthly_start_km' => 'decimal:2',
             'gps_lat' => 'decimal:7',
             'gps_lng' => 'decimal:7',
             'gps_speed' => 'decimal:2',
@@ -266,15 +276,112 @@ class Vehicle extends Model
     public function getActiveTripAttribute(): ?Trip
     {
         if ($this->relationLoaded('trips')) {
-            return $this->trips
-                ->filter(fn ($t) => in_array($t->status, TripStatus::activeStatuses(), true))
+            $trips = $this->trips;
+
+            // 0. ƯU TIÊN CAO NHẤT: Bất kỳ chuyến nào của xe đang bị Tạm dừng (Báo sai Km chưa xử lý)
+            $pausedTrip = $trips
+                ->filter(fn (Trip $t) => $t->status !== TripStatus::Cancelled && $t->isPaused())
                 ->sortByDesc('id')
+                ->first();
+
+            if ($pausedTrip !== null) {
+                return $pausedTrip;
+            }
+
+            // 1. Ưu tiên chuyến đang chạy thực tế (từ đã bắt đầu đến hoàn thành nhưng chưa kết thúc/end)
+            $inProgressTrip = $trips
+                ->filter(function (Trip $t): bool {
+                    if ($t->status === TripStatus::Cancelled || $t->status === TripStatus::Pending) {
+                        return false;
+                    }
+
+                    if ($t->hasEnded()) {
+                        return false;
+                    }
+
+                    if (in_array($t->status, [
+                        TripStatus::Started,
+                        TripStatus::ArrivedPickup,
+                        TripStatus::Delivering,
+                        TripStatus::ArrivedDelivery,
+                        TripStatus::Delivered,
+                        TripStatus::DriverSwap,
+                        TripStatus::ReturnTrip,
+                    ], true)) {
+                        return true;
+                    }
+
+                    if ($t->status === TripStatus::Completed) {
+                        return ($t->completed_at && $t->completed_at->isToday())
+                            || ($t->started_at && $t->started_at->isToday())
+                            || ($t->created_at && $t->created_at->isToday());
+                    }
+
+                    return false;
+                })
+                ->sortByDesc('id')
+                ->first();
+
+            if ($inProgressTrip !== null) {
+                return $inProgressTrip;
+            }
+
+            // 2. Nếu không có chuyến đang chạy, lấy chuyến tiếp theo đang chờ chạy (Pending)
+            return $trips
+                ->filter(fn (Trip $t) => $t->status === TripStatus::Pending)
+                ->sortBy('id')
                 ->first();
         }
 
-        return $this->trips()
-            ->whereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
+        // Khi relation chưa được eager-load:
+        // 0. Ưu tiên chuyến đang bị Tạm dừng (Báo sai Km)
+        $pausedTrip = $this->trips()
+            ->where('status', '!=', TripStatus::Cancelled->value)
+            ->where(function (Builder $q) {
+                $q->where('is_paused', true)
+                    ->orWhereHas('kmReports', fn ($kr) => $kr->where('status', 'pending'));
+            })
             ->latest('id')
+            ->first();
+
+        if ($pausedTrip !== null) {
+            return $pausedTrip;
+        }
+
+        // 1. Tìm chuyến đang chạy thực tế
+        $inProgressTrip = $this->trips()
+            ->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value])
+            ->whereDoesntHave('checkpoints', fn (Builder $q) => $q->where('checkpoint_type', CheckpointType::End->value))
+            ->whereNull('end_km')
+            ->where(function (Builder $q) {
+                $q->whereIn('status', [
+                    TripStatus::Started->value,
+                    TripStatus::ArrivedPickup->value,
+                    TripStatus::Delivering->value,
+                    TripStatus::ArrivedDelivery->value,
+                    TripStatus::Delivered->value,
+                    TripStatus::DriverSwap->value,
+                    TripStatus::ReturnTrip->value,
+                ])->orWhere(function (Builder $sub) {
+                    $sub->where('status', TripStatus::Completed->value)
+                        ->where(function (Builder $dateQ) {
+                            $dateQ->whereDate('completed_at', today())
+                                ->orWhereDate('started_at', today())
+                                ->orWhereDate('created_at', today());
+                        });
+                });
+            })
+            ->latest('id')
+            ->first();
+
+        if ($inProgressTrip !== null) {
+            return $inProgressTrip;
+        }
+
+        // 2. Chuyến chờ chạy kế tiếp
+        return $this->trips()
+            ->where('status', TripStatus::Pending->value)
+            ->oldest('id')
             ->first();
     }
 }

@@ -190,14 +190,22 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->native(false)
                                             ->required()
                                             ->columnSpan(1),
-                                        TextInput::make('chargeable_weight')
+                                        Select::make('chargeable_weight')
                                             ->label('Tải trọng tính cước')
                                             ->suffix('tấn')
-                                            ->mask(RawJs::make('$money($input)'))
-                                            ->stripCharacters(',')
-                                            ->numeric()
                                             ->required(fn (Get $get): bool => $get('order_type_code') === 'external')
-                                            ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
+                                            ->native(false)
+                                            ->options([
+                                                '1.25' => '1.25',
+                                                '1.5' => '1.5',
+                                                '2.5' => '2.5',
+                                                '3.5' => '3.5',
+                                                '5' => '5',
+                                                '7' => '7',
+                                                '8' => '8',
+                                                '10' => '10',
+                                                '14' => '14',
+                                            ])
                                             ->visible(fn (Get $get): bool => $get('order_type_code') === 'external')
                                             ->columnSpan(1),
                                     ]),

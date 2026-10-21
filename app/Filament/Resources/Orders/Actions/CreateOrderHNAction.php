@@ -129,14 +129,22 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->mask(RawJs::make('$money($input)'))
                         ->stripCharacters(',')
                         ->numeric(),
-                    TextInput::make('chargeable_weight')
+                    Select::make('chargeable_weight')
                         ->label('Tải trọng tính cước')
                         ->suffix('tấn')
-                        ->mask(RawJs::make('$money($input)'))
-                        ->stripCharacters(',')
-                        ->numeric()
                         ->required()
-                        ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14]),
+                        ->native(false)
+                        ->options([
+                            '1.25' => '1.25',
+                            '1.5' => '1.5',
+                            '2.5' => '2.5',
+                            '3.5' => '3.5',
+                            '5' => '5',
+                            '7' => '7',
+                            '8' => '8',
+                            '10' => '10',
+                            '14' => '14',
+                        ]),
                     Textarea::make('notes')
                         ->label('Ghi chú')
                         ->columnSpanFull(),

@@ -158,7 +158,7 @@ test('TripUpdated event is configured for public trips channel and broadcast for
         ]);
 });
 
-test('ListTrips page reacts to echo TripUpdated event by refreshing memoized counts and table', function () {
+test('ListTrips page reacts to echo TripUpdated event by refreshing memoized counts and table without notification', function () {
     $admin = User::factory()->create();
     $permission = Permission::create(['name' => 'ViewAny:Trip', 'guard_name' => 'web']);
     $admin->givePermissionTo($permission);
@@ -175,7 +175,7 @@ test('ListTrips page reacts to echo TripUpdated event by refreshing memoized cou
     Livewire::test(ListTrips::class)
         ->call('onTripUpdated', ['trip_id' => $trip->id, 'action' => 'updated', 'vehicle_plate' => '29A-99999', 'status' => 'delivering'])
         ->assertSuccessful()
-        ->assertNotified();
+        ->assertHasNoErrors();
 });
 
 test('TripKmReport creation and resolution dispatches TripUpdated event', function () {

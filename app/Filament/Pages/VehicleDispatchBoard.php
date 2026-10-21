@@ -3,18 +3,21 @@
 namespace App\Filament\Pages;
 
 use App\Enums\CheckpointType;
-use App\Enums\DriverWorkShift;
+use App\Enums\OnDutyLocation;
+use App\Enums\OrderStatus;
 use App\Enums\ShiftType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ResolveKmReportAction;
+use App\Models\DriverShift;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
-use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
 use App\Services\EupGpsService;
+use App\Services\ShiftScheduleService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
@@ -27,7 +30,9 @@ use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use UnitEnum;
 
@@ -63,6 +68,23 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public ?int $selectedVehicleIdForGps = null;
 
+    /**
+     * Lắng nghe broadcast event realtime qua Laravel Reverb / Echo.
+     * Khi chuyến xe thay đổi trạng thái hoặc cập nhật, tự động làm mới bảng kiểm soát xe.
+     *
+     * @param  array<string, mixed>|null  $event
+     */
+    #[On('echo:trips,TripUpdated')]
+    #[On('echo:trips,.TripUpdated')]
+    public function onTripUpdated(?array $event = null): void
+    {
+        if (filled($this->mountedActions ?? [])) {
+            return;
+        }
+
+        $this->flushCachedTableRecords();
+    }
+
     public function openTripModal(int $vehicleId): void
     {
         $this->selectedVehicleIdForTrip = $vehicleId;
@@ -75,24 +97,95 @@ class VehicleDispatchBoard extends Page implements HasTable
         $this->dispatch('open-modal', id: 'vehicle-gps-modal');
     }
 
+    /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function getShiftWindow(): array
+    {
+        return ShiftScheduleService::getShiftWindow();
+    }
+
+    public static function getShiftDate(): Carbon
+    {
+        return ShiftScheduleService::getShiftDate();
+    }
+
+    /**
+     * Danh sách trạng thái chuyến xe đang chạy thực tế (từ lúc bắt đầu đến trước khi hoàn thành).
+     * Loại bỏ trạng thái Chờ chạy (Pending) và Đã huỷ (Cancelled).
+     *
+     * @return TripStatus[]
+     */
+    public static function runningTripStatuses(): array
+    {
+        return [
+            TripStatus::Started,
+            TripStatus::ArrivedPickup,
+            TripStatus::Delivering,
+            TripStatus::ArrivedDelivery,
+            TripStatus::Delivered,
+            TripStatus::DriverSwap,
+            TripStatus::ReturnTrip,
+        ];
+    }
+
+    /**
+     * Thứ tự ưu tiên trạng thái chuyến xe hiển thị:
+     * 1. Đang thực hiện (Started -> ReturnTrip)
+     * 2. Chờ chạy (Pending)
+     * 3. Hoàn thành (Completed)
+     * 4. Khác (Cancelled)
+     */
+    public static function getTripPriority(Trip|string $status): int
+    {
+        $statusVal = $status instanceof TripStatus
+            ? $status->value
+            : ($status instanceof Trip
+                ? ($status->status instanceof TripStatus ? $status->status->value : (string) $status->status)
+                : (string) $status);
+
+        $runningValues = array_map(fn (TripStatus $s) => $s->value, self::runningTripStatuses());
+
+        if (in_array($statusVal, $runningValues, true)) {
+            return 1;
+        }
+
+        if ($statusVal === TripStatus::Pending->value) {
+            return 2;
+        }
+
+        if ($statusVal === TripStatus::Completed->value) {
+            return 3;
+        }
+
+        return 4;
+    }
+
     public function getSelectedVehicleForTrip(): ?Vehicle
     {
         if (! $this->selectedVehicleIdForTrip) {
             return null;
         }
 
-        $today = today();
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+        $runningValues = array_map(fn (TripStatus $s) => $s->value, self::runningTripStatuses());
+        $runningSql = "'".implode("','", $runningValues)."'";
 
         return Vehicle::with([
             'driver',
             'evenDriver',
             'oddDriver',
-            'trips' => function ($q) use ($today) {
-                $q->where(function (Builder $sub) use ($today) {
-                    $sub->whereDate('started_at', $today)
-                        ->orWhereDate('created_at', $today)
-                        ->orWhereDate('completed_at', $today)
-                        ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()));
+            'trips' => function ($q) use ($shiftStart, $shiftEnd, $runningValues, $runningSql) {
+                $q->where(function (Builder $sub) use ($shiftStart, $shiftEnd, $runningValues) {
+                    $sub->whereIn('status', $runningValues)
+                        ->orWhere('status', TripStatus::Pending->value)
+                        ->orWhere(function (Builder $completedSub) use ($shiftStart, $shiftEnd) {
+                            $completedSub->where('status', TripStatus::Completed->value)
+                                ->where(function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                                    $dateQ->whereBetween('completed_at', [$shiftStart, $shiftEnd])
+                                        ->orWhereBetween('started_at', [$shiftStart, $shiftEnd]);
+                                });
+                        });
                 })
                     ->with([
                         'driver',
@@ -104,6 +197,12 @@ class VehicleDispatchBoard extends Page implements HasTable
                         'orders.deliveryPoints.location',
                         'orders.customer',
                     ])
+                    ->orderByRaw("CASE 
+                        WHEN status IN ({$runningSql}) THEN 1 
+                        WHEN status = '".TripStatus::Pending->value."' THEN 2 
+                        WHEN status = '".TripStatus::Completed->value."' THEN 3 
+                        ELSE 4 
+                    END ASC")
                     ->orderByRaw('COALESCE(started_at, created_at) ASC')
                     ->orderBy('id', 'asc');
             },
@@ -112,15 +211,22 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public function getTodayTripsForVehicle(Vehicle $vehicle): Collection
     {
-        $today = today();
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+        $runningValues = array_map(fn (TripStatus $s) => $s->value, self::runningTripStatuses());
+        $runningSql = "'".implode("','", $runningValues)."'";
 
         return Trip::query()
             ->where('vehicle_id', $vehicle->id)
-            ->where(function (Builder $q) use ($today) {
-                $q->whereDate('started_at', $today)
-                    ->orWhereDate('created_at', $today)
-                    ->orWhereDate('completed_at', $today)
-                    ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()));
+            ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues) {
+                $q->whereIn('status', $runningValues)
+                    ->orWhere('status', TripStatus::Pending->value)
+                    ->orWhere(function (Builder $sub) use ($shiftStart, $shiftEnd) {
+                        $sub->where('status', TripStatus::Completed->value)
+                            ->where(function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                                $dateQ->whereBetween('completed_at', [$shiftStart, $shiftEnd])
+                                    ->orWhereBetween('started_at', [$shiftStart, $shiftEnd]);
+                            });
+                    });
             })
             ->with([
                 'driver',
@@ -132,6 +238,12 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'orders.deliveryPoints.location',
                 'orders.customer',
             ])
+            ->orderByRaw("CASE 
+                WHEN status IN ({$runningSql}) THEN 1 
+                WHEN status = '".TripStatus::Pending->value."' THEN 2 
+                WHEN status = '".TripStatus::Completed->value."' THEN 3 
+                ELSE 4 
+            END ASC")
             ->orderByRaw('COALESCE(started_at, created_at) ASC')
             ->orderBy('id', 'asc')
             ->get();
@@ -144,7 +256,25 @@ class VehicleDispatchBoard extends Page implements HasTable
             return collect();
         }
 
-        return $vehicle->trips ?? $this->getTodayTripsForVehicle($vehicle);
+        $trips = $vehicle->trips ?? $this->getTodayTripsForVehicle($vehicle);
+
+        return $trips->sort(function (Trip $a, Trip $b) {
+            $pA = self::getTripPriority($a);
+            $pB = self::getTripPriority($b);
+
+            if ($pA !== $pB) {
+                return $pA <=> $pB;
+            }
+
+            $timeA = $a->started_at ?? $a->created_at;
+            $timeB = $b->started_at ?? $b->created_at;
+
+            if ($timeA && $timeB && ! $timeA->equalTo($timeB)) {
+                return $timeA->lessThan($timeB) ? -1 : 1;
+            }
+
+            return $a->id <=> $b->id;
+        })->values();
     }
 
     public function getSelectedVehicleForGps(): ?Vehicle
@@ -180,6 +310,8 @@ class VehicleDispatchBoard extends Page implements HasTable
     {
         $this->syncEupGps();
 
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+
         $vehicles = Vehicle::query()
             ->select('vehicles.*')
             ->selectSub(function ($q) {
@@ -197,27 +329,32 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'driver.driverShifts',
                 'evenDriver.driverShifts',
                 'oddDriver.driverShifts',
-                'trips' => function ($q) {
-                    $q->where(function ($sub) {
-                        $sub->whereDate('started_at', today())
+                'trips' => function ($q) use ($shiftStart, $shiftEnd) {
+                    $q->where(function ($sub) use ($shiftStart, $shiftEnd) {
+                        $sub->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                            ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd])
                             ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
-                            ->orWhere('completed_at', '>=', now()->subHours(48));
+                            ->orWhere('completed_at', '>=', now()->subHours(48))
+                            ->orWhere('is_paused', true)
+                            ->orWhereHas('kmReports', fn ($kr) => $kr->where('status', 'pending'));
                     })->with([
                         'checkpoints',
-                        'driver',
+                        'driver.driverShifts',
                         'startLocation',
-                        'endLocation',
+                        'endLocation.area',
                         'orders.pickupLocation',
-                        'orders.deliveryPoints.location',
+                        'orders.deliveryPoints.location.area',
+                        'latestPendingKmReport',
                     ]);
                 },
             ])
             ->get();
 
         $stationOrder = [
-            'BN' => 'Bắc ninh',
-            'NBA' => 'Nội bài',
-            'TN' => 'Thái Nguyên',
+            'NB' => 'Nội Bài (NB)',
+            'BN' => 'Bắc Ninh (BN)',
+            'TN' => 'Thái Nguyên (TN)',
+            'Province' => 'Ngoại tỉnh (Province)',
             'OTHER' => 'Khác',
         ];
 
@@ -231,25 +368,10 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         foreach ($vehicles as $vehicle) {
-            $driver = $vehicle->getDriverForToday() ?? $vehicle->driver ?? $vehicle->evenDriver ?? $vehicle->oddDriver;
-            $code = $driver?->station?->value;
-
-            if (! $code) {
-                $prefix = substr($vehicle->plate_number, 0, 2);
-                $code = match ($prefix) {
-                    '20' => 'TN',
-                    '99' => 'BN',
-                    '29', '30' => 'NBA',
-                    default => 'OTHER',
-                };
-            }
+            $code = self::getDriverStation($vehicle);
 
             if (! isset($grouped[$code])) {
-                $grouped[$code] = [
-                    'code' => $code,
-                    'title' => $code,
-                    'vehicles' => collect(),
-                ];
+                $code = 'OTHER';
             }
 
             $grouped[$code]['vehicles']->push($vehicle);
@@ -353,9 +475,9 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->state(fn (Vehicle $record): string => self::renderBsx($record))
                     ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
 
-                // 2. STT (CH / KH)
+                // 2. Sở hữu (CH / KH)
                 TextColumn::make('type')
-                    ->label('STT')
+                    ->label('Sở hữu')
                     ->badge()
                     ->alignCenter()
                     ->color(fn (Vehicle $record): string => $record->isCompany() ? 'info' : 'warning')
@@ -445,10 +567,26 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->state(fn (Vehicle $record): int => self::getTodayTripsCount($record))
                     ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
 
-                // 11. KM over
+                // 11. Đơn chờ
+                TextColumn::make('waiting_orders_count')
+                    ->label('Đơn chờ')
+                    ->alignCenter()
+                    ->weight(FontWeight::Bold)
+                    ->color(fn (Vehicle $record): string => self::getWaitingOrdersCount($record) > 0 ? 'purple' : 'gray')
+                    ->state(fn (Vehicle $record): int => self::getWaitingOrdersCount($record))
+                    ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
+
+                // 12. KM over
                 TextColumn::make('km_over')
                     ->label('KM over')
                     ->alignCenter()
+                    ->badge()
+                    ->color(fn (Vehicle $record): string => match (self::getKmOverData($record)['status']) {
+                        'danger' => 'danger',
+                        'warning' => 'warning',
+                        default => 'gray',
+                    })
+                    ->tooltip(fn (Vehicle $record): string => self::getKmOverData($record)['tooltip'])
                     ->state(fn (Vehicle $record): string => self::getKmOver($record)),
 
                 // 12. Tên lái xe
@@ -493,7 +631,7 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->visible(fn (Vehicle $record): bool => self::getTodayTripsCount($record) > 0 || $record->active_trip !== null)
                     ->modal()
                     ->modalWidth(Width::FourExtraLarge)
-                    ->modalHeading(fn (Vehicle $record): string => 'Danh sách chuyến xe trong ngày — '.$record->plate_number.' ('.today()->format('d/m/Y').')')
+                    ->modalHeading(fn (Vehicle $record): string => 'Danh sách chuyến xe trong ca — '.$record->plate_number.' ('.self::getShiftDate()->format('d/m/Y').')')
                     ->modalContent(fn (Vehicle $record, VehicleDispatchBoard $livewire) => view('filament.pages.partials.vehicle-trip-modal', [
                         'vehicle' => $record,
                         'trips' => $livewire->getTodayTripsForVehicle($record),
@@ -518,6 +656,8 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     protected function buildTableQuery(): Builder
     {
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+
         return Vehicle::query()
             ->select('vehicles.*')
             ->selectSub(function ($q) {
@@ -533,18 +673,21 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'driver.driverShifts',
                 'evenDriver.driverShifts',
                 'oddDriver.driverShifts',
-                'trips' => function ($q) {
-                    $q->where(function ($sub) {
-                        $sub->whereDate('started_at', today())
+                'trips' => function ($q) use ($shiftStart, $shiftEnd) {
+                    $q->where(function ($sub) use ($shiftStart, $shiftEnd) {
+                        $sub->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                            ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd])
                             ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
-                            ->orWhere('completed_at', '>=', now()->subHours(48));
+                            ->orWhere('completed_at', '>=', now()->subHours(48))
+                            ->orWhere('is_paused', true)
+                            ->orWhereHas('kmReports', fn ($kr) => $kr->where('status', 'pending'));
                     })->with([
                         'checkpoints',
-                        'driver',
+                        'driver.driverShifts',
                         'startLocation',
-                        'endLocation',
+                        'endLocation.area',
                         'orders.pickupLocation',
-                        'orders.deliveryPoints.location',
+                        'orders.deliveryPoints.location.area',
                         'latestPendingKmReport',
                     ]);
                 },
@@ -590,8 +733,9 @@ class VehicleDispatchBoard extends Page implements HasTable
             if ($val > 0) {
                 $ton = match (true) {
                     $val >= 13.0 && $val <= 14.5 => '14',
-                    $val >= 4.5 && $val <= 5.8 => '5',
                     $val >= 6.0 && $val <= 7.5 => '7',
+                    $val >= 4.0 && $val <= 5.8 => '5',
+                    $val >= 3.0 && $val < 4.0 => '3.5',
                     $val >= 2.0 && $val <= 2.6 => '2.5',
                     $val >= 1.0 && $val <= 1.5 => '1.25',
                     default => (string) round($val),
@@ -601,14 +745,33 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         $extra = '';
-        if ($record->vehicle_type?->value === 'cold') {
+        if ($record->vehicle_type?->value === 'cold' && ! str_contains($record->notes ?? '', 'cool')) {
             $extra .= ' <span class="text-blue-500 font-normal text-xs">cool</span>';
         }
-        if ($record->vehicle_type?->value === 'flatbed') {
+        if ($record->vehicle_type?->value === 'flatbed' && ! str_contains($record->notes ?? '', 'mâm')) {
             $extra .= ' <span class="text-amber-500 font-normal text-xs">mâm</span>';
         }
 
-        return "<div><span class='font-bold'>{$plate}</span>".($tonnage ? " <span class='text-xs text-gray-500 font-medium'>{$tonnage}</span>" : '').$extra.'</div>';
+        // Phần chỉ chuột vào thì mới show ra: Tải thực, Số khối
+        $tooltipParts = [];
+        if ($record->load_capacity !== null) {
+            $tooltipParts[] = 'Tải thực: '.((float) $record->load_capacity).'T';
+        }
+        if ($record->cargo_volume !== null) {
+            $tooltipParts[] = 'Số khối: '.((float) $record->cargo_volume).' cbm';
+        }
+        $tooltip = ! empty($tooltipParts) ? implode(' | ', $tooltipParts) : '';
+
+        // Phần show ra luôn: Biển số xe, Tải quy đổi, Số cửa, Ghi chú
+        $note = '';
+        $noteText = $record->notes ?: ($record->status === VehicleStatus::Off ? $record->off_reason : null);
+        if (! empty($noteText)) {
+            $note = ' <span class="text-xs text-amber-600 dark:text-amber-400 font-normal italic">('.e(trim($noteText)).')</span>';
+        }
+
+        $titleAttr = $tooltip ? ' title="'.e($tooltip).'"' : '';
+
+        return "<div{$titleAttr} class='cursor-default'><span class='font-bold text-primary-600 dark:text-primary-400'>{$plate}</span>".($tonnage ? " <span class='text-xs text-gray-500 dark:text-gray-400 font-medium'>{$tonnage}</span>" : '').$extra.$note.'</div>';
     }
 
     public static function getTripStatusLabel(Vehicle $record): string
@@ -662,17 +825,17 @@ class VehicleDispatchBoard extends Page implements HasTable
 
         if ($activeTrip === null) {
             if ($record->status === VehicleStatus::Off) {
-                return 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300';
+                return 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-200 font-bold';
             }
             if ($record->status === VehicleStatus::Bdsc) {
-                return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300';
+                return 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-200 font-bold';
             }
 
-            return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700';
+            return 'bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 font-normal';
         }
 
         if ($activeTrip->isPaused()) {
-            return 'bg-amber-500 text-white font-bold animate-pulse shadow-sm';
+            return 'bg-amber-500 text-white font-bold animate-pulse';
         }
 
         $status = $activeTrip->status instanceof TripStatus
@@ -680,7 +843,7 @@ class VehicleDispatchBoard extends Page implements HasTable
             : TripStatus::tryFrom((string) $activeTrip->status);
 
         return match ($status) {
-            TripStatus::Pending => 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200 font-semibold',
+            TripStatus::Pending => 'bg-purple-600 text-white font-bold',
             TripStatus::Started => 'bg-sky-500 text-white font-bold',
             TripStatus::ArrivedPickup => 'bg-amber-500 text-white font-bold',
             TripStatus::Delivering => 'bg-emerald-600 text-white font-bold',
@@ -1004,51 +1167,142 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function getTodayTripsCount(Vehicle $record): int
     {
-        if (! $record->relationLoaded('trips')) {
-            $today = today();
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+        $runningStatuses = self::runningTripStatuses();
+        $runningValues = array_map(fn (TripStatus $s) => $s->value, $runningStatuses);
 
+        if (! $record->relationLoaded('trips')) {
             return $record->trips()
-                ->where(function (Builder $q) use ($today) {
-                    $q->whereDate('started_at', $today)
-                        ->orWhereDate('created_at', $today)
-                        ->orWhereDate('completed_at', $today)
-                        ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()));
+                ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues) {
+                    $q->whereIn('status', $runningValues)
+                        ->orWhere(function (Builder $sub) use ($shiftStart, $shiftEnd) {
+                            $sub->where('status', TripStatus::Completed->value)
+                                ->where(function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                                    $dateQ->whereBetween('completed_at', [$shiftStart, $shiftEnd])
+                                        ->orWhereBetween('started_at', [$shiftStart, $shiftEnd]);
+                                });
+                        });
                 })
                 ->count();
         }
 
         return $record->trips
-            ->filter(fn (Trip $t) => ($t->started_at && $t->started_at->isToday())
-                || ($t->completed_at && $t->completed_at->isToday())
-                || ($t->created_at && $t->created_at->isToday())
-                || in_array($t->status, TripStatus::activeStatuses(), true))
+            ->filter(function (Trip $t) use ($shiftStart, $shiftEnd, $runningStatuses): bool {
+                if ($t->status === TripStatus::Pending || $t->status === TripStatus::Cancelled) {
+                    return false;
+                }
+
+                if (in_array($t->status, $runningStatuses, true)) {
+                    return true;
+                }
+
+                if ($t->status === TripStatus::Completed) {
+                    return ($t->completed_at && $t->completed_at->between($shiftStart, $shiftEnd))
+                        || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd));
+                }
+
+                return false;
+            })
             ->count();
+    }
+
+    /**
+     * Đếm số lượng đơn hàng đang chờ chưa chạy của xe (thuộc các chuyến Chờ chạy - Pending).
+     */
+    public static function getWaitingOrdersCount(Vehicle $record): int
+    {
+        if ($record->relationLoaded('trips')) {
+            return $record->trips
+                ->filter(function (Trip $trip): bool {
+                    $status = $trip->status instanceof TripStatus ? $trip->status->value : (string) $trip->status;
+
+                    return $status === TripStatus::Pending->value;
+                })
+                ->flatMap(function (Trip $trip) {
+                    if ($trip->relationLoaded('orders')) {
+                        return $trip->orders->filter(function (Order $order): bool {
+                            $orderStatus = $order->status instanceof OrderStatus ? $order->status->value : (string) $order->status;
+
+                            return ! in_array($orderStatus, [OrderStatus::Cancelled->value, OrderStatus::Completed->value], true);
+                        });
+                    }
+
+                    return $trip->orders()
+                        ->whereNotIn('status', [OrderStatus::Cancelled->value, OrderStatus::Completed->value])
+                        ->get();
+                })
+                ->count();
+        }
+
+        return Order::query()
+            ->whereHas('trip', function (Builder $q) use ($record) {
+                $q->where('vehicle_id', $record->id)
+                    ->where('status', TripStatus::Pending->value);
+            })
+            ->whereNotIn('status', [OrderStatus::Cancelled->value, OrderStatus::Completed->value])
+            ->count();
+    }
+
+    /**
+     * @return array{
+     *     text: string,
+     *     delta: ?float,
+     *     status: 'danger'|'warning'|'normal'|'none',
+     *     cellClass: string,
+     *     tooltip: string,
+     * }
+     */
+    public static function getKmOverData(Vehicle $record): array
+    {
+        $currentKm = $record->current_mileage !== null ? (float) $record->current_mileage : null;
+        $startKm = $record->monthly_start_km !== null ? (float) $record->monthly_start_km : null;
+
+        if ($currentKm === null || $startKm === null) {
+            return [
+                'text' => '—',
+                'delta' => null,
+                'status' => 'none',
+                'cellClass' => 'text-gray-400',
+                'tooltip' => 'Chưa có dữ liệu Km bắt đầu chu kỳ ngày 23',
+            ];
+        }
+
+        $delta = max(0.0, $currentKm - $startKm);
+        $formattedDelta = number_format($delta, 0, ',', '.');
+        $tooltipDetails = 'Đã chạy: '.$formattedDelta.' km | Đầu chu kỳ (ngày 23): '.number_format($startKm, 0, ',', '.').' km | Hiện tại: '.number_format($currentKm, 0, ',', '.').' km';
+
+        if ($delta >= 3000) {
+            return [
+                'text' => $formattedDelta,
+                'delta' => $delta,
+                'status' => 'danger',
+                'cellClass' => 'km-over-cell bg-rose-500 text-white font-bold select-none',
+                'tooltip' => '⚠️ VƯỢT ĐỊNH MỨC (≥ 3.000 km) — '.$tooltipDetails,
+            ];
+        }
+
+        if ($delta >= 2800) {
+            return [
+                'text' => $formattedDelta,
+                'delta' => $delta,
+                'status' => 'warning',
+                'cellClass' => 'km-over-cell bg-amber-400 text-slate-900 font-bold select-none',
+                'tooltip' => '⚡ SẮP ĐẾN HẠN MỨC (≥ 2.800 km) — '.$tooltipDetails,
+            ];
+        }
+
+        return [
+            'text' => $formattedDelta,
+            'delta' => $delta,
+            'status' => 'normal',
+            'cellClass' => 'text-gray-700 dark:text-gray-300 font-semibold',
+            'tooltip' => $tooltipDetails,
+        ];
     }
 
     public static function getKmOver(Vehicle $record): string
     {
-        if (! $record->isRent()) {
-            return '—';
-        }
-
-        $monthlyKm = TripCheckpoint::query()
-            ->where('vehicle_id', $record->id)
-            ->whereMonth('occurred_at', now()->month)
-            ->whereYear('occurred_at', now()->year)
-            ->max('km_reading');
-
-        if ($monthlyKm === null) {
-            return '—';
-        }
-
-        $limit = 3000;
-        $over = (float) $monthlyKm - $limit;
-
-        if ($over <= 0) {
-            return '—';
-        }
-
-        return '+'.number_format($over, 0, ',', '.');
+        return self::getKmOverData($record)['text'];
     }
 
     public static function getDriverName(Vehicle $record): string
@@ -1070,21 +1324,141 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function getDriverStation(Vehicle $record): string
     {
-        $activeTrip = $record->active_trip;
-        $driver = $activeTrip?->driver ?? $record->getDriverForToday() ?? $record->driver ?? $record->evenDriver ?? $record->oddDriver;
-        $val = $driver?->station?->value ?? (! empty($record->driver_station) && $record->driver_station !== 'OTHER' ? (string) $record->driver_station : null);
+        // Lấy Điểm trực (station) từ bảng users của tài xế
+        $driver = $record->active_trip?->driver
+            ?? $record->getDriverForToday()
+            ?? $record->driver
+            ?? $record->evenDriver
+            ?? $record->oddDriver;
 
-        if (! $val) {
-            $prefix = substr($record->plate_number, 0, 2);
-            $val = match ($prefix) {
-                '20' => 'TN',
-                '99' => 'BN',
-                '29', '30' => 'NBA',
-                default => '—',
+        $station = $driver?->station instanceof OnDutyLocation
+            ? $driver->station->value
+            : ($driver?->station ? (string) $driver->station : null);
+
+        if (! $station && ! empty($record->driver_station) && $record->driver_station !== 'OTHER') {
+            $station = (string) $record->driver_station;
+        }
+
+        if ($station) {
+            return match (strtoupper($station)) {
+                'NBA' => 'NB',
+                'BN' => 'BN',
+                'TN' => 'TN',
+                default => $station,
             };
         }
 
-        return $val;
+        return 'OTHER';
+    }
+
+    public static function resolveStationFromTripDestination(Trip $trip): ?string
+    {
+        // 1. Kiểm tra các điểm giao hàng (delivery points) của các đơn hàng trong chuyến
+        $deliveryPoints = $trip->orders
+            ->flatMap(fn (Order $o) => $o->deliveryPoints)
+            ->filter();
+
+        $lastDp = $deliveryPoints->sortBy('sequence')->last() ?? $deliveryPoints->last();
+        if ($lastDp) {
+            $station = self::mapLocationOrAddressToStation($lastDp->location, $lastDp->address);
+            if ($station !== null) {
+                return $station;
+            }
+        }
+
+        // 2. Kiểm tra endLocation của chuyến
+        if ($trip->endLocation) {
+            $station = self::mapLocationOrAddressToStation($trip->endLocation, $trip->endLocation->address);
+            if ($station !== null) {
+                return $station;
+            }
+        }
+
+        return null;
+    }
+
+    public static function mapLocationOrAddressToStation(?Location $location, ?string $address): ?string
+    {
+        if ($location) {
+            $areaCode = $location->area?->code;
+            if ($areaCode === 'NBA') {
+                return 'NB';
+            }
+            if ($areaCode === 'BN') {
+                return 'BN';
+            }
+            if (in_array($areaCode, ['TN', 'NBO'], true)) {
+                return 'TN';
+            }
+            if ($areaCode === 'PROVINCE') {
+                return 'Province';
+            }
+
+            $locCode = strtoupper($location->code ?? '');
+            if (in_array($locCode, ['ACSV', 'NCTS', 'ALSC', 'DHL', 'ALSW', 'ASG', 'NBA'], true)) {
+                return 'NB';
+            }
+            if (in_array($locCode, ['SEV', 'ALSB', 'SDV', 'ASGS', 'BN'], true)) {
+                return 'BN';
+            }
+            if (in_array($locCode, ['SEVT', 'ALST', 'TN'], true)) {
+                return 'TN';
+            }
+
+            $address = $address ?: $location->address;
+        }
+
+        if (! empty($address)) {
+            if (str_contains($address, 'Thái Nguyên') || str_contains($address, 'Phổ Yên') || str_contains($address, 'Sông Công')) {
+                return 'TN';
+            }
+            if (str_contains($address, 'Bắc Ninh') || str_contains($address, 'Yên Phong') || str_contains($address, 'Quế Võ') || str_contains($address, 'Từ Sơn')) {
+                return 'BN';
+            }
+            if (str_contains($address, 'Hà Nội') || str_contains($address, 'Nội Bài') || str_contains($address, 'Sóc Sơn') || str_contains($address, 'Mê Linh')) {
+                return 'NB';
+            }
+
+            return 'Province';
+        }
+
+        return null;
+    }
+
+    public static function resolveStationFromGps(Vehicle $record): ?string
+    {
+        $addr = $record->gps_address;
+        if (! empty($addr)) {
+            if (str_contains($addr, 'Thái Nguyên')) {
+                return 'TN';
+            }
+            if (str_contains($addr, 'Bắc Ninh')) {
+                return 'BN';
+            }
+            if (str_contains($addr, 'Hà Nội') || str_contains($addr, 'Nội Bài') || str_contains($addr, 'Sóc Sơn')) {
+                return 'NB';
+            }
+
+            return 'Province';
+        }
+
+        $lat = (float) $record->gps_lat;
+        $lng = (float) $record->gps_lng;
+        if ($lat !== 0.0 && $lng !== 0.0) {
+            if ($lat > 21.35 && $lat < 21.85 && $lng > 105.5 && $lng < 106.1) {
+                return 'TN';
+            }
+            if ($lat > 21.05 && $lat < 21.35 && $lng > 105.95 && $lng < 106.3) {
+                return 'BN';
+            }
+            if ($lat > 20.95 && $lat < 21.4 && $lng > 105.6 && $lng < 105.95) {
+                return 'NB';
+            }
+
+            return 'Province';
+        }
+
+        return null;
     }
 
     public static function getShiftLabel(Vehicle $record): string
@@ -1096,20 +1470,25 @@ class VehicleDispatchBoard extends Page implements HasTable
             return '—';
         }
 
-        $latestShift = $driver->driverShifts
-            ->sortByDesc('start_time')
-            ->first();
+        // Chỉ hiển thị ca làm hiện tại khi lái xe đăng nhập trên app (ca đang hoạt động, chưa kết thúc)
+        $activeShift = $driver->relationLoaded('driverShifts')
+            ? $driver->driverShifts
+                ->filter(fn (DriverShift $s) => $s->start_time && $s->start_time->lte(now()) && $s->end_time === null)
+                ->sortByDesc('start_time')
+                ->first()
+            : $driver->driverShifts()
+                ->where('start_time', '<=', now())
+                ->whereNull('end_time')
+                ->latest('start_time')
+                ->first();
 
-        if ($latestShift?->shift_type) {
-            return match ($latestShift->shift_type) {
+        if ($activeShift?->shift_type) {
+            return match ($activeShift->shift_type) {
                 ShiftType::MorningHalf => 'X/2',
                 ShiftType::NightHalf => 'Y/2',
                 ShiftType::Full => 'X',
+                default => 'X',
             };
-        }
-
-        if ($driver->work_shift) {
-            return $driver->work_shift === DriverWorkShift::Even ? 'Ca chẵn' : 'Ca lẻ';
         }
 
         return '—';

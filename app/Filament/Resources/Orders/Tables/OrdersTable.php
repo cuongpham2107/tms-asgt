@@ -10,13 +10,10 @@ use App\Enums\VehicleStatus;
 use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
-use App\Filament\Resources\Orders\Actions\BulkAssignTransportAction;
-use App\Filament\Resources\Orders\Actions\BulkSendOrderAction;
 use App\Filament\Resources\Orders\Actions\CancelOrderAction;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
-use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
@@ -26,15 +23,12 @@ use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
-use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\ReplicateAction;
-use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
@@ -43,7 +37,7 @@ use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Blade;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\HtmlString;
 
 class OrdersTable extends BaseTable
@@ -154,89 +148,6 @@ class OrdersTable extends BaseTable
                     ->label('Ngày tạo')
                     ->dateTime('d/m/Y')
                     ->sortable(),
-                // UniqueMapColumn::make('map_coords')
-                //     ->label('Bản đồ')
-                //     ->height(72)
-                //     ->zoom(12)
-                //     ->static()
-                //     ->action(
-                //         Action::make('select')
-                //             ->modal()
-                //             ->modalWidth('4xl')
-                //             ->modalHeading(fn (Order $record): string => 'Bản đồ — '.$record->order_code)
-                //             ->modalSubmitAction(false)
-                //             ->modalCancelActionLabel('Đóng')
-                //             ->modalContent(fn (Order $record): HtmlString => new HtmlString(Blade::render(<<<'BLADE'
-                //                 <div class="space-y-4">
-                //                     <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-800">
-                //                         <div>
-                //                             <span class="text-xs text-gray-500 dark:text-gray-400">Mã đơn</span>
-                //                             <span class="ml-2 text-sm font-bold text-gray-900 dark:text-white">{{ $order->order_code }}</span>
-                //                         </div>
-
-                //                         <div>
-                //                             <span class="text-xs text-gray-500 dark:text-gray-400">Khách hàng</span>
-                //                             <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $order->customer?->name ?? '—' }}</span>
-                //                         </div>
-
-                //                         @if ($order->trip?->vehicle)
-                //                             <div>
-                //                                 <span class="text-xs text-gray-500 dark:text-gray-400">Xe</span>
-                //                                 <span class="ml-2 text-sm font-bold text-amber-700 dark:text-amber-300">{{ $order->trip->vehicle->plate_number }}</span>
-                //                             </div>
-                //                         @endif
-
-                //                         @if ($order->trip?->driver)
-                //                             <div>
-                //                                 <span class="text-xs text-gray-500 dark:text-gray-400">Lái xe</span>
-                //                                 <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $order->trip->driver->name }}</span>
-                //                             </div>
-                //                         @endif
-
-                //                         <div>
-                //                             <span class="text-xs text-gray-500 dark:text-gray-400">Điểm lấy</span>
-                //                             <span class="ml-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                //                                 {{ $order->pickupLocation?->name ?? $order->pickup_address ?? '—' }}
-                //                             </span>
-                //                         </div>
-
-                //                         @foreach ($order->deliveryPoints->sortBy('sequence') as $dp)
-                //                             <div>
-                //                                 <span class="text-xs text-gray-500 dark:text-gray-400">Điểm giao {{ $dp->sequence }}</span>
-                //                                 <span class="ml-2 text-sm font-medium text-red-700 dark:text-red-300">
-                //                                     {{ $dp->address ?? $dp->location?->name ?? '—' }}
-                //                                 </span>
-                //                             </div>
-                //                         @endforeach
-                //                     </div>
-
-                //                     <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-                //                         <x-filament-leaflet::map :config="$mapConfig" widget />
-                //                     </div>
-
-                //                     <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
-                //                         <span class="inline-flex items-center gap-1.5">
-                //                             <span class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span> Điểm lấy hàng
-                //                         </span>
-                //                         <span class="mx-2">·</span>
-                //                         <span class="inline-flex items-center gap-1.5">
-                //                             <span class="inline-block h-2.5 w-2.5 rounded-full bg-red-500"></span> Điểm giao hàng
-                //                         </span>
-                //                         @if ($order->deliveryPoints->filter(fn ($dp) => $dp->location?->lat !== null)->isNotEmpty())
-                //                             <span class="mx-2">·</span>
-                //                             <span class="text-blue-500">━━</span> Tuyến đường
-                //                         @endif
-                //                         @if ($order->trip?->vehicle)
-                //                             <span class="mx-2">·</span>
-                //                             <span class="inline-flex items-center gap-1.5">🚛 Vị trí xe</span>
-                //                         @endif
-                //                     </div>
-                //                 </div>
-                //             BLADE, [
-                //                 'order' => $record,
-                //                 'mapConfig' => self::buildOrderMapConfig($record),
-                //             ]))),
-                //     ),
                 TextColumn::make('createdBy.name')
                     ->label('Người tạo')
                     ->searchable(),
@@ -254,7 +165,6 @@ class OrdersTable extends BaseTable
                 AssignTransportAction::make(),
                 ActionGroup::make([
                     EditAction::make()
-                        // ->slideOver()
                         ->stickyModalFooter()
                         ->modalWidth(Width::MaxContent)
                         ->modalDescription(fn (Order $record): string => 'Loại đơn hàng: '.($record->type?->getLabel() ?? 'Chưa xác định'))
@@ -314,7 +224,7 @@ class OrdersTable extends BaseTable
                         ->hidden(fn (Order $record): bool => ! $record->status->canDelete())
                         ->requiresConfirmation()
                         ->modalHeading('Xác nhận xóa đơn')
-                        ->modalDescription('Bạn chắc chắn muốn xóa đơn hàng này? Chỉ đơn ở trạng thái Nháp hoặc Đã hủy mới có thể xóa.')
+                        ->modalDescription('Bạn chắc chắn muốn xóa đơn hàng này? Chỉ đơn ở trạng thái Nháp mới có thể xóa.')
                         ->modalSubmitActionLabel('Xóa')
                         ->modalCancelActionLabel('Hủy'),
                     ReplicateAction::make()
@@ -393,16 +303,22 @@ class OrdersTable extends BaseTable
             ])
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(25)
-            // ->defaultGroup('area.code')
+            ->checkIfRecordIsSelectableUsing(fn (Order $record): bool => $record->status === OrderStatus::Draft)
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    // ForceDeleteBulkAction::make(),
-                    // RestoreBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->modalDescription('Bạn chắc chắn muốn xóa các đơn hàng đã chọn? Chỉ các đơn hàng ở trạng thái Nháp mới có thể xóa.')
+                        ->action(function (Collection $records, DeleteBulkAction $action): void {
+                            $drafts = $records->filter(fn (Order $record): bool => $record->status === OrderStatus::Draft);
+                            if ($drafts->isNotEmpty()) {
+                                foreach ($drafts as $record) {
+                                    $record->delete();
+                                }
+                                $action->success();
+                            }
+                        })
+                        ->deselectRecordsAfterCompletion(),
                 ]),
-
-                // BulkAssignTransportAction::make(),
-                // BulkSendOrderAction::make(),
             ]);
     }
 

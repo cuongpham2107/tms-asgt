@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Enums\OrderStatus;
 use App\Models\Order;
 use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
@@ -34,7 +35,7 @@ class OrderPolicy
 
     public function delete(AuthUser $authUser, Order $order): bool
     {
-        return $authUser->can('Delete:Order');
+        return $authUser->can('Delete:Order') && $order->status === OrderStatus::Draft;
     }
 
     public function deleteAny(AuthUser $authUser): bool

@@ -86,10 +86,27 @@ class VehiclesTable extends BaseTable
                     ->label('Số km')
                     ->formatStateUsing(fn ($state) => $state ? number_format($state, 0, ',', '.').' km' : '—')
                     ->sortable(),
+                TextColumn::make('monthly_start_km')
+                    ->label('Km đầu chu kỳ (23 hàng tháng)')
+                    ->formatStateUsing(fn ($state) => $state ? number_format($state, 0, ',', '.').' km' : '—')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('load_capacity')
                     ->label('Tải trọng')
-                    ->formatStateUsing(fn ($state) => $state ? number_format($state, 1).' tấn' : '—')
+                    ->formatStateUsing(fn ($state) => $state ? rtrim(rtrim(number_format((float) $state, 2, '.', ''), '0'), '.').' tấn' : '—')
                     ->sortable(),
+                TextColumn::make('cargo_volume')
+                    ->label('Số khối')
+                    ->alignCenter()
+                    ->formatStateUsing(fn ($state) => $state ? number_format((float) $state, 2).' m³' : '—')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('door_count')
+                    ->label('Số cửa')
+                    ->alignCenter()
+                    ->formatStateUsing(fn ($state) => $state ? "{$state} cửa" : '—')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->label('Ngày tạo')
                     ->dateTime()

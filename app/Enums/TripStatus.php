@@ -63,7 +63,7 @@ enum TripStatus: string implements HasColor, HasLabel
     public function getColor(): string|array|null
     {
         return match ($this) {
-            self::Pending => 'gray',
+            self::Pending => 'purple',
             self::Started => 'info',
             self::ArrivedPickup => 'warning',
             self::Delivering => 'warning',

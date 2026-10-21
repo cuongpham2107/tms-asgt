@@ -12,3 +12,7 @@ Artisan::command('inspire', function () {
 Schedule::call(fn () => app(EupGpsService::class)->sync())
     ->everyMinute()
     ->name('sync-eup-gps');
+
+Schedule::command('vehicles:snapshot-monthly-km')
+    ->monthlyOn(23, '00:00')
+    ->name('snapshot-monthly-vehicle-km');

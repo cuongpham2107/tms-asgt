@@ -56,9 +56,11 @@ class TripController extends Controller
                 ]),
                 'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
+            ->select('trips.*')
+            ->selectRaw('COALESCE((SELECT MIN(sent_at) FROM orders WHERE orders.trip_id = trips.id), trips.created_at) as first_sent_at')
             ->orderByRaw('CASE WHEN is_empty_run = 0 THEN 0 ELSE 1 END')
-            ->orderByRaw("CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered') THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END")
-            ->orderBy('created_at', 'desc')
+            ->orderByRaw("CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered', 'return_trip') THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END")
+            ->orderBy('first_sent_at', 'asc')
             ->get();
 
         return response()->json([
@@ -96,9 +98,11 @@ class TripController extends Controller
                 ]),
                 'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
+            ->select('trips.*')
+            ->selectRaw('COALESCE((SELECT MIN(sent_at) FROM orders WHERE orders.trip_id = trips.id), trips.created_at) as first_sent_at')
             ->orderByRaw('CASE WHEN is_empty_run = 0 THEN 0 ELSE 1 END')
-            ->orderByRaw("CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered') THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END")
-            ->orderBy('created_at', 'desc')
+            ->orderByRaw("CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered', 'return_trip') THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END")
+            ->orderBy('first_sent_at', 'asc')
             ->first();
 
         if ($trip === null) {

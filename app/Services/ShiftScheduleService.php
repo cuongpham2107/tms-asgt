@@ -48,6 +48,20 @@ class ShiftScheduleService
     }
 
     /**
+     * Lấy khoảng thời gian của ca trực: từ 08:00 sáng ngày ca trực đến 08:00 sáng ngày hôm sau.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function getShiftWindow(?CarbonInterface $time = null): array
+    {
+        $shiftDate = self::getShiftDate($time);
+        $start = $shiftDate->copy()->setTime(8, 0, 0);
+        $end = $start->copy()->addDay();
+
+        return [$start, $end];
+    }
+
+    /**
      * Kiểm tra xem một ca trực (hoặc chu kỳ của tài xế) có phải là ca trực của thời điểm đã cho (mặc định now()) hay không.
      */
     public static function isTodayShift(DriverWorkShift|string|null $shift, ?CarbonInterface $time = null): bool

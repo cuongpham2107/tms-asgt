@@ -49,6 +49,8 @@ class TripResource extends JsonResource
 
             'driver_swaps' => DriverSwapResource::collection($this->whenLoaded('driverSwaps')),
 
+            'sent_at' => $this->sent_at?->toIso8601String(),
+
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

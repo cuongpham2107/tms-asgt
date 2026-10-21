@@ -87,25 +87,59 @@ class VehicleForm
                             ]),
 
                         TextInput::make('load_capacity')
-                            ->label('Tải trọng (tấn)')
+                            ->label('Tải trọng / Tải thực (tấn)')
                             ->prefixIcon('heroicon-o-scale')
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
                             ->numeric()
                             ->inputMode('decimal')
                             ->minValue(0)
-                            ->step(0.1)
-                            ->dataList(['1.25', '1.5', '2.5', '3.5', '5', '7', '8', '10', '14'])
-                            ->suffix(' tấn'),
+                            ->step(0.01)
+                            ->dataList(['1.25', '1.5', '2.5', '3.5', '4.12', '5', '5.25', '5.65', '7', '8', '10', '14'])
+                            ->suffix(' tấn')
+                            ->placeholder('VD: 5.25'),
+
+                        TextInput::make('cargo_volume')
+                            ->label('Số khối (m³ / CBM)')
+                            ->prefixIcon('heroicon-o-cube')
+                            ->numeric()
+                            ->inputMode('decimal')
+                            ->minValue(0)
+                            ->step(0.01)
+                            ->suffix(' m³')
+                            ->placeholder('VD: 40.34'),
+
+                        TextInput::make('door_count')
+                            ->label('Số cửa')
+                            ->prefixIcon('heroicon-o-arrow-right-start-on-rectangle')
+                            ->numeric()
+                            ->minValue(1)
+                            ->maxValue(20)
+                            ->step(1)
+                            ->dataList(['1', '2', '3', '4', '5', '6', '7'])
+                            ->suffix(' cửa')
+                            ->placeholder('VD: 3'),
 
                         TextInput::make('current_mileage')
                             ->label('Số km hiện tại')
+                            ->helperText('Cập nhật tự động theo chuyến xe & thiết bị GPS')
                             ->prefixIcon('heroicon-o-variable')
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')
                             ->numeric()
-                            ->minValue(0)
-                            ->step(0.1)
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->suffix(' km'),
+
+                        TextInput::make('monthly_start_km')
+                            ->label('Km đầu chu kỳ (ngày 23)')
+                            ->helperText('Chốt tự động lúc 00:00 ngày 23 hàng tháng')
+                            ->prefixIcon('heroicon-o-calendar-days')
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
+                            ->numeric()
+                            ->disabled()
+                            ->dehydrated(false)
                             ->suffix(' km'),
 
                         TextInput::make('model_year')

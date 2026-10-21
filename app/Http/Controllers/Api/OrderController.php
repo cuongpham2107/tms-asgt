@@ -34,7 +34,9 @@ class OrderController extends Controller
             ])
             ->whereHas('trip', fn ($q) => $q->where('driver_id', $user->id))
             ->whereIn('status', [OrderStatus::Sent, OrderStatus::InTransit])
-            ->orderBy('planned_loading_at')
+            ->orderByRaw("CASE WHEN status = 'in_transit' THEN 0 ELSE 1 END")
+            ->orderByRaw('COALESCE(sent_at, created_at) ASC')
+            ->orderBy('planned_loading_at', 'ASC')
             ->get();
 
         return response()->json([

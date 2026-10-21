@@ -16,6 +16,8 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginator
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Url;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use UnitEnum;
@@ -94,6 +96,26 @@ class TripStatisticsReport extends Page
         $this->page = 1;
     }
 
+    protected function getBaseRowsCacheKey(): string
+    {
+        $userId = Auth::id() ?? 'guest';
+        $filterHash = md5(json_encode([
+            $this->startDate,
+            $this->endDate,
+            $this->customerId,
+            $this->vehicleOwner,
+            $this->search,
+        ]));
+
+        return "trip_stats_rows_{$userId}_{$filterHash}";
+    }
+
+    public function clearBaseRowsCache(): void
+    {
+        $this->cachedBaseRows = null;
+        Cache::forget($this->getBaseRowsCacheKey());
+    }
+
     public function updatedActiveTab(): void
     {
         $this->serviceType = $this->activeTab;
@@ -102,21 +124,21 @@ class TripStatisticsReport extends Page
 
     public function updatedSearch(): void
     {
-        $this->cachedBaseRows = null;
+        $this->clearBaseRowsCache();
         $this->page = 1;
     }
 
     public function updatedStartDate(): void
     {
         $this->syncDatePreset();
-        $this->cachedBaseRows = null;
+        $this->clearBaseRowsCache();
         $this->page = 1;
     }
 
     public function updatedEndDate(): void
     {
         $this->syncDatePreset();
-        $this->cachedBaseRows = null;
+        $this->clearBaseRowsCache();
         $this->page = 1;
     }
 
@@ -128,13 +150,13 @@ class TripStatisticsReport extends Page
 
     public function updatedCustomerId(): void
     {
-        $this->cachedBaseRows = null;
+        $this->clearBaseRowsCache();
         $this->page = 1;
     }
 
     public function updatedVehicleOwner(): void
     {
-        $this->cachedBaseRows = null;
+        $this->clearBaseRowsCache();
         $this->page = 1;
     }
 
@@ -176,6 +198,7 @@ class TripStatisticsReport extends Page
             default => null,
         };
 
+        $this->clearBaseRowsCache();
         $this->page = 1;
     }
 
@@ -221,7 +244,7 @@ class TripStatisticsReport extends Page
         $this->customerId = null;
         $this->vehicleOwner = 'all';
         $this->search = null;
-        $this->cachedBaseRows = null;
+        $this->clearBaseRowsCache();
         $this->page = 1;
     }
 
@@ -245,6 +268,8 @@ class TripStatisticsReport extends Page
                 'orders.deliveryPoints.location',
                 'orders.tripCheckpoints',
                 'checkpoints',
+                'startLocation',
+                'endLocation',
             ])
             ->when($dateFrom || $dateTo, function (Builder $q) use ($dateFrom, $dateTo): Builder {
                 if ($dateFrom && $dateTo) {
@@ -348,6 +373,14 @@ class TripStatisticsReport extends Page
             return $this->cachedBaseRows;
         }
 
+        $cacheKey = $this->getBaseRowsCacheKey();
+
+        /** @var array<int, array<string, mixed>>|null $cached */
+        $cached = Cache::get($cacheKey);
+        if ($cached !== null && is_array($cached)) {
+            return $this->cachedBaseRows = collect($cached);
+        }
+
         $trips = $this->getFilteredTrips();
 
         /** @var TripExcelExportService $exportService */
@@ -389,7 +422,20 @@ class TripStatisticsReport extends Page
             })->values();
         }
 
-        return $this->cachedBaseRows = $rows;
+        // Chuẩn hóa ngày giờ sang chuỗi ISO / scalar để serialize an toàn vào Cache
+        $serializedRows = $rows->map(function (array $row): array {
+            $row['date'] = $row['date'] instanceof Carbon ? $row['date']->toDateTimeString() : ($row['date'] ? (string) $row['date'] : null);
+            $row['time_a'] = $row['time_a'] instanceof Carbon ? $row['time_a']->toDateTimeString() : ($row['time_a'] ? (string) $row['time_a'] : null);
+            $row['time_b'] = $row['time_b'] instanceof Carbon ? $row['time_b']->toDateTimeString() : ($row['time_b'] ? (string) $row['time_b'] : null);
+            $row['time_c'] = $row['time_c'] instanceof Carbon ? $row['time_c']->toDateTimeString() : ($row['time_c'] ? (string) $row['time_c'] : null);
+            $row['time_d'] = $row['time_d'] instanceof Carbon ? $row['time_d']->toDateTimeString() : ($row['time_d'] ? (string) $row['time_d'] : null);
+
+            return $row;
+        });
+
+        Cache::put($cacheKey, $serializedRows->all(), 120);
+
+        return $this->cachedBaseRows = $serializedRows;
     }
 
     /**
@@ -549,11 +595,13 @@ class TripStatisticsReport extends Page
      */
     public function getCustomerOptions(): array
     {
-        return Customer::query()
-            ->where('is_active', true)
-            ->orderBy('code')
-            ->pluck('code', 'id')
-            ->toArray();
+        return Cache::remember('trip_stats_customer_options', 300, function (): array {
+            return Customer::query()
+                ->where('is_active', true)
+                ->orderBy('code')
+                ->pluck('code', 'id')
+                ->toArray();
+        });
     }
 
     public function updateOrderMetric(int $orderId, string $field, mixed $value): void
@@ -587,7 +635,7 @@ class TripStatisticsReport extends Page
 
         $order->save();
 
-        $this->cachedBaseRows = null;
+        $this->clearBaseRowsCache();
 
         Notification::make()
             ->title("Đã cập nhật {$label}: {$displayVal}")

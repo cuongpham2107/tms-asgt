@@ -7,6 +7,7 @@ use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\TripKmCalculatorService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -150,6 +151,22 @@ class Trip extends Model
         return $this->hasOne(TripKmReport::class)->where('status', 'pending')->latestOfMany();
     }
 
+    public function getSentAtAttribute(): ?Carbon
+    {
+        if (isset($this->attributes['first_sent_at']) && $this->attributes['first_sent_at']) {
+            return Carbon::parse($this->attributes['first_sent_at']);
+        }
+
+        if ($this->relationLoaded('orders') && $this->orders->isNotEmpty()) {
+            $minSent = $this->orders->whereNotNull('sent_at')->min('sent_at');
+            if ($minSent) {
+                return $minSent instanceof Carbon ? $minSent : Carbon::parse($minSent);
+            }
+        }
+
+        return $this->created_at;
+    }
+
     public function isPaused(): bool
     {
         return (bool) $this->is_paused || $this->latestPendingKmReport !== null;
@@ -189,6 +206,29 @@ class Trip extends Model
     public function isCompleted(): bool
     {
         return $this->status === TripStatus::Completed;
+    }
+
+    public function hasEndCheckpoint(): bool
+    {
+        if ($this->relationLoaded('checkpoints')) {
+            return $this->checkpoints->contains(function ($cp): bool {
+                $type = $cp->checkpoint_type;
+
+                return $type === CheckpointType::End
+                    || $type === CheckpointType::End->value
+                    || $type === 'end';
+            });
+        }
+
+        return $this->checkpoints()
+            ->where('checkpoint_type', CheckpointType::End->value)
+            ->exists();
+    }
+
+    public function hasEnded(): bool
+    {
+        return $this->hasEndCheckpoint()
+            || ($this->status === TripStatus::Completed && $this->end_km !== null);
     }
 
     /**

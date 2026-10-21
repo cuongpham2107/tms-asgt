@@ -134,14 +134,22 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->placeholder('Ví dụ: Hàng gia dụng')
                                     ->columnSpan(['default' => 1, 'sm' => fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2, 'md' => fn (Get $get): int => self::isExternalOrder($get) ? 2 : 4]),
 
-                                TextInput::make('chargeable_weight')
+                                Select::make('chargeable_weight')
                                     ->label('Tải trọng tính cước')
                                     ->suffix('tấn')
-                                    ->mask(RawJs::make('$money($input)'))
-                                    ->stripCharacters(',')
-                                    ->numeric()
                                     ->required()
-                                    ->datalist([1.25, 1.5, 2.5, 3.5, 5, 7, 8, 10, 14])
+                                    ->native(false)
+                                    ->options([
+                                        '1.25' => '1.25',
+                                        '1.5' => '1.5',
+                                        '2.5' => '2.5',
+                                        '3.5' => '3.5',
+                                        '5' => '5',
+                                        '7' => '7',
+                                        '8' => '8',
+                                        '10' => '10',
+                                        '14' => '14',
+                                    ])
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
                                     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 

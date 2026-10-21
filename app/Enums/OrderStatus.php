@@ -68,7 +68,7 @@ enum OrderStatus: string implements HasColor, HasLabel
 
     public function canDelete(): bool
     {
-        return in_array($this, [self::Draft, self::Sent]);
+        return $this === self::Draft;
     }
 
     public function isClosed(): bool
