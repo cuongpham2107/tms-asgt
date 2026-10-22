@@ -1,370 +1,72 @@
-<laravel-boost-guidelines>
-=== foundation rules ===
+# TMS-ASGT — agent guide
 
-# Laravel Boost Guidelines
+Transport management system for a Vietnamese freight operator. One repo, two apps:
 
-The Laravel Boost guidelines are specifically curated by Laravel maintainers for this application. These guidelines should be followed closely to ensure the best experience when building Laravel applications.
+| Surface | Code | URL |
+| --- | --- | --- |
+| Filament admin | `app/Filament`, `app/Models`, `app/Services` | `/app` |
+| Driver JSON API | `app/Http/Controllers/Api`, `routes/api.php` | `/api/driver` |
+| Expo driver app | `mobile/` (Expo 52, expo-router, TS) | app stores + web build at `/mobile` |
 
-## Foundational Context
+Laravel 13 + Filament 5 + PHP 8.4, Sanctum, Filament Shield, Reverb, Firebase push, SQLite.
+UI copy and domain language are Vietnamese. Terminology in `CONTEXT.md`; tables in `database/SCHEMA_REFERENCE.md`.
 
-This application is a Laravel application running on PHP 8.4. You are an expert with the Laravel ecosystem. Always use the APIs that match the installed major version of each package — do not assume a version.
-
-Before relying on a package's API, confirm its installed version:
-- PHP packages: run `composer show --direct` to list direct dependencies with versions, or `composer show <vendor/package>` for a single package.
-- JS packages: check `package.json` for the installed versions.
-
-## Skills Activation
-
-This project has domain-specific skills available in `**/skills/**`. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
-
-## Conventions
-
-- You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
-- Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
-- Check for existing components to reuse before writing a new one.
-
-## Verification Scripts
-
-- Do not create verification scripts or tinker when tests cover that functionality and prove they work. Unit and feature tests are more important.
-
-## Application Structure & Architecture
-
-- Stick to existing directory structure; don't create new base folders without approval.
-- Do not change the application's dependencies without approval.
-
-## Frontend Bundling
-
-- If the user doesn't see a frontend change reflected in the UI, it could mean they need to run `npm run build`, `npm run dev`, or `composer run dev`. Ask them.
-
-## Documentation Files
-
-- You must only create documentation files if explicitly requested by the user.
-
-## Replies
-
-- Be concise in your explanations - focus on what's important rather than explaining obvious details.
-
-=== boost rules ===
-
-# Laravel Boost
-
-## Tools
-
-- Laravel Boost is an MCP server with tools designed specifically for this application. Prefer Boost tools over manual alternatives like shell commands or file reads.
-- Use `database-query` to run read-only queries against the database instead of writing raw SQL in tinker.
-- Use `database-schema` to inspect table structure before writing migrations or models.
-- Use `get-absolute-url` to resolve the correct scheme, domain, and port for project URLs. Always use this before sharing a URL with the user.
-- Use `browser-logs` to read browser logs, errors, and exceptions. Only recent logs are useful, ignore old entries.
-
-## Searching Documentation (IMPORTANT)
-
-- Use `search-docs` before changes that depend on Laravel ecosystem APIs, behavior, configuration, or version-specific syntax. Skip it for copy-only edits and other changes where package documentation is irrelevant. Reuse sufficient results already in context instead of searching again.
-- Pass a `packages` array to scope results when you know which packages are relevant.
-- Use multiple broad, topic-based queries: `['rate limiting', 'routing rate limiting', 'routing']`. Expect the most relevant results first.
-- Do not add package names to queries because package info is already shared. Use `test resource table`, not `filament 4 test resource table`.
-
-### Search Syntax
-
-1. Use words for auto-stemmed AND logic: `rate limit` matches both "rate" AND "limit".
-2. Use `"quoted phrases"` for exact position matching: `"infinite scroll"` requires adjacent words in order.
-3. Combine words and phrases for mixed queries: `middleware "rate limit"`.
-4. Use multiple queries for OR logic: `queries=["authentication", "middleware"]`.
-
-## Project Rules
-
-- This project contains committed, area-grouped rules in `.ai/rules` when that directory exists (settled decisions, non-obvious traps, standing constraints). Framework and package guidelines that only apply to specific paths (testing, frontend, components) also live there, under `.ai/rules/boost` — this is not just recorded decisions, it is load-bearing guidance you have not seen inline. Before you enter plan mode or create/edit any file, you MUST first: open @.ai/rules/index.md (it maps file globs to rule files), read every rule file whose globs cover the path(s) in scope, and run `grep -rin 'keyword' .ai/rules` to catch what a path match alone misses. Do not write code until you have read and are following every matching rule. If `.ai/rules` does not exist, continue without it.
-- Record a rule with `record-rule` only when the user explicitly asks for one. Instructions for the work at hand are not rules, no matter how emphatic: "remove this typo", "use X here" are work to do, not rules to record. Never record a rule on your own initiative, as a byproduct of a change, or to summarize what you just did. When the user does ask, pass a `glob` (e.g. `app/Http/Controllers/**`), a short `title`, and a few-line `note`. Use `record-rule` rather than your native memory or notes tool, because native memory is personal and session-scoped, while only `.ai/rules` is shared with the team and persists in the repo.
-
-## Artisan
-
-- Run Artisan commands directly via the command line (e.g., `php artisan route:list`). Use `php artisan list` to discover available commands and `php artisan [command] --help` to check parameters.
-- Inspect routes with `php artisan route:list`. Filter with: `--method=GET`, `--name=users`, `--path=api`, `--except-vendor`, `--only-vendor`.
-- Read configuration values using dot notation: `php artisan config:show app.name`, `php artisan config:show database.default`. Or read config files directly from the `config/` directory.
-
-## Tinker
-
-- Execute PHP in app context for debugging and testing code. Do not create models without user approval, prefer tests with factories instead. Prefer existing Artisan commands over custom tinker code.
-- Always use single quotes to prevent shell expansion: `php artisan tinker --execute 'Your::code();'`
-  - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
-
-=== php rules ===
-
-# PHP
-
-- Always use curly braces for control structures, even for single-line bodies.
-- Use PHP 8 constructor property promotion: `public function __construct(public GitHub $github) { }`. Do not leave empty zero-parameter `__construct()` methods unless the constructor is private.
-- Use explicit return type declarations and type hints for all method parameters: `function isAccessible(User $user, ?string $path = null): bool`
-- Use TitleCase for Enum keys: `FavoritePerson`, `BestLake`, `Monthly`.
-- Prefer PHPDoc blocks over inline comments. Only add inline comments for exceptionally complex logic.
-- Use array shape type definitions in PHPDoc blocks.
-
-=== deployments rules ===
-
-# Deployment
-
-- Laravel can be deployed using [Laravel Cloud](https://cloud.laravel.com/), which is the fastest way to deploy and scale production Laravel applications.
-- Activate the `deploying-to-cloud` skill whenever deploying to Laravel Cloud, configuring Cloud environments or resources, using the Cloud CLI, or troubleshooting Cloud deployments.
-
-=== tests rules ===
-
-# Test Enforcement
-
-- Add or update tests for behavior and logic changes when a test provides meaningful regression coverage.
-- Pure copy, styling, and layout-only changes do not require new or updated tests.
-- When test coverage applies, run the affected tests and ensure they pass.
-- Test the changed behavior and its important failure modes, but do not add tests beyond them.
-- Read the `testing-best-practices` skill before writing tests.
-
-=== laravel/core rules ===
-
-# Do Things the Laravel Way
-
-- Use `php artisan make:` commands to create new files (i.e. migrations, controllers, models, etc.). You can list available Artisan commands using `php artisan list` and check their parameters with `php artisan [command] --help`.
-- If you're creating a generic PHP class, use `php artisan make:class`.
-- Pass `--no-interaction` to all Artisan commands to ensure they work without user input. You should also pass the correct `--options` to ensure correct behavior.
-
-### Model Creation
-
-- When creating new models, create useful factories and seeders for them too. Ask the user if they need any other things, using `php artisan make:model --help` to check the available options.
-
-## APIs & Eloquent Resources
-
-- For APIs, default to using Eloquent API Resources and API versioning unless existing API routes do not, then you should follow existing application convention.
-
-## URL Generation
-
-- When generating links to other pages, prefer named routes and the `route()` function.
-
-## Testing
-
-- When creating models for tests, use the factories for the models. Check if the factory has custom states that can be used before manually setting up the model.
-- Faker: Use methods such as `$this->faker->word()` or `fake()->randomDigit()`. Follow existing conventions whether to use `$this->faker` or `fake()`.
-- When creating tests, make use of `php artisan make:test [options] {name}` to create a feature test, and pass `--unit` to create a unit test. Most tests should be feature tests.
-
-## Vite Error
-
-- If you receive an "Illuminate\Foundation\ViteException: Unable to locate file in Vite manifest" error, you can run `npm run build` or ask the user to run `npm run dev` or `composer run dev`.
-
-=== pint/core rules ===
-
-# Laravel Pint Code Formatter
-
-- If you have modified any PHP files, you must run `vendor/bin/pint --dirty --format agent` before finalizing changes to ensure your code matches the project's expected style.
-- Do not run `vendor/bin/pint --test --format agent`, simply run `vendor/bin/pint --format agent` to fix any formatting issues.
-
-=== pest/core rules ===
-
-# Pest
-
-- This project uses Pest. Create tests with `php artisan make:test --pest {name}`.
-- Do not include the test suite directory in `{name}`. Use `SomeFeatureTest`, not `Feature/SomeFeatureTest`.
-- Read the `testing-best-practices` skill for guidance on coverage, naming, structure, dependency isolation, and review.
-- Do not delete tests or test files without approval. They are part of the application.
-
-## Running Tests
-
-- Run the narrowest set of tests that covers the change. Pass a file path or `--filter=testName` to `php artisan test --compact`.
-- Rerun a test after each change to it.
-- Run `vendor/bin/pest` to call the test runner directly. It accepts the same file path and `--filter=testName` arguments.
-- After the feature tests pass, ask the user to run the complete suite with `php artisan test --compact`.
-
-</laravel-boost-guidelines>
-
-<!-- CODEGRAPH_START -->
-
-## CodeGraph
-
-This project has a CodeGraph MCP server (`codegraph_*` tools) configured. CodeGraph is a tree-sitter-parsed knowledge graph of every symbol, edge, and file. Reads are sub-millisecond and return structural information grep cannot.
-
-### When to prefer codegraph over native search
-
-Use codegraph for **structural** questions — what calls what, what would break, where is X defined, what is X's signature. Use native grep/read only for **literal text** queries (string contents, comments, log messages) or after you already have a specific file open.
-
-| Question                                      | Tool                |
-| --------------------------------------------- | ------------------- |
-| "Where is X defined?" / "Find symbol named X" | `codegraph_search`  |
-| "What calls function Y?"                      | `codegraph_callers` |
-| "What does Y call?"                           | `codegraph_callees` |
-| "What would break if I changed Z?"            | `codegraph_impact`  |
-| "Show me Y's signature / source / docstring"  | `codegraph_node`    |
-| "Give me focused context for a task/area"     | `codegraph_context` |
-| "See several related symbols' source at once" | `codegraph_explore` |
-| "What files exist under path/"                | `codegraph_files`   |
-| "Is the index healthy?"                       | `codegraph_status`  |
-
-### Rules of thumb
-
-- **Answer directly — don't delegate exploration.** For "how does X work" / architecture / trace questions, answer with 2-3 codegraph calls: `codegraph_context` first, then ONE `codegraph_explore` for the source of the symbols it surfaces. Codegraph IS the pre-built index, so spawning a separate file-reading sub-task/agent — or running a grep + read loop — repeats work codegraph already did and costs more for the same answer.
-- **Trust codegraph results.** They come from a full AST parse. Do NOT re-verify them with grep — that's slower, less accurate, and wastes context.
-- **Don't grep first** when looking up a symbol by name. `codegraph_search` is faster and returns kind + location + signature in one call.
-- **Don't chain `codegraph_search` + `codegraph_node`** when you just want context — `codegraph_context` is one call.
-- **Don't loop `codegraph_node` over many symbols** — one `codegraph_explore` call returns several symbols' source grouped in a single capped call, while each separate node/Read call re-reads the whole context and costs far more.
-- **Index lag**: the file watcher debounces ~500ms behind writes; don't re-query immediately after editing a file in the same turn.
-
-### If `.codegraph/` doesn't exist
-
-The MCP server returns "not initialized." Ask the user: _"I notice this project doesn't have CodeGraph initialized. Want me to run `codegraph init -i` to build the index?"_
-
-<!-- CODEGRAPH_END -->
-
-<!-- FILAMENT_LEAFLET_START -->
-
-## Filament Leaflet
-
-This project uses `eduardoribeirodev/filament-leaflet` for interactive maps. A domain skill is available at `.agents/skills/filament-leaflet/SKILL.md` — activate it when working with maps and geospatial features.
-
-### Quick Reference
-
-| Component        | Namespace                                                     | Use Case                     |
-| ---------------- | ------------------------------------------------------------- | ---------------------------- |
-| `MapWidget`      | `EduardoRibeiroDev\FilamentLeaflet\Widgets\MapWidget`         | Dashboard map widget         |
-| `MapPicker`      | `EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker`          | Form field for coord picking |
-| `GeoSearchInput` | `EduardoRibeiroDev\FilamentLeaflet\Fields\GeoSearchInput`     | Geocoding search in forms    |
-| `MapColumn`      | `EduardoRibeiroDev\FilamentLeaflet\Tables\MapColumn`          | Map display in tables        |
-| `MapEntry`       | `EduardoRibeiroDev\FilamentLeaflet\Infolists\MapEntry`        | Read-only map in infolists   |
-| `Marker`         | `EduardoRibeiroDev\FilamentLeaflet\Layers\Marker`             | Map markers                  |
-| `Circle`         | `EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Circle`      | Circle shapes                |
-| `MarkerCluster`  | `EduardoRibeiroDev\FilamentLeaflet\LayerGroups\MarkerCluster` | Clustered markers            |
-
-### Key Rules
-
-- **Coordinate DTO**: Model coordinates column must cast to `EduardoRibeiroDev\FilamentLeaflet\ValueObjects\Coordinate`
-- **Static maps**: Use `->static()` to disable all interactions (dragging + zooming)
-- **CRUD integration**: Set `$markerModel` and optional `$markerResource` on MapWidget for create/edit/delete
-- **Performance**: Use `MarkerCluster::fromModel()` for datasets > 50 markers
-- **Tile layers**: Can switch between OpenStreetMap, GoogleSatellite, Mapbox, and custom URLs
-- **Publish assets**: Run `php artisan vendor:publish --tag=filament-leaflet` after install
-    <!-- FILAMENT_LEAFLET_END -->
-
-<!-- AGENT_SKILLS_START -->
-
-## OpenCode Integration — Agent Skills
-
-This project uses [agent-skills](https://github.com/addyosmani/agent-skills) for structured engineering workflows.
-
-### Core Rules
-
-- If a task matches a skill, you MUST invoke it using the `skill` tool
-- Skills are located in `.agents/skills/<skill-name>/SKILL.md` (project-specific) or `skills/<skill-name>/SKILL.md` (global)
-- Never implement directly if a skill applies
-- Always follow the skill instructions exactly
-
-### Intent → Skill Mapping
-
-| Intent                              | Skill                                                                                |
-| ----------------------------------- | ------------------------------------------------------------------------------------ |
-| Feature / new functionality         | `spec-driven-development` → `incremental-implementation` + `test-driven-development` |
-| Planning / breakdown                | `planning-and-task-breakdown`                                                        |
-| Bug / failure / unexpected behavior | `debugging-and-error-recovery`                                                       |
-| Code review                         | `code-review-and-quality`                                                            |
-| Refactoring / simplification        | `code-simplification`                                                                |
-| API or interface design             | `api-and-interface-design`                                                           |
-| UI work                             | `frontend-ui-engineering`                                                            |
-| Security                            | `security-and-hardening`                                                             |
-| Performance                         | `performance-optimization`                                                           |
-| Shipping                            | `shipping-and-launch`                                                                |
-| Documentation / ADRs                | `documentation-and-adrs`                                                             |
-| CI/CD                               | `ci-cd-and-automation`                                                               |
-
-### Lifecycle Mapping
-
-- DEFINE → `spec-driven-development`
-- PLAN → `planning-and-task-breakdown`
-- BUILD → `incremental-implementation` + `test-driven-development`
-- VERIFY → `debugging-and-error-recovery`
-- REVIEW → `code-review-and-quality`
-- SHIP → `shipping-and-launch`
-
-### Execution Model
-
-For every request:
-
-1. Determine if any skill applies (even 1% chance)
-2. Invoke the appropriate skill using the `skill` tool
-3. Follow the skill workflow strictly
-4. Only proceed to implementation after required steps (spec, plan, etc.) are complete
-
-### Anti-Rationalization
-
-The following thoughts are incorrect:
-
-- "This is too small for a skill"
-- "I can just quickly implement this"
-- "I'll gather context first"
-
-Correct behavior: always check for and use skills first.
-
-**Note**: Project-specific skills (filament-leaflet, laravel-best-practices, pest-testing, tailwindcss-development) take priority over generic agent-skills.
-
-<!-- AGENT_SKILLS_END -->
-
-<!-- REPO_SPECIFIC_START -->
-
-## Repo-specific
-
-### Architecture
-
-- **Filament v5 pattern**: Every resource follows `app/Filament/Resources/{Name}/` with `{Name}Resource.php`, `Tables/{Name}Table.php` (extends `BaseTable`), `Schemas/{Name}Form.php`, `Pages/`, and optionally `Actions/`, `Widgets/`.
-  - `BaseTable::applyDefaults()` provides default bulk/record actions — call it BEFORE adding columns.
-  - `BaseResource` auto-handles soft-delete route binding via `getRecordRouteBindingEloquentQuery()`.
-- **Non-resource Filament code**: `app/Filament/Pages/` for non-resource pages, `app/Filament/Widgets/` for dashboard widgets.
-- **Custom form components** at `app/Filament/Forms/Components/`: `VehiclePicker`, `DriverPicker`, `PillFilter`, `MapboxLocationPicker`, `CardPicker`, `OrderDateRangePicker` — check here before building new ones.
-- **Trip checkpoint system** at `app/Services/Trip/` — uses handler pattern: `TripCheckpointService` → `CheckpointFactory` + individual `*Handler` classes (marker interface `CheckpointHandlerInterface`, no enforced signature – each handler receives only the params it needs).
-- **Authorization**: Filament Shield auto-generates policies in `app/Policies/`. New resources need `php artisan shield:generate --all --ignore-config-changes` to create policies.
-- **API**: Sanctum-based, all driver endpoints behind `auth:sanctum` + `EnsureRoleVehicle` middleware (checks `driver` role). Routes in `routes/api.php`, prefix `driver/`. API docs auto-generated by `dedoc/scramble` at `/docs/api` — all routes under `api/` path are documented automatically.
-- **Observers**: `OrderObserver` logs changes to tracked fields into `OrderEditLog` on update.
-- **Mapbox** loaded via CDN in `AppPanelProvider` (also `mapbox-gl` npm package for Filament leaflet maps).
-
-### DB & Migrations
-
-- **SQLite** by default (both local and test). Production may differ — verify before writing raw SQL or platform-specific migrations.
-- **ENUM columns** (`$table->enum()`): In SQLite these become CHECK constraints. Adding new values requires a migration with `->change()`. Tests use `:memory:`, so all migrations run fresh on each test run.
-
-### Enum → query pitfall
-
-When updating via **Eloquent relations** (`$trip->orders()->update([...])`), enum values must use `->value`:
-```php
-// CORRECT on relations:
-$trip->orders()->where('status', OrderStatus::Sent->value)
-    ->update(['status' => OrderStatus::InTransit->value]);
-
-// OK on model queries (automatic cast):
-Order::where('id', $id)->update(['status' => OrderStatus::Completed]);
-```
-
-### Commands
+## Commands
 
 ```bash
-# Full dev stack (serve + queue + logs + vite)
-composer run dev
-
-# Test
-php artisan test --compact
-php artisan test --compact --filter=TestName
-
-# Format (always before finalizing changes)
-vendor/bin/pint --format agent
-
-# Migration for new filament resource
-php artisan make:filament-resource {name} --soft-deletes --view --generate --no-interaction
-# Then generate shield policies:
-php artisan shield:generate --all --ignore-config-changes
-
-# Create Pest test
+composer run dev                          # serve + queue:listen + pail + vite + reverb
+php artisan test --compact                # all tests (pass a path or --filter=Name to narrow)
+vendor/bin/pint --dirty --format agent    # required before finishing any PHP edit
+npm run build                             # Vite assets (or ask the user to run dev)
 php artisan make:test --pest SomeFeatureTest
+php artisan make:filament-resource {name} --soft-deletes --view --generate --no-interaction
+php artisan shield:generate --all --ignore-config-changes   # after adding a resource
 ```
 
-### Tests
+`bun.lock` is the tracked JS lockfile (`package-lock.json` is not committed); `bun install` or `npm install` both work.
 
-- Pest v4, `uses(RefreshDatabase::class)` per test file (not global).
-- Common pattern: `beforeEach()` sets up models via `Model::create()`, then `Sanctum::actingAs($driver)` for API calls.
-- Key test files: `TripCheckpointTest` (checkpoint flow), `OrderFullFlowTest` (end-to-end with driver swaps), `TripHistoryTest` (API history endpoint), `OrderFlowHHHKTest` (order status transitions).
+## Filament conventions
 
-### Other gotchas
+- Resource layout: `app/Filament/Resources/{Name}/` → `{Name}Resource.php` (extends `App\Filament\BaseResource`), `Tables/{Name}Table.php` (extends `App\Filament\BaseTable`), `Schemas/{Name}Form.php`, `Pages/`, optional `Actions/`, `Widgets/`.
+- `Tables` must call `parent::applyDefaults($table)` **before** adding columns — it installs bulk delete plus the "Sửa" row action.
+- Reuse `app/Filament/Forms/Components/` (`VehiclePicker`, `DriverPicker`, `PillFilter`, `MapboxLocationPicker`, `CardPicker`, `OrderDateRangePicker`) before writing new fields.
+- v5: forms are built with `Filament\Schemas\Schema`, but field classes still come from `Filament\Forms\Components\*`.
+- List pages use `#[Url]` for `activeStatusFilter` and `$this->resetPage()` when it changes (see `ListTrips`, `ListOrders`, `ListVehicles`).
+- Non-resource UI: `app/Filament/Pages/` and `app/Filament/Widgets/`.
 
-- Filament v5 form builder uses `Filament\Schemas\Schema` (not `Filament\Forms` from v3). However, field components (e.g. `TextInput`, `Select`, `DateTimePicker`) still come from `Filament\Forms\Components` — both `Schemas` and `Forms` namespaces coexist.
-- Use `#[Url]` for `activeStatusFilter` on List pages; call `$this->resetPage()` when the filter value changes (see `ListTrips`, `ListOrders`, `ListVehicles` for examples).
-- The `opencode.json` at root enables `laravel-boost` MCP server and `codegraph` MCP server.
-- `CONTEXT.md` holds domain terminology (Vietnamese). `database/SCHEMA_REFERENCE.md` documents table schemas.
+## API
 
-<!-- REPO_SPECIFIC_END -->
+- Everything under `prefix('driver')` requires `auth:sanctum` + `EnsureRoleVehicle` (`driver` role). Public: `POST /api/driver/login`, `GET /api/driver/version`, `POST /api/route`.
+- Docs are generated by Scramble at `/docs/api` (`/docs/api.json`); docblocks on controller methods feed it, so keep `@bodyParam`/`@response` current.
+- Routes geometry comes from OSRM (`app/Services/OsrmService`); admin maps use Mapbox (CDN, `AppPanelProvider`) and `eduardoribeirodev/filament-leaflet`.
+
+## Database gotchas
+
+- `$table->enum()` becomes a CHECK constraint on SQLite — adding a value needs a migration with `->change()`.
+- Relation mass-updates (`$trip->orders()->update([...])`) skip casts: pass `Enum::Case->value`. Model queries cast automatically.
+- Tests run on `:memory:` SQLite (forced in `tests/TestCase.php`), so every migration re-runs per suite.
+- Soft-deleted records still route-bind (`BaseResource` strips `SoftDeletingScope`), so View/Edit works on trashed rows.
+
+## Mobile (`mobile/`)
+
+- `cd mobile && bun install && npx expo start`. See `mobile/CLAUDE.md` for screens and the endpoint list.
+- API base URL is hard-coded in `mobile/src/lib/api.ts` (currently production `https://tms.asgl.net.vn/api/driver`).
+- `mobile/package.json` `postinstall` patches expo-router with `baseUrl = '/mobile'`; the web build breaks without it — don't remove the script.
+- Web build: `bun run build:web` → exports into `public/mobile` (gitignored) and rewrites asset URLs. Laravel serves it via `/mobile/{any?}` in `routes/web.php`.
+- Release bumps touch two places: `mobile/app.json` `version` and `MOBILE_LATEST_VERSION` in `.env` (read by `config/app.php` → `GET /api/driver/version`). Builds: `bun run build:prod:android` / `:ios` (EAS, credentials in `mobile/certs`, gitignored).
+
+## Deploy / ops
+
+- Production is nginx (`nginx-tms-asgt.conf`) + pm2 (`pm2.json`: `schedule:work`, `queue:work`, `reverb:start`) on `/var/www/tms-asgt`, domain `tms.asgl.net.vn`.
+- Scheduler (`routes/console.php`): EUP GPS sync every minute, monthly vehicle-km snapshot on the 23rd, auto-end driver shifts at 08:05 and 20:05.
+- External services to keep in mind: EUP GPS API (`EUP_API_*`), Firebase (`storage/firebase/firebase-credentials.json`), OSRM, Mapbox.
+- No CI. Verify locally: `vendor/bin/pint --dirty --format agent` then `php artisan test --compact`.
+- `opencode.json` and `.mcp.json` point CodeGraph at `/var/www/tms-asgt`, which does not exist on a local checkout — pass `projectPath` or fix the path.
+
+## Working rules
+
+- Use `php artisan make:* --no-interaction`; follow sibling files for structure and naming.
+- Don't add dependencies, docs, or base folders without being asked.
+- Project skills live in `.agents/skills/` (filament-leaflet, laravel-best-practices, testing-best-practices, tailwindcss-development, …); load the matching one before working in that domain.
+- Filament Leaflet: coordinate columns must cast to `EduardoRibeiroDev\FilamentLeaflet\ValueObjects\Coordinate`.
+- Other instruction sources: `CLAUDE.md` (Boost + issue tracker/triage conventions), `mobile/CLAUDE.md`, specs in `docs/specs/`.
