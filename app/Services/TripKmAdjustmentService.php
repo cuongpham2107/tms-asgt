@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\CheckpointType;
-use App\Enums\OrderStatus;
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
@@ -384,22 +383,16 @@ class TripKmAdjustmentService
         $trip->start_km = $first->km_reading;
 
         $hasEnd = (clone $kmCheckpoints)->where('checkpoint_type', CheckpointType::End->value)->exists();
-        $hasCompleted = (clone $kmCheckpoints)->where('checkpoint_type', CheckpointType::Completed->value)->exists();
-        $allOrdersCompleted = $trip->orders()->where('status', '!=', OrderStatus::Completed->value)->doesntExist();
 
         $shouldFinalizeEndKm = $trip->end_km !== null
             || $trip->status === TripStatus::Completed
-            || $hasEnd
-            || ($hasCompleted && $allOrdersCompleted);
+            || $hasEnd;
 
+        // Trạng thái chuyến do form sửa chuyến quyết định; ở đây chỉ đồng bộ km.
         if ($shouldFinalizeEndKm && $last !== null) {
             $trip->end_km = $last->km_reading;
 
-            if (($hasEnd || ($hasCompleted && $allOrdersCompleted)) && $trip->status !== TripStatus::Completed) {
-                $trip->status = TripStatus::Completed;
-            }
-
-            if ($trip->completed_at === null && $last->occurred_at !== null) {
+            if ($trip->status === TripStatus::Completed && $trip->completed_at === null && $last->occurred_at !== null) {
                 $trip->completed_at = $last->occurred_at;
             }
         }

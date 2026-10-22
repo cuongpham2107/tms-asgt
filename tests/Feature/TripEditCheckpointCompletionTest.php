@@ -89,7 +89,7 @@ function editTripTableForCompletion()
     ]);
 }
 
-test('checkpoint hoàn thành tự chuyển trip và order sang hoàn thành', function () {
+test('checkpoint hoàn thành chuyển order sang hoàn thành và trip sang đã giao', function () {
     TripCheckpoint::create([
         'trip_id' => $this->trip->id,
         'checkpoint_type' => CheckpointType::Completed->value,
@@ -107,9 +107,8 @@ test('checkpoint hoàn thành tự chuyển trip và order sang hoàn thành', f
 
     $trip = $this->trip->fresh();
 
-    expect($trip->status)->toBe(TripStatus::Completed)
-        ->and($trip->completed_at)->not->toBeNull()
-        ->and((float) $trip->end_km)->toBe(100120.0)
+    expect($trip->status)->toBe(TripStatus::Delivered)
+        ->and($trip->completed_at)->toBeNull()
         ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed)
         ->and($this->cancelledOrder->fresh()->status)->toBe(OrderStatus::Cancelled);
 });
@@ -157,7 +156,7 @@ test('không có checkpoint kết thúc thì không tự hoàn thành', function
         ->and($this->order->fresh()->status)->toBe(OrderStatus::InTransit);
 });
 
-test('thêm checkpoint hoàn thành trong form tự hoàn thành trip và order', function () {
+test('thêm checkpoint hoàn thành trong form hoàn thành order, trip sang đã giao', function () {
     $started = TripCheckpoint::create([
         'trip_id' => $this->trip->id,
         'checkpoint_type' => CheckpointType::Started->value,
@@ -194,10 +193,79 @@ test('thêm checkpoint hoàn thành trong form tự hoàn thành trip và order'
 
     $trip = $this->trip->fresh();
 
-    expect($trip->status)->toBe(TripStatus::Completed)
-        ->and((float) $trip->end_km)->toBe(100200.0)
+    expect($trip->status)->toBe(TripStatus::Delivered)
+        ->and($trip->completed_at)->toBeNull()
         ->and($trip->checkpoints()->where('checkpoint_type', CheckpointType::Completed->value)->exists())->toBeTrue()
         ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed);
 
     expect($started->fresh())->not->toBeNull();
+});
+
+test('chuyến nhiều đơn: giao xong một đơn không đóng chuyến và đơn còn lại', function () {
+    $otherOrder = Order::create([
+        'order_code' => 'ORD-COMPLETE-02',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->admin->id,
+        'trip_id' => $this->trip->id,
+        'status' => OrderStatus::InTransit,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'checkpoint_type' => CheckpointType::Completed->value,
+        'order_id' => $this->order->id,
+        'driver_id' => $this->driver->id,
+        'km_reading' => 100120,
+        'occurred_at' => now()->subMinutes(10),
+    ]);
+
+    editTripTableForCompletion()
+        ->mountTableAction('edit', $this->trip)
+        ->fillForm(['driver_id' => $this->driver->id])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    $trip = $this->trip->fresh();
+
+    expect($trip->status)->toBe(TripStatus::Delivering)
+        ->and($trip->completed_at)->toBeNull()
+        ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed)
+        ->and($otherOrder->fresh()->status)->toBe(OrderStatus::InTransit);
+});
+
+test('chuyến nhiều đơn: mốc kết thúc xe ở cuối đóng chuyến và mọi đơn chưa huỷ', function () {
+    $otherOrder = Order::create([
+        'order_code' => 'ORD-COMPLETE-02',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->admin->id,
+        'trip_id' => $this->trip->id,
+        'status' => OrderStatus::InTransit,
+    ]);
+
+    foreach ([[CheckpointType::Completed, 100120, 10], [CheckpointType::End, 100150, 5]] as [$type, $km, $minutesAgo]) {
+        TripCheckpoint::create([
+            'trip_id' => $this->trip->id,
+            'checkpoint_type' => $type->value,
+            'order_id' => $this->order->id,
+            'driver_id' => $this->driver->id,
+            'km_reading' => $km,
+            'occurred_at' => now()->subMinutes($minutesAgo),
+        ]);
+    }
+
+    editTripTableForCompletion()
+        ->mountTableAction('edit', $this->trip)
+        ->fillForm(['driver_id' => $this->driver->id])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    $trip = $this->trip->fresh();
+
+    expect($trip->status)->toBe(TripStatus::Completed)
+        ->and((float) $trip->end_km)->toBe(100150.0)
+        ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed)
+        ->and($otherOrder->fresh()->status)->toBe(OrderStatus::Completed)
+        ->and($this->cancelledOrder->fresh()->status)->toBe(OrderStatus::Cancelled);
 });

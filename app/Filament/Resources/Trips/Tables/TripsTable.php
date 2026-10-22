@@ -20,9 +20,11 @@ use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\DriverShift;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Services\Notification\DriverNotificationService;
 use App\Services\OsrmService;
+use App\Services\Trip\Handlers\CompletedHandler;
 use App\Services\Trip\TripCheckpointOsmValidationService;
 use App\Services\TripKmAdjustmentService;
 use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
@@ -347,37 +349,31 @@ class TripsTable extends BaseTable
                         ->using(function (Model $record, array $data): Model {
                             $record->loadMissing(['vehicle', 'orders']);
 
-                            // Field trạng thái đã bị khoá. Chuyến được coi là kết thúc khi:
-                            // - admin đặt completed_at, hoặc
-                            // - chuyến có mốc kết thúc xe / hoàn thành giao hàng.
-                            if (filled($data['completed_at'] ?? null)) {
-                                $data['status'] = TripStatus::Completed;
-                            }
-
-                            $finalCheckpoint = $record->checkpoints()
+                            // Field trạng thái đã bị khoá. Chuyến chỉ kết thúc khi admin đặt completed_at
+                            // hoặc mốc cuối cùng là "Kết thúc xe". Mốc "Hoàn thành" là theo từng đơn.
+                            $lastCheckpoint = $record->checkpoints()
                                 ->reorder()
-                                ->whereIn('checkpoint_type', [
-                                    CheckpointType::End->value,
-                                    CheckpointType::Completed->value,
-                                ])
                                 ->orderByDesc('occurred_at')
                                 ->orderByDesc('id')
                                 ->first();
 
-                            if ($finalCheckpoint !== null) {
-                                $data['status'] = TripStatus::Completed;
-
+                            if ($lastCheckpoint?->checkpoint_type === CheckpointType::End) {
                                 if (blank($data['completed_at'] ?? null)) {
-                                    $data['completed_at'] = $finalCheckpoint->occurred_at;
+                                    $data['completed_at'] = $lastCheckpoint->occurred_at;
                                 }
 
-                                if (blank($data['end_km'] ?? null) && $finalCheckpoint->km_reading !== null) {
-                                    $data['end_km'] = $finalCheckpoint->km_reading;
+                                if ($lastCheckpoint->km_reading !== null) {
+                                    $data['end_km'] = $lastCheckpoint->km_reading;
                                 }
                             }
 
-                            $newStatus = $data['status'] ?? $record->status;
-                            $newStatusValue = $newStatus instanceof TripStatus ? $newStatus->value : $newStatus;
+                            $isEnding = filled($data['completed_at'] ?? null);
+
+                            if ($isEnding) {
+                                $data['status'] = TripStatus::Completed;
+                            } elseif (self::applyCompletedCheckpoints($record)) {
+                                $data['status'] = TripStatus::Delivered;
+                            }
 
                             $oldDriverId = $record->driver_id;
                             $newDriverId = $data['driver_id'] ?? null;
@@ -409,9 +405,9 @@ class TripsTable extends BaseTable
                             $record->update($data);
 
                             // Chuyến hoàn thành -> toàn bộ đơn chưa huỷ cũng hoàn thành.
-                            if ($newStatusValue === TripStatus::Completed->value) {
+                            if ($isEnding) {
                                 $record->orders()
-                                    ->where('status', '!=', OrderStatus::Cancelled->value)
+                                    ->whereNotIn('status', [OrderStatus::Cancelled->value, OrderStatus::Completed->value])
                                     ->get()
                                     ->each(fn ($order) => $order->update(['status' => OrderStatus::Completed]));
                             }
@@ -473,6 +469,35 @@ class TripsTable extends BaseTable
                     ->size('xs'),
 
             ], position: RecordActionsPosition::BeforeColumns);
+    }
+
+    /**
+     * Áp các mốc "Hoàn thành" do điều hành nhập giống như khi lái xe gửi từ app
+     * (điểm giao, đơn, loaded_km, trạng thái xe).
+     *
+     * @return bool true khi mọi đơn chưa huỷ của chuyến đã hoàn thành
+     */
+    private static function applyCompletedCheckpoints(Trip $record): bool
+    {
+        if (in_array($record->status, [TripStatus::Completed, TripStatus::Cancelled, TripStatus::DriverSwap], true)) {
+            return false;
+        }
+
+        $handler = app(CompletedHandler::class);
+
+        $record->checkpoints()
+            ->where('checkpoint_type', CheckpointType::Completed->value)
+            ->get()
+            ->each(fn (TripCheckpoint $checkpoint) => $handler->handle(
+                $record,
+                ['occurred_at' => $checkpoint->occurred_at->toDateTimeString()],
+                collect([$checkpoint]),
+            ));
+
+        $activeOrders = $record->orders()->where('status', '!=', OrderStatus::Cancelled->value);
+
+        return $activeOrders->exists()
+            && (clone $activeOrders)->where('status', '!=', OrderStatus::Completed->value)->doesntExist();
     }
 
     private static function renderBsx(Trip $record): string

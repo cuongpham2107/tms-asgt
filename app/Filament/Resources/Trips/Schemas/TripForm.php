@@ -219,7 +219,7 @@ class TripForm
 
                                 $endTime = $record->checkpoints()
                                     ->whereNotNull('occurred_at')
-                                    ->whereIn('checkpoint_type', [CheckpointType::Completed->value, CheckpointType::End->value])
+                                    ->where('checkpoint_type', CheckpointType::End->value)
                                     ->latest('occurred_at')
                                     ->value('occurred_at');
 
@@ -255,7 +255,7 @@ class TripForm
                                     ->live()
                                     ->afterStateUpdated(function ($state, $set, $get) {
                                         $type = $state instanceof CheckpointType ? $state : (is_string($state) ? CheckpointType::tryFrom($state) : null);
-                                        if ($type === CheckpointType::Completed || $type === CheckpointType::End) {
+                                        if ($type === CheckpointType::End) {
                                             $set('../../status', TripStatus::Completed);
 
                                             $occurredAt = $get('occurred_at');
@@ -299,7 +299,7 @@ class TripForm
                                     ->afterStateUpdated(function ($state, $set, $get) {
                                         $raw = $get('checkpoint_type');
                                         $type = $raw instanceof CheckpointType ? $raw : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
-                                        if (($type === CheckpointType::Completed || $type === CheckpointType::End) && filled($state)) {
+                                        if (($type === CheckpointType::End) && filled($state)) {
                                             $set('../../completed_at', $state);
                                             $set('../../status', TripStatus::Completed);
                                         } elseif ($type === CheckpointType::Started && filled($state)) {
@@ -374,7 +374,7 @@ class TripForm
                                     ->live()
                                     ->afterStateUpdated(function ($state, $set, $get) {
                                         $type = $state instanceof CheckpointType ? $state : (is_string($state) ? CheckpointType::tryFrom($state) : null);
-                                        if ($type === CheckpointType::Completed || $type === CheckpointType::End) {
+                                        if ($type === CheckpointType::End) {
                                             $set('../../status', TripStatus::Completed);
 
                                             $km = $get('km_reading');
@@ -468,7 +468,7 @@ class TripForm
                                     ->afterStateUpdated(function ($state, $set, $get) {
                                         $raw = $get('checkpoint_type');
                                         $type = $raw instanceof CheckpointType ? $raw : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
-                                        if (($type === CheckpointType::Completed || $type === CheckpointType::End) && filled($state)) {
+                                        if (($type === CheckpointType::End) && filled($state)) {
                                             $set('../../completed_at', $state);
                                             $set('../../status', TripStatus::Completed);
                                         } elseif ($type === CheckpointType::Started && filled($state)) {
