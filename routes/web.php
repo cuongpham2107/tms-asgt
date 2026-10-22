@@ -1,9 +1,19 @@
 <?php
 
 use App\Http\Controllers\MapboxController;
+use App\Http\Controllers\PublicTripTrackingController;
 use App\Http\Controllers\TripPhotoDownloadController;
 use App\Services\EupGpsService;
 use Illuminate\Support\Facades\Route;
+
+// Trang theo dõi lộ trình công khai cho khách hàng (URL có chữ ký + hạn dùng)
+Route::middleware(['signed', 'throttle:120,1'])->prefix('theo-doi/{trip}')->group(function () {
+    Route::get('/', [PublicTripTrackingController::class, 'show'])
+        ->name('trips.public-tracking');
+
+    Route::get('/vi-tri', [PublicTripTrackingController::class, 'position'])
+        ->name('trips.public-tracking.position');
+});
 
 // Tải tất cả ảnh của chuyến đi dạng file zip
 Route::middleware(['web', 'auth'])->group(function () {

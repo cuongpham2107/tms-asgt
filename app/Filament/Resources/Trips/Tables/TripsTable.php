@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Trips\Tables;
 
+use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -9,6 +10,7 @@ use App\Enums\VehicleOwnerType;
 use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Trips\Actions\CancelTripAction;
+use App\Filament\Resources\Trips\Actions\CopyTrackingLinkAction;
 use App\Filament\Resources\Trips\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
@@ -326,6 +328,8 @@ class TripsTable extends BaseTable
 
                     ViewTripPhotosAction::make(),
 
+                    CopyTrackingLinkAction::make(),
+
                     EditAction::make()
                         ->stickyModalFooter()
                         ->modal()
@@ -343,17 +347,37 @@ class TripsTable extends BaseTable
                         ->using(function (Model $record, array $data): Model {
                             $record->loadMissing(['vehicle', 'orders']);
 
-                            if ($record->vehicle?->type === VehicleOwnerType::Rent && filled($data['completed_at'] ?? null)) {
+                            // Field trạng thái đã bị khoá. Chuyến được coi là kết thúc khi:
+                            // - admin đặt completed_at, hoặc
+                            // - chuyến có mốc kết thúc xe / hoàn thành giao hàng.
+                            if (filled($data['completed_at'] ?? null)) {
                                 $data['status'] = TripStatus::Completed;
                             }
 
-                            $newStatus = $data['status'] ?? $record->status;
+                            $finalCheckpoint = $record->checkpoints()
+                                ->reorder()
+                                ->whereIn('checkpoint_type', [
+                                    CheckpointType::End->value,
+                                    CheckpointType::Completed->value,
+                                ])
+                                ->orderByDesc('occurred_at')
+                                ->orderByDesc('id')
+                                ->first();
 
-                            if ($newStatus === TripStatus::Completed && $record->vehicle?->type === VehicleOwnerType::Rent) {
-                                $record->orders->each(function ($order) {
-                                    $order->update(['status' => OrderStatus::Completed]);
-                                });
+                            if ($finalCheckpoint !== null) {
+                                $data['status'] = TripStatus::Completed;
+
+                                if (blank($data['completed_at'] ?? null)) {
+                                    $data['completed_at'] = $finalCheckpoint->occurred_at;
+                                }
+
+                                if (blank($data['end_km'] ?? null) && $finalCheckpoint->km_reading !== null) {
+                                    $data['end_km'] = $finalCheckpoint->km_reading;
+                                }
                             }
+
+                            $newStatus = $data['status'] ?? $record->status;
+                            $newStatusValue = $newStatus instanceof TripStatus ? $newStatus->value : $newStatus;
 
                             $oldDriverId = $record->driver_id;
                             $newDriverId = $data['driver_id'] ?? null;
@@ -383,6 +407,14 @@ class TripsTable extends BaseTable
                             }
 
                             $record->update($data);
+
+                            // Chuyến hoàn thành -> toàn bộ đơn chưa huỷ cũng hoàn thành.
+                            if ($newStatusValue === TripStatus::Completed->value) {
+                                $record->orders()
+                                    ->where('status', '!=', OrderStatus::Cancelled->value)
+                                    ->get()
+                                    ->each(fn ($order) => $order->update(['status' => OrderStatus::Completed]));
+                            }
 
                             if ($newDriverId && (int) $oldDriverId !== (int) $newDriverId) {
                                 $oldDriver = $oldDriverId ? User::find($oldDriverId) : null;

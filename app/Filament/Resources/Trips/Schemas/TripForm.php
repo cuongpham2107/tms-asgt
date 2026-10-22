@@ -44,6 +44,7 @@ class TripForm
                             ->label('Trạng thái')
                             ->prefixIcon(Heroicon::OutlinedSignal)
                             ->options(TripStatus::class)
+                            ->disabled()
                             ->columnSpan(['default' => 1, 'sm' => 3]),
                         Select::make('vehicle_id')
                             ->label('Phương tiện')

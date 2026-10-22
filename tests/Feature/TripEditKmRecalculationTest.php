@@ -196,15 +196,16 @@ test('checkpoints at the same minute may carry different km', function () {
         ->assertHasNoTableActionErrors();
 });
 
-test('editing only the status to completed recalculates end km from the latest checkpoint', function () {
+test('editing completed_at completes the trip and recalculates end km from the latest checkpoint', function () {
     $this->oldTrip->updateQuietly(['end_km' => null, 'total_km' => null]);
 
     editTripTable()->mountTableAction('edit', $this->oldTrip)
-        ->fillForm(['status' => TripStatus::Completed])
+        ->fillForm(['completed_at' => now()->subMinutes(30)])
         ->callMountedTableAction()
         ->assertHasNoTableActionErrors();
 
     $trip = $this->oldTrip->fresh();
-    expect((float) $trip->end_km)->toBe(100120.0)
+    expect($trip->status)->toBe(TripStatus::Completed)
+        ->and((float) $trip->end_km)->toBe(100120.0)
         ->and((float) $trip->total_km)->toBe(120.0);
 });

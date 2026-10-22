@@ -1449,41 +1449,24 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function resolveVehicleLocationGroup(Vehicle $vehicle): string
     {
-        // 1. Chỉ tìm chuyến ĐANG CHẠY / CHƯA KẾT THÚC (Started, Delivering, ArrivedDelivery, Pending, v.v.)
-        // Tuyệt đối không lấy chuyến đã Hoàn thành (Completed), Đã huỷ (Cancelled) hoặc Đã kết thúc (hasEnded)
-        // vì xe đã xong chuyến, không còn di chuyển đến điểm đó nữa.
-        $activeTrip = null;
-        if ($vehicle->relationLoaded('trips')) {
-            $activeTrip = $vehicle->trips
-                ->filter(function (Trip $t): bool {
-                    if ($t->status === TripStatus::Cancelled || $t->status === TripStatus::Completed) {
-                        return false;
-                    }
+        // Dùng đúng chuyến đang hiển thị trên dòng (active_trip) để nhóm và dòng
+        // luôn nhất quán. Chuyến đã kết thúc/đã huỷ thì không dùng điểm đến nữa.
+        $activeTrip = $vehicle->active_trip;
 
-                    if ($t->hasEnded()) {
-                        return false;
-                    }
-
-                    return in_array($t->status, TripStatus::activeStatuses(), true) || $t->isPaused();
-                })
-                ->sortByDesc('id')
-                ->first();
-        } else {
-            $trip = $vehicle->active_trip;
-            if ($trip && $trip->status !== TripStatus::Completed && $trip->status !== TripStatus::Cancelled && ! $trip->hasEnded()) {
-                $activeTrip = $trip;
-            }
-        }
-
-        // Ưu tiên 1: Nếu xe ĐANG CÓ CHUYẾN CHẠY -> Gom nhóm theo điểm đến của chuyến đó (NB, BN, TN, Province)
-        if ($activeTrip !== null) {
+        // Ưu tiên 1: điểm đến của các đơn trong chuyến đang chạy.
+        if (
+            $activeTrip !== null
+            && $activeTrip->status !== TripStatus::Cancelled
+            && $activeTrip->status !== TripStatus::Completed
+            && ! $activeTrip->hasEnded()
+        ) {
             $destStation = self::resolveStationFromTripDestination($activeTrip);
             if ($destStation !== null) {
                 return $destStation;
             }
         }
 
-        // Ưu tiên 2: Nếu xe KHÔNG CÓ CHUYẾN (xe chờ, chuyến đã xong, xe dừng...) -> vị trí GPS ở đâu thì ở địa điểm đó
+        // Ưu tiên 2: chuyến/đơn không có điểm đến -> dùng vị trí GPS hiện tại.
         $gpsStation = self::resolveStationFromGps($vehicle);
         if ($gpsStation !== null) {
             return $gpsStation;
@@ -1512,19 +1495,22 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function resolveStationFromTripDestination(Trip $trip): ?string
     {
-        // 1. Kiểm tra các điểm giao hàng (delivery points) của các đơn hàng trong chuyến theo thứ tự ngược lại (điểm cuối trước)
-        $deliveryPoints = $trip->orders
-            ->flatMap(fn (Order $o) => $o->deliveryPoints)
-            ->filter();
+        // 1. Điểm giao của các đơn, xét theo thứ tự chuyến: đơn cuối cùng trước,
+        // trong mỗi đơn lấy điểm giao cuối (sequence lớn nhất).
+        $orders = $trip->orders
+            ->sortBy(fn (Order $order): int => $order->planned_loading_at?->getTimestamp() ?? PHP_INT_MAX)
+            ->values();
 
-        foreach ($deliveryPoints->sortByDesc('sequence') as $dp) {
-            $station = self::mapLocationOrAddressToStation($dp->location, $dp->address);
-            if ($station !== null) {
-                return $station;
+        foreach ($orders->reverse() as $order) {
+            foreach ($order->deliveryPoints->sortByDesc('sequence') as $dp) {
+                $station = self::mapLocationOrAddressToStation($dp->location, $dp->address);
+                if ($station !== null) {
+                    return $station;
+                }
             }
         }
 
-        // 2. Kiểm tra endLocation của chuyến
+        // 2. Không có điểm giao nào map được -> dùng điểm kết thúc của chuyến.
         if ($trip->endLocation) {
             $station = self::mapLocationOrAddressToStation($trip->endLocation, $trip->endLocation->address);
             if ($station !== null) {
@@ -1532,6 +1518,7 @@ class VehicleDispatchBoard extends Page implements HasTable
             }
         }
 
+        // 3. Không có điểm đến -> trả null để nơi gọi fallback sang GPS.
         return null;
     }
 
