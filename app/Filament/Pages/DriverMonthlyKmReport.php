@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Enums\OnDutyLocation;
 use App\Services\DriverMonthlyKmReportService;
 use BackedEnum;
 use Carbon\Carbon;
@@ -173,6 +174,27 @@ class DriverMonthlyKmReport extends Page
     }
 
     /**
+     * Tài xế nhóm theo điểm trực (thứ tự như OnDutyLocation), tài xế chưa gán điểm trực xếp cuối.
+     *
+     * @return Collection<int, array{code: string, title: string, rows: Collection<int, array<string, mixed>>}>
+     */
+    #[Computed]
+    public function driverGroups(): Collection
+    {
+        $order = array_flip(array_map(fn (OnDutyLocation $station): string => $station->value, OnDutyLocation::cases()));
+
+        return $this->driverRows()
+            ->groupBy(fn (array $row): string => $row['station']?->value ?? 'none')
+            ->sortBy(fn (Collection $rows, string $code): int => $order[$code] ?? PHP_INT_MAX)
+            ->map(fn (Collection $rows, string $code): array => [
+                'code' => $code,
+                'title' => $rows->first()['station']?->getLabel() ?? 'Chưa gán',
+                'rows' => $rows->values(),
+            ])
+            ->values();
+    }
+
+    /**
      * @return array{drivers: int, active_drivers: int, trips: int, km_total: float, km_loaded: float, km_empty: float}
      */
     #[Computed]
@@ -233,6 +255,6 @@ class DriverMonthlyKmReport extends Page
     {
         $this->period = $period;
         $this->date = $anchor->toDateString();
-        unset($this->tripLines, $this->allDriverRows, $this->driverRows, $this->totals, $this->selectedTrips);
+        unset($this->tripLines, $this->allDriverRows, $this->driverRows, $this->driverGroups, $this->totals, $this->selectedTrips);
     }
 }
