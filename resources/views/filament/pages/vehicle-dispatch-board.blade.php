@@ -403,7 +403,7 @@
                                     </button>
                                 </td>
 
-                                {{-- 13. KM over (>=3000 tô đỏ, >=2800 tô vàng, còn lại tô nền theo tỉ lệ / 3.000 km) --}}
+                                {{-- 13. KM over (>=3000 tô đỏ, >=2700 tô vàng, còn lại tô nền theo tỉ lệ / 3.000 km) --}}
                                 <td 
                                     class="border-r border-gray-100 dark:border-white/5 px-1.5 py-1.5 text-center whitespace-nowrap font-mono text-[11px] {{ $kmOverData['cellClass'] }}"
                                     title="{{ $kmOverData['tooltip'] }}"

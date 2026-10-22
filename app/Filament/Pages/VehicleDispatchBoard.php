@@ -1382,13 +1382,13 @@ class VehicleDispatchBoard extends Page implements HasTable
             ];
         }
 
-        if ($delta >= 2800) {
+        if ($delta >= 2700) {
             return [
                 'text' => $formattedDelta,
                 'delta' => $delta,
                 'status' => 'warning',
                 'cellClass' => 'km-over-cell bg-amber-400 text-slate-900 font-bold select-none',
-                'tooltip' => '⚡ SẮP ĐẾN HẠN MỨC (≥ 2.800 km) — '.$tooltipDetails,
+                'tooltip' => '⚡ SẮP ĐẾN HẠN MỨC (≥ 2.700 km) — '.$tooltipDetails,
                 'fillPercent' => $fillPercent,
             ];
         }

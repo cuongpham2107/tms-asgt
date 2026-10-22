@@ -982,7 +982,7 @@ test('vehicle dispatch board calculates km over and highlights background based 
         ->and($dataNone['status'])->toBe('none')
         ->and($dataNone['cellClass'])->toContain('text-gray-400');
 
-    // 2. Xe chạy bình thường (delta = 1500 < 2800)
+    // 2. Xe chạy bình thường (delta = 1500 < 2700)
     $vehicleNormal = Vehicle::factory()->create([
         'plate_number' => '29C-KM-NORMAL',
         'type' => VehicleOwnerType::Company,
@@ -999,18 +999,18 @@ test('vehicle dispatch board calculates km over and highlights background based 
         ->and($dataNormal['cellClass'])->not->toContain('bg-amber-400')
         ->and($dataNormal['cellClass'])->not->toContain('bg-rose-500');
 
-    // 3. Xe sắp đến hạn mức (delta = 2850: >= 2800 và < 3000) -> Tô vàng
+    // 3. Xe sắp đến hạn mức (delta = 2700: đúng ngưỡng >= 2700 và < 3000) -> Tô vàng
     $vehicleWarning = Vehicle::factory()->create([
         'plate_number' => '29C-KM-WARN',
         'type' => VehicleOwnerType::Company,
-        'current_mileage' => 12850,
+        'current_mileage' => 12700,
         'monthly_start_km' => 10000,
         'status' => VehicleStatus::On,
         'is_active' => true,
     ]);
 
     $dataWarn = VehicleDispatchBoard::getKmOverData($vehicleWarning);
-    expect($dataWarn['text'])->toBe('2.850')
+    expect($dataWarn['text'])->toBe('2.700')
         ->and($dataWarn['status'])->toBe('warning')
         ->and($dataWarn['cellClass'])->toContain('bg-amber-400')
         ->and($dataWarn['cellClass'])->toContain('text-slate-900')
@@ -1037,7 +1037,7 @@ test('vehicle dispatch board calculates km over and highlights background based 
     Livewire::test(VehicleDispatchBoard::class)
         ->assertStatus(200)
         ->assertSee('29C-KM-WARN')
-        ->assertSee('2.850')
+        ->assertSee('2.700')
         ->assertSee('bg-amber-400')
         ->assertSee('29C-KM-DANGER')
         ->assertSee('3.120')
