@@ -229,7 +229,7 @@ test('page resolves today, week and month periods from the anchor date', functio
     'month' => ['month', '2026-10-01 00:00:00', '2026-10-31 23:59:59'],
 ]);
 
-test('page lists drivers and opens the trips of a driver', function () {
+test('page lists drivers and shows the trips of the selected driver', function () {
     $this->actingAs($this->driverA);
     $trip = monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 123, 100);
     monthlyTrip($this, $this->driverB, '2026-10-03 08:00', 10, 0);
@@ -240,6 +240,6 @@ test('page lists drivers and opens the trips of a driver', function () {
         ->assertSee('Tài xế A')
         ->assertSee('Tài xế Nghỉ')
         ->assertDontSee($trip->trip_code)
-        ->mountTableAction('trips', (string) $this->driverA->id)
-        ->assertMountedActionModalSee([$trip->trip_code, '123.0', '1 chuyến']);
+        ->call('selectDriver', $this->driverA->id)
+        ->assertSee([$trip->trip_code, '123.0', '1 chuyến']);
 });

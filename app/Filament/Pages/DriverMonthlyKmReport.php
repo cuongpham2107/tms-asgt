@@ -7,30 +7,15 @@ use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
-use Filament\Infolists\Components\RepeatableEntry;
-use Filament\Infolists\Components\RepeatableEntry\TableColumn;
-use Filament\Infolists\Components\TextEntry;
 use Filament\Pages\Page;
-use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Schema;
-use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Table;
-use Filament\Widgets\StatsOverviewWidget\Stat;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
 use UnitEnum;
 
-class DriverMonthlyKmReport extends Page implements HasTable
+class DriverMonthlyKmReport extends Page
 {
-    use InteractsWithTable;
-
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-truck';
@@ -40,6 +25,8 @@ class DriverMonthlyKmReport extends Page implements HasTable
     protected static ?string $title = 'Tổng hợp chuyến & km tài xế';
 
     protected static ?int $navigationSort = 5;
+
+    protected string $view = 'filament.pages.driver-monthly-km-report';
 
     /** @var array<string, string> */
     public const PERIODS = [
@@ -53,6 +40,12 @@ class DriverMonthlyKmReport extends Page implements HasTable
 
     #[Url]
     public string $date = '';
+
+    #[Url]
+    public ?int $driverId = null;
+
+    #[Url]
+    public string $search = '';
 
     public function mount(): void
     {
@@ -114,127 +107,6 @@ class DriverMonthlyKmReport extends Page implements HasTable
         ];
     }
 
-    public function content(Schema $schema): Schema
-    {
-        $totals = $this->totals();
-
-        return $schema->components([
-            Section::make()
-                ->schema([
-                    Stat::make('Tài xế có chạy', $totals['active_drivers'])
-                        ->description('trên '.$totals['drivers'].' tài xế')
-                        ->descriptionIcon(Heroicon::OutlinedUsers)
-                        ->color('primary'),
-                    Stat::make('Tổng chuyến', number_format($totals['trips']))
-                        ->description('chuyến đã chốt trong kỳ')
-                        ->descriptionIcon(Heroicon::OutlinedTruck)
-                        ->color('gray'),
-                    Stat::make('Km có hàng', number_format($totals['km_loaded'], 1))
-                        ->description(self::loadedPercent($totals['km_loaded'], $totals['km_total']).'% tổng km')
-                        ->descriptionIcon(Heroicon::OutlinedCube)
-                        ->color('success'),
-                    Stat::make('Km không hàng', number_format($totals['km_empty'], 1))
-                        ->description('tổng '.number_format($totals['km_total'], 1).' km')
-                        ->descriptionIcon(Heroicon::OutlinedArrowUturnLeft)
-                        ->color('warning'),
-                ])
-                ->columns(['md' => 2, 'xl' => 4])
-                ->contained(false)
-                ->gridContainer(),
-            EmbeddedTable::make(),
-        ]);
-    }
-
-    public function table(Table $table): Table
-    {
-        return $table
-            ->records(fn (?string $search, ?string $sortColumn, ?string $sortDirection, int $page, int $recordsPerPage): LengthAwarePaginator => $this->paginateRows($search, $sortColumn, $sortDirection, $page, $recordsPerPage))
-            ->heading('Theo tài xế')
-            ->description('Bấm vào một tài xế để xem danh sách chuyến.')
-            ->columns([
-                TextColumn::make('index')
-                    ->label('STT')
-                    ->rowIndex(),
-                TextColumn::make('driver_name')
-                    ->label('Tài xế')
-                    ->description(fn (array $record): ?string => $record['employee_code'])
-                    ->weight(FontWeight::SemiBold)
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('station')
-                    ->label('Điểm trực')
-                    ->badge()
-                    ->placeholder('—'),
-                TextColumn::make('trip_count')
-                    ->label('Số chuyến')
-                    ->numeric()
-                    ->alignEnd()
-                    ->sortable(),
-                TextColumn::make('km_loaded')
-                    ->label('Km có hàng')
-                    ->numeric(1)
-                    ->color('success')
-                    ->alignEnd()
-                    ->sortable(),
-                TextColumn::make('km_empty')
-                    ->label('Km không hàng')
-                    ->numeric(1)
-                    ->color('warning')
-                    ->alignEnd()
-                    ->sortable(),
-                TextColumn::make('km_total')
-                    ->label('Tổng km')
-                    ->numeric(1)
-                    ->weight(FontWeight::Bold)
-                    ->alignEnd()
-                    ->sortable(),
-                TextColumn::make('loaded_percent')
-                    ->label('% có hàng')
-                    ->suffix('%')
-                    ->badge()
-                    ->color('gray')
-                    ->alignEnd()
-                    ->sortable(),
-            ])
-            ->recordActions([
-                Action::make('trips')
-                    ->label('Chuyến')
-                    ->icon(Heroicon::OutlinedListBullet)
-                    ->color('gray')
-                    ->slideOver()
-                    ->modalHeading(fn (array $record): string => $record['driver_name'])
-                    ->modalDescription(fn (array $record): string => $record['trip_count'].' chuyến · '.number_format($record['km_total'], 1).' km · '.$this->periodLabel())
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Đóng')
-                    ->schema(fn (array $record): array => [
-                        RepeatableEntry::make('trips')
-                            ->hiddenLabel()
-                            ->state($this->tripLines()->where('driver_id', $record['driver_id'])->values()->all())
-                            ->placeholder('Chưa có chuyến nào được chốt trong kỳ.')
-                            ->table([
-                                TableColumn::make('Ngày'),
-                                TableColumn::make('Mã chuyến'),
-                                TableColumn::make('Xe'),
-                                TableColumn::make('Có hàng'),
-                                TableColumn::make('Không hàng'),
-                                TableColumn::make('Tổng'),
-                            ])
-                            ->schema([
-                                TextEntry::make('started_at')->dateTime('d/m H:i'),
-                                TextEntry::make('trip_code')->weight(FontWeight::Medium),
-                                TextEntry::make('plate')->placeholder('—'),
-                                TextEntry::make('km_loaded')->numeric(1)->color('success'),
-                                TextEntry::make('km_empty')->numeric(1)->color('warning'),
-                                TextEntry::make('km_total')->numeric(1)->weight(FontWeight::Bold),
-                            ]),
-                    ]),
-            ])
-            ->recordAction('trips')
-            ->defaultSort('km_total', 'desc')
-            ->paginated([25, 50, 100])
-            ->defaultPaginationPageOption(50);
-    }
-
     public function anchorDate(): Carbon
     {
         return Carbon::createFromFormat('Y-m-d', $this->date)->startOfDay();
@@ -278,29 +150,60 @@ class DriverMonthlyKmReport extends Page implements HasTable
      * @return Collection<int, array<string, mixed>>
      */
     #[Computed]
+    public function allDriverRows(): Collection
+    {
+        return app(DriverMonthlyKmReportService::class)->summarize($this->tripLines());
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    #[Computed]
     public function driverRows(): Collection
     {
-        return app(DriverMonthlyKmReportService::class)
-            ->summarize($this->tripLines())
-            ->map(fn (array $row): array => [...$row, 'loaded_percent' => self::loadedPercent($row['km_loaded'], $row['km_total'])])
-            ->keyBy('driver_id');
+        $needle = mb_strtolower(trim($this->search));
+
+        if ($needle === '') {
+            return $this->allDriverRows();
+        }
+
+        return $this->allDriverRows()
+            ->filter(fn (array $row): bool => str_contains(mb_strtolower($row['driver_name'].' '.$row['employee_code']), $needle))
+            ->values();
     }
 
     /**
      * @return array{drivers: int, active_drivers: int, trips: int, km_total: float, km_loaded: float, km_empty: float}
      */
+    #[Computed]
     public function totals(): array
     {
         $lines = $this->tripLines();
 
         return [
-            'drivers' => $this->driverRows()->count(),
-            'active_drivers' => $this->driverRows()->where('trip_count', '>', 0)->count(),
+            'drivers' => $this->allDriverRows()->count(),
+            'active_drivers' => $this->allDriverRows()->where('trip_count', '>', 0)->count(),
             'trips' => $lines->pluck('trip_id')->unique()->count(),
             'km_total' => round($lines->sum('km_total'), 1),
             'km_loaded' => round($lines->sum('km_loaded'), 1),
             'km_empty' => round($lines->sum('km_empty'), 1),
         ];
+    }
+
+    /**
+     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, km_total: float, km_loaded: float, km_empty: float}>
+     */
+    #[Computed]
+    public function selectedTrips(): Collection
+    {
+        return $this->driverId === null
+            ? collect()
+            : $this->tripLines()->where('driver_id', $this->driverId)->values();
+    }
+
+    public function selectDriver(int $driverId): void
+    {
+        $this->driverId = $this->driverId === $driverId ? null : $driverId;
     }
 
     public static function loadedPercent(float $loaded, float $total): int
@@ -330,27 +233,6 @@ class DriverMonthlyKmReport extends Page implements HasTable
     {
         $this->period = $period;
         $this->date = $anchor->toDateString();
-        unset($this->tripLines, $this->driverRows);
-        $this->resetTable();
-    }
-
-    private function paginateRows(?string $search, ?string $sortColumn, ?string $sortDirection, int $page, int $recordsPerPage): LengthAwarePaginator
-    {
-        $needle = mb_strtolower(trim((string) $search));
-
-        $rows = $this->driverRows()
-            ->when($needle !== '', fn (Collection $rows): Collection => $rows->filter(
-                fn (array $row): bool => str_contains(mb_strtolower($row['driver_name'].' '.$row['employee_code']), $needle),
-            ))
-            ->when(filled($sortColumn), fn (Collection $rows): Collection => $rows->sortBy(
-                [[$sortColumn, $sortDirection === 'asc' ? 'asc' : 'desc'], ['driver_name', 'asc']],
-            ));
-
-        return new LengthAwarePaginator(
-            $rows->forPage($page, $recordsPerPage),
-            total: $rows->count(),
-            perPage: $recordsPerPage,
-            currentPage: $page,
-        );
+        unset($this->tripLines, $this->allDriverRows, $this->driverRows, $this->totals, $this->selectedTrips);
     }
 }
