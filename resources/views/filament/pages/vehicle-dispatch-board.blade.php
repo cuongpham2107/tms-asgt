@@ -83,6 +83,28 @@
             }
         </style>
 
+        {{-- Tìm kiếm theo biển số / tên lái xe --}}
+        <div class="flex items-center gap-2">
+            <div class="w-full max-w-xs">
+                <x-filament::input.wrapper prefix-icon="heroicon-m-magnifying-glass">
+                    <x-filament::input
+                        type="search"
+                        wire:model.live.debounce.400ms="searchQuery"
+                        placeholder="Tìm biển số hoặc tên lái xe..."
+                    />
+                </x-filament::input.wrapper>
+            </div>
+            @if (filled($searchQuery))
+                <x-filament::icon-button
+                    icon="heroicon-m-x-mark"
+                    wire:click="$set('searchQuery', null)"
+                    label="Xoá tìm kiếm"
+                    color="gray"
+                    tooltip="Xoá tìm kiếm"
+                />
+            @endif
+        </div>
+
         {{-- Bảng Kiểm Soát Tình Trạng Xe theo mẫu thực tế --}}
         <div class="dispatch-table-container overflow-auto rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10 bg-white dark:bg-gray-900 shadow-xs max-h-[calc(100vh-9rem)]">
             <table class="dispatch-table w-full text-xs border-collapse font-sans">

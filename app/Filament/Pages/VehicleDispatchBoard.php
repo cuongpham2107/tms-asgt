@@ -374,6 +374,13 @@ class VehicleDispatchBoard extends Page implements HasTable
             ])
             ->get();
 
+        if (filled($this->searchQuery)) {
+            $term = mb_strtolower(trim($this->searchQuery));
+
+            $vehicles = $vehicles->filter(fn (Vehicle $vehicle): bool => str_contains(mb_strtolower((string) $vehicle->plate_number), $term)
+                || str_contains(mb_strtolower(self::getDriverName($vehicle)), $term));
+        }
+
         $stationOrder = [
             'NB' => 'Nội Bài (NB)',
             'BN' => 'Bắc Ninh (BN)',
