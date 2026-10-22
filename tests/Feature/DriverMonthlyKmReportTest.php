@@ -241,5 +241,5 @@ test('page lists drivers and shows the trips of the selected driver', function (
         ->assertSee('Tài xế Nghỉ')
         ->assertDontSee($trip->trip_code)
         ->call('selectDriver', $this->driverA->id)
-        ->assertSee([$trip->trip_code, '123.0', '1 chuyến']);
+        ->assertSee([$trip->trip_code, '123.0', '100.0', '81% có hàng']);
 });
