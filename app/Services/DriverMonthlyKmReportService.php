@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\OnDutyLocation;
+use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\DriverSwap;
@@ -15,7 +16,8 @@ use Illuminate\Support\Collection;
 /**
  * Tổng hợp km có hàng / không hàng theo tài xế trong một khoảng thời gian (ngày / tuần / tháng).
  *
- * Chỉ tính chuyến đã hoàn thành, gán vào kỳ theo giờ bắt đầu chuyến. Chuyến đảo lái được chia
+ * Tính các chuyến đã kết thúc giống màn thống kê của app lái xe: hoàn thành, đã bàn giao đảo lái và
+ * đã huỷ (xe vẫn chạy km); gán vào kỳ theo giờ bắt đầu chuyến. Chuyến đảo lái được chia
  * km theo đoạn từng tài xế lái; mỗi đoạn chỉ được tính khi ca của đoạn đó đã kết thúc (đã chốt).
  */
 class DriverMonthlyKmReportService
@@ -23,14 +25,16 @@ class DriverMonthlyKmReportService
     /**
      * Phần km của từng tài xế trên từng chuyến trong khoảng [$from, $to].
      *
-     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
+     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, status: TripStatus, order_codes: list<string>, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
      */
     public function tripLines(Carbon $from, Carbon $to): Collection
     {
         $trips = Trip::query()
-            ->with('vehicle:id,plate_number')
-            ->withCount('orders')
-            ->where('status', TripStatus::Completed)
+            ->with([
+                'vehicle:id,plate_number',
+                'orders' => fn ($query) => $query->where('status', '!=', OrderStatus::Draft)->select(['id', 'trip_id', 'order_code']),
+            ])
+            ->whereIn('status', [TripStatus::Completed, TripStatus::DriverSwap, TripStatus::Cancelled])
             ->where(fn (Builder $q): Builder => $q
                 ->whereBetween('started_at', [$from, $to])
                 ->orWhere(fn (Builder $o): Builder => $o->whereNull('started_at')->whereBetween('completed_at', [$from, $to])))
@@ -55,6 +59,7 @@ class DriverMonthlyKmReportService
                 $trip = $group->first()['trip'];
                 $total = $group->sum('km_total');
                 $loaded = $group->sum('km_loaded');
+                $orderCodes = $trip->orders->pluck('order_code')->filter()->sort()->values()->all();
 
                 return [
                     'trip_id' => $trip->id,
@@ -62,8 +67,10 @@ class DriverMonthlyKmReportService
                     'plate' => $trip->vehicle?->plate_number,
                     'started_at' => $trip->started_at ?? $trip->completed_at,
                     'driver_id' => (int) $group->first()['driver_id'],
+                    'status' => $trip->status,
+                    'order_codes' => $orderCodes,
                     // Chuyến không hàng = chuyến không có đơn nào
-                    'is_empty' => $trip->orders_count === 0,
+                    'is_empty' => $orderCodes === [],
                     'km_total' => round($total, 1),
                     'km_loaded' => round($loaded, 1),
                     'km_empty' => round(max(0.0, $total - $loaded), 1),

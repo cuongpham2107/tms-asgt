@@ -207,7 +207,7 @@
                             </tr>
                             <tr class="text-[11px] font-bold uppercase tracking-wide text-white dark:bg-slate-950" style="{{ $navy }}">
                                 <th class="whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Ngày</th>
-                                <th class="whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Mã chuyến</th>
+                                <th class="whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Mã đơn</th>
                                 <th class="whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">BSX</th>
                                 <th class="whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Km CH</th>
                                 <th class="whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Km KH</th>
@@ -240,12 +240,21 @@
                                         @else
                                             <td class="border-r border-gray-100 px-2 py-1.5 dark:border-white/5"></td>
                                         @endif
-                                        <td class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 dark:border-white/5">
-                                            <span class="mr-1 font-mono text-[10px] text-gray-500 dark:text-gray-400">{{ $trip['started_at']?->format('H:i') }}</span>
-                                            <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $trip['trip_code'] }}</span>
-                                            @if ($trip['is_empty'])
-                                                <x-filament::badge color="warning" size="xs" class="ml-1 inline-flex">Không hàng</x-filament::badge>
-                                            @endif
+                                        <td class="border-r border-gray-100 px-2 py-1.5 dark:border-white/5" title="Chuyến {{ $trip['trip_code'] }}">
+                                            <div class="flex flex-wrap items-center gap-1">
+                                                <span class="font-mono text-[10px] text-gray-500 dark:text-gray-400">{{ $trip['started_at']?->format('H:i') }}</span>
+                                                @if ($trip['is_empty'])
+                                                    <span class="font-semibold text-gray-500 dark:text-gray-400">{{ $trip['trip_code'] }}</span>
+                                                    <x-filament::badge color="warning" size="xs">Không hàng</x-filament::badge>
+                                                @else
+                                                    <span class="font-semibold text-gray-900 dark:text-gray-100">{{ implode(', ', $trip['order_codes']) }}</span>
+                                                @endif
+                                                @if ($trip['status'] === \App\Enums\TripStatus::Cancelled)
+                                                    <x-filament::badge color="danger" size="xs">Huỷ</x-filament::badge>
+                                                @elseif ($trip['status'] === \App\Enums\TripStatus::DriverSwap)
+                                                    <x-filament::badge color="info" size="xs">Đảo lái</x-filament::badge>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 text-center font-semibold text-gray-800 dark:border-white/5 dark:text-gray-200">{{ $trip['plate'] ?? '—' }}</td>
                                         <td class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 text-right font-mono text-[11px] text-emerald-700 dark:border-white/5 dark:text-emerald-400">{{ number_format($trip['km_loaded'], 1) }}</td>

@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Enums\OnDutyLocation;
+use App\Enums\TripStatus;
 use App\Services\DriverMonthlyKmReportService;
 use BackedEnum;
 use Carbon\Carbon;
@@ -139,7 +140,7 @@ class DriverMonthlyKmReport extends Page
     }
 
     /**
-     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
+     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, status: TripStatus, order_codes: list<string>, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
      */
     #[Computed]
     public function tripLines(): Collection
@@ -214,7 +215,7 @@ class DriverMonthlyKmReport extends Page
     }
 
     /**
-     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
+     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, status: TripStatus, order_codes: list<string>, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
      */
     #[Computed]
     public function selectedTrips(): Collection

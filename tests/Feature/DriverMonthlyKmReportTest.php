@@ -155,16 +155,45 @@ test('sums completed trips of the month per driver', function () {
         ->and($rows[$this->driverB->id])->toMatchArray(['trip_count' => 1, 'km_total' => 80.0, 'km_loaded' => 80.0, 'km_empty' => 0.0]);
 });
 
-test('ignores trips that are not completed or fall outside the month', function () {
+test('counts finished trips like the driver app and skips unfinished or out of range ones', function () {
     monthlyTrip($this, $this->driverA, '2026-10-05 08:00', 40, 20);
-    monthlyTrip($this, $this->driverA, '2026-10-06 08:00', 99, 99, TripStatus::Cancelled);
+    monthlyTrip($this, $this->driverA, '2026-10-06 08:00', 30, 10, TripStatus::Cancelled);
+    monthlyTrip($this, $this->driverA, '2026-10-06 12:00', 25, 5, TripStatus::DriverSwap);
     monthlyTrip($this, $this->driverA, '2026-10-07 08:00', 99, 99, TripStatus::Delivering);
     monthlyTrip($this, $this->driverA, '2026-09-30 23:00', 99, 99);
     monthlyTrip($this, $this->driverA, '2026-11-01 00:00', 99, 99);
 
-    $row = app(DriverMonthlyKmReportService::class)->driverRows($this->month, $this->month->copy()->endOfMonth())->firstWhere('driver_id', $this->driverA->id);
+    $service = app(DriverMonthlyKmReportService::class);
+    $lines = $service->tripLines($this->month, $this->month->copy()->endOfMonth());
+    $row = $service->summarize($lines)->firstWhere('driver_id', $this->driverA->id);
 
-    expect($row)->toMatchArray(['trip_count' => 1, 'km_total' => 40.0, 'km_loaded' => 20.0]);
+    // Hoàn thành + huỷ (xe đã chạy) + đảo lái đều được cộng km, như màn thống kê của app lái xe
+    expect($row)->toMatchArray(['trip_count' => 3, 'km_total' => 95.0, 'km_loaded' => 35.0])
+        ->and($lines->pluck('status')->map->value->all())->toBe(['completed', 'cancelled', 'driver_swap']);
+});
+
+test('lists the order codes of each trip and ignores draft orders', function () {
+    $trip = monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 50, 40);
+    $area = Area::create(['type' => OrderType::Hhhk, 'code' => 'OC', 'name' => 'Order codes']);
+    $customer = Customer::create(['code' => 'OC', 'name' => 'Order codes', 'is_active' => true]);
+    foreach (['ASG-102' => OrderStatus::Completed, 'ASG-101' => OrderStatus::Completed, 'ASG-999' => OrderStatus::Draft] as $code => $status) {
+        Order::create([
+            'order_code' => $code,
+            'type' => OrderType::Hhhk,
+            'area_id' => $area->id,
+            'customer_id' => $customer->id,
+            'trip_id' => $trip->id,
+            'status' => $status,
+            'created_by' => $this->driverA->id,
+        ]);
+    }
+
+    $line = app(DriverMonthlyKmReportService::class)
+        ->tripLines($this->month, $this->month->copy()->endOfMonth())
+        ->firstWhere('trip_id', $trip->id);
+
+    expect($line['order_codes'])->toBe(['ASG-101', 'ASG-102'])
+        ->and($line['is_empty'])->toBeFalse();
 });
 
 test('splits a swapped trip between drivers and counts it for each of them', function () {
