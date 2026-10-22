@@ -132,12 +132,14 @@ test('link hợp lệ hiển thị thông tin chuyến và các điểm dừng',
 
     $this->get(CopyTrackingLinkAction::makeUrl($trip))
         ->assertOk()
-        ->assertSee($trip->trip_code)
+        ->assertDontSee($trip->trip_code)
+        ->assertSee('Biển số xe')
         ->assertSee('29C-12345')
         ->assertSee('Nguyễn Văn Tài')
         ->assertSee('Kho Lấy Hàng')
         ->assertSee('Kho Giao Hàng')
-        ->assertSee('Đang giao');
+        ->assertSee('Đang giao')
+        ->assertSee('<title>Theo dõi xe 29C-12345 — ASG Vận Tải</title>', escape: false);
 });
 
 test('trang theo dõi không lộ số điện thoại và CCCD tài xế', function () {

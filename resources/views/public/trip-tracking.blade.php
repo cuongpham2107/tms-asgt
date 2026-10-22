@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <meta name="referrer" content="no-referrer">
-    <title>Theo dõi chuyến {{ $trip->trip_code }} — ASG Vận Tải</title>
+    <title>Theo dõi xe {{ $trip->vehicle?->plate_number ?? $trip->trip_code }} — ASG Vận Tải</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -356,12 +356,10 @@
 <main class="shell">
     <section class="card trip-head">
         <div>
-            <div class="eyebrow">Mã chuyến</div>
-            <h1>{{ $trip->trip_code }}</h1>
+            {{-- Khách theo dõi theo biển số xe; chỉ hiện mã chuyến khi chuyến chưa gán xe --}}
+            <div class="eyebrow">{{ $trip->vehicle?->plate_number ? 'Biển số xe' : 'Mã chuyến' }}</div>
+            <h1>{{ $trip->vehicle?->plate_number ?? $trip->trip_code }}</h1>
             <div class="meta">
-                @if ($trip->vehicle?->plate_number)
-                    <span class="chip">🚛 {{ $trip->vehicle->plate_number }}</span>
-                @endif
                 @if ($trip->driver?->name)
                     <span class="chip">👤 {{ $trip->driver->name }}</span>
                 @endif
