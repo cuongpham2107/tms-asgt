@@ -403,10 +403,13 @@
                                     </button>
                                 </td>
 
-                                {{-- 13. KM over (>=3000 tô đỏ, >=2800 tô vàng) --}}
+                                {{-- 13. KM over (>=3000 tô đỏ, >=2800 tô vàng, còn lại tô nền theo tỉ lệ / 3.000 km) --}}
                                 <td 
                                     class="border-r border-gray-100 dark:border-white/5 px-1.5 py-1.5 text-center whitespace-nowrap font-mono text-[11px] {{ $kmOverData['cellClass'] }}"
                                     title="{{ $kmOverData['tooltip'] }}"
+                                    @if ($kmOverData['status'] === 'normal' && $kmOverData['fillPercent'] > 0)
+                                        style="background: linear-gradient(to right, rgb(59 130 246 / 0.22) {{ $kmOverData['fillPercent'] }}%, transparent {{ $kmOverData['fillPercent'] }}%);"
+                                    @endif
                                 >
                                     <span>{{ $kmOver }}</span>
                                 </td>

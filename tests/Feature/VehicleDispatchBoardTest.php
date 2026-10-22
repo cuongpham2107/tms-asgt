@@ -995,6 +995,7 @@ test('vehicle dispatch board calculates km over and highlights background based 
     $dataNormal = VehicleDispatchBoard::getKmOverData($vehicleNormal);
     expect($dataNormal['text'])->toBe('1.500')
         ->and($dataNormal['status'])->toBe('normal')
+        ->and($dataNormal['fillPercent'])->toBe(50)
         ->and($dataNormal['cellClass'])->not->toContain('bg-amber-400')
         ->and($dataNormal['cellClass'])->not->toContain('bg-rose-500');
 
@@ -1040,7 +1041,8 @@ test('vehicle dispatch board calculates km over and highlights background based 
         ->assertSee('bg-amber-400')
         ->assertSee('29C-KM-DANGER')
         ->assertSee('3.120')
-        ->assertSee('bg-rose-500');
+        ->assertSee('bg-rose-500')
+        ->assertSeeHtml('rgb(59 130 246 / 0.22) 50%');
 });
 
 test('vehicle dispatch board renders loading overlay and spam click protection for modals', function () {

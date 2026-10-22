@@ -1346,6 +1346,7 @@ class VehicleDispatchBoard extends Page implements HasTable
      *     status: 'danger'|'warning'|'normal'|'none',
      *     cellClass: string,
      *     tooltip: string,
+     *     fillPercent: int,
      * }
      */
     public static function getKmOverData(Vehicle $record): array
@@ -1360,10 +1361,13 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'status' => 'none',
                 'cellClass' => 'text-gray-400',
                 'tooltip' => 'Chưa có dữ liệu Km bắt đầu chu kỳ ngày 23',
+                'fillPercent' => 0,
             ];
         }
 
         $delta = max(0.0, $currentKm - $startKm);
+        // Tỉ lệ đã chạy so với định mức 3.000 km, dùng tô nền ô (1.500 km = nửa ô).
+        $fillPercent = (int) round(min($delta / 3000, 1) * 100);
         $formattedDelta = number_format($delta, 0, ',', '.');
         $tooltipDetails = 'Đã chạy: '.$formattedDelta.' km | Đầu chu kỳ (ngày 23): '.number_format($startKm, 0, ',', '.').' km | Hiện tại: '.number_format($currentKm, 0, ',', '.').' km';
 
@@ -1374,6 +1378,7 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'status' => 'danger',
                 'cellClass' => 'km-over-cell bg-rose-500 text-white font-bold select-none',
                 'tooltip' => '⚠️ VƯỢT ĐỊNH MỨC (≥ 3.000 km) — '.$tooltipDetails,
+                'fillPercent' => $fillPercent,
             ];
         }
 
@@ -1384,6 +1389,7 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'status' => 'warning',
                 'cellClass' => 'km-over-cell bg-amber-400 text-slate-900 font-bold select-none',
                 'tooltip' => '⚡ SẮP ĐẾN HẠN MỨC (≥ 2.800 km) — '.$tooltipDetails,
+                'fillPercent' => $fillPercent,
             ];
         }
 
@@ -1393,6 +1399,7 @@ class VehicleDispatchBoard extends Page implements HasTable
             'status' => 'normal',
             'cellClass' => 'text-gray-700 dark:text-gray-300 font-semibold',
             'tooltip' => $tooltipDetails,
+            'fillPercent' => $fillPercent,
         ];
     }
 
