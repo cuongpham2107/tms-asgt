@@ -186,7 +186,7 @@
                         </div>
 
                         {{-- Card Header --}}
-                        <div class="flex items-center gap-3 border-b border-gray-100 px-3.5 py-3 dark:border-gray-800">
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100 px-3.5 py-3 dark:border-gray-800">
                             {{-- Avatar / Icon --}}
                             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm"
                                 :class="isSelected(card.value) ?
@@ -203,9 +203,9 @@
                             </div>
 
                             {{-- Title + Subtitle --}}
-                            <div class="min-w-0 flex-1">
+                            <div class="min-w-[7rem] flex-1">
                                 <div class="flex items-center gap-2">
-                                    <span class="break-words text-sm font-bold leading-snug text-gray-900 dark:text-gray-100"
+                                    <span class="min-w-0 text-sm font-bold leading-snug [overflow-wrap:anywhere] text-gray-900 dark:text-gray-100"
                                         x-text="card.title"></span>
                                     {{-- Status dot --}}
                                     <span x-show="card.statusDot" class="relative flex h-2 w-2 shrink-0">
