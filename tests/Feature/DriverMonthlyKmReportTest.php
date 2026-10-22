@@ -202,6 +202,21 @@ test('lists active drivers without trips with zero km', function () {
     expect($row)->toMatchArray(['trip_count' => 0, 'km_total' => 0.0, 'km_loaded' => 0.0, 'km_empty' => 0.0]);
 });
 
+test('counts trips without orders as empty trips', function () {
+    monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 100, 60);
+    monthlyTrip($this, $this->driverA, '2026-10-03 08:00', 30, 0)->update(['is_empty_run' => true]);
+    monthlySwapTrip($this);
+
+    $service = app(DriverMonthlyKmReportService::class);
+    $lines = $service->tripLines($this->month, $this->month->copy()->endOfMonth());
+    $rows = $service->summarize($lines)->keyBy('driver_id');
+
+    // Hai chuyến đầu không gắn đơn → không hàng; chuyến đảo lái có đơn → có hàng
+    expect($lines->where('driver_id', $this->driverA->id)->pluck('is_empty', 'trip_code')->values()->all())->toBe([true, true, false])
+        ->and($rows[$this->driverA->id])->toMatchArray(['trip_count' => 3, 'empty_trip_count' => 2])
+        ->and($rows[$this->driverB->id])->toMatchArray(['trip_count' => 1, 'empty_trip_count' => 0]);
+});
+
 test('limits trips to the requested date range', function () {
     monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 100, 60);
     monthlyTrip($this, $this->driverA, '2026-10-03 08:00', 30, 10);
@@ -241,5 +256,5 @@ test('page lists drivers and shows the trips of the selected driver', function (
         ->assertSee('Tài xế Nghỉ')
         ->assertDontSee($trip->trip_code)
         ->call('selectDriver', $this->driverA->id)
-        ->assertSee([$trip->trip_code, '123.0', '100.0', '81% có hàng']);
+        ->assertSee([$trip->trip_code, '123.0', '100.0', '81% có hàng', '1 chuyến (1 không hàng)', 'Không hàng']);
 });

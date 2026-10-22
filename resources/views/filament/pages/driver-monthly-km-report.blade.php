@@ -39,7 +39,7 @@
                 <table class="dispatch-table w-full border-collapse font-sans text-xs">
                     <thead class="sticky top-0 z-20 shadow-sm">
                         <tr class="dark:bg-slate-950" style="{{ $navy }}">
-                            <th colspan="8" class="border-b border-white/10 px-4 py-2.5 text-center text-sm font-bold uppercase tracking-wider text-white sm:text-base dark:bg-slate-950" style="{{ $navy }}">
+                            <th colspan="9" class="border-b border-white/10 px-4 py-2.5 text-center text-sm font-bold uppercase tracking-wider text-white sm:text-base dark:bg-slate-950" style="{{ $navy }}">
                                 Thống kê chuyến & km lái xe · {{ $this->periodLabel() }}
                             </th>
                         </tr>
@@ -48,6 +48,7 @@
                             <th class="min-w-[150px] whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Tên lái xe</th>
                             <th class="min-w-[90px] whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Mã NV</th>
                             <th class="min-w-[55px] whitespace-nowrap border-b border-r border-white/10 px-1 py-2 text-center">Chuyến</th>
+                            <th class="min-w-[70px] whitespace-nowrap border-b border-r border-white/10 px-1 py-2 text-center" title="Chuyến không có đơn">Chuyến KH</th>
                             <th class="min-w-[70px] whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Km CH</th>
                             <th class="min-w-[70px] whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Km KH</th>
                             <th class="min-w-[75px] whitespace-nowrap border-b border-r border-white/10 px-2 py-2 text-center">Tổng km</th>
@@ -119,6 +120,14 @@
                                     </td>
                                     <td wire:click="selectDriver({{ $row['driver_id'] }})" class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 dark:border-white/5 dark:text-gray-400">{{ $row['employee_code'] ?? '—' }}</td>
                                     <td wire:click="selectDriver({{ $row['driver_id'] }})" class="whitespace-nowrap border-r border-gray-100 px-1 py-1.5 text-center font-bold text-gray-800 dark:border-white/5 dark:text-gray-200">{{ $row['trip_count'] }}</td>
+                                    <td
+                                        wire:click="selectDriver({{ $row['driver_id'] }})"
+                                        @class([
+                                            'whitespace-nowrap border-r border-gray-100 px-1 py-1.5 text-center dark:border-white/5',
+                                            'font-bold text-amber-700 dark:text-amber-400' => $row['empty_trip_count'] > 0,
+                                            'text-gray-400 dark:text-gray-500' => $row['empty_trip_count'] === 0,
+                                        ])
+                                    >{{ $row['empty_trip_count'] }}</td>
                                     <td wire:click="selectDriver({{ $row['driver_id'] }})" class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 text-right font-mono text-[11px] text-emerald-700 dark:border-white/5 dark:text-emerald-400">{{ number_format($row['km_loaded'], 1) }}</td>
                                     <td wire:click="selectDriver({{ $row['driver_id'] }})" class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 text-right font-mono text-[11px] text-amber-700 dark:border-white/5 dark:text-amber-400">{{ number_format($row['km_empty'], 1) }}</td>
                                     <td wire:click="selectDriver({{ $row['driver_id'] }})" class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 text-right font-mono text-[11px] font-bold text-gray-900 dark:border-white/5 dark:text-white">{{ number_format($row['km_total'], 1) }}</td>
@@ -137,7 +146,7 @@
                             @endforeach
                         @empty
                             <tr>
-                                <td colspan="8" class="px-3 py-8 text-center text-gray-500">Không có lái xe phù hợp.</td>
+                                <td colspan="9" class="px-3 py-8 text-center text-gray-500">Không có lái xe phù hợp.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -148,6 +157,7 @@
                                 Tổng · {{ $totals['active_drivers'] }}/{{ $totals['drivers'] }} lái xe có chạy
                             </td>
                             <td class="border-r border-t-2 border-gray-300 px-1 py-2 text-center dark:border-white/10">{{ number_format($totals['trips']) }}</td>
+                            <td class="border-r border-t-2 border-gray-300 px-1 py-2 text-center text-amber-700 dark:border-white/10 dark:text-amber-400">{{ number_format($totals['empty_trips']) }}</td>
                             <td class="border-r border-t-2 border-gray-300 px-2 py-2 text-right font-mono text-[11px] text-emerald-700 dark:border-white/10 dark:text-emerald-400">{{ number_format($totals['km_loaded'], 1) }}</td>
                             <td class="border-r border-t-2 border-gray-300 px-2 py-2 text-right font-mono text-[11px] text-amber-700 dark:border-white/10 dark:text-amber-400">{{ number_format($totals['km_empty'], 1) }}</td>
                             <td class="border-r border-t-2 border-gray-300 px-2 py-2 text-right font-mono text-[11px] dark:border-white/10">{{ number_format($totals['km_total'], 1) }}</td>
@@ -233,6 +243,9 @@
                                         <td class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 dark:border-white/5">
                                             <span class="mr-1 font-mono text-[10px] text-gray-500 dark:text-gray-400">{{ $trip['started_at']?->format('H:i') }}</span>
                                             <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $trip['trip_code'] }}</span>
+                                            @if ($trip['is_empty'])
+                                                <x-filament::badge color="warning" size="xs" class="ml-1 inline-flex">Không hàng</x-filament::badge>
+                                            @endif
                                         </td>
                                         <td class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 text-center font-semibold text-gray-800 dark:border-white/5 dark:text-gray-200">{{ $trip['plate'] ?? '—' }}</td>
                                         <td class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 text-right font-mono text-[11px] text-emerald-700 dark:border-white/5 dark:text-emerald-400">{{ number_format($trip['km_loaded'], 1) }}</td>
@@ -265,7 +278,7 @@
                         <tfoot class="sticky bottom-0 z-10">
                             <tr class="bg-gray-100 text-xs font-bold text-gray-900 dark:bg-gray-800 dark:text-white">
                                 <td colspan="3" class="border-r border-t-2 border-gray-300 px-2 py-2 uppercase dark:border-white/10">
-                                    {{ $selectedDriver['trip_count'] }} chuyến · {{ $driverPercent }}% có hàng
+                                    {{ $selectedDriver['trip_count'] }} chuyến ({{ $selectedDriver['empty_trip_count'] }} không hàng) · {{ $driverPercent }}% có hàng
                                 </td>
                                 <td class="border-r border-t-2 border-gray-300 px-2 py-2 text-right font-mono text-[11px] text-emerald-700 dark:border-white/10 dark:text-emerald-400">{{ number_format($selectedDriver['km_loaded'], 1) }}</td>
                                 <td class="border-r border-t-2 border-gray-300 px-2 py-2 text-right font-mono text-[11px] text-amber-700 dark:border-white/10 dark:text-amber-400">{{ number_format($selectedDriver['km_empty'], 1) }}</td>

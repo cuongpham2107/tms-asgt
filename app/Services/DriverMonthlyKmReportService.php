@@ -23,12 +23,13 @@ class DriverMonthlyKmReportService
     /**
      * Phần km của từng tài xế trên từng chuyến trong khoảng [$from, $to].
      *
-     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, km_total: float, km_loaded: float, km_empty: float}>
+     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
      */
     public function tripLines(Carbon $from, Carbon $to): Collection
     {
         $trips = Trip::query()
             ->with('vehicle:id,plate_number')
+            ->withCount('orders')
             ->where('status', TripStatus::Completed)
             ->where(fn (Builder $q): Builder => $q
                 ->whereBetween('started_at', [$from, $to])
@@ -61,6 +62,8 @@ class DriverMonthlyKmReportService
                     'plate' => $trip->vehicle?->plate_number,
                     'started_at' => $trip->started_at ?? $trip->completed_at,
                     'driver_id' => (int) $group->first()['driver_id'],
+                    // Chuyến không hàng = chuyến không có đơn nào
+                    'is_empty' => $trip->orders_count === 0,
                     'km_total' => round($total, 1),
                     'km_loaded' => round($loaded, 1),
                     'km_empty' => round(max(0.0, $total - $loaded), 1),
@@ -72,8 +75,8 @@ class DriverMonthlyKmReportService
     /**
      * Một dòng mỗi tài xế: tài xế đang hoạt động (kể cả không chạy chuyến nào) và tài xế có chuyến trong kỳ.
      *
-     * @param  Collection<int, array{trip_id: int, driver_id: int, km_total: float, km_loaded: float, km_empty: float}>  $lines
-     * @return Collection<int, array{driver_id: int, driver_name: string, employee_code: ?string, station: ?OnDutyLocation, trip_count: int, km_total: float, km_loaded: float, km_empty: float}>
+     * @param  Collection<int, array{trip_id: int, driver_id: int, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>  $lines
+     * @return Collection<int, array{driver_id: int, driver_name: string, employee_code: ?string, station: ?OnDutyLocation, trip_count: int, empty_trip_count: int, km_total: float, km_loaded: float, km_empty: float}>
      */
     public function summarize(Collection $lines): Collection
     {
@@ -93,6 +96,7 @@ class DriverMonthlyKmReportService
                     'employee_code' => $driver->employee_code,
                     'station' => $driver->station,
                     'trip_count' => $driverLines->pluck('trip_id')->unique()->count(),
+                    'empty_trip_count' => $driverLines->where('is_empty', true)->pluck('trip_id')->unique()->count(),
                     'km_total' => round($driverLines->sum('km_total'), 1),
                     'km_loaded' => round($driverLines->sum('km_loaded'), 1),
                     'km_empty' => round($driverLines->sum('km_empty'), 1),
@@ -103,7 +107,7 @@ class DriverMonthlyKmReportService
     }
 
     /**
-     * @return Collection<int, array{driver_id: int, driver_name: string, employee_code: ?string, station: ?OnDutyLocation, trip_count: int, km_total: float, km_loaded: float, km_empty: float}>
+     * @return Collection<int, array{driver_id: int, driver_name: string, employee_code: ?string, station: ?OnDutyLocation, trip_count: int, empty_trip_count: int, km_total: float, km_loaded: float, km_empty: float}>
      */
     public function driverRows(Carbon $from, Carbon $to): Collection
     {

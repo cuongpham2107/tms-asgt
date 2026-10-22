@@ -139,7 +139,7 @@ class DriverMonthlyKmReport extends Page
     }
 
     /**
-     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, km_total: float, km_loaded: float, km_empty: float}>
+     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
      */
     #[Computed]
     public function tripLines(): Collection
@@ -195,7 +195,7 @@ class DriverMonthlyKmReport extends Page
     }
 
     /**
-     * @return array{drivers: int, active_drivers: int, trips: int, km_total: float, km_loaded: float, km_empty: float}
+     * @return array{drivers: int, active_drivers: int, trips: int, empty_trips: int, km_total: float, km_loaded: float, km_empty: float}
      */
     #[Computed]
     public function totals(): array
@@ -206,6 +206,7 @@ class DriverMonthlyKmReport extends Page
             'drivers' => $this->allDriverRows()->count(),
             'active_drivers' => $this->allDriverRows()->where('trip_count', '>', 0)->count(),
             'trips' => $lines->pluck('trip_id')->unique()->count(),
+            'empty_trips' => $lines->where('is_empty', true)->pluck('trip_id')->unique()->count(),
             'km_total' => round($lines->sum('km_total'), 1),
             'km_loaded' => round($lines->sum('km_loaded'), 1),
             'km_empty' => round($lines->sum('km_empty'), 1),
@@ -213,7 +214,7 @@ class DriverMonthlyKmReport extends Page
     }
 
     /**
-     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, km_total: float, km_loaded: float, km_empty: float}>
+     * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
      */
     #[Computed]
     public function selectedTrips(): Collection
