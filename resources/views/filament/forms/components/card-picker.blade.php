@@ -223,7 +223,7 @@
                         </div>
 
                         {{-- Card Header --}}
-                        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100 px-3.5 py-3 dark:border-gray-800">
+                        <div class="flex items-center gap-3 border-b border-gray-100 px-3.5 py-3 dark:border-gray-800">
                             {{-- Avatar / Icon --}}
                             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm"
                                 :class="isSelected(card.value) ?
@@ -240,7 +240,7 @@
                             </div>
 
                             {{-- Title + Subtitle --}}
-                            <div class="min-w-[7rem] flex-1">
+                            <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2">
                                     <span class="min-w-0 text-sm font-bold leading-snug [overflow-wrap:anywhere] text-gray-900 dark:text-gray-100"
                                         x-text="card.title"></span>
@@ -256,19 +256,6 @@
                                 <div class="truncate text-xs text-gray-500 dark:text-gray-400" x-text="card.subtitle">
                                 </div>
                             </div>
-
-                            {{-- Badge --}}
-                            <span x-show="card.badge"
-                                class="shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
-                                :class="activeTab === 'suggested' && card.isSuggested ?
-                                    (card.suggestedBadgeClasses ?? card.badgeClasses ??
-                                        'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200') :
-                                    (card.badgeClasses ??
-                                        'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'
-                                    )"
-                                x-text="activeTab === 'suggested' && card.isSuggested
-                                    ? (card.suggestedBadge ?? card.badge)
-                                    : card.badge"></span>
                         </div>
 
                         {{-- Card Body: Details --}}
@@ -290,6 +277,21 @@
                             </template>
                         </div>
 
+
+                        {{-- Trạng thái --}}
+                        <div x-show="card.badge" class="mt-auto flex border-t border-gray-100 px-3.5 py-2 dark:border-gray-800">
+                            <span x-show="card.badge"
+                                class="rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
+                                :class="activeTab === 'suggested' && card.isSuggested ?
+                                    (card.suggestedBadgeClasses ?? card.badgeClasses ??
+                                        'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200') :
+                                    (card.badgeClasses ??
+                                        'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200'
+                                    )"
+                                x-text="activeTab === 'suggested' && card.isSuggested
+                                    ? (card.suggestedBadge ?? card.badge)
+                                    : card.badge"></span>
+                        </div>
                         {{-- Suggestion highlight bar --}}
                         <div x-show="activeTab === 'suggested' && card.isSuggested"
                             class="mt-auto flex items-center gap-2 rounded-b-[10px] bg-primary-50 px-3.5 py-2 dark:bg-primary-950/30">
