@@ -185,6 +185,29 @@ test('link hết hạn bị từ chối', function () {
     $this->get($url)->assertForbidden();
 });
 
+test('link vẫn mở được khi app chat gắn thêm tham số theo dõi', function (string $extraQuery) {
+    ['trip' => $trip] = publicTrackingFixtures();
+
+    $url = CopyTrackingLinkAction::makeUrl($trip);
+
+    $positionUrl = URL::temporarySignedRoute('trips.public-tracking.position', now()->addDay(), ['trip' => $trip]);
+
+    $this->get($url.'&'.$extraQuery)->assertOk();
+    $this->get($positionUrl.'&'.$extraQuery)->assertOk();
+})->with([
+    'zalo' => ['zarsrc=31&utm_source=zalo&utm_medium=zalo&utm_campaign=zalo'],
+    'facebook' => ['fbclid=IwAR0abc123'],
+]);
+
+test('sửa hạn dùng trên link vẫn bị từ chối', function () {
+    ['trip' => $trip] = publicTrackingFixtures();
+
+    $url = CopyTrackingLinkAction::makeUrl($trip);
+    $tampered = preg_replace('/expires=\d+/', 'expires='.now()->addYear()->timestamp, $url);
+
+    $this->get($tampered)->assertForbidden();
+});
+
 test('endpoint vị trí trả json đúng hợp đồng và không cache', function () {
     ['trip' => $trip] = publicTrackingFixtures();
 

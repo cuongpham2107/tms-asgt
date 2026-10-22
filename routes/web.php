@@ -3,11 +3,12 @@
 use App\Http\Controllers\MapboxController;
 use App\Http\Controllers\PublicTripTrackingController;
 use App\Http\Controllers\TripPhotoDownloadController;
+use App\Http\Middleware\ValidateTrackingSignature;
 use App\Services\EupGpsService;
 use Illuminate\Support\Facades\Route;
 
 // Trang theo dõi lộ trình công khai cho khách hàng (URL có chữ ký + hạn dùng)
-Route::middleware(['signed', 'throttle:120,1'])->prefix('theo-doi/{trip}')->group(function () {
+Route::middleware([ValidateTrackingSignature::class, 'throttle:120,1'])->prefix('theo-doi/{trip}')->group(function () {
     Route::get('/', [PublicTripTrackingController::class, 'show'])
         ->name('trips.public-tracking');
 
