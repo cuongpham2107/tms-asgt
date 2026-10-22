@@ -261,13 +261,15 @@ class GoogleMapTracking extends Page
     }
 
     /**
-     * Chỉ vẽ xe có toạ độ thật; luôn gom cụm với id cố định để JS cập nhật marker theo id thay vì dựng lại.
+     * Chỉ vẽ xe có toạ độ thật; đang chọn xe thì chỉ vẽ các xe đó.
+     * Luôn gom cụm với id cố định để JS cập nhật marker theo id thay vì dựng lại.
      *
      * @return MarkerCluster[]
      */
     protected function getMarkers(): array
     {
         $markers = $this->getFilteredVehicles()
+            ->when($this->selectedVehicleIds !== [], fn (Collection $vehicles): Collection => $vehicles->whereIn('id', $this->selectedVehicleIds))
             ->map(function (Vehicle $vehicle): ?Marker {
                 $position = $this->vehiclePosition($vehicle);
 

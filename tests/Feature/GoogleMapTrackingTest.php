@@ -214,6 +214,33 @@ test('google map tracking only draws vehicles at their real gps position, cluste
         ->and($page->getVehiclesWithoutGpsCount())->toBe(1);
 });
 
+test('google map tracking shows only the selected vehicles on the map', function () {
+    $make = fn (string $plate, float $lat) => Vehicle::create([
+        'plate_number' => $plate,
+        'owner' => 'ASGL',
+        'type' => VehicleOwnerType::Company,
+        'vehicle_type' => VehicleType::Normal,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+        'gps_lat' => $lat,
+        'gps_lng' => 105.85,
+    ]);
+    $selected = $make('29E-00001', 21.01);
+    $other = $make('29E-00002', 21.02);
+
+    $component = Livewire::test(GoogleMapTracking::class)
+        ->dispatch('vehicleSelectionChanged', selectedIds: [$selected->id]);
+    $markerIds = collect($component->instance()->getMapData()['layersData'])->pluck('id');
+
+    expect($markerIds)->toContain('vehicle-'.$selected->id)
+        ->not->toContain('vehicle-'.$other->id);
+
+    $component->call('clearSelectedVehicles');
+    $markerIds = collect($component->instance()->getMapData()['layersData'])->pluck('id');
+
+    expect($markerIds)->toContain('vehicle-'.$selected->id, 'vehicle-'.$other->id);
+});
+
 test('google map tracking draws selected vehicle route in time order to its current position and plans remaining stops', function () {
     Http::fake(['*' => Http::response([], 500)]);
 

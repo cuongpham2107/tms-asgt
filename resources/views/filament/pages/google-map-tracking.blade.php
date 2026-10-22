@@ -107,12 +107,12 @@
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <span class="font-bold text-gray-700 dark:text-gray-200">Lộ trình xe đang chọn:</span>
                     <span class="inline-flex items-center gap-1.5 font-medium"><span class="inline-block h-1 w-6 rounded" style="background:#2563eb"></span>Đã đi</span>
-                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="inline-block w-6 border-b-[3px] border-dashed" style="border-color:#e11d48"></span>Kế hoạch còn lại</span>
+                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="inline-block w-6" style="border-bottom:3px dashed #e11d48"></span>Kế hoạch còn lại</span>
                     <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full" style="background:#16a34a"></span>Bắt đầu</span>
                     <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full" style="background:#d97706"></span>Lấy hàng</span>
                     <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full" style="background:#7c3aed"></span>Giao hàng</span>
                     <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full" style="background:#dc2626"></span>Kết thúc</span>
-                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full border-[3px] bg-white" style="border-color:#e11d48"></span>Điểm chưa tới</span>
+                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full bg-white" style="border:3px solid #e11d48"></span>Điểm chưa tới</span>
                 </div>
             </div>
 
@@ -192,27 +192,30 @@
 
                 let selectedIds = [];
                 let fittedKey = null;
+                let fleetFitPending = false;
 
                 const markerOf = (id) => Alpine.raw(mapCore.layers.get('vehicle-' + id)?.layer);
                 const routeLayersOf = (id) => Array.from(mapCore.layers.entries())
                     .filter(([layerId]) => String(layerId).startsWith('trk-' + id + '-'))
                     .map(([, entry]) => Alpine.raw(entry.layer));
 
-                // Popup riêng neo theo vị trí xe: vẫn hiện khi marker đang nằm trong cụm, không kéo bản đồ.
-                const selectionPopup = L.popup({ maxWidth: 320, autoPan: false, offset: [0, -34] });
+                // Popup riêng neo theo vị trí xe: vẫn hiện khi marker đang nằm trong cụm.
+                const selectionPopup = L.popup({ maxWidth: 320, autoPanPadding: [20, 20], offset: [0, -34] });
 
                 function openPopup(id) {
                     const marker = markerOf(id);
                     const content = marker?.getPopup()?.getContent();
                     if (!content) return;
 
-                    selectionPopup.setLatLng(marker.getLatLng()).setContent(content);
-                    if (!map.hasLayer(selectionPopup)) selectionPopup.openOn(map);
+                    // Mở lại (kể cả khi đang mở) để autoPan kéo popup vào khung nhìn sau khi bản đồ đổi.
+                    map.closePopup(selectionPopup);
+                    selectionPopup.setLatLng(marker.getLatLng()).setContent(content).openOn(map);
                 }
 
                 function focusSelection() {
                     if (!selectedIds.length) {
                         fittedKey = '';
+                        fleetFitPending = true;
                         map.closePopup();
                         mapCore.applyFitBounds();
                         return;
@@ -234,14 +237,25 @@
                     if (!bounds.isValid()) return;
 
                     fittedKey = selectedIds.join(',') + (hasRoute ? ':route' : '');
-                    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
-
-                    selectedIds.length === 1 ? openPopup(selectedIds[0]) : map.closePopup();
+                    // Leaflet bỏ qua lệnh zoom khi đang có animation zoom -> chờ xong rồi mới fit theo tuyến.
+                    const fit = () => {
+                        // Mở popup sau khi fit xong để autoPan đẩy popup vào khung nhìn.
+                        map.once('moveend', () => selectedIds.length === 1 ? openPopup(selectedIds[0]) : map.closePopup());
+                        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+                    };
+                    map._animatingZoom ? map.once('zoomend', () => setTimeout(fit)) : fit();
                 }
 
                 const originalUpdate = mapCore.updateMapData.bind(mapCore);
                 mapCore.updateMapData = function (newConfig) {
                     originalUpdate(newConfig);
+
+                    // Bỏ chọn: server vừa trả lại toàn bộ xe -> fit cả đội xe.
+                    if (!selectedIds.length && fleetFitPending) {
+                        fleetFitPending = false;
+                        mapCore.applyFitBounds();
+                        return;
+                    }
 
                     // Lộ trình của xe đang chọn vừa về: fit một lần theo cả tuyến.
                     const routeKey = selectedIds.join(',') + ':route';
