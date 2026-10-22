@@ -142,7 +142,7 @@
                             {{-- Title + Subtitle --}}
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2">
-                                    <span class="truncate text-sm font-bold text-gray-900 dark:text-gray-100"
+                                    <span class="break-words text-sm font-bold leading-snug text-gray-900 dark:text-gray-100"
                                         x-text="card.title"></span>
                                     {{-- Status dot --}}
                                     <span x-show="card.statusDot" class="relative flex h-2 w-2 shrink-0">
