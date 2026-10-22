@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\OnDutyLocation;
 use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\DriverSwap;
@@ -12,23 +13,20 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
- * Tổng hợp km có hàng / không hàng theo tài xế trong một tháng.
+ * Tổng hợp km có hàng / không hàng theo tài xế trong một khoảng thời gian (ngày / tuần / tháng).
  *
- * Chỉ tính chuyến đã hoàn thành, gán vào tháng theo giờ bắt đầu chuyến. Chuyến đảo lái được chia
+ * Chỉ tính chuyến đã hoàn thành, gán vào kỳ theo giờ bắt đầu chuyến. Chuyến đảo lái được chia
  * km theo đoạn từng tài xế lái; mỗi đoạn chỉ được tính khi ca của đoạn đó đã kết thúc (đã chốt).
  */
 class DriverMonthlyKmReportService
 {
     /**
-     * Phần km của từng tài xế trên từng chuyến trong tháng.
+     * Phần km của từng tài xế trên từng chuyến trong khoảng [$from, $to].
      *
      * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, km_total: float, km_loaded: float, km_empty: float}>
      */
-    public function tripLines(Carbon $month): Collection
+    public function tripLines(Carbon $from, Carbon $to): Collection
     {
-        $from = $month->copy()->startOfMonth();
-        $to = $month->copy()->endOfMonth();
-
         $trips = Trip::query()
             ->with('vehicle:id,plate_number')
             ->where('status', TripStatus::Completed)
@@ -72,10 +70,10 @@ class DriverMonthlyKmReportService
     }
 
     /**
-     * Một dòng mỗi tài xế: tài xế đang hoạt động (kể cả không chạy chuyến nào) và tài xế có chuyến trong tháng.
+     * Một dòng mỗi tài xế: tài xế đang hoạt động (kể cả không chạy chuyến nào) và tài xế có chuyến trong kỳ.
      *
      * @param  Collection<int, array{trip_id: int, driver_id: int, km_total: float, km_loaded: float, km_empty: float}>  $lines
-     * @return Collection<int, array{driver_id: int, driver_name: string, employee_code: ?string, station: ?string, trip_count: int, km_total: float, km_loaded: float, km_empty: float}>
+     * @return Collection<int, array{driver_id: int, driver_name: string, employee_code: ?string, station: ?OnDutyLocation, trip_count: int, km_total: float, km_loaded: float, km_empty: float}>
      */
     public function summarize(Collection $lines): Collection
     {
@@ -93,7 +91,7 @@ class DriverMonthlyKmReportService
                     'driver_id' => $driver->id,
                     'driver_name' => $driver->name,
                     'employee_code' => $driver->employee_code,
-                    'station' => $driver->station?->getLabel(),
+                    'station' => $driver->station,
                     'trip_count' => $driverLines->pluck('trip_id')->unique()->count(),
                     'km_total' => round($driverLines->sum('km_total'), 1),
                     'km_loaded' => round($driverLines->sum('km_loaded'), 1),
@@ -105,11 +103,11 @@ class DriverMonthlyKmReportService
     }
 
     /**
-     * @return Collection<int, array{driver_id: int, driver_name: string, employee_code: ?string, station: ?string, trip_count: int, km_total: float, km_loaded: float, km_empty: float}>
+     * @return Collection<int, array{driver_id: int, driver_name: string, employee_code: ?string, station: ?OnDutyLocation, trip_count: int, km_total: float, km_loaded: float, km_empty: float}>
      */
-    public function driverRows(Carbon $month): Collection
+    public function driverRows(Carbon $from, Carbon $to): Collection
     {
-        return $this->summarize($this->tripLines($month));
+        return $this->summarize($this->tripLines($from, $to));
     }
 
     /**

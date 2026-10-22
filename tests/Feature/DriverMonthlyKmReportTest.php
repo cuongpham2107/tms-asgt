@@ -149,7 +149,7 @@ test('sums completed trips of the month per driver', function () {
     monthlyTrip($this, $this->driverA, '2026-10-31 22:00', 50, 10);
     monthlyTrip($this, $this->driverB, '2026-10-10 08:00', 80, 80);
 
-    $rows = app(DriverMonthlyKmReportService::class)->driverRows($this->month)->keyBy('driver_id');
+    $rows = app(DriverMonthlyKmReportService::class)->driverRows($this->month, $this->month->copy()->endOfMonth())->keyBy('driver_id');
 
     expect($rows[$this->driverA->id])->toMatchArray(['trip_count' => 2, 'km_total' => 150.0, 'km_loaded' => 70.0, 'km_empty' => 80.0])
         ->and($rows[$this->driverB->id])->toMatchArray(['trip_count' => 1, 'km_total' => 80.0, 'km_loaded' => 80.0, 'km_empty' => 0.0]);
@@ -162,7 +162,7 @@ test('ignores trips that are not completed or fall outside the month', function 
     monthlyTrip($this, $this->driverA, '2026-09-30 23:00', 99, 99);
     monthlyTrip($this, $this->driverA, '2026-11-01 00:00', 99, 99);
 
-    $row = app(DriverMonthlyKmReportService::class)->driverRows($this->month)->firstWhere('driver_id', $this->driverA->id);
+    $row = app(DriverMonthlyKmReportService::class)->driverRows($this->month, $this->month->copy()->endOfMonth())->firstWhere('driver_id', $this->driverA->id);
 
     expect($row)->toMatchArray(['trip_count' => 1, 'km_total' => 40.0, 'km_loaded' => 20.0]);
 });
@@ -170,7 +170,7 @@ test('ignores trips that are not completed or fall outside the month', function 
 test('splits a swapped trip between drivers and counts it for each of them', function () {
     monthlySwapTrip($this);
 
-    $rows = app(DriverMonthlyKmReportService::class)->driverRows($this->month)->keyBy('driver_id');
+    $rows = app(DriverMonthlyKmReportService::class)->driverRows($this->month, $this->month->copy()->endOfMonth())->keyBy('driver_id');
 
     expect($rows[$this->driverA->id])->toMatchArray(['trip_count' => 1, 'km_total' => 60.0, 'km_loaded' => 50.0, 'km_empty' => 10.0])
         ->and($rows[$this->driverB->id])->toMatchArray(['trip_count' => 1, 'km_total' => 40.0, 'km_loaded' => 20.0, 'km_empty' => 20.0]);
@@ -180,7 +180,7 @@ test('skips trips whose shift has not ended yet', function () {
     monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 100, 60);
     monthlyTrip($this, $this->driverA, '2026-10-03 08:00', 77, 7, shift: monthlyShift($this->driverA, ended: false));
 
-    $row = app(DriverMonthlyKmReportService::class)->driverRows($this->month)->firstWhere('driver_id', $this->driverA->id);
+    $row = app(DriverMonthlyKmReportService::class)->driverRows($this->month, $this->month->copy()->endOfMonth())->firstWhere('driver_id', $this->driverA->id);
 
     expect($row)->toMatchArray(['trip_count' => 1, 'km_total' => 100.0, 'km_loaded' => 60.0]);
 });
@@ -188,7 +188,7 @@ test('skips trips whose shift has not ended yet', function () {
 test('counts only the swap segments whose shift has ended', function () {
     monthlySwapTrip($this, driverBShiftEnded: false);
 
-    $rows = app(DriverMonthlyKmReportService::class)->driverRows($this->month)->keyBy('driver_id');
+    $rows = app(DriverMonthlyKmReportService::class)->driverRows($this->month, $this->month->copy()->endOfMonth())->keyBy('driver_id');
 
     expect($rows[$this->driverA->id])->toMatchArray(['trip_count' => 1, 'km_total' => 60.0, 'km_loaded' => 50.0])
         ->and($rows[$this->driverB->id])->toMatchArray(['trip_count' => 0, 'km_total' => 0.0]);
@@ -197,22 +197,49 @@ test('counts only the swap segments whose shift has ended', function () {
 test('lists active drivers without trips with zero km', function () {
     monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 100, 60);
 
-    $row = app(DriverMonthlyKmReportService::class)->driverRows($this->month)->firstWhere('driver_id', $this->idleDriver->id);
+    $row = app(DriverMonthlyKmReportService::class)->driverRows($this->month, $this->month->copy()->endOfMonth())->firstWhere('driver_id', $this->idleDriver->id);
 
     expect($row)->toMatchArray(['trip_count' => 0, 'km_total' => 0.0, 'km_loaded' => 0.0, 'km_empty' => 0.0]);
 });
 
-test('page shows driver totals and the selected driver trips', function () {
+test('limits trips to the requested date range', function () {
+    monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 100, 60);
+    monthlyTrip($this, $this->driverA, '2026-10-03 08:00', 30, 10);
+
+    $row = app(DriverMonthlyKmReportService::class)
+        ->driverRows(Carbon::parse('2026-10-02')->startOfDay(), Carbon::parse('2026-10-02')->endOfDay())
+        ->firstWhere('driver_id', $this->driverA->id);
+
+    expect($row)->toMatchArray(['trip_count' => 1, 'km_total' => 100.0]);
+});
+
+test('page resolves today, week and month periods from the anchor date', function (string $period, string $from, string $to) {
+    $this->actingAs($this->driverA);
+
+    $range = Livewire::withQueryParams(['period' => $period, 'date' => '2026-10-22'])
+        ->test(DriverMonthlyKmReport::class)
+        ->instance()
+        ->periodRange();
+
+    expect($range[0]->toDateTimeString())->toBe($from)
+        ->and($range[1]->toDateTimeString())->toBe($to);
+})->with([
+    'today' => ['today', '2026-10-22 00:00:00', '2026-10-22 23:59:59'],
+    'week' => ['week', '2026-10-19 00:00:00', '2026-10-25 23:59:59'],
+    'month' => ['month', '2026-10-01 00:00:00', '2026-10-31 23:59:59'],
+]);
+
+test('page lists drivers and opens the trips of a driver', function () {
     $this->actingAs($this->driverA);
     $trip = monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 123, 100);
     monthlyTrip($this, $this->driverB, '2026-10-03 08:00', 10, 0);
 
-    Livewire::test(DriverMonthlyKmReport::class, ['month' => '2026-10'])
+    Livewire::withQueryParams(['period' => 'month', 'date' => '2026-10-15'])
+        ->test(DriverMonthlyKmReport::class)
         ->assertSuccessful()
         ->assertSee('Tài xế A')
         ->assertSee('Tài xế Nghỉ')
         ->assertDontSee($trip->trip_code)
-        ->call('selectDriver', $this->driverA->id)
-        ->assertSee($trip->trip_code)
-        ->assertSee('123.0');
+        ->mountTableAction('trips', (string) $this->driverA->id)
+        ->assertMountedActionModalSee([$trip->trip_code, '123.0', '1 chuyến']);
 });
