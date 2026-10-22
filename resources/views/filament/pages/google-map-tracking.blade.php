@@ -51,26 +51,15 @@
                 height: 520px;
             }
         }
-        /* Popup optimization classes (drastically reduces HTML payload) */
-        .trk-popup { font-family: Inter, system-ui, -apple-system, sans-serif; min-width: 250px; max-width: 340px; line-height: 1.4; color: #0f172a; }
-        .trk-popup-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9; }
-        .trk-popup-plate { font-weight: 800; font-size: 15px; color: #0f172a; letter-spacing: -0.02em; }
-        .trk-popup-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+        .trk-popup { font-family: Inter, system-ui, -apple-system, sans-serif; min-width: 230px; max-width: 300px; line-height: 1.45; color: #0f172a; font-size: 12px; }
+        .trk-popup-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9; }
+        .trk-popup-plate { font-weight: 800; font-size: 15px; letter-spacing: -0.02em; }
         .trk-popup-badge { color: #ffffff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
-        .trk-popup-driver { display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 5px 8px; border-radius: 6px; margin-bottom: 6px; font-size: 11px; color: #334155; }
-        .trk-popup-order-title { font-size: 10px; font-weight: 700; color: #64748b; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
-        .trk-order-item { margin-bottom: 5px; padding: 6px 8px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #3b82f6; box-shadow: 0 1px 2px rgba(0,0,0,0.03); font-size: 11px; }
-        .trk-speed { display: inline-flex; align-items: center; gap: 3px; color: #d97706; font-weight: 700; font-size: 11px; }
-
-        /* Hardware acceleration hints for map elements on low-spec GPUs */
-        .map-tracking-map-container .leaflet-container {
-            contain: layout paint;
-            will-change: transform;
-            transform: translateZ(0);
-        }
-        .map-tracking-map-container .leaflet-tile {
-            will-change: transform;
-        }
+        .trk-row { margin-bottom: 4px; color: #334155; }
+        .trk-muted { font-size: 11px; color: #64748b; }
+        .trk-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .trk-stale { color: #dc2626; font-weight: 600; }
+        .trk-order-item { margin-bottom: 4px; padding: 4px 8px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #3b82f6; }
     </style>
 
     <div class="flex flex-col gap-4">
@@ -83,18 +72,17 @@
 
             {{-- Right Map Container --}}
             <div class="map-tracking-map-container overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-                <div wire:loading.delay.class="opacity-40" wire:target="refreshData,updateSelectedVehicles" class="h-full w-full transition-opacity duration-300">
-                    <x-filament-leaflet::map
-                        :config="$this->getMapData()"
-                        widget
-                    />
+                {{-- Chỉ lần render đầu nhúng config; các lần sau wire:ignore giữ nguyên DOM bản đồ, dữ liệu đi qua sự kiện update-leaflet --}}
+                <div wire:ignore class="h-full w-full">
+                    @if ($this->isInitialRender())
+                        <x-filament-leaflet::map :config="$this->getMapData()" widget />
+                    @endif
                 </div>
 
-                {{-- Loading Overlay --}}
-                <div wire:loading wire:target="refreshData,updateSelectedVehicles" class="absolute inset-0 z-50 flex items-center justify-center rounded-xl" style="background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(4px);">
-                    <div class="flex items-center gap-3 rounded-xl bg-white px-6 py-4 shadow-xl ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-                        <x-filament::loading-indicator class="h-6 w-6 text-primary-600 dark:text-primary-400" />
-                        <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">Đang cập nhật lộ trình xe...</span>
+                <div wire:loading.delay wire:target="refreshData,updateSelectedVehicles,handleLayerClick,clearSelectedVehicles" class="absolute right-3 top-3 z-[1000]">
+                    <div class="flex items-center gap-2 rounded-lg bg-white/95 px-3 py-1.5 text-xs font-semibold text-gray-700 shadow ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">
+                        <x-filament::loading-indicator class="h-4 w-4 text-primary-600" />
+                        Đang cập nhật...
                     </div>
                 </div>
             </div>
@@ -102,29 +90,30 @@
 
         {{-- Bottom Mission Control Bar: Legend & Actions --}}
         <div class="flex flex-col lg:flex-row flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-3.5 shadow-sm dark:border-gray-700 dark:bg-gray-900 shrink-0">
-            {{-- Route Legend --}}
-            <div class="flex flex-wrap items-center gap-4 text-xs">
-                <span class="font-bold text-gray-700 dark:text-gray-300">Chú thích lộ trình:</span>
-                <span class="inline-flex items-center gap-1.5 font-medium text-gray-600 dark:text-gray-300">
-                    <span class="h-3 w-3 rounded-full bg-emerald-500"></span>
-                    Xuất phát
-                </span>
-                <span class="inline-flex items-center gap-1.5 font-medium text-gray-600 dark:text-gray-300">
-                    <span class="h-3 w-3 rounded-full bg-blue-600"></span>
-                    Đang di chuyển
-                </span>
-                <span class="inline-flex items-center gap-1.5 font-medium text-gray-600 dark:text-gray-300">
-                    <span class="h-3 w-3 rounded-full bg-purple-600"></span>
-                    Điểm giao
-                </span>
-                <span class="inline-flex items-center gap-1.5 font-medium text-gray-600 dark:text-gray-300">
-                    <span class="h-3 w-3 rounded-full bg-red-600"></span>
-                    Điểm kết thúc
-                </span>
-                <span class="inline-flex items-center gap-1.5 font-medium text-gray-600 dark:text-gray-300">
-                    <span class="inline-block h-0 w-5 border-b-2 border-dashed border-gray-400"></span>
-                    GPS Breadcrumbs
-                </span>
+            {{-- Legend --}}
+            <div class="flex flex-col gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span class="font-bold text-gray-700 dark:text-gray-200">Trạng thái xe:</span>
+                    @foreach ($this->getStatusLegend() as $label => $color)
+                        <span class="inline-flex items-center gap-1.5 font-medium">
+                            <span class="h-3 w-3 rounded-full" style="background: {{ $color }}"></span>
+                            {{ $label }}
+                        </span>
+                    @endforeach
+                    @if (($withoutGps = $this->getVehiclesWithoutGpsCount()) > 0)
+                        <span class="text-gray-400">· {{ $withoutGps }} xe chưa có GPS (không hiển thị)</span>
+                    @endif
+                </div>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span class="font-bold text-gray-700 dark:text-gray-200">Lộ trình xe đang chọn:</span>
+                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="inline-block h-1 w-6 rounded" style="background:#2563eb"></span>Đã đi</span>
+                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="inline-block w-6 border-b-[3px] border-dashed" style="border-color:#e11d48"></span>Kế hoạch còn lại</span>
+                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full" style="background:#16a34a"></span>Bắt đầu</span>
+                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full" style="background:#d97706"></span>Lấy hàng</span>
+                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full" style="background:#7c3aed"></span>Giao hàng</span>
+                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full" style="background:#dc2626"></span>Kết thúc</span>
+                    <span class="inline-flex items-center gap-1.5 font-medium"><span class="h-3 w-3 rounded-full border-[3px] bg-white" style="border-color:#e11d48"></span>Điểm chưa tới</span>
+                </div>
             </div>
 
             {{-- Selected Vehicle Indicator & Clear Action --}}
@@ -171,225 +160,131 @@
 
     @push('scripts')
         <script>
-            function handleMapInitAndResize() {
+            function initTrackingMap() {
                 let attempts = 0;
-                const maxAttempts = 30;
 
-                function tryInit() {
-                    const mapContainer = document.querySelector('[id^="map-"]');
-                    if (!mapContainer) {
-                        if (++attempts < maxAttempts) setTimeout(tryInit, 100);
+                (function tryInit() {
+                    const root = document.querySelector('.map-tracking-map-container [x-data^="leafletMapWidget"]');
+                    const mapCore = root && window.Alpine ? Alpine.$data(root)?.mapCore : null;
+
+                    if (!mapCore?.map) {
+                        if (++attempts < 50) setTimeout(tryInit, 100);
                         return;
                     }
 
-                    const component = Alpine.$data(mapContainer);
-                    if (!component?.mapCore?.map) {
-                        if (++attempts < maxAttempts) setTimeout(tryInit, 100);
-                        return;
-                    }
+                    if (mapCore._tmsReady) return;
+                    mapCore._tmsReady = true;
 
-                    const mapCore = component.mapCore;
-                    const map = mapCore.map;
-
-                    if (mapCore._tmsOptimized) {
-                        return;
-                    }
-                    mapCore._tmsOptimized = true;
-
-                    const REF_ZOOM = 13;
-
-                    // Debounced resize handler using requestAnimationFrame
-                    let resizeRaf = null;
-                    const scheduleInvalidate = () => {
-                        if (resizeRaf) cancelAnimationFrame(resizeRaf);
-                        resizeRaf = requestAnimationFrame(() => {
-                            if (map && map._container) {
-                                map.invalidateSize({ debounceMoveend: true });
-                            }
-                        });
-                    };
-
-                    // Initial invalidate
-                    scheduleInvalidate();
-                    setTimeout(scheduleInvalidate, 250);
-
-                    // ResizeObserver with debounce to avoid layout thrashing
-                    const mapWrapper = document.querySelector('.map-tracking-map-container');
-                    if (mapWrapper && window.ResizeObserver) {
-                        const ro = new ResizeObserver(() => {
-                            scheduleInvalidate();
-                        });
-                        ro.observe(mapWrapper);
-                    }
-
-                    window.addEventListener('resize', scheduleInvalidate, { passive: true });
-
-                    function storeBaseValues() {
-                        mapCore.layers.forEach(({ layer, data }) => {
-                            if (layer instanceof L.Polyline && layer._baseWeight === undefined) {
-                                layer._baseWeight = layer.options.weight || data?.options?.weight || 3;
-                            } else if (layer instanceof L.CircleMarker && layer._baseRadius === undefined) {
-                                layer._baseRadius = layer.options.radius || data?.options?.radius || 6;
-                            }
-                        });
-                    }
-
-                    let zoomRaf = null;
-                    function applyZoomStyles() {
-                        if (zoomRaf) cancelAnimationFrame(zoomRaf);
-                        zoomRaf = requestAnimationFrame(() => {
-                            const zoom = map.getZoom();
-                            const scale = Math.max(0.4, Math.min(2.2, Math.pow(1.4, zoom - REF_ZOOM)));
-
-                            mapCore.layers.forEach(({ layer }) => {
-                                if (layer instanceof L.Polyline && layer._baseWeight) {
-                                    layer.setStyle({ weight: layer._baseWeight * scale });
-                                } else if (layer instanceof L.CircleMarker && layer._baseRadius) {
-                                    layer.setRadius(layer._baseRadius * scale);
-                                }
-                            });
-                        });
-                    }
-
-                    storeBaseValues();
-
-                    // Dynamic vehicle focus on map when selected from sidebar or map
-                    function handleVehicleSelection(selectedIds) {
-                        if (!map || !mapCore) return;
-
-                        window._tmsCurrentSelectedVehicleId = (selectedIds && selectedIds.length === 1) ? selectedIds[0] : null;
-
-                        if (selectedIds && selectedIds.length === 1) {
-                            const vehicleId = selectedIds[0];
-                            const layerId = 'vehicle-' + vehicleId;
-                            const entry = mapCore.layers.get(layerId);
-                            const marker = Alpine.raw(entry?.layer);
-
-                            if (!marker) {
-                                return;
-                            }
-
-                            let showedInCluster = false;
-                            if (mapCore.layerGroups) {
-                                mapCore.layerGroups.forEach(({ layer: group }) => {
-                                    const rawGroup = Alpine.raw(group);
-                                    if (rawGroup && typeof rawGroup.zoomToShowLayer === 'function' && rawGroup.hasLayer(marker)) {
-                                        rawGroup.zoomToShowLayer(marker, function() {
-                                            if (typeof marker.openPopup === 'function') {
-                                                marker.openPopup();
-                                            }
-                                        });
-                                        showedInCluster = true;
-                                    }
-                                });
-                            }
-
-                            if (!showedInCluster) {
-                                const latLng = marker.getLatLng();
-                                if (latLng) {
-                                    const targetZoom = Math.max(map.getZoom(), 15);
-                                    map.flyTo(latLng, targetZoom, {
-                                        animate: true,
-                                        duration: 0.7
-                                    });
-                                    setTimeout(function() {
-                                        if (typeof marker.openPopup === 'function') {
-                                            marker.openPopup();
-                                        }
-                                    }, 750);
-                                }
-                            }
-                        } else if (selectedIds && selectedIds.length > 1) {
-                            // Multiple vehicles selected (e.g. running only or select all): fit bounds
-                            const latLngs = [];
-                            selectedIds.forEach(function(id) {
-                                const m = Alpine.raw(mapCore.layers.get('vehicle-' + id)?.layer);
-                                if (m && typeof m.getLatLng === 'function') {
-                                    latLngs.push(m.getLatLng());
-                                }
-                            });
-
-                            if (latLngs.length > 0) {
-                                map.closePopup();
-                                map.fitBounds(L.latLngBounds(latLngs), {
-                                    padding: [50, 50],
-                                    maxZoom: 16
-                                });
-                            }
-                        } else {
-                            // Deselected: close popup and fit bounds to fleet
-                            map.closePopup();
-                            if (typeof mapCore.applyFitBounds === 'function') {
-                                mapCore.applyFitBounds();
-                            }
-                        }
-                    }
-
-                    const origUpdate = mapCore.updateMapData.bind(mapCore);
-                    mapCore.updateMapData = function(newConfig) {
-                        origUpdate(newConfig);
-                        storeBaseValues();
-                        applyZoomStyles();
-                        scheduleInvalidate();
-
-                        // Keep popup open for the active selected vehicle when route/layer data updates
-                        if (window._tmsCurrentSelectedVehicleId) {
-                            setTimeout(function() {
-                                const entry = mapCore.layers.get('vehicle-' + window._tmsCurrentSelectedVehicleId);
-                                const marker = Alpine.raw(entry?.layer);
-                                if (marker && typeof marker.openPopup === 'function' && !marker.isPopupOpen()) {
-                                    marker.openPopup();
-                                }
-                            }, 120);
-                        }
-                    };
-
-                    map.on('zoomend', applyZoomStyles);
-                    setTimeout(applyZoomStyles, 100);
-
-                    // Neutralize empty map click callback to prevent unwanted network requests
-                    // when dragging, zooming, or clicking near markers
-                    if (component?.mapCore?.callbacks) {
-                        component.mapCore.callbacks.onMapClick = null;
-                    }
-
-                    // Bidirectional sync handler: Map focus + Sidebar scroll
-                    if (!window._tmsVehicleSyncHandlerAttached) {
-                        window._tmsVehicleSyncHandlerAttached = true;
-                        window.addEventListener('vehicleSelectionChanged', function(e) {
-                            const ids = e.detail?.selectedIds || [];
-
-                            // 1. Zoom/fly map and open popup
-                            handleVehicleSelection(ids);
-
-                            // 2. Smoothly scroll sidebar list to selected vehicle
-                            if (ids.length >= 1) {
-                                setTimeout(function() {
-                                    const card = document.getElementById('sidebar-vehicle-' + ids[0]);
-                                    if (card) {
-                                        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                                    }
-                                }, 150);
-                            }
-                        });
-                    }
-
-                    // When user clicks the popup close button ('x'), clear selection so map resets
-                    if (!window._tmsPopupCloseHandlerAttached) {
-                        window._tmsPopupCloseHandlerAttached = true;
-                        document.addEventListener('click', function(e) {
-                            if (e.target.closest('.leaflet-popup-close-button')) {
-                                component.$wire.call('clearSelectedVehicles');
-                            }
-                        });
-                    }
-                }
-
-                tryInit();
+                    window._tmsTracking = setupTrackingMap(Alpine.$data(root), mapCore, Alpine.raw(mapCore.map));
+                })();
             }
 
-            document.addEventListener('livewire:navigated', handleMapInitAndResize);
-            document.addEventListener('DOMContentLoaded', handleMapInitAndResize);
+            function setupTrackingMap(component, mapCore, map) {
+                // Thư viện gỡ layer khỏi bản đồ nhưng không xoá khỏi registry -> fitBounds/tìm marker dính layer cũ.
+                const originalRemove = mapCore.removeLayer.bind(mapCore);
+                mapCore.removeLayer = (layerData) => {
+                    originalRemove(layerData);
+                    mapCore.layers.delete(layerData.id);
+                };
+
+                // Bấm nền bản đồ không cần gọi server.
+                mapCore.callbacks.onMapClick = null;
+
+                let selectedIds = [];
+                let fittedKey = null;
+
+                const markerOf = (id) => Alpine.raw(mapCore.layers.get('vehicle-' + id)?.layer);
+                const routeLayersOf = (id) => Array.from(mapCore.layers.entries())
+                    .filter(([layerId]) => String(layerId).startsWith('trk-' + id + '-'))
+                    .map(([, entry]) => Alpine.raw(entry.layer));
+
+                // Popup riêng neo theo vị trí xe: vẫn hiện khi marker đang nằm trong cụm, không kéo bản đồ.
+                const selectionPopup = L.popup({ maxWidth: 320, autoPan: false, offset: [0, -34] });
+
+                function openPopup(id) {
+                    const marker = markerOf(id);
+                    const content = marker?.getPopup()?.getContent();
+                    if (!content) return;
+
+                    selectionPopup.setLatLng(marker.getLatLng()).setContent(content);
+                    if (!map.hasLayer(selectionPopup)) selectionPopup.openOn(map);
+                }
+
+                function focusSelection() {
+                    if (!selectedIds.length) {
+                        fittedKey = '';
+                        map.closePopup();
+                        mapCore.applyFitBounds();
+                        return;
+                    }
+
+                    const bounds = L.latLngBounds([]);
+                    let hasRoute = false;
+
+                    selectedIds.forEach((id) => {
+                        const marker = markerOf(id);
+                        if (marker) bounds.extend(marker.getLatLng());
+
+                        routeLayersOf(id).forEach((layer) => {
+                            hasRoute = true;
+                            bounds.extend(layer.getLatLng ? layer.getLatLng() : layer.getBounds());
+                        });
+                    });
+
+                    if (!bounds.isValid()) return;
+
+                    fittedKey = selectedIds.join(',') + (hasRoute ? ':route' : '');
+                    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+
+                    selectedIds.length === 1 ? openPopup(selectedIds[0]) : map.closePopup();
+                }
+
+                const originalUpdate = mapCore.updateMapData.bind(mapCore);
+                mapCore.updateMapData = function (newConfig) {
+                    originalUpdate(newConfig);
+
+                    // Lộ trình của xe đang chọn vừa về: fit một lần theo cả tuyến.
+                    const routeKey = selectedIds.join(',') + ':route';
+                    if (selectedIds.length && fittedKey !== routeKey && selectedIds.some((id) => routeLayersOf(id).length)) {
+                        focusSelection();
+                    } else if (selectedIds.length === 1 && map.hasLayer(selectionPopup)) {
+                        openPopup(selectedIds[0]);
+                    }
+                };
+
+                mapCore.applyFitBounds();
+
+                return {
+                    component,
+                    onSelectionChanged(ids) {
+                        selectedIds = (ids || []).map(Number);
+                        focusSelection();
+                    },
+                };
+            }
+
+            if (!window._tmsTrackingListeners) {
+                window._tmsTrackingListeners = true;
+
+                window.addEventListener('vehicleSelectionChanged', (e) => {
+                    const ids = e.detail?.selectedIds || [];
+                    window._tmsTracking?.onSelectionChanged(ids);
+
+                    if (ids.length) {
+                        document.getElementById('sidebar-vehicle-' + ids[0])?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                });
+
+                // Đóng popup bằng nút X = bỏ chọn xe.
+                document.addEventListener('click', (e) => {
+                    if (e.target.closest('.map-tracking-map-container .leaflet-popup-close-button')) {
+                        window._tmsTracking?.component.$wire.call('clearSelectedVehicles');
+                    }
+                });
+            }
+
+            document.addEventListener('livewire:navigated', initTrackingMap);
+            document.addEventListener('DOMContentLoaded', initTrackingMap);
         </script>
     @endpush
 </x-filament-panels::page>

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Pages;
 
+use App\Enums\CheckpointType;
+use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
@@ -61,6 +63,11 @@ class GoogleMapTracking extends Page
     private ?Collection $cachedVehicles = null;
 
     private bool $filterDateLightUpdate = false;
+
+    /**
+     * Chỉ lần render đầu mới nhúng config bản đồ vào HTML; các lần sau dữ liệu đi qua refreshMap().
+     */
+    protected bool $isInitialRender = false;
 
     protected function getHeaderWidgets(): array
     {
@@ -128,8 +135,7 @@ class GoogleMapTracking extends Page
     {
         $this->lastUpdated = now();
         $this->selectedVehicleIds = [];
-        $this->cachedLayerData = null;
-        $this->refreshMap();
+        $this->isInitialRender = true;
     }
 
     #[On('refreshMapData')]
@@ -167,6 +173,11 @@ class GoogleMapTracking extends Page
         $this->refreshMap();
     }
 
+    public function isInitialRender(): bool
+    {
+        return $this->isInitialRender;
+    }
+
     public function getLastUpdated(): ?Carbon
     {
         return $this->lastUpdated;
@@ -187,9 +198,12 @@ class GoogleMapTracking extends Page
         return 740;
     }
 
+    /**
+     * Không tự fit mỗi lần cập nhật (làm bản đồ nhảy); JS tự fit lúc khởi tạo và khi đổi xe chọn.
+     */
     protected function getFitBounds(): bool
     {
-        return empty($this->selectedVehicleIds);
+        return false;
     }
 
     protected function hasFullscreenControl(): bool
@@ -217,414 +231,353 @@ class GoogleMapTracking extends Page
     }
 
     /**
-     * Tính khoảng cách đường chim bay nhanh bằng công thức Haversine (km).
+     * Màu marker theo trạng thái xe (dùng chung cho chú thích trên view).
      */
-    private function calculateHaversineDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
+    public static function statusColor(?VehicleStatus $status): string
     {
-        $earthRadius = 6371;
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-        $a = sin($dLat / 2) * sin($dLat / 2) +
-            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-            sin($dLon / 2) * sin($dLon / 2);
-
-        return $earthRadius * (2 * atan2(sqrt($a), sqrt(1 - $a)));
+        return match ($status) {
+            VehicleStatus::Running => '#f59e0b',
+            VehicleStatus::On => '#10b981',
+            VehicleStatus::Bdsc => '#ef4444',
+            default => '#6b7280',
+        };
     }
 
     /**
-     * @return Marker[]
+     * @return array<string, string> nhãn trạng thái => màu
+     */
+    public function getStatusLegend(): array
+    {
+        return collect(VehicleStatus::cases())
+            ->mapWithKeys(fn (VehicleStatus $status): array => [$status->getLabel() => self::statusColor($status)])
+            ->all();
+    }
+
+    public function getVehiclesWithoutGpsCount(): int
+    {
+        return $this->getFilteredVehicles()
+            ->filter(fn (Vehicle $vehicle): bool => $this->vehiclePosition($vehicle) === null)
+            ->count();
+    }
+
+    /**
+     * Chỉ vẽ xe có toạ độ thật; luôn gom cụm với id cố định để JS cập nhật marker theo id thay vì dựng lại.
+     *
+     * @return MarkerCluster[]
      */
     protected function getMarkers(): array
     {
-        $vehicles = $this->getFilteredVehicles();
+        $markers = $this->getFilteredVehicles()
+            ->map(function (Vehicle $vehicle): ?Marker {
+                $position = $this->vehiclePosition($vehicle);
 
-        $allMarkers = $vehicles->map(function (Vehicle $vehicle): Marker {
-            $activeTrip = $vehicle->trips
-                ->first(fn (Trip $t) => in_array($t->status, TripStatus::activeStatuses(), true))
-                ?? $vehicle->trips->first();
-
-            $activeOrders = $activeTrip?->orders ?? $vehicle->trips->flatMap->orders;
-
-            $hasActiveTrip = $activeTrip !== null || $activeOrders->isNotEmpty();
-
-            // Checkpoints with valid GPS
-            $realCheckpoints = ($activeTrip?->checkpoints ?? collect())
-                ->filter(fn (TripCheckpoint $c) => $c->gps_lat !== null && $c->gps_lng !== null)
-                ->sortBy('occurred_at');
-
-            $latestCheckpoint = $realCheckpoints->last();
-
-            // Latitude & Longitude Resolution
-            $lat = $vehicle->gps_lat ?? $latestCheckpoint?->gps_lat;
-            $lng = $vehicle->gps_lng ?? $latestCheckpoint?->gps_lng;
-
-            // Fallback to order pickup location or hub
-            if ($lat === null || $lng === null) {
-                $firstOrder = $activeOrders->first();
-                if ($firstOrder?->pickupLocation && $firstOrder->pickupLocation->lat !== null) {
-                    $lat = (float) $firstOrder->pickupLocation->lat;
-                    $lng = (float) $firstOrder->pickupLocation->lng;
-                } else {
-                    $offsetLat = (($vehicle->id % 9) - 4) * 0.008;
-                    $offsetLng = ((($vehicle->id * 3) % 9) - 4) * 0.008;
-                    $lat = self::DEFAULT_HUB_CENTER[0] + $offsetLat;
-                    $lng = self::DEFAULT_HUB_CENTER[1] + $offsetLng;
+                if ($position === null) {
+                    return null;
                 }
-            }
 
-            $statusColor = match ($vehicle->status) {
-                VehicleStatus::Running => '#f59e0b',
-                VehicleStatus::On => '#10b981',
-                VehicleStatus::Bdsc => '#ef4444',
-                VehicleStatus::Off => '#6b7280',
-                default => '#6b7280',
-            };
+                return Marker::make($position[0], $position[1])
+                    ->id('vehicle-'.$vehicle->id)
+                    ->icon(Heroicon::Truck, [30, 42])
+                    ->color(self::statusColor($vehicle->status))
+                    ->showShadow(false)
+                    ->popupContent($this->vehiclePopupHtml($vehicle))
+                    ->popupOptions(['maxWidth' => 320]);
+            })
+            ->filter()
+            ->values();
 
-            $driverName = $activeTrip?->driver?->name ?? $vehicle->driver?->name ?? 'Chưa gán lái xe';
-            $driverPhone = $activeTrip?->driver?->phone ?? $vehicle->driver?->phone ?? null;
-
-            // Route ETA & Distance calculation if running (only fetch OSRM if selected or cached to prevent blocking)
-            $etaText = null;
-            $distanceText = null;
-            if ($vehicle->status === VehicleStatus::Running && $hasActiveTrip) {
-                $routePoints = $this->routePointsForTrip($activeTrip, $activeOrders, $vehicle);
-                if ($routePoints->count() >= 2) {
-                    $origin = $routePoints->first();
-                    $destination = $routePoints->last();
-                    $waypoints = $routePoints->slice(1, $routePoints->count() - 2)->map(fn ($p) => ['lat' => $p['lat'], 'lng' => $p['lng']])->values()->all();
-
-                    $isSelected = in_array($vehicle->id, $this->selectedVehicleIds, true);
-                    $osrmService = app(OsrmService::class);
-
-                    if ($isSelected || $osrmService->hasCachedRoute($origin['lat'], $origin['lng'], $destination['lat'], $destination['lng'], $waypoints)) {
-                        $osrmInfo = $osrmService->getRoute(
-                            $origin['lat'],
-                            $origin['lng'],
-                            $destination['lat'],
-                            $destination['lng'],
-                            $waypoints,
-                        );
-
-                        if (! empty($osrmInfo['success']) && ! empty($osrmInfo['data'])) {
-                            $duration = $osrmInfo['data']['duration'] ?? null;
-                            $distance = $osrmInfo['data']['distance'] ?? null;
-
-                            if ($duration !== null) {
-                                $eta = now()->addSeconds($duration);
-                                $etaText = $eta->format('H:i');
-                            }
-
-                            if ($distance !== null) {
-                                $distanceText = round($distance / 1000, 1).' km';
-                            }
-                        }
-                    } else {
-                        // Fast approximate distance using Haversine calculation (instant, 0ms overhead)
-                        $approxDist = $this->calculateHaversineDistance($origin['lat'], $origin['lng'], $destination['lat'], $destination['lng']) * 1.35;
-                        if ($approxDist > 0) {
-                            $distanceText = '~'.round($approxDist, 1).' km';
-                        }
-                    }
-                }
-            }
-
-            $ordersHtml = '';
-            if ($activeOrders->isNotEmpty()) {
-                $ordersHtml = $activeOrders->take(2)->map(function (Order $o) {
-                    $pickup = $o->pickup_address ?? $o->pickupLocation?->name ?? 'Điểm nhận';
-                    $delivery = $o->deliveryPoints?->sortBy('sequence')->first()?->address ?? 'Điểm giao';
-                    $weight = $o->chargeable_weight ? ($o->chargeable_weight.'T') : ($o->total_weight ? ($o->total_weight.'T') : null);
-
-                    return sprintf(
-                        '<div class="trk-order-item">'
-                        .'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">'
-                            .'<span style="font-weight:700;font-size:11px;color:#1e293b;">#%s</span>'
-                            .'<span style="font-size:10px;font-weight:600;padding:1px 5px;border-radius:4px;background:#e0f2fe;color:#0369a1;">%s</span>'
-                        .'</div>'
-                        .'<div style="color:#475569;margin-bottom:1px;">%s %s</div>'
-                        .'<div style="font-size:10px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📍 %s → %s</div>'
-                        .'</div>',
-                        e($o->order_code),
-                        e($o->status->getLabel()),
-                        e($o->customer?->name ?? 'Khách lẻ'),
-                        $weight ? ' &bull; <strong>'.$weight.'</strong>' : '',
-                        e($pickup),
-                        e($delivery),
-                    );
-                })->implode('');
-            }
-
-            $speedHtml = '';
-            if ($vehicle->gps_speed !== null && (float) $vehicle->gps_speed > 0) {
-                $speedHtml = sprintf(
-                    '<span class="trk-speed">⚡ %s km/h</span>',
-                    round((float) $vehicle->gps_speed, 1)
-                );
-            }
-
-            $tripBadge = $activeTrip
-                ? sprintf('<div style="font-size:11px;color:#2563eb;font-weight:600;margin-top:2px;">Chuyến: %s (%s đơn)</div>', e($activeTrip->trip_code), $activeOrders->count())
-                : '';
-
-            $popupContent = sprintf(
-                '<div class="trk-popup">'
-                .'<div class="trk-popup-head">'
-                    .'<div>'
-                        .'<div class="trk-popup-plate">%s</div>'
-                        .'%s'
-                        .'<div class="trk-popup-sub">%s%s</div>'
-                    .'</div>'
-                    .'<span class="trk-popup-badge" style="background:%s;">%s</span>'
-                .'</div>'
-                .'<div class="trk-popup-driver">'
-                    .'<div>👤 <strong>%s</strong>%s</div>'
-                    .'%s'
-                .'</div>'
-                .'<div class="trk-popup-order-title">Đơn hàng vận chuyển</div>'
-                .'%s'
-                .'</div>',
-                e($vehicle->plate_number),
-                $tripBadge,
-                $etaText ? ('ETA: <strong>'.e($etaText).'</strong> • ') : '',
-                $distanceText ? ('Khoảng cách: <strong>'.e($distanceText).'</strong>') : ($vehicle->getVehicleTypeLabel()),
-                $statusColor,
-                e($vehicle->getStatusLabel()),
-                e($driverName),
-                $driverPhone ? (' ('.e($driverPhone).')') : '',
-                $speedHtml,
-                $ordersHtml ?: '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:6px 0;">Không có đơn hàng nào đang chạy</div>',
-            );
-
-            return Marker::make((float) $lat, (float) $lng)
-                ->id('vehicle-'.$vehicle->id)
-                ->title($vehicle->plate_number)
-                ->icon(asset('images/truck.png'), [36, 36])
-                ->color($statusColor)
-                ->popupContent($popupContent)
-                ->popupOptions(['maxWidth' => 380]);
-        });
-
-        // Always keep all markers visible so users can view and click other vehicles!
-        // Keep clustering consistent to avoid recreating layers and closing open popups on selection.
-        if ($allMarkers->count() > 25) {
-            return [
-                MarkerCluster::make($allMarkers->all())
-                    ->maxClusterRadius(60)
-                    ->spiderfyOnMaxZoom(true)
-                    ->removeOutsideVisibleBounds(true)
-                    ->zoomToBoundsOnClick(true),
-            ];
-        }
-
-        return $allMarkers->all();
+        return [
+            MarkerCluster::make($markers->all())
+                ->id('vehicles')
+                ->maxClusterRadius(45)
+                ->spiderfyOnMaxZoom(true)
+                ->removeOutsideVisibleBounds(true)
+                ->zoomToBoundsOnClick(true),
+        ];
     }
 
     /**
-     * @return Polyline[]|CircleMarker[]
+     * Lộ trình của xe đang chọn: đường đã đi (checkpoint theo thời gian + vị trí hiện tại)
+     * và đường kế hoạch còn lại (tới các điểm giao chưa giao).
+     *
+     * @return array<int, Polyline|CircleMarker>
      */
     protected function getShapes(): array
     {
-        $vehicles = $this->getFilteredVehicles();
-
-        $segmentColors = [
-            '#16a34a', // xanh lá: Xuất phát
-            '#2563eb', // xanh dương: Lấy hàng / Trên đường
-            '#7c3aed', // tím: Điểm giao hàng
-            '#ea580c', // cam: Đang tiếp cận
-            '#dc2626', // đỏ: Điểm cuối
-        ];
-
-        return $vehicles
-            ->filter(fn (Vehicle $v) => in_array($v->id, $this->selectedVehicleIds, true))
-            ->flatMap(function (Vehicle $vehicle) use ($segmentColors): array {
-                // 1. Tìm chuyến đi active hoặc chuyến gần nhất có checkpoints
-                $trackingTrip = $vehicle->trips
-                    ->first(fn (Trip $t) => in_array($t->status, TripStatus::activeStatuses(), true))
-                    ?? $vehicle->trips->first(fn (Trip $t) => ($t->checkpoints ?? collect())->whereNotNull('gps_lat')->count() >= 2)
-                    ?? $vehicle->trips->first();
-
-                $activeOrders = $trackingTrip?->orders ?? $vehicle->trips->flatMap->orders;
-
-                $routePoints = $this->routePointsForTrip($trackingTrip, $activeOrders, $vehicle);
-
-                if ($routePoints->count() < 2) {
-                    // Nếu chỉ có 1 điểm (vị trí hiện tại của xe), vẽ vòng tròn định vị nổi bật
-                    if ($routePoints->count() === 1) {
-                        $p = $routePoints->first();
-
-                        return [
-                            CircleMarker::make($p['lat'], $p['lng'])
-                                ->id('pulse-vehicle-'.$vehicle->id)
-                                ->radius(18)
-                                ->color('#3b82f6')
-                                ->fillColor('#60a5fa')
-                                ->fillOpacity(0.35)
-                                ->weight(2)
-                                ->tooltipContent($vehicle->plate_number.' (Vị trí hiện tại)'),
-                        ];
-                    }
-
-                    return [];
-                }
-
-                $points = $routePoints->map(fn (array $p) => [$p['lat'], $p['lng']])->values()->all();
-                $labels = $routePoints->pluck('label')->all();
-
-                $shapes = [];
-
-                // GPS Breadcrumbs (đường nét đứt nối các checkpoint thực tế)
-                $shapes[] = Polyline::make($points)
-                    ->id('route-gps-'.$vehicle->id)
-                    ->color('#64748b')
-                    ->weight(2)
-                    ->opacity(0.5)
-                    ->dashArray(5, 5)
-                    ->fill(false);
-
-                // Điểm bắt đầu (Marker tròn xanh lá)
-                $firstPoint = $points[0];
-                $shapes[] = CircleMarker::make($firstPoint[0], $firstPoint[1])
-                    ->id('start-'.$vehicle->id)
-                    ->radius(8)
-                    ->color('#15803d')
-                    ->fillColor('#22c55e')
-                    ->fillOpacity(0.95)
-                    ->weight(2)
-                    ->tooltipContent('Xuất phát: '.($labels[0] ?? 'Điểm bắt đầu'));
-
-                // Điểm kết thúc (Marker tròn đỏ)
-                $lastIdx = count($points) - 1;
-                $lastPoint = $points[$lastIdx];
-                $shapes[] = CircleMarker::make($lastPoint[0], $lastPoint[1])
-                    ->id('end-'.$vehicle->id)
-                    ->radius(8)
-                    ->color('#b91c1c')
-                    ->fillColor('#ef4444')
-                    ->fillOpacity(0.95)
-                    ->weight(2)
-                    ->tooltipContent('Đích đến: '.($labels[$lastIdx] ?? 'Điểm kết thúc'));
-
-                // Các điểm dừng trung gian (Marker tròn tím)
-                for ($k = 1; $k < $lastIdx; $k++) {
-                    $pt = $points[$k];
-                    $shapes[] = CircleMarker::make($pt[0], $pt[1])
-                        ->id("waypoint-{$k}-{$vehicle->id}")
-                        ->radius(6)
-                        ->color('#6d28d9')
-                        ->fillColor('#8b5cf6')
-                        ->fillOpacity(0.9)
-                        ->weight(2)
-                        ->tooltipContent(($k).'. '.($labels[$k] ?? 'Điểm dừng'));
-                }
-
-                // Vẽ các chặng đường OSRM bám đường thực tế
-                for ($i = 0; $i < count($points) - 1; $i++) {
-                    $segment = [$points[$i], $points[$i + 1]];
-                    $osrmSegment = app(OsrmService::class)->getRouteFromPoints($segment);
-                    $color = $segmentColors[$i % count($segmentColors)];
-                    $label = ($labels[$i] ?? '?').' → '.($labels[$i + 1] ?? '?');
-
-                    if (count($osrmSegment) >= 2) {
-                        $shapes[] = Polyline::make($osrmSegment)
-                            ->id("route-seg{$i}-{$vehicle->id}")
-                            ->color($color)
-                            ->weight(5)
-                            ->opacity(0.9)
-                            ->fill(false)
-                            ->tooltipContent($label);
-                    } else {
-                        $shapes[] = Polyline::make($segment)
-                            ->id("route-seg{$i}-{$vehicle->id}")
-                            ->color($color)
-                            ->weight(4)
-                            ->opacity(0.85)
-                            ->dashArray(6, 4)
-                            ->fill(false)
-                            ->tooltipContent($label);
-                    }
-                }
-
-                return $shapes;
-            })
+        return $this->getFilteredVehicles()
+            ->filter(fn (Vehicle $vehicle): bool => in_array($vehicle->id, $this->selectedVehicleIds, true))
+            ->flatMap(fn (Vehicle $vehicle): array => $this->vehicleRouteShapes($vehicle))
             ->all();
     }
 
     /**
-     * @return Collection<int, array{lat: float, lng: float, label: string}>
+     * @return array<int, Polyline|CircleMarker>
      */
-    private function routePointsForTrip(?Trip $trip, Collection $orders, ?Vehicle $vehicle = null): Collection
+    private function vehicleRouteShapes(Vehicle $vehicle): array
     {
-        $points = collect();
+        $trip = $this->activeTrip($vehicle) ?? $vehicle->trips->first();
 
-        // 1. Tọa độ từ các Checkpoint thực tế của chuyến đi
-        if ($trip !== null) {
-            $tripCheckpoints = ($trip->checkpoints ?? collect())
-                ->filter(fn (TripCheckpoint $c) => $c->gps_lat !== null && $c->gps_lng !== null)
-                ->sortBy('occurred_at')
-                ->values();
+        if ($trip === null) {
+            return [];
+        }
 
-            foreach ($tripCheckpoints as $cp) {
-                $points->push([
-                    'lat' => (float) $cp->gps_lat,
-                    'lng' => (float) $cp->gps_lng,
-                    'label' => $cp->checkpoint_type?->getLabel() ?? 'Checkpoint',
+        $isActive = in_array($trip->status, TripStatus::activeStatuses(), true);
+        $checkpoints = $this->gpsCheckpoints($trip);
+        $current = $isActive ? $this->vehicleGps($vehicle) : null;
+
+        $traveled = $checkpoints->map(fn (array $c): array => [$c['lat'], $c['lng']])->values();
+        if ($current !== null && ! $this->samePoint($traveled->last(), $current)) {
+            $traveled->push($current);
+        }
+
+        $pendingStops = $isActive ? $this->pendingStops($trip, $checkpoints->isEmpty()) : collect();
+        $planned = $pendingStops->map(fn (array $s): array => [$s['lat'], $s['lng']]);
+        if ($traveled->isNotEmpty()) {
+            $planned->prepend($traveled->last());
+        }
+
+        $prefix = "trk-{$vehicle->id}-";
+        $shapes = [];
+
+        if ($traveled->count() >= 2) {
+            $shapes[] = $this->routeLine($prefix.'traveled', $traveled->all())
+                ->color('#2563eb')
+                ->weight(5)
+                ->opacity(0.9)
+                ->tooltipContent(e($vehicle->plate_number).' · Đã đi');
+        }
+
+        if ($planned->count() >= 2) {
+            $shapes[] = $this->routeLine($prefix.'planned', $planned->values()->all())
+                ->color('#e11d48')
+                ->weight(4)
+                ->opacity(0.85)
+                ->dashArray(8, 8)
+                ->tooltipContent(e($vehicle->plate_number).' · Kế hoạch còn lại');
+        }
+
+        foreach ($checkpoints as $checkpoint) {
+            $shapes[] = CircleMarker::make($checkpoint['lat'], $checkpoint['lng'])
+                ->id($prefix.'cp-'.$checkpoint['id'])
+                ->radius(6)
+                ->color('#ffffff')
+                ->fillColor($this->checkpointColor($checkpoint['type']))
+                ->fillOpacity(1)
+                ->weight(2)
+                ->tooltipContent(e($checkpoint['label']).' · '.$checkpoint['time']);
+        }
+
+        foreach ($pendingStops as $stop) {
+            $shapes[] = CircleMarker::make($stop['lat'], $stop['lng'])
+                ->id($prefix.'stop-'.$stop['key'])
+                ->radius(7)
+                ->color('#e11d48')
+                ->fillColor('#ffffff')
+                ->fillOpacity(1)
+                ->weight(3)
+                ->tooltipContent(e($stop['label']));
+        }
+
+        return $shapes;
+    }
+
+    /**
+     * Tuyến bám đường qua OSRM; lỗi thì nối thẳng. Id gồm hash toạ độ để tuyến đổi thì JS thay layer mới.
+     *
+     * @param  array<int, array{0: float, 1: float}>  $points
+     */
+    private function routeLine(string $idPrefix, array $points): Polyline
+    {
+        $road = app(OsrmService::class)->getRouteFromPoints($points);
+
+        return Polyline::make(count($road) >= 2 ? $road : $points)
+            ->id($idPrefix.'-'.md5(json_encode($points)))
+            ->fill(false);
+    }
+
+    private function checkpointColor(?CheckpointType $type): string
+    {
+        return match ($type) {
+            CheckpointType::Started => '#16a34a',
+            CheckpointType::ArrivedPickup, CheckpointType::LeftPickup => '#d97706',
+            CheckpointType::ArrivedDelivery, CheckpointType::Completed => '#7c3aed',
+            CheckpointType::End, CheckpointType::Cancelled => '#dc2626',
+            default => '#64748b',
+        };
+    }
+
+    private function activeTrip(Vehicle $vehicle): ?Trip
+    {
+        return $vehicle->trips->first(fn (Trip $trip): bool => in_array($trip->status, TripStatus::activeStatuses(), true));
+    }
+
+    /**
+     * Vị trí hiện tại: GPS xe, nếu không có thì checkpoint mới nhất của chuyến. Không bịa toạ độ.
+     *
+     * @return array{0: float, 1: float}|null
+     */
+    private function vehiclePosition(Vehicle $vehicle): ?array
+    {
+        $gps = $this->vehicleGps($vehicle);
+
+        if ($gps !== null) {
+            return $gps;
+        }
+
+        $trip = $this->activeTrip($vehicle) ?? $vehicle->trips->first();
+        $latest = $trip ? $this->gpsCheckpoints($trip)->last() : null;
+
+        return $latest ? [$latest['lat'], $latest['lng']] : null;
+    }
+
+    /**
+     * @return array{0: float, 1: float}|null
+     */
+    private function vehicleGps(Vehicle $vehicle): ?array
+    {
+        return $this->validPoint($vehicle->gps_lat, $vehicle->gps_lng);
+    }
+
+    /**
+     * Checkpoint có GPS hợp lệ, theo thứ tự thời gian (cùng thời điểm thì theo id).
+     *
+     * @return Collection<int, array{id: int, lat: float, lng: float, type: ?CheckpointType, label: string, time: string}>
+     */
+    private function gpsCheckpoints(Trip $trip): Collection
+    {
+        $trip->loadMissing('checkpoints');
+
+        return $trip->checkpoints
+            ->sortBy([['occurred_at', 'asc'], ['id', 'asc']])
+            ->map(function (TripCheckpoint $checkpoint): ?array {
+                $point = $this->validPoint($checkpoint->gps_lat, $checkpoint->gps_lng);
+
+                return $point === null ? null : [
+                    'id' => $checkpoint->id,
+                    'lat' => $point[0],
+                    'lng' => $point[1],
+                    'type' => $checkpoint->checkpoint_type,
+                    'label' => $checkpoint->checkpoint_type?->getLabel() ?? 'Checkpoint',
+                    'time' => $checkpoint->occurred_at?->format('H:i d/m') ?? '',
+                ];
+            })
+            ->filter()
+            ->values();
+    }
+
+    /**
+     * Các điểm chưa tới của chuyến: điểm lấy hàng (khi chưa có checkpoint nào) và điểm giao chưa giao.
+     *
+     * @return Collection<int, array{key: string, lat: float, lng: float, label: string}>
+     */
+    private function pendingStops(Trip $trip, bool $includePickup): Collection
+    {
+        $stops = collect();
+
+        foreach ($trip->orders as $order) {
+            $pickup = $order->pickupLocation;
+            $pickupPoint = $pickup ? $this->validPoint($pickup->lat, $pickup->lng) : null;
+            if ($includePickup && $pickupPoint !== null) {
+                $stops->put('pickup-'.$pickup->id, [
+                    'key' => 'pickup-'.$pickup->id,
+                    'lat' => $pickupPoint[0],
+                    'lng' => $pickupPoint[1],
+                    'label' => 'Lấy hàng: '.($pickup->name ?? $order->pickup_address ?? ''),
+                ]);
+            }
+
+            foreach ($order->deliveryPoints->sortBy('sequence') as $deliveryPoint) {
+                $point = $deliveryPoint->location ? $this->validPoint($deliveryPoint->location->lat, $deliveryPoint->location->lng) : null;
+                if ($point === null || $deliveryPoint->status === OrderDeliveryPointStatus::Delivered) {
+                    continue;
+                }
+
+                $stops->put('dp-'.$deliveryPoint->id, [
+                    'key' => 'dp-'.$deliveryPoint->id,
+                    'lat' => $point[0],
+                    'lng' => $point[1],
+                    'label' => 'Điểm giao chưa tới: '.($deliveryPoint->address ?? $deliveryPoint->location->name ?? ''),
                 ]);
             }
         }
 
-        // 2. Nếu thiếu điểm, bổ sung từ điểm lấy hàng và các điểm giao của đơn hàng
-        if ($points->count() < 2 && $orders->isNotEmpty()) {
-            $fallbackPoints = collect();
+        return $stops->values();
+    }
 
-            foreach ($orders as $order) {
-                if ($order->pickupLocation && $order->pickupLocation->lat !== null && $order->pickupLocation->lng !== null) {
-                    $fallbackPoints->push([
-                        'lat' => (float) $order->pickupLocation->lat,
-                        'lng' => (float) $order->pickupLocation->lng,
-                        'label' => $order->pickupLocation->name ?? 'Điểm nhận hàng',
-                    ]);
-                }
-
-                $deliveryPoints = $order->deliveryPoints ?? collect();
-                foreach ($deliveryPoints->sortBy('sequence') as $dp) {
-                    if ($dp->location && $dp->location->lat !== null && $dp->location->lng !== null) {
-                        $fallbackPoints->push([
-                            'lat' => (float) $dp->location->lat,
-                            'lng' => (float) $dp->location->lng,
-                            'label' => $dp->address ?? ($dp->location->name ?? 'Điểm trả hàng'),
-                        ]);
-                    }
-                }
-            }
-
-            if ($fallbackPoints->count() >= 2) {
-                return $fallbackPoints;
-            }
-
-            if ($fallbackPoints->isNotEmpty() && $points->isEmpty()) {
-                $points = $fallbackPoints;
-            }
+    /**
+     * @return array{0: float, 1: float}|null
+     */
+    private function validPoint(mixed $lat, mixed $lng): ?array
+    {
+        if (! is_numeric($lat) || ! is_numeric($lng)) {
+            return null;
         }
 
-        // 3. Nếu vẫn chỉ có 0 hoặc 1 điểm, kiểm tra GPS hiện tại của phương tiện
-        if ($points->count() < 2 && $vehicle !== null && $vehicle->gps_lat !== null && $vehicle->gps_lng !== null) {
-            $currentGps = [
-                'lat' => (float) $vehicle->gps_lat,
-                'lng' => (float) $vehicle->gps_lng,
-                'label' => 'Vị trí hiện tại',
-            ];
+        $lat = (float) $lat;
+        $lng = (float) $lng;
 
-            if ($points->isEmpty()) {
-                $points->push($currentGps);
-            } elseif (
-                abs($points->first()['lat'] - $currentGps['lat']) > 0.0001 ||
-                abs($points->first()['lng'] - $currentGps['lng']) > 0.0001
-            ) {
-                $points->push($currentGps);
-            }
+        if (abs($lat) > 90 || abs($lng) > 180 || ($lat == 0.0 && $lng == 0.0)) {
+            return null;
         }
 
-        return $points;
+        return [$lat, $lng];
+    }
+
+    /**
+     * @param  array{0: float, 1: float}|null  $a
+     * @param  array{0: float, 1: float}  $b
+     */
+    private function samePoint(?array $a, array $b): bool
+    {
+        return $a !== null && abs($a[0] - $b[0]) < 0.0001 && abs($a[1] - $b[1]) < 0.0001;
+    }
+
+    private function vehiclePopupHtml(Vehicle $vehicle): string
+    {
+        $trip = $this->activeTrip($vehicle);
+        $driver = $trip?->driver ?? $vehicle->driver;
+        $orders = $trip?->orders ?? collect();
+
+        $ordersHtml = $orders->take(2)->map(function (Order $order): string {
+            $pickup = $order->pickupLocation?->name ?? $order->pickup_address ?? 'Điểm nhận';
+            $delivery = $order->deliveryPoints->sortBy('sequence')->first()?->address ?? 'Điểm giao';
+
+            return sprintf(
+                '<div class="trk-order-item"><strong>#%s</strong> · %s<div class="trk-muted trk-ellipsis">%s → %s</div></div>',
+                e($order->order_code),
+                e($order->customer?->name ?? 'Khách lẻ'),
+                e($pickup),
+                e($delivery),
+            );
+        })->implode('');
+
+        $lastUpdate = $vehicle->last_gps_update;
+        $isStale = $lastUpdate === null || $lastUpdate->lt(now()->subMinutes(30));
+        $meta = array_filter([
+            $vehicle->gps_speed !== null && (float) $vehicle->gps_speed > 0 ? round((float) $vehicle->gps_speed).' km/h' : null,
+            sprintf(
+                '<span class="%s">Cập nhật: %s</span>',
+                $isStale ? 'trk-stale' : '',
+                $lastUpdate?->format('H:i d/m') ?? 'chưa có GPS',
+            ),
+        ]);
+
+        return sprintf(
+            '<div class="trk-popup">'
+            .'<div class="trk-popup-head"><span class="trk-popup-plate">%s</span><span class="trk-popup-badge" style="background:%s;">%s</span></div>'
+            .'<div class="trk-row">👤 <strong>%s</strong>%s</div>'
+            .'%s%s'
+            .'<div class="trk-muted">%s</div>'
+            .'</div>',
+            e($vehicle->plate_number),
+            self::statusColor($vehicle->status),
+            e($vehicle->getStatusLabel()),
+            e($driver?->name ?? 'Chưa gán lái xe'),
+            $driver?->phone ? ' · '.e($driver->phone) : '',
+            $trip ? sprintf('<div class="trk-row">🚚 Chuyến <strong>%s</strong> · %d đơn</div>', e($trip->trip_code), $orders->count()) : '<div class="trk-row trk-muted">Không có chuyến đang chạy</div>',
+            $ordersHtml,
+            implode(' · ', $meta),
+        );
     }
 
     private function getRawVehicles(): Collection
@@ -639,7 +592,7 @@ class GoogleMapTracking extends Page
                 'trips' => fn ($q) => $q
                     ->latest('id')
                     ->take(5)
-                    ->with(['orders.customer', 'orders.pickupLocation', 'orders.deliveryPoints.location', 'checkpoints']),
+                    ->with(['driver', 'orders.customer', 'orders.pickupLocation', 'orders.deliveryPoints.location']),
             ])
             ->where('is_active', true)
             ->where('type', VehicleOwnerType::Company)

@@ -1,14 +1,28 @@
 <?php
 
+use App\Enums\CargoType;
+use App\Enums\CheckpointType;
+use App\Enums\OrderDeliveryPointStatus;
+use App\Enums\OrderStatus;
+use App\Enums\OrderType;
+use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Filament\Pages\GoogleMapTracking;
 use App\Filament\Widgets\GoogleMapSidebar;
+use App\Models\Area;
+use App\Models\Customer;
+use App\Models\Location;
+use App\Models\Order;
+use App\Models\OrderDeliveryPoint;
+use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -166,4 +180,92 @@ test('google map sidebar allows selecting a single vehicle and toggling checkbox
     // Clicking vehicle 2 card when already the only selected vehicle deselects it
     $sidebar->call('selectVehicle', $vehicle2->id)
         ->assertSet('selectedVehicleIds', []);
+});
+
+test('google map tracking only draws vehicles at their real gps position, clustered and colored by status', function () {
+    $tracked = Vehicle::create([
+        'plate_number' => '29D-10001',
+        'owner' => 'ASGL',
+        'type' => VehicleOwnerType::Company,
+        'vehicle_type' => VehicleType::Normal,
+        'status' => VehicleStatus::Running,
+        'is_active' => true,
+        'gps_lat' => 21.2068,
+        'gps_lng' => 105.8208,
+    ]);
+
+    $untracked = Vehicle::create([
+        'plate_number' => '29D-10002',
+        'owner' => 'ASGL',
+        'type' => VehicleOwnerType::Company,
+        'vehicle_type' => VehicleType::Normal,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    $page = Livewire::test(GoogleMapTracking::class)->instance();
+    $layers = collect($page->getMapData()['layersData'])->keyBy('id');
+
+    expect($layers->get('vehicle-'.$tracked->id))
+        ->coords->toBe([21.2068, 105.8208])
+        ->group->toBe('vehicles')
+        ->and($layers->get('vehicle-'.$tracked->id)['icon']['color'])->toBe('rgb(245, 158, 11)')
+        ->and($layers->has('vehicle-'.$untracked->id))->toBeFalse()
+        ->and($page->getVehiclesWithoutGpsCount())->toBe(1);
+});
+
+test('google map tracking draws selected vehicle route in time order to its current position and plans remaining stops', function () {
+    Http::fake(['*' => Http::response([], 500)]);
+
+    $vehicle = Vehicle::create([
+        'plate_number' => '29D-20001',
+        'owner' => 'ASGL',
+        'type' => VehicleOwnerType::Company,
+        'vehicle_type' => VehicleType::Normal,
+        'status' => VehicleStatus::Running,
+        'is_active' => true,
+        'gps_lat' => 21.10,
+        'gps_lng' => 105.90,
+    ]);
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-MAP-01',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $this->user->id,
+        'status' => TripStatus::Started,
+    ]);
+    $order = Order::create([
+        'order_code' => 'ORD-MAP-01',
+        'type' => OrderType::Hhhk,
+        'area_id' => Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true, 'sort_order' => 1])->id,
+        'customer_id' => Customer::create(['code' => 'ASGL', 'name' => 'ASGL', 'is_active' => true])->id,
+        'trip_id' => $trip->id,
+        'cargo_type' => CargoType::Gcr,
+        'status' => OrderStatus::Completed,
+        'created_by' => $this->user->id,
+    ]);
+    $makeStop = fn (string $code, float $lat, float $lng, int $sequence, OrderDeliveryPointStatus $status) => OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => Location::create(['code' => $code, 'name' => $code, 'lat' => $lat, 'lng' => $lng, 'loc_type' => 'delivery', 'is_active' => true])->id,
+        'sequence' => $sequence,
+        'address' => $code,
+        'status' => $status,
+    ]);
+    $makeStop('DONE', 21.05, 105.85, 1, OrderDeliveryPointStatus::Delivered);
+    $pending = $makeStop('NEXT', 21.30, 106.00, 2, OrderDeliveryPointStatus::Pending);
+
+    // Inserted out of order: the route must follow occurred_at, not insertion order.
+    TripCheckpoint::create(['trip_id' => $trip->id, 'checkpoint_type' => CheckpointType::LeftPickup, 'occurred_at' => now()->subHour(), 'gps_lat' => 21.02, 'gps_lng' => 105.84]);
+    TripCheckpoint::create(['trip_id' => $trip->id, 'checkpoint_type' => CheckpointType::Started, 'occurred_at' => now()->subHours(2), 'gps_lat' => 21.00, 'gps_lng' => 105.80]);
+
+    $page = Livewire::test(GoogleMapTracking::class)
+        ->call('handleLayerClick', 'vehicle-'.$vehicle->id)
+        ->instance();
+    $layers = collect($page->getMapData()['layersData']);
+
+    $traveled = $layers->first(fn (array $l): bool => str_starts_with($l['id'], "trk-{$vehicle->id}-traveled-"));
+    $planned = $layers->first(fn (array $l): bool => str_starts_with($l['id'], "trk-{$vehicle->id}-planned-"));
+
+    expect($traveled['points'])->toBe([[21.0, 105.8], [21.02, 105.84], [21.1, 105.9]])
+        ->and($planned['points'])->toBe([[21.1, 105.9], [21.3, 106.0]])
+        ->and($layers->pluck('id'))->toContain("trk-{$vehicle->id}-stop-dp-{$pending->id}");
 });
