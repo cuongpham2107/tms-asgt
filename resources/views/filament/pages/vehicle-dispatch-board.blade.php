@@ -173,6 +173,7 @@
                                 $isXeChoWarning = $xeChoData['isWarning'];
 
                                 $orderType = \App\Filament\Pages\VehicleDispatchBoard::getOrderType($vehicle);
+                                $currentTrip = $vehicle->active_trip;
                                 $pickup = \App\Filament\Pages\VehicleDispatchBoard::getPickupPoint($vehicle);
                                 $dest = \App\Filament\Pages\VehicleDispatchBoard::getDeliveryPoint($vehicle);
                                 $pickupFull = \App\Filament\Pages\VehicleDispatchBoard::getPickupPointFullName($vehicle);
@@ -223,7 +224,7 @@
                                 
                                 {{-- Hành trình chuyến hiện tại --}}
                                 <td class="border-r border-gray-100 dark:border-white/5 px-1 py-1.5 text-center whitespace-nowrap">
-                                    @if ($vehicle->active_trip)
+                                    @if ($currentTrip)
                                         <x-filament::icon-button
                                             icon="heroicon-o-map-pin"
                                             color="primary"
@@ -231,7 +232,7 @@
                                             class="mx-auto"
                                             label="Hành trình"
                                             tooltip="Xem hành trình chuyến hiện tại"
-                                            wire:click="openTimelineModal({{ $vehicle->id }})"
+                                            wire:click="openTimelineModal({{ $currentTrip->id }})"
                                         />
                                     @else
                                         <span class="text-gray-400">—</span>

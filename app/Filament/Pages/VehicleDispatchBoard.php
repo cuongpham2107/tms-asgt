@@ -73,7 +73,7 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public ?int $selectedVehicleIdForTrip = null;
 
-    public ?int $selectedVehicleIdForTimeline = null;
+    public ?int $selectedTripIdForTimeline = null;
 
     public ?int $selectedVehicleIdForGps = null;
 
@@ -106,19 +106,19 @@ class VehicleDispatchBoard extends Page implements HasTable
         $this->dispatch('open-modal', id: 'vehicle-gps-modal');
     }
 
-    public function openTimelineModal(int $vehicleId): void
+    public function openTimelineModal(int $tripId): void
     {
-        $this->selectedVehicleIdForTimeline = $vehicleId;
+        $this->selectedTripIdForTimeline = $tripId;
         $this->dispatch('open-modal', id: 'vehicle-timeline-modal');
     }
 
     public function getSelectedTripForTimeline(): ?Trip
     {
-        if (! $this->selectedVehicleIdForTimeline) {
+        if (! $this->selectedTripIdForTimeline) {
             return null;
         }
 
-        return Vehicle::find($this->selectedVehicleIdForTimeline)?->active_trip;
+        return Trip::find($this->selectedTripIdForTimeline);
     }
 
     /**
