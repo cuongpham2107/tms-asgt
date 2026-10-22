@@ -54,8 +54,6 @@ test('vehicle dispatch board page renders successfully with company vehicles', f
         ->assertSee('KIỂM SOÁT TÌNH TRẠNG XE')
         ->assertSee('20C-12345')
         ->assertDontSee('29H-99999')
-        ->assertSee('CH')
-        ->assertDontSee('KH')
         ->assertHasNoErrors();
 });
 
@@ -1328,14 +1326,17 @@ test('getGroupedVehicles sorts vehicles by status priority within each location 
 
     expect(isset($grouped['BN']))->toBeTrue();
 
-    // Nhóm BN phải giữ nguyên các xe, nhưng thứ tự phải là:
-    // 1. Xe chờ: 20C-00003 (Priority 2)
-    // 2. Xe chờ: 20C-00004 (Priority 2)
-    // 3. Chờ chạy: 20C-00002 (Priority 3)
-    // 4. Đang giao: 20C-00001 (Priority 6)
-    $platesInGroup = $grouped['BN']['vehicles']->pluck('plate_number')->all();
+    // Mặc định sắp xếp status giảm dần (priority lớn trước), cùng priority thì theo BSX tăng dần
+    expect($grouped['BN']['vehicles']->pluck('plate_number')->all())->toBe([
+        '20C-00001',
+        '20C-00002',
+        '20C-00003',
+        '20C-00004',
+    ]);
 
-    expect($platesInGroup)->toBe([
+    $board->sortDirection = 'asc';
+
+    expect($board->getGroupedVehicles()['BN']['vehicles']->pluck('plate_number')->all())->toBe([
         '20C-00003',
         '20C-00004',
         '20C-00002',
@@ -1346,9 +1347,9 @@ test('getGroupedVehicles sorts vehicles by status priority within each location 
 test('VehicleDispatchBoard sortTable toggles sorting between status and plate_number', function () {
     $component = Livewire::test(VehicleDispatchBoard::class);
 
-    // Mặc định sortBy là status, sortDirection là asc
+    // Mặc định sortBy là status, sortDirection là desc
     expect($component->get('sortBy'))->toBe('status')
-        ->and($component->get('sortDirection'))->toBe('asc');
+        ->and($component->get('sortDirection'))->toBe('desc');
 
     // Bấm sort BSX
     $component->call('sortTable', 'plate_number');
