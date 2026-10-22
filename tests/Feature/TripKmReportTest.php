@@ -875,3 +875,291 @@ test('resolve_km_report_column action on trip table resolves report directly', f
         ->and((float) $this->trip->fresh()->start_km)->toBe(108090.0)
         ->and((float) $this->vehicle->fresh()->current_mileage)->toBe(108090.0);
 });
+
+function kmReportBelowPreviousCheckpoint(): array
+{
+    $started = test()->trip->checkpoints()->first();
+    $started->update(['occurred_at' => now()->subHour()]);
+
+    $pickup = TripCheckpoint::create([
+        'trip_id' => test()->trip->id,
+        'driver_id' => test()->driver->id,
+        'shift_id' => test()->shift->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'km_reading' => 108000,
+        'occurred_at' => now()->subMinutes(30),
+    ]);
+
+    $report = TripKmReport::create([
+        'trip_id' => test()->trip->id,
+        'checkpoint_id' => $pickup->id,
+        'driver_id' => test()->driver->id,
+        'vehicle_id' => test()->vehicle->id,
+        'reported_km' => 107990,
+        'system_km' => 108000,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    foreach (['ViewAny:Trip', 'View:Trip', 'Update:Trip'] as $permission) {
+        test()->admin->givePermissionTo(Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']));
+    }
+    test()->actingAs(test()->admin);
+
+    return [$started, $pickup, $report];
+}
+
+function kmReportCheckpointRows(TripCheckpoint ...$checkpoints): array
+{
+    return collect($checkpoints)->map(fn (TripCheckpoint $checkpoint, int $index): array => [
+        'id' => $checkpoint->id,
+        'occurred_at' => $checkpoint->occurred_at->format('Y-m-d H:i:s'),
+        'label' => (string) $index,
+        'km_reading' => $checkpoint->km_reading,
+    ])->all();
+}
+
+test('báo km nhỏ hơn mốc trước mà chỉ sửa mốc được báo thì bị chặn', function () {
+    [$started, $pickup, $report] = kmReportBelowPreviousCheckpoint();
+
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+        ->mountTableAction('resolve_km_report_column', $this->trip)
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 107990])
+        ->callMountedTableAction()
+        ->assertHasTableActionErrors(['checkpoints']);
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Pending)
+        ->and((float) $pickup->fresh()->km_reading)->toBe(108000.0);
+});
+
+test('báo km nhỏ hơn mốc trước thì sửa được km các mốc trước trong cùng modal', function () {
+    [$started, $pickup, $report] = kmReportBelowPreviousCheckpoint();
+
+    $rows = kmReportCheckpointRows($started, $pickup);
+    $rows[0]['km_reading'] = 107990;
+    $rows[1]['km_reading'] = 107990;
+
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+        ->mountTableAction('resolve_km_report_column', $this->trip)
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 107990])
+        ->fillForm(['checkpoints' => $rows])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Resolved)
+        ->and((float) $started->fresh()->km_reading)->toBe(107990.0)
+        ->and((float) $pickup->fresh()->km_reading)->toBe(107990.0)
+        ->and((float) $this->trip->fresh()->start_km)->toBe(107990.0)
+        ->and((float) $this->shift->fresh()->start_km)->toBe(107990.0)
+        ->and($this->trip->fresh()->is_paused)->toBeFalse();
+});
+
+test('km báo nằm trong giới hạn thì không hiện danh sách mốc', function () {
+    [$started, $pickup, $report] = kmReportBelowPreviousCheckpoint();
+
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+        ->mountTableAction('resolve_km_report_column', $this->trip)
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 108010])
+        ->assertFormFieldHidden('checkpoints')
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect((float) $pickup->fresh()->km_reading)->toBe(108010.0)
+        ->and((float) $started->fresh()->km_reading)->toBe(108000.0);
+});
+
+/**
+ * @param  list<array{0: CheckpointType, 1: int, 2: int}>  $checkpoints  [loại, km, số phút trước]
+ * @return array{0: list<TripCheckpoint>, 1: TripKmReport}
+ */
+function kmReportScenario(array $checkpoints, int $reportedIndex, int $reportedKm, TripStatus $status, array $tripOverrides = []): array
+{
+    test()->trip->checkpoints()->delete();
+    test()->trip->update(['status' => $status, ...$tripOverrides]);
+
+    $created = collect($checkpoints)->map(fn (array $checkpoint): TripCheckpoint => TripCheckpoint::create([
+        'trip_id' => test()->trip->id,
+        'driver_id' => test()->driver->id,
+        'shift_id' => test()->shift->id,
+        'checkpoint_type' => $checkpoint[0],
+        'km_reading' => $checkpoint[1],
+        'occurred_at' => now()->subMinutes($checkpoint[2]),
+    ]))->all();
+
+    $report = TripKmReport::create([
+        'trip_id' => test()->trip->id,
+        'checkpoint_id' => $created[$reportedIndex]->id,
+        'driver_id' => test()->driver->id,
+        'vehicle_id' => test()->vehicle->id,
+        'reported_km' => $reportedKm,
+        'system_km' => $created[$reportedIndex]->km_reading,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    foreach (['ViewAny:Trip', 'View:Trip', 'Update:Trip'] as $permission) {
+        test()->admin->givePermissionTo(Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']));
+    }
+    test()->actingAs(test()->admin);
+
+    return [$created, $report];
+}
+
+function resolveKmReportOnTable(): mixed
+{
+    return Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+        ->mountTableAction('resolve_km_report_column', test()->trip);
+}
+
+test('km báo lớn hơn mốc sau thì hiện danh sách mốc và sửa được mốc sau', function () {
+    [$cps, $report] = kmReportScenario([
+        [CheckpointType::Started, 108000, 90],
+        [CheckpointType::ArrivedPickup, 108050, 60],
+        [CheckpointType::LeftPickup, 108050, 30],
+    ], 1, 108080, TripStatus::Delivering);
+
+    $rows = kmReportCheckpointRows(...$cps);
+    $rows[1]['km_reading'] = 108080;
+
+    resolveKmReportOnTable()
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 108080])
+        ->assertFormFieldVisible('checkpoints')
+        ->fillForm(['checkpoints' => $rows])
+        ->callMountedTableAction()
+        ->assertHasTableActionErrors(['checkpoints']);
+
+    $rows[2]['km_reading'] = 108080;
+
+    resolveKmReportOnTable()
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 108080])
+        ->fillForm(['checkpoints' => $rows])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Resolved)
+        ->and((float) $cps[0]->fresh()->km_reading)->toBe(108000.0)
+        ->and((float) $cps[1]->fresh()->km_reading)->toBe(108080.0)
+        ->and((float) $cps[2]->fresh()->km_reading)->toBe(108080.0);
+});
+
+test('chuyến đang giao: sửa mốc giữa thấp hơn mốc trước, các mốc sau giữ nguyên', function () {
+    [$cps, $report] = kmReportScenario([
+        [CheckpointType::Started, 108000, 120],
+        [CheckpointType::ArrivedPickup, 108040, 90],
+        [CheckpointType::LeftPickup, 108040, 60],
+        [CheckpointType::ArrivedDelivery, 108100, 30],
+    ], 2, 108020, TripStatus::Delivering);
+
+    $rows = kmReportCheckpointRows(...$cps);
+    $rows[1]['km_reading'] = 108020;
+    $rows[2]['km_reading'] = 108020;
+
+    resolveKmReportOnTable()
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 108020])
+        ->fillForm(['checkpoints' => $rows])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Resolved)
+        ->and((float) $cps[0]->fresh()->km_reading)->toBe(108000.0)
+        ->and((float) $cps[1]->fresh()->km_reading)->toBe(108020.0)
+        ->and((float) $cps[2]->fresh()->km_reading)->toBe(108020.0)
+        ->and((float) $cps[3]->fresh()->km_reading)->toBe(108100.0)
+        ->and((float) $this->trip->fresh()->start_km)->toBe(108000.0)
+        ->and($this->trip->fresh()->status)->toBe(TripStatus::Delivering);
+});
+
+test('chuyến đã hoàn thành: sửa mốc kết thúc thấp hơn mốc trước thì cập nhật end_km', function () {
+    [$cps, $report] = kmReportScenario([
+        [CheckpointType::Started, 108000, 120],
+        [CheckpointType::Completed, 108100, 60],
+        [CheckpointType::End, 108100, 30],
+    ], 2, 108090, TripStatus::Completed, ['end_km' => 108100, 'completed_at' => now()->subMinutes(30)]);
+
+    $rows = kmReportCheckpointRows(...$cps);
+    $rows[1]['km_reading'] = 108090;
+    $rows[2]['km_reading'] = 108090;
+
+    resolveKmReportOnTable()
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 108090])
+        ->fillForm(['checkpoints' => $rows])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    $trip = $this->trip->fresh();
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Resolved)
+        ->and((float) $cps[1]->fresh()->km_reading)->toBe(108090.0)
+        ->and((float) $cps[2]->fresh()->km_reading)->toBe(108090.0)
+        ->and((float) $trip->end_km)->toBe(108090.0)
+        ->and($trip->status)->toBe(TripStatus::Completed);
+});
+
+test('từ chối báo cáo vượt giới hạn thì không cần sửa danh sách mốc', function () {
+    [$cps, $report] = kmReportScenario([
+        [CheckpointType::Started, 108000, 60],
+        [CheckpointType::ArrivedPickup, 108000, 30],
+    ], 1, 107990, TripStatus::ArrivedPickup);
+
+    resolveKmReportOnTable()
+        ->fillForm(['decision' => 'reject', 'admin_note' => 'Ảnh taplo không rõ'])
+        ->assertFormFieldHidden('checkpoints')
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Rejected)
+        ->and((float) $cps[0]->fresh()->km_reading)->toBe(108000.0)
+        ->and((float) $cps[1]->fresh()->km_reading)->toBe(108000.0)
+        ->and($this->trip->fresh()->is_paused)->toBeFalse();
+});
+
+test('báo sai ở các loại mốc khác nhau đều sửa được và tính lại km chuyến, đơn, xe', function (int $reportedIndex, int $reportedKm, array $expectedKms) {
+    [$cps, $report] = kmReportScenario([
+        [CheckpointType::Started, 108000, 180],
+        [CheckpointType::ArrivedPickup, 108020, 150],
+        [CheckpointType::LeftPickup, 108020, 120],
+        [CheckpointType::ArrivedDelivery, 108080, 90],
+        [CheckpointType::Completed, 108080, 60],
+        [CheckpointType::DriverSwap, 108090, 30],
+    ], $reportedIndex, $reportedKm, TripStatus::Delivering);
+
+    $order = Order::create([
+        'trip_id' => $this->trip->id,
+        'customer_id' => Customer::firstOrCreate(['code' => 'CUST_KM'], ['name' => 'Khách km'])->id,
+        'created_by' => $this->admin->id,
+        'area_id' => Area::firstOrCreate(['code' => 'ASG'], ['name' => 'ASG Logistics', 'sort_order' => 1, 'is_active' => true])->id,
+        'order_code' => 'KM-ORD-01',
+        'status' => OrderStatus::InTransit,
+        'type' => OrderType::Hhhk,
+    ]);
+    $cps[1]->update(['order_id' => $order->id]);
+    $cps[4]->update(['order_id' => $order->id]);
+
+    // Điều hành sửa các mốc lệch cho km tăng dần (giống thao tác trên bảng).
+    $rows = kmReportCheckpointRows(...$cps);
+    foreach ($expectedKms as $index => $km) {
+        $rows[$index]['km_reading'] = $km;
+    }
+
+    resolveKmReportOnTable()
+        ->fillForm(['decision' => 'ok', 'corrected_km' => $reportedKm])
+        ->assertFormFieldVisible('checkpoints')
+        ->fillForm(['checkpoints' => $rows])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    $trip = $this->trip->fresh();
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Resolved)
+        ->and(collect($cps)->map(fn (TripCheckpoint $cp): float => (float) $cp->fresh()->km_reading)->all())
+        ->toBe(array_map('floatval', $expectedKms))
+        ->and((float) $trip->start_km)->toBe((float) $expectedKms[0])
+        ->and((float) $trip->total_km)->toBe((float) ($expectedKms[5] - $expectedKms[0]))
+        ->and((float) $order->fresh()->loaded_km)->toBe((float) ($expectedKms[4] - $expectedKms[1]))
+        ->and((float) $this->vehicle->fresh()->current_mileage)->toBe((float) max($expectedKms))
+        ->and($trip->is_paused)->toBeFalse();
+})->with([
+    'Đến lấy hàng cao hơn mốc sau' => [1, 108030, [108000, 108030, 108030, 108080, 108080, 108090]],
+    'Rời lấy hàng thấp hơn mốc trước' => [2, 108010, [108000, 108010, 108010, 108080, 108080, 108090]],
+    'Đến giao hàng thấp hơn mốc trước' => [3, 108015, [108000, 108015, 108015, 108015, 108080, 108090]],
+    'Hoàn thành thấp hơn mốc trước' => [4, 108075, [108000, 108020, 108020, 108075, 108075, 108090]],
+    'Đảo lái thấp hơn mốc trước' => [5, 108070, [108000, 108020, 108020, 108070, 108070, 108070]],
+]);

@@ -145,21 +145,32 @@ class TripKmAdjustmentService
      *
      * @param  float  $correctedKm  Số km thực tế được admin xác nhận
      * @param  int|null  $targetCheckpointId  Checkpoint cụ thể được chọn điều chỉnh
+     * @param  array<int, float>  $otherCheckpointKms  Km mới của các mốc khác (checkpoint id => km) khi km báo làm lệch mốc trước/sau
      */
     public function resolveReport(
         TripKmReport $report,
         float $correctedKm,
         ?int $targetCheckpointId = null,
         ?string $adminNote = null,
-        ?int $adminId = null
+        ?int $adminId = null,
+        array $otherCheckpointKms = [],
     ): void {
-        DB::transaction(function () use ($report, $correctedKm, $targetCheckpointId, $adminNote, $adminId) {
+        DB::transaction(function () use ($report, $correctedKm, $targetCheckpointId, $adminNote, $adminId, $otherCheckpointKms) {
             $freshReport = TripKmReport::where('id', $report->id)->lockForUpdate()->first();
             if (! $freshReport || $freshReport->status !== TripKmReportStatus::Pending) {
                 return;
             }
 
             $trip = $freshReport->trip;
+
+            foreach ($otherCheckpointKms as $checkpointId => $km) {
+                $checkpoint = TripCheckpoint::where('trip_id', $trip->id)->find($checkpointId);
+
+                if ($checkpoint !== null && (float) $checkpoint->km_reading !== (float) $km) {
+                    $checkpoint->update(['km_reading' => $km]);
+                    $this->syncTripBoundary($trip, $checkpoint, (float) $km);
+                }
+            }
 
             // 1. Xác định checkpoint mục tiêu (từ Admin chọn, hoặc lưu sẵn trong report, hoặc mới nhất)
             $targetCp = $this->resolveTargetCheckpoint($trip, $targetCheckpointId, $freshReport);
