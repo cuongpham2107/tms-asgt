@@ -442,13 +442,23 @@ class DriverNotificationService
                     'priority' => 'high',
                 ]);
 
-            if ($response->successful()) {
+            // Expo trả HTTP 200 kể cả khi từ chối thông báo: kết quả thật nằm ở data.status của ticket
+            if ($response->successful() && $response->json('data.status') === 'ok') {
                 Log::info("DriverNotification (Expo/Simulator): Đã gửi thông báo tới lái xe {$driver->name} ({$title})");
 
                 return true;
             }
 
-            Log::warning("DriverNotification (Expo/Simulator): Lỗi gửi Expo push tới {$driver->name}: ".$response->body());
+            $error = $response->json('data.details.error') ?? $response->json('errors.0.code');
+            Log::warning("DriverNotification (Expo/Simulator): Expo từ chối thông báo tới {$driver->name} [{$error}]: ".$response->body());
+
+            // App đã gỡ hoặc token hết hạn → xóa token để app đăng ký lại
+            if ($error === 'DeviceNotRegistered') {
+                $driver->update([
+                    'fcm_token' => null,
+                    'fcm_token_updated_at' => null,
+                ]);
+            }
 
             return false;
         } catch (Throwable $e) {

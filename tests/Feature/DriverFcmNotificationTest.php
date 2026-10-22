@@ -31,6 +31,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Kreait\Firebase\Contract\Messaging;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Laravel\Sanctum\Sanctum;
@@ -359,6 +360,30 @@ test('driver notification service sends expo push notification when token is exp
             && str_contains($request['title'], 'Lệnh vận chuyển mới');
     });
 });
+
+test('expo push reports failure when expo rejects the ticket despite http 200', function (string $error, ?string $tokenAfter) {
+    Http::fake([
+        'https://exp.host/--/api/v2/push/send' => Http::response(['data' => [
+            'status' => 'error',
+            'message' => 'Expo rejected the notification',
+            'details' => ['error' => $error],
+        ]], 200),
+    ]);
+    Log::spy();
+
+    $driver = User::factory()->create(['fcm_token' => 'ExponentPushToken[rejected_token]']);
+
+    $result = (new DriverNotificationService)->sendToDriver($driver, 'Đơn hàng mới', 'ASG-1');
+
+    expect($result)->toBeFalse()
+        ->and($driver->fresh()->fcm_token)->toBe($tokenAfter);
+
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message): bool => str_contains($message, $error))->once();
+    Log::shouldNotHaveReceived('info', [Mockery::on(fn (string $message): bool => str_contains($message, 'Đã gửi'))]);
+})->with([
+    'missing push credentials keeps token' => ['InvalidCredentials', 'ExponentPushToken[rejected_token]'],
+    'uninstalled app clears token' => ['DeviceNotRegistered', null],
+]);
 
 test('driver notification service sends empty run push notification to driver', function () {
     $driver = User::factory()->create(['fcm_token' => 'driver_empty_run_token']);
