@@ -118,6 +118,7 @@ export default function TripDetailScreen() {
     const { showLoading, hideLoading } = useLoading();
     const params = useLocalSearchParams<{ id: string; trip: string }>();
     const trip = params.trip ? JSON.parse(params.trip) : null;
+    const tripId = trip?.id || params.id;
     const [detail, setDetail] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -227,7 +228,6 @@ export default function TripDetailScreen() {
             );
             return;
         }
-        const tripId = trip?.id || params.id;
         if (!tripId || !token) return;
 
         const currentStep = getCurrentStepInfo();
@@ -270,7 +270,6 @@ export default function TripDetailScreen() {
     };
 
     const load = async () => {
-        const tripId = trip?.id || params.id;
         if (!token || !tripId) return;
         try {
             const r = await api.trips.detail(String(tripId), token);
@@ -348,7 +347,7 @@ export default function TripDetailScreen() {
     }, [vehicleKm]);
 
     const handleStart = async () => {
-        if (!trip?.id || !token) return;
+        if (!tripId || !token) return;
         setStarting(true);
         showLoading();
         try {
@@ -361,7 +360,7 @@ export default function TripDetailScreen() {
                 body.gps_lat = gps.gps_lat;
                 body.gps_lng = gps.gps_lng;
             }
-            await api.trips.checkpoint(String(trip.id), body, token);
+            await api.trips.checkpoint(String(tripId), body, token);
             const updated = await load();
             const currentOrders: any[] =
                 updated?.orders || detail?.orders || trip?.orders || [];
@@ -426,7 +425,7 @@ export default function TripDetailScreen() {
             showAlert("Thiếu", "Nhập Km bắt đầu");
             return;
         }
-        if (!trip?.id || !token) return;
+        if (!tripId || !token) return;
         setStarting(true);
         try {
             const cps = detail?.checkpoints || [];
@@ -435,7 +434,7 @@ export default function TripDetailScreen() {
             );
             if (startedCp) {
                 await api.trips.checkpoint(
-                    String(trip.id),
+                    String(tripId),
                     {
                         checkpoint_type: "started",
                         km_reading: sKm,
@@ -469,7 +468,7 @@ export default function TripDetailScreen() {
             );
             return;
         }
-        if (!trip?.id || !token) return;
+        if (!tripId || !token) return;
         showDestructiveConfirm(
             "Kết thúc chuyến quay đầu",
             "Bạn có chắc chắn muốn kết thúc chuyến quay đầu?",
@@ -483,7 +482,7 @@ export default function TripDetailScreen() {
                     );
                     if (endCp) {
                         await api.trips.checkpoint(
-                            String(trip.id),
+                            String(tripId),
                             {
                                 checkpoint_type: "end",
                                 km_reading: eKm,
@@ -492,7 +491,7 @@ export default function TripDetailScreen() {
                             token,
                         );
                     }
-                    await api.trips.complete(String(trip.id), eKm, token);
+                    await api.trips.complete(String(tripId), eKm, token);
                     showAlert("Thành công", "Đã kết thúc chuyến quay đầu");
                     await load();
                 } catch (e: any) {
@@ -506,13 +505,13 @@ export default function TripDetailScreen() {
     };
 
     const doComplete = async (km: number) => {
-        if (!trip?.id || !token) return;
+        if (!tripId || !token) return;
         setCompleting(true);
         showLoading();
         try {
             const gps = await getGps();
             await api.trips.complete(
-                String(trip.id),
+                String(tripId),
                 km,
                 token,
                 gps ?? undefined,
