@@ -974,6 +974,8 @@ export default function OrderDetailScreen() {
                                     flexDirection: "row",
                                     justifyContent: "space-between",
                                     alignItems: "center",
+                                    flexWrap: "wrap",
+                                    rowGap: 4,
                                     paddingHorizontal: 16,
                                     marginBottom: 10,
                                     marginTop: 8,
@@ -981,6 +983,7 @@ export default function OrderDetailScreen() {
                             >
                                 <Text
                                     style={{
+                                        flexShrink: 1,
                                         fontSize: 16,
                                         fontWeight: "700",
                                         color: "#111827",
