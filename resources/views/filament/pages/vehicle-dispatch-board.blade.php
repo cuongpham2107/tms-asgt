@@ -90,7 +90,7 @@
                     {{-- Dòng tiêu đề chính màu navy theo theme table --}}
                     <tr class="dark:bg-slate-950" style="background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));">
                         <th 
-                            colspan="16" 
+                            colspan="17" 
                             class="text-white py-2.5 px-4 text-center font-bold tracking-wider text-sm sm:text-base border-b border-white/10 uppercase dark:bg-slate-950"
                             style="background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));"
                         >
@@ -101,6 +101,7 @@
                     {{-- Dòng tiêu đề các cột màu navy theo theme table --}}
                     <tr class="text-white text-[11px] font-bold tracking-wide uppercase dark:bg-slate-950" style="background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));">
                         <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[100px]">Địa điểm</th>
+                        <th class="border-r border-b border-white/10 py-2 px-1 text-center whitespace-nowrap min-w-[45px]">HT</th>
                         <th 
                             wire:click="sortTable('plate_number')"
                             class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[125px] cursor-pointer hover:bg-white/10 select-none transition"
@@ -113,7 +114,8 @@
                                 @endif
                             </span>
                         </th>
-                        <th class="border-r border-b border-white/10 py-2 px-1 text-center whitespace-nowrap min-w-[55px]">Sở hữu</th>
+                        
+                        <th class="border-r border-b border-white/10 py-2 px-1 text-center whitespace-nowrap min-w-[55px]">Loại đơn</th>
                         <th 
                             wire:click="sortTable('status')"
                             class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[85px] cursor-pointer hover:bg-white/10 select-none transition"
@@ -170,6 +172,7 @@
                                 $isXeChoAlert = $xeChoData['isAlert'];
                                 $isXeChoWarning = $xeChoData['isWarning'];
 
+                                $orderType = \App\Filament\Pages\VehicleDispatchBoard::getOrderType($vehicle);
                                 $pickup = \App\Filament\Pages\VehicleDispatchBoard::getPickupPoint($vehicle);
                                 $dest = \App\Filament\Pages\VehicleDispatchBoard::getDeliveryPoint($vehicle);
                                 $pickupFull = \App\Filament\Pages\VehicleDispatchBoard::getPickupPointFullName($vehicle);
@@ -217,6 +220,23 @@
                                 @else
                                     <td class="border-r border-gray-100 dark:border-white/5 px-2 py-1.5"></td>
                                 @endif
+                                
+                                {{-- Hành trình chuyến hiện tại --}}
+                                <td class="border-r border-gray-100 dark:border-white/5 px-1 py-1.5 text-center whitespace-nowrap">
+                                    @if ($vehicle->active_trip)
+                                        <x-filament::icon-button
+                                            icon="heroicon-o-map-pin"
+                                            color="primary"
+                                            size="xs"
+                                            class="mx-auto"
+                                            label="Hành trình"
+                                            tooltip="Xem hành trình chuyến hiện tại"
+                                            wire:click="openTimelineModal({{ $vehicle->id }})"
+                                        />
+                                    @else
+                                        <span class="text-gray-400">—</span>
+                                    @endif
+                                </td>
 
                                 {{-- 2. BSX --}}
                                 <td class="border-r border-gray-100 dark:border-white/5 px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100">
@@ -225,11 +245,17 @@
                                     </span>
                                 </td>
 
-                                {{-- 3. Sở hữu (CH / KH) --}}
+                                
+
+                                {{-- 3. Loại đơn của đơn hiện tại (HHHK / Hàng ngoài) --}}
                                 <td class="border-r border-gray-100 dark:border-white/5 px-1 py-1.5 text-center whitespace-nowrap">
-                                    <x-filament::badge size="xs" :color="$vehicle->isCompany() ? 'info' : 'warning'">
-                                        {{ $vehicle->isCompany() ? 'CH' : 'KH' }}
-                                    </x-filament::badge>
+                                    @if ($orderType)
+                                        <x-filament::badge size="xs" :color="$orderType->getColor()">
+                                            {{ $orderType->getLabel() }}
+                                        </x-filament::badge>
+                                    @else
+                                        <span class="text-gray-400">—</span>
+                                    @endif
                                 </td>
 
                                 {{-- 4. Trạng thái (Tô màu toàn bộ ô, không bị ghi đè màu khi hover) --}}
@@ -395,7 +421,7 @@
                         @endforeach
                     @empty
                         <tr>
-                            <td colspan="15" class="py-8 text-center text-gray-500 italic">
+                            <td colspan="16" class="py-8 text-center text-gray-500 italic">
                                 Không tìm thấy xe nào phù hợp.
                             </td>
                         </tr>
@@ -409,6 +435,7 @@
     @php
         $tripVehicle = $this->getSelectedVehicleForTrip();
         $gpsVehicle = $this->getSelectedVehicleForGps();
+        $timelineTrip = $this->getSelectedTripForTimeline();
     @endphp
 
     {{-- Modal xem danh sách chuyến xe trong ngày --}}
@@ -442,6 +469,25 @@
                 @include('filament.pages.partials.vehicle-gps-modal', [
                     'vehicle' => $gpsVehicle,
                 ])
+            </div>
+        @endif
+    </x-filament::modal>
+
+    {{-- Modal hành trình chuyến hiện tại --}}
+    <x-filament::modal id="vehicle-timeline-modal" width="7xl">
+        <x-slot name="heading">
+            Hành trình — {{ $timelineTrip?->vehicle?->plate_number }}
+        </x-slot>
+
+        @if ($timelineTrip)
+            <div wire:key="vehicle-timeline-modal-content-{{ $timelineTrip->id }}">
+                @include('filament.resources.trips.components.trip-timeline-popup', [
+                    'trip' => $timelineTrip,
+                ])
+            </div>
+        @else
+            <div class="text-sm text-gray-500 italic p-4 text-center">
+                Xe chưa có chuyến đang chạy.
             </div>
         @endif
     </x-filament::modal>

@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Enums\CheckpointType;
 use App\Enums\OnDutyLocation;
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\ShiftType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
@@ -72,6 +73,8 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public ?int $selectedVehicleIdForTrip = null;
 
+    public ?int $selectedVehicleIdForTimeline = null;
+
     public ?int $selectedVehicleIdForGps = null;
 
     /**
@@ -101,6 +104,21 @@ class VehicleDispatchBoard extends Page implements HasTable
     {
         $this->selectedVehicleIdForGps = $vehicleId;
         $this->dispatch('open-modal', id: 'vehicle-gps-modal');
+    }
+
+    public function openTimelineModal(int $vehicleId): void
+    {
+        $this->selectedVehicleIdForTimeline = $vehicleId;
+        $this->dispatch('open-modal', id: 'vehicle-timeline-modal');
+    }
+
+    public function getSelectedTripForTimeline(): ?Trip
+    {
+        if (! $this->selectedVehicleIdForTimeline) {
+            return null;
+        }
+
+        return Vehicle::find($this->selectedVehicleIdForTimeline)?->active_trip;
     }
 
     /**
@@ -513,13 +531,14 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->state(fn (Vehicle $record): string => self::renderBsx($record))
                     ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
 
-                // 2. Sở hữu (CH / KH)
-                TextColumn::make('type')
-                    ->label('Sở hữu')
+                // 2. Loại đơn của đơn hiện tại (HHHK / Hàng ngoài)
+                TextColumn::make('order_type')
+                    ->label('Loại đơn')
                     ->badge()
                     ->alignCenter()
-                    ->color(fn (Vehicle $record): string => $record->isCompany() ? 'info' : 'warning')
-                    ->state(fn (Vehicle $record): string => $record->isCompany() ? 'CH' : 'KH'),
+                    ->placeholder('—')
+                    ->color(fn (Vehicle $record): ?string => self::getOrderType($record)?->getColor())
+                    ->state(fn (Vehicle $record): ?string => self::getOrderType($record)?->getLabel()),
 
                 // 3. Trạng thái chuyến / xe
                 TextColumn::make('trip_status')
@@ -931,6 +950,11 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         return $activeTrip->status === TripStatus::DriverSwap || $activeTrip->isPaused();
+    }
+
+    public static function getOrderType(Vehicle $record): ?OrderType
+    {
+        return $record->active_trip?->orders->first()?->type;
     }
 
     public static function getPickupPoint(Vehicle $record): string
