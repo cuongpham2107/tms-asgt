@@ -3,14 +3,14 @@
     .dispatch-row {
         transition: background-color 0.15s ease, border-color 0.15s ease;
     }
-    .dispatch-row:hover td:not(.status-cell):not(.km-over-cell) {
+    .dispatch-row:hover td:not(.status-cell):not(.km-over-cell):not(.alert-cell) {
         background-color: rgb(239 246 255 / 0.85);
     }
     .dispatch-row:hover td {
         border-top-color: rgb(147 197 253 / 0.9) !important;
         border-bottom-color: rgb(147 197 253 / 0.9) !important;
     }
-    .dark .dispatch-row:hover td:not(.status-cell):not(.km-over-cell) {
+    .dark .dispatch-row:hover td:not(.status-cell):not(.km-over-cell):not(.alert-cell) {
         background-color: rgb(30 58 138 / 0.35);
     }
     .dark .dispatch-row:hover td {

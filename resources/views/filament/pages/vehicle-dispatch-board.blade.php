@@ -132,12 +132,7 @@
                                 $statusColor = \App\Filament\Pages\VehicleDispatchBoard::getTripStatusBadgeClass($vehicle);
 
                                 $movStatus = \App\Filament\Pages\VehicleDispatchBoard::getMovementStatus($vehicle);
-                                $movBadgeColor = match ($movStatus) {
-                                    'Đang chạy' => 'success',
-                                    'Ko tắt máy' => 'warning',
-                                    'Mất GPS' => 'gray',
-                                    default => 'gray',
-                                };
+                                $movBadgeColor = \App\Filament\Pages\VehicleDispatchBoard::getMovementStatusColor($vehicle);
 
                                 $xeChoData = \App\Filament\Pages\VehicleDispatchBoard::getXeChoData($vehicle);
                                 $xeCho = $xeChoData['text'];
@@ -314,8 +309,11 @@
                                 </td>
 
                                 {{-- 9. Tốc độ --}}
-                                <td class="border-r border-gray-100 dark:border-white/5 px-1 py-1.5 text-center whitespace-nowrap font-bold text-gray-900 dark:text-white">
-                                    <span class="{{ (float)$vehicle->gps_speed > 0 ? 'text-emerald-600 dark:text-emerald-400 font-black' : '' }}">
+                                @php
+                                    $speedAlertClass = \App\Filament\Pages\VehicleDispatchBoard::getSpeedAlertClass($vehicle);
+                                @endphp
+                                <td class="border-r border-gray-100 dark:border-white/5 px-1 py-1.5 text-center whitespace-nowrap font-bold {{ $speedAlertClass ?: 'text-gray-900 dark:text-white' }}">
+                                    <span class="{{ ! $speedAlertClass && (float) $vehicle->gps_speed > 0 ? 'text-emerald-600 dark:text-emerald-400 font-black' : '' }}">
                                         {{ $speed }}
                                     </span>
                                 </td>
@@ -354,7 +352,7 @@
                                     </button>
                                 </td>
 
-                                {{-- 13. KM over (>=3000 tô đỏ, >=2700 tô vàng, còn lại tô nền theo tỉ lệ / 3.000 km) --}}
+                                {{-- 13. KM over (>=3000 đỏ, >=2800 cam, >=2600 vàng nhạt, còn lại tô nền theo tỉ lệ / 3.000 km) --}}
                                 <td 
                                     class="border-r border-gray-100 dark:border-white/5 px-1.5 py-1.5 text-center whitespace-nowrap font-mono text-[11px] {{ $kmOverData['cellClass'] }}"
                                     title="{{ $kmOverData['tooltip'] }}"

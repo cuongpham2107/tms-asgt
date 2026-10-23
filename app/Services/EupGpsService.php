@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Vehicle;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -123,6 +124,7 @@ class EupGpsService
                 }
 
                 $vehicle->update($updateData);
+                self::trackIdleEngine($vehicle);
                 $updated++;
             }
 
@@ -146,5 +148,36 @@ class EupGpsService
 
             return ['success' => false, 'message' => 'Lỗi kết nối đến API GPS: '.$e->getMessage()];
         }
+    }
+
+    /**
+     * Mốc bắt đầu trạng thái "Ko tắt máy" (nổ máy, đứng yên) liên tục của xe, null nếu xe không ở trạng thái đó.
+     */
+    public static function idleEngineSince(int $vehicleId): ?Carbon
+    {
+        $timestamp = Cache::get(self::idleEngineCacheKey($vehicleId));
+
+        return is_numeric($timestamp) ? Carbon::createFromTimestamp((int) $timestamp, config('app.timezone')) : null;
+    }
+
+    /**
+     * Ghi mốc lần đầu xe vào trạng thái nổ máy đứng yên, xoá mốc khi xe chạy, tắt máy hoặc mất GPS.
+     */
+    private static function trackIdleEngine(Vehicle $vehicle): void
+    {
+        $key = self::idleEngineCacheKey($vehicle->id);
+
+        if ($vehicle->car_status === 0 && (float) $vehicle->gps_speed <= 0) {
+            Cache::add($key, ($vehicle->last_gps_update ?? Carbon::now())->getTimestamp());
+
+            return;
+        }
+
+        Cache::forget($key);
+    }
+
+    private static function idleEngineCacheKey(int $vehicleId): string
+    {
+        return "vehicle:{$vehicleId}:idle_engine_since";
     }
 }

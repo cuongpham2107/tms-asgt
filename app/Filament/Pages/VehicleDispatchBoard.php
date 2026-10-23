@@ -41,6 +41,15 @@ class VehicleDispatchBoard extends Page implements HasTable
 {
     use InteractsWithTable;
 
+    /** Nền ô cảnh báo theo mức của getAlertLevel(). */
+    public const ALERT_CELL_CLASSES = [
+        'light' => 'alert-cell bg-yellow-100 text-yellow-900 font-bold select-none',
+        'orange' => 'alert-cell bg-orange-400 text-white font-bold select-none',
+        'red' => 'alert-cell bg-rose-500 text-white font-bold select-none',
+    ];
+
+    public const IDLE_ENGINE_ALERT_MINUTES = 20;
+
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-table-cells';
@@ -616,11 +625,7 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->label('Status')
                     ->badge()
                     ->alignCenter()
-                    ->color(fn (Vehicle $record): string => match (self::getMovementStatus($record)) {
-                        'Đang chạy' => 'success',
-                        'Ko tắt máy' => 'warning',
-                        default => 'gray',
-                    })
+                    ->color(fn (Vehicle $record): string => self::getMovementStatusColor($record))
                     ->state(fn (Vehicle $record): string => self::getMovementStatus($record)),
 
                 // 10. Chuyến
@@ -647,7 +652,7 @@ class VehicleDispatchBoard extends Page implements HasTable
                     ->badge()
                     ->color(fn (Vehicle $record): string => match (self::getKmOverData($record)['status']) {
                         'danger' => 'danger',
-                        'warning' => 'warning',
+                        'warning', 'notice' => 'warning',
                         default => 'gray',
                     })
                     ->tooltip(fn (Vehicle $record): string => self::getKmOverData($record)['tooltip'])
@@ -1261,6 +1266,49 @@ class VehicleDispatchBoard extends Page implements HasTable
         return 'Xe dừng';
     }
 
+    /**
+     * Màu badge Status: Mất GPS đỏ; Ko tắt máy đỏ khi kéo dài quá IDLE_ENGINE_ALERT_MINUTES phút.
+     */
+    public static function getMovementStatusColor(Vehicle $record): string
+    {
+        return match (self::getMovementStatus($record)) {
+            'Đang chạy' => 'success',
+            'Mất GPS' => 'danger',
+            'Ko tắt máy' => self::isIdleEngineOverdue(EupGpsService::idleEngineSince($record->id)) ? 'danger' : 'warning',
+            default => 'gray',
+        };
+    }
+
+    public static function isIdleEngineOverdue(?\DateTimeInterface $idleSince): bool
+    {
+        return $idleSince !== null && Carbon::instance($idleSince)->lt(now()->subMinutes(self::IDLE_ENGINE_ALERT_MINUTES));
+    }
+
+    /**
+     * Mức cảnh báo theo 3 ngưỡng tăng dần: vàng nhạt, cam, đỏ.
+     *
+     * @return 'light'|'orange'|'red'|null
+     */
+    public static function getAlertLevel(float $value, float $light, float $orange, float $red): ?string
+    {
+        return match (true) {
+            $value >= $red => 'red',
+            $value >= $orange => 'orange',
+            $value >= $light => 'light',
+            default => null,
+        };
+    }
+
+    /**
+     * Làm tròn như getSpeed() để màu khớp số đang hiển thị.
+     */
+    public static function getSpeedAlertClass(Vehicle $record): string
+    {
+        $level = self::getAlertLevel(round((float) $record->gps_speed), 55, 60, 65);
+
+        return $level ? self::ALERT_CELL_CLASSES[$level] : '';
+    }
+
     public static function getTodayTripsCount(Vehicle $record): int
     {
         [$shiftStart, $shiftEnd] = self::getShiftWindow();
@@ -1343,7 +1391,7 @@ class VehicleDispatchBoard extends Page implements HasTable
      * @return array{
      *     text: string,
      *     delta: ?float,
-     *     status: 'danger'|'warning'|'normal'|'none',
+     *     status: 'danger'|'warning'|'notice'|'normal'|'none',
      *     cellClass: string,
      *     tooltip: string,
      *     fillPercent: int,
@@ -1371,34 +1419,24 @@ class VehicleDispatchBoard extends Page implements HasTable
         $formattedDelta = number_format($delta, 0, ',', '.');
         $tooltipDetails = 'Đã chạy: '.$formattedDelta.' km | Đầu chu kỳ (ngày 23): '.number_format($startKm, 0, ',', '.').' km | Hiện tại: '.number_format($currentKm, 0, ',', '.').' km';
 
-        if ($delta >= 3000) {
-            return [
-                'text' => $formattedDelta,
-                'delta' => $delta,
-                'status' => 'danger',
-                'cellClass' => 'km-over-cell bg-rose-500 text-white font-bold select-none',
-                'tooltip' => '⚠️ VƯỢT ĐỊNH MỨC (≥ 3.000 km) — '.$tooltipDetails,
-                'fillPercent' => $fillPercent,
-            ];
-        }
-
-        if ($delta >= 2700) {
-            return [
-                'text' => $formattedDelta,
-                'delta' => $delta,
-                'status' => 'warning',
-                'cellClass' => 'km-over-cell bg-amber-400 text-slate-900 font-bold select-none',
-                'tooltip' => '⚡ SẮP ĐẾN HẠN MỨC (≥ 2.700 km) — '.$tooltipDetails,
-                'fillPercent' => $fillPercent,
-            ];
-        }
+        $level = self::getAlertLevel($delta, 2600, 2800, 3000);
 
         return [
             'text' => $formattedDelta,
             'delta' => $delta,
-            'status' => 'normal',
-            'cellClass' => 'text-gray-700 dark:text-gray-300 font-semibold',
-            'tooltip' => $tooltipDetails,
+            'status' => match ($level) {
+                'red' => 'danger',
+                'orange' => 'warning',
+                'light' => 'notice',
+                default => 'normal',
+            },
+            'cellClass' => $level ? 'km-over-cell '.self::ALERT_CELL_CLASSES[$level] : 'text-gray-700 dark:text-gray-300 font-semibold',
+            'tooltip' => match ($level) {
+                'red' => '⚠️ VƯỢT ĐỊNH MỨC (≥ 3.000 km) — ',
+                'orange' => '⚡ SẮP ĐẾN HẠN MỨC (≥ 2.800 km) — ',
+                'light' => 'Gần hạn mức (≥ 2.600 km) — ',
+                default => '',
+            }.$tooltipDetails,
             'fillPercent' => $fillPercent,
         ];
     }

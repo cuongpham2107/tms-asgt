@@ -20,8 +20,10 @@ use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\EupGpsService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -980,7 +982,7 @@ test('vehicle dispatch board calculates km over and highlights background based 
         ->and($dataNone['status'])->toBe('none')
         ->and($dataNone['cellClass'])->toContain('text-gray-400');
 
-    // 2. Xe chạy bình thường (delta = 1500 < 2700)
+    // 2. Xe chạy bình thường (delta = 1500 < 2600)
     $vehicleNormal = Vehicle::factory()->create([
         'plate_number' => '29C-KM-NORMAL',
         'type' => VehicleOwnerType::Company,
@@ -994,24 +996,23 @@ test('vehicle dispatch board calculates km over and highlights background based 
     expect($dataNormal['text'])->toBe('1.500')
         ->and($dataNormal['status'])->toBe('normal')
         ->and($dataNormal['fillPercent'])->toBe(50)
-        ->and($dataNormal['cellClass'])->not->toContain('bg-amber-400')
+        ->and($dataNormal['cellClass'])->not->toContain('bg-orange-400')
         ->and($dataNormal['cellClass'])->not->toContain('bg-rose-500');
 
-    // 3. Xe sắp đến hạn mức (delta = 2700: đúng ngưỡng >= 2700 và < 3000) -> Tô vàng
+    // 3. Xe sắp đến hạn mức (delta = 2800: đúng ngưỡng >= 2800 và < 3000) -> Tô cam
     $vehicleWarning = Vehicle::factory()->create([
         'plate_number' => '29C-KM-WARN',
         'type' => VehicleOwnerType::Company,
-        'current_mileage' => 12700,
+        'current_mileage' => 12800,
         'monthly_start_km' => 10000,
         'status' => VehicleStatus::On,
         'is_active' => true,
     ]);
 
     $dataWarn = VehicleDispatchBoard::getKmOverData($vehicleWarning);
-    expect($dataWarn['text'])->toBe('2.700')
+    expect($dataWarn['text'])->toBe('2.800')
         ->and($dataWarn['status'])->toBe('warning')
-        ->and($dataWarn['cellClass'])->toContain('bg-amber-400')
-        ->and($dataWarn['cellClass'])->toContain('text-slate-900')
+        ->and($dataWarn['cellClass'])->toContain('bg-orange-400')
         ->and($dataWarn['cellClass'])->toContain('km-over-cell');
 
     // 4. Xe từ 3000 trở lên (delta = 3120 >= 3000) -> Tô đỏ
@@ -1035,8 +1036,8 @@ test('vehicle dispatch board calculates km over and highlights background based 
     Livewire::test(VehicleDispatchBoard::class)
         ->assertStatus(200)
         ->assertSee('29C-KM-WARN')
-        ->assertSee('2.700')
-        ->assertSee('bg-amber-400')
+        ->assertSee('2.800')
+        ->assertSee('bg-orange-400')
         ->assertSee('29C-KM-DANGER')
         ->assertSee('3.120')
         ->assertSee('bg-rose-500')
@@ -1365,4 +1366,64 @@ test('VehicleDispatchBoard sortTable toggles sorting between status and plate_nu
     $component->call('sortTable', 'status');
     expect($component->get('sortBy'))->toBe('status')
         ->and($component->get('sortDirection'))->toBe('asc');
+});
+
+test('alert level boundaries for speed and km over', function (float $value, float $light, float $orange, float $red, ?string $expected) {
+    expect(VehicleDispatchBoard::getAlertLevel($value, $light, $orange, $red))->toBe($expected);
+})->with([
+    'speed 54.9' => [54.9, 55, 60, 65, null],
+    'speed 55' => [55, 55, 60, 65, 'light'],
+    'speed 59.9' => [59.9, 55, 60, 65, 'light'],
+    'speed 60' => [60, 55, 60, 65, 'orange'],
+    'speed 65' => [65, 55, 60, 65, 'red'],
+    'km 2599' => [2599, 2600, 2800, 3000, null],
+    'km 2600' => [2600, 2600, 2800, 3000, 'light'],
+    'km 2800' => [2800, 2600, 2800, 3000, 'orange'],
+    'km 2999' => [2999, 2600, 2800, 3000, 'orange'],
+    'km 3000' => [3000, 2600, 2800, 3000, 'red'],
+]);
+
+test('speed and km over cells use the alert colors', function () {
+    $speeding = Vehicle::factory()->create(['gps_speed' => 64.6]);
+    $slow = Vehicle::factory()->create(['gps_speed' => 54.4]);
+    $nearLimit = Vehicle::factory()->create(['current_mileage' => 12600, 'monthly_start_km' => 10000]);
+
+    expect(VehicleDispatchBoard::getSpeedAlertClass($speeding))->toContain('bg-rose-500')
+        ->and(VehicleDispatchBoard::getSpeedAlertClass($slow))->toBe('')
+        ->and(VehicleDispatchBoard::getKmOverData($nearLimit)['status'])->toBe('notice')
+        ->and(VehicleDispatchBoard::getKmOverData($nearLimit)['cellClass'])->toContain('bg-yellow-100');
+});
+
+test('idle engine turns red only after more than 20 minutes', function () {
+    $this->travelTo(Carbon::parse('2026-10-23 10:00:00'));
+
+    expect(VehicleDispatchBoard::isIdleEngineOverdue(null))->toBeFalse()
+        ->and(VehicleDispatchBoard::isIdleEngineOverdue(now()->subMinutes(20)))->toBeFalse()
+        ->and(VehicleDispatchBoard::isIdleEngineOverdue(now()->subMinutes(20)->subSecond()))->toBeTrue();
+});
+
+test('gps sync tracks how long a vehicle idles with engine on', function () {
+    config(['services.eup.base_url' => 'http://eup.test']);
+    $vehicle = Vehicle::factory()->create(['plate_number' => '29C-IDLE', 'gps_speed' => 0, 'car_status' => 2]);
+    $lost = Vehicle::factory()->create(['car_status' => 5]);
+    $gpsItem = fn (int $carStatus, int $speed, string $at) => ['result' => [
+        ['VehicleNo' => '29C-IDLE', 'Speed' => $speed, 'CarStatus' => $carStatus, 'OperateDate' => $at],
+    ]];
+    Http::fake(['*' => Http::sequence()
+        ->push($gpsItem(0, 0, '2026-10-23 10:00:00'))
+        ->push($gpsItem(0, 0, '2026-10-23 10:15:00'))
+        ->push($gpsItem(0, 30, '2026-10-23 10:22:00'))]);
+
+    app(EupGpsService::class)->sync();
+    app(EupGpsService::class)->sync();
+
+    expect(EupGpsService::idleEngineSince($vehicle->id)?->format('H:i'))->toBe('10:00');
+
+    $this->travelTo(Carbon::parse('2026-10-23 10:21:00'));
+    expect(VehicleDispatchBoard::getMovementStatusColor($vehicle->fresh()))->toBe('danger')
+        ->and(VehicleDispatchBoard::getMovementStatusColor($lost))->toBe('danger');
+
+    app(EupGpsService::class)->sync();
+
+    expect(EupGpsService::idleEngineSince($vehicle->id))->toBeNull();
 });
