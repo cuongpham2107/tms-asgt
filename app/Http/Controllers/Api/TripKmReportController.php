@@ -29,6 +29,12 @@ class TripKmReportController extends Controller
             return response()->json(['message' => 'Bạn không thuộc chuyến này'], 403);
         }
 
+        if ($trip->kmReports()->where('status', 'pending')->exists()) {
+            return response()->json([
+                'message' => 'Bạn đã gửi báo sai km cho chuyến này, vui lòng chờ điều hành xử lý trước khi gửi lại.',
+            ], 422);
+        }
+
         $photoPath = null;
         if ($request->hasFile('photo')) {
             $photoPath = $request->file('photo')->store('km_reports', 'public');
@@ -51,38 +57,17 @@ class TripKmReportController extends Controller
 
         $systemKm = $checkpoint?->km_reading ?? $trip->start_km ?? $trip->vehicle?->current_mileage;
 
-        $existingPending = $trip->kmReports()->where('status', 'pending')->first();
-        if ($existingPending) {
-            $previous = sprintf(
-                'Lần báo trước (%s): %s km%s',
-                $existingPending->updated_at?->format('H:i d/m') ?? '',
-                number_format((float) $existingPending->reported_km, 1, ',', '.'),
-                filled($existingPending->note) ? ' — '.$existingPending->note : '',
-            );
-
-            $existingPending->update([
-                'checkpoint_id' => $checkpointId,
-                'driver_id' => $user->id,
-                'vehicle_id' => $trip->vehicle_id,
-                'reported_km' => $request->validated('reported_km'),
-                'system_km' => $systemKm,
-                'photo_path' => $photoPath ?? $existingPending->photo_path,
-                'note' => trim(($request->validated('note') ?? '')."\n".$previous),
-            ]);
-            $report = $existingPending;
-        } else {
-            $report = TripKmReport::create([
-                'trip_id' => $trip->id,
-                'checkpoint_id' => $checkpointId,
-                'driver_id' => $user->id,
-                'vehicle_id' => $trip->vehicle_id,
-                'reported_km' => $request->validated('reported_km'),
-                'system_km' => $systemKm,
-                'photo_path' => $photoPath,
-                'note' => $request->validated('note'),
-                'status' => 'pending',
-            ]);
-        }
+        $report = TripKmReport::create([
+            'trip_id' => $trip->id,
+            'checkpoint_id' => $checkpointId,
+            'driver_id' => $user->id,
+            'vehicle_id' => $trip->vehicle_id,
+            'reported_km' => $request->validated('reported_km'),
+            'system_km' => $systemKm,
+            'photo_path' => $photoPath,
+            'note' => $request->validated('note'),
+            'status' => 'pending',
+        ]);
 
         $note = $request->validated('note');
         $pausedReason = 'Chờ điều chỉnh báo sai số Km'.($note ? ": {$note}" : '');
