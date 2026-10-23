@@ -14,7 +14,7 @@ Artisan::command('inspire', function () {
 Schedule::call(fn () => app(EupGpsService::class)->sync())
     ->name('sync-eup-gps')
     ->everyThirtySeconds()
-    ->withoutOverlapping();
+    ->withoutOverlapping(1);
 
 Schedule::command('vehicles:snapshot-monthly-km')
     ->monthlyOn(23, '12:00')

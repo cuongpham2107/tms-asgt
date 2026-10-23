@@ -119,7 +119,10 @@ test('eup sync runs only from the scheduler every 30 seconds without overlapping
 
     expect($event)->not->toBeNull()
         ->and($event->repeatSeconds)->toBe(30)
-        ->and($event->withoutOverlapping)->toBeTrue();
+        ->and($event->withoutOverlapping)->toBeTrue()
+        // Khoá chống chạy chồng tự hết hạn sau 1 phút: nếu tiến trình bị kill giữa chừng
+        // (pm2 restart) thì không bị kẹt khoá 24 giờ làm ngừng đồng bộ.
+        ->and($event->expiresAt)->toBe(1);
 });
 
 test('no web route or page triggers an eup sync', function () {
