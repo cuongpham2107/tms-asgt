@@ -733,8 +733,15 @@ export default function TripDetailScreen() {
                             },
                             {
                                 icon: "arrow-up-circle-outline",
-                                label: "Km xe",
-                                value: fmt(vehicleKm),
+                                label:
+                                    currentStatus === "completed"
+                                        ? "Km kết thúc"
+                                        : "Km xe",
+                                value: fmt(
+                                    currentStatus === "completed"
+                                        ? (detail?.end_km ?? trip?.end_km)
+                                        : vehicleKm,
+                                ),
                                 color: "#F59E0B",
                                 bg: "#FFFBEB",
                             },
