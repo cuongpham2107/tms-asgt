@@ -2,6 +2,9 @@ const { withAndroidManifest, withDangerousMod } = require("@expo/config-plugins"
 const fs = require("fs");
 const path = require("path");
 
+// Bản dev/preview cho phép HTTP thường để gọi Laravel local (http://<IP máy>:8000); production chỉ HTTPS.
+const allowLocalHttp = process.env.EAS_BUILD_PROFILE !== "production";
+
 const networkSecurityConfig = `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
@@ -13,7 +16,7 @@ const networkSecurityConfig = `<?xml version="1.0" encoding="utf-8"?>
             <certificates src="user" />
         </trust-anchors>
     </domain-config>
-    <base-config>
+    <base-config${allowLocalHttp ? ' cleartextTrafficPermitted="true"' : ""}>
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />

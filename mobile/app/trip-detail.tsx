@@ -17,7 +17,8 @@ import {
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
-import { api } from "../src/lib/api";
+import { api, type GeofenceError } from "../src/lib/api";
+import GeofenceBlockedModal from "../src/components/GeofenceBlockedModal";
 import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { clearNotificationBadge } from "../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
@@ -504,6 +505,8 @@ export default function TripDetailScreen() {
         );
     };
 
+    const [geofenceBlock, setGeofenceBlock] = useState<{ error: GeofenceError; km: number } | null>(null);
+
     const doComplete = async (km: number) => {
         if (!tripId || !token) return;
         setCompleting(true);
@@ -528,7 +531,11 @@ export default function TripDetailScreen() {
             setShowCompleteModal(false);
             await load();
         } catch (e: any) {
-            showAlert("Lỗi", e.message);
+            if (e.geofence) {
+                setGeofenceBlock({ error: e.geofence, km });
+            } else {
+                showAlert("Lỗi", e.message);
+            }
         } finally {
             setCompleting(false);
             hideLoading();
@@ -2066,6 +2073,15 @@ export default function TripDetailScreen() {
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+            <GeofenceBlockedModal
+                error={geofenceBlock?.error ?? null}
+                onClose={() => setGeofenceBlock(null)}
+                onRetry={() => {
+                    const km = geofenceBlock?.km;
+                    setGeofenceBlock(null);
+                    if (km != null) doComplete(km);
+                }}
+            />
         </KeyboardAvoidingView>
     );
 }

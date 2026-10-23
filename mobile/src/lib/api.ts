@@ -1,15 +1,34 @@
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import type { AppVersionInfo } from "./version";
 
 // ─── Cấu hình API Laravel ───────────────────────────────────────────
-// Thay IP này thành IP máy chạy Laravel backend
-const API = Platform.select({
-    ios: "https://tms.asgl.net.vn/api/driver",
-    android: "https://tms.asgl.net.vn/api/driver",
-    default: "https://tms.asgl.net.vn/api/driver",
-});
+// Build production luôn gọi server thật. Khi chạy dev (__DEV__) gọi Laravel trên máy đang chạy Metro:
+// - Mặc định lấy IP máy Metro (cùng mạng LAN với điện thoại), cổng 8000 của `php artisan serve --host=0.0.0.0`.
+// - Muốn trỏ chỗ khác thì đặt EXPO_PUBLIC_API_URL trong mobile/.env (ví dụ http://192.168.1.10:8000/api/driver).
+const PRODUCTION_API = "https://tms.asgl.net.vn/api/driver";
+
+function devApi(): string {
+    if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
+
+    const metroHost = Constants.expoConfig?.hostUri?.split(":")[0];
+    if (metroHost) return `http://${metroHost}:8000/api/driver`;
+
+    // Giả lập Android truy cập máy chủ qua 10.0.2.2, giả lập iOS dùng localhost
+    return Platform.OS === "android" ? "http://10.0.2.2:8000/api/driver" : "http://localhost:8000/api/driver";
+}
+
+const API = __DEV__ ? devApi() : PRODUCTION_API;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
+
+/** Mốc bị chặn vì sai vị trí (API trả kèm lỗi 422). */
+export interface GeofenceError {
+    layer: "vehicle" | "location";
+    distance_m: number | null;
+    radius_m: number;
+    target_code: string | null;
+}
 
 let unauthorizedHandler: (() => void) | null = null;
 
@@ -37,6 +56,9 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
         const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg)) as any;
         if (json?.active_trip_id) {
             err.active_trip_id = json.active_trip_id;
+        }
+        if (json?.geofence) {
+            err.geofence = json.geofence as GeofenceError;
         }
         throw err;
     }

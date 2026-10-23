@@ -17,7 +17,8 @@ import {
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
-import { api } from "../src/lib/api";
+import { api, type GeofenceError } from "../src/lib/api";
+import GeofenceBlockedModal from "../src/components/GeofenceBlockedModal";
 import { showAlert } from "../src/lib/alert";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -132,6 +133,7 @@ export default function OrderDetailScreen() {
 
     // Photo capture
     const [photos, setPhotos] = useState<string[]>([]);
+    const [geofenceBlock, setGeofenceBlock] = useState<{ error: GeofenceError; type: string } | null>(null);
 
     // Fetch full order detail with checkpoints from API
     const loadDetail = async () => {
@@ -445,7 +447,11 @@ export default function OrderDetailScreen() {
             setSelectedLoc(null);
             await loadDetail(); // refresh
         } catch (e: any) {
-            showAlert("Lỗi", e.message);
+            if (e.geofence) {
+                setGeofenceBlock({ error: e.geofence, type });
+            } else {
+                showAlert("Lỗi", e.message);
+            }
         } finally {
             setLoading(false);
             hideLoading();
@@ -1394,6 +1400,15 @@ export default function OrderDetailScreen() {
 
                 <View style={{ height: 40 }} />
             </ScrollView>
+            <GeofenceBlockedModal
+                error={geofenceBlock?.error ?? null}
+                onClose={() => setGeofenceBlock(null)}
+                onRetry={() => {
+                    const type = geofenceBlock?.type;
+                    setGeofenceBlock(null);
+                    if (type) submitCheckpoint(type);
+                }}
+            />
         </KeyboardAvoidingView>
     );
 }
