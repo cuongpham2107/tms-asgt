@@ -209,6 +209,7 @@ class TripKmAdjustmentService
 
             // 4. Đồng bộ số km xe an toàn
             $this->syncVehicleMileageIfLatest($trip, $correctedKm);
+            $this->lowerMonthlyStartKmIfAboveReadings($trip);
 
             // 5. Mở lại chuyến xe (unpause)
             $trip->update([
@@ -306,6 +307,7 @@ class TripKmAdjustmentService
             app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
 
             $this->syncVehicleMileageIfLatest($trip);
+            $this->lowerMonthlyStartKmIfAboveReadings($trip);
         });
     }
 
@@ -414,6 +416,32 @@ class TripKmAdjustmentService
     /**
      * Km xe chỉ đi theo chuyến mới nhất của xe; sửa chuyến cũ không đụng km xe.
      */
+    /**
+     * Mốc Km đầu chu kỳ (chốt lúc 00:00 ngày 23) không thể lớn hơn số Km ghi nhận sau thời điểm chốt.
+     * Nếu sau khi sửa km lại có số nhỏ hơn mốc, mốc đã được chốt từ số km sai → hạ mốc xuống.
+     */
+    private function lowerMonthlyStartKmIfAboveReadings(Trip $trip): void
+    {
+        $vehicle = $trip->vehicle;
+
+        if ($vehicle?->monthly_start_km === null) {
+            return;
+        }
+
+        $cycleStart = now()->day >= 23
+            ? now()->setDay(23)->startOfDay()
+            : now()->subMonthNoOverflow()->setDay(23)->startOfDay();
+
+        $minKmAfterSnapshot = TripCheckpoint::where('trip_id', $trip->id)
+            ->whereNotNull('km_reading')
+            ->where('occurred_at', '>=', $cycleStart)
+            ->min('km_reading');
+
+        if ($minKmAfterSnapshot !== null && (float) $minKmAfterSnapshot < (float) $vehicle->monthly_start_km) {
+            $vehicle->update(['monthly_start_km' => $minKmAfterSnapshot]);
+        }
+    }
+
     private function syncVehicleMileageIfLatest(Trip $trip, ?float $correctedKm = null): void
     {
         $vehicle = $trip->vehicle;

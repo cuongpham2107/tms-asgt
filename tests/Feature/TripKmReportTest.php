@@ -1121,3 +1121,54 @@ test('báo sai ở các loại mốc khác nhau đều sửa được và tính 
     'Hoàn thành thấp hơn mốc trước' => [4, 108075, [108000, 108020, 108020, 108075, 108075, 108090]],
     'Đảo lái thấp hơn mốc trước' => [5, 108070, [108000, 108020, 108020, 108070, 108070, 108070]],
 ]);
+
+test('resolving a report lowers monthly_start_km when the snapshot took a wrong km after the 23rd cutoff', function () {
+    $this->travelTo(now()->setDate(2026, 10, 23)->setTime(6, 49));
+    $this->vehicle->update(['current_mileage' => 108010, 'monthly_start_km' => 108010]);
+    $this->trip->update(['start_km' => 108010, 'started_at' => now()->setTime(1, 6)]);
+    $this->trip->checkpoints()->update(['km_reading' => 108010, 'occurred_at' => now()->setTime(1, 6)]);
+
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108000,
+        'system_km' => 108010,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    app(TripKmAdjustmentService::class)->resolveReport($report, 108000);
+
+    expect((float) $this->vehicle->fresh()->monthly_start_km)->toBe(108000.0);
+});
+
+test('resolving a report keeps monthly_start_km when the corrected checkpoint is before the 23rd cutoff', function () {
+    $this->travelTo(now()->setDate(2026, 10, 23)->setTime(6, 49));
+    $this->vehicle->update(['current_mileage' => 108010, 'monthly_start_km' => 108010]);
+    $this->trip->update(['start_km' => 108010, 'started_at' => now()->subDay()]);
+    $this->trip->checkpoints()->update(['km_reading' => 108010, 'occurred_at' => now()->subDay()]);
+
+    $report = TripKmReport::create([
+        'trip_id' => $this->trip->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'reported_km' => 108000,
+        'system_km' => 108010,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    app(TripKmAdjustmentService::class)->resolveReport($report, 108000);
+
+    expect((float) $this->vehicle->fresh()->monthly_start_km)->toBe(108010.0);
+});
+
+test('driver cannot submit a km report equal to the system km', function () {
+    Sanctum::actingAs($this->driver);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/report-km-issue", ['reported_km' => 108000])
+        ->assertUnprocessable()
+        ->assertJsonPath('message', 'Số km báo cáo trùng với số km hệ thống đang ghi nhận (108.000 km), không cần báo sai.');
+
+    expect(TripKmReport::count())->toBe(0)
+        ->and($this->trip->fresh()->is_paused)->toBeFalsy();
+});

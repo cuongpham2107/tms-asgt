@@ -35,11 +35,6 @@ class TripKmReportController extends Controller
             ], 422);
         }
 
-        $photoPath = null;
-        if ($request->hasFile('photo')) {
-            $photoPath = $request->file('photo')->store('km_reports', 'public');
-        }
-
         $checkpointId = $request->validated('checkpoint_id');
         $checkpoint = null;
         if ($checkpointId) {
@@ -56,6 +51,17 @@ class TripKmReportController extends Controller
         }
 
         $systemKm = $checkpoint?->km_reading ?? $trip->start_km ?? $trip->vehicle?->current_mileage;
+
+        if ($systemKm !== null && (float) $systemKm === (float) $request->validated('reported_km')) {
+            return response()->json([
+                'message' => 'Số km báo cáo trùng với số km hệ thống đang ghi nhận ('.number_format((float) $systemKm, 0, ',', '.').' km), không cần báo sai.',
+            ], 422);
+        }
+
+        $photoPath = null;
+        if ($request->hasFile('photo')) {
+            $photoPath = $request->file('photo')->store('km_reports', 'public');
+        }
 
         $report = TripKmReport::create([
             'trip_id' => $trip->id,
