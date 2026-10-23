@@ -4,7 +4,6 @@ use App\Http\Controllers\MapboxController;
 use App\Http\Controllers\PublicTripTrackingController;
 use App\Http\Controllers\TripPhotoDownloadController;
 use App\Http\Middleware\ValidateTrackingSignature;
-use App\Services\EupGpsService;
 use Illuminate\Support\Facades\Route;
 
 // Trang theo dõi lộ trình công khai cho khách hàng (URL có chữ ký + hạn dùng)
@@ -24,11 +23,6 @@ Route::middleware(['web', 'auth'])->group(function () {
 
 // Mapbox helper for map matching (server-side)
 Route::post('/mapbox/match', [MapboxController::class, 'match']);
-
-// Đồng bộ GPS từ API EUP
-Route::get('/gps-sync', function (EupGpsService $service) {
-    return response()->json($service->sync());
-})->name('gps.sync');
 
 // Chính sách quyền riêng tư (Privacy Policy) cho Apple App Store & Google Play Console
 Route::get('/privacy-policy', function () {

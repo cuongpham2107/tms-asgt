@@ -7,7 +7,7 @@ use App\Models\Trip;
 class VehicleUpdater
 {
     /**
-     * Cập nhật km, GPS của vehicle từ payload checkpoint.
+     * Cập nhật km của vehicle từ payload checkpoint, và GPS nếu xe không có thiết bị EUP.
      *
      * @param  array<string, mixed>  $payload
      */
@@ -25,14 +25,18 @@ class VehicleUpdater
             $dirty = true;
         }
 
-        if (isset($payload['gps_lat'])) {
-            $vehicle->gps_lat = $payload['gps_lat'];
-            $dirty = true;
-        }
+        // Xe có thiết bị EUP: vị trí xe do EUP quản lý, không ghi đè bằng GPS điện thoại
+        // (kiểm tra vị trí mốc dựa vào vị trí EUP này). Chỉ xe không có EUP mới lấy GPS điện thoại.
+        if ($vehicle->last_gps_update === null) {
+            if (isset($payload['gps_lat'])) {
+                $vehicle->gps_lat = $payload['gps_lat'];
+                $dirty = true;
+            }
 
-        if (isset($payload['gps_lng'])) {
-            $vehicle->gps_lng = $payload['gps_lng'];
-            $dirty = true;
+            if (isset($payload['gps_lng'])) {
+                $vehicle->gps_lng = $payload['gps_lng'];
+                $dirty = true;
+            }
         }
 
         if ($dirty) {

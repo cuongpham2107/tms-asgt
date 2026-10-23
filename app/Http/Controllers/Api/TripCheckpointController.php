@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\TripStatus;
+use App\Exceptions\CheckpointGeofenceException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TripCheckpointRequest;
 use App\Http\Resources\TripCheckpointResource;
@@ -51,6 +52,8 @@ class TripCheckpointController extends Controller
 
         try {
             $result = $this->service->recordCheckpoint($trip, $request->validated(), $photosArray);
+        } catch (CheckpointGeofenceException $e) {
+            return $e->render();
         } catch (ValidationException $e) {
             $response = [
                 'message' => $e->validator->errors()->first(),

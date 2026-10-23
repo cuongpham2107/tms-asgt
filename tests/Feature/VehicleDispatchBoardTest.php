@@ -2,6 +2,7 @@
 
 use App\Enums\CheckpointType;
 use App\Enums\DriverWorkShift;
+use App\Enums\GeoCheckStatus;
 use App\Enums\OnDutyLocation;
 use App\Enums\OrderStatus;
 use App\Enums\ShiftType;
@@ -24,6 +25,7 @@ use App\Services\EupGpsService;
 use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
@@ -175,26 +177,22 @@ test('vehicle helpers format BSX, status and driver information correctly', func
 
     $idlingVehicle = Vehicle::factory()->create([
         'gps_speed' => 0,
-        'car_status' => 0,
+        'car_status' => 10,
     ]);
     expect(VehicleDispatchBoard::getMovementStatus($idlingVehicle))->toBe('Ko tắt máy');
+
+    // 0 = xe đang hoạt động, kể cả khi tốc độ tức thời bằng 0 (dừng đèn đỏ)
+    $activeVehicle = Vehicle::factory()->create([
+        'gps_speed' => 0,
+        'car_status' => 0,
+    ]);
+    expect(VehicleDispatchBoard::getMovementStatus($activeVehicle))->toBe('Đang chạy');
 
     $lostGpsVehicle = Vehicle::factory()->create([
         'gps_speed' => 0,
         'car_status' => 5,
     ]);
     expect(VehicleDispatchBoard::getMovementStatus($lostGpsVehicle))->toBe('Mất GPS');
-});
-
-test('syncEupGps handles corrupted cache gracefully without error', function () {
-    // Put non-numeric corrupted data in cache
-    cache()->put('last_eup_gps_sync_at', 'invalid-serialized-data', 60);
-
-    $page = new VehicleDispatchBoard;
-    // Should not throw any exception
-    $page->syncEupGps();
-
-    expect(true)->toBeTrue();
 });
 
 test('vehicle dispatch board allows clicking trip status when driver swap is active', function () {
@@ -1418,14 +1416,18 @@ test('gps sync tracks how long a vehicle idles with engine on', function () {
         ['VehicleNo' => '29C-IDLE', 'Speed' => $speed, 'CarStatus' => $carStatus, 'OperateDate' => $at],
     ]];
     Http::fake(['*' => Http::sequence()
-        ->push($gpsItem(0, 0, '2026-10-23 10:00:00'))
-        ->push($gpsItem(0, 0, '2026-10-23 10:15:00'))
+        ->push($gpsItem(10, 0, '2026-10-23 10:00:00'))
+        ->push($gpsItem(10, 0, '2026-10-23 10:15:00'))
         ->push($gpsItem(0, 30, '2026-10-23 10:22:00'))]);
 
     app(EupGpsService::class)->sync();
     app(EupGpsService::class)->sync();
 
-    expect(EupGpsService::idleEngineSince($vehicle->id)?->format('H:i'))->toBe('10:00');
+    expect($vehicle->fresh()->idle_engine_since?->format('H:i'))->toBe('10:00');
+
+    // Xoá cache (ví dụ khi deploy) không được làm mất mốc bắt đầu.
+    Cache::flush();
+    expect($vehicle->fresh()->idle_engine_since?->format('H:i'))->toBe('10:00');
 
     $this->travelTo(Carbon::parse('2026-10-23 10:21:00'));
     expect(VehicleDispatchBoard::getMovementStatusColor($vehicle->fresh()))->toBe('danger')
@@ -1433,5 +1435,93 @@ test('gps sync tracks how long a vehicle idles with engine on', function () {
 
     app(EupGpsService::class)->sync();
 
-    expect(EupGpsService::idleEngineSince($vehicle->id))->toBeNull();
+    expect($vehicle->fresh()->idle_engine_since)->toBeNull();
+});
+
+test('geo check column summarises wrong-location checkpoints of the current shift trips', function () {
+    $driver = User::factory()->create();
+    $vehicle = Vehicle::factory()->create();
+    $trip = Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now(),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'occurred_at' => now()->setTime(8, 15),
+        'vehicle_geo_status' => GeoCheckStatus::Valid,
+        'location_geo_status' => GeoCheckStatus::OutOfRange,
+        'location_distance_m' => 1250,
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'checkpoint_type' => CheckpointType::LeftPickup,
+        'occurred_at' => now()->setTime(8, 40),
+        'vehicle_geo_status' => GeoCheckStatus::Valid,
+        'location_geo_status' => GeoCheckStatus::Valid,
+    ]);
+
+    $data = VehicleDispatchBoard::getGeoCheckData($vehicle->fresh());
+
+    expect($data['wrong'])->toBe(1)
+        ->and($data['checked'])->toBe(2)
+        ->and($data['label'])->toBe('1 sai')
+        ->and($data['tooltip'])->toContain('Xe cách điểm 1.250 m');
+});
+
+test('geo check column shows ok when all checked checkpoints are valid and dash without data', function () {
+    $driver = User::factory()->create();
+    $checkedVehicle = Vehicle::factory()->create();
+    $trip = Trip::factory()->create([
+        'vehicle_id' => $checkedVehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Started,
+        'started_at' => now(),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'checkpoint_type' => CheckpointType::Started,
+        'occurred_at' => now(),
+        'vehicle_geo_status' => GeoCheckStatus::Valid,
+        'location_geo_status' => GeoCheckStatus::Skipped,
+    ]);
+
+    expect(VehicleDispatchBoard::getGeoCheckData($checkedVehicle->fresh())['label'])->toBe('Đúng')
+        ->and(VehicleDispatchBoard::getGeoCheckData(Vehicle::factory()->create())['label'])->toBe('—');
+});
+
+test('status cell colours the whole cell like the trip status column', function () {
+    $running = Vehicle::factory()->create(['gps_speed' => 40, 'car_status' => 0]);
+    $stopped = Vehicle::factory()->create(['gps_speed' => 0, 'car_status' => 2, 'last_gps_update' => now()]);
+    $lost = Vehicle::factory()->create(['gps_speed' => 0, 'car_status' => 5]);
+
+    expect(VehicleDispatchBoard::getMovementStatusText($running))->toBe('Đang chạy')
+        ->and(VehicleDispatchBoard::getMovementStatusCellClass($running))->toContain('bg-emerald-600')
+        ->and(VehicleDispatchBoard::getMovementStatusText($stopped))->toBe('Xe dừng')
+        ->and(VehicleDispatchBoard::getMovementStatusCellClass($stopped))->toContain('bg-slate-100')
+        ->and(VehicleDispatchBoard::getMovementStatusCellClass($lost))->toContain('bg-rose-600');
+});
+
+test('idle engine status shows minutes and turns red after 20 minutes', function () {
+    $this->travelTo(Carbon::parse('2026-10-23 10:00:00'));
+    $vehicle = Vehicle::factory()->create(['gps_speed' => 0, 'car_status' => 10, 'last_gps_update' => now()]);
+    $idleSince = fn (int $minutes) => $vehicle->update(['idle_engine_since' => now()->subMinutes($minutes)]);
+
+    $idleSince(12);
+    expect(VehicleDispatchBoard::getMovementStatusText($vehicle))->toBe("Ko tắt máy · 12'")
+        ->and(VehicleDispatchBoard::getMovementStatusCellClass($vehicle))->toContain('bg-orange-500')
+        ->and(VehicleDispatchBoard::getMovementStatusTooltip($vehicle))->toBe('Dừng không tắt máy từ 09:48');
+
+    $idleSince(35);
+    expect(VehicleDispatchBoard::getMovementStatusText($vehicle))->toBe("Ko tắt máy · 35'")
+        ->and(VehicleDispatchBoard::getMovementStatusCellClass($vehicle))->toContain('bg-rose-600');
+
+    $idleSince(65);
+    expect(VehicleDispatchBoard::getMovementStatusText($vehicle))->toBe("Ko tắt máy · 1h05'");
+
+    $vehicle->update(['idle_engine_since' => null]);
+    expect(VehicleDispatchBoard::getMovementStatusText($vehicle))->toBe('Ko tắt máy')
+        ->and(VehicleDispatchBoard::getMovementStatusTooltip($vehicle))->toBeNull();
 });

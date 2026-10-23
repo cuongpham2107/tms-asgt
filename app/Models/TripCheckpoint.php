@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CheckpointType;
+use App\Enums\GeoCheckStatus;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -21,6 +22,14 @@ class TripCheckpoint extends Model
         'km_reading',
         'gps_lat',
         'gps_lng',
+        'eup_lat',
+        'eup_lng',
+        'eup_recorded_at',
+        'eup_speed',
+        'vehicle_distance_m',
+        'vehicle_geo_status',
+        'location_distance_m',
+        'location_geo_status',
         'voice_note',
         'driver_id',
         'shift_id',
@@ -36,6 +45,14 @@ class TripCheckpoint extends Model
             'gps_lat' => 'decimal:7',
             'gps_lng' => 'decimal:7',
             'checkpoint_type' => CheckpointType::class,
+            'eup_lat' => 'decimal:7',
+            'eup_lng' => 'decimal:7',
+            'eup_recorded_at' => 'datetime',
+            'eup_speed' => 'decimal:1',
+            'vehicle_distance_m' => 'integer',
+            'vehicle_geo_status' => GeoCheckStatus::class,
+            'location_distance_m' => 'integer',
+            'location_geo_status' => GeoCheckStatus::class,
         ];
     }
 

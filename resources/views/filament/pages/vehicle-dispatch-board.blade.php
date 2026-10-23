@@ -131,8 +131,9 @@
                                 $statusLabel = \App\Filament\Pages\VehicleDispatchBoard::getTripStatusLabel($vehicle);
                                 $statusColor = \App\Filament\Pages\VehicleDispatchBoard::getTripStatusBadgeClass($vehicle);
 
-                                $movStatus = \App\Filament\Pages\VehicleDispatchBoard::getMovementStatus($vehicle);
-                                $movBadgeColor = \App\Filament\Pages\VehicleDispatchBoard::getMovementStatusColor($vehicle);
+                                $movStatusText = \App\Filament\Pages\VehicleDispatchBoard::getMovementStatusText($vehicle);
+                                $movCellClass = \App\Filament\Pages\VehicleDispatchBoard::getMovementStatusCellClass($vehicle);
+                                $movTooltip = \App\Filament\Pages\VehicleDispatchBoard::getMovementStatusTooltip($vehicle);
 
                                 $xeChoData = \App\Filament\Pages\VehicleDispatchBoard::getXeChoData($vehicle);
                                 $xeCho = $xeChoData['text'];
@@ -318,11 +319,10 @@
                                     </span>
                                 </td>
 
-                                {{-- 10. Status (GPS / Động cơ) --}}
-                                <td class="border-r border-gray-100 dark:border-white/5 px-1.5 py-1.5 text-center whitespace-nowrap">
-                                    <x-filament::badge size="xs" :color="$movBadgeColor">
-                                        {{ $movStatus }}
-                                    </x-filament::badge>
+                                {{-- 10. Status (GPS / Động cơ) — tô màu cả ô như cột Trạng thái --}}
+                                <td class="status-cell border-r border-gray-100 dark:border-white/5 px-2 py-1.5 text-center whitespace-nowrap text-[11px] select-none {{ $movCellClass }}"
+                                    @if ($movTooltip) title="{{ $movTooltip }}" @endif>
+                                    {{ $movStatusText }}
                                 </td>
 
                                 {{-- 11. Chuyến --}}

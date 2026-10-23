@@ -9,8 +9,10 @@ use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Services\ShiftScheduleService;
+use Carbon\CarbonInterface;
 use Database\Factories\VehicleFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -85,6 +87,7 @@ class Vehicle extends Model
         'gps_lng',
         'gps_speed',
         'car_status',
+        'idle_engine_since',
         'gps_direction',
         'gps_address',
         'last_gps_update',
@@ -119,6 +122,7 @@ class Vehicle extends Model
             'gps_speed' => 'decimal:2',
             'gps_direction' => 'integer',
             'last_gps_update' => 'datetime',
+            'idle_engine_since' => 'datetime',
             'is_active' => 'boolean',
             'vehicle_type' => VehicleType::class,
             'status' => VehicleStatus::class,
@@ -383,5 +387,23 @@ class Vehicle extends Model
             ->where('status', TripStatus::Pending->value)
             ->oldest('id')
             ->first();
+    }
+
+    public function gpsLogs(): HasMany
+    {
+        return $this->hasMany(VehicleGpsLog::class);
+    }
+
+    /**
+     * Lộ trình EUP của xe trong khoảng thời gian, theo thứ tự thời gian.
+     *
+     * @return Collection<int, VehicleGpsLog>
+     */
+    public function trackBetween(CarbonInterface $from, CarbonInterface $to): Collection
+    {
+        return $this->gpsLogs()
+            ->whereBetween('recorded_at', [$from, $to])
+            ->orderBy('recorded_at')
+            ->get();
     }
 }

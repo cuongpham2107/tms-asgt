@@ -178,6 +178,7 @@ class CheckpointFactory
             'gps_lat' => $payload['gps_lat'] ?? $trip->vehicle?->gps_lat,
             'gps_lng' => $payload['gps_lng'] ?? $trip->vehicle?->gps_lng,
             'voice_note' => $payload['voice_note'] ?? null,
+            ...($payload['geofence'] ?? []),
         ];
     }
 }

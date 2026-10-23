@@ -12,6 +12,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Models\VehicleGpsLog;
 use App\Services\Trip\TripTrackingMapService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -367,4 +368,46 @@ test('makeUrl tạo url có chữ ký hợp lệ và hết hạn sau 3 ngày', f
     expect((int) $query['expires'])
         ->toBeGreaterThanOrEqual(now()->addDays(3)->subMinute()->getTimestamp())
         ->toBeLessThanOrEqual(now()->addDays(3)->addMinute()->getTimestamp());
+});
+
+test('dữ liệu bản đồ dùng lộ trình EUP thật trong thời gian chuyến khi có', function () {
+    fakeOsrmRoute();
+
+    ['trip' => $trip, 'pickup' => $pickup, 'delivery' => $delivery] = publicTrackingFixtures(['started_at' => now()->subHours(2)]);
+    publicTrackingOrder($trip, $pickup, $delivery);
+
+    $log = fn (float $lat, int $minutesAgo) => VehicleGpsLog::create([
+        'vehicle_id' => $trip->vehicle_id,
+        'lat' => $lat,
+        'lng' => 105.85,
+        'recorded_at' => now()->subMinutes($minutesAgo),
+    ]);
+    $log(20.9, 180); // trước khi bắt đầu chuyến: không lấy
+    $log(21.03, 90);
+    $log(21.01, 110);
+    $log(21.05, 30);
+
+    $map = app(TripTrackingMapService::class)->buildMapData($trip->fresh());
+
+    expect($map['traveled'])->toBe([[21.01, 105.85], [21.03, 105.85], [21.05, 105.85]])
+        ->and($map['traveled_route'])->toBe($map['traveled'])
+        ->and($map['traveled_route_source'])->toBe('gps');
+});
+
+test('lộ trình EUP dài được rút gọn nhưng giữ điểm đầu và cuối', function () {
+    ['trip' => $trip] = publicTrackingFixtures(['started_at' => now()->subHours(5)]);
+
+    $rows = collect(range(1, 1200))->map(fn (int $i) => [
+        'vehicle_id' => $trip->vehicle_id,
+        'lat' => 21 + $i / 10000,
+        'lng' => 105.85,
+        'recorded_at' => now()->subHours(5)->addSeconds($i * 10)->format('Y-m-d H:i:s'),
+    ]);
+    VehicleGpsLog::insert($rows->all());
+
+    $track = $trip->fresh()->gpsTrack();
+
+    expect(count($track))->toBeLessThanOrEqual(500)
+        ->and($track[0])->toBe([21.0001, 105.85])
+        ->and(end($track))->toBe([21.12, 105.85]);
 });

@@ -173,8 +173,10 @@ class TripTrackingMapService
             $route = app(OsrmService::class)->getRouteFromPoints($points);
         }
 
-        // Các mốc GPS thực tế của tài xế để vẽ tuyến đường xe đã chạy.
-        $traveled = $trip->checkpoints
+        // Lộ trình EUP thật của xe trong chuyến; không có thì nối các mốc GPS của tài xế qua OSRM.
+        $gpsTrack = $trip->gpsTrack();
+
+        $traveled = count($gpsTrack) >= 2 ? $gpsTrack : $trip->checkpoints
             ->filter(fn ($checkpoint): bool => $checkpoint->gps_lat !== null && $checkpoint->gps_lng !== null)
             ->sortBy(fn ($checkpoint): int => $checkpoint->occurred_at?->getTimestamp() ?? 0)
             ->map(fn ($checkpoint): array => [(float) $checkpoint->gps_lat, (float) $checkpoint->gps_lng])
@@ -182,7 +184,9 @@ class TripTrackingMapService
             ->all();
 
         $traveledRoute = [];
-        if (count($traveled) >= 2) {
+        if (count($gpsTrack) >= 2) {
+            $traveledRoute = $gpsTrack;
+        } elseif (count($traveled) >= 2) {
             $traveledRoute = app(OsrmService::class)->getRouteFromPoints($traveled);
         }
 
@@ -200,7 +204,12 @@ class TripTrackingMapService
             'route_source' => count($route) >= 2 ? 'osrm' : (count($points) >= 2 ? 'direct' : 'none'),
             'traveled' => $traveled,
             'traveled_route' => $traveledRoute,
-            'traveled_route_source' => count($traveledRoute) >= 2 ? 'osrm' : (count($traveled) >= 2 ? 'direct' : 'none'),
+            'traveled_route_source' => match (true) {
+                count($gpsTrack) >= 2 => 'gps',
+                count($traveledRoute) >= 2 => 'osrm',
+                count($traveled) >= 2 => 'direct',
+                default => 'none',
+            },
             'center' => $center,
             'has_points' => $points !== [] || $traveled !== [],
             'pickups' => $pickups,

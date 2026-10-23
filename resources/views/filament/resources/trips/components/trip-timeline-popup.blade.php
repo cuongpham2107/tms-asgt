@@ -151,6 +151,25 @@
             $html .= '</div>';
         }
 
+        $geoWarnings = array_filter([
+            $cp->vehicle_geo_status === \App\Enums\GeoCheckStatus::OutOfRange
+                ? 'Gửi khi cách xe '.number_format((int) $cp->vehicle_distance_m, 0, ',', '.').' m'
+                : null,
+            $cp->location_geo_status === \App\Enums\GeoCheckStatus::OutOfRange
+                ? 'Xe cách điểm '.number_format((int) $cp->location_distance_m, 0, ',', '.').' m'
+                : null,
+        ]);
+        if ($geoWarnings !== []) {
+            $html .= '<div class="mt-1.5 flex flex-wrap items-center gap-1.5">';
+            foreach ($geoWarnings as $warning) {
+                $html .= '<span class="inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/30 dark:bg-rose-950/50 dark:text-rose-300 dark:ring-rose-500/30">';
+                $html .= $renderIcon('heroicon-m-map-pin', 'h-3.5 w-3.5 shrink-0');
+                $html .= '<span>Sai vị trí: '.e($warning).'</span>';
+                $html .= '</span>';
+            }
+            $html .= '</div>';
+        }
+
         if ($cp->photos->isNotEmpty()) {
             $html .= '<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">';
             foreach ($cp->photos as $photo) {

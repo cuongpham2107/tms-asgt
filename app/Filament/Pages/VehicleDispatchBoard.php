@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Enums\CheckpointType;
+use App\Enums\EupCarStatus;
+use App\Enums\GeoCheckStatus;
 use App\Enums\OnDutyLocation;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
@@ -17,9 +19,9 @@ use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
-use App\Services\EupGpsService;
 use App\Services\ShiftScheduleService;
 use BackedEnum;
+use Carbon\CarbonInterface;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
 use Filament\Support\Enums\FontWeight;
@@ -319,30 +321,8 @@ class VehicleDispatchBoard extends Page implements HasTable
         return Vehicle::find($this->selectedVehicleIdForGps);
     }
 
-    public function syncEupGps(): void
-    {
-        if (app()->runningUnitTests()) {
-            return;
-        }
-
-        try {
-            $cacheKey = 'last_eup_gps_sync_at';
-            $lastSync = cache()->get($cacheKey);
-
-            if (! is_numeric($lastSync) || (time() - (int) $lastSync) >= 15) {
-                cache()->put($cacheKey, time(), 60);
-
-                app(EupGpsService::class)->sync(5);
-            }
-        } catch (\Throwable) {
-            // Ensure page render is never blocked by external API, database or cache failure
-        }
-    }
-
     public function getGroupedVehicles(): array
     {
-        $this->syncEupGps();
-
         [$shiftStart, $shiftEnd] = self::getShiftWindow();
 
         $vehicles = Vehicle::query()
@@ -657,6 +637,20 @@ class VehicleDispatchBoard extends Page implements HasTable
                     })
                     ->tooltip(fn (Vehicle $record): string => self::getKmOverData($record)['tooltip'])
                     ->state(fn (Vehicle $record): string => self::getKmOver($record)),
+
+                // Kiểm tra vị trí các mốc trong ca
+                TextColumn::make('geo_check')
+                    ->label('Vị trí mốc')
+                    ->alignCenter()
+                    ->badge()
+                    ->color(fn (Vehicle $record): string => match (true) {
+                        self::getGeoCheckData($record)['wrong'] > 0 => 'danger',
+                        self::getGeoCheckData($record)['checked'] > 0 => 'success',
+                        default => 'gray',
+                    })
+                    ->tooltip(fn (Vehicle $record): string => self::getGeoCheckData($record)['tooltip'])
+                    ->state(fn (Vehicle $record): string => self::getGeoCheckData($record)['label'])
+                    ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
 
                 // 12. Tên lái xe
                 TextColumn::make('driver_name')
@@ -1249,7 +1243,7 @@ class VehicleDispatchBoard extends Page implements HasTable
 
         $isGpsLost = false;
         try {
-            $isGpsLost = $record->car_status === 5
+            $isGpsLost = $record->car_status === EupCarStatus::SignalLost->value
                 || ($record->last_gps_update instanceof \DateTimeInterface && $record->last_gps_update->diffInHours(now()) >= 24);
         } catch (\Throwable) {
             $isGpsLost = false;
@@ -1259,11 +1253,11 @@ class VehicleDispatchBoard extends Page implements HasTable
             return 'Mất GPS';
         }
 
-        if ($record->car_status === 0) {
-            return 'Ko tắt máy';
-        }
-
-        return 'Xe dừng';
+        return match ($record->car_status) {
+            EupCarStatus::Active->value => 'Đang chạy',
+            EupCarStatus::IdleEngine->value => 'Ko tắt máy',
+            default => 'Xe dừng',
+        };
     }
 
     /**
@@ -1274,9 +1268,52 @@ class VehicleDispatchBoard extends Page implements HasTable
         return match (self::getMovementStatus($record)) {
             'Đang chạy' => 'success',
             'Mất GPS' => 'danger',
-            'Ko tắt máy' => self::isIdleEngineOverdue(EupGpsService::idleEngineSince($record->id)) ? 'danger' : 'warning',
+            'Ko tắt máy' => self::isIdleEngineOverdue($record->idle_engine_since) ? 'danger' : 'warning',
             default => 'gray',
         };
+    }
+
+    /**
+     * Chữ trong ô Status; trạng thái "Ko tắt máy" kèm thời gian đã dừng không tắt máy.
+     */
+    public static function getMovementStatusText(Vehicle $record): string
+    {
+        $status = self::getMovementStatus($record);
+        $idleSince = $status === 'Ko tắt máy' ? $record->idle_engine_since : null;
+
+        if ($idleSince === null) {
+            return $status;
+        }
+
+        $minutes = (int) $idleSince->diffInMinutes(now());
+
+        return $status.' · '.($minutes >= 60 ? intdiv($minutes, 60).'h'.str_pad((string) ($minutes % 60), 2, '0', STR_PAD_LEFT) : $minutes)."'";
+    }
+
+    /**
+     * Màu nền cả ô Status (cùng kiểu cột Trạng thái): Ko tắt máy cam, quá IDLE_ENGINE_ALERT_MINUTES phút thì đỏ.
+     */
+    public static function getMovementStatusCellClass(Vehicle $record): string
+    {
+        return match (self::getMovementStatus($record)) {
+            'Đang chạy' => 'bg-emerald-600 text-white font-bold',
+            'Mất GPS' => 'bg-rose-600 text-white font-bold',
+            'Ko tắt máy' => self::isIdleEngineOverdue($record->idle_engine_since)
+                ? 'bg-rose-600 text-white font-bold'
+                : 'bg-orange-500 text-white font-bold',
+            default => 'bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 font-semibold',
+        };
+    }
+
+    public static function getMovementStatusTooltip(Vehicle $record): ?string
+    {
+        if (self::getMovementStatus($record) !== 'Ko tắt máy') {
+            return null;
+        }
+
+        $idleSince = $record->idle_engine_since;
+
+        return $idleSince !== null ? 'Dừng không tắt máy từ '.$idleSince->format('H:i') : null;
     }
 
     public static function isIdleEngineOverdue(?\DateTimeInterface $idleSince): bool
@@ -1331,23 +1368,72 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         return $record->trips
-            ->filter(function (Trip $t) use ($shiftStart, $shiftEnd, $runningStatuses): bool {
-                if ($t->status === TripStatus::Pending || $t->status === TripStatus::Cancelled) {
-                    return false;
-                }
-
-                if (in_array($t->status, $runningStatuses, true)) {
-                    return true;
-                }
-
-                if ($t->status === TripStatus::Completed) {
-                    return ($t->completed_at && $t->completed_at->between($shiftStart, $shiftEnd))
-                        || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd));
-                }
-
-                return false;
-            })
+            ->filter(fn (Trip $t): bool => self::isTripInCurrentShift($t, $shiftStart, $shiftEnd, $runningStatuses))
             ->count();
+    }
+
+    /**
+     * Chuyến đang chạy, hoặc đã hoàn thành trong ca hiện tại.
+     *
+     * @param  array<int, TripStatus>  $runningStatuses
+     */
+    private static function isTripInCurrentShift(Trip $t, CarbonInterface $shiftStart, CarbonInterface $shiftEnd, array $runningStatuses): bool
+    {
+        if ($t->status === TripStatus::Pending || $t->status === TripStatus::Cancelled) {
+            return false;
+        }
+
+        if (in_array($t->status, $runningStatuses, true)) {
+            return true;
+        }
+
+        if ($t->status === TripStatus::Completed) {
+            return ($t->completed_at && $t->completed_at->between($shiftStart, $shiftEnd))
+                || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd));
+        }
+
+        return false;
+    }
+
+    /**
+     * Tổng hợp kiểm tra vị trí các mốc của chuyến trong ca hiện tại.
+     *
+     * @return array{wrong: int, checked: int, label: string, tooltip: string}
+     */
+    public static function getGeoCheckData(Vehicle $record): array
+    {
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+        $runningStatuses = self::runningTripStatuses();
+        $checked = [GeoCheckStatus::Valid, GeoCheckStatus::OutOfRange];
+
+        $checkpoints = $record->trips
+            ->filter(fn (Trip $t): bool => self::isTripInCurrentShift($t, $shiftStart, $shiftEnd, $runningStatuses))
+            ->flatMap(fn (Trip $t) => $t->checkpoints)
+            ->filter(fn ($cp): bool => in_array($cp->vehicle_geo_status, $checked, true) || in_array($cp->location_geo_status, $checked, true))
+            ->sortBy('occurred_at');
+
+        $wrong = $checkpoints->filter(fn ($cp): bool => $cp->vehicle_geo_status === GeoCheckStatus::OutOfRange
+            || $cp->location_geo_status === GeoCheckStatus::OutOfRange);
+
+        $tooltip = $wrong->map(function ($cp): string {
+            $reasons = array_filter([
+                $cp->location_geo_status === GeoCheckStatus::OutOfRange ? 'Xe cách điểm '.number_format((int) $cp->location_distance_m, 0, ',', '.').' m' : null,
+                $cp->vehicle_geo_status === GeoCheckStatus::OutOfRange ? 'Gửi khi cách xe '.number_format((int) $cp->vehicle_distance_m, 0, ',', '.').' m' : null,
+            ]);
+
+            return ($cp->occurred_at?->format('H:i') ?? '—').' '.$cp->checkpoint_type->getLabel().': '.implode(', ', $reasons);
+        })->implode("\n");
+
+        return [
+            'wrong' => $wrong->count(),
+            'checked' => $checkpoints->count(),
+            'label' => match (true) {
+                $wrong->isNotEmpty() => $wrong->count().' sai',
+                $checkpoints->isNotEmpty() => 'Đúng',
+                default => '—',
+            },
+            'tooltip' => $tooltip !== '' ? $tooltip : ($checkpoints->isNotEmpty() ? $checkpoints->count().' mốc đúng vị trí' : 'Chưa có dữ liệu vị trí'),
+        ];
     }
 
     /**

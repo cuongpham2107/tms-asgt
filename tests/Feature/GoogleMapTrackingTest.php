@@ -20,6 +20,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Models\VehicleGpsLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
@@ -295,4 +296,38 @@ test('google map tracking draws selected vehicle route in time order to its curr
     expect($traveled['points'])->toBe([[21.0, 105.8], [21.02, 105.84], [21.1, 105.9]])
         ->and($planned['points'])->toBe([[21.1, 105.9], [21.3, 106.0]])
         ->and($layers->pluck('id'))->toContain("trk-{$vehicle->id}-stop-dp-{$pending->id}");
+});
+
+test('google map tracking draws the real EUP track of the active trip when available', function () {
+    Http::fake(['*' => Http::response([], 500)]);
+
+    $vehicle = Vehicle::create([
+        'plate_number' => '29D-20002',
+        'owner' => 'ASGL',
+        'type' => VehicleOwnerType::Company,
+        'vehicle_type' => VehicleType::Normal,
+        'status' => VehicleStatus::Running,
+        'is_active' => true,
+        'gps_lat' => 21.10,
+        'gps_lng' => 105.90,
+    ]);
+    Trip::create([
+        'trip_code' => 'TRIP-MAP-02',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $this->user->id,
+        'status' => TripStatus::Started,
+        'started_at' => now()->subHours(2),
+    ]);
+    foreach ([[21.00, 100], [21.04, 60], [21.08, 20]] as [$lat, $minutesAgo]) {
+        VehicleGpsLog::create(['vehicle_id' => $vehicle->id, 'lat' => $lat, 'lng' => 105.90, 'recorded_at' => now()->subMinutes($minutesAgo)]);
+    }
+
+    $layers = collect(Livewire::test(GoogleMapTracking::class)
+        ->call('handleLayerClick', 'vehicle-'.$vehicle->id)
+        ->instance()
+        ->getMapData()['layersData']);
+
+    $traveled = $layers->first(fn (array $l): bool => str_starts_with($l['id'], "trk-{$vehicle->id}-traveled-"));
+
+    expect($traveled['points'])->toBe([[21.0, 105.9], [21.04, 105.9], [21.08, 105.9], [21.1, 105.9]]);
 });

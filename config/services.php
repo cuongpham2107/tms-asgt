@@ -46,6 +46,7 @@ return [
         'account' => env('EUP_API_ACCOUNT'),
         'password' => env('EUP_API_PASSWORD'),
         'api_key' => env('EUP_API_KEY'),
+        'gps_log_retention_days' => (int) env('EUP_GPS_LOG_RETENTION_DAYS', 3),
     ],
 
 ];

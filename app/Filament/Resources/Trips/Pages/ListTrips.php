@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Trips\Pages;
 
+use App\Enums\GeoCheckStatus;
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Filament\Forms\Components\OrderDateRangePicker;
@@ -113,6 +114,7 @@ class ListTrips extends ListRecords
         'completed' => ['label' => 'Hoàn thành', 'color' => 'bg-emerald-500'],
         'driver_swap' => ['label' => 'Đảo lái', 'color' => 'bg-red-600'],
         'km_report' => ['label' => 'Báo sai km', 'color' => 'bg-amber-500'],
+        'geo_out_of_range' => ['label' => 'Sai vị trí', 'color' => 'bg-rose-500'],
         'cancelled' => ['label' => 'Đã huỷ', 'color' => 'bg-red-500'],
     ];
 
@@ -779,6 +781,10 @@ class ListTrips extends ListRecords
                 $q->where('trips.is_paused', true)
                     ->orWhereHas('kmReports', fn (Builder $kr) => $kr->where('status', TripKmReportStatus::Pending->value));
             }),
+            'geo_out_of_range' => $query->whereHas('checkpoints', fn (Builder $cp) => $cp->where(function (Builder $q) {
+                $q->where('vehicle_geo_status', GeoCheckStatus::OutOfRange->value)
+                    ->orWhere('location_geo_status', GeoCheckStatus::OutOfRange->value);
+            })),
             default => $query,
         };
     }

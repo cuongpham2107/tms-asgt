@@ -327,7 +327,11 @@ class GoogleMapTracking extends Page
         $checkpoints = $this->gpsCheckpoints($trip);
         $current = $isActive ? $this->vehicleGps($vehicle) : null;
 
-        $traveled = $checkpoints->map(fn (array $c): array => [$c['lat'], $c['lng']])->values();
+        // Lộ trình EUP thật của xe trong chuyến; không có thì nối các mốc GPS của tài xế.
+        $gpsTrack = $trip->gpsTrack();
+        $traveled = count($gpsTrack) >= 2
+            ? collect($gpsTrack)
+            : $checkpoints->map(fn (array $c): array => [$c['lat'], $c['lng']])->values();
         if ($current !== null && ! $this->samePoint($traveled->last(), $current)) {
             $traveled->push($current);
         }
@@ -342,7 +346,9 @@ class GoogleMapTracking extends Page
         $shapes = [];
 
         if ($traveled->count() >= 2) {
-            $shapes[] = $this->routeLine($prefix.'traveled', $traveled->all())
+            $shapes[] = (count($gpsTrack) >= 2
+                ? Polyline::make($traveled->all())->id($prefix.'traveled-'.md5(json_encode($traveled->all())))->fill(false)
+                : $this->routeLine($prefix.'traveled', $traveled->all()))
                 ->color('#2563eb')
                 ->weight(5)
                 ->opacity(0.9)

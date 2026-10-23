@@ -34,6 +34,7 @@ class TripCheckpointService
         private readonly ArrivedDeliveryHandler $arrivedDeliveryHandler,
         private readonly CompletedHandler $completedHandler,
         private readonly CheckpointEndHandler $checkpointEndHandler,
+        private readonly CheckpointGeofenceService $geofence,
     ) {}
 
     /**
@@ -79,6 +80,11 @@ class TripCheckpointService
         $this->validateOrderBelongsToTrip($trip, $payload, $checkpointType);
         $this->validateNoActiveTrip($trip, $checkpointType);
         $this->validateVehicleNotBusy($trip);
+
+        // Kiểm tra vị trí trước transaction: bị chặn thì không lưu gì (không auto-start, không lưu ảnh)
+        $payload['geofence'] = $this->geofence
+            ->checkOrFail($trip, $checkpointType, $payload)
+            ->toCheckpointAttributes();
 
         return DB::transaction(function () use ($trip, $payload, $photos, $checkpointType) {
             $this->shiftResolver->resolveForTrip($trip);

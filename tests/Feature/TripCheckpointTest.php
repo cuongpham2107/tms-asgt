@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\CheckpointType;
+use App\Enums\GeoCheckStatus;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
@@ -18,11 +19,13 @@ use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
@@ -1102,4 +1105,135 @@ test('adding a new checkpoint in rental trip form advances checkpoint_type corre
     $schemas = $comp->getChildSchemas();
     $newRow = end($schemas);
     expect($newRow->getFlatComponents()['checkpoint_type']->getState())->toEqual(CheckpointType::ArrivedDelivery);
+});
+
+// ---- Kiểm tra vị trí (geofence) ----
+
+function placeVehicleByEup(Vehicle $vehicle, float $lat, float $lng): void
+{
+    $vehicle->update([
+        'gps_lat' => $lat,
+        'gps_lng' => $lng,
+        'gps_speed' => 0,
+        'car_status' => 0,
+        'last_gps_update' => now(),
+    ]);
+}
+
+test('geofence result is stored on the checkpoint without blocking when enforcement is off', function () {
+    // Xe cách điểm lấy hàng ~667m, tài xế đứng cạnh xe.
+    placeVehicleByEup($this->vehicle, 10.818889 + 0.006, 106.651944);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'order_id' => $this->order1->id,
+        'km_reading' => 50010,
+        'gps_lat' => 10.818889 + 0.006,
+        'gps_lng' => 106.651944,
+    ])->assertSuccessful();
+
+    $checkpoint = TripCheckpoint::where('trip_id', $this->trip->id)
+        ->where('order_id', $this->order1->id)
+        ->where('checkpoint_type', 'arrived_pickup')
+        ->sole();
+
+    expect($checkpoint->location_geo_status)->toBe(GeoCheckStatus::OutOfRange)
+        ->and($checkpoint->location_distance_m)->toBeBetween(600, 700)
+        ->and($checkpoint->vehicle_geo_status)->toBe(GeoCheckStatus::Valid)
+        ->and((float) $checkpoint->eup_lat)->toBe(10.824889);
+});
+
+test('enforced driver-to-vehicle check rejects the checkpoint and saves nothing', function () {
+    config(['checkpoint_geofence.enforce_vehicle' => true]);
+    Storage::fake('public');
+    placeVehicleByEup($this->vehicle, 10.818889, 106.651944);
+
+    $this->post("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'gps_lat' => 10.9,
+        'gps_lng' => 106.651944,
+        'photos' => [UploadedFile::fake()->image('cp.jpg')],
+    ], ['Accept' => 'application/json'])
+        ->assertUnprocessable()
+        ->assertJsonPath('message', fn (string $message) => str_contains($message, 'cách xe'))
+        ->assertJsonPath('geofence.layer', 'vehicle')
+        ->assertJsonPath('geofence.radius_m', 500)
+        ->assertJsonPath('geofence.distance_m', fn (int $m) => $m > 500);
+
+    expect(TripCheckpoint::count())->toBe(0)
+        ->and($this->trip->fresh()->status)->toBe(TripStatus::Pending)
+        ->and(Storage::disk('public')->allFiles())->toBeEmpty();
+});
+
+test('enforced vehicle-to-location check rejects a pickup checkpoint before auto-starting the trip', function () {
+    config(['checkpoint_geofence.enforce_location' => true]);
+    placeVehicleByEup($this->vehicle, 10.9, 106.651944);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'order_id' => $this->order1->id,
+        'km_reading' => 50010,
+        'gps_lat' => 10.9,
+        'gps_lng' => 106.651944,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('message', fn (string $message) => str_contains($message, 'cách PICKUP'))
+        ->assertJsonPath('geofence.layer', 'location')
+        ->assertJsonPath('geofence.target_code', 'PICKUP');
+
+    expect(TripCheckpoint::count())->toBe(0)
+        ->and($this->trip->fresh()->status)->toBe(TripStatus::Pending);
+});
+
+test('enforcement never blocks when the position cannot be verified', function () {
+    config(['checkpoint_geofence.enforce_vehicle' => true, 'checkpoint_geofence.enforce_location' => true]);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'order_id' => $this->order1->id,
+        'km_reading' => 50010,
+    ])->assertSuccessful();
+
+    expect(TripCheckpoint::where('checkpoint_type', 'arrived_pickup')->first()->location_geo_status)
+        ->toBe(GeoCheckStatus::Unverified);
+});
+
+test('enforced driver-to-vehicle check applies to completing the trip', function () {
+    config(['checkpoint_geofence.enforce_vehicle' => true]);
+    $this->trip->update(['status' => TripStatus::Delivered, 'start_km' => 50000, 'started_at' => now()]);
+    placeVehicleByEup($this->vehicle, 10.818889, 106.651944);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/complete", [
+        'end_km' => 50020,
+        'gps_lat' => 10.9,
+        'gps_lng' => 106.651944,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonPath('geofence.layer', 'vehicle');
+
+    expect($this->trip->fresh()->status)->toBe(TripStatus::Delivered);
+});
+
+test('phone GPS does not overwrite the EUP position of a vehicle with an EUP device', function () {
+    placeVehicleByEup($this->vehicle, 21.0, 105.0);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'gps_lat' => 37.785834,
+        'gps_lng' => -122.406417,
+    ])->assertSuccessful();
+
+    $vehicle = $this->vehicle->fresh();
+    expect((float) $vehicle->gps_lat)->toBe(21.0)
+        ->and((float) $vehicle->gps_lng)->toBe(105.0);
+});
+
+test('phone GPS updates the position of a vehicle without an EUP device', function () {
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'gps_lat' => 10.9,
+        'gps_lng' => 106.7,
+    ])->assertSuccessful();
+
+    expect((float) $this->vehicle->fresh()->gps_lat)->toBe(10.9);
 });

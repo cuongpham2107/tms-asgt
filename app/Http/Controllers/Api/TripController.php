@@ -10,6 +10,7 @@ use App\Http\Resources\TripResource;
 use App\Models\Trip;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
+use App\Services\Trip\CheckpointGeofenceService;
 use App\Services\Trip\TripKmLimitService;
 use App\Services\TripKmCalculatorService;
 use App\Services\TripKmSplitService;
@@ -278,6 +279,8 @@ class TripController extends Controller
             'gps_lat' => 'nullable|numeric',
             'gps_lng' => 'nullable|numeric',
         ]);
+
+        app(CheckpointGeofenceService::class)->checkOrFail($trip, CheckpointType::End, $validated);
 
         if ($trip->start_km !== null && (float) $validated['end_km'] < (float) $trip->start_km) {
             return response()->json(['message' => [
