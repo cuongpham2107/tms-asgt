@@ -1525,3 +1525,33 @@ test('idle engine status shows minutes and turns red after 20 minutes', function
     expect(VehicleDispatchBoard::getMovementStatusText($vehicle))->toBe('Ko tắt máy')
         ->and(VehicleDispatchBoard::getMovementStatusTooltip($vehicle))->toBeNull();
 });
+
+test('dispatch board shows a refresh countdown driven by a single timer', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertSeeHtml('secondsLeft: '.VehicleDispatchBoard::REFRESH_SECONDS)
+        ->assertSee('Làm mới sau')
+        ->assertDontSeeHtml('wire:poll');
+});
+
+test('dispatch board shows the new trip status right after a TripUpdated event', function () {
+    $driver = User::factory()->create();
+    $vehicle = Vehicle::factory()->create(['plate_number' => '20C-LIVE', 'type' => VehicleOwnerType::Company, 'is_active' => true]);
+    $trip = Trip::create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Started,
+        'started_at' => now(),
+        'trip_code' => 'TRIP-LIVE',
+    ]);
+
+    $page = Livewire::test(VehicleDispatchBoard::class)
+        ->assertSee(TripStatus::Started->getLabel())
+        ->assertDontSee(TripStatus::ArrivedPickup->getLabel());
+
+    $trip->update(['status' => TripStatus::ArrivedPickup]);
+
+    $page->call('onTripUpdated', ['trip_id' => $trip->id, 'action' => 'updated'])
+        ->assertSee(TripStatus::ArrivedPickup->getLabel());
+});

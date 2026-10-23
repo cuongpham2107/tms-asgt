@@ -23,13 +23,29 @@
     </div>
 
     <div 
-        wire:poll.20s 
         x-data="{ 
             collapsed: {},
             toggleGroup(code) {
                 this.collapsed[code] = !this.collapsed[code];
+            },
+            refreshEvery: {{ \App\Filament\Pages\VehicleDispatchBoard::REFRESH_SECONDS }},
+            secondsLeft: {{ \App\Filament\Pages\VehicleDispatchBoard::REFRESH_SECONDS }},
+            refreshing: false,
+            tick() {
+                // Tab ẩn thì tạm dừng đếm (không gọi server vô ích), quay lại thì đếm tiếp
+                if (document.hidden || this.refreshing) return;
+                if (--this.secondsLeft <= 0) this.refresh();
+            },
+            async refresh() {
+                if (this.refreshing) return;
+                this.refreshing = true;
+                try { await $wire.$refresh(); } finally {
+                    this.refreshing = false;
+                    this.secondsLeft = this.refreshEvery;
+                }
             }
         }" 
+        x-init="setInterval(() => tick(), 1000)"
         class="w-full space-y-3"
     >
         @include('filament.pages.partials.dispatch-table-styles')
@@ -54,6 +70,20 @@
                     tooltip="Xoá tìm kiếm"
                 />
             @endif
+
+            {{-- Đếm ngược tới lần làm mới tiếp theo; bấm để làm mới ngay --}}
+            <button
+                type="button"
+                x-on:click="refresh()"
+                x-bind:disabled="refreshing"
+                title="Bấm để làm mới ngay"
+                class="ms-auto inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-950/10 transition hover:bg-gray-50 hover:text-primary-600 disabled:cursor-wait dark:bg-gray-900 dark:text-gray-300 dark:ring-white/10 dark:hover:bg-white/5"
+            >
+                <svg x-bind:class="refreshing && 'animate-spin'" class="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clip-rule="evenodd" />
+                </svg>
+                <span x-text="refreshing ? 'Đang làm mới…' : `Làm mới sau ${secondsLeft}s`">Làm mới sau {{ \App\Filament\Pages\VehicleDispatchBoard::REFRESH_SECONDS }}s</span>
+            </button>
         </div>
 
         {{-- Bảng Kiểm Soát Tình Trạng Xe theo mẫu thực tế --}}

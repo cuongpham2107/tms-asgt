@@ -52,6 +52,11 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public const IDLE_ENGINE_ALERT_MINUTES = 20;
 
+    /**
+     * Chu kỳ tự làm mới bảng (giây). Một bộ đếm Alpine vừa hiển thị đếm ngược vừa gọi làm mới.
+     */
+    public const REFRESH_SECONDS = 20;
+
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-table-cells';
