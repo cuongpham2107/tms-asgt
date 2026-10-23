@@ -417,7 +417,7 @@ class TripKmAdjustmentService
      * Km xe chỉ đi theo chuyến mới nhất của xe; sửa chuyến cũ không đụng km xe.
      */
     /**
-     * Mốc Km đầu chu kỳ (chốt lúc 00:00 ngày 23) không thể lớn hơn số Km ghi nhận sau thời điểm chốt.
+     * Mốc Km đầu chu kỳ (chốt lúc 12:00 ngày 23) không thể lớn hơn số Km ghi nhận sau thời điểm chốt.
      * Nếu sau khi sửa km lại có số nhỏ hơn mốc, mốc đã được chốt từ số km sai → hạ mốc xuống.
      */
     private function lowerMonthlyStartKmIfAboveReadings(Trip $trip): void
@@ -428,9 +428,10 @@ class TripKmAdjustmentService
             return;
         }
 
-        $cycleStart = now()->day >= 23
-            ? now()->setDay(23)->startOfDay()
-            : now()->subMonthNoOverflow()->setDay(23)->startOfDay();
+        $cycleStart = now()->setDay(23)->setTime(12, 0);
+        if (now()->lt($cycleStart)) {
+            $cycleStart = $cycleStart->subMonthNoOverflow();
+        }
 
         $minKmAfterSnapshot = TripCheckpoint::where('trip_id', $trip->id)
             ->whereNotNull('km_reading')

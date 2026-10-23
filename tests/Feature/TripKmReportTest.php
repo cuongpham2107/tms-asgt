@@ -1122,11 +1122,11 @@ test('báo sai ở các loại mốc khác nhau đều sửa được và tính 
     'Đảo lái thấp hơn mốc trước' => [5, 108070, [108000, 108020, 108020, 108070, 108070, 108070]],
 ]);
 
-test('resolving a report lowers monthly_start_km when the snapshot took a wrong km after the 23rd cutoff', function () {
-    $this->travelTo(now()->setDate(2026, 10, 23)->setTime(6, 49));
+test('resolving a report lowers monthly_start_km when the snapshot took a wrong km after the 23rd 12:00 cutoff', function () {
+    $this->travelTo(now()->setDate(2026, 10, 23)->setTime(18, 49));
     $this->vehicle->update(['current_mileage' => 108010, 'monthly_start_km' => 108010]);
-    $this->trip->update(['start_km' => 108010, 'started_at' => now()->setTime(1, 6)]);
-    $this->trip->checkpoints()->update(['km_reading' => 108010, 'occurred_at' => now()->setTime(1, 6)]);
+    $this->trip->update(['start_km' => 108010, 'started_at' => now()->setTime(13, 6)]);
+    $this->trip->checkpoints()->update(['km_reading' => 108010, 'occurred_at' => now()->setTime(13, 6)]);
 
     $report = TripKmReport::create([
         'trip_id' => $this->trip->id,
@@ -1142,11 +1142,11 @@ test('resolving a report lowers monthly_start_km when the snapshot took a wrong 
     expect((float) $this->vehicle->fresh()->monthly_start_km)->toBe(108000.0);
 });
 
-test('resolving a report keeps monthly_start_km when the corrected checkpoint is before the 23rd cutoff', function () {
-    $this->travelTo(now()->setDate(2026, 10, 23)->setTime(6, 49));
+test('resolving a report keeps monthly_start_km when the corrected checkpoint is before the 23rd 12:00 cutoff', function () {
+    $this->travelTo(now()->setDate(2026, 10, 23)->setTime(18, 49));
     $this->vehicle->update(['current_mileage' => 108010, 'monthly_start_km' => 108010]);
-    $this->trip->update(['start_km' => 108010, 'started_at' => now()->subDay()]);
-    $this->trip->checkpoints()->update(['km_reading' => 108010, 'occurred_at' => now()->subDay()]);
+    $this->trip->update(['start_km' => 108010, 'started_at' => now()->setTime(10, 0)]);
+    $this->trip->checkpoints()->update(['km_reading' => 108010, 'occurred_at' => now()->setTime(10, 0)]);
 
     $report = TripKmReport::create([
         'trip_id' => $this->trip->id,

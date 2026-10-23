@@ -133,7 +133,7 @@ class VehicleForm
 
                         TextInput::make('monthly_start_km')
                             ->label('Km đầu chu kỳ (ngày 23)')
-                            ->helperText('Chốt tự động lúc 00:00 ngày 23 hàng tháng')
+                            ->helperText('Chốt tự động lúc 12:00 ngày 23 hàng tháng')
                             ->prefixIcon('heroicon-o-calendar-days')
                             ->mask(RawJs::make('$money($input)'))
                             ->stripCharacters(',')

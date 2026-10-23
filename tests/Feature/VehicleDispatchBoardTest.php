@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\EupGpsService;
 use Carbon\Carbon;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -931,6 +932,13 @@ test('vehicle dispatch board only shows shift label when driver has an open acti
     $activeShift->update(['shift_type' => ShiftType::Full]);
     $vehicle->load('driver.driverShifts');
     expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('X');
+});
+
+test('snapshot monthly vehicle km is scheduled at 12:00 on the 23rd', function () {
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn ($event) => str_contains($event->command ?? '', 'vehicles:snapshot-monthly-km'));
+
+    expect($event?->expression)->toBe('0 12 23 * *');
 });
 
 test('snapshot monthly vehicle km command copies current mileage to monthly_start_km and defers active trips to next month', function () {

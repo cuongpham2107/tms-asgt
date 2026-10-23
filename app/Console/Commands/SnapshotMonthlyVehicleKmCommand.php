@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 #[Signature('vehicles:snapshot-monthly-km')]
-#[Description('Chốt số Km đầu chu kỳ tháng lúc 00:00 ngày 23 hàng tháng (các chuyến đang chạy lấy start_km để tính sang tháng sau)')]
+#[Description('Chốt số Km đầu chu kỳ tháng lúc 12:00 ngày 23 hàng tháng (các chuyến đang chạy lấy start_km để tính sang tháng sau)')]
 class SnapshotMonthlyVehicleKmCommand extends Command
 {
     /**
@@ -20,7 +20,7 @@ class SnapshotMonthlyVehicleKmCommand extends Command
      */
     public function handle(): int
     {
-        $this->info('Đang bắt đầu chốt Km bắt đầu chu kỳ tháng (00:00 ngày 23) cho các xe...');
+        $this->info('Đang bắt đầu chốt Km bắt đầu chu kỳ tháng (12:00 ngày 23) cho các xe...');
 
         // 1. Tìm các chuyến đang chạy thực tế (chưa hoàn thành/kết thúc)
         $inProgressStatuses = [
