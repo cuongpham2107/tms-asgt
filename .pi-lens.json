@@ -1,0 +1,7 @@
+{
+  "rules": {
+    "intelephense:P1005": { "ignorePaths": ["tests/**"] },
+    "intelephense:P1013": { "ignorePaths": ["tests/**"] },
+    "intelephense:P1014": { "ignorePaths": ["tests/**"] }
+  }
+}
