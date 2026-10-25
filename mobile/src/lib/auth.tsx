@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       token, shiftId, shift,
       setAuth: (t, s, sh) => { setToken(t); if (s) setShiftId(s); setShift(sh ?? null); },
-      setShift: (sh) => { setShift(sh); if (sh?.id) setShiftId(String(sh.id)); },
+      setShift: (sh) => { setShift(sh ?? null); setShiftId(sh?.id ? String(sh.id) : null); },
       logout: () => { setToken(null); setShiftId(null); setShift(null); },
     }}>
       {children}

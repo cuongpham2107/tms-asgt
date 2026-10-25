@@ -429,3 +429,82 @@ test('driver can start a new trip when having another pending trip', function ()
     expect($activeTrip->fresh()->status)->toBe(TripStatus::Started);
     expect($pendingTrip->fresh()->status)->toBe(TripStatus::Pending);
 });
+
+// === TEST 11: Bấm "Kết thúc ca" lần 2 khi ca đã kết thúc (auto-end/admin/thiết bị khác) ===
+test('end vehicle on already ended shift is idempotent', function () {
+    $shift = endMakeShift($this->driver);
+    $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
+
+    endMakeCheckpoint($trip, $order, CheckpointType::ArrivedPickup->value, 10010, $shift, $this->vehicle);
+    endMakeCheckpoint($trip, $order, CheckpointType::Completed->value, 10050, $shift, $this->vehicle);
+    $trip->update(['end_km' => 10050, 'status' => TripStatus::Completed]);
+    app(TripKmCalculatorService::class)->calculate($trip);
+
+    $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", ['km_reading' => 10080])
+        ->assertSuccessful();
+    $this->postJson('/api/driver/shifts/end', [])->assertSuccessful();
+
+    $shift->refresh();
+    expect($shift->end_time)->not->toBeNull();
+
+    $endCheckpointCount = fn () => TripCheckpoint::where('shift_id', $shift->id)
+        ->where('checkpoint_type', CheckpointType::End->value)
+        ->count();
+    $countBefore = $endCheckpointCount();
+
+    // App vẫn giữ state cũ (chưa có end_time) và gọi lại "Kết thúc ca"
+    $response = $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", ['km_reading' => 10100]);
+
+    $response->assertSuccessful();
+    $response->assertJsonPath('already_ended', true);
+    expect((float) $response->json('checkpoint.km_reading'))->toBe(10080.0);
+
+    // Không tạo checkpoint trùng, không đổi km xe
+    expect($endCheckpointCount())->toBe($countBefore);
+    expect((float) $this->vehicle->fresh()->current_mileage)->toBe(10080.0);
+});
+
+// === TEST 12: Gọi /shifts/end khi không còn ca mở → trả ca vừa kết thúc (idempotent) ===
+test('end shift when no active shift returns last ended shift', function () {
+    $shift = endMakeShift($this->driver);
+    $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
+    endMakeCheckpoint($trip, $order, CheckpointType::Completed->value, 10050, $shift, $this->vehicle);
+    $trip->update(['end_km' => 10050, 'status' => TripStatus::Completed]);
+    app(TripKmCalculatorService::class)->calculate($trip);
+
+    $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", ['km_reading' => 10050])
+        ->assertSuccessful();
+
+    $first = $this->postJson('/api/driver/shifts/end', []);
+    $first->assertSuccessful();
+    $first->assertJsonMissingPath('already_ended');
+    $endTime = $first->json('shift.end_time');
+    expect($endTime)->not->toBeNull();
+
+    $second = $this->postJson('/api/driver/shifts/end', []);
+    $second->assertSuccessful();
+    $second->assertJsonPath('already_ended', true);
+    $second->assertJsonPath('shift.id', $shift->id);
+    $second->assertJsonPath('shift.end_time', $endTime);
+});
+
+// === TEST 13: Tài xế chưa từng vào ca → /shifts/end vẫn 404 ===
+test('end shift without any shift returns 404', function () {
+    $this->postJson('/api/driver/shifts/end', [])
+        ->assertStatus(404)
+        ->assertJsonPath('message', 'Không tìm thấy ca làm việc đang hoạt động');
+});
+
+// === TEST 14: end-vehicle khi trip đang chạy không có đơn (empty run) không được 500 ===
+test('end vehicle with active empty trip does not fail', function () {
+    $shift = endMakeShift($this->driver);
+    endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+
+    $response = $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", ['km_reading' => 10020]);
+
+    $response->assertSuccessful();
+    expect(TripCheckpoint::where('shift_id', $shift->id)->whereNotNull('km_reading')->exists())->toBeTrue();
+    expect((float) $this->vehicle->fresh()->current_mileage)->toBe(10020.0);
+});

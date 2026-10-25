@@ -103,7 +103,11 @@ class DriverShiftController extends Controller
     /**
      * Nhập km khi rời xe (checkpoint type = end).
      *
-     * @response array{checkpoint: array, vehicle: array}
+     * Idempotent: nếu ca đã kết thúc, trả 200 kèm checkpoint 'end' gần nhất và cờ
+     * `already_ended` thay vì lỗi 422 — app mobile có thể giữ state cũ (ca đã bị
+     * auto-end/admin kết thúc) và bấm "Kết thúc ca" lần nữa.
+     *
+     * @response array{checkpoint: ?array, vehicle: ?array, already_ended: bool}
      */
     #[BodyParameter('km_reading', type: 'number', description: 'Số km đồng hồ lúc rời xe.', required: true)]
     public function endVehicle(EndVehicleRequest $request, DriverShift $shift): JsonResponse
@@ -116,16 +120,31 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Ca này không thuộc về bạn'], 403);
         }
 
-        if ($shift->end_time !== null) {
-            return response()->json(['message' => 'Ca đã kết thúc'], 422);
-        }
-
         // Find vehicle: from any trip on this shift (even completed ones — driver
         // may still be in the same vehicle after all trips are done)
         $vehicle = $shift->trips()
             ->latest('started_at')
             ->first()?->vehicle
             ?? $user->vehiclesAsDriver()->first();
+
+        // Ca đã kết thúc rồi (auto-end lúc 08:00/20:00, admin kết thúc, hoặc thiết bị khác)
+        // → trả về checkpoint 'end' đã có thay vì báo lỗi, để app đồng bộ lại trạng thái.
+        if ($shift->end_time !== null) {
+            $existingCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
+                ->whereIn('checkpoint_type', [CheckpointType::End->value, CheckpointType::DriverSwap->value])
+                ->whereNotNull('km_reading')
+                ->latest('id')
+                ->first();
+
+            return response()->json([
+                'checkpoint' => $existingCheckpoint?->toArray(),
+                'vehicle' => $vehicle ? [
+                    'id' => $vehicle->id,
+                    'current_mileage' => $vehicle->fresh()->current_mileage,
+                ] : null,
+                'already_ended' => true,
+            ]);
+        }
 
         if ($vehicle === null) {
             return response()->json(['message' => 'Không tìm thấy xe đang hoạt động trong ca này'], 404);
@@ -150,7 +169,11 @@ class DriverShiftController extends Controller
     /**
      * Kết thúc ca làm việc.
      *
-     * @response array{shift: DriverShiftResource}
+     * Idempotent: nếu không còn ca nào đang mở, trả 200 kèm ca vừa kết thúc gần nhất
+     * (cờ `already_ended`) để app mobile tự cập nhật lại state; chỉ trả 404 khi tài xế
+     * chưa từng có ca nào.
+     *
+     * @response array{shift: DriverShiftResource, already_ended?: bool}
      */
     #[BodyParameter('end_time', type: 'string', format: 'date-time', description: 'Thời điểm kết thúc ca.', example: '2026-05-20T17:30:00Z')]
     #[BodyParameter('end_km', type: 'number', description: 'Km đồng hồ lúc kết thúc ca.', example: 10245.5)]
@@ -170,6 +193,19 @@ class DriverShiftController extends Controller
             ->first();
 
         if (! $shift) {
+            $lastShift = DriverShift::query()
+                ->where('driver_id', $user->id)
+                ->whereNotNull('end_time')
+                ->latest('end_time')
+                ->first();
+
+            if ($lastShift) {
+                return response()->json([
+                    'shift' => DriverShiftResource::make($lastShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with(['vehicle', 'orders'])])),
+                    'already_ended' => true,
+                ]);
+            }
+
             /** @status 404 */
             return response()->json(['message' => 'Không tìm thấy ca làm việc đang hoạt động'], 404);
         }

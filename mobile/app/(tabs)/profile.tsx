@@ -80,10 +80,12 @@ export default function ProfileScreen() {
         api.shifts
           .current(token)
           .then((res) => {
-            if (res?.shift) {
-              setShift(res.shift);
-              if (res.shift.driver) setLocalDriver(res.shift.driver);
-            }
+            // API trả shift: null khi ca đã kết thúc (bấm kết thúc, auto-end 08:00/20:00,
+            // admin kết thúc...) → phải clear state, nếu không nút "Kết thúc ca" còn đó
+            // và bấm vào sẽ bị 422 "Ca đã kết thúc".
+            const nextShift = res?.shift ?? null;
+            setShift(nextShift);
+            if (nextShift?.driver) setLocalDriver(nextShift.driver);
           })
           .catch(() => null);
       }
@@ -150,21 +152,37 @@ export default function ProfileScreen() {
   const doEnd = async () => {
     setEnding(true); showLoading();
     try {
-      let kmToUse = shift?.vehicle?.current_mileage;
-      const fresh = await api.shifts.current(token!).catch(() => null);
-      if (fresh?.shift?.vehicle?.current_mileage != null) {
-        kmToUse = fresh.shift.vehicle.current_mileage;
+      // Đồng bộ lại ca từ server trước khi kết thúc: ca có thể đã bị auto-end (08:00/20:00),
+      // admin kết thúc, hoặc kết thúc từ thiết bị khác → app đang giữ state cũ.
+      const fresh = await api.shifts.current(token!).catch(() => undefined);
+      const liveShift = fresh === undefined ? shift : (fresh?.shift ?? null);
+
+      if (!liveShift) {
+        setShift(null);
+        showAlert("Thông báo", "Ca làm việc đã kết thúc trước đó.");
+        return;
       }
+
+      const kmToUse = liveShift.vehicle?.current_mileage ?? shift?.vehicle?.current_mileage;
       if (kmToUse != null) {
-        await api.shifts.endVehicle(String(shift.id), parseInt(kmToUse), token!);
+        // Number() thay parseInt(): km có thể là số thập phân (decimal 10,2)
+        await api.shifts.endVehicle(String(liveShift.id), Number(kmToUse), token!);
       }
       const res = await api.shifts.end(token!);
-      setShift(res?.shift || shift);
+      setShift(res?.shift ?? null);
       setLocalDriver(res?.shift?.driver || localDriver);
       showAlert("Thành công", "Đã kết thúc ca");
       router.replace("/");
     } catch (e: any) {
       const msg = e.message || "Không thể kết thúc ca";
+
+      // Ca đã kết thúc ở server nhưng app còn state cũ → đồng bộ lại UI
+      if (msg.includes("Ca đã kết thúc") || msg.includes("Không tìm thấy ca làm việc")) {
+        setShift(null);
+        showAlert("Thông báo", "Ca làm việc đã kết thúc trước đó.");
+        return;
+      }
+
       const title = msg.includes("chưa hoàn thiện chuyến") ? "Không thể kết thúc ca" : "Lỗi";
       const targetId = e.active_trip_id || activeTrips[0]?.id;
       showAlert(title, msg, () => {

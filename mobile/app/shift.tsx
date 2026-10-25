@@ -30,12 +30,17 @@ export default function ShiftScreen() {
   useFocusEffect(useCallback(() => {
     if (!token || !shift) return;
     api.shifts.current(token).then((res) => {
-      if (res?.shift && !res.shift.end_time) {
-        setShift(res.shift);
-        setShowEnd(true);
-        const vKm = res.shift.vehicle?.current_mileage;
-        if (vKm != null && !endKm) setEndKm(String(parseInt(vKm)));
+      const nextShift = res?.shift ?? null;
+      // Ca đã kết thúc (kể cả bị auto-end 08:00/20:00) → clear state cũ của app
+      if (!nextShift || nextShift.end_time) {
+        setShift(null);
+        setShowEnd(false);
+        return;
       }
+      setShift(nextShift);
+      setShowEnd(true);
+      const vKm = nextShift.vehicle?.current_mileage;
+      if (vKm != null && !endKm) setEndKm(String(Math.round(Number(vKm))));
     }).catch(() => {});
   }, [token]));
 
@@ -80,7 +85,10 @@ export default function ShiftScreen() {
         if (coords) {
           gps = { start_gps_lat: coords.gps_lat, start_gps_lng: coords.gps_lng };
         }
-      } catch {}
+      } catch (e) {
+        // Không lấy được GPS: vẫn cho vào ca, chỉ ghi log để debug
+        console.warn("[shift] Không lấy được GPS khi vào ca:", e);
+      }
       const res = await api.shifts.start({ shift_type: type, ...(gps || {}) }, token!);
       if (res?.shift?.id) {
         setAuth(token!, String(res.shift.id), res.shift);
@@ -115,7 +123,10 @@ export default function ShiftScreen() {
           const activeRes = await api.trips.active(token!);
           const data: any = activeRes?.data;
           targetTripId = Array.isArray(data) ? data[0]?.id : data?.id;
-        } catch {}
+        } catch (e) {
+          // Không tìm được chuyến đang chạy để điều hướng: chỉ ghi log
+          console.warn("[shift] Không lấy được chuyến đang chạy:", e);
+        }
       }
       showAlert(title, msg, () => {
         if (targetTripId) {

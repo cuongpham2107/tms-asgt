@@ -46,6 +46,8 @@ class EndHandler implements CheckpointHandlerInterface
             }
 
             // 2. Create TripCheckpoint(s)
+            $checkpoint = null;
+
             if ($activeTripId !== null) {
                 $checkpoints = app(CheckpointFactory::class)->create(
                     $activeTrip,
@@ -53,16 +55,19 @@ class EndHandler implements CheckpointHandlerInterface
                     CheckpointType::DriverSwap,
                 );
                 $checkpoint = $checkpoints->first();
-            } else {
-                $checkpoint = TripCheckpoint::create([
-                    'checkpoint_type' => CheckpointType::End->value,
-                    'trip_id' => null,
-                    'shift_id' => $shift->id,
-                    'driver_id' => $shift->driver_id,
-                    'km_reading' => $kmReading,
-                    'occurred_at' => now(),
-                ]);
             }
+
+            // Fallback: trip đang chạy không có đơn (empty run) hoặc không tạo được checkpoint
+            // → vẫn phải ghi checkpoint 'end' cho ca, tránh trả null (500 TypeError)
+            // và tránh việc ca không có km kết thúc.
+            $checkpoint ??= TripCheckpoint::create([
+                'checkpoint_type' => CheckpointType::End->value,
+                'trip_id' => null,
+                'shift_id' => $shift->id,
+                'driver_id' => $shift->driver_id,
+                'km_reading' => $kmReading,
+                'occurred_at' => now(),
+            ]);
 
             // 3. Update vehicle mileage — critical for Bug 1 fix
             $vehicle->current_mileage = $kmReading;

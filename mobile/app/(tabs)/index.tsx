@@ -30,19 +30,21 @@ export default function DashboardScreen() {
   const userId = shift?.driver?.id;
 
   useEffect(() => {
-    if (authShift) setShiftState(authShift);
+    setShiftState(authShift ?? null);
   }, [authShift]);
 
   const refresh = useCallback(async () => {
     if (!token) return;
     const [tRes, shiftRes] = await Promise.all([
       api.trips.active(token).catch(() => ({ data: [] })),
-      api.shifts.current(token).catch(() => null),
+      api.shifts.current(token).catch(() => undefined),
     ]);
     setTrips(tRes.data || []);
-    if (shiftRes?.shift) {
-      setShiftState(shiftRes.shift);
-      setShift(shiftRes.shift);
+    // undefined = lỗi mạng (giữ nguyên state); { shift: null } = ca đã kết thúc
+    if (shiftRes !== undefined) {
+      const nextShift = shiftRes?.shift ?? null;
+      setShiftState(nextShift);
+      setShift(nextShift);
     }
   }, [token, setShift]);
 
@@ -107,7 +109,7 @@ export default function DashboardScreen() {
       <View style={st.header}>
         <View>
           <Text style={st.greeting}>Xin chào, {shift?.driver?.name || "Tài xế"} 👋</Text>
-          <Text style={st.subtitle}>{shift ? "Ca đang hoạt động" : "Chưa vào ca"}</Text>
+          <Text style={st.subtitle}>{shift && !shift.end_time ? "Ca đang hoạt động" : "Chưa vào ca"}</Text>
         </View>
       </View>
 
@@ -136,7 +138,7 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      {!shift && (
+      {(!shift || shift.end_time) && (
         <TouchableOpacity style={st.startShiftBtn} onPress={() => router.replace("/shift")} activeOpacity={0.8}>
           <Ionicons name="play-circle" size={22} color="#fff" />
           <Text style={st.startShiftText}>Vào ca</Text>
