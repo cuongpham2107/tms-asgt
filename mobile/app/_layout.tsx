@@ -6,6 +6,7 @@ import { LoadingProvider, useLoading } from "../src/lib/loading";
 import { usePushNotifications } from "../src/lib/notifications";
 import LoadingOverlay from "../src/components/LoadingOverlay";
 import VersionUpdateModal from "../src/components/VersionUpdateModal";
+import { installUiDebugTracking } from "../src/lib/ui-debug";
 import { api, setUnauthorizedHandler } from "../src/lib/api";
 import {
   CURRENT_APP_VERSION,
@@ -46,6 +47,12 @@ function AuthGuard() {
 function NotificationManager() {
   const { token } = useAuth();
   usePushNotifications(token);
+  return null;
+}
+
+/** Ghi nhật ký sự kiện bàn phím toàn app để chẩn đoán lỗi trên máy khách hàng. */
+function UiDebugTracker() {
+  useEffect(() => installUiDebugTracking(), []);
   return null;
 }
 
@@ -117,6 +124,7 @@ export default function RootLayout() {
         <StatusBar style="light" />
         <AuthGuard />
         <NotificationManager />
+        <UiDebugTracker />
         <LoadingLayer />
         <VersionGate />
         <Stack screenOptions={{ headerShown: false }}>

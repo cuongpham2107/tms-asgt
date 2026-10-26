@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -16,8 +16,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
 import { login } from "../src/lib/api";
+import { logUiEvent } from "../src/lib/ui-debug";
+import UiDebugPanel from "../src/components/UiDebugPanel";
 
 const REMEMBER_KEY = "@tms_driver_saved_login";
+
+type Field = "email" | "password";
+
+// Trên một số máy Android (Samsung One UI) bàn phím hiện lên rồi tự đóng ngay sau cú chạm
+// đầu tiên. Nếu blur xảy ra quá sớm và người dùng chưa chuyển sang ô khác, ta tự focus lại.
+const REFOCUS_ELAPSED_MS = 700;
+const REFOCUS_MAX_ATTEMPTS = 3;
 
 export default function LoginScreen() {
   const { setAuth } = useAuth();
@@ -27,6 +36,64 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [debugVisible, setDebugVisible] = useState(false);
+
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const focusState = useRef<{ field: Field | null; at: number; retries: number }>({
+    field: null,
+    at: 0,
+    retries: 0,
+  });
+  const suppressRefocus = useRef(false);
+  const logoTapCount = useRef(0);
+  const logoLastTapAt = useRef(0);
+
+  function focusField(field: Field) {
+    (field === "email" ? emailRef : passwordRef).current?.focus();
+  }
+
+  function handleInputFocus(field: Field) {
+    const prev = focusState.current;
+    // Giữ số lần thử khi chính watchdog vừa focus lại, tránh vòng lặp vô hạn.
+    const keepRetries =
+      prev.field === field && Date.now() - prev.at < 1500 ? prev.retries : 0;
+    focusState.current = { field, at: Date.now(), retries: keepRetries };
+    suppressRefocus.current = false;
+    logUiEvent("focus", field);
+  }
+
+  function handleInputBlur(field: Field) {
+    logUiEvent("blur", field);
+    const st = focusState.current;
+    if (st.field !== field) return;
+
+    const elapsed = Date.now() - st.at;
+    if (suppressRefocus.current || elapsed > REFOCUS_ELAPSED_MS) return;
+    if (st.retries >= REFOCUS_MAX_ATTEMPTS) return;
+
+    st.retries += 1;
+    st.at = Date.now();
+    logUiEvent("refocus", `${field} lần ${st.retries} (${Math.round(elapsed)}ms)`);
+    setTimeout(() => {
+      // Bỏ qua nếu người dùng đã chuyển sang ô khác hoặc bấm nút.
+      if (focusState.current.field === field && !suppressRefocus.current) {
+        focusField(field);
+      }
+    }, 150);
+  }
+
+  function handleLogoPress() {
+    const now = Date.now();
+    logoTapCount.current =
+      now - logoLastTapAt.current > 1500 ? 1 : logoTapCount.current + 1;
+    logoLastTapAt.current = now;
+    if (logoTapCount.current >= 5) {
+      logoTapCount.current = 0;
+      logUiEvent("debug:open");
+      setDebugVisible(true);
+    }
+  }
 
   // Tự động load thông tin đã lưu nếu người dùng từng tích "Lưu thông tin đăng nhập"
   useEffect(() => {
@@ -45,6 +112,7 @@ export default function LoginScreen() {
   }, []);
 
   async function handleLogin() {
+    suppressRefocus.current = true;
     if (!email.trim() || !password) {
       setError("Vui lòng nhập mã nhân viên, email hoặc số điện thoại và mật khẩu");
       return;
@@ -87,14 +155,20 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === "android" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "android" ? 88 : 0}
+      // Android đã có `adjustResize` (window tự co lại khi bàn phím mở) nên KHÔNG dùng
+      // `padding` ở đây: cộng dồn thêm padding khiến vùng hiển thị co về gần 0 và bàn phím
+      // bị hệ thống đóng ngay (lỗi gặp trên Samsung M51).
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 24 }}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
       >
-        <Image source={require("../assets/icon.png")} style={s.logo} />
+        <TouchableOpacity activeOpacity={0.9} onPress={handleLogoPress}>
+          <Image source={require("../assets/icon.png")} style={s.logo} />
+        </TouchableOpacity>
         <Text style={s.subtitle}>Đăng nhập tài xế</Text>
 
         {error ? (
@@ -105,6 +179,7 @@ export default function LoginScreen() {
         ) : null}
 
         <TextInput
+          ref={emailRef}
           style={s.input}
           placeholder="Mã NV, Email hoặc Số điện thoại"
           placeholderTextColor="#9CA3AF"
@@ -113,12 +188,20 @@ export default function LoginScreen() {
             setEmail(val);
             if (error) setError("");
           }}
+          onFocus={() => handleInputFocus("email")}
+          onBlur={() => handleInputBlur("email")}
+          onSubmitEditing={() => focusField("password")}
           autoCapitalize="none"
           keyboardType="default"
           autoCorrect={false}
+          autoComplete="off"
+          importantForAutofill="no"
+          textContentType="none"
+          returnKeyType="next"
         />
 
         <TextInput
+          ref={passwordRef}
           style={s.input}
           placeholder="Mật khẩu"
           placeholderTextColor="#9CA3AF"
@@ -127,13 +210,25 @@ export default function LoginScreen() {
             setPassword(val);
             if (error) setError("");
           }}
+          onFocus={() => handleInputFocus("password")}
+          onBlur={() => handleInputBlur("password")}
+          onSubmitEditing={handleLogin}
           secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="off"
+          importantForAutofill="no"
+          textContentType="none"
+          returnKeyType="go"
         />
 
         {/* Nút tích Lưu thông tin đăng nhập */}
         <TouchableOpacity
           style={s.rememberRow}
-          onPress={() => setRememberMe(!rememberMe)}
+          onPress={() => {
+            suppressRefocus.current = true;
+            setRememberMe(!rememberMe);
+          }}
           activeOpacity={0.7}
         >
           <View style={[s.checkbox, rememberMe && s.checkboxChecked]}>
@@ -150,6 +245,8 @@ export default function LoginScreen() {
           <Text style={s.btnText}>{loading ? "Đang đăng nhập..." : "Đăng nhập"}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <UiDebugPanel visible={debugVisible} onClose={() => setDebugVisible(false)} />
     </KeyboardAvoidingView>
   );
 }
