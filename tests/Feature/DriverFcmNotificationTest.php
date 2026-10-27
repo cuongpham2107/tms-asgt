@@ -801,3 +801,86 @@ test('unsend order action sends fcm notification to driver of order', function (
     $order->refresh();
     expect($order->status)->toBe(OrderStatus::Draft);
 });
+
+test('updating fcm token detaches the token from previous account on the same device', function () {
+    $driverA = User::factory()->create([
+        'fcm_token' => 'shared_device_token_abc',
+        'fcm_token_updated_at' => now(),
+    ]);
+    $driverA->assignRole($this->driverRole);
+
+    $driverB = User::factory()->create([
+        'fcm_token' => null,
+    ]);
+    $driverB->assignRole($this->driverRole);
+
+    Sanctum::actingAs($driverB);
+
+    $response = $this->postJson('/api/driver/fcm-token', [
+        'fcm_token' => 'shared_device_token_abc',
+    ]);
+
+    $response->assertSuccessful();
+
+    $driverA->refresh();
+    $driverB->refresh();
+
+    // Driver A bị gỡ token để không bị nhận nhầm thông báo
+    expect($driverA->fcm_token)->toBeNull();
+    expect($driverA->fcm_token_updated_at)->toBeNull();
+
+    // Driver B nhận token thành công
+    expect($driverB->fcm_token)->toBe('shared_device_token_abc');
+    expect($driverB->fcm_token_updated_at)->not->toBeNull();
+});
+
+test('login with fcm token detaches the token from previous account on the same device', function () {
+    $driverA = User::factory()->create([
+        'fcm_token' => 'shared_device_token_login',
+        'fcm_token_updated_at' => now(),
+    ]);
+    $driverA->assignRole($this->driverRole);
+
+    $driverB = User::factory()->create([
+        'email' => 'driverB@asgl.local',
+        'password' => bcrypt('password123'),
+        'fcm_token' => null,
+        'is_active' => true,
+    ]);
+    $driverB->assignRole($this->driverRole);
+
+    $response = $this->postJson('/api/driver/login', [
+        'login' => 'driverB@asgl.local',
+        'password' => 'password123',
+        'fcm_token' => 'shared_device_token_login',
+    ]);
+
+    $response->assertSuccessful();
+
+    $driverA->refresh();
+    $driverB->refresh();
+
+    expect($driverA->fcm_token)->toBeNull();
+    expect($driverA->fcm_token_updated_at)->toBeNull();
+
+    expect($driverB->fcm_token)->toBe('shared_device_token_login');
+    expect($driverB->fcm_token_updated_at)->not->toBeNull();
+});
+
+test('logout clears fcm token and revokes access token', function () {
+    $driver = User::factory()->create([
+        'fcm_token' => 'token_to_clear_on_logout',
+        'fcm_token_updated_at' => now(),
+    ]);
+    $driver->assignRole($this->driverRole);
+
+    Sanctum::actingAs($driver);
+
+    $response = $this->postJson('/api/driver/logout');
+
+    $response->assertSuccessful();
+
+    $driver->refresh();
+    expect($driver->fcm_token)->toBeNull();
+    expect($driver->fcm_token_updated_at)->toBeNull();
+});

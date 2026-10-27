@@ -93,6 +93,10 @@ export const api = {
             body: { current_password: string; new_password: string; new_password_confirmation: string },
             token: string,
         ) => changePassword(body, token),
+        logout: (token: string) =>
+            fetchApi<{ message: string }>("/logout", token, {
+                method: "POST",
+            }),
     },
     // Shifts
     shifts: {

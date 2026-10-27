@@ -152,8 +152,18 @@ class AuthController extends Controller
         $token = $user->createToken('mobile')->plainTextToken;
 
         if ($request->filled('fcm_token')) {
+            $fcmToken = $request->input('fcm_token');
+
+            // Thu hồi token này khỏi bất kỳ tài khoản nào khác (tránh nhận nhầm thông báo khi đổi tài khoản trên cùng thiết bị)
+            User::where('fcm_token', $fcmToken)
+                ->where('id', '!=', $user->id)
+                ->update([
+                    'fcm_token' => null,
+                    'fcm_token_updated_at' => null,
+                ]);
+
             $user->update([
-                'fcm_token' => $request->input('fcm_token'),
+                'fcm_token' => $fcmToken,
                 'fcm_token_updated_at' => now(),
             ]);
         }
@@ -195,6 +205,11 @@ class AuthController extends Controller
         $user = $request->user();
 
         if ($user) {
+            $user->update([
+                'fcm_token' => null,
+                'fcm_token_updated_at' => null,
+            ]);
+
             $token = $user->currentAccessToken();
             if ($token instanceof PersonalAccessToken) {
                 $token->delete();

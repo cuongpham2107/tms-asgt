@@ -4,7 +4,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Modal, T
 import { useAuth } from "../../src/lib/auth";
 import { useLoading } from "../../src/lib/loading";
 import { api, PRIVACY_POLICY_URL } from "../../src/lib/api";
-import { showAlert, showDestructiveConfirm } from "../../src/lib/alert";
+import { showAlert, showConfirm, showDestructiveConfirm } from "../../src/lib/alert";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen() {
@@ -225,6 +225,25 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleLogout = () => {
+    showConfirm(
+      "Đăng xuất",
+      "Bạn có chắc chắn muốn đăng xuất khỏi tài khoản?",
+      async () => {
+        try {
+          if (token) {
+            await api.auth.logout(token);
+          }
+        } catch {
+          // Bỏ qua lỗi mạng để vẫn cho tài xế đăng xuất trên thiết bị
+        } finally {
+          logout();
+          router.replace("/login");
+        }
+      }
+    );
+  };
+
   return (
     <ScrollView style={s.container}>
       {/* Header với background + avatar */}
@@ -335,7 +354,7 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.menuItem} onPress={logout}>
+        <TouchableOpacity style={s.menuItem} onPress={handleLogout}>
           <View style={[s.menuIcon, { backgroundColor: "#F3F4F6" }]}>
             <Ionicons name="log-out" size={20} color="#4B5563" />
           </View>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,15 @@ class DriverFcmTokenController extends Controller
         ]);
 
         $user = $request->user();
+
+        // Thu hồi token này khỏi bất kỳ tài khoản nào khác (tránh nhận nhầm thông báo khi đổi tài khoản trên cùng thiết bị)
+        User::where('fcm_token', $validated['fcm_token'])
+            ->where('id', '!=', $user->id)
+            ->update([
+                'fcm_token' => null,
+                'fcm_token_updated_at' => null,
+            ]);
+
         $user->update([
             'fcm_token' => $validated['fcm_token'],
             'fcm_token_updated_at' => now(),
