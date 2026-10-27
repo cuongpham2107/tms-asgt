@@ -436,21 +436,7 @@ class ListTrips extends ListRecords
 
     private function applyActiveFilters(Builder $query, string $except = ''): Builder
     {
-        return $query
-            ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query): Builder {
-                if (filled($this->dateFrom) && filled($this->dateTo)) {
-                    return $query->whereBetween('trips.started_at', [
-                        Carbon::parse($this->dateFrom)->startOfDay(),
-                        Carbon::parse($this->dateTo)->endOfDay(),
-                    ]);
-                }
-
-                if (filled($this->dateFrom)) {
-                    return $query->where('trips.started_at', '>=', Carbon::parse($this->dateFrom)->startOfDay());
-                }
-
-                return $query->where('trips.started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
-            })
+        return $this->applyDateRangeFilter($query, $this->dateFrom, $this->dateTo)
             ->when($except !== 'status' && $this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
             ->when($except !== 'status' && $this->activeStatusFilter === 'all', fn (Builder $query): Builder => $query->whereNotIn('trips.status', [TripStatus::Completed->value, TripStatus::Delivered->value, TripStatus::Cancelled->value]))
             ->when($except !== 'vehicleOwner' && $this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
@@ -557,20 +543,10 @@ class ListTrips extends ListRecords
                 filled($driverId),
                 fn (Builder $query): Builder => $query->where('trips.driver_id', $driverId),
             )
-            ->when(filled($dateFrom) || filled($dateTo), function (Builder $query) use ($dateFrom, $dateTo): Builder {
-                if (filled($dateFrom) && filled($dateTo)) {
-                    return $query->whereBetween('started_at', [
-                        Carbon::parse($dateFrom)->startOfDay(),
-                        Carbon::parse($dateTo)->endOfDay(),
-                    ]);
-                }
-
-                if (filled($dateFrom)) {
-                    return $query->where('started_at', '>=', Carbon::parse($dateFrom)->startOfDay());
-                }
-
-                return $query->where('started_at', '<=', Carbon::parse($dateTo)->endOfDay());
-            })
+            ->when(
+                filled($dateFrom) || filled($dateTo),
+                fn (Builder $query): Builder => $this->applyDateRangeFilter($query, $dateFrom, $dateTo),
+            )
             ->when(filled($search), function (Builder $query) use ($search): Builder {
                 return $query->where(function (Builder $query) use ($search): void {
                     $query
@@ -714,17 +690,8 @@ class ListTrips extends ListRecords
                 },
             )
             ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query) use ($actionRecordId): Builder {
-                return $query->where(function (Builder $dateQuery) use ($actionRecordId) {
-                    if (filled($this->dateFrom) && filled($this->dateTo)) {
-                        $dateQuery->whereBetween('trips.started_at', [
-                            Carbon::parse($this->dateFrom)->startOfDay(),
-                            Carbon::parse($this->dateTo)->endOfDay(),
-                        ]);
-                    } elseif (filled($this->dateFrom)) {
-                        $dateQuery->where('trips.started_at', '>=', Carbon::parse($this->dateFrom)->startOfDay());
-                    } else {
-                        $dateQuery->where('trips.started_at', '<=', Carbon::parse($this->dateTo)->endOfDay());
-                    }
+                return $query->where(function (Builder $dateQuery) use ($actionRecordId): void {
+                    $this->applyDateRangeFilter($dateQuery, $this->dateFrom, $this->dateTo);
 
                     if ($actionRecordId) {
                         $dateQuery->orWhere('trips.id', $actionRecordId);
@@ -751,6 +718,46 @@ class ListTrips extends ListRecords
                     }
                 });
             });
+    }
+
+    /**
+     * Lọc theo khoảng ngày của chuyến.
+     *
+     * Chuyến nháp/chờ chạy chưa khởi hành nên `started_at` = NULL. Nếu chỉ so sánh
+     * trên `started_at` thì các bản ghi này bị loại sạch khỏi kết quả, nên với
+     * chuyến chưa có `started_at` ta dùng `created_at` thay thế.
+     */
+    private function applyDateRangeFilter(Builder $query, ?string $dateFrom, ?string $dateTo): Builder
+    {
+        $from = filled($dateFrom) ? Carbon::parse($dateFrom)->startOfDay() : null;
+        $to = filled($dateTo) ? Carbon::parse($dateTo)->endOfDay() : null;
+
+        if (! $from && ! $to) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $dateQuery) use ($from, $to): void {
+            $dateQuery
+                ->where(function (Builder $started) use ($from, $to): void {
+                    $started->whereNotNull('trips.started_at');
+                    $this->applyDateBound($started, 'trips.started_at', $from, $to);
+                })
+                ->orWhere(function (Builder $draft) use ($from, $to): void {
+                    $draft->whereNull('trips.started_at');
+                    $this->applyDateBound($draft, 'trips.created_at', $from, $to);
+                });
+        });
+    }
+
+    private function applyDateBound(Builder $query, string $column, ?Carbon $from, ?Carbon $to): void
+    {
+        if ($from && $to) {
+            $query->whereBetween($column, [$from, $to]);
+        } elseif ($from) {
+            $query->where($column, '>=', $from);
+        } else {
+            $query->where($column, '<=', $to);
+        }
     }
 
     private function applyStatusFilterByKey(Builder $query, string $key): Builder
