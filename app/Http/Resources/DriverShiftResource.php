@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -18,8 +19,9 @@ class DriverShiftResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $firstTrip = $this->trips()->first();
-        $latestTrip = $this->trips()->latest('started_at')->first();
+        $nonPendingTrips = $this->trips()->whereNotIn('status', [TripStatus::Pending, TripStatus::Cancelled]);
+        $firstTrip = (clone $nonPendingTrips)->first();
+        $latestTrip = (clone $nonPendingTrips)->latest('started_at')->first();
         $displayTrip = $latestTrip ?? $firstTrip;
 
         return [
@@ -46,27 +48,34 @@ class DriverShiftResource extends JsonResource
             'total_km' => $this->total_km,
             'total_km_loaded' => $this->total_km_loaded,
             'total_km_empty' => $this->total_km_empty,
-            'trips' => $this->whenLoaded('trips', fn () => $this->trips->map(fn ($trip) => [
-                'id' => $trip->id,
-                'trip_code' => $trip->trip_code,
-                'vehicle_id' => $trip->vehicle_id,
-                'status' => $trip->status,
-                'vehicle' => $trip->vehicle ? [
-                    'id' => $trip->vehicle->id,
-                    'plate_number' => $trip->vehicle->plate_number,
-                ] : null,
-                'orders' => $trip->relationLoaded('orders') ? $trip->orders->map(fn ($o) => [
-                    'id' => $o->id,
-                    'order_code' => $o->order_code,
-                ]) : [],
-                'started_at' => $trip->started_at?->toDateTimeString(),
-                'completed_at' => $trip->completed_at?->toDateTimeString(),
-                'start_km' => $trip->start_km,
-                'end_km' => $trip->end_km,
-                'total_km' => $trip->total_km,
-                'total_km_loaded' => $trip->total_km_loaded,
-                'total_km_empty' => $trip->total_km_empty,
-            ])),
+            'trips' => $this->whenLoaded('trips', fn () => $this->trips
+                ->filter(fn ($trip) => ! in_array(
+                    $trip->status instanceof TripStatus ? $trip->status : TripStatus::tryFrom($trip->status),
+                    [TripStatus::Pending, TripStatus::Cancelled],
+                    true
+                ))
+                ->values()
+                ->map(fn ($trip) => [
+                    'id' => $trip->id,
+                    'trip_code' => $trip->trip_code,
+                    'vehicle_id' => $trip->vehicle_id,
+                    'status' => $trip->status,
+                    'vehicle' => $trip->vehicle ? [
+                        'id' => $trip->vehicle->id,
+                        'plate_number' => $trip->vehicle->plate_number,
+                    ] : null,
+                    'orders' => $trip->relationLoaded('orders') ? $trip->orders->map(fn ($o) => [
+                        'id' => $o->id,
+                        'order_code' => $o->order_code,
+                    ]) : [],
+                    'started_at' => $trip->started_at?->toDateTimeString(),
+                    'completed_at' => $trip->completed_at?->toDateTimeString(),
+                    'start_km' => $trip->start_km,
+                    'end_km' => $trip->end_km,
+                    'total_km' => $trip->total_km,
+                    'total_km_loaded' => $trip->total_km_loaded,
+                    'total_km_empty' => $trip->total_km_empty,
+                ])),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

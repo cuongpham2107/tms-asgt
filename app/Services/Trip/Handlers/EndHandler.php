@@ -20,9 +20,15 @@ class EndHandler implements CheckpointHandlerInterface
     {
         return DB::transaction(function () use ($shift, $vehicle, $kmReading) {
             // 1. Find active trip on this vehicle in this shift
-            $activeTrip = Trip::where('vehicle_id', $vehicle->id)
+            $activeTrip = Trip::query()
+                ->where('vehicle_id', $vehicle->id)
                 ->where('shift_id', $shift->id)
-                ->whereNotIn('status', [TripStatus::Completed, TripStatus::DriverSwap, TripStatus::Cancelled])
+                ->whereNotIn('status', [
+                    TripStatus::Completed,
+                    TripStatus::DriverSwap,
+                    TripStatus::Cancelled,
+                    TripStatus::Pending,
+                ], 'and')
                 ->first();
 
             $activeTripId = null;

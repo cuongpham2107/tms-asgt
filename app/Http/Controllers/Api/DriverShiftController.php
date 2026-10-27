@@ -201,7 +201,7 @@ class DriverShiftController extends Controller
 
             if ($lastShift) {
                 return response()->json([
-                    'shift' => DriverShiftResource::make($lastShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with(['vehicle', 'orders'])])),
+                    'shift' => DriverShiftResource::make($lastShift->load(['driver', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])])),
                     'already_ended' => true,
                 ]);
             }
@@ -210,7 +210,7 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Không tìm thấy ca làm việc đang hoạt động'], 404);
         }
 
-        $hasTrips = $shift->trips()->exists();
+        $hasTrips = $shift->trips()->whereNotIn('status', [TripStatus::Cancelled, TripStatus::Pending], 'and')->exists();
 
         // Gate: phải có checkpoint type='end' cho xe hiện tại trước khi kết thúc ca
         // (chỉ bắt buộc nếu ca có chuyến — không có chuyến nào thì không cần)
@@ -308,6 +308,13 @@ class DriverShiftController extends Controller
                 $trip->save();
             }
 
+            // Gỡ shift_id cho các chuyến 'pending' của ca này để ca sau nhận lại
+            Trip::query()
+                ->where('driver_id', $user->id)
+                ->where('shift_id', $shift->id)
+                ->where('status', TripStatus::Pending)
+                ->update(['shift_id' => null]);
+
             // Update vehicle mileage from the 'end' checkpoint's km_reading
             if ($endCheckpoint?->vehicle_id) {
                 $vehicleUpdate = ['current_mileage' => $endKm];
@@ -351,7 +358,7 @@ class DriverShiftController extends Controller
             app(ShiftKmCalculatorService::class)->calculate($shift);
         }
 
-        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with(['vehicle', 'orders'])])) : null]);
+        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])])) : null]);
     }
 
     /**

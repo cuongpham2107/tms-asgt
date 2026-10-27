@@ -508,3 +508,84 @@ test('end vehicle with active empty trip does not fail', function () {
     expect(TripCheckpoint::where('shift_id', $shift->id)->whereNotNull('km_reading')->exists())->toBeTrue();
     expect((float) $this->vehicle->fresh()->current_mileage)->toBe(10020.0);
 });
+
+// === TEST 15: /shifts/current và /shifts/status không đưa chuyến Pending vào shift.trips ===
+test('driver shift current and status do not include pending trips in trips list', function () {
+    $shift = endMakeShift($this->driver);
+    $trip1 = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $trip1->update(['status' => TripStatus::Completed]);
+
+    $pendingTrip = Trip::create([
+        'trip_code' => 'TRIP-PENDING-TEST-15',
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'status' => TripStatus::Pending,
+        'shift_id' => $shift->id,
+    ]);
+
+    $resCurrent = $this->getJson('/api/driver/shifts/current');
+    $resCurrent->assertSuccessful();
+    $tripsInCurrent = $resCurrent->json('shift.trips');
+    expect($tripsInCurrent)->toHaveCount(1);
+    expect($tripsInCurrent[0]['id'])->toBe($trip1->id);
+    expect(collect($tripsInCurrent)->pluck('id'))->not->toContain($pendingTrip->id);
+
+    $resStatus = $this->getJson('/api/driver/shifts/active');
+    $resStatus->assertSuccessful();
+    $tripsInStatus = $resStatus->json('active_shift.trips');
+    expect($tripsInStatus)->toHaveCount(1);
+    expect($tripsInStatus[0]['id'])->toBe($trip1->id);
+    expect(collect($tripsInStatus)->pluck('id'))->not->toContain($pendingTrip->id);
+});
+
+// === TEST 16: end vehicle và end shift thành công khi tài xế có chuyến Pending gán vào ca ===
+test('end vehicle and end shift succeed when driver has a pending trip linked to shift', function () {
+    $shift = endMakeShift($this->driver);
+    $pendingTrip = Trip::create([
+        'trip_code' => 'TRIP-PENDING-TEST-16',
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'status' => TripStatus::Pending,
+        'shift_id' => $shift->id,
+    ]);
+
+    $this->vehicle->update(['current_mileage' => 10000]);
+
+    // Lái xe nhập km rời xe (end-vehicle)
+    $resEndVehicle = $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", ['km_reading' => 10050]);
+    $resEndVehicle->assertSuccessful();
+
+    // Chuyến Pending tuyệt đối KHÔNG bị chuyển thành DriverSwap
+    expect($pendingTrip->fresh()->status)->toBe(TripStatus::Pending);
+
+    // Lái xe kết thúc ca
+    $resEndShift = $this->postJson('/api/driver/shifts/end', []);
+    $resEndShift->assertSuccessful();
+
+    $shift->refresh();
+    expect($shift->end_time)->not->toBeNull();
+    // Chuyến Pending được gỡ shift_id để ca sau nhận lại
+    expect($pendingTrip->fresh()->shift_id)->toBeNull();
+    expect($pendingTrip->fresh()->status)->toBe(TripStatus::Pending);
+});
+
+// === TEST 17: Tài xế chỉ có chuyến Pending có thể kết thúc ca mà không cần km kết thúc xe ===
+test('driver with only pending trip can end shift directly without end vehicle', function () {
+    $shift = endMakeShift($this->driver);
+    $pendingTrip = Trip::create([
+        'trip_code' => 'TRIP-PENDING-TEST-17',
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'status' => TripStatus::Pending,
+        'shift_id' => $shift->id,
+    ]);
+
+    // Không gọi end-vehicle, kết thúc ca luôn
+    $response = $this->postJson('/api/driver/shifts/end', []);
+
+    $response->assertSuccessful();
+    $shift->refresh();
+    expect($shift->end_time)->not->toBeNull();
+    expect($pendingTrip->fresh()->shift_id)->toBeNull();
+    expect($pendingTrip->fresh()->status)->toBe(TripStatus::Pending);
+});

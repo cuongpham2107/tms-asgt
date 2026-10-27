@@ -94,7 +94,7 @@ export default function ProfileScreen() {
 
   const driver = localDriver;
   const shiftTrips: any[] = shift?.trips || [];
-  const activeTrips = shiftTrips.filter((t: any) => t.status !== "completed" && t.status !== "driver_swap" && t.status !== "cancelled");
+  const activeTrips = shiftTrips.filter((t: any) => t.status !== "completed" && t.status !== "driver_swap" && t.status !== "cancelled" && t.status !== "pending");
 
   const handleEndShift = () => {
     if (!shift?.id) { showAlert("Không có ca", "Bạn chưa vào ca"); return; }

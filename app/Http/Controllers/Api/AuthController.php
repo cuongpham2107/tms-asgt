@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DriverShiftResource;
 use App\Http\Resources\UserResource;
@@ -13,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -168,7 +170,7 @@ class AuthController extends Controller
             'user' => UserResource::make($user),
             'token' => $token,
             'shift' => $activeShift
-                ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->where('status', '!=', 'cancelled')->with(['vehicle', 'orders'])]))
+                ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])]))
                 : null,
             'app_version' => [
                 'latest_version' => (string) config('app.mobile_latest_version', '1.1.5'),
@@ -189,10 +191,14 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
+        /** @var User|null $user */
         $user = $request->user();
 
         if ($user) {
-            $user->currentAccessToken()?->delete();
+            $token = $user->currentAccessToken();
+            if ($token instanceof PersonalAccessToken) {
+                $token->delete();
+            }
         }
 
         return response()->json(['message' => 'Đã đăng xuất thành công']);
