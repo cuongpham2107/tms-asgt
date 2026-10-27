@@ -106,24 +106,37 @@ class ShiftKmCalculatorService
         $allTrips = $shift->trips()->whereNotNull('start_km')->get();
 
         // Thêm các chuyến liên quan đến ca hoặc tài xế này:
-        // 1. Swap ra khỏi ca (from_shift_id = $shift->id hoặc from_driver_id = $shift->driver_id)
-        // 2. Swap vào ca (to_shift_id = $shift->id hoặc to_driver_id = $shift->driver_id)
-        // 3. Chuyến do tài xế này chạy (driver_id = $shift->driver_id) nhưng shift_id chưa gán hoặc khác
-        // 4. Chuyến có checkpoint thuộc ca hoặc tài xế này
+        // 1. Swap ra/vào ca (from_shift_id/to_shift_id = $shift->id)
+        // 2. Chuyến có checkpoint thuộc ca ($shift->id)
+        // 3. Chuyến có checkpoint của tài xế này trong khoảng thời gian của ca
+        // 4. Chuyến do tài xế này chạy (driver_id) trong khoảng thời gian của ca
+        //
+        // Nhánh 3 & 4 phải giới hạn theo giờ ca: nếu không, mọi chuyến/checkpoint cũ của cùng
+        // tài xế sẽ bị cộng dồn vào ca mới → ca vừa mở đã có km của ca trước.
+        // Nhánh 1 & 2 đã gắn chặt với $shift->id nên không cần giới hạn (tránh mất km khi swap giữa chuyến).
+        $windowStart = $shift->start_time;
+        $windowEnd = $shift->end_time ?? now();
+
         $additionalTripIds = Trip::query()
             ->whereNotNull('start_km')
             ->whereNotIn('id', $allTrips->pluck('id'))
-            ->where(function ($query) use ($shift) {
-                $query->where('driver_id', $shift->driver_id)
-                    ->orWhereHas('driverSwaps', fn ($q) => $q
-                        ->where('from_shift_id', $shift->id)
-                        ->orWhere('to_shift_id', $shift->id)
-                        ->orWhere('from_driver_id', $shift->driver_id)
-                        ->orWhere('to_driver_id', $shift->driver_id)
-                    )
+            ->where(function ($query) use ($shift, $windowStart, $windowEnd) {
+                $query->whereHas('driverSwaps', fn ($q) => $q
+                    ->where('from_shift_id', $shift->id)
+                    ->orWhere('to_shift_id', $shift->id)
+                )
+                    ->orWhereHas('checkpoints', fn ($q) => $q->where('shift_id', $shift->id))
                     ->orWhereHas('checkpoints', fn ($q) => $q
-                        ->where('shift_id', $shift->id)
-                        ->orWhere('driver_id', $shift->driver_id)
+                        ->where('driver_id', $shift->driver_id)
+                        ->whereBetween('occurred_at', [$windowStart, $windowEnd])
+                    )
+                    ->orWhere(fn ($q) => $q
+                        ->where('driver_id', $shift->driver_id)
+                        ->where(fn ($t) => $t
+                            ->whereBetween('started_at', [$windowStart, $windowEnd])
+                            ->orWhere(fn ($draft) => $draft
+                                ->whereNull('started_at')
+                                ->whereBetween('created_at', [$windowStart, $windowEnd])))
                     );
             })
             ->pluck('id');

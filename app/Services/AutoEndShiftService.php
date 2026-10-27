@@ -22,6 +22,12 @@ class AutoEndShiftService
      */
     public const GRACE_MINUTES = 0;
 
+    /**
+     * Thời lượng tối thiểu (giờ) của một ca cả ngày — dùng để chặn trường hợp ca vào
+     * sát mốc 08:00 bị tính là đã hết hạn ngay trong ngày.
+     */
+    public const MIN_DAY_SHIFT_HOURS = 4;
+
     public function __construct(
         protected ShiftKmCalculatorService $shiftKmCalculatorService
     ) {}
@@ -37,11 +43,26 @@ class AutoEndShiftService
         $startTime = Carbon::parse($shift->start_time);
         $shiftDate = ShiftScheduleService::getShiftDate($startTime);
 
-        return match ($shift->shift_type) {
+        $deadline = match ($shift->shift_type) {
             ShiftType::MorningHalf => $shiftDate->copy()->setTime(20, 0, 0),
             ShiftType::Full, ShiftType::NightHalf => $shiftDate->copy()->addDay()->setTime(8, 0, 0),
             default => $shiftDate->copy()->addDay()->setTime(8, 0, 0),
         };
+
+        // Mốc kết thúc phải sau giờ vào ca một khoảng tối thiểu. Trước 08:00, getShiftDate() tính về
+        // ngày hôm trước, nên ca cả ngày vào sáng sớm (vd 07:30) từng bị coi là quá hạn ngay 08:00
+        // cùng ngày và bị auto-end chỉ sau vài chục phút.
+        $minimumHours = in_array($shift->shift_type, [ShiftType::Full, ShiftType::NightHalf], true)
+            ? self::MIN_DAY_SHIFT_HOURS
+            : 0;
+        $threshold = $startTime->copy()->addHours($minimumHours);
+        $cycleHours = $shift->shift_type === ShiftType::MorningHalf ? 12 : 24;
+
+        while ($deadline->lte($threshold)) {
+            $deadline->addHours($cycleHours);
+        }
+
+        return $deadline;
     }
 
     /**

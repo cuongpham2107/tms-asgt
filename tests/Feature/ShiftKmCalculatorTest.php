@@ -333,3 +333,61 @@ test('trip completion recalculates all participating shifts and active shift API
     expect((float) $currentRes->json('shift.total_km_loaded'))->toBe(100.0);
     expect((float) $currentRes->json('shift.total_km_empty'))->toBe(50.0);
 });
+
+test('ca mới không cộng km của chuyến thuộc ca cũ cùng tài xế', function () {
+    // Ca cũ đã kết thúc 2 ngày trước, có 1 chuyến 100 km
+    $oldShift = DriverShift::create([
+        'driver_id' => $this->driverA->id,
+        'vehicle_id' => $this->vehicle->id,
+        'shift_type' => ShiftType::Full,
+        'start_km' => 99000,
+        'end_km' => 99180,
+        'start_time' => now()->subDays(2),
+        'end_time' => now()->subDays(1),
+    ]);
+
+    Trip::create([
+        'trip_code' => 'SKC-OLD-'.fake()->unique()->randomNumber(),
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $oldShift->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subDays(2)->addHour(),
+        'completed_at' => now()->subDays(2)->addHours(5),
+        'start_km' => 99000,
+        'end_km' => 99100,
+        'total_km' => 100,
+        'total_km_loaded' => 80,
+        'total_km_empty' => 20,
+    ]);
+
+    // Ca mới của cùng tài xế, chưa chạy chuyến nào
+    app(ShiftKmCalculatorService::class)->calculate($this->shiftA);
+
+    $this->shiftA->refresh();
+    expect((float) $this->shiftA->total_km)->toBe(0.0);
+    expect((float) $this->shiftA->total_km_loaded)->toBe(0.0);
+    expect((float) $this->shiftA->total_km_empty)->toBe(0.0);
+
+    // Chuyến mới trong ca hiện tại thì vẫn phải được tính
+    Trip::create([
+        'trip_code' => 'SKC-NEW-'.fake()->unique()->randomNumber(),
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $this->shiftA->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subMinutes(30),
+        'completed_at' => now()->subMinutes(10),
+        'start_km' => 100000,
+        'end_km' => 100050,
+        'total_km' => 50,
+        'total_km_loaded' => 50,
+        'total_km_empty' => 0,
+    ]);
+
+    app(ShiftKmCalculatorService::class)->calculate($this->shiftA);
+
+    $this->shiftA->refresh();
+    expect((float) $this->shiftA->total_km)->toBe(50.0);
+    expect((float) $this->shiftA->total_km_loaded)->toBe(50.0);
+});

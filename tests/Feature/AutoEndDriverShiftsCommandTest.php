@@ -19,6 +19,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\AutoEndShiftService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
@@ -49,7 +50,7 @@ beforeEach(function () {
     ]);
 });
 
-test('it does not auto-end shift before 5-minute grace period has passed', function () {
+test('it ends MorningHalf shift (Ca X/2) right at the 20:00 deadline (no grace period)', function () {
     Carbon::setTestNow('2026-10-21 08:30:00');
 
     $shift = DriverShift::create([
@@ -59,14 +60,22 @@ test('it does not auto-end shift before 5-minute grace period has passed', funct
         'start_km' => 1000.0,
     ]);
 
-    // Ca X/2 mốc kết thúc là 20:00 cùng ngày. Lúc 20:04 vẫn chưa quá 5 phút ân hạn (20:05)
-    Carbon::setTestNow('2026-10-21 20:04:59');
+    // Chưa tới mốc 20:00 thì không được out ca
+    Carbon::setTestNow('2026-10-21 19:59:30');
+
+    $this->artisan('shifts:auto-end')
+        ->assertSuccessful();
+
+    expect($shift->fresh()->end_time)->toBeNull();
+
+    // GRACE_MINUTES = 0: qua mốc 20:00 là out ca luôn, chốt giờ đúng 20:00:00
+    Carbon::setTestNow('2026-10-21 20:00:30');
 
     $this->artisan('shifts:auto-end')
         ->assertSuccessful();
 
     $shift->refresh();
-    expect($shift->end_time)->toBeNull();
+    expect($shift->end_time->format('Y-m-d H:i:s'))->toBe('2026-10-21 20:00:00');
 });
 
 test('it auto-ends MorningHalf shift (Ca X/2) after 20:05 when driver has no incomplete orders', function () {
@@ -103,12 +112,12 @@ test('it auto-ends Full shift (Ca X) after next day 08:05', function () {
         'start_km' => 2000.0,
     ]);
 
-    // Ngày hôm sau lúc 08:04: Chưa out ca
-    Carbon::setTestNow('2026-10-22 08:04:00');
+    // Ngày hôm sau lúc 07:59: Chưa tới mốc nên chưa out ca
+    Carbon::setTestNow('2026-10-22 07:59:00');
     $this->artisan('shifts:auto-end')->assertSuccessful();
     expect($shift->fresh()->end_time)->toBeNull();
 
-    // Ngày hôm sau lúc 08:06: Đã qua mốc ân hạn 08:05 -> Auto out ca
+    // Ngày hôm sau lúc 08:06: Đã qua mốc 08:00 -> Auto out ca
     Carbon::setTestNow('2026-10-22 08:06:00');
     $this->artisan('shifts:auto-end')->assertSuccessful();
 
@@ -355,4 +364,30 @@ test('it does not persist changes when running in dry-run mode', function () {
     // Trong DB vẫn là null (không đổi)
     $shift->refresh();
     expect($shift->end_time)->toBeNull();
+});
+
+test('ca X vào sáng sớm (07:30) không bị auto-end lúc 08:00 cùng ngày', function () {
+    Carbon::setTestNow('2026-10-27 07:30:00');
+
+    $shift = DriverShift::create([
+        'driver_id' => $this->driver->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now(),
+        'start_km' => 1000.0,
+    ]);
+
+    // Mốc kết thúc phải là 08:00 hôm sau, không phải 08:00 hôm nay
+    expect(app(AutoEndShiftService::class)->getShiftDeadline($shift)->format('Y-m-d H:i:s'))
+        ->toBe('2026-10-28 08:00:00');
+
+    Carbon::setTestNow('2026-10-27 08:06:00');
+    $this->artisan('shifts:auto-end')->assertSuccessful();
+    expect($shift->fresh()->end_time)->toBeNull();
+
+    // Sang hôm sau mới tự động thoát, ghi nhận đúng mốc 08:00
+    Carbon::setTestNow('2026-10-28 08:06:00');
+    $this->artisan('shifts:auto-end')->assertSuccessful();
+
+    $shift->refresh();
+    expect($shift->end_time->format('Y-m-d H:i:s'))->toBe('2026-10-28 08:00:00');
 });
