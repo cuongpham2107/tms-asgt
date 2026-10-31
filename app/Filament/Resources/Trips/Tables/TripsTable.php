@@ -147,7 +147,10 @@ class TripsTable extends BaseTable
                 UniqueMapColumn::make('gps_position')
                     ->label('Vị trí GPS')
                     ->height(72)
+                    ->width(90)
                     ->zoom(14)
+                    // Một lớp bản đồ cho ô nhỏ: nhiều lớp sẽ hiện nút đổi lớp che mất bản đồ
+                    ->tileLayersUrl(MapTile::Streets->value)
                     ->static()
                     ->placeholder('—')
                     ->state(fn (Trip $record): ?array => ($record->vehicle?->gps_lat && $record->vehicle?->gps_lng)

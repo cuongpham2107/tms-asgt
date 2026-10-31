@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Vehicles\Tables;
 
+use App\Enums\MapTile;
 use App\Filament\BaseTable;
 use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Vehicle;
@@ -41,6 +42,8 @@ class VehiclesTable extends BaseTable
                     ->height(80)
                     ->width(100)
                     ->zoom(15)
+                    // Một lớp bản đồ cho ô nhỏ: nhiều lớp sẽ hiện nút đổi lớp che mất bản đồ
+                    ->tileLayersUrl(MapTile::Streets->value)
                     ->pickMarker(fn (Marker $marker) => $marker->icon(asset('images/truck.png'), [16, 16]))
                     ->static()
                     ->placeholder('—')

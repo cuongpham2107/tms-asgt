@@ -1,8 +1,12 @@
 <?php
 
+use App\Enums\TripStatus;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Filament\Resources\Locations\Pages\CreateLocation;
+use App\Filament\Resources\Trips\Pages\ListTrips;
+use App\Filament\Resources\Vehicles\Pages\ListVehicles;
 use App\Filament\Widgets\VehicleTrackingMap;
+use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -52,4 +56,31 @@ test('the gps modal uses a Google-tiles Leaflet map instead of an OpenStreetMap 
         ->assertDontSeeHtml('openstreetmap.org');
 
     expect(File::get(resource_path('js/filament/gps-modal-map.ts')))->toContain('lyrs=m');
+});
+
+test('table map columns use Google tiles instead of the plugin OpenStreetMap default', function () {
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '29H-MAP-TEST',
+        'is_active' => true,
+        'gps_lat' => 21.05,
+        'gps_lng' => 105.8542,
+    ]);
+
+    Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => User::factory()->create()->id,
+        'status' => TripStatus::Started,
+        'started_at' => now(),
+    ]);
+
+    $tripsHtml = Livewire::test(ListTrips::class)
+        ->set('orderType', 'all')
+        ->set('activePlaceFilter', 'all')
+        ->call('loadTable')
+        ->html();
+
+    $vehiclesHtml = Livewire::test(ListVehicles::class)->call('loadTable')->html();
+
+    expect($tripsHtml)->toContain('mt1.google.com')->not->toContain('openstreetmap');
+    expect($vehiclesHtml)->toContain('mt1.google.com')->not->toContain('openstreetmap');
 });
