@@ -793,6 +793,14 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     // ─── Formatting Helpers ──────────────────────────────────────────
 
+    /**
+     * Xe nhà là xe có chủ xe thuộc công ty (ASGT); mọi chủ xe khác là xe thuê ngoài.
+     */
+    public static function getOwnerCategory(Vehicle $record): string
+    {
+        return in_array(mb_strtoupper(trim((string) $record->owner)), ['ASGT'], true) ? 'Xe CTY' : 'Xe thuê';
+    }
+
     public static function renderBsx(Vehicle $record): string
     {
         $plate = e($record->plate_number);

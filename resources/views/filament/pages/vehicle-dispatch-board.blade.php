@@ -93,7 +93,7 @@
                     {{-- Dòng tiêu đề chính màu navy theo theme table --}}
                     <tr class="dark:bg-slate-950" style="background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));">
                         <th 
-                            colspan="17" 
+                            colspan="18" 
                             class="text-white py-2.5 px-4 text-center font-bold tracking-wider text-sm sm:text-base border-b border-white/10 uppercase dark:bg-slate-950"
                             style="background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));"
                         >
@@ -117,7 +117,9 @@
                                 @endif
                             </span>
                         </th>
-                        
+
+                        <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[75px]">Phân loại</th>
+
                         <th class="border-r border-b border-white/10 py-2 px-1 text-center whitespace-nowrap min-w-[55px]">Loại đơn</th>
                         <th 
                             wire:click="sortTable('status')"
@@ -171,6 +173,7 @@
                                 $isXeChoAlert = $xeChoData['isAlert'];
                                 $isXeChoWarning = $xeChoData['isWarning'];
 
+                                $ownerCategory = \App\Filament\Pages\VehicleDispatchBoard::getOwnerCategory($vehicle);
                                 $orderType = \App\Filament\Pages\VehicleDispatchBoard::getOrderType($vehicle);
                                 $currentTrip = $vehicle->active_trip;
                                 $pickup = \App\Filament\Pages\VehicleDispatchBoard::getPickupPoint($vehicle);
@@ -247,7 +250,14 @@
 
                                 
 
-                                {{-- 3. Loại đơn của đơn hiện tại (HHHK / Hàng ngoài) --}}
+                                {{-- 3. Phân loại: chủ xe ASGT là xe nhà, còn lại là xe thuê --}}
+                                <td class="border-r border-gray-100 dark:border-white/5 px-2 py-1.5 text-center whitespace-nowrap">
+                                    <x-filament::badge size="xs" :color="$ownerCategory === 'Xe CTY' ? 'info' : 'warning'">
+                                        {{ $ownerCategory }}
+                                    </x-filament::badge>
+                                </td>
+
+                                {{-- 4. Loại đơn của đơn hiện tại (HHHK / Hàng ngoài) --}}
                                 <td class="border-r border-gray-100 dark:border-white/5 px-1 py-1.5 text-center whitespace-nowrap">
                                     @if ($orderType)
                                         <x-filament::badge size="xs" :color="$orderType->getColor()">

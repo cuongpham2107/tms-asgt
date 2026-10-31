@@ -97,6 +97,32 @@ test('vehicle dispatch board summary stats correctly count vehicles', function (
         ->and($stats['stopped'])->toBe(1);
 });
 
+test('dispatch board classifies vehicles by owner code into company or rented', function () {
+    $company = Vehicle::factory()->create([
+        'plate_number' => '20C-ASGT-01',
+        'owner' => 'ASGT',
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    $rented = Vehicle::factory()->create([
+        'plate_number' => '20C-RENT-01',
+        'owner' => 'HMA',
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    expect(VehicleDispatchBoard::getOwnerCategory($company))->toBe('Xe CTY')
+        ->and(VehicleDispatchBoard::getOwnerCategory($rented))->toBe('Xe thuê');
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertSee('Phân loại')
+        ->assertSee('Xe CTY')
+        ->assertSee('Xe thuê');
+});
+
 test('vehicle dispatch board only shows company vehicles', function () {
     Vehicle::factory()->create([
         'plate_number' => '20C-COMPANY',
