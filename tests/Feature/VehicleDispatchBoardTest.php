@@ -478,7 +478,9 @@ test('trip modal and gps modal show the customer code', function () {
         ->call('openTripModal', $vehicle->id)
         ->assertSee('SAFO')
         ->call('openGpsModal', $vehicle->id)
-        ->assertSee('SAFO');
+        ->assertSee('SAFO')
+        ->call('openTimelineModal', $trip->id)
+        ->assertSee('(SAFO)');
 });
 
 test('vehicle dispatch board shows friendly empty state when vehicle has no trips today', function () {

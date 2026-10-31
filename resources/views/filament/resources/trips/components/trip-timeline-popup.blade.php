@@ -75,6 +75,7 @@
     ];
 
     $orderCodes = $orders->pluck('order_code')->implode(', ');
+    $customerCodes = $orders->map(fn ($order): ?string => $order->customer?->code)->filter()->unique()->implode(', ');
 
     $renderIcon = fn (string $icon, string $classes): string => Blade::render(
         '<x-filament::icon icon="'.$icon.'" class="'.$classes.'" />'
@@ -207,6 +208,9 @@
         <div>
             <span class="text-xs text-gray-500 dark:text-gray-400">Đơn hàng</span>
             <span class="ml-2 text-sm font-bold text-gray-900 dark:text-white">{{ $orderCodes ?: '—' }}</span>
+            @if (filled($customerCodes))
+                <span class="ml-1 text-xs font-semibold text-primary-600 dark:text-primary-400" title="Mã khách hàng">({{ $customerCodes }})</span>
+            @endif
         </div>
         <div>
             <span class="text-xs text-gray-500 dark:text-gray-400">Xe</span>
