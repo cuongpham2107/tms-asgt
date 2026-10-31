@@ -1068,6 +1068,7 @@ abstract class CreatesOrderTransportCards
                         'pickup_location_id' => $data['pickup_location_id'] ?? null,
                         'pickup_address' => $pickupAddress,
                         'chargeable_weight' => $data['chargeable_weight'] ?? null,
+                        'rate_type' => $data['rate_type'] ?? null,
                         'pickup_contact' => $data['pickup_contact'] ?? null,
                         'pickup_phone' => $data['pickup_phone'] ?? null,
                         'planned_loading_at' => $data['planned_loading_at'] ?? null,

@@ -56,6 +56,7 @@ class AppPanelProvider extends PanelProvider
             ->navigationGroups([
                 'Tổng quan',
                 'Vận hành',
+                'Cước vận chuyển',
                 'Quản lý',
                 'Quản lý danh mục',
                 'Hoạt động',

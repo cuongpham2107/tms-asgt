@@ -87,8 +87,9 @@ beforeEach(function () {
 test('trip statistics report page can be rendered', function () {
     Livewire::test(TripStatisticsReport::class)
         ->assertSuccessful()
-        ->assertSee('BẢNG THỐNG KÊ TỔNG HỢP CÁC CHUYẾN ĐÃ PHỤC VỤ')
-        ->assertSee('Xuất Excel (.xlsx)');
+        ->assertSee('Bảng thống kê tổng hợp các chuyến đã phục vụ')
+        ->assertActionVisible('export')
+        ->assertActionVisible('pickRange');
 });
 
 test('trip statistics report calculates 27 columns correctly for hhhk trip', function () {
@@ -737,4 +738,62 @@ test('handles invalid fields and non-existent orders for updateOrderMetric clean
     $component->call('updateOrderMetric', $order->id, 'total_weight', '');
     $order->refresh();
     expect($order->total_weight)->toBeNull();
+});
+
+test('a trip with several orders shows one trip row followed by its orders', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-MULTI-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 09:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 12:00:00'),
+        'total_km_loaded' => 40,
+        'total_km_empty' => 10,
+    ]);
+
+    foreach ([['ASG-M1', $this->customer, 10, 100], ['ASG-M2', $this->customer2, 5, 50]] as [$code, $customer, $pcs, $gw]) {
+        Order::create([
+            'order_code' => $code,
+            'type' => OrderType::Hhhk,
+            'area_id' => $this->area->id,
+            'customer_id' => $customer->id,
+            'created_by' => $this->driver->id,
+            'pickup_location_id' => $this->pickupLocation->id,
+            'planned_loading_at' => Carbon::parse('2026-04-20 08:00:00'),
+            'trip_id' => $trip->id,
+            'status' => OrderStatus::Completed,
+            'cargo_type' => CargoType::Gcr,
+            'total_packages' => $pcs,
+            'total_weight' => $gw,
+        ]);
+    }
+
+    $component = Livewire::test(TripStatisticsReport::class, ['activeTab' => 'HHHK'])
+        ->set('startDate', '2026-04-01')
+        ->set('endDate', '2026-04-30');
+
+    $tripRows = $component->instance()->getTripRows();
+
+    expect($tripRows)->toHaveCount(1)
+        ->and($tripRows[0]['code'])->toBe('TRIP-MULTI-01')
+        ->and($tripRows[0]['orders'])->toHaveCount(2)
+        ->and($tripRows[0]['customer'])->toBe('ASGL; SAFO')
+        ->and($tripRows[0]['pcs'])->toBe(15)
+        // km có hàng tính theo chuyến, không cộng dồn mỗi đơn
+        ->and($tripRows[0]['km_loaded'])->toBe(40.0)
+        ->and($component->instance()->getTabCounts()['HHHK'])->toBe(1)
+        ->and($component->instance()->getSummaryMetrics()['total_km_empty'])->toBe(10.0);
+
+    $component->assertSeeInOrder(['TRIP-MULTI-01', 'ASG-M1', 'ASG-M2']);
+
+    $sheet = app(TripExcelExportService::class)
+        ->buildSpreadsheetFromRows($component->instance()->getAllRows())
+        ->getSheet(0);
+
+    expect($sheet->getCell('B5')->getValue())->toBe('TRIP-MULTI-01')
+        ->and($sheet->getCell('X5')->getValue())->toBe(15)
+        ->and($sheet->getCell('B6')->getValue())->toBe('└ ASG-M1')
+        ->and($sheet->getCell('D6')->getValue())->toBeEmpty()
+        ->and($sheet->getCell('B7')->getValue())->toBe('└ ASG-M2');
 });

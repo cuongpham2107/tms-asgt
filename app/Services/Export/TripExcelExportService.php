@@ -7,10 +7,12 @@ use App\Enums\CheckpointType;
 use App\Enums\OrderType;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
+use App\Models\FeeType;
 use App\Models\Order;
 use App\Models\Trip;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -308,8 +310,28 @@ class TripExcelExportService
 
         // 3. Đổ dữ liệu từ các dòng đã lọc
         $row = 5;
-        foreach ($rows as $rowData) {
-            $this->writeTripSummaryRowFromData($sheet, $row, $rowData);
+        foreach ($this->groupRowsByTrip($rows) as $tripRow) {
+            $this->writeTripSummaryRowFromData($sheet, $row, $tripRow);
+
+            if (count($tripRow['orders']) > 1) {
+                $sheet->getStyle("A{$row}:AA{$row}")->getFont()->setBold(true);
+                $sheet->getStyle("A{$row}:AA{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('F1F5F9');
+
+                foreach ($tripRow['orders'] as $orderRow) {
+                    $row++;
+                    // Dòng đơn con: các cột theo chuyến (xe, lái xe, km không hàng) đã có ở dòng chuyến
+                    $this->writeTripSummaryRowFromData($sheet, $row, [
+                        ...$orderRow,
+                        'code' => '└ '.$orderRow['code'],
+                        'plate_number' => '',
+                        'vehicle_owner' => '',
+                        'vehicle_type' => '',
+                        'driver_name' => '',
+                        'km_empty' => 0,
+                    ]);
+                }
+            }
+
             $row++;
         }
 
@@ -431,7 +453,7 @@ class TripExcelExportService
 
                 $serviceType = $order->type === OrderType::Hhhk ? 'HHHK' : 'Hàng ngoài';
 
-                $rows->push($this->formatTripSummaryRowData(
+                $rows->push([...$this->formatTripSummaryRowData(
                     trip: $trip,
                     order: $order,
                     serviceType: $serviceType,
@@ -456,11 +478,89 @@ class TripExcelExportService
                     gw: (float) ($order->total_weight ?? 0),
                     cargoType: $order->cargo_type?->value ?? ($order->cargo_type instanceof CargoType ? $order->cargo_type->getLabel() : ''),
                     chargeableWeight: (float) ($order->chargeable_weight ?? 0)
-                ));
+                ), 'trip_code' => $trip->trip_code, 'trip_km_loaded' => (float) ($trip->total_km_loaded ?? 0)]);
             }
         }
 
         return $rows;
+    }
+
+    /**
+     * Gom các dòng theo đơn thành dòng theo chuyến. Mỗi phần tử là dòng chuyến kèm 'orders' (các dòng đơn);
+     * chuyến chỉ có 1 đơn thì dòng chuyến chính là dòng đơn đó.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function groupRowsByTrip(Collection $rows): Collection
+    {
+        return $rows
+            ->groupBy(fn (array $row): string => (string) $row['trip_id'])
+            ->map(function (Collection $orders): array {
+                $first = $orders->first();
+
+                if ($orders->count() === 1) {
+                    return [...$first, 'orders' => [$first]];
+                }
+
+                $times = fn (string $key): Collection => $orders->pluck($key)->filter()->map(fn (mixed $value): Carbon => Carbon::parse($value));
+                $join = fn (string $key): string => $orders->pluck($key)->filter()->unique()->implode('; ');
+                [$timeA, $timeB, $timeC, $timeD] = [$times('time_a')->min(), $times('time_b')->max(), $times('time_c')->min(), $times('time_d')->max()];
+
+                return [
+                    ...$first,
+                    ...$this->tripDurations($timeA, $timeB, $timeC, $timeD),
+                    'order_id' => null,
+                    'customer_id' => $orders->pluck('customer_id')->unique()->count() === 1 ? $first['customer_id'] : null,
+                    'code' => $first['trip_code'] ?? $first['code'],
+                    'journey' => $join('journey'),
+                    'time_a' => $timeA,
+                    'time_b' => $timeB,
+                    'time_c' => $timeC,
+                    'time_d' => $timeD,
+                    'customer' => $join('customer'),
+                    'warehouse' => $join('warehouse'),
+                    'note' => $join('note'),
+                    'cargo_type' => $join('cargo_type'),
+                    'is_return_trip' => $orders->contains('is_return_trip', true),
+                    'km_loaded' => ($first['trip_km_loaded'] ?? 0) > 0 ? $first['trip_km_loaded'] : $orders->sum('km_loaded'),
+                    'pcs' => $orders->sum('pcs'),
+                    'gw' => $orders->sum('gw'),
+                    'chargeable_weight' => $orders->sum('chargeable_weight'),
+                    'orders' => $orders->values()->all(),
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * Thời lượng (phút) từ 4 mốc: đóng hàng A → xe chạy B → đến C → hạ hàng D.
+     *
+     * @return array{time_loading: ?int, time_travel: ?int, time_unloading: ?int, time_waiting_22h: int, time_total_trip: ?int}
+     */
+    private function tripDurations(?Carbon $timeA, ?Carbon $timeB, ?Carbon $timeC, ?Carbon $timeD): array
+    {
+        $time1 = ($timeA && $timeB) ? (int) abs($timeB->diffInMinutes($timeA)) : null;
+        $time2 = ($timeB && $timeC) ? (int) abs($timeC->diffInMinutes($timeB)) : null;
+        $time3 = ($timeC && $timeD) ? (int) abs($timeD->diffInMinutes($timeC)) : null;
+
+        // Thời gian cắt 22:00: Nếu thời gian hạ hàng D >= 22:00
+        $time4 = 0;
+        if ($timeC && $timeD && ($timeD->hour >= 22 || $timeD->isAfter($timeC->copy()->endOfDay()))) {
+            $cutoff22 = $timeC->copy()->setTime(22, 0, 0);
+            $waitTo22 = (int) abs($cutoff22->diffInMinutes($timeC));
+            $time4 = ($time1 ?? 0) + ($time2 ?? 0) + $waitTo22;
+        }
+
+        return [
+            'time_loading' => $time1,
+            'time_travel' => $time2,
+            'time_unloading' => $time3,
+            'time_waiting_22h' => $time4,
+            'time_total_trip' => ($time1 !== null || $time2 !== null || $time3 !== null)
+                ? (($time1 ?? 0) + ($time2 ?? 0) + ($time3 ?? 0))
+                : null,
+        ];
     }
 
     /**
@@ -516,23 +616,6 @@ class TripExcelExportService
         string $cargoType,
         float $chargeableWeight
     ): array {
-        // Tính toán các mốc thời gian phút
-        $time1 = ($timeA && $timeB) ? (int) abs($timeB->diffInMinutes($timeA)) : null;
-        $time2 = ($timeB && $timeC) ? (int) abs($timeC->diffInMinutes($timeB)) : null;
-        $time3 = ($timeC && $timeD) ? (int) abs($timeD->diffInMinutes($timeC)) : null;
-
-        // Thời gian cắt 22:00: Nếu thời gian hạ hàng D >= 22:00
-        $time4 = 0;
-        if ($timeC && $timeD && ($timeD->hour >= 22 || $timeD->isAfter($timeC->copy()->endOfDay()))) {
-            $cutoff22 = $timeC->copy()->setTime(22, 0, 0);
-            $waitTo22 = (int) abs($cutoff22->diffInMinutes($timeC));
-            $time4 = ($time1 ?? 0) + ($time2 ?? 0) + $waitTo22;
-        }
-
-        $time5 = ($time1 !== null || $time2 !== null || $time3 !== null)
-            ? (($time1 ?? 0) + ($time2 ?? 0) + ($time3 ?? 0))
-            : null;
-
         $ownerLabel = match ($vehicleOwner) {
             'company', VehicleOwnerType::Company->value => 'Xe công ty',
             'rent', VehicleOwnerType::Rent->value => 'Xe thuê',
@@ -559,11 +642,7 @@ class TripExcelExportService
             'time_b' => $timeB,
             'time_c' => $timeC,
             'time_d' => $timeD,
-            'time_loading' => $time1,
-            'time_travel' => $time2,
-            'time_unloading' => $time3,
-            'time_waiting_22h' => $time4,
-            'time_total_trip' => $time5,
+            ...$this->tripDurations($timeA, $timeB, $timeC, $timeD),
             'customer' => $customer,
             'warehouse' => $warehouse,
             'vehicle_owner' => $ownerLabel,
@@ -720,11 +799,34 @@ class TripExcelExportService
             'Hàng quay đầu',
         ];
 
+        EloquentCollection::make($externalOrders->all())->load('charge.fees');
+        $feeTypes = FeeType::query()->orderBy('sort')->get();
+        $headers = [
+            ...$headers,
+            'Mã giá',
+            'Loại hình tính cước',
+            'Loại hình tính phụ phí',
+            'Tổng thời gian chờ (phút)',
+            'Đơn giá',
+            'Tỷ lệ tăng/giảm giá dầu (%)',
+            'Đơn giá sau khi điều chỉnh tăng/giảm giá dầu',
+            'Chi phí giờ chờ',
+            ...$feeTypes->pluck('name'),
+            'Tổng',
+            'VAT (%)',
+            'VAT',
+            'Thanh toán',
+            'Số phiếu giao hàng',
+            'Trọng lượng hàng',
+            'Trọng lượng tính tiền',
+        ];
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+
         // --- KHỐI 1: ĐƠN 1 ĐIỂM ---
-        $sheet->mergeCells('A1:T1');
+        $sheet->mergeCells("A1:{$lastCol}1");
         $sheet->setCellValue('A1', 'DỮ LIỆU ĐIỂM ĐÓNG VÀ TRẢ: 1 ĐIỂM');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(11)->setColor(new Color('065F46'));
-        $sheet->getStyle('A1:T1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('D1FAE5'); // Green 100
+        $sheet->getStyle("A1:{$lastCol}1")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('D1FAE5'); // Green 100
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER);
         $sheet->getRowDimension(1)->setRowHeight(25);
 
@@ -735,7 +837,7 @@ class TripExcelExportService
             $sheet->setCellValue("{$colLetter}2", $h);
             $colIdx++;
         }
-        $sheet->getStyle('A2:T2')->applyFromArray([
+        $sheet->getStyle("A2:{$lastCol}2")->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 9],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => '047857']], // Emerald 700
@@ -746,18 +848,18 @@ class TripExcelExportService
         $row = 3;
         foreach ($singlePointOrders as $order) {
             $this->writeExternalOrderRow($sheet, $row, $order);
-            $row++;
+            $row = $this->writeChargeRows($sheet, $row, $row + 1, $order, $feeTypes);
         }
 
         if ($singlePointOrders->isEmpty()) {
             $sheet->setCellValue("A{$row}", 'Không có dữ liệu');
-            $sheet->mergeCells("A{$row}:T{$row}");
+            $sheet->mergeCells("A{$row}:{$lastCol}{$row}");
             $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $row++;
         }
 
         $singleEndRow = $row - 1;
-        $sheet->getStyle("A3:T{$singleEndRow}")->applyFromArray([
+        $sheet->getStyle("A3:{$lastCol}{$singleEndRow}")->applyFromArray([
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'E2E8F0']]],
             'font' => ['size' => 9],
             'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
@@ -768,10 +870,10 @@ class TripExcelExportService
 
         // --- KHỐI 2: ĐƠN NHIỀU ĐIỂM ---
         $bannerRow = $row;
-        $sheet->mergeCells("A{$bannerRow}:T{$bannerRow}");
+        $sheet->mergeCells("A{$bannerRow}:{$lastCol}{$bannerRow}");
         $sheet->setCellValue("A{$bannerRow}", 'DỮ LIỆU ĐIỂM ĐÓNG VÀ TRẢ:  NHIỀU ĐIỂM');
         $sheet->getStyle("A{$bannerRow}")->getFont()->setBold(true)->setSize(11)->setColor(new Color('92400E'));
-        $sheet->getStyle("A{$bannerRow}:T{$bannerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FEF3C7'); // Amber 100
+        $sheet->getStyle("A{$bannerRow}:{$lastCol}{$bannerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FEF3C7'); // Amber 100
         $sheet->getStyle("A{$bannerRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER);
         $sheet->getRowDimension($bannerRow)->setRowHeight(25);
 
@@ -783,7 +885,7 @@ class TripExcelExportService
             $sheet->setCellValue("{$colLetter}{$headerRow2}", $h);
             $colIdx++;
         }
-        $sheet->getStyle("A{$headerRow2}:T{$headerRow2}")->applyFromArray([
+        $sheet->getStyle("A{$headerRow2}:{$lastCol}{$headerRow2}")->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 9],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'B45309']], // Amber 700
@@ -793,26 +895,90 @@ class TripExcelExportService
 
         $row = $headerRow2 + 1;
         foreach ($multiPointOrders as $order) {
+            $firstRow = $row;
             $row = $this->writeMultiPointOrderRows($sheet, $row, $order);
+            $row = $this->writeChargeRows($sheet, $firstRow, $row, $order, $feeTypes);
         }
 
         if ($multiPointOrders->isEmpty()) {
             $sheet->setCellValue("A{$row}", 'Không có dữ liệu');
-            $sheet->mergeCells("A{$row}:T{$row}");
+            $sheet->mergeCells("A{$row}:{$lastCol}{$row}");
             $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $row++;
         }
 
         $multiEndRow = $row - 1;
-        $sheet->getStyle("A{$headerRow2}:T{$multiEndRow}")->applyFromArray([
+        $sheet->getStyle("A{$headerRow2}:{$lastCol}{$multiEndRow}")->applyFromArray([
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'E2E8F0']]],
             'font' => ['size' => 9],
             'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
         ]);
 
-        foreach (range('A', 'T') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+        foreach (range(1, count($headers)) as $colIndex) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($colIndex))->setAutoSize(true);
         }
+    }
+
+    /**
+     * Ghi các cột cước (từ cột U) cho 1 đơn hàng ngoài. Phiếu giao hàng đầu tiên nằm ở dòng gốc;
+     * mỗi phiếu tách thêm sinh 1 dòng mới chép nguyên cột A–T của dòng gốc, chỉ khác số phiếu và trọng lượng.
+     * Tiền cước chỉ ghi ở dòng gốc để cộng tổng bảng kê không bị nhân đôi.
+     *
+     * @param  Collection<int, FeeType>  $feeTypes
+     * @return int dòng trống kế tiếp
+     */
+    protected function writeChargeRows(Worksheet $sheet, int $firstRow, int $nextRow, Order $order, Collection $feeTypes): int
+    {
+        $charge = $order->charge;
+
+        if ($charge === null) {
+            return $nextRow;
+        }
+
+        $notes = array_values($charge->delivery_notes ?: [[]]);
+        $this->writeChargeColumns($sheet, $firstRow, $order, $feeTypes, $notes[0], withMoney: true);
+
+        $orderColumns = $sheet->rangeToArray("A{$firstRow}:T{$firstRow}", null, false, false);
+        foreach (array_slice($notes, 1) as $note) {
+            $sheet->fromArray($orderColumns, null, "A{$nextRow}", true);
+            $this->writeChargeColumns($sheet, $nextRow, $order, $feeTypes, $note, withMoney: false);
+            $nextRow++;
+        }
+
+        return $nextRow;
+    }
+
+    /**
+     * @param  Collection<int, FeeType>  $feeTypes
+     * @param  array{number?: ?string, actual_weight?: ?float, chargeable_weight?: ?float}  $note
+     */
+    protected function writeChargeColumns(Worksheet $sheet, int $row, Order $order, Collection $feeTypes, array $note, bool $withMoney): void
+    {
+        $charge = $order->charge;
+        $feeAmounts = $charge->fees->pluck('amount', 'fee_type_id');
+        $money = fn ($value): float|string => (! $withMoney || $value === null) ? '' : (float) $value;
+        $weight = fn ($value): float|string => $value === null || $value === '' ? '' : (float) $value;
+
+        $values = [
+            $charge->price_code ?? '',
+            $charge->rate_type,
+            $charge->surcharge_type,
+            $withMoney ? $charge->waiting_minutes : '',
+            $money($charge->base_price),
+            $withMoney ? (float) $charge->fuel_adjustment_percent : '',
+            $money($charge->adjusted_price),
+            $money($charge->waiting_fee),
+            ...$feeTypes->map(fn (FeeType $feeType): float|string => $money($feeAmounts->get($feeType->id))),
+            $money($charge->subtotal),
+            $withMoney ? (float) $charge->vat_percent : '',
+            $money($charge->vat_amount),
+            $money($charge->total),
+            $note['number'] ?? '',
+            $weight($note['actual_weight'] ?? null),
+            $weight($note['chargeable_weight'] ?? null),
+        ];
+
+        $sheet->fromArray([$values], null, "U{$row}", true);
     }
 
     protected function writeExternalOrderRow(Worksheet $sheet, int $row, Order $order): void

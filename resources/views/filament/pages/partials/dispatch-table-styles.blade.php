@@ -47,4 +47,16 @@
     .dark .dispatch-table thead th {
         background-color: rgb(2 6 23) !important;
     }
+    /* Safari (WebKit) không vẽ border của ô sticky trong bảng border-collapse → kẻ ô header bằng box-shadow */
+    .dispatch-table thead th {
+        box-shadow: inset -1px -1px 0 rgb(255 255 255 / 0.25);
+    }
+    /* Chiều cao dòng đồng nhất giữa các bảng/tab: 1 dòng chữ, không xuống dòng */
+    .dispatch-table tbody td {
+        height: 36px;
+        padding-top: 0.375rem;
+        padding-bottom: 0.375rem;
+        line-height: 1rem;
+        white-space: nowrap;
+    }
 </style>

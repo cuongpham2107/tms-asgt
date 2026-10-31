@@ -2,6 +2,9 @@
 
 namespace App\Observers;
 
+use App\Enums\OrderStatus;
+use App\Enums\OrderType;
+use App\Jobs\CalculateOrderCharge;
 use App\Models\Order;
 use App\Models\OrderEditLog;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +15,12 @@ class OrderObserver
     {
         if (! $order->wasChanged()) {
             return;
+        }
+
+        if ($order->wasChanged('status')
+            && $order->status === OrderStatus::Completed
+            && $order->type === OrderType::External) {
+            CalculateOrderCharge::dispatch($order->id);
         }
 
         $user = Auth::user();

@@ -43,6 +43,7 @@ class CreateReturnTripAction
                         'customer_id' => $record->customer_id,
                         'cargo_name' => 'Quay đầu: '.($record->cargo_name ?? ''),
                         'cargo_type' => $record->cargo_type,
+                        'rate_type' => $record->rate_type,
                         'total_packages' => $record->total_packages,
                         'total_weight' => $record->total_weight,
                         'pickup_location_id' => $firstDelivery?->location_id,

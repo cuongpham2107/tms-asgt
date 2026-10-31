@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Relaticle\ActivityLog\Concerns\InteractsWithTimeline;
 use Relaticle\ActivityLog\Contracts\HasTimeline;
 use Relaticle\ActivityLog\Timeline\TimelineBuilder;
@@ -44,6 +45,7 @@ class Order extends Model implements HasTimeline
         'total_packages',
         'total_weight',
         'chargeable_weight',
+        'rate_type',
         'pickup_location_id',
         'pickup_address',
         'pickup_contact',
@@ -127,6 +129,11 @@ class Order extends Model implements HasTimeline
     public function returnTrips(): HasMany
     {
         return $this->hasMany(Order::class, 'parent_order_id');
+    }
+
+    public function charge(): HasOne
+    {
+        return $this->hasOne(OrderCharge::class);
     }
 
     public function getMapCoordsAttribute(): array
