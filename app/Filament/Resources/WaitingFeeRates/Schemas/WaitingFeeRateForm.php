@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\WaitingFeeRates\Schemas;
 
+use App\Enums\SurchargeType;
 use App\Models\WaitingFeeRate;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
@@ -28,11 +29,8 @@ class WaitingFeeRateForm
                             ->searchable(['code', 'name'])
                             ->preload()
                             ->required(),
-                        TextInput::make('surcharge_type')
-                            ->label('Loại hình tính phụ phí')
-                            ->placeholder('Để trống = chuẩn')
-                            ->datalist(fn (): array => WaitingFeeRate::query()->where('surcharge_type', '!=', '')->distinct()->pluck('surcharge_type')->all())
-                            ->dehydrateStateUsing(fn (?string $state): string => trim((string) $state)),
+                        SurchargeType::select('surcharge_type')
+                            ->label('Loại hình tính phụ phí'),
                         Select::make('waiting_mode')
                             ->label('Kiểu chờ')
                             ->options([

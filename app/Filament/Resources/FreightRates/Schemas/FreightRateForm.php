@@ -3,14 +3,13 @@
 namespace App\Filament\Resources\FreightRates\Schemas;
 
 use App\Enums\CargoType;
+use App\Enums\FreightRateType;
 use App\Enums\VehicleType;
-use App\Models\FreightRate;
 use App\Models\Location;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
@@ -30,11 +29,8 @@ class FreightRateForm
                             ->searchable(['code', 'name'])
                             ->preload()
                             ->required(),
-                        TextInput::make('rate_type')
-                            ->label('Loại hình tính cước')
-                            ->placeholder('Để trống = giá chuẩn')
-                            ->datalist(fn (): array => FreightRate::query()->where('rate_type', '!=', '')->distinct()->pluck('rate_type')->all())
-                            ->dehydrateStateUsing(fn (?string $state): string => trim((string) $state)),
+                        FreightRateType::select('rate_type')
+                            ->label('Loại hình tính cước'),
                         self::zoneSelect('origin_zone_id', 'originZone', 'Khu vực điểm đi'),
                         self::zoneSelect('destination_zone_id', 'destinationZone', 'Khu vực điểm đến'),
                     ]),

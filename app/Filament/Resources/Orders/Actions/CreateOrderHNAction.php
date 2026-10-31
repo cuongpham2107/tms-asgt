@@ -2,12 +2,12 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
+use App\Enums\FreightRateType;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
-use App\Models\FreightRate;
 use App\Models\Location;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
@@ -146,11 +146,8 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                             '10' => '10',
                             '14' => '14',
                         ]),
-                    TextInput::make('rate_type')
-                        ->label('Loại hình tính cước')
-                        ->placeholder('Chuẩn')
-                        ->maxLength(100)
-                        ->datalist(fn (Get $get): array => FreightRate::rateTypesFor($get('customer_id') ? (int) $get('customer_id') : null)),
+                    FreightRateType::select('rate_type')
+                        ->label('Loại hình tính cước'),
                     Textarea::make('notes')
                         ->label('Ghi chú')
                         ->columnSpanFull(),

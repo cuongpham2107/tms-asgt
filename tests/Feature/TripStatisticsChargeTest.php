@@ -277,10 +277,9 @@ test('missing price can be added to the price table from the charge modal', func
             TestAction::make('editCharge')->arguments(['orderId' => $this->order->id]),
             TestAction::make('addFreightRate')->schemaComponent('base_price'),
         ], data: [
-            'origin_zone_id' => $this->rate->origin_zone_id,
+            // Form giống "Thêm đơn giá vận chuyển": khách hàng, khu vực đi, loại hàng, bậc tải điền sẵn theo đơn
             'destination_zone_id' => $noiBai->id,
-            'tonnage' => 5,
-            'price' => '1,500,000',
+            'prices' => ['5' => '1.500.000'],
         ])
         ->assertHasNoActionErrors()
         ->assertMountedActionModalSee('1.500.000 đ')

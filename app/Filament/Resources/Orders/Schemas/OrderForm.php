@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Schemas;
 
 use App\Enums\CargoType;
+use App\Enums\FreightRateType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Filament\Forms\Components\DriverPicker;
@@ -12,7 +13,6 @@ use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
 use App\Models\Customer;
-use App\Models\FreightRate;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -154,11 +154,8 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
                                     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 
-                                TextInput::make('rate_type')
+                                FreightRateType::select('rate_type')
                                     ->label('Loại hình tính cước')
-                                    ->placeholder('Chuẩn')
-                                    ->maxLength(100)
-                                    ->datalist(fn (Get $get): array => FreightRate::rateTypesFor($get('customer_id') ? (int) $get('customer_id') : null))
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
                                     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 

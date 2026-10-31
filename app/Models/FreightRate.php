@@ -98,22 +98,6 @@ class FreightRate extends Model
     }
 
     /**
-     * Các loại hình tính cước đã có trong bảng giá (gợi ý cho ô nhập).
-     *
-     * @return list<string>
-     */
-    public static function rateTypesFor(?int $customerId): array
-    {
-        return self::query()
-            ->when($customerId, fn (Builder $q) => $q->where('customer_id', $customerId))
-            ->where('rate_type', '!=', '')
-            ->distinct()
-            ->orderBy('rate_type')
-            ->pluck('rate_type')
-            ->all();
-    }
-
-    /**
      * Giá còn hiệu lực tại ngày $date (null = không giới hạn).
      */
     public function scopeEffectiveOn(Builder $query, CarbonInterface $date): Builder

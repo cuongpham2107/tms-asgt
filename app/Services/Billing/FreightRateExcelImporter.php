@@ -3,6 +3,8 @@
 namespace App\Services\Billing;
 
 use App\Enums\CargoType;
+use App\Enums\FreightRateType;
+use App\Enums\SurchargeType;
 use App\Enums\VehicleType;
 use App\Models\BillingZone;
 use App\Models\Customer;
@@ -44,10 +46,10 @@ class FreightRateExcelImporter
 
     private const SHEET_VFC_COLD_CODES = '6.2 VFC code tìm giá lạnh';
 
-    private const VFC_COLD_RATE_TYPE = 'Hàng lạnh';
+    private const VFC_COLD_RATE_TYPE = FreightRateType::Cold;
 
     /** Sheet 3.4: giá trọn chuyến 2 điểm trả, lưu theo tuyến điểm đi → điểm trả đầu với loại hình riêng. */
-    private const TWO_DROP_RATE_TYPE = '2 điểm trả';
+    private const TWO_DROP_RATE_TYPE = FreightRateType::TwoDrops;
 
     /** Cột tải trọng hàng của sheet 3.3 → cận trên (tấn). */
     private const VFC_NORMAL_TIERS = ['G' => 2, 'H' => 3, 'I' => 4, 'J' => 7];
@@ -321,7 +323,7 @@ class FreightRateExcelImporter
                 row: $row,
                 customer: $this->cell($sheet, "D{$row}"),
                 cargoType: $this->cell($sheet, "B{$row}"),
-                rateType: self::TWO_DROP_RATE_TYPE,
+                rateType: self::TWO_DROP_RATE_TYPE->value,
                 zones: [$this->cell($sheet, "E{$row}"), $this->cell($sheet, "F{$row}")],
                 tiers: $tiers,
             );
@@ -371,7 +373,7 @@ class FreightRateExcelImporter
                 row: $priceRow,
                 customer: $this->cell($codesSheet, "{$customerCol}{$row}"),
                 cargoType: 'GCR',
-                rateType: $normal ? '' : self::VFC_COLD_RATE_TYPE,
+                rateType: $normal ? FreightRateType::Standard->value : self::VFC_COLD_RATE_TYPE->value,
                 zones: [$this->cell($codesSheet, "{$originCol}{$row}"), $this->cell($codesSheet, "{$destinationCol}{$row}")],
                 tiers: $tiers,
                 source: "{$codesSheetName}!{$row}",
@@ -403,6 +405,13 @@ class FreightRateExcelImporter
             return;
         }
 
+        $rateTypeCase = FreightRateType::fromText($rateType);
+        if ($rateTypeCase === null) {
+            $this->warn("{$source}: loại hình tính cước \"{$rateType}\" chưa có trong danh sách — bỏ qua dòng");
+
+            return;
+        }
+
         [$origin, $destination] = [$this->zone($origin), $this->zone($destination)];
         $this->zoneRateSources[$origin][] = $source;
         $this->zoneRateSources[$destination][] = $source;
@@ -421,7 +430,7 @@ class FreightRateExcelImporter
                 'origin_zone' => $origin,
                 'destination_zone' => $destination,
                 'cargo_type' => CargoType::tryFrom(strtoupper($cargoType)) ?? CargoType::Gcr,
-                'rate_type' => trim($rateType),
+                'rate_type' => $rateTypeCase->value,
                 'vehicle_type' => $vehicleType === '' ? null : VehicleType::from($vehicleType),
                 'effective_from' => null,
                 'effective_to' => null,
@@ -470,7 +479,12 @@ class FreightRateExcelImporter
                 continue;
             }
 
-            $type = trim($this->cell($sheet, "B{$row}"));
+            $type = SurchargeType::fromText($this->cell($sheet, "B{$row}"))?->value;
+            if ($type === null) {
+                $this->warn("{$sheet->getTitle()}!{$row}: loại hình phụ phí \"{$this->cell($sheet, "B{$row}")}\" chưa có trong danh sách — bỏ qua dòng");
+
+                continue;
+            }
 
             if ($inGraceTable) {
                 $graceMinutes["{$customerId}|{$type}"] = (int) $this->cell($sheet, "D{$row}");

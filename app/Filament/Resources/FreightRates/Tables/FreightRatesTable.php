@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\FreightRates\Tables;
 
 use App\Enums\CargoType;
+use App\Enums\FreightRateType;
 use App\Filament\BaseTable;
 use App\Models\FreightRate;
 use Filament\Tables\Columns\TextColumn;
@@ -70,9 +71,7 @@ class FreightRatesTable extends BaseTable
                     ->options(CargoType::class),
                 SelectFilter::make('rate_type')
                     ->label('Loại hình')
-                    ->options(fn (): array => FreightRate::query()->distinct()->pluck('rate_type', 'rate_type')
-                        ->mapWithKeys(fn (string $type): array => [$type => $type === '' ? 'Chuẩn' : $type])
-                        ->all()),
+                    ->options(collect(FreightRateType::cases())->mapWithKeys(fn (FreightRateType $type): array => [$type->value => $type->getLabel()])->all()),
                 SelectFilter::make('origin_zone_id')
                     ->label('Khu vực đi')
                     ->relationship('originZone', 'name')

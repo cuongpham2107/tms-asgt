@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\CargoType;
+use App\Enums\FreightRateType;
 use App\Filament\Resources\BillingZones\Pages\ListBillingZones;
 use App\Filament\Resources\FeeTypes\Pages\ListFeeTypes;
 use App\Filament\Resources\FreightRates\Pages\ListFreightRates;
@@ -44,6 +45,7 @@ test('freight rate list shows rates and creates a route with prices per tonnage'
             'origin_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id,
             'destination_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id,
             'cargo_type' => CargoType::Dangerous->value,
+            'rate_type' => FreightRateType::Kioway1->value,
             'prices' => ['2,5' => '800.000', '8' => '2200000'],
         ])
         ->assertHasNoActionErrors();
@@ -51,6 +53,7 @@ test('freight rate list shows rates and creates a route with prices per tonnage'
     $created = FreightRate::where('cargo_type', 'DGR')->firstOrFail();
 
     expect($created->originZone->code)->toBe('KCN QUANG CHÂU')
+        ->and($created->rate_type)->toBe('KIOWAY 1')
         ->and($created->priceFor(2.5))->toBe(800_000.0)
         ->and($created->priceFor(8))->toBe(2_200_000.0)
         ->and($created->priceFor(5))->toBeNull();

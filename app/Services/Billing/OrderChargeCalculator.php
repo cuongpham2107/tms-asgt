@@ -140,32 +140,25 @@ class OrderChargeCalculator
     /**
      * Thời gian chờ = (đến điểm lấy hàng → rời điểm lấy hàng) + (đến điểm trả → hoàn thành).
      * Phí chỉ tính trên phần vượt thời gian miễn phí của từng chặng.
-     * Đóng hàng dùng giá "không nổ máy", hạ hàng dùng giá "nổ máy" nếu khách có, không thì giá thường.
+     * Lấy một dòng phí giờ chờ theo khách hàng + loại hình tính phụ phí, ưu tiên kiểu chờ thường.
+     * ponytail: chưa tách giá nổ máy / không nổ máy theo chặng — làm khi có quy tắc chốt.
      *
      * @return array{0: int, 1: float} [tổng phút chờ, phí giờ chờ]
      */
     private function waiting(Order $order, OrderCharge $charge, CarbonInterface $date): array
     {
-        $rates = WaitingFeeRate::query()
+        $rate = WaitingFeeRate::query()
             ->where('customer_id', $charge->customer_id)
             ->where('surcharge_type', $charge->surcharge_type)
             ->where(fn (Builder $q) => $q->whereNull('effective_from')->orWhereDate('effective_from', '<=', $date->toDateString()))
             ->where(fn (Builder $q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date->toDateString()))
             ->get()
-            ->keyBy('waiting_mode');
-
-        // Mỗi kiểu chờ: [dòng phí, bậc tải khớp trọng tải tính cước]
-        $tierOf = function (string $mode) use ($rates, $charge): ?array {
-            $rate = $rates->get($mode);
-            $tier = $rate?->tierFor($charge->chargeable_tonnage);
-
-            return $tier === null ? null : [$rate, $tier];
-        };
-
-        $normal = $tierOf(WaitingFeeRate::MODE_NORMAL);
-        $loading = $tierOf(WaitingFeeRate::MODE_ENGINE_OFF) ?? $normal;
-        $unloading = $tierOf(WaitingFeeRate::MODE_ENGINE_ON) ?? $normal;
-        $feeSource = $normal ?? $unloading ?? $loading;
+            ->sortBy(fn (WaitingFeeRate $rate): array => [
+                $rate->waiting_mode !== WaitingFeeRate::MODE_NORMAL,
+                $rate->id,
+            ])
+            ->first(fn (WaitingFeeRate $rate): bool => $rate->tierFor($charge->chargeable_tonnage) !== null);
+        $tier = $rate?->tierFor($charge->chargeable_tonnage);
 
         if ($order->trip_id === null) {
             return [0, 0.0];
@@ -179,15 +172,13 @@ class OrderChargeCalculator
         $unloadingMinutes = (int) ($row['time_unloading'] ?? 0);
         $waitingMinutes = $loadingMinutes + $unloadingMinutes;
 
-        if ($feeSource === null) {
+        if ($rate === null) {
             return [$waitingMinutes, 0.0];
         }
 
-        $billableMinutes = max(0, $loadingMinutes - (int) ($loading[1]['free_minutes'] ?? 0))
-            + max(0, $unloadingMinutes - (int) ($unloading[1]['free_minutes'] ?? 0));
+        $freeMinutes = (int) $tier['free_minutes'];
+        $billableMinutes = max(0, $loadingMinutes - $freeMinutes) + max(0, $unloadingMinutes - $freeMinutes);
 
-        [$feeRate, $feeTier] = $feeSource;
-
-        return [$waitingMinutes, (float) self::waitingFee($billableMinutes, (float) $feeTier['fee'], $feeRate->fee_block_minutes, $feeRate->grace_minutes)];
+        return [$waitingMinutes, (float) self::waitingFee($billableMinutes, (float) $tier['fee'], $rate->fee_block_minutes, $rate->grace_minutes)];
     }
 }

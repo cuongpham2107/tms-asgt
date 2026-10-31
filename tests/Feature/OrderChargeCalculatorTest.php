@@ -217,8 +217,9 @@ test('waiting fee charges full blocks plus one more when leftover exceeds grace'
     'lẻ vượt thời gian miễn thêm' => [60 + 30, 100_000],
 ]);
 
-test('waiting minutes come from loading and unloading checkpoints', function () {
+test('waiting minutes come from loading and unloading checkpoints', function (array $rateAttributes) {
     WaitingFeeRate::create([
+        ...$rateAttributes,
         'customer_id' => $this->customer->id,
         'tiers' => [
             ['tonnage' => 1.25, 'fee' => 30_000, 'free_minutes' => 30],
@@ -250,7 +251,11 @@ test('waiting minutes come from loading and unloading checkpoints', function () 
     // Tính phí: đóng 150' − 60' miễn = 90'; hạ 30' < 60' → 0' ⇒ 90' = 1 giờ + 30' (> 19') ⇒ 2 giờ
     expect($charge->waiting_minutes)->toBe(180)
         ->and((float) $charge->waiting_fee)->toBe(100_000.0);
-});
+})->with([
+    'dòng phí thường' => [[]],
+    // Chưa phân biệt kiểu chờ: khách chỉ có dòng "nổ máy" vẫn dùng dòng đó
+    'chỉ có dòng nổ máy' => [['waiting_mode' => WaitingFeeRate::MODE_ENGINE_ON]],
+]);
 
 test('backfill command prices completed orders that had no rate yet and leaves the rest alone', function () {
     $prices = $this->rate->prices;
