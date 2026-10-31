@@ -294,3 +294,22 @@ test('missing price can be added to the price table from the charge modal', func
         ->and((float) $this->charge->fresh()->base_price)->toBe(1_500_000.0)
         ->and($this->charge->fresh()->freight_rate_id)->toBe($rate->id);
 });
+
+test('legend chips filter the external tab by charge status', function () {
+    $page = ($this->page)();
+
+    expect($page->instance()->getChargeStatusCounts())->toBe(['locked' => 0, 'missing' => 0]);
+
+    $page->call('toggleChargeStatus', 'missing')->assertSet('chargeStatus', 'missing');
+    expect($page->instance()->getAllRows())->toHaveCount(0);
+
+    $this->charge->update(['base_price' => null]);
+    expect($page->instance()->getChargeStatusCounts())->toBe(['locked' => 0, 'missing' => 1])
+        ->and($page->instance()->getAllRows()->pluck('order_id')->all())->toBe([$this->order->id]);
+
+    // Bấm lại thì bỏ lọc; đã xuất bảng kê thì thuộc nhóm khoá
+    $this->charge->update(['exported_at' => now()]);
+    $page->call('toggleChargeStatus', 'missing')->assertSet('chargeStatus', null)
+        ->call('toggleChargeStatus', 'locked');
+    expect($page->instance()->getAllRows()->pluck('order_id')->all())->toBe([$this->order->id]);
+});

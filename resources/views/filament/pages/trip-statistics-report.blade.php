@@ -99,9 +99,35 @@
         </div>
 
         @if ($showCharges)
-            <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-emerald-100 ring-1 ring-emerald-300 dark:bg-emerald-900 dark:ring-emerald-700"></span>Đã xuất bảng kê (khoá)</span>
-                <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-amber-100 ring-1 ring-amber-300 dark:bg-amber-900 dark:ring-amber-700"></span>Chưa có giá</span>
+            @php
+                $chargeStatusCounts = $this->getChargeStatusCounts();
+                $chargeStatusFilters = [
+                    'locked' => ['label' => 'Đã xuất bảng kê (khoá)', 'swatch' => 'bg-emerald-100 ring-emerald-300 dark:bg-emerald-900 dark:ring-emerald-700', 'active' => 'bg-emerald-50 ring-emerald-400 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'],
+                    'missing' => ['label' => 'Chưa có giá', 'swatch' => 'bg-amber-100 ring-amber-300 dark:bg-amber-900 dark:ring-amber-700', 'active' => 'bg-amber-50 ring-amber-400 text-amber-800 dark:bg-amber-950 dark:text-amber-300'],
+                ];
+            @endphp
+            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <span>Lọc:</span>
+                @foreach ($chargeStatusFilters as $status => $filter)
+                    <button
+                        type="button"
+                        wire:click="toggleChargeStatus('{{ $status }}')"
+                        aria-pressed="{{ $chargeStatus === $status ? 'true' : 'false' }}"
+                        title="{{ $chargeStatus === $status ? 'Bỏ lọc' : 'Chỉ hiện các đơn '.mb_strtolower($filter['label']) }}"
+                        @class([
+                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 transition cursor-pointer',
+                            $filter['active'].' font-semibold' => $chargeStatus === $status,
+                            'ring-gray-950/10 hover:bg-gray-50 dark:ring-white/10 dark:hover:bg-white/5' => $chargeStatus !== $status,
+                        ])
+                    >
+                        <span class="w-3 h-3 rounded-sm ring-1 {{ $filter['swatch'] }}"></span>
+                        {{ $filter['label'] }}
+                        <span class="font-mono text-[11px] opacity-70">{{ number_format($chargeStatusCounts[$status]) }}</span>
+                        @if ($chargeStatus === $status)
+                            <x-heroicon-m-x-mark class="w-3 h-3" />
+                        @endif
+                    </button>
+                @endforeach
             </div>
         @endif
 

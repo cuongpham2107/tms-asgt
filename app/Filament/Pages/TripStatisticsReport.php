@@ -99,6 +99,10 @@ class TripStatisticsReport extends Page
     #[Url]
     public int $perPage = 25;
 
+    /** Lọc tab Hàng ngoài theo trạng thái cước: 'locked' (đã xuất bảng kê) | 'missing' (chưa có giá) */
+    #[Url]
+    public ?string $chargeStatus = null;
+
     public int $page = 1;
 
     protected ?Collection $cachedBaseRows = null;
@@ -348,8 +352,58 @@ class TripStatisticsReport extends Page
         $this->customerId = null;
         $this->vehicleOwner = 'all';
         $this->search = null;
+        $this->chargeStatus = null;
         $this->clearBaseRowsCache();
         $this->page = 1;
+    }
+
+    public function toggleChargeStatus(string $status): void
+    {
+        $this->chargeStatus = $this->chargeStatus === $status ? null : $status;
+        $this->page = 1;
+    }
+
+    /**
+     * Số đơn hàng ngoài (theo bộ lọc hiện tại) đã xuất bảng kê / chưa có giá.
+     *
+     * @return array{locked: int, missing: int}
+     */
+    public function getChargeStatusCounts(): array
+    {
+        $rows = $this->rowsForTab('external');
+        $charges = $this->chargesByOrderId($rows);
+
+        return [
+            'locked' => $rows->filter(fn (array $row): bool => $this->chargeStatusOf($row, $charges) === 'locked')->count(),
+            'missing' => $rows->filter(fn (array $row): bool => $this->chargeStatusOf($row, $charges) === 'missing')->count(),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, OrderCharge>
+     */
+    private function chargesByOrderId(Collection $rows): Collection
+    {
+        return OrderCharge::query()
+            ->whereIn('order_id', $rows->pluck('order_id')->filter())
+            ->get(['order_id', 'base_price', 'exported_at'])
+            ->keyBy('order_id');
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  Collection<int, OrderCharge>  $charges
+     */
+    private function chargeStatusOf(array $row, Collection $charges): ?string
+    {
+        $charge = $charges->get($row['order_id']);
+
+        return match (true) {
+            $charge?->exported_at !== null => 'locked',
+            $charge === null || $charge->base_price === null => 'missing',
+            default => null,
+        };
     }
 
     /**
@@ -565,12 +619,24 @@ class TripStatisticsReport extends Page
      */
     public function getAllRows(): Collection
     {
-        $rows = $this->getBaseFilteredRows();
         $target = $this->activeTab ?: $this->serviceType;
+        $rows = $this->rowsForTab($target);
 
-        if ($target === 'all') {
+        if ($target !== 'external' || $this->chargeStatus === null) {
             return $rows;
         }
+
+        $charges = $this->chargesByOrderId($rows);
+
+        return $rows->filter(fn (array $row): bool => $this->chargeStatusOf($row, $charges) === $this->chargeStatus)->values();
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function rowsForTab(string $target): Collection
+    {
+        $rows = $this->getBaseFilteredRows();
 
         return match ($target) {
             'HHHK' => $rows->filter(fn (array $row): bool => $row['service_type'] === 'HHHK')->values(),
