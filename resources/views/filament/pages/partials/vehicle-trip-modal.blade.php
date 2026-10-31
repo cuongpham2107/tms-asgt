@@ -86,9 +86,9 @@
                             ? 'border-s-4 border-s-purple-500' 
                             : ($isCompleted ? 'border-s-4 border-s-emerald-500' : 'border-s-4 border-s-gray-300 dark:border-s-gray-600'));
                     
-                    $pickupName = $t->startLocation?->name ?? ($t->orders->first()?->pickupLocation?->name ?? $t->orders->first()?->pickup_address);
+                    $pickupCode = $t->startLocation?->code ?? ($t->orders->first()?->pickupLocation?->code ?? $t->orders->first()?->pickup_address);
+                    $deliveryCodes = $t->endLocation?->code ?? $t->orders->flatMap->deliveryPoints->map(fn ($dp) => $dp->location?->code ?? $dp->address)->filter()->unique()->join(', ');
                     $customerCodes = $t->orders->map(fn ($order) => $order->customer?->code)->filter()->unique();
-                    $deliveryNames = $t->endLocation?->name ?? $t->orders->flatMap->deliveryPoints->map(fn($dp) => $dp->location?->name ?? $dp->address)->filter()->unique()->join(', ');
                 @endphp
 
                 <div class="rounded-xl bg-white dark:bg-gray-900 ring-1 ring-gray-950/5 dark:ring-white/10 shadow-xs overflow-hidden {{ $accentBorder }}">
@@ -180,13 +180,13 @@
                         </div>
 
                         {{-- Tuyến đường vắn tắt nếu có --}}
-                        @if ($pickupName || $deliveryNames)
+                        @if ($pickupCode || $deliveryCodes)
                             <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-white/5 px-3 py-2 rounded-lg">
                                 <x-filament::icon icon="heroicon-m-map-pin" class="w-4 h-4 text-gray-400 shrink-0" />
                                 <span class="text-gray-500 dark:text-gray-400 shrink-0 font-medium">Lộ trình:</span>
-                                <span class="font-medium text-gray-900 dark:text-white truncate">{{ $pickupName ?: '—' }}</span>
+                                <span class="font-mono font-medium text-gray-900 dark:text-white truncate">{{ $pickupCode ?: '—' }}</span>
                                 <x-filament::icon icon="heroicon-m-arrow-right" class="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                <span class="font-medium text-gray-900 dark:text-white truncate">{{ $deliveryNames ?: '—' }}</span>
+                                <span class="font-mono font-medium text-gray-900 dark:text-white truncate">{{ $deliveryCodes ?: '—' }}</span>
                             </div>
                         @endif
 
@@ -213,11 +213,11 @@
                                             <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11px] text-gray-600 dark:text-gray-300">
                                                 <span class="inline-flex items-baseline gap-1">
                                                     <span class="text-gray-400">Điểm đi:</span>
-                                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ $order->pickupLocation?->name ?? $order->pickup_address ?? '—' }}</span>
+                                                    <span class="font-mono font-medium text-gray-800 dark:text-gray-200">{{ $order->pickupLocation?->code ?? $order->pickup_address ?? '—' }}</span>
                                                 </span>
                                                 <span class="inline-flex items-baseline gap-1">
                                                     <span class="text-gray-400">Điểm đến:</span>
-                                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ $order->deliveryPoints->map(fn($dp) => $dp->location?->name ?? $dp->address)->filter()->join(', ') ?: '—' }}</span>
+                                                    <span class="font-mono font-medium text-gray-800 dark:text-gray-200">{{ $order->deliveryPoints->map(fn($dp) => $dp->location?->code ?? $dp->address)->filter()->join(', ') ?: '—' }}</span>
                                                 </span>
                                             </div>
                                         </div>
