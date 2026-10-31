@@ -103,16 +103,15 @@
                                     Chạy rỗng
                                 </x-filament::badge>
                             @endif
-                        </div>
-
-                        <div class="flex items-center gap-2">
                             <x-filament::badge :color="$t->status?->getColor() ?? ($isCompleted ? 'success' : ($isActive ? 'warning' : ($isPending ? 'info' : 'gray')))" size="sm">
                                 @if ($isActive && ! $isCompleted)
                                     <span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse me-1"></span>
                                 @endif
                                 {{ $t->getStatusLabel() }}
                             </x-filament::badge>
+                        </div>
 
+                        <div class="flex items-center gap-2">
                             <x-filament::button 
                                 tag="a"
                                 href="{{ \App\Filament\Resources\Trips\TripResource::getUrl('timeline', ['record' => $t]) }}" 
