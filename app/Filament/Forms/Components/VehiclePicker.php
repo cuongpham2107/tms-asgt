@@ -10,8 +10,6 @@ use Filament\Support\Enums\Width;
 
 class VehiclePicker extends CardPicker
 {
-    protected string $view = 'filament.forms.components.vehicle-picker';
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -21,6 +19,35 @@ class VehiclePicker extends CardPicker
         $this->registerActions([
             fn (VehiclePicker $component): Action => $component->getCreateVehicleAction(),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getRendererConfiguration(): array
+    {
+        return [
+            ...parent::getRendererConfiguration(),
+            // React mở modal Filament của action này bằng context schemaComponent.
+            'createAction' => [
+                'name' => 'createVehicle',
+                'label' => 'Tạo phương tiện',
+                'schemaComponent' => $this->getKey(),
+            ],
+        ];
+    }
+
+    protected function getMode(): string
+    {
+        return 'vehicle';
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cards
+     */
+    protected function resolveDefaultTab(array $cards): string
+    {
+        return collect($cards)->contains(fn (array $card): bool => ($card['type'] ?? null) === 'company') ? 'company' : 'all';
     }
 
     public function getCreateVehicleAction(): Action

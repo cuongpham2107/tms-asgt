@@ -12,7 +12,7 @@ export default defineConfig({
     },
     plugins: [
         laravel({
-            input: ['resources/css/filament/app/theme.css', 'resources/js/filament/widgets/trip-statistics-table.tsx', 'resources/js/filament/widgets/vehicle-tracking-map.tsx'],
+            input: ['resources/css/filament/app/theme.css', 'resources/js/filament/forms/card-picker.tsx', 'resources/js/filament/widgets/trip-statistics-table.tsx', 'resources/js/filament/widgets/vehicle-tracking-map.tsx'],
             refresh: true,
             fonts: [
                 bunny('Instrument Sans', {
