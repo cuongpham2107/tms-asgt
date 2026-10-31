@@ -259,9 +259,11 @@
                             <td class="py-2 px-3 text-center border-r border-gray-100 dark:border-white/5">
                                 <span class="font-mono text-[11px] text-gray-600 dark:text-gray-400">{{ $row['cargo_type'] ?: '—' }}</span>
                             </td>
+                            @if ($showChargeableWeight)
                             <td class="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-gray-100">
                                 {{ $row['chargeable_weight'] > 0 ? number_format($row['chargeable_weight'], 1) : '—' }}
                             </td>
+                            @endif
 
                             @if ($showCharges)
                                 @php

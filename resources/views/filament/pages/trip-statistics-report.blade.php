@@ -5,6 +5,8 @@
         $customerOptions = $this->getCustomerOptions();
         $tabCounts = $this->getTabCounts();
         $showCharges = $this->activeTab === 'external';
+        // HHHK không tính cước theo trọng tải nên ẩn cột "Trọng tải cước"
+        $showChargeableWeight = $this->activeTab !== 'HHHK';
         $charges = $showCharges ? $this->getChargesForRows($paginator->items()) : collect();
     @endphp
 
@@ -166,7 +168,7 @@
                         <th colspan="7" class="border-b border-r border-white/25 py-2 px-3">
                             4. ĐỐI TÁC, XE & TÀI XẾ
                         </th>
-                        <th colspan="6" class="border-b border-r border-white/25 py-2 px-3">
+                        <th colspan="{{ $showChargeableWeight ? 6 : 5 }}" class="border-b border-r border-white/25 py-2 px-3">
                             5. SẢN LƯỢNG, KM & CƯỚC
                         </th>
                         @if ($showCharges)
@@ -273,9 +275,11 @@
                         <th class="border-b border-r border-white/25 py-2.5 px-3 text-center min-w-[75px]">
                             Loại hàng
                         </th>
+                        @if ($showChargeableWeight)
                         <th class="border-b border-r border-white/25 py-2.5 px-3 text-right min-w-[95px]">
                             Trọng tải cước
                         </th>
+                        @endif
 
                         @if ($showCharges)
                         <th class="border-b border-r border-white/25 py-2.5 px-3 min-w-[160px]">Mã giá</th>
@@ -311,7 +315,7 @@
                         @endif
                     @empty
                         <tr>
-                            <td colspan="{{ $showCharges ? 37 : 27 }}" class="py-12 text-center text-gray-500 dark:text-gray-400">
+                            <td colspan="{{ ($showCharges ? 37 : 27) - ($showChargeableWeight ? 0 : 1) }}" class="py-12 text-center text-gray-500 dark:text-gray-400">
                                 <div class="flex flex-col items-center justify-center gap-2">
                                     <x-filament::icon icon="heroicon-o-inbox" class="w-8 h-8 text-gray-400" />
                                     <p class="text-sm font-medium">Không tìm thấy dữ liệu chuyến nào cho {{ $this->getActiveTabTitle() }} phù hợp với bộ lọc</p>
