@@ -895,7 +895,9 @@ class TripsTable extends BaseTable
             'tileLayersUrl' => MapTile::config(),
             'layerGroupsData' => [],
             'layersData' => $layers,
-            'zoomConfig' => ['max' => 18, 'min' => 0],
+            // Plugin truyền max vào fitBounds; để 18 thì chuyến có ít mốc gần nhau
+            // sẽ zoom sát mặt đường, không thấy xe đang ở đâu.
+            'zoomConfig' => ['max' => 15, 'min' => 0],
             'mapConfig' => [],
             'mapControls' => [],
             'geoSearchConfig' => [],

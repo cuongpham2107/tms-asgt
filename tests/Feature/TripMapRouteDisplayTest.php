@@ -134,7 +134,8 @@ test('buildGpsMapConfig builds route points, OSRM polylines, and sets fitBounds 
     $config = $method->invoke(null, $trip);
 
     expect($config['autoCenter'])->toBeFalse()
-        ->and($config['fitBounds'])->toBeTrue();
+        ->and($config['fitBounds'])->toBeTrue()
+        ->and($config['zoomConfig']['max'])->toBe(15); // chặn fitBounds zoom sát mặt đường
 
     $layers = collect($config['layersData']);
 
