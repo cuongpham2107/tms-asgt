@@ -251,3 +251,31 @@ test('waiting minutes come from loading and unloading checkpoints', function () 
     expect($charge->waiting_minutes)->toBe(180)
         ->and((float) $charge->waiting_fee)->toBe(100_000.0);
 });
+
+test('backfill command prices completed orders that had no rate yet and leaves the rest alone', function () {
+    $prices = $this->rate->prices;
+    $this->rate->delete();
+
+    // Đơn hoàn thành lúc chưa có bảng giá → dòng cước không có giá
+    $missing = ($this->makeOrder)();
+    $missing->update(['status' => OrderStatus::Completed]);
+    // Đơn chưa từng có dòng cước (hoàn thành trước khi có tính năng)
+    $noCharge = ($this->makeOrder)();
+    Order::withoutEvents(fn () => $noCharge->update(['status' => OrderStatus::Completed]));
+    // Dòng cước đã sửa tay và dòng đã xuất bảng kê không bị đụng tới
+    $manual = ($this->makeOrder)();
+    $manual->update(['status' => OrderStatus::Completed]);
+    $manual->charge->update(['base_price' => 999_000]);
+    $exported = ($this->makeOrder)();
+    $exported->update(['status' => OrderStatus::Completed]);
+    $exported->charge->update(['exported_at' => now()]);
+
+    FreightRate::create([...$this->rate->only(['customer_id', 'origin_zone_id', 'destination_zone_id', 'cargo_type']), 'prices' => $prices]);
+
+    $this->artisan('order-charges:calculate')->assertSuccessful();
+
+    expect((float) $missing->charge()->first()->base_price)->toBe(1_275_000.0)
+        ->and((float) $noCharge->charge()->first()->base_price)->toBe(1_275_000.0)
+        ->and((float) $manual->charge()->first()->base_price)->toBe(999_000.0)
+        ->and($exported->charge()->first()->base_price)->toBeNull();
+});
