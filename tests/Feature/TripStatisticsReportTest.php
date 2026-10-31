@@ -797,3 +797,30 @@ test('a trip with several orders shows one trip row followed by its orders', fun
         ->and($sheet->getCell('D6')->getValue())->toBeEmpty()
         ->and($sheet->getCell('B7')->getValue())->toBe('└ ASG-M2');
 });
+
+test('pagination uses the filament component and its page methods', function () {
+    // Chuyến không hàng để bảng có dữ liệu
+    Trip::create([
+        'trip_code' => 'TRIP-PAGE-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 09:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 10:00:00'),
+    ]);
+
+    Livewire::test(TripStatisticsReport::class, ['activeTab' => 'empty'])
+        ->set('startDate', '2026-04-01')
+        ->set('endDate', '2026-04-30')
+        ->assertSeeHtml('fi-pagination')
+        ->call('nextPage', 'page')
+        ->assertSet('page', 2)
+        ->call('previousPage', 'page')
+        ->assertSet('page', 1)
+        ->call('previousPage', 'page')
+        ->assertSet('page', 1)
+        ->call('gotoPage', 3, 'page')
+        ->assertSet('page', 3)
+        ->set('perPage', 50)
+        ->assertSet('page', 1);
+});

@@ -306,84 +306,12 @@
 
         {{-- Chân bảng: số dòng/trang + phân trang --}}
         @if ($paginator->total() > 0)
-            <div class="px-4 py-3 border-t border-gray-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-2 bg-gray-50/50 dark:bg-white/[0.02]">
-                <div class="text-xs text-gray-600 dark:text-gray-400">
-                    Hiển thị từ <span class="font-semibold text-gray-900 dark:text-gray-100">{{ ($paginator->currentPage() - 1) * $paginator->perPage() + 1 }}</span>
-                    đến <span class="font-semibold text-gray-900 dark:text-gray-100">{{ min($paginator->total(), $paginator->currentPage() * $paginator->perPage()) }}</span>
-                    trên tổng số <span class="font-semibold text-gray-900 dark:text-gray-100">{{ number_format($paginator->total()) }}</span> dòng
-                    <span class="inline-flex items-center gap-1.5 ms-3 align-middle">
-                        Số dòng/trang
-                        <span class="w-20 inline-block">
-                            <x-filament::input.wrapper>
-                                <x-filament::input.select wire:model.live="perPage">
-                                    <option value="25">25</option>
-                                    <option value="50">50</option>
-                                    <option value="100">100</option>
-                                </x-filament::input.select>
-                            </x-filament::input.wrapper>
-                        </span>
-                    </span>
-                </div>
-
-                @if ($paginator->hasPages())
-                <div class="flex items-center gap-1">
-                    {{-- Nút Trang trước --}}
-                    @if ($paginator->onFirstPage())
-                        <span class="px-2.5 py-1 text-xs rounded-lg ring-1 ring-gray-950/5 dark:ring-white/10 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-white/5 cursor-not-allowed">Trước</span>
-                    @else
-                        <button
-                            type="button"
-                            wire:click="gotoPage({{ $paginator->currentPage() - 1 }})"
-                            class="px-2.5 py-1 text-xs rounded-lg ring-1 ring-gray-950/10 dark:ring-white/10 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition"
-                        >
-                            Trước
-                        </button>
-                    @endif
-
-                    {{-- Các số trang --}}
-                    @php
-                        $start = max(1, $paginator->currentPage() - 2);
-                        $end = min($paginator->lastPage(), $paginator->currentPage() + 2);
-                    @endphp
-
-                    @if ($start > 1)
-                        <button type="button" wire:click="gotoPage(1)" class="px-2.5 py-1 text-xs rounded-lg ring-1 ring-gray-950/10 dark:ring-white/10 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition">1</button>
-                        @if ($start > 2) <span class="px-1 text-gray-400">...</span> @endif
-                    @endif
-
-                    @for ($p = $start; $p <= $end; $p++)
-                        @if ($p === $paginator->currentPage())
-                            <span class="px-2.5 py-1 text-xs rounded-lg bg-primary-600 text-white font-semibold shadow-xs">{{ $p }}</span>
-                        @else
-                            <button
-                                type="button"
-                                wire:click="gotoPage({{ $p }})"
-                                class="px-2.5 py-1 text-xs rounded-lg ring-1 ring-gray-950/10 dark:ring-white/10 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition"
-                            >
-                                {{ $p }}
-                            </button>
-                        @endif
-                    @endfor
-
-                    @if ($end < $paginator->lastPage())
-                        @if ($end < $paginator->lastPage() - 1) <span class="px-1 text-gray-400">...</span> @endif
-                        <button type="button" wire:click="gotoPage({{ $paginator->lastPage() }})" class="px-2.5 py-1 text-xs rounded-lg ring-1 ring-gray-950/10 dark:ring-white/10 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition">{{ $paginator->lastPage() }}</button>
-                    @endif
-
-                    {{-- Nút Trang sau --}}
-                    @if ($paginator->hasMorePages())
-                        <button
-                            type="button"
-                            wire:click="gotoPage({{ $paginator->currentPage() + 1 }})"
-                            class="px-2.5 py-1 text-xs rounded-lg ring-1 ring-gray-950/10 dark:ring-white/10 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition"
-                        >
-                            Sau
-                        </button>
-                    @else
-                        <span class="px-2.5 py-1 text-xs rounded-lg ring-1 ring-gray-950/5 dark:ring-white/10 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-white/5 cursor-not-allowed">Sau</span>
-                    @endif
-                </div>
-                @endif
+            <div class="px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                <x-filament::pagination
+                    :paginator="$paginator"
+                    :page-options="[25, 50, 100]"
+                    current-page-option-property="perPage"
+                />
             </div>
         @endif
     </div>

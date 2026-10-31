@@ -201,9 +201,22 @@ class TripStatisticsReport extends Page
         $this->page = 1;
     }
 
-    public function gotoPage(int $page): void
+    /**
+     * Các hàm phân trang mà <x-filament::pagination> gọi (cùng chữ ký với WithPagination của Livewire).
+     */
+    public function gotoPage(int $page, string $pageName = 'page'): void
     {
-        $this->page = $page;
+        $this->page = max(1, $page);
+    }
+
+    public function previousPage(string $pageName = 'page'): void
+    {
+        $this->gotoPage($this->page - 1);
+    }
+
+    public function nextPage(string $pageName = 'page'): void
+    {
+        $this->gotoPage($this->page + 1);
     }
 
     public function setDatePreset(string $preset): void
