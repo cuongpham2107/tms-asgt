@@ -1,5 +1,6 @@
 <?php
 
+use App\Events\VehiclesSynced;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Models\Vehicle;
 use App\Models\VehicleGpsLog;
@@ -7,6 +8,7 @@ use App\Services\EupGpsService;
 use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 
@@ -192,4 +194,24 @@ test('idle engine start is stored on the vehicle only when the status changes', 
 
     expect($whileIdle)->toBe('10:00')
         ->and($this->vehicle->fresh()->idle_engine_since)->toBeNull();
+});
+
+test('sync broadcasts VehiclesSynced when vehicles were updated', function () {
+    Event::fake([VehiclesSynced::class]);
+    Http::fake(['*' => Http::response(['result' => [eupItem()]])]);
+
+    app(EupGpsService::class)->sync();
+
+    Event::assertDispatched(VehiclesSynced::class, fn (VehiclesSynced $event): bool => $event->updated === 1
+        && $event->broadcastOn()[0]->name === 'vehicles');
+});
+
+test('sync still succeeds when broadcasting fails', function () {
+    Event::listen(VehiclesSynced::class, fn () => throw new RuntimeException('Reverb không chạy'));
+    Http::fake(['*' => Http::response(['result' => [eupItem()]])]);
+
+    $result = app(EupGpsService::class)->sync();
+
+    expect($result['success'])->toBeTrue()
+        ->and(VehicleGpsLog::count())->toBe(1);
 });

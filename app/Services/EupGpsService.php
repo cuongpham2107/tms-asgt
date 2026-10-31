@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\EupCarStatus;
+use App\Events\VehiclesSynced;
 use App\Models\Vehicle;
 use App\Models\VehicleGpsLog;
 use App\Services\Trip\TripCheckpointOsmValidationService;
@@ -125,6 +126,11 @@ class EupGpsService
                     VehicleGpsLog::insert($chunk);
                 }
             });
+
+            if ($updated > 0) {
+                // Reverb chưa chạy / lỗi kết nối thì bỏ qua — các màn hình vẫn tự tải lại định kỳ.
+                rescue(fn () => VehiclesSynced::dispatch($updated), report: false);
+            }
 
             $message = "Đã cập nhật vị trí cho {$updated} xe";
 

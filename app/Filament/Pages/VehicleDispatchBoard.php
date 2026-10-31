@@ -95,12 +95,14 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     /**
      * Lắng nghe broadcast event realtime qua Laravel Reverb / Echo.
-     * Khi chuyến xe thay đổi trạng thái hoặc cập nhật, tự động làm mới bảng kiểm soát xe.
+     * Khi chuyến xe thay đổi hoặc vừa đồng bộ GPS xong, tự động làm mới bảng kiểm soát xe.
+     * Không có Reverb thì bảng vẫn tự tải lại theo poll().
      *
      * @param  array<string, mixed>|null  $event
      */
     #[On('echo:trips,TripUpdated')]
     #[On('echo:trips,.TripUpdated')]
+    #[On('echo:vehicles,.VehiclesSynced')]
     public function onTripUpdated(?array $event = null): void
     {
         if (filled($this->mountedActions ?? [])) {
