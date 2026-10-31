@@ -103,7 +103,7 @@
 
                     {{-- Dòng tiêu đề các cột màu navy theo theme table --}}
                     <tr class="text-white text-[11px] font-bold tracking-wide uppercase dark:bg-slate-950" style="background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));">
-                        <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[100px]">Địa điểm</th>
+                        <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[60px]">Địa điểm</th>
                         <th class="border-r border-b border-white/10 py-2 px-1 text-center whitespace-nowrap min-w-[45px]">HT</th>
                         <th 
                             wire:click="sortTable('plate_number')"
@@ -138,7 +138,7 @@
                         <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[70px]">Xe chờ</th>
                         <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[140px]">Vị trí thực tế trên GPS</th>
                         <th class="border-r border-b border-white/10 py-2 px-1 text-center whitespace-nowrap min-w-[50px]">Tốc độ</th>
-                        <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[85px]">Status</th>
+                        <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[70px]">Status</th>
                         <th class="border-r border-b border-white/10 py-2 px-1 text-center whitespace-nowrap min-w-[50px]">Chuyến</th>
                         <th class="border-r border-b border-white/10 py-2 px-1 text-center whitespace-nowrap min-w-[55px]">Đơn chờ</th>
                         <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap min-w-[70px]">KM over</th>
@@ -318,23 +318,15 @@
                                 {{-- 7. Xe chờ --}}
                                 <td class="border-r border-gray-100 dark:border-white/5 px-1.5 py-1.5 text-center whitespace-nowrap font-medium" title="{{ $xeChoTooltip }}">
                                     @if ($isXeChoAlert)
-                                        <x-filament::badge color="danger" size="xs" class="animate-pulse">
-                                            {{ $xeCho }}
-                                        </x-filament::badge>
+                                        <span class="animate-pulse font-bold text-rose-600 dark:text-rose-400">{{ $xeCho }}</span>
                                     @elseif ($isXeChoWarning)
-                                        <x-filament::badge color="warning" size="xs">
-                                            {{ $xeCho }}
-                                        </x-filament::badge>
+                                        <span class="font-semibold text-amber-600 dark:text-amber-400">{{ $xeCho }}</span>
                                     @elseif ($xeCho === 'Sẵn sàng')
-                                        <x-filament::badge color="success" size="xs">
-                                            Sẵn sàng
-                                        </x-filament::badge>
+                                        <span class="font-semibold text-emerald-600 dark:text-emerald-400">Sẵn sàng</span>
                                     @elseif ($xeCho === '—')
                                         <span class="text-gray-400">—</span>
                                     @else
-                                        <x-filament::badge color="gray" size="xs">
-                                            {{ $xeCho }}
-                                        </x-filament::badge>
+                                        <span class="text-gray-600 dark:text-gray-300">{{ $xeCho }}</span>
                                     @endif
                                 </td>
 
