@@ -139,7 +139,7 @@
 
                     {{-- Nội dung thông tin chi tiết của chuyến --}}
                     <div class="p-4 space-y-3.5">
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                        <div class="grid grid-cols-2 gap-3 text-xs lg:grid-cols-4">
                             <div>
                                 <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400 block">Lái xe</span>
                                 <span class="text-xs font-semibold text-gray-900 dark:text-white mt-0.5 block truncate" title="{{ $t->driver?->name }}">
@@ -199,32 +199,26 @@
                                 <div class="space-y-2 max-h-56 overflow-y-auto pe-1">
                                     @foreach ($t->orders as $order)
                                         <div class="rounded-lg bg-gray-50/70 dark:bg-white/[0.03] p-3 text-xs space-y-1.5">
-                                            <div class="flex items-center justify-between">
-                                                <div class="flex items-center gap-2">
-                                                    <span class="font-bold text-gray-900 dark:text-white">{{ $order->order_code }}</span>
-                                                    @if ($order->customer)
-                                                        <span class="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[220px]">
-                                                            ({{ $order->customer->code }} · {{ $order->customer->name }})
-                                                        </span>
-                                                    @endif
-                                                </div>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="font-bold text-gray-900 dark:text-white">{{ $order->order_code }}</span>
                                                 <x-filament::badge size="xs" :color="$order->status?->getColor() ?? 'gray'">
                                                     {{ $order->status?->getLabel() ?? (string) $order->status }}
                                                 </x-filament::badge>
+                                                @if ($order->customer)
+                                                    <span class="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[260px]">
+                                                        ({{ $order->customer->code }} · {{ $order->customer->name }})
+                                                    </span>
+                                                @endif
                                             </div>
-                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-gray-600 dark:text-gray-300">
-                                                <div class="flex items-baseline gap-1">
-                                                    <span class="text-gray-400 shrink-0">Điểm đi:</span>
-                                                    <span class="font-medium text-gray-800 dark:text-gray-200 truncate">
-                                                        {{ $order->pickupLocation?->name ?? $order->pickup_address ?? '—' }}
-                                                    </span>
-                                                </div>
-                                                <div class="flex items-baseline gap-1">
-                                                    <span class="text-gray-400 shrink-0">Điểm đến:</span>
-                                                    <span class="font-medium text-gray-800 dark:text-gray-200 truncate">
-                                                        {{ $order->deliveryPoints->map(fn($dp) => $dp->location?->name ?? $dp->address)->filter()->join(', ') ?: '—' }}
-                                                    </span>
-                                                </div>
+                                            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11px] text-gray-600 dark:text-gray-300">
+                                                <span class="inline-flex items-baseline gap-1">
+                                                    <span class="text-gray-400">Điểm đi:</span>
+                                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ $order->pickupLocation?->name ?? $order->pickup_address ?? '—' }}</span>
+                                                </span>
+                                                <span class="inline-flex items-baseline gap-1">
+                                                    <span class="text-gray-400">Điểm đến:</span>
+                                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ $order->deliveryPoints->map(fn($dp) => $dp->location?->name ?? $dp->address)->filter()->join(', ') ?: '—' }}</span>
+                                                </span>
                                             </div>
                                         </div>
                                     @endforeach
