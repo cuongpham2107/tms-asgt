@@ -304,7 +304,7 @@ function CardGrid(props: JsFieldProps<PickerValue, Configuration> & { mountActio
                 </div>
             </div>
 
-            <div className="grid max-h-[60vh] grid-cols-1 gap-2.5 overflow-y-auto p-1.5 custom-scrollbar sm:grid-cols-2 md:grid-cols-3 md:max-h-162.5">
+            <div className="grid max-h-[75vh] grid-cols-1 gap-2.5 overflow-y-auto p-1.5 custom-scrollbar sm:grid-cols-2 md:grid-cols-3">
                 {visible.map((card) => {
                     const selected = String(card.value) === selectedKey
                     const dotClass = statusDotColors[card.statusDot ?? ''] ?? 'bg-gray-400'
