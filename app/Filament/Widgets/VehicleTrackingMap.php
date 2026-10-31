@@ -30,6 +30,9 @@ class VehicleTrackingMap extends Widget
 
     private const DEFAULT_CENTER = [21.0285, 105.8542]; // Hà Nội Center
 
+    /** Lộ trình đã đi chỉ vẽ trong N giờ gần nhất: có chuyến bị treo "đang chạy" nhiều ngày. */
+    private const TRACK_WINDOW_HOURS = 8;
+
     protected int|string|array $columnSpan = 'full';
 
     /** @var array<int, int> */
@@ -263,7 +266,7 @@ class VehicleTrackingMap extends Widget
         $current = $isActive ? $this->vehicleGps($vehicle) : null;
 
         // Lộ trình EUP thật của xe; không có thì nối các mốc GPS của tài xế.
-        $gpsTrack = $trip->gpsTrack();
+        $gpsTrack = $trip->gpsTrack(since: now()->subHours(self::TRACK_WINDOW_HOURS));
         $traveled = count($gpsTrack) >= 2
             ? collect($gpsTrack)
             : $checkpoints->map(fn (array $checkpoint): array => [$checkpoint['lat'], $checkpoint['lng']])->values();

@@ -114,17 +114,22 @@ const vehiclePopup = (vehicle: Snapshot<VehicleRow>): string => `
         <div class="trk-muted">${vehicle.speed && vehicle.speed > 0 ? `${Math.round(vehicle.speed)} km/h · ` : ''}<span class="${vehicle.stale ? 'trk-stale' : ''}">Cập nhật: ${escapeHtml(vehicle.updated ?? 'chưa có GPS')}</span></div>
     </div>`
 
-function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configuration>; wire: Wire }) {
+function MapCanvas({ configuration, selectedIds, onSelect }: { configuration: Snapshot<Configuration>; selectedIds: number[]; onSelect: (id: number) => void }) {
     const containerRef = useRef<HTMLDivElement | null>(null)
     const mapRef = useRef<L.Map | null>(null)
     const clusterRef = useRef<L.MarkerClusterGroup | null>(null)
     const markersRef = useRef<Map<number, L.Marker>>(new Map())
     const routeLayersRef = useRef<L.Layer[]>([])
     const fitKeyRef = useRef<string | null>(null)
-    const wireRef = useRef(wire)
+    const onSelectRef = useRef(onSelect)
     const vehiclesRef = useRef<readonly Snapshot<VehicleRow>[]>([])
+    const selectionKey = selectedIds.join(',')
+    const selectedRef = useRef(selectedIds)
+    const popupKeyRef = useRef('')
 
-    wireRef.current = wire
+    selectedRef.current = selectedIds
+
+    onSelectRef.current = onSelect
     vehiclesRef.current = configuration.vehicles
 
     // Khởi tạo bản đồ đúng một lần; cập nhật dữ liệu qua các effect bên dưới.
@@ -178,7 +183,7 @@ function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configurat
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Marker: cập nhật theo id để bản đồ không nhảy khi có dữ liệu mới.
+    // Marker: cập nhật theo id để bản đồ không nhảy khi có dữ liệu mới. Đang chọn xe thì chỉ hiện các xe đó.
     useEffect(() => {
         const cluster = clusterRef.current
         const map = mapRef.current
@@ -187,7 +192,10 @@ function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configurat
             return
         }
 
-        const tracked = configuration.vehicles.filter((vehicle) => vehicle.hasGps && vehicle.lat !== null && vehicle.lng !== null)
+        const selected = new Set(selectedIds)
+        const tracked = configuration.vehicles.filter(
+            (vehicle) => vehicle.hasGps && vehicle.lat !== null && vehicle.lng !== null && (selected.size === 0 || selected.has(vehicle.id)),
+        )
         const seen = new Set<number>()
 
         tracked.forEach((vehicle) => {
@@ -210,7 +218,12 @@ function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configurat
             const created = L.marker(latlng, { icon, title: vehicle.plate ?? '' })
             created.bindPopup(popup, { maxWidth: 320 })
             created.bindTooltip(vehicle.plate ?? '', { direction: 'top', offset: [0, -34] })
-            created.on('click', () => void wireRef.current.selectVehicle(vehicle.id))
+            // Bấm marker xe đang chọn chỉ mở popup, không bỏ chọn.
+            created.on('click', () => {
+                if (!selectedRef.current.includes(vehicle.id)) {
+                    onSelectRef.current(vehicle.id)
+                }
+            })
             cluster.addLayer(created)
             markersRef.current.set(vehicle.id, created)
         })
@@ -222,6 +235,18 @@ function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configurat
             }
         })
 
+        // Vừa chọn đúng 1 xe: mở popup thông tin của xe đó (một lần cho mỗi lần chọn).
+        if (selectionKey !== popupKeyRef.current) {
+            popupKeyRef.current = selectionKey
+            const only = selectedIds.length === 1 ? markersRef.current.get(selectedIds[0]) : undefined
+
+            if (only) {
+                setTimeout(() => only.openPopup(), 0)
+            } else {
+                map.closePopup()
+            }
+        }
+
         if (fitKeyRef.current === null && tracked.length > 0) {
             fitKeyRef.current = ''
 
@@ -231,7 +256,8 @@ function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configurat
                 map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
             }
         }
-    }, [configuration.vehicles])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [configuration.vehicles, selectionKey])
 
     // Lộ trình của xe đang chọn + fit khung nhìn khi đổi lựa chọn.
     useEffect(() => {
@@ -244,7 +270,8 @@ function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configurat
         routeLayersRef.current.forEach((layer) => map.removeLayer(layer))
         routeLayersRef.current = []
 
-        configuration.routes.forEach((route) => {
+        // Lộ trình cũ của xe vừa bỏ chọn ẩn ngay, không chờ server trả về.
+        configuration.routes.filter((route) => selectedIds.includes(route.vehicleId)).forEach((route) => {
             if (route.traveled.length >= 2) {
                 const line = L.polyline(route.traveled.map(([lat, lng]) => [lat, lng] as [number, number]), { color: '#2563eb', weight: 5, opacity: 0.9 })
                 line.bindTooltip('Đã đi')
@@ -286,9 +313,7 @@ function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configurat
             })
         })
 
-        const fitKey =
-            configuration.selectedIds.join(',') +
-            (configuration.routes.some((route) => route.traveled.length >= 2 || route.planned.length >= 2) ? ':route' : '')
+        const fitKey = selectionKey + (routeLayersRef.current.some((layer) => layer instanceof L.Polyline) ? ':route' : '')
 
         if (fitKey === fitKeyRef.current) {
             return
@@ -297,14 +322,14 @@ function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configurat
         fitKeyRef.current = fitKey
         const bounds = L.latLngBounds([])
 
-        if (configuration.selectedIds.length === 0) {
+        if (selectedIds.length === 0) {
             vehiclesRef.current.forEach((vehicle) => {
                 if (vehicle.hasGps && vehicle.lat !== null && vehicle.lng !== null) {
                     bounds.extend([vehicle.lat, vehicle.lng])
                 }
             })
         } else {
-            configuration.selectedIds.forEach((id) => {
+            selectedIds.forEach((id) => {
                 const marker = markersRef.current.get(id)
 
                 if (marker) {
@@ -320,50 +345,58 @@ function MapCanvas({ configuration, wire }: { configuration: Snapshot<Configurat
         }
 
         if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 })
+            map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 15, duration: 0.6 })
         }
-    }, [configuration.routes, configuration.selectedIds])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [configuration.routes, selectionKey])
 
     return <div ref={containerRef} className="h-full w-full" />
 }
 
-function VehicleCard({ vehicle, wire }: { vehicle: Snapshot<VehicleRow>; wire: Wire }) {
+interface VehicleCardProps {
+    vehicle: Snapshot<VehicleRow>
+    selected: boolean
+    onSelect: (id: number) => void
+    onToggle: (id: number) => void
+}
+
+function VehicleCard({ vehicle, selected, onSelect, onToggle }: VehicleCardProps) {
     const pulse = vehicle.status === 'running'
 
     return (
         <div
             role="button"
             tabIndex={0}
-            onClick={() => void wire.selectVehicle(vehicle.id)}
+            onClick={() => onSelect(vehicle.id)}
             onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault()
-                    void wire.selectVehicle(vehicle.id)
+                    onSelect(vehicle.id)
                 }
             }}
             className={`group relative flex cursor-pointer flex-col gap-1.5 rounded-lg border p-2.5 transition-all ${
-                vehicle.selected
+                selected
                     ? 'border-l-4 bg-gray-50 shadow-xs dark:bg-gray-800'
                     : 'border-gray-200 bg-white hover:border-primary-400 hover:bg-gray-50/80 dark:border-gray-700 dark:bg-gray-850 dark:hover:bg-gray-800'
             }`}
-            style={vehicle.selected ? { borderLeftColor: vehicle.color, borderColor: vehicle.color } : undefined}
+            style={selected ? { borderLeftColor: vehicle.color, borderColor: vehicle.color } : undefined}
         >
             <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2.5">
                     <button
                         type="button"
                         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                            vehicle.selected
+                            selected
                                 ? 'border-primary-600 bg-primary-600 text-white'
                                 : 'border-gray-400 bg-white hover:border-primary-500 dark:border-gray-500 dark:bg-gray-800'
                         }`}
                         title="Chọn/Bỏ chọn để so sánh nhiều xe"
                         onClick={(event) => {
                             event.stopPropagation()
-                            void wire.toggleCheckbox(vehicle.id)
+                            onToggle(vehicle.id)
                         }}
                     >
-                        {vehicle.selected && (
+                        {selected && (
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="h-3.5 w-3.5" aria-hidden="true">
                                 <path d="M4.5 12.75l6 6 9-13.5" />
                             </svg>
@@ -440,6 +473,34 @@ function VehicleTracking({ configuration, wire }: { configuration: Snapshot<Conf
         return () => clearInterval(timer)
     }, [])
 
+    // Chọn xe phản hồi ngay trên client (ẩn xe khác, bay tới xe); server trả lộ trình sau.
+    const serverSelectionKey = configuration.selectedIds.join(',')
+    const [pendingSelection, setPendingSelection] = useState<number[] | null>(null)
+
+    useEffect(() => setPendingSelection(null), [serverSelectionKey])
+
+    const selectedIds = pendingSelection ?? [...configuration.selectedIds]
+    const selectedSet = new Set(selectedIds)
+    const selectedPlates = configuration.vehicles
+        .filter((vehicle) => selectedSet.has(vehicle.id))
+        .map((vehicle) => vehicle.plate)
+        .join(', ')
+
+    const selectVehicle = (id: number) => {
+        setPendingSelection(selectedIds.length === 1 && selectedIds[0] === id ? [] : [id])
+        void wire.selectVehicle(id)
+    }
+
+    const toggleVehicle = (id: number) => {
+        setPendingSelection(selectedSet.has(id) ? selectedIds.filter((value) => value !== id) : [...selectedIds, id])
+        void wire.toggleCheckbox(id)
+    }
+
+    const deselectAll = () => {
+        setPendingSelection([])
+        void wire.deselectAll()
+    }
+
     const visible = configuration.vehicles.slice(0, configuration.visibleCount)
 
     return (
@@ -458,7 +519,7 @@ function VehicleTracking({ configuration, wire }: { configuration: Snapshot<Conf
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-bold text-primary-800 ring-1 ring-inset ring-primary-700/20 dark:bg-primary-950 dark:text-primary-300" title="Đã chọn / Tổng số xe">
-                                Đã chọn: {configuration.selectedIds.length} / {configuration.totalCount}
+                                Đã chọn: {selectedIds.length} / {configuration.totalCount}
                             </span>
                             <button
                                 type="button"
@@ -542,7 +603,7 @@ function VehicleTracking({ configuration, wire }: { configuration: Snapshot<Conf
                             <button
                                 type="button"
                                 className="rounded-md px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
-                                onClick={() => void wire.deselectAll()}
+                                onClick={deselectAll}
                             >
                                 Bỏ chọn
                             </button>
@@ -559,7 +620,9 @@ function VehicleTracking({ configuration, wire }: { configuration: Snapshot<Conf
                                 <p className="mt-0.5 text-[11px] text-gray-500">Thử đổi từ khóa hoặc bộ lọc trạng thái</p>
                             </div>
                         ) : (
-                            visible.map((vehicle) => <VehicleCard key={vehicle.id} vehicle={vehicle} wire={wire} />)
+                            visible.map((vehicle) => (
+                                <VehicleCard key={vehicle.id} vehicle={vehicle} selected={selectedSet.has(vehicle.id)} onSelect={selectVehicle} onToggle={toggleVehicle} />
+                            ))
                         )}
 
                         {configuration.hasMore && (
@@ -578,7 +641,7 @@ function VehicleTracking({ configuration, wire }: { configuration: Snapshot<Conf
 
                 {/* Bản đồ */}
                 <div className="trk-map relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-                    <MapCanvas configuration={configuration} wire={wire} />
+                    <MapCanvas configuration={configuration} selectedIds={selectedIds} onSelect={selectVehicle} />
                 </div>
             </div>
 
@@ -631,17 +694,17 @@ function VehicleTracking({ configuration, wire }: { configuration: Snapshot<Conf
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                    {configuration.selectedIds.length > 0 && (
+                    {selectedIds.length > 0 && (
                         <div className="flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 ring-1 ring-inset ring-primary-700/20 dark:bg-primary-950 dark:text-primary-300">
                             <span className="flex h-2 w-2 animate-pulse rounded-full bg-primary-600" />
                             <span>
-                                Đang chọn: <strong>{configuration.selectedPlates}</strong>
+                                Đang chọn: <strong>{selectedPlates}</strong>
                             </span>
                             <button
                                 type="button"
                                 className="ml-1 inline-flex items-center rounded bg-primary-200/70 px-1.5 py-0.5 text-[11px] font-bold text-primary-800 transition-colors hover:bg-primary-300 dark:bg-primary-800 dark:text-primary-200 dark:hover:bg-primary-700"
                                 title="Bỏ chọn để xem tất cả xe"
-                                onClick={() => void wire.deselectAll()}
+                                onClick={deselectAll}
                             >
                                 ✕ Bỏ chọn
                             </button>

@@ -321,10 +321,11 @@ class Trip extends Model
     /**
      * Lộ trình EUP thật của xe trong thời gian chuyến (bắt đầu → kết thúc, hoặc tới hiện tại nếu đang chạy).
      * Rút gọn đều còn tối đa $maxPoints điểm, luôn giữ điểm đầu và cuối.
+     * $since: chỉ lấy từ mốc này trở đi (chuyến treo trạng thái nhiều ngày thì không vẽ cả tuần GPS).
      *
      * @return array<int, array{0: float, 1: float}>
      */
-    public function gpsTrack(int $maxPoints = 500): array
+    public function gpsTrack(int $maxPoints = 500, ?Carbon $since = null): array
     {
         if ($this->vehicle_id === null || $this->started_at === null) {
             return [];
@@ -333,7 +334,7 @@ class Trip extends Model
         // Chỉ lấy 2 cột dạng thô (không dựng model) vì chuyến dài có thể có hàng nghìn điểm
         $points = VehicleGpsLog::query()
             ->where('vehicle_id', $this->vehicle_id)
-            ->whereBetween('recorded_at', [$this->started_at, $this->completed_at ?? $this->cancelled_at ?? now()])
+            ->whereBetween('recorded_at', [$since?->max($this->started_at) ?? $this->started_at, $this->completed_at ?? $this->cancelled_at ?? now()])
             ->orderBy('recorded_at')
             ->toBase()
             ->get(['lat', 'lng'])
