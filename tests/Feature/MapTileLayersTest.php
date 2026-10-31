@@ -1,8 +1,10 @@
 <?php
 
+use App\Filament\Pages\VehicleDispatchBoard;
 use App\Filament\Resources\Locations\Pages\CreateLocation;
 use App\Filament\Widgets\VehicleTrackingMap;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Gate;
@@ -38,4 +40,16 @@ test('the location form map shows Google street tiles', function () {
     Livewire::test(CreateLocation::class)
         ->assertSeeHtml('lyrs=m')
         ->assertDontSeeHtml('tile.openstreetmap.org');
+});
+
+test('the gps modal uses a Google-tiles Leaflet map instead of an OpenStreetMap iframe', function () {
+    $vehicle = Vehicle::factory()->create(['gps_lat' => 21.0285, 'gps_lng' => 105.8542]);
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->call('openGpsModal', $vehicle->id)
+        ->assertSeeHtml('data-gps-map')
+        ->assertSeeHtml('data-lat="21.0285"')
+        ->assertDontSeeHtml('openstreetmap.org');
+
+    expect(File::get(resource_path('js/filament/gps-modal-map.ts')))->toContain('lyrs=m');
 });

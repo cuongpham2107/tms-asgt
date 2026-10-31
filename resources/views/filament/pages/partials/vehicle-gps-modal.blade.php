@@ -40,15 +40,14 @@
 
     @if ($vehicle->gps_lat && $vehicle->gps_lng)
         <div class="rounded-xl overflow-hidden ring-1 ring-gray-950/5 dark:ring-white/10 shadow-xs" style="height: 320px;">
-            <iframe 
-                width="100%" 
-                height="100%" 
-                frameborder="0" 
-                scrolling="no" 
-                marginheight="0" 
-                marginwidth="0" 
-                src="https://www.openstreetmap.org/export/embed.html?bbox={{ (float)$vehicle->gps_lng - 0.008 }}%2C{{ (float)$vehicle->gps_lat - 0.006 }}%2C{{ (float)$vehicle->gps_lng + 0.008 }}%2C{{ (float)$vehicle->gps_lat + 0.006 }}&amp;layer=mapnik&amp;marker={{ $vehicle->gps_lat }}%2C{{ $vehicle->gps_lng }}">
-            </iframe>
+            {{-- Bản đồ do resources/js/filament/gps-modal-map.ts vẽ khi modal mở --}}
+            <div
+                data-gps-map
+                data-lat="{{ (float) $vehicle->gps_lat }}"
+                data-lng="{{ (float) $vehicle->gps_lng }}"
+                class="h-full w-full"
+                wire:ignore
+            ></div>
         </div>
         <div class="flex items-center justify-between pt-1">
             <span class="text-xs text-gray-500 dark:text-gray-400">Dữ liệu định vị từ thiết bị giám sát hành trình</span>

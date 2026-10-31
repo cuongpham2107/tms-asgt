@@ -18,6 +18,8 @@
         </div>
     </div>
 
+    @vite('resources/js/filament/gps-modal-map.ts')
+
     @include('filament.pages.partials.dispatch-table-styles')
 
     {{-- Bảng Kiểm soát tình trạng xe do widget React vẽ; page giữ bộ lọc, modal và action --}}
