@@ -80,13 +80,14 @@ test('billing zone form creates a zone and moves locations into it', function ()
 
     Livewire::test(ListBillingZones::class)
         ->callAction('create', data: [
-            'code' => 'kcn  yên phong',
-            'name' => 'Kcn Yên Phong',
+            // Chỉ nhập tên, mã tự tạo
+            'name' => 'kcn  yên phong',
             'location_ids' => [$this->origin->id, $this->destination->id],
         ])
         ->assertHasNoActionErrors();
 
-    $zone = BillingZone::where('code', 'KCN YÊN PHONG')->firstOrFail();
+    $zone = BillingZone::where('name', 'KCN YÊN PHONG')->firstOrFail();
+    expect($zone->code)->toBe('KCN-YEN-PHONG');
 
     expect($this->origin->fresh()->billing_zone_id)->toBe($zone->id)
         ->and($this->destination->fresh()->billing_zone_id)->toBe($zone->id);

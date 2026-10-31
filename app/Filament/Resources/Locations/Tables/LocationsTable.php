@@ -25,7 +25,7 @@ class LocationsTable extends BaseTable
                     ->label('Mã')
                     ->searchable()
                     ->weight('bold'),
-                TextColumn::make('billingZone.code')
+                TextColumn::make('billingZone.name')
                     ->label('Khu vực tính cước')
                     ->placeholder('—')
                     ->searchable()

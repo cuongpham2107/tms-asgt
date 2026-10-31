@@ -73,7 +73,7 @@ class LocationForm
                 Select::make('billing_zone_id')
                     ->label('Khu vực tính cước')
                     ->prefixIcon(Heroicon::OutlinedSquares2x2)
-                    ->relationship('billingZone', 'code')
+                    ->relationship('billingZone', 'name')
                     ->searchable(['code', 'name'])
                     ->preload()
                     ->helperText('Các địa điểm cùng khu vực dùng chung đơn giá vận chuyển.'),

@@ -17,16 +17,17 @@ class BillingZonesTable extends BaseTable
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with('locations:id,billing_zone_id,code')
                 ->withCount(['locations', 'originRates', 'destinationRates']))
-            ->defaultSort('code')
+            ->defaultSort('name')
             ->columns([
-                TextColumn::make('code')
-                    ->label('Mã viết tắt')
+                TextColumn::make('name')
+                    ->label('Tên khu vực')
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
-                TextColumn::make('name')
-                    ->label('Tên khu vực')
-                    ->searchable(),
+                TextColumn::make('code')
+                    ->label('Mã viết tắt')
+                    ->searchable()
+                    ->color('gray'),
                 TextColumn::make('locations.code')
                     ->label('Địa điểm')
                     ->badge()

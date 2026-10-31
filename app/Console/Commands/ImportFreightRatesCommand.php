@@ -43,7 +43,7 @@ class ImportFreightRatesCommand extends Command
         if ($report['zones_without_locations'] !== []) {
             $this->warn('Các khu vực dưới đây đã có giá nhưng chưa địa điểm nào thuộc khu vực — thêm địa điểm vào khu vực thì đơn mới tra được giá:');
             $this->table(
-                ['Mã khu vực', 'Số dòng giá', 'Ví dụ'],
+                ['Khu vực', 'Số dòng giá', 'Ví dụ'],
                 collect($report['zones_without_locations'])
                     ->sortByDesc(fn (array $sources): int => count($sources))
                     ->map(fn (array $sources, string $zone): array => [$zone, count($sources), $sources[0]])

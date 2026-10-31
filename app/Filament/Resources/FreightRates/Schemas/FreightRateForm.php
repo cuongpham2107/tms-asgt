@@ -81,7 +81,7 @@ class FreightRateForm
     {
         return Select::make($name)
             ->label($label)
-            ->relationship($relationship, 'code')
+            ->relationship($relationship, 'name')
             ->searchable(['code', 'name'])
             ->preload()
             ->required()

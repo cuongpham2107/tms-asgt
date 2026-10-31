@@ -45,6 +45,7 @@ beforeEach(function () {
     $this->alsc = Location::create(['code' => 'ALSC', 'name' => 'Nhà ga ALSC', 'loc_type' => 'delivery', 'is_active' => true]);
     $this->alseWarehouse = Location::create(['code' => 'ALSE', 'name' => 'Kho ALSE', 'loc_type' => 'delivery', 'is_active' => true]);
     $this->akzo = Location::create(['code' => 'AKZO', 'name' => 'Nhà máy AkzoNobel', 'loc_type' => 'pickup', 'is_active' => true]);
+    $this->srTech = Location::create(['code' => 'SÔNG CÔNG', 'name' => 'CÔNG TY TNHH SR TECH', 'loc_type' => 'pickup', 'is_active' => true]);
     $this->enkei = Location::create(['code' => 'ENKEI', 'name' => 'Enkei', 'loc_type' => 'delivery', 'is_active' => true]);
 
     $this->file = makeFreightWorkbook([
@@ -54,6 +55,8 @@ beforeEach(function () {
             'C4' => 'ALSE', 'D4' => 'KCN VSIP BẮC NINH',
             'C5' => 'AKZO', 'D5' => 'KCN QUẾ VÕ 1',
             'C6' => 'ENKEI', 'D6' => 'KCN THĂNG LONG',
+            // Mã trong hệ thống ("SÔNG CÔNG") khác mã Excel ("SR TECH") → khớp theo tên công ty cột E
+            'C7' => 'SR TECH', 'D7' => 'KCN SÔNG CÔNG', 'E7' => 'CÔNG TY TNHH SR TECH', 'F7' => 'KCN Sông Công I, Bách Quang, Thái Nguyên',
         ],
         '3.1 Đơn giá 1 điểm trả' => [
             'J1' => 1.25, 'K1' => 1.5, 'L1' => 2.5, 'M1' => 3.5, 'N1' => 5, 'O1' => 7, 'P1' => 8, 'Q1' => 10, 'R1' => 14, 'S1' => '10 CÁNH DƠI',
@@ -102,12 +105,13 @@ test('imports freight rates and waiting fees from the price workbook', function 
         ->expectsOutputToContain('KCN YÊN BÌNH')
         ->assertSuccessful();
 
-    // Sheet 5: tạo khu vực theo cột D (tên cột J) và gán cho địa điểm theo mã cột C
-    $quangChau = BillingZone::where('code', 'KCN QUANG CHÂU')->firstOrFail();
-    $noiBai = BillingZone::where('code', 'NỘI BÀI')->firstOrFail();
-    expect($quangChau->name)->toBe('Kcn Quang Châu')
+    // Sheet 5: cột D là tên khu vực (mã tự tạo từ tên), gán cho địa điểm theo mã nhà máy cột C
+    $quangChau = BillingZone::where('name', 'KCN QUANG CHÂU')->firstOrFail();
+    $noiBai = BillingZone::where('name', 'NỘI BÀI')->firstOrFail();
+    expect($quangChau->code)->toBe('KCN-QUANG-CHAU')
         ->and($this->fukang->fresh()->billing_zone_id)->toBe($quangChau->id)
-        ->and($this->alsc->fresh()->billing_zone_id)->toBe($noiBai->id);
+        ->and($this->alsc->fresh()->billing_zone_id)->toBe($noiBai->id)
+        ->and($this->srTech->fresh()->billingZone->name)->toBe('KCN SÔNG CÔNG');
 
     $safoRates = FreightRate::where('customer_id', $this->safo->id)
         ->where('origin_zone_id', $quangChau->id)
@@ -123,16 +127,16 @@ test('imports freight rates and waiting fees from the price workbook', function 
     // Giá 2 điểm trả: tuyến điểm đi → điểm trả đầu, loại hình "2 điểm trả"
     $twoDrop = FreightRate::where('customer_id', $this->alse->id)->firstOrFail();
     expect($twoDrop->rate_type)->toBe('2 điểm trả')
-        ->and($twoDrop->destinationZone->code)->toBe('KCN VSIP BẮC NINH')
+        ->and($twoDrop->destinationZone->name)->toBe('KCN VSIP BẮC NINH')
         ->and($twoDrop->priceFor(8))->toBe(1_520_000.0);
 
     $vfcCold = FreightRate::where('customer_id', $this->vfc->id)->where('rate_type', 'Hàng lạnh')->firstOrFail();
-    expect($vfcCold->originZone->code)->toBe('KCN QUẾ VÕ 1')
-        ->and($vfcCold->destinationZone->code)->toBe('KCN THĂNG LONG')
+    expect($vfcCold->originZone->name)->toBe('KCN QUẾ VÕ 1')
+        ->and($vfcCold->destinationZone->name)->toBe('KCN THĂNG LONG')
         ->and($vfcCold->priceFor(1.25))->toBe(727_500.0);
 
     // Khu vực chỉ có trong bảng giá vẫn được tạo để gán địa điểm sau
-    expect(BillingZone::where('code', 'KCN YÊN BÌNH')->firstOrFail()->destinationRates()->exists())->toBeTrue();
+    expect(BillingZone::where('name', 'KCN YÊN BÌNH')->firstOrFail()->destinationRates()->exists())->toBeTrue();
 
     $vfcNormal = FreightRate::where('customer_id', $this->vfc->id)->where('rate_type', '')->firstOrFail();
     expect($vfcNormal->prices)->toEqual(['2' => 741_280.79, '7' => 1_563_851.46]);

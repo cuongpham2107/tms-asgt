@@ -21,10 +21,10 @@ class FreightRatesTable extends BaseTable
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
-                TextColumn::make('originZone.code')
+                TextColumn::make('originZone.name')
                     ->label('Khu vực đi')
                     ->searchable(['code', 'name']),
-                TextColumn::make('destinationZone.code')
+                TextColumn::make('destinationZone.name')
                     ->label('Khu vực đến')
                     ->searchable(['code', 'name']),
                 TextColumn::make('cargo_type')
@@ -75,12 +75,12 @@ class FreightRatesTable extends BaseTable
                         ->all()),
                 SelectFilter::make('origin_zone_id')
                     ->label('Khu vực đi')
-                    ->relationship('originZone', 'code')
+                    ->relationship('originZone', 'name')
                     ->searchable()
                     ->preload(),
                 SelectFilter::make('destination_zone_id')
                     ->label('Khu vực đến')
-                    ->relationship('destinationZone', 'code')
+                    ->relationship('destinationZone', 'name')
                     ->searchable()
                     ->preload(),
             ]);

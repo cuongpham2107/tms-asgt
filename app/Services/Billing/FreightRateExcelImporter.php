@@ -20,7 +20,8 @@ use ZipArchive;
 /**
  * Nhập bảng giá từ file "QUY TRÌNH THỰC HIỆN SỐ LIỆU.xlsx" (sheet 3.1, 3.2, 3.3, 3.4, 4 + tra cứu 5, 6.1, 6.2).
  *
- * - Tạo khu vực tính cước (billing_zones) từ sheet 5 cột D/J và cột "Điểm đi/đến viết tắt" của các bảng giá.
+ * - Tạo khu vực tính cước (billing_zones) theo tên: sheet 5 cột D và cột "Điểm đi/đến viết tắt" của các bảng giá;
+ *   mã khu vực tự tạo từ tên.
  * - Gán khu vực cho địa điểm: sheet 5 mã nhà máy cột C → locations.code, khu vực cột D.
  * - Đơn giá khoá theo khách hàng + khu vực đi + khu vực đến + loại hàng + loại hình + loại xe.
  * Chạy lại nhiều lần không nhân đôi: cùng mã khu vực / cùng khoá giá thì cập nhật.
@@ -55,10 +56,10 @@ class FreightRateExcelImporter
 
     private Spreadsheet $workbook;
 
-    /** @var array<string, string> mã khu vực → tên hiển thị */
+    /** @var array<string, true> tên các khu vực (chuẩn hoá) có trong file */
     private array $zoneNames = [];
 
-    /** @var array<int, string> id địa điểm → mã khu vực theo sheet 5 */
+    /** @var array<int, string> id địa điểm → tên khu vực theo sheet 5 */
     private array $zoneCodeByLocationId = [];
 
     /** @var array<string, int> mã KH (chuẩn hoá) → id */
@@ -93,20 +94,23 @@ class FreightRateExcelImporter
         $this->readVfcRates(self::SHEET_VFC_COLD_CODES, self::SHEET_VFC_COLD, normal: false);
         $this->readWaitingFees();
 
-        $existingZoneIds = BillingZone::query()->pluck('id', 'code')->all();
+        $existingZoneIds = BillingZone::query()->get(['id', 'name'])
+            ->mapWithKeys(fn (BillingZone $zone): array => [BillingZone::normalizeName($zone->name) => $zone->id])
+            ->all();
         $locationsToAssign = Location::query()->get(['id', 'billing_zone_id'])
             ->filter(fn (Location $location): bool => isset($this->zoneCodeByLocationId[$location->id])
                 && $location->billing_zone_id !== ($existingZoneIds[$this->zoneCodeByLocationId[$location->id]] ?? false));
-        $zonesWithLocations = Location::query()->whereNotNull('billing_zone_id')->with('billingZone:id,code')->get()
-            ->pluck('billingZone.code')
+        $zonesWithLocations = Location::query()->whereNotNull('billing_zone_id')->with('billingZone:id,name')->get()
+            ->pluck('billingZone.name')
             ->merge($this->zoneCodeByLocationId)
             ->flip();
 
         if (! $dryRun) {
-            DB::transaction(function () use ($locationsToAssign): void {
-                $zoneIds = [];
-                foreach ($this->zoneNames as $code => $name) {
-                    $zoneIds[$code] = BillingZone::firstOrCreate(['code' => $code], ['name' => $name])->id;
+            DB::transaction(function () use ($locationsToAssign, $existingZoneIds): void {
+                // Khu vực đã có giữ nguyên mã (có thể đã sửa tay); khu vực mới tự tạo mã từ tên.
+                $zoneIds = $existingZoneIds;
+                foreach (array_keys($this->zoneNames) as $name) {
+                    $zoneIds[$name] ??= BillingZone::create(['name' => $name])->id;
                 }
                 foreach ($locationsToAssign as $location) {
                     $location->update(['billing_zone_id' => $zoneIds[$this->zoneCodeByLocationId[$location->id]]]);
@@ -160,47 +164,54 @@ class FreightRateExcelImporter
     }
 
     /**
-     * Sheet 5: mỗi mã nhà máy (cột C) thuộc khu vực cột D (mã viết tắt), cột J là tên hiển thị.
+     * Sheet 5 nối địa điểm với khu vực: mã nhà máy (cột C) = locations.code, cột D "Địa điểm viết tắt" = tên khu vực.
+     * Mã trong hệ thống khác Excel (VD "SÔNG CÔNG" vs "SR TECH") thì khớp theo tên công ty (cột E), rồi theo địa chỉ
+     * (cột F) — chỉ khi tên / địa chỉ đó thuộc đúng một khu vực.
      */
     private function readLocationZones(string $path): void
     {
-        $zoneByLocationCode = [];
-        foreach ($this->locationSheetRows($path) as [$locationCode, $zoneCode, $zoneName]) {
-            $zone = $this->zone($zoneCode, $zoneName);
-            if ($this->normalize($locationCode) !== '' && $zone !== null) {
-                $zoneByLocationCode[$this->normalize($locationCode)] = $zone;
+        $zonesByKey = ['code' => [], 'name' => [], 'address' => []];
+        foreach ($this->locationSheetRows($path) as [$locationCode, $zoneName, $company, $address]) {
+            $zone = $this->zone($zoneName);
+            if ($zone === null) {
+                continue;
+            }
+            foreach (['code' => $locationCode, 'name' => $company, 'address' => $address] as $key => $value) {
+                if ($this->normalize($value) !== '') {
+                    $zonesByKey[$key][$this->normalize($value)][$zone] = true;
+                }
             }
         }
 
-        foreach (Location::query()->get(['id', 'code']) as $location) {
-            $zone = $zoneByLocationCode[$this->normalize($location->code)] ?? null;
-            if ($zone !== null) {
-                $this->zoneCodeByLocationId[$location->id] = $zone;
+        foreach (Location::query()->get(['id', 'code', 'name', 'address']) as $location) {
+            foreach (['code' => $location->code, 'name' => $location->name, 'address' => $location->address] as $key => $value) {
+                $zones = array_keys($zonesByKey[$key][$this->normalize($value)] ?? []);
+                if (count($zones) === 1) {
+                    $this->zoneCodeByLocationId[$location->id] = $zones[0];
+                    break;
+                }
             }
         }
     }
 
     /**
-     * Ghi nhận khu vực, trả về mã chuẩn hoá (null nếu ô trống).
+     * Ghi nhận khu vực theo tên, trả về tên chuẩn hoá (null nếu ô trống).
      */
-    private function zone(?string $code, ?string $name = null): ?string
+    private function zone(?string $name): ?string
     {
-        $code = BillingZone::normalizeCode($code);
-        if ($code === null) {
-            return null;
+        $name = BillingZone::normalizeName($name);
+        if ($name !== null) {
+            $this->zoneNames[$name] = true;
         }
 
-        $name = trim((string) preg_replace('/\s+/u', ' ', (string) $name));
-        $this->zoneNames[$code] ??= $name !== '' ? $name : mb_convert_case(mb_strtolower($code), MB_CASE_TITLE);
-
-        return $code;
+        return $name;
     }
 
     /**
-     * Đọc streaming sheet "5. Địa điểm" (cột C mã nhà máy, cột D mã khu vực, cột J tên khu vực).
+     * Đọc streaming sheet "5. Địa điểm" (cột C mã nhà máy, D tên khu vực, E tên công ty, F địa chỉ).
      * Sheet này có định dạng tới cột XFA (~70MB XML) nên không nạp bằng PhpSpreadsheet được — tốn vài GB RAM.
      *
-     * @return \Generator<int, array{0: string, 1: string, 2: string}>
+     * @return \Generator<int, array{0: string, 1: string, 2: string, 3: string}>
      */
     private function locationSheetRows(string $path): \Generator
     {
@@ -235,7 +246,7 @@ class FreightRateExcelImporter
                 continue;
             }
 
-            $values = ['C' => '', 'D' => '', 'J' => ''];
+            $values = ['C' => '', 'D' => '', 'E' => '', 'F' => ''];
             foreach (simplexml_load_string($reader->readOuterXml())->c as $cell) {
                 $column = preg_replace('/\d+/', '', (string) $cell['r']);
                 if (! array_key_exists($column, $values)) {
@@ -246,7 +257,7 @@ class FreightRateExcelImporter
                 $values[$column] = (string) $cell['t'] === 's' ? ($sharedStrings[(int) $raw] ?? '') : $raw;
             }
 
-            yield [$values['C'], $values['D'], $values['J']];
+            yield [$values['C'], $values['D'], $values['E'], $values['F']];
         }
 
         $reader->close();
@@ -387,11 +398,12 @@ class FreightRateExcelImporter
         $source ??= "{$sheet->getTitle()}!{$row}";
         $customerId = $this->customerId($customer, $source);
 
-        if ($customerId === null || BillingZone::normalizeCode($zones[0]) === null || BillingZone::normalizeCode($zones[1]) === null) {
+        [$origin, $destination] = [BillingZone::normalizeName($zones[0]), BillingZone::normalizeName($zones[1])];
+        if ($customerId === null || $origin === null || $destination === null) {
             return;
         }
 
-        [$origin, $destination] = [$this->zone($zones[0], $zones[0]), $this->zone($zones[1], $zones[1])];
+        [$origin, $destination] = [$this->zone($origin), $this->zone($destination)];
         $this->zoneRateSources[$origin][] = $source;
         $this->zoneRateSources[$destination][] = $source;
 

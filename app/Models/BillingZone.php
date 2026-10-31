@@ -7,9 +7,11 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 /**
  * Khu vực tính cước: nhóm các địa điểm dùng chung đơn giá (VD "KCN YÊN PHONG" gồm SEV, ALSB, SDV…).
+ * Tên lấy theo sheet 5 cột D, mã tự tạo từ tên (sửa được).
  */
 class BillingZone extends Model
 {
@@ -23,18 +25,47 @@ class BillingZone extends Model
     ];
 
     /**
-     * Mã viết tắt chuẩn hoá để so khớp: "Kcn  Yên Phong" → "KCN YÊN PHONG".
+     * Tên khu vực = cột "Địa điểm viết tắt (áp giá tính cước vc)" sheet 5, chuẩn hoá để so khớp:
+     * "Kcn  Yên Bình" → "KCN YÊN BÌNH".
      */
-    public static function normalizeCode(?string $value): ?string
+    public static function normalizeName(?string $value): ?string
     {
-        $code = trim((string) preg_replace('/\s+/u', ' ', (string) $value));
+        $name = trim((string) preg_replace('/\s+/u', ' ', (string) $value));
 
-        return $code === '' ? null : mb_strtoupper($code);
+        return $name === '' ? null : mb_strtoupper($name);
+    }
+
+    /**
+     * Mã tự tạo từ tên, không dấu: "KCN YÊN BÌNH" → "KCN-YEN-BINH"; trùng thì thêm hậu tố "-2", "-3"…
+     */
+    public static function uniqueCodeFor(string $name, ?int $ignoreId = null): string
+    {
+        $base = Str::upper(Str::slug($name)) ?: 'KV';
+        $code = $base;
+        for ($suffix = 2; self::query()->where('code', $code)->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))->exists(); $suffix++) {
+            $code = "{$base}-{$suffix}";
+        }
+
+        return $code;
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $zone): void {
+            if (blank($zone->code)) {
+                $zone->code = self::uniqueCodeFor($zone->name, $zone->id);
+            }
+        });
+    }
+
+    protected function name(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value): ?string => self::normalizeName($value));
     }
 
     protected function code(): Attribute
     {
-        return Attribute::make(set: fn (?string $value): ?string => self::normalizeCode($value));
+        return Attribute::make(set: fn (?string $value): ?string => blank($value) ? null : Str::upper(trim($value)));
     }
 
     public function locations(): HasMany

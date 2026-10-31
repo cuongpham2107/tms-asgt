@@ -17,18 +17,19 @@ class BillingZoneForm
         return $schema
             ->columns(2)
             ->components([
-                TextInput::make('code')
-                    ->label('Mã viết tắt')
-                    ->placeholder('VD: KCN YÊN PHONG')
-                    ->helperText('Dùng trong mã giá; tự viết hoa.')
-                    ->required()
-                    ->maxLength(100)
-                    ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule, ?string $state): Unique => $rule->where('code', BillingZone::normalizeCode($state))),
                 TextInput::make('name')
                     ->label('Tên khu vực')
-                    ->placeholder('VD: Kcn Yên Phong')
+                    ->placeholder('VD: KCN YÊN PHONG')
+                    ->helperText('Theo cột "Địa điểm viết tắt" sheet 5; tự viết hoa.')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule, ?string $state): Unique => $rule->where('name', BillingZone::normalizeName($state))),
+                TextInput::make('code')
+                    ->label('Mã viết tắt')
+                    ->placeholder('Để trống sẽ tự tạo từ tên, VD: KCN-YEN-PHONG')
+                    ->helperText('Dùng trong mã giá.')
+                    ->maxLength(100)
+                    ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule, ?string $state): Unique => $rule->where('code', mb_strtoupper(trim((string) $state)))),
                 // HasMany nên tự lưu: địa điểm chọn thì gán vào khu vực, bỏ chọn thì gỡ ra.
                 Select::make('location_ids')
                     ->label('Địa điểm thuộc khu vực')
