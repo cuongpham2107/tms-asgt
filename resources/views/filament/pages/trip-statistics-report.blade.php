@@ -12,6 +12,12 @@
 
     <div class="w-full space-y-3">
         @include('filament.pages.partials.dispatch-table-styles')
+        <style>
+            .metric-cell[x-data] { cursor: pointer; }
+            .metric-cell[x-data]:hover { box-shadow: inset 0 0 0 1px rgb(147 197 253); color: rgb(37 99 235); font-weight: 600; }
+            .metric-input { width: 5rem; padding: 0.125rem 0.375rem; text-align: right; font-size: 0.75rem; border-radius: 0.375rem; outline: 2px solid rgb(59 130 246); background: white; color: rgb(17 24 39); }
+            .dark .metric-input { background: rgb(31 41 55); color: rgb(243 244 246); }
+        </style>
 
         {{-- Thanh lọc: tìm kiếm, khách hàng, quản lý xe --}}
         <div class="flex flex-wrap items-center gap-2">

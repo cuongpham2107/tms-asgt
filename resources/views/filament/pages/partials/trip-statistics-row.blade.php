@@ -129,133 +129,30 @@
                                 {{ $isChild ? '' : ($row['km_empty'] > 0 ? number_format($row['km_empty'], 1) : '—') }}
                             </td>
 
-                            {{-- PCS (Click to edit) --}}
-                            <td
-                                wire:key="cell-pcs-{{ $row['order_id'] ?? ('trip-'.$row['trip_id']) }}"
-                                class="py-1 px-1.5 text-right border-r border-gray-100 dark:border-white/5 font-mono text-xs"
-                                @if ($row['order_id'])
-                                    x-data="inlineMetricEditor({{ $row['order_id'] }}, 'total_packages', '{{ $row['pcs'] ? (int) $row['pcs'] : '' }}')"
-                                @endif
-                            >
-                                @if ($row['order_id'])
-                                    <div
-                                        x-show="!editing"
+                            {{-- PCS / GW: bấm để sửa nhanh. Ô nhập chỉ dựng khi bấm (x-if) để HTML mỗi dòng gọn. --}}
+                            @foreach ([
+                                'total_packages' => ['key' => 'pcs', 'step' => '1', 'value' => $row['pcs'] ? (int) $row['pcs'] : '', 'display' => $row['pcs'] > 0 ? number_format($row['pcs']) : '—'],
+                                'total_weight' => ['key' => 'gw', 'step' => 'any', 'value' => $row['gw'] ? (float) $row['gw'] : '', 'display' => $row['gw'] > 0 ? (fmod((float) $row['gw'], 1) != 0 ? number_format($row['gw'], 2) : number_format($row['gw'])) : '—'],
+                            ] as $field => $metric)
+                                <td
+                                    wire:key="cell-{{ $metric['key'] }}-{{ $row['order_id'] ?? ('trip-'.$row['trip_id']) }}"
+                                    class="metric-cell py-1 px-1.5 text-right border-r border-gray-100 dark:border-white/5 font-mono text-xs"
+                                    @if ($row['order_id'])
+                                        x-data="inlineMetricEditor({{ $row['order_id'] }}, '{{ $field }}', '{{ $metric['value'] }}')"
                                         @click="startEdit()"
-                                        class="group/edit inline-flex items-center justify-end gap-1 w-full cursor-pointer px-1 rounded-md hover:bg-primary-50/80 dark:hover:bg-primary-950/40 hover:ring-1 hover:ring-primary-300 dark:hover:ring-primary-700 transition"
-                                        title="Nhấn để sửa nhanh số kiện (PCS)"
-                                    >
-                                        <span x-show="!saving" class="group-hover/edit:text-primary-600 dark:group-hover/edit:text-primary-400 group-hover/edit:font-semibold">
-                                            {{ $row['pcs'] > 0 ? number_format($row['pcs']) : '—' }}
-                                        </span>
-                                        <span x-show="saving" x-cloak class="inline-flex items-center text-primary-500">
-                                            <svg class="animate-spin h-3 w-3 text-primary-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                            </svg>
-                                        </span>
-                                        <x-heroicon-m-pencil-square class="w-3 h-3 text-gray-400 dark:text-gray-500 opacity-0 group-hover/edit:opacity-100 transition-opacity text-primary-500 shrink-0" />
-                                    </div>
-                                    <div x-show="editing" x-cloak @click.away="save()" class="flex items-center justify-end gap-1 w-full">
-                                        <input
-                                            x-ref="input"
-                                            type="number"
-                                            min="0"
-                                            step="1"
-                                            x-model="val"
-                                            @click.stop
-                                            @keydown.enter.prevent="save()"
-                                            @keydown.escape.prevent="cancel()"
-                                            class="w-16 min-w-[50px] text-right font-mono text-xs py-0.5 px-1.5 rounded-md ring-1 ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600"
-                                        />
-                                        <div class="flex items-center gap-0.5 shrink-0">
-                                            <button
-                                                type="button"
-                                                @mousedown.prevent
-                                                @click.stop="save()"
-                                                class="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10 transition"
-                                                title="Lưu (Enter)"
-                                            >
-                                                <x-heroicon-m-check class="w-3.5 h-3.5 stroke-[2.5]" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                @mousedown.prevent
-                                                @click.stop="cancel()"
-                                                class="p-1 rounded-md text-gray-400 hover:bg-gray-100 dark:text-gray-500 dark:hover:bg-white/5 transition"
-                                                title="Hủy (Esc)"
-                                            >
-                                                <x-heroicon-m-x-mark class="w-3.5 h-3.5 stroke-[2.5]" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                @else
-                                    <span class="px-1">{{ $row['pcs'] > 0 ? number_format($row['pcs']) : '—' }}</span>
-                                @endif
-                            </td>
-
-                            {{-- GW (Click to edit) --}}
-                            <td
-                                wire:key="cell-gw-{{ $row['order_id'] ?? ('trip-'.$row['trip_id']) }}"
-                                class="py-1 px-1.5 text-right border-r border-gray-100 dark:border-white/5 font-mono text-xs"
-                                @if ($row['order_id'])
-                                    x-data="inlineMetricEditor({{ $row['order_id'] }}, 'total_weight', '{{ $row['gw'] ? (float) $row['gw'] : '' }}')"
-                                @endif
-                            >
-                                @if ($row['order_id'])
-                                    <div
-                                        x-show="!editing"
-                                        @click="startEdit()"
-                                        class="group/edit inline-flex items-center justify-end gap-1 w-full cursor-pointer px-1 rounded-md hover:bg-primary-50/80 dark:hover:bg-primary-950/40 hover:ring-1 hover:ring-primary-300 dark:hover:ring-primary-700 transition"
-                                        title="Nhấn để sửa nhanh trọng lượng (GW)"
-                                    >
-                                        <span x-show="!saving" class="group-hover/edit:text-primary-600 dark:group-hover/edit:text-primary-400 group-hover/edit:font-semibold">
-                                            {{ $row['gw'] > 0 ? (fmod((float) $row['gw'], 1) != 0 ? number_format($row['gw'], 2) : number_format($row['gw'])) : '—' }}
-                                        </span>
-                                        <span x-show="saving" x-cloak class="inline-flex items-center text-primary-500">
-                                            <svg class="animate-spin h-3 w-3 text-primary-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                            </svg>
-                                        </span>
-                                        <x-heroicon-m-pencil-square class="w-3 h-3 text-gray-400 dark:text-gray-500 opacity-0 group-hover/edit:opacity-100 transition-opacity text-primary-500 shrink-0" />
-                                    </div>
-                                    <div x-show="editing" x-cloak @click.away="save()" class="flex items-center justify-end gap-1 w-full">
-                                        <input
-                                            x-ref="input"
-                                            type="number"
-                                            min="0"
-                                            step="any"
-                                            x-model="val"
-                                            @click.stop
-                                            @keydown.enter.prevent="save()"
-                                            @keydown.escape.prevent="cancel()"
-                                            class="w-20 min-w-[60px] text-right font-mono text-xs py-0.5 px-1.5 rounded-md ring-1 ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600"
-                                        />
-                                        <div class="flex items-center gap-0.5 shrink-0">
-                                            <button
-                                                type="button"
-                                                @mousedown.prevent
-                                                @click.stop="save()"
-                                                class="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10 transition"
-                                                title="Lưu (Enter)"
-                                            >
-                                                <x-heroicon-m-check class="w-3.5 h-3.5 stroke-[2.5]" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                @mousedown.prevent
-                                                @click.stop="cancel()"
-                                                class="p-1 rounded-md text-gray-400 hover:bg-gray-100 dark:text-gray-500 dark:hover:bg-white/5 transition"
-                                                title="Hủy (Esc)"
-                                            >
-                                                <x-heroicon-m-x-mark class="w-3.5 h-3.5 stroke-[2.5]" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                @else
-                                    <span class="px-1">{{ $row['gw'] > 0 ? number_format($row['gw'], 2) : '—' }}</span>
-                                @endif
-                            </td>
+                                        title="Nhấn để sửa nhanh (Enter lưu, Esc huỷ)"
+                                    @endif
+                                >
+                                    @if ($row['order_id'])
+                                        <span x-show="!editing" :class="saving && 'opacity-40'">{{ $metric['display'] }}</span>
+                                        <template x-if="editing">
+                                            <input x-ref="input" x-init="$el.focus(); $el.select()" type="number" min="0" step="{{ $metric['step'] }}" x-model="val" @click.stop @keydown.enter.prevent="save()" @keydown.escape.prevent="cancel()" @blur="save()" class="metric-input">
+                                        </template>
+                                    @else
+                                        <span class="px-1">{{ $metric['display'] }}</span>
+                                    @endif
+                                </td>
+                            @endforeach
                             <td class="py-2 px-3 text-center border-r border-gray-100 dark:border-white/5">
                                 <span class="font-mono text-[11px] text-gray-600 dark:text-gray-400">{{ $row['cargo_type'] ?: '—' }}</span>
                             </td>
