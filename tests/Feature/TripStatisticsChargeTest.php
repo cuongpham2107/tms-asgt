@@ -132,7 +132,9 @@ test('edit charge action saves manual fields, other fees and totals', function (
 test('edit charge modal shows trip milestones and price breakdown', function () {
     ($this->page)()
         ->mountAction('editCharge', arguments: ['orderId' => $this->order->id])
-        ->assertMountedActionModalSee(['Mốc thời gian', 'Đóng hàng', 'Hạ hàng', '20C04368', 'Hàng thường (GCR)', '1.300.000 đ', 'Thanh toán']);
+        ->assertMountedActionModalSee(['Mốc thời gian', 'Đóng hàng', 'Hạ hàng', '20C04368', 'Hàng thường (GCR)', '1.300.000 đ', 'Thanh toán'])
+        // Diễn giải đơn giá gốc và phí giờ chờ
+        ->assertMountedActionModalSee(['KCN QUANG CHÂU → NỘI BÀI · 5T: 1.300.000 đ', 'chưa có phí giờ chờ cho khách SAFO']);
 });
 
 test('price breakdown updates while editing the form', function () {

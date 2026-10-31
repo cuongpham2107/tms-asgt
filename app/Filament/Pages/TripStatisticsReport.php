@@ -1231,6 +1231,16 @@ class TripStatisticsReport extends Page
             ? []
             : (app(TripExcelExportService::class)->getTripSummaryRowsFromOrders(Order::query()->whereKey($orderId))->firstWhere('order_id', $orderId) ?? []);
 
+        // Diễn giải nguồn gốc đơn giá (theo giá trị đang sửa trên form) và phí giờ chờ tính tự động.
+        $calculator = app(OrderChargeCalculator::class);
+        $priceNote = fn (Get $get): ?string => $charge === null || $order === null ? null : $calculator->explainPrice($order, (clone $charge)->fill([
+            'rate_type' => (string) $get('rate_type'),
+            'chargeable_tonnage' => is_numeric($get('chargeable_tonnage')) ? $get('chargeable_tonnage') : null,
+            'is_return_trip' => (bool) $get('is_return_trip'),
+            'return_trip_percent' => (float) $get('return_trip_percent'),
+        ]), filled($get('freight_rate_id')) ? (int) $get('freight_rate_id') : null);
+        $waitingNote = $charge === null || $order === null ? null : $calculator->explainWaiting($order, $charge);
+
         $cargoType = $order?->cargo_type ?? CargoType::tryFrom((string) $charge?->cargo_type);
         $time = fn (mixed $value): string => $value ? Carbon::parse($value)->format('H:i d/m/Y') : '—';
         $duration = fn (?int $minutes): string => $minutes === null ? '—' : $this->formatDuration($minutes);
@@ -1296,11 +1306,12 @@ class TripStatisticsReport extends Page
                         ->badge()
                         ->color(fn (Get $get): string => $get('price_code') ? 'gray' : 'warning')
                         ->copyable(fn (Get $get): bool => (bool) $get('price_code')),
-                    $entry('summary_base_price', 'Đơn giá gốc', Heroicon::OutlinedBanknotes, fn (Get $get): string => $money($number($get('base_price')))),
+                    $entry('summary_base_price', 'Đơn giá gốc', Heroicon::OutlinedBanknotes, fn (Get $get): string => $money($number($get('base_price'))))
+                        ->helperText($priceNote),
                     $entry('summary_adjusted_price', 'Sau dầu', Heroicon::OutlinedBeaker, fn (Get $get): string => $money($totals($get)['adjusted_price']))
                         ->helperText(fn (Get $get): string => 'Tăng/giảm dầu '.$percent($get('fuel_adjustment_percent')).', làm tròn nghìn'),
                     $entry('summary_waiting_fee', 'Giờ chờ', Heroicon::OutlinedClock, fn (Get $get): string => $money((float) $number($get('waiting_fee'))))
-                        ->helperText(fn (Get $get): string => 'Chờ '.((int) $get('waiting_minutes')).' phút (trước khi trừ miễn phí)'),
+                        ->helperText($waitingNote),
                     $entry('summary_other_fees', 'Phí khác', Heroicon::OutlinedReceiptPercent, fn (Get $get): string => $money($totals($get)['other_fees_total'])),
                     $entry('summary_subtotal', 'Tổng', Heroicon::OutlinedRectangleStack, fn (Get $get): string => $money($totals($get)['subtotal']))
                         ->weight(FontWeight::SemiBold),

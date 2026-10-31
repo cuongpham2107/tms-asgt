@@ -51,7 +51,8 @@ class OrderChargeCalculator
 
         $this->applyFreightRate($order, $charge, $chargeDate);
 
-        [$charge->waiting_minutes, $charge->waiting_fee] = $this->waiting($order, $charge, $chargeDate);
+        $waiting = $this->waiting($order, $charge, $chargeDate);
+        [$charge->waiting_minutes, $charge->waiting_fee] = [$waiting['minutes'], $waiting['fee']];
 
         $charge->recalculateTotals()->save();
 
@@ -143,7 +144,7 @@ class OrderChargeCalculator
      * Lấy một dòng phí giờ chờ theo khách hàng + loại hình tính phụ phí, ưu tiên kiểu chờ thường.
      * ponytail: chưa tách giá nổ máy / không nổ máy theo chặng — làm khi có quy tắc chốt.
      *
-     * @return array{0: int, 1: float} [tổng phút chờ, phí giờ chờ]
+     * @return array{minutes: int, fee: float, loading: int, unloading: int, rate: ?WaitingFeeRate, tier: ?array{tonnage: mixed, fee: mixed, free_minutes: mixed}, billable: int}
      */
     private function waiting(Order $order, OrderCharge $charge, CarbonInterface $date): array
     {
@@ -160,25 +161,72 @@ class OrderChargeCalculator
             ->first(fn (WaitingFeeRate $rate): bool => $rate->tierFor($charge->chargeable_tonnage) !== null);
         $tier = $rate?->tierFor($charge->chargeable_tonnage);
 
-        if ($order->trip_id === null) {
-            return [0, 0.0];
-        }
-
-        $row = $this->tripSummary
+        $row = $order->trip_id === null ? [] : ($this->tripSummary
             ->getTripSummaryRowsFromOrders(Order::query()->whereKey($order->id))
-            ->firstWhere('order_id', $order->id);
+            ->firstWhere('order_id', $order->id) ?? []);
 
         $loadingMinutes = (int) ($row['time_loading'] ?? 0);
         $unloadingMinutes = (int) ($row['time_unloading'] ?? 0);
-        $waitingMinutes = $loadingMinutes + $unloadingMinutes;
-
-        if ($rate === null) {
-            return [$waitingMinutes, 0.0];
-        }
-
-        $freeMinutes = (int) $tier['free_minutes'];
+        $freeMinutes = (int) ($tier['free_minutes'] ?? 0);
         $billableMinutes = max(0, $loadingMinutes - $freeMinutes) + max(0, $unloadingMinutes - $freeMinutes);
 
-        return [$waitingMinutes, (float) self::waitingFee($billableMinutes, (float) $tier['fee'], $rate->fee_block_minutes, $rate->grace_minutes)];
+        return [
+            'minutes' => $loadingMinutes + $unloadingMinutes,
+            'fee' => $rate === null ? 0.0 : (float) self::waitingFee($billableMinutes, (float) $tier['fee'], $rate->fee_block_minutes, $rate->grace_minutes),
+            'loading' => $loadingMinutes,
+            'unloading' => $unloadingMinutes,
+            'rate' => $rate,
+            'tier' => $tier,
+            'billable' => $billableMinutes,
+        ];
+    }
+
+    /**
+     * Diễn giải phí giờ chờ tính tự động (hiện trong modal cước).
+     */
+    public function explainWaiting(Order $order, OrderCharge $charge): string
+    {
+        $waiting = $this->waiting($order, $charge, $order->planned_loading_at ?? $order->created_at ?? now());
+        $legs = "Đóng hàng {$waiting['loading']}' + hạ hàng {$waiting['unloading']}'";
+
+        if ($waiting['rate'] === null) {
+            return $legs.' · chưa có phí giờ chờ cho khách '.($charge->customer?->code ?? '—')
+                .', loại hình phụ phí "'.($charge->surcharge_type ?: 'Chuẩn').'", bậc '.FreightRate::tonnageKey($charge->chargeable_tonnage).'T';
+        }
+
+        $rate = $waiting['rate'];
+        $blocks = intdiv($waiting['billable'], max(1, $rate->fee_block_minutes))
+            + ($rate->grace_minutes < $waiting['billable'] % max(1, $rate->fee_block_minutes) ? 1 : 0);
+
+        return "{$legs} · miễn {$waiting['tier']['free_minutes']}'/chặng → tính {$waiting['billable']}'"
+            ." = {$blocks} × ".number_format((float) $waiting['tier']['fee'], 0, ',', '.')." đ (block {$rate->fee_block_minutes}', lẻ quá {$rate->grace_minutes}' tính thêm 1 block)";
+    }
+
+    /**
+     * Diễn giải đơn giá gốc theo các giá trị đang có trên form cước (hiện trong modal).
+     */
+    public function explainPrice(Order $order, OrderCharge $charge, ?int $freightRateId): string
+    {
+        $tonnage = FreightRate::tonnageKey($charge->chargeable_tonnage);
+        $rate = $freightRateId === null ? null : FreightRate::with(['originZone', 'destinationZone'])->find($freightRateId);
+
+        if ($rate !== null) {
+            return "{$rate->originZone?->name} → {$rate->destinationZone?->name} · {$tonnage}T: "
+                .number_format((float) $rate->priceFor($charge->chargeable_tonnage), 0, ',', '.').' đ'
+                .($charge->is_return_trip ? ' × '.(float) $charge->return_trip_percent.'% quay đầu' : '');
+        }
+
+        $order->loadMissing(['pickupLocation.billingZone', 'deliveryPoints.location.billingZone']);
+        $pickup = $order->pickupLocation;
+        $delivery = $order->deliveryPoints->sortBy('sequence')->first()?->location;
+
+        return match (true) {
+            $pickup?->billingZone === null => 'Điểm lấy hàng '.($pickup?->code ?? '—').' chưa thuộc khu vực tính cước',
+            $delivery?->billingZone === null => 'Điểm trả '.($delivery?->code ?? '—').' chưa thuộc khu vực tính cước',
+            $tonnage === '' => 'Chưa có trọng tải tính cước',
+            default => 'Bảng giá chưa có tuyến '.$pickup->billingZone->name.' → '.$delivery->billingZone->name
+                .' (khách '.($charge->customer?->code ?? '—').', '.($charge->cargo_type?->value ?? '—')
+                .', loại hình "'.($charge->rate_type ?: 'Chuẩn').'") bậc '.$tonnage.'T',
+        };
     }
 }

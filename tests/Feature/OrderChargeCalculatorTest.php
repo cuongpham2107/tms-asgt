@@ -139,8 +139,11 @@ test('location without a billing zone gets no price', function () {
     $this->pickup->update(['billing_zone_id' => null]);
     $order = ($this->makeOrder)();
     $order->update(['status' => OrderStatus::Completed]);
+    $charge = OrderCharge::where('order_id', $order->id)->firstOrFail();
 
-    expect(OrderCharge::where('order_id', $order->id)->firstOrFail()->base_price)->toBeNull();
+    expect($charge->base_price)->toBeNull()
+        ->and(app(OrderChargeCalculator::class)->explainPrice($order->fresh(), $charge, null))
+        ->toBe('Điểm lấy hàng FUKANG chưa thuộc khu vực tính cước');
 });
 
 test('hhhk orders are not charged', function () {
@@ -250,7 +253,9 @@ test('waiting minutes come from loading and unloading checkpoints', function (ar
     // Thời gian chờ = đóng hàng 150' + hạ hàng 30' = 180'.
     // Tính phí: đóng 150' − 60' miễn = 90'; hạ 30' < 60' → 0' ⇒ 90' = 1 giờ + 30' (> 19') ⇒ 2 giờ
     expect($charge->waiting_minutes)->toBe(180)
-        ->and((float) $charge->waiting_fee)->toBe(100_000.0);
+        ->and((float) $charge->waiting_fee)->toBe(100_000.0)
+        ->and(app(OrderChargeCalculator::class)->explainWaiting($order, $charge))
+        ->toContain("Đóng hàng 150' + hạ hàng 30' · miễn 60'/chặng → tính 90' = 2 × 50.000 đ");
 })->with([
     'dòng phí thường' => [[]],
     // Chưa phân biệt kiểu chờ: khách chỉ có dòng "nổ máy" vẫn dùng dòng đó
