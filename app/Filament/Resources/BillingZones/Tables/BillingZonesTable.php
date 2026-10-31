@@ -33,6 +33,7 @@ class BillingZonesTable extends BaseTable
                     ->badge()
                     ->color('gray')
                     ->wrap()
+                    ->searchable()
                     ->placeholder('Chưa có địa điểm')
                     ->width('28rem'),
                 TextColumn::make('locations_count')
