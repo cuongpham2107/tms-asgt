@@ -282,7 +282,7 @@ class TripsTable extends BaseTable
                                             @endif
                                         </div>
                                         <div class="text-[11px] text-gray-500 dark:text-gray-400 italic">
-                                            * Bản đồ tự động định vị theo xe và lộ trình chuyến
+                                            * Bản đồ mở tại vị trí xe — lăn chuột để xem chi tiết hoặc rộng hơn
                                         </div>
                                     </div>
                                 </div>
@@ -887,17 +887,19 @@ class TripsTable extends BaseTable
             'mapHeight' => 450,
             'defaultCoord' => [$centerLat, $centerLng],
             'autoCenter' => false, // Không lấy vị trí trình duyệt của người điều hành
-            'fitBounds' => $hasFitBounds,
-            'defaultZoom' => $hasFitBounds ? 12 : 15,
+            // Có GPS xe thì mở đúng chỗ xe đang đứng, ở mức khu vực (~30 km) và để
+            // người dùng tự lăn chuột. fitBounds sẽ fit sát các mốc rất gần nhau của
+            // một chuyến và khoá luôn zoom (plugin lấy zoomConfig.max làm maxZoom).
+            'fitBounds' => $hasFitBounds && ! $hasVehicleGps,
+            'defaultZoom' => $hasVehicleGps ? 11 : ($hasFitBounds ? 10 : 13),
             'geoJsonColors' => [],
             'geoJsonData' => [],
             'infoText' => '',
             'tileLayersUrl' => MapTile::config(),
             'layerGroupsData' => [],
             'layersData' => $layers,
-            // Plugin truyền max vào fitBounds; để 18 thì chuyến có ít mốc gần nhau
-            // sẽ zoom sát mặt đường, không thấy xe đang ở đâu.
-            'zoomConfig' => ['max' => 13, 'min' => 0],
+            // max cũng là maxZoom của bản đồ: phải để cao thì lăn chuột mới zoom vào được.
+            'zoomConfig' => ['max' => 19, 'min' => 3],
             'mapConfig' => [],
             'mapControls' => [],
             'geoSearchConfig' => [],

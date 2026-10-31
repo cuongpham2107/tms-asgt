@@ -134,8 +134,17 @@ test('buildGpsMapConfig builds route points, OSRM polylines, and sets fitBounds 
     $config = $method->invoke(null, $trip);
 
     expect($config['autoCenter'])->toBeFalse()
-        ->and($config['fitBounds'])->toBeTrue()
-        ->and($config['zoomConfig']['max'])->toBe(13); // chặn fitBounds zoom sát mặt đường
+        // Có GPS xe thì mở tại xe, không fit (fit + maxZoom thấp sẽ khoá luôn lăn chuột)
+        ->and($config['fitBounds'])->toBeFalse()
+        ->and($config['defaultZoom'])->toBe(11)
+        ->and($config['zoomConfig'])->toBe(['max' => 19, 'min' => 3]);
+
+    // Không có GPS xe thì mới fit theo lộ trình để vẫn thấy các mốc
+    $vehicle->update(['gps_lat' => null, 'gps_lng' => null]);
+    $noGpsConfig = $method->invoke(null, Trip::find($trip->id));
+
+    expect($noGpsConfig['fitBounds'])->toBeTrue()
+        ->and($noGpsConfig['defaultZoom'])->toBe(10);
 
     $layers = collect($config['layersData']);
 
