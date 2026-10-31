@@ -6,9 +6,11 @@ use App\Enums\CargoType;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
+use App\Models\BillingZone;
 use App\Models\Customer;
 use App\Models\FeeType;
 use App\Models\FreightRate;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderCharge;
 use App\Models\Trip;
@@ -975,6 +977,76 @@ class TripStatisticsReport extends Page
      *
      * @return array<int, mixed>
      */
+    /**
+     * Tuyến chưa có đơn giá → thêm giá vào bảng giá ngay từ modal cước (khách hàng + khu vực đi/đến + loại hàng
+     * + loại hình + trọng tải), địa điểm chưa thuộc khu vực nào thì gán luôn, rồi tra lại đơn giá trên form.
+     */
+    private function addFreightRateAction(?OrderCharge $charge, Closure $refreshPrice): Action
+    {
+        $order = $charge?->order?->loadMissing(['pickupLocation', 'deliveryPoints.location']);
+        $pickup = $order?->pickupLocation;
+        $delivery = $order?->deliveryPoints->sortBy('sequence')->first()?->location;
+        $zoneSelect = fn (string $name, string $label, ?Location $location): Select => Select::make($name)
+            ->label($label)
+            ->options(fn (): array => BillingZone::query()->orderBy('name')->pluck('name', 'id')->all())
+            ->searchable()
+            ->required()
+            ->default($location?->billing_zone_id)
+            ->helperText($location === null ? null : ($location->billing_zone_id === null
+                ? "Địa điểm {$location->code} chưa thuộc khu vực nào — chọn để gán luôn."
+                : "Địa điểm {$location->code}"));
+
+        return Action::make('addFreightRate')
+            ->icon(Heroicon::OutlinedPlusCircle)
+            ->tooltip('Thêm đơn giá vào bảng giá')
+            ->visible(fn (Get $get): bool => $charge !== null && ! $charge->isLocked() && blank($get('freight_rate_id')))
+            ->modalHeading('Thêm đơn giá vận chuyển')
+            ->modalDescription(fn (): string => 'Khách hàng '.($charge?->customer?->code ?? '—').' · loại hàng '.($charge?->cargo_type?->value ?? '—').' · áp cho mọi loại xe')
+            ->modalSubmitActionLabel('Lưu đơn giá')
+            ->modalWidth(Width::Large)
+            ->fillForm(fn (Get $get): array => [
+                'rate_type' => $get('rate_type'),
+                'tonnage' => $get('chargeable_tonnage'),
+            ])
+            ->schema([
+                Grid::make(2)->schema([
+                    $zoneSelect('origin_zone_id', 'Khu vực điểm đi', $pickup),
+                    $zoneSelect('destination_zone_id', 'Khu vực điểm đến', $delivery),
+                    TextInput::make('rate_type')->label('Loại hình tính cước')->placeholder('Chuẩn')
+                        ->datalist(fn (): array => FreightRate::rateTypesFor($charge?->customer_id)),
+                    TextInput::make('tonnage')->label('Trọng tải tính cước')->numeric()->minValue(0)->suffix('tấn')->required(),
+                    self::moneyInput('price')->label('Đơn giá')->required()->columnSpanFull(),
+                ]),
+            ])
+            ->action(function (array $data, Get $get, Set $set) use ($charge, $pickup, $delivery, $refreshPrice): void {
+                foreach ([[$pickup, $data['origin_zone_id']], [$delivery, $data['destination_zone_id']]] as [$location, $zoneId]) {
+                    if ($location !== null && $location->billing_zone_id === null) {
+                        $location->update(['billing_zone_id' => $zoneId]);
+                    }
+                }
+
+                $rate = FreightRate::query()->firstOrNew([
+                    'customer_id' => $charge->customer_id,
+                    'origin_zone_id' => $data['origin_zone_id'],
+                    'destination_zone_id' => $data['destination_zone_id'],
+                    'cargo_type' => $charge->cargo_type ?? CargoType::Gcr,
+                    'rate_type' => trim((string) $data['rate_type']),
+                    'vehicle_type' => null,
+                    'effective_from' => null,
+                    'effective_to' => null,
+                ]);
+                $rate->prices = array_replace($rate->prices ?? [], [FreightRate::tonnageKey($data['tonnage']) => $data['price']]);
+                $rate->notes ??= 'Thêm từ modal cước đơn '.($charge->order?->order_code ?? '');
+                $rate->save();
+
+                $set('rate_type', trim((string) $data['rate_type']));
+                $set('chargeable_tonnage', $data['tonnage']);
+                $refreshPrice($get, $set);
+
+                Notification::make()->title('Đã thêm đơn giá vào bảng giá')->success()->send();
+            });
+    }
+
     private function chargeFormSchema(?OrderCharge $charge, int $orderId): array
     {
         $rateTypes = fn (): array => FreightRate::rateTypesFor($charge?->customer_id);
@@ -1050,7 +1122,8 @@ class TripStatisticsReport extends Page
                             ->columns(3)
                             ->compact()
                             ->schema([
-                                $money('base_price', 'Đơn giá vận chuyển gốc')->live(debounce: 500),
+                                $money('base_price', 'Đơn giá vận chuyển gốc')->live(debounce: 500)
+                                    ->suffixAction($this->addFreightRateAction($charge, $refreshPrice)),
                                 TextInput::make('fuel_adjustment_percent')->label('Tỷ lệ tăng/giảm dầu')->numeric()->suffix('%')->live(debounce: 500),
                                 TextInput::make('vat_percent')->label('VAT')->numeric()->minValue(0)->suffix('%')->live(debounce: 500),
                                 TextInput::make('waiting_minutes')->label('Thời gian chờ')->hint('Đóng hàng + hạ hàng')->numeric()->minValue(0)->suffix('phút'),

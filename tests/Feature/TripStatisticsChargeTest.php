@@ -19,8 +19,10 @@ use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Billing\OrderChargeCalculator;
 use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
+use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
@@ -261,4 +263,35 @@ test('each split delivery note becomes its own row in the external cargo sheet',
         ->and((float) $cell(4, 'Trọng lượng tính tiền'))->toBe(3_000.0)
         ->and((float) $cell(3, 'Thanh toán'))->toBe(1_300_000.0)
         ->and($cell(4, 'Thanh toán'))->toBeEmpty();
+});
+
+test('missing price can be added to the price table from the charge modal', function () {
+    $this->rate->delete();
+    $noiBai = BillingZone::where('code', 'NỘI BÀI')->firstOrFail();
+    $delivery = $this->order->deliveryPoints()->first()->location;
+    $delivery->update(['billing_zone_id' => null]);
+    app(OrderChargeCalculator::class)->calculate($this->order->fresh());
+
+    ($this->page)()
+        ->callAction([
+            TestAction::make('editCharge')->arguments(['orderId' => $this->order->id]),
+            TestAction::make('addFreightRate')->schemaComponent('base_price'),
+        ], data: [
+            'origin_zone_id' => $this->rate->origin_zone_id,
+            'destination_zone_id' => $noiBai->id,
+            'tonnage' => 5,
+            'price' => '1,500,000',
+        ])
+        ->assertHasNoActionErrors()
+        ->assertMountedActionModalSee('1.500.000 đ')
+        ->callMountedAction()
+        ->assertHasNoActionErrors();
+
+    $rate = FreightRate::where('destination_zone_id', $noiBai->id)->firstOrFail();
+
+    // Địa điểm chưa có khu vực được gán luôn, đơn giá mới áp ngay vào dòng cước
+    expect($rate->priceFor(5))->toBe(1_500_000.0)
+        ->and($delivery->fresh()->billing_zone_id)->toBe($noiBai->id)
+        ->and((float) $this->charge->fresh()->base_price)->toBe(1_500_000.0)
+        ->and($this->charge->fresh()->freight_rate_id)->toBe($rate->id);
 });
