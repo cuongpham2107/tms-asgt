@@ -39,7 +39,7 @@ test('wrong location status filter lists only trips with an out-of-range checkpo
 
     $this->actingAs($admin);
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->set('activeStatusFilter', 'geo_out_of_range')

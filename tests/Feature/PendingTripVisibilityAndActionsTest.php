@@ -94,7 +94,7 @@ test('pending trips with sent orders are visible in ListTrips and can be reassig
     expect($trip->getStatusLabel())->toBe('Chờ chạy');
     expect($trip->getStatusColor())->toBe('gray');
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->assertCanSeeTableRecords([$trip])
         ->call('filterStatus', 'pending')
         ->assertCanSeeTableRecords([$trip]);
@@ -106,7 +106,7 @@ test('pending trips with sent orders are visible in ListTrips and can be reassig
 
     // 3. Điều hành có thể gán lại phương tiện & tài xế trên ListTrips
     $this->actingAs($this->admin);
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->mountTableAction('reassign_transport', $trip)
         ->setTableActionData([
             'vehicle_id' => $this->vehicleB->id,

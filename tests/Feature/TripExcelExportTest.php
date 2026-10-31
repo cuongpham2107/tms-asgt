@@ -313,13 +313,13 @@ test('exportFromOrders handles orders query directly', function () {
 });
 
 test('livewire list trips can call exportExcel', function () {
-    Livewire\Livewire::test(ListTrips::class)
+    Livewire\Livewire::test(ListTrips::class)->loadTable()
         ->call('exportExcel')
         ->assertFileDownloaded();
 });
 
 test('livewire list trips can call exportExcel action with modal filter data', function () {
-    Livewire\Livewire::test(ListTrips::class)
+    Livewire\Livewire::test(ListTrips::class)->loadTable()
         ->callAction('exportExcel', [
             'status' => 'all',
             'order_type' => 'all',
@@ -330,13 +330,13 @@ test('livewire list trips can call exportExcel action with modal filter data', f
 });
 
 test('livewire list orders can call exportExcel', function () {
-    Livewire\Livewire::test(ListOrders::class)
+    Livewire\Livewire::test(ListOrders::class)->loadTable()
         ->call('exportExcel')
         ->assertFileDownloaded();
 });
 
 test('livewire list orders can call exportExcel action with modal filter data', function () {
-    Livewire\Livewire::test(ListOrders::class)
+    Livewire\Livewire::test(ListOrders::class)->loadTable()
         ->callAction('exportExcel', [
             'status' => 'all',
             'order_type' => 'all',

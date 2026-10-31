@@ -133,7 +133,7 @@ test('closing pending reports after an edit resolves them and unpauses the trip'
 
 function editTripTable()
 {
-    return Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all']);
+    return Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])->loadTable();
 }
 
 test('editing a trip without km changes does not recalculate', function () {

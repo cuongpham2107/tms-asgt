@@ -95,7 +95,7 @@ test('can send trip directly and update orders to sent', function () {
 });
 
 test('send_trip action does not exist on TripsTable', function () {
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->assertTableActionDoesNotExist('send_trip');
 });

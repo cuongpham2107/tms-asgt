@@ -783,7 +783,7 @@ test('ResolveKmReportAction works on ListTrips table even when UI filter tabs mi
     // When admin is filtered on NBA tab (mismatching ASG area of the order)
     $this->actingAs($admin);
 
-    Livewire::test(ListTrips::class, ['activePlaceFilter' => 'NBA', 'orderType' => 'all', 'activeStatusFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['activePlaceFilter' => 'NBA', 'orderType' => 'all', 'activeStatusFilter' => 'all'])->loadTable()
         ->callTableAction('resolve_km_report', $this->trip, data: [
             'decision' => 'ok',
             'corrected_km' => 108080,
@@ -821,7 +821,7 @@ test('resolve_km_report_column action on trip table resolves report directly', f
 
     $this->actingAs($admin);
 
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])->loadTable()
         ->callTableAction('resolve_km_report_column', $this->trip, data: [
             'decision' => 'ok',
             'corrected_km' => 108090,
@@ -879,7 +879,7 @@ function kmReportCheckpointRows(TripCheckpoint ...$checkpoints): array
 test('báo km nhỏ hơn mốc trước mà chỉ sửa mốc được báo thì bị chặn', function () {
     [$started, $pickup, $report] = kmReportBelowPreviousCheckpoint();
 
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])->loadTable()
         ->mountTableAction('resolve_km_report_column', $this->trip)
         ->fillForm(['decision' => 'ok', 'corrected_km' => 107990])
         ->callMountedTableAction()
@@ -896,7 +896,7 @@ test('báo km nhỏ hơn mốc trước thì sửa được km các mốc trư�
     $rows[0]['km_reading'] = 107990;
     $rows[1]['km_reading'] = 107990;
 
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])->loadTable()
         ->mountTableAction('resolve_km_report_column', $this->trip)
         ->fillForm(['decision' => 'ok', 'corrected_km' => 107990])
         ->fillForm(['checkpoints' => $rows])
@@ -914,7 +914,7 @@ test('báo km nhỏ hơn mốc trước thì sửa được km các mốc trư�
 test('km báo nằm trong giới hạn thì không hiện danh sách mốc', function () {
     [$started, $pickup, $report] = kmReportBelowPreviousCheckpoint();
 
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])->loadTable()
         ->mountTableAction('resolve_km_report_column', $this->trip)
         ->fillForm(['decision' => 'ok', 'corrected_km' => 108010])
         ->assertFormFieldHidden('checkpoints')
@@ -963,7 +963,7 @@ function kmReportScenario(array $checkpoints, int $reportedIndex, int $reportedK
 
 function resolveKmReportOnTable(): mixed
 {
-    return Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+    return Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])->loadTable()
         ->mountTableAction('resolve_km_report_column', test()->trip);
 }
 

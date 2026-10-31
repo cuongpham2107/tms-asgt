@@ -14,10 +14,51 @@ use BackedEnum;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class OrderResource extends BaseResource
 {
+    protected static bool $isGloballySearchable = true;
+
+    /**
+     * Tìm nhanh (⌘K / Ctrl+K).
+     *
+     * @return list<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['order_code', 'customer.code'];
+    }
+
+    public static function getGlobalSearchEloquentQuery(): Builder
+    {
+        return parent::getGlobalSearchEloquentQuery()->with(['customer']);
+    }
+
+    /**
+     * @param  Order  $record
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return [
+            'Khách hàng' => $record->customer?->code ?? '—',
+            'Trạng thái' => $record->status?->getLabel() ?? '—',
+        ];
+    }
+
+    /**
+     * Bảng sửa/xem bằng modal nên mở danh sách đã lọc sẵn theo bản ghi.
+     *
+     * @param  Order  $record
+     */
+    public static function getGlobalSearchResultUrl(Model $record): string
+    {
+        return static::getUrl('index', ['search' => $record->order_code]);
+    }
+
     protected static ?string $model = Order::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocument;

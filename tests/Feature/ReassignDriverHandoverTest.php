@@ -84,7 +84,7 @@ function reassignTestCheckpoint(object $test, CheckpointType $type, float $km, $
 
 function reassignTestCall(object $test, User $driver, ?Trip $trip = null): void
 {
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])->loadTable()
         ->callTableAction('reassign_driver', $trip ?? $test->trip, data: [
             'new_driver_id' => $driver->id,
             'reason' => DriverSwapReason::CargoNotUnloaded->value,

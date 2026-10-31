@@ -57,7 +57,7 @@ test('date range includes draft trips whose started_at is still null', function 
     $running = makeTrip('TRIP-RUNNING', '2026-10-10 09:00:00', '2026-10-10 07:00:00');
     $outside = makeTrip('TRIP-OUTSIDE', '2026-09-01 09:00:00', '2026-09-01 07:00:00');
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->set('activeStatusFilter', 'all')
@@ -72,7 +72,7 @@ test('date range works when only the from date is selected', function () {
     $running = makeTrip('TRIP-RUNNING', '2026-10-10 09:00:00', '2026-10-10 07:00:00');
     $outside = makeTrip('TRIP-OUTSIDE', '2026-09-01 09:00:00', '2026-09-01 07:00:00');
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->set('activeStatusFilter', 'all')
@@ -87,7 +87,7 @@ test('date range works when only the to date is selected', function () {
     $running = makeTrip('TRIP-RUNNING', '2026-10-10 09:00:00', '2026-10-10 07:00:00');
     $outside = makeTrip('TRIP-OUTSIDE', '2026-11-01 09:00:00', '2026-11-01 07:00:00');
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->set('activeStatusFilter', 'all')
@@ -101,7 +101,7 @@ test('status counts respect the date range and include draft trips', function ()
     $draft = makeTrip('TRIP-DRAFT', null, '2026-10-10 08:00:00', TripStatus::Pending);
     makeTrip('TRIP-OUTSIDE', '2026-09-01 09:00:00', '2026-09-01 07:00:00');
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->set('activeStatusFilter', 'all')
@@ -116,7 +116,7 @@ test('date bounds are inclusive of the whole end day', function () {
 
     $lateTrip = makeTrip('TRIP-LATE', '2026-10-31 23:30:00', '2026-10-31 07:00:00');
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->set('activeStatusFilter', 'all')

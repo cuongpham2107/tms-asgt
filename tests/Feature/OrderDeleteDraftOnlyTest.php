@@ -97,7 +97,7 @@ test('OrdersTable only allows selecting Draft orders', function () {
         'created_by' => $this->user->id,
     ]);
 
-    $component = Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all']);
+    $component = Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])->loadTable();
 
     $table = $component->instance()->getTable();
     expect($table->isRecordSelectable($draftOrder))->toBeTrue();
@@ -125,7 +125,7 @@ test('DeleteBulkAction only deletes Draft orders and leaves other orders untouch
         'created_by' => $this->user->id,
     ]);
 
-    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])->loadTable()
         ->callTableBulkAction('delete', [$draftOrder, $sentOrder]);
 
     expect(Order::find($draftOrder->id))->toBeNull();
@@ -153,7 +153,7 @@ test('row level DeleteAction is hidden on non-Draft orders and visible on Draft 
         'created_by' => $this->user->id,
     ]);
 
-    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])->loadTable()
         ->assertTableActionVisible('delete', $draftOrder)
         ->assertTableActionHidden('delete', $sentOrder);
 });

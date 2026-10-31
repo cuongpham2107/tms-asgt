@@ -153,7 +153,7 @@ test('view_photos action is present in trip table action group and renders modal
 
     $this->actingAs($admin);
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->assertTableActionExists('view_photos', record: $this->trip);

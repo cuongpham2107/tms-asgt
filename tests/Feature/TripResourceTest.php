@@ -64,7 +64,7 @@ test('trips list page renders successfully', function () {
         'start_km' => 100,
     ]);
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->assertStatus(200)
         ->assertHasNoErrors();
 });
@@ -307,7 +307,7 @@ test('trips list shows pending trip when no date filter applied', function () {
         'started_at' => null,
     ]);
 
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])->loadTable()
         ->assertStatus(200)
         ->assertHasNoErrors()
         ->assertSee('51P-123.45');
@@ -352,26 +352,26 @@ test('trips list hides completed and cancelled trips by default and only shows t
     ]);
 
     // Default view: shows pending, hides completed, delivered & cancelled
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])->loadTable()
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$pendingTrip])
         ->assertCanNotSeeTableRecords([$completedTrip, $deliveredTrip, $cancelledTrip]);
 
     // Filter by running: shows running/pending-running, does not show delivered
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])->loadTable()
         ->call('filterStatus', 'running')
         ->assertStatus(200)
         ->assertCanNotSeeTableRecords([$deliveredTrip, $completedTrip, $cancelledTrip]);
 
     // Filter by completed: shows completed & delivered, hides pending & cancelled
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])->loadTable()
         ->call('filterStatus', 'completed')
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$completedTrip, $deliveredTrip])
         ->assertCanNotSeeTableRecords([$pendingTrip, $cancelledTrip]);
 
     // Filter by cancelled: shows cancelled, hides pending, delivered & completed
-    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])->loadTable()
         ->call('filterStatus', 'cancelled')
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$cancelledTrip])
@@ -430,7 +430,7 @@ test('trips list filters by km_report status correctly', function () {
         'status' => TripKmReportStatus::Resolved,
     ]);
 
-    $component = Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all']);
+    $component = Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])->loadTable();
 
     expect($component->instance()->getTripStatusCount('km_report'))->toBe(1);
 
@@ -501,21 +501,21 @@ test('trips list filters by order area place correctly', function () {
     ]);
 
     // When filtering by NBA
-    Livewire::test(ListTrips::class, ['orderType' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])->loadTable()
         ->call('filterPlace', 'NBA')
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$tripNba])
         ->assertCanNotSeeTableRecords([$tripHni]);
 
     // When filtering by HNI
-    Livewire::test(ListTrips::class, ['orderType' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])->loadTable()
         ->call('filterPlace', 'HNI')
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$tripHni])
         ->assertCanNotSeeTableRecords([$tripNba]);
 
     // When filtering by all
-    Livewire::test(ListTrips::class, ['orderType' => 'all'])
+    Livewire::test(ListTrips::class, ['orderType' => 'all'])->loadTable()
         ->call('filterPlace', 'all')
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$tripNba, $tripHni]);
@@ -593,7 +593,7 @@ test('trip stat cards calculate correct metrics and filter by status properly', 
         'planned_loading_at' => now()->subHours(3),
     ]);
 
-    $component = Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all']);
+    $component = Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all'])->loadTable();
 
     /** @var ListTrips $instance */
     $instance = $component->instance();
@@ -631,7 +631,7 @@ test('trip stat cards calculate correct metrics and filter by status properly', 
 });
 
 test('trips list handles map click and layer events without throwing MethodNotFoundException', function () {
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->call('handleLayerClick', 'layer-123')
         ->call('handleMapClick', 10.8231, 106.6297)
         ->call('handleLayerUpdated', 'layer-123', ['lat' => 10.8231, 'lng' => 106.6297])
@@ -640,7 +640,7 @@ test('trips list handles map click and layer events without throwing MethodNotFo
 });
 
 test('trips table does not have manual recalculate_km action', function () {
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->assertTableActionDoesNotExist('recalculate_km');
 });
 
@@ -670,7 +670,7 @@ test('ListTrips resets filters and displays target trip when tableActionRecord i
         'activePlaceFilter' => 'all',
         'vehicleOwner' => 'all',
     ])
-        ->test(ListTrips::class)
+        ->test(ListTrips::class)->loadTable()
         ->assertSet('activeStatusFilter', 'all')
         ->assertSet('orderType', 'all')
         ->assertSet('activePlaceFilter', 'all')

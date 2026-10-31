@@ -86,7 +86,7 @@ function editTripTableForCompletion()
         'orderType' => 'all',
         'activePlaceFilter' => 'all',
         'activeStatusFilter' => 'all',
-    ]);
+    ])->loadTable();
 }
 
 test('checkpoint hoàn thành chuyển order sang hoàn thành và trip sang đã giao', function () {

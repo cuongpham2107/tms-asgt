@@ -68,7 +68,7 @@ test('list orders hides completed and cancelled orders by default when status is
         'created_by' => $this->user->id,
     ]);
 
-    Livewire::test(ListOrders::class)
+    Livewire::test(ListOrders::class)->loadTable()
         ->assertSet('activeStatusFilter', 'all')
         ->assertCanSeeTableRecords([$draftOrder, $sentOrder])
         ->assertCanNotSeeTableRecords([$completedOrder, $cancelledOrder]);
@@ -93,7 +93,7 @@ test('list orders shows completed orders only when completed status is selected'
         'created_by' => $this->user->id,
     ]);
 
-    Livewire::test(ListOrders::class)
+    Livewire::test(ListOrders::class)->loadTable()
         ->call('filterStatus', 'completed')
         ->assertSet('activeStatusFilter', 'completed')
         ->assertCanSeeTableRecords([$completedOrder])
@@ -119,7 +119,7 @@ test('list orders shows cancelled orders only when cancelled status is selected'
         'created_by' => $this->user->id,
     ]);
 
-    Livewire::test(ListOrders::class)
+    Livewire::test(ListOrders::class)->loadTable()
         ->call('filterStatus', 'cancelled')
         ->assertSet('activeStatusFilter', 'cancelled')
         ->assertCanSeeTableRecords([$cancelledOrder])

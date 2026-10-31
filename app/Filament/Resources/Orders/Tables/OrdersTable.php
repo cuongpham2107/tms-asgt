@@ -301,6 +301,8 @@ class OrdersTable extends BaseTable
                     ->getTitleFromRecordUsing(fn (Order $record): string => $record->trip?->trip_code ?? 'Chưa có chuyến đi')
                     ->collapsible(),
             ])
+            // Trang hiện ngay, dữ liệu tải ngay sau (bảng lớn)
+            ->deferLoading()
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(25)
             ->checkIfRecordIsSelectableUsing(fn (Order $record): bool => $record->status === OrderStatus::Draft)

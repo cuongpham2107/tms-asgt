@@ -81,6 +81,10 @@ abstract class BaseTable
             ->filters(static::getDefaultFilters())
             ->recordActions(static::getDefaultRecordActions(), position: static::getDefaultRecordActionsPosition())
             ->toolbarActions(static::getDefaultToolbarActions())
+            // Quay lại trang vẫn giữ bộ lọc, ô tìm kiếm, cột sắp xếp đã chọn
+            ->persistFiltersInSession()
+            ->persistSearchInSession()
+            ->persistSortInSession()
             ->emptyStateIcon('heroicon-o-bookmark')
             ->emptyStateHeading('Chưa có dữ liệu')
             ->emptyStateDescription('Dữ liệu sẽ xuất hiện ở đây sau khi bạn thêm mới.');

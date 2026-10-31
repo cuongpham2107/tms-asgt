@@ -124,9 +124,13 @@ class ListTrips extends ListRecords
         'rent' => ['label' => 'Xe thuê ngoài', 'color' => 'bg-amber-500'],
     ];
 
+    /** Chuyến được mở thẳng qua link (?tableActionRecord=…); giữ lại cho các request sau (bảng tải chậm). */
+    public ?string $deepLinkTripId = null;
+
     public function mount(): void
     {
         $actionRecordId = Request::query('tableActionRecord');
+        $this->deepLinkTripId = filled($actionRecordId) ? (string) $actionRecordId : null;
         if (filled($actionRecordId)) {
             $targetTrip = Trip::find($actionRecordId);
             if ($targetTrip) {
@@ -626,7 +630,7 @@ class ListTrips extends ListRecords
             .collect($statusOrder)->map(fn ($ord, $status) => "WHEN '{$status}' THEN {$ord}")->implode(' ')
             .' ELSE 99 END';
 
-        $actionRecordId = Request::query('tableActionRecord');
+        $actionRecordId = $this->deepLinkTripId;
 
         return TripResource::getEloquentQuery()
             ->orderByRaw($caseSql)

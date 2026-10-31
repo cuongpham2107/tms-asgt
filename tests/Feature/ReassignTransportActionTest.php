@@ -62,7 +62,7 @@ beforeEach(function () {
 });
 
 test('can reassign vehicle and driver to a pending trip', function () {
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->mountTableAction('reassign_transport', $this->pendingTrip)
@@ -91,7 +91,7 @@ test('updates shift_id when new driver has active shift', function () {
         'start_time' => now(),
     ]);
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->mountTableAction('reassign_transport', $this->pendingTrip)
@@ -115,7 +115,7 @@ test('reassign_transport action is hidden when trip is not pending', function ()
         'started_at' => now(),
     ]);
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->assertTableActionHidden('reassign_transport', $startedTrip)

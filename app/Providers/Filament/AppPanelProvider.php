@@ -47,7 +47,12 @@ class AppPanelProvider extends PanelProvider
             ->spa()
             ->sidebarWidth('220px')
             ->sidebarCollapsibleOnDesktop()
-            ->globalSearch(false)
+            // Tìm nhanh mã đơn, mã chuyến, biển số… bằng ⌘K / Ctrl+K; chỉ resource nào khai báo $isGloballySearchable mới được tìm.
+            ->globalSearch()
+            ->globalSearchResourceOptIn()
+            ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
+            ->globalSearchFieldKeyBindingSuffix()
+            ->unsavedChangesAlerts()
             // ->topbar(false)
             ->maxContentWidth(Width::Full)
             ->subNavigationPosition(SubNavigationPosition::Top)

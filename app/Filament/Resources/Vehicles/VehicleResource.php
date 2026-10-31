@@ -11,10 +11,50 @@ use BackedEnum;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class VehicleResource extends BaseResource
 {
+    protected static bool $isGloballySearchable = true;
+
+    /**
+     * Tìm nhanh (⌘K / Ctrl+K).
+     *
+     * @return list<string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['plate_number'];
+    }
+
+    public static function getGlobalSearchEloquentQuery(): Builder
+    {
+        return parent::getGlobalSearchEloquentQuery()->with([]);
+    }
+
+    /**
+     * @param  Vehicle  $record
+     * @return array<string, string>
+     */
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return [
+            'Loại xe' => $record->vehicle_type?->getLabel() ?? '—',
+        ];
+    }
+
+    /**
+     * Bảng sửa/xem bằng modal nên mở danh sách đã lọc sẵn theo bản ghi.
+     *
+     * @param  Vehicle  $record
+     */
+    public static function getGlobalSearchResultUrl(Model $record): string
+    {
+        return static::getUrl('index', ['search' => $record->plate_number]);
+    }
+
     protected static ?string $model = Vehicle::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;

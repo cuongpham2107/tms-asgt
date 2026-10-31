@@ -48,7 +48,7 @@ test('external order without chargeable_weight requires input when assigning tra
         'activeOrderTypeFilter' => 'external',
         'activePlaceFilter' => 'HN',
         'showMineOnly' => false,
-    ])
+    ])->loadTable()
         ->callTableAction('assign_transport', $externalOrder, [
             'vehicle_id' => $vehicle->id,
             'driver_id' => $driver->id,

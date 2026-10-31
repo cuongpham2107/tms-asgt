@@ -172,7 +172,7 @@ test('ListTrips page reacts to echo TripUpdated event by refreshing memoized cou
         'trip_code' => 'TRIP-RT-04',
     ]);
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->call('onTripUpdated', ['trip_id' => $trip->id, 'action' => 'updated', 'vehicle_plate' => '29A-99999', 'status' => 'delivering'])
         ->assertSuccessful()
         ->assertHasNoErrors();

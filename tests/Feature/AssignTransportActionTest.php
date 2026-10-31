@@ -65,7 +65,7 @@ test('can assign vehicle and driver to order and update vehicle current driver',
     $admin = User::factory()->create();
     $this->actingAs($admin);
 
-    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])->loadTable()
         ->mountTableAction('assign_transport', $order)
         ->setTableActionData([
             'vehicle_id' => $vehicle->id,
@@ -116,7 +116,7 @@ test('assigns successfully when driver has active shift', function () {
     $admin = User::factory()->create();
     $this->actingAs($admin);
 
-    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])->loadTable()
         ->mountTableAction('assign_transport', $order)
         ->setTableActionData([
             'vehicle_id' => $vehicle->id,
@@ -158,7 +158,7 @@ test('selecting vehicle automatically sets driver_id in form state', function ()
     $admin = User::factory()->create();
     $this->actingAs($admin);
 
-    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])->loadTable()
         ->mountTableAction('assign_transport', $order)
         ->setTableActionData([
             'vehicle_id' => $vehicle->id,
@@ -197,7 +197,7 @@ test('selecting driver does not automatically set vehicle_id in form state', fun
     $admin = User::factory()->create();
     $this->actingAs($admin);
 
-    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all'])->loadTable()
         ->mountTableAction('assign_transport', $order)
         ->setTableActionData([
             'driver_id' => $driver->id,

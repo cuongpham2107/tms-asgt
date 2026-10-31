@@ -92,7 +92,7 @@ test('copy_transport_info action is present in trip table action group and can b
 
     $this->actingAs($admin);
 
-    Livewire::test(ListTrips::class)
+    Livewire::test(ListTrips::class)->loadTable()
         ->set('orderType', 'all')
         ->set('activePlaceFilter', 'all')
         ->assertTableActionExists('copy_transport_info', record: $this->trip)
