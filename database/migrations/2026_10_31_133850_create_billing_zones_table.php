@@ -21,7 +21,6 @@ return new class extends Migration
             $table->string('code', 100)->unique()->comment('Mã viết tắt, VD: KCN YÊN PHONG');
             $table->string('name')->comment('Tên khu vực');
             $table->text('notes')->nullable();
-            $table->timestamps();
         });
 
         Schema::table('locations', function (Blueprint $table) {
