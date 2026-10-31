@@ -1001,6 +1001,7 @@ test('vehicle dispatch board calculates km over and highlights background based 
     // 1. Xe chưa có monthly_start_km (chưa từng chốt ngày 23 và không có mốc)
     $vehicleNoStart = Vehicle::factory()->create([
         'plate_number' => '29C-KM-NONE',
+        'owner' => 'HMA',
         'type' => VehicleOwnerType::Company,
         'current_mileage' => 10000,
         'status' => VehicleStatus::On,
@@ -1017,6 +1018,7 @@ test('vehicle dispatch board calculates km over and highlights background based 
     // 2. Xe chạy bình thường (delta = 1500 < 2600)
     $vehicleNormal = Vehicle::factory()->create([
         'plate_number' => '29C-KM-NORMAL',
+        'owner' => 'HMA',
         'type' => VehicleOwnerType::Company,
         'current_mileage' => 11500,
         'monthly_start_km' => 10000,
@@ -1034,6 +1036,7 @@ test('vehicle dispatch board calculates km over and highlights background based 
     // 3. Xe sắp đến hạn mức (delta = 2800: đúng ngưỡng >= 2800 và < 3000) -> Tô cam
     $vehicleWarning = Vehicle::factory()->create([
         'plate_number' => '29C-KM-WARN',
+        'owner' => 'HMA',
         'type' => VehicleOwnerType::Company,
         'current_mileage' => 12800,
         'monthly_start_km' => 10000,
@@ -1050,6 +1053,7 @@ test('vehicle dispatch board calculates km over and highlights background based 
     // 4. Xe từ 3000 trở lên (delta = 3120 >= 3000) -> Tô đỏ
     $vehicleDanger = Vehicle::factory()->create([
         'plate_number' => '29C-KM-DANGER',
+        'owner' => 'HMA',
         'type' => VehicleOwnerType::Company,
         'current_mileage' => 13120,
         'monthly_start_km' => 10000,
@@ -1415,10 +1419,40 @@ test('alert level boundaries for speed and km over', function (float $value, flo
     'km 3000' => [3000, 2600, 2800, 3000, 'red'],
 ]);
 
+test('company vehicles do not show km over while rented vehicles still do', function () {
+    $company = Vehicle::factory()->create([
+        'plate_number' => '20C-ASGT-KM',
+        'owner' => 'ASGT',
+        'type' => VehicleOwnerType::Company,
+        'current_mileage' => 13500,
+        'monthly_start_km' => 10000,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    $rented = Vehicle::factory()->create([
+        'plate_number' => '20C-RENT-KM',
+        'owner' => 'HMA',
+        'type' => VehicleOwnerType::Company,
+        'current_mileage' => 13500,
+        'monthly_start_km' => 10000,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    $companyData = VehicleDispatchBoard::getKmOverData($company);
+    expect($companyData['text'])->toBe('—')
+        ->and($companyData['status'])->toBe('none')
+        ->and($companyData['fillPercent'])->toBe(0)
+        ->and($companyData['cellClass'])->toContain('text-gray-400');
+
+    expect(VehicleDispatchBoard::getKmOverData($rented)['text'])->toBe('3.500');
+});
+
 test('speed and km over cells use the alert colors', function () {
     $speeding = Vehicle::factory()->create(['gps_speed' => 64.6]);
     $slow = Vehicle::factory()->create(['gps_speed' => 54.4]);
-    $nearLimit = Vehicle::factory()->create(['current_mileage' => 12600, 'monthly_start_km' => 10000]);
+    $nearLimit = Vehicle::factory()->create(['owner' => 'HMA', 'current_mileage' => 12600, 'monthly_start_km' => 10000]);
 
     expect(VehicleDispatchBoard::getSpeedAlertClass($speeding))->toContain('bg-rose-500')
         ->and(VehicleDispatchBoard::getSpeedAlertClass($slow))->toBe('')

@@ -1500,6 +1500,18 @@ class VehicleDispatchBoard extends Page implements HasTable
      */
     public static function getKmOverData(Vehicle $record): array
     {
+        // Xe công ty không theo dõi định mức KM over.
+        if (self::getOwnerCategory($record) === 'Xe CTY') {
+            return [
+                'text' => '—',
+                'delta' => null,
+                'status' => 'none',
+                'cellClass' => 'text-gray-400',
+                'tooltip' => 'Xe công ty không theo dõi KM over',
+                'fillPercent' => 0,
+            ];
+        }
+
         $currentKm = $record->current_mileage !== null ? (float) $record->current_mileage : null;
         $startKm = $record->monthly_start_km !== null ? (float) $record->monthly_start_km : null;
 
