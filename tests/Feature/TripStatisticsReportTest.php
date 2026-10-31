@@ -8,6 +8,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
 use App\Filament\Pages\TripStatisticsReport;
+use App\Filament\Widgets\TripStatisticsTable;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Location;
@@ -629,10 +630,14 @@ test('trip statistics report separates data into 3 tabs and updates counts', fun
     expect($rowsEmpty->first()['code'])->toBe('TRIP-TAB-EMPTY');
     expect($rowsEmpty->first()['service_type'])->toBe('Xe không hàng');
 
-    // Kiểm tra các nhãn tab hiển thị trong HTML
-    $component->assertSee('HHHK (Hàng không)')
-        ->assertSee('Hàng ngoài')
-        ->assertSee('Xe không hàng');
+    // Nhãn tab do widget React vẽ, lấy từ cấu hình gửi xuống
+    $tabs = Livewire::test(TripStatisticsTable::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'empty',
+    ])->instance()->getRendererConfiguration()['tabs'];
+
+    expect(array_column($tabs, 'label'))->toBe(['HHHK (Hàng không)', 'Hàng ngoài', 'Xe không hàng']);
 });
 
 test('can quick edit pcs and gw inline via updateOrderMetric', function () {
@@ -785,7 +790,24 @@ test('a trip with several orders shows one trip row followed by its orders', fun
         ->and($component->instance()->getTabCounts()['HHHK'])->toBe(1)
         ->and($component->instance()->getSummaryMetrics()['total_km_empty'])->toBe(10.0);
 
-    $component->assertSeeInOrder(['TRIP-MULTI-01', 'ASG-M1', 'ASG-M2']);
+    expect(array_map(fn (array $row): ?string => $row['code'], $component->instance()->getReactTableConfiguration()['rows']))
+        ->toBe(['TRIP-MULTI-01', 'ASG-M1', 'ASG-M2']);
+
+    $config = $component->instance()->getReactTableConfiguration();
+
+    expect($config['showCharges'])->toBeFalse()
+        ->and($config['showChargeableWeight'])->toBeFalse()
+        ->and($config['codeLabel'])->toBe('Mã đơn hàng')
+        ->and($config['rows'])->toHaveCount(3)
+        ->and($config['rows'][0]['variant'])->toBe('trip')
+        ->and($config['rows'][0]['stt'])->toBe(1)
+        ->and($config['rows'][0]['ordersCount'])->toBe(2)
+        ->and($config['rows'][0]['code'])->toBe('TRIP-MULTI-01')
+        ->and($config['rows'][0]['pcs'])->toBe(15.0)
+        ->and($config['rows'][1]['variant'])->toBe('order')
+        ->and($config['rows'][1]['stt'])->toBeNull()
+        ->and($config['rows'][1]['code'])->toBe('ASG-M1')
+        ->and($config['rows'][2]['code'])->toBe('ASG-M2');
 
     $sheet = app(TripExcelExportService::class)
         ->buildSpreadsheetFromRows($component->instance()->getAllRows())
@@ -798,7 +820,7 @@ test('a trip with several orders shows one trip row followed by its orders', fun
         ->and($sheet->getCell('B7')->getValue())->toBe('└ ASG-M2');
 });
 
-test('pagination uses the filament component and its page methods', function () {
+test('pagination works with the react widget configuration', function () {
     // Chuyến không hàng để bảng có dữ liệu
     Trip::create([
         'trip_code' => 'TRIP-PAGE-01',
@@ -809,10 +831,19 @@ test('pagination uses the filament component and its page methods', function () 
         'completed_at' => Carbon::parse('2026-04-20 10:00:00'),
     ]);
 
+    $pagination = Livewire::test(TripStatisticsTable::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'empty',
+    ])->instance()->getRendererConfiguration()['pagination'];
+
+    expect($pagination['total'])->toBe(1)
+        ->and($pagination['lastPage'])->toBe(1)
+        ->and($pagination['perPage'])->toBe(25);
+
     Livewire::test(TripStatisticsReport::class, ['activeTab' => 'empty'])
         ->set('startDate', '2026-04-01')
         ->set('endDate', '2026-04-30')
-        ->assertSeeHtml('fi-pagination')
         ->call('nextPage', 'page')
         ->assertSet('page', 2)
         ->call('previousPage', 'page')
@@ -825,9 +856,39 @@ test('pagination uses the filament component and its page methods', function () 
         ->assertSet('page', 1);
 });
 
+test('react widget renders the host with escaped configuration', function () {
+    Trip::create([
+        'trip_code' => 'TRIP-REACT-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-10-05 08:00:00'),
+        'completed_at' => Carbon::parse('2026-10-05 10:00:00'),
+        // Nội dung người dùng nhập không được đóng thẻ script chứa JSON
+        'note' => '</script><script>alert(1)</script>',
+    ]);
+
+    $component = Livewire::test(TripStatisticsTable::class, [
+        'activeTab' => 'empty',
+        'startDate' => '2026-10-01',
+        'endDate' => '2026-10-31',
+    ])
+        ->assertSuccessful()
+        ->assertSeeHtml('jsWidgetComponent')
+        ->assertSeeHtml('data-renderer-configuration')
+        ->assertSeeHtml('TRIP-REACT-01')
+        ->assertDontSeeHtml('</script><script>alert(1)</script>');
+
+    expect($component->instance()->getRendererConfiguration()['rows'][0]['note'])
+        ->toBe('</script><script>alert(1)</script>');
+});
+
 test('chargeable weight column is hidden on the HHHK tab only', function () {
-    Livewire::test(TripStatisticsReport::class, ['activeTab' => 'HHHK'])->assertDontSee('Trọng tải cước');
-    Livewire::test(TripStatisticsReport::class, ['activeTab' => 'external'])->assertSee('Trọng tải cước');
+    $hhhk = Livewire::test(TripStatisticsTable::class, ['activeTab' => 'HHHK'])->instance()->getRendererConfiguration();
+    $external = Livewire::test(TripStatisticsTable::class, ['activeTab' => 'external'])->instance()->getRendererConfiguration();
+
+    expect($hhhk['showChargeableWeight'])->toBeFalse()
+        ->and($external['showChargeableWeight'])->toBeTrue();
 });
 
 test('last month preset does not overflow into the current month on the 31st', function () {

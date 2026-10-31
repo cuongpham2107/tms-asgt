@@ -7,6 +7,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
 use App\Filament\Pages\TripStatisticsReport;
+use App\Filament\Widgets\TripStatisticsTable;
 use App\Models\Area;
 use App\Models\BillingZone;
 use App\Models\Customer;
@@ -92,10 +93,22 @@ beforeEach(function () {
 });
 
 test('external tab shows the freight charge of each order', function () {
-    ($this->page)()
-        ->assertSuccessful()
-        ->assertSee('CƯỚC VẬN CHUYỂN')
-        ->assertSee('1,300,000');
+    $component = ($this->page)()->assertSuccessful();
+
+    $config = Livewire::test(TripStatisticsTable::class, [
+        'startDate' => '2026-10-01',
+        'endDate' => '2026-10-31',
+        'activeTab' => 'external',
+    ])->instance()->getRendererConfiguration();
+    $row = $config['rows'][0];
+
+    expect($config['showCharges'])->toBeTrue()
+        ->and($config['showChargeableWeight'])->toBeTrue()
+        ->and($row['orderId'])->toBe($this->order->id)
+        ->and($row['variant'])->toBe('single')
+        ->and($row['charge']['total'])->toBe(1_300_000.0)
+        ->and($row['charge']['missing'])->toBeFalse()
+        ->and($row['charge']['locked'])->toBeFalse();
 });
 
 test('edit charge action saves manual fields, other fees and totals', function () {
@@ -212,6 +225,11 @@ test('locked charge cannot be edited or recalculated', function () {
 
     expect($charge->delivery_notes[0]['number'])->toBeNull()
         ->and((float) $charge->base_price)->toBe(1_300_000.0);
+
+    $row = ($this->page)()->instance()->getReactTableConfiguration()['rows'][0];
+
+    expect($row['charge']['locked'])->toBeTrue()
+        ->and($row['charge']['missing'])->toBeFalse();
 });
 
 test('recalculate looks up the rate again', function () {
@@ -307,7 +325,8 @@ test('legend chips filter the external tab by charge status', function () {
 
     $this->charge->update(['base_price' => null]);
     expect($page->instance()->getChargeStatusCounts())->toBe(['locked' => 0, 'missing' => 1])
-        ->and($page->instance()->getAllRows()->pluck('order_id')->all())->toBe([$this->order->id]);
+        ->and($page->instance()->getAllRows()->pluck('order_id')->all())->toBe([$this->order->id])
+        ->and($page->instance()->getReactTableConfiguration()['rows'][0]['charge']['missing'])->toBeTrue();
 
     // Bấm lại thì bỏ lọc; đã xuất bảng kê thì thuộc nhóm khoá
     $this->charge->update(['exported_at' => now()]);

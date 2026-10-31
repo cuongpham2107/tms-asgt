@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "jsx": "react-jsx",
+        "strict": true,
+        "noEmit": true,
+        "skipLibCheck": true,
+        "paths": {
+            "@filament/forms/js-field": [
+                "./vendor/filament/forms/resources/js/types/js-field.d.ts"
+            ],
+            "@filament/schemas/js-component": [
+                "./vendor/filament/schemas/resources/js/types/js-component.d.ts"
+            ],
+            "@filament/widgets/js-widget": [
+                "./vendor/filament/widgets/resources/js/types/js-widget.d.ts"
+            ]
+        }
+    },
+    "include": [
+        "resources/js/**/*"
+    ]
+}

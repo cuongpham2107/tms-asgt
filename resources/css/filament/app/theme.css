@@ -1,7 +1,11 @@
 @import "../../../../vendor/filament/filament/resources/css/theme.css";
+@import "leaflet/dist/leaflet.css";
+@import "leaflet.markercluster/dist/MarkerCluster.css";
+@import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 @source '../../../../app/Filament/**/*.php';
 @source '../../../../resources/views/**/*.blade.php';
+@source '../../../../resources/js/filament/**/*.tsx';
 @source '../../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
 
 /* ==========================================================================
@@ -630,5 +634,67 @@ html.dark .pill-filter-btn:not(.is-active) .pill-count-badge {
 
     &::-webkit-scrollbar-thumb:hover {
         background-color: rgb(107 114 128 / 0.7);
+    }
+}
+
+/* ==========================================================================
+   Bản đồ theo dõi xe (renderer React)
+   ========================================================================== */
+.trk-popup { font-family: Inter, system-ui, -apple-system, sans-serif; min-width: 230px; max-width: 300px; line-height: 1.45; color: #0f172a; font-size: 12px; }
+.trk-popup-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9; }
+.trk-popup-plate { font-weight: 800; font-size: 15px; letter-spacing: -0.02em; }
+.trk-popup-badge { color: #ffffff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.trk-row { margin-bottom: 4px; color: #334155; }
+.trk-muted { font-size: 11px; color: #64748b; }
+.trk-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trk-stale { color: #dc2626; font-weight: 600; }
+.trk-order-item { margin-bottom: 4px; padding: 4px 8px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #3b82f6; }
+html.dark .trk-popup { color: #e2e8f0; }
+html.dark .trk-popup-head { border-bottom-color: #1e293b; }
+html.dark .trk-row { color: #cbd5e1; }
+html.dark .trk-order-item { background: #0f172a; }
+
+/* Layout bản đồ theo dõi. Dùng class riêng thay vì `flex flex-col lg:flex-row`:
+   CSS plugin filament-date-range (unlayered) có `.flex-col` nên đè `lg:flex-row` trong @layer utilities. */
+.trk-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    height: calc(100vh - 340px);
+    min-height: 580px;
+}
+.trk-sidebar {
+    width: 100%;
+    height: 480px;
+    flex-shrink: 0;
+}
+.trk-map {
+    height: 520px;
+    min-width: 0;
+    flex: 1 1 0%;
+}
+.trk-legend {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+@media (min-width: 64rem) {
+    .trk-layout {
+        flex-direction: row;
+    }
+    .trk-sidebar {
+        width: 360px;
+        min-width: 340px;
+        max-width: 400px;
+        height: 100%;
+    }
+    .trk-map {
+        height: 100%;
+    }
+    .trk-legend {
+        flex-direction: row;
     }
 }

@@ -1,7 +1,7 @@
 <?php
 
-use App\Filament\Pages\GoogleMapTracking;
 use App\Filament\Resources\Locations\Pages\CreateLocation;
+use App\Filament\Widgets\VehicleTrackingMap;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -27,11 +27,9 @@ test('no map in the app loads OpenStreetMap tiles, which some networks block', f
 });
 
 test('the gps tracking map uses Vietnamese Google street tiles first, over https', function () {
-    $page = new GoogleMapTracking;
-    $page->mount();
-    $layers = $page->getMapData()['tileLayersUrl'];
+    $tiles = Livewire::test(VehicleTrackingMap::class)->instance()->getRendererConfiguration()['tiles'];
 
-    expect($layers[0][1])->toStartWith('https://')
+    expect($tiles[0][1])->toStartWith('https://')
         ->toContain('lyrs=m')
         ->toContain('hl=vi');
 });

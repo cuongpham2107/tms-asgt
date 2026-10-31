@@ -6,10 +6,13 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
     build: {
         chunkSizeWarningLimit: 2000,
+        rolldownOptions: {
+            preserveEntrySignatures: 'exports-only',
+        },
     },
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js', 'resources/css/filament/app/theme.css'],
+            input: ['resources/css/filament/app/theme.css', 'resources/js/filament/widgets/trip-statistics-table.tsx', 'resources/js/filament/widgets/vehicle-tracking-map.tsx'],
             refresh: true,
             fonts: [
                 bunny('Instrument Sans', {
