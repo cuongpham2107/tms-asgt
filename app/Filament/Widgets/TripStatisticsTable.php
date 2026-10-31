@@ -17,8 +17,6 @@ class TripStatisticsTable extends Widget
     use HasJsRenderer;
     use HasTripStatistics;
 
-    protected string $view = 'filament.widgets.trip-statistics-table';
-
     protected int|string|array $columnSpan = 'full';
 
     #[Reactive]

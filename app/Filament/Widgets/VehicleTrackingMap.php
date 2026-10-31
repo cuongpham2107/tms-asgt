@@ -30,8 +30,6 @@ class VehicleTrackingMap extends Widget
 
     private const DEFAULT_CENTER = [21.0285, 105.8542]; // Hà Nội Center
 
-    protected string $view = 'filament.widgets.vehicle-tracking-map';
-
     protected int|string|array $columnSpan = 'full';
 
     /** @var array<int, int> */

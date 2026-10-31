@@ -9,16 +9,18 @@
     {{-- Toàn bộ thân trang do widget React vẽ; page chỉ giữ header actions và state bộ lọc --}}
     <div wire:loading class="fixed inset-x-0 top-0 z-50 h-0.5 animate-pulse bg-primary-500"></div>
 
-    @livewire(\App\Filament\Widgets\TripStatisticsTable::class, [
-        'startDate' => $this->startDate,
-        'endDate' => $this->endDate,
-        'activeTab' => $this->activeTab,
-        'customerId' => $this->customerId,
-        'vehicleOwner' => $this->vehicleOwner,
-        'search' => $this->search,
-        'chargeStatus' => $this->chargeStatus,
-        'page' => $this->page,
-        'perPage' => $this->perPage,
-        'dataVersion' => $this->dataVersion,
-    ])
+    <div class="fi-js-widget-bare">
+        @livewire(\App\Filament\Widgets\TripStatisticsTable::class, [
+            'startDate' => $this->startDate,
+            'endDate' => $this->endDate,
+            'activeTab' => $this->activeTab,
+            'customerId' => $this->customerId,
+            'vehicleOwner' => $this->vehicleOwner,
+            'search' => $this->search,
+            'chargeStatus' => $this->chargeStatus,
+            'page' => $this->page,
+            'perPage' => $this->perPage,
+            'dataVersion' => $this->dataVersion,
+        ])
+    </div>
 </x-filament-panels::page>

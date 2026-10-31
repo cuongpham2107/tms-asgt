@@ -698,3 +698,13 @@ html.dark .trk-order-item { background: #0f172a; }
         flex-direction: row;
     }
 }
+
+/* Widget React chiếm cả thân trang (Thống kê, Theo dõi xe): bỏ khung card của view js-widget mặc định. */
+.fi-js-widget-bare .fi-wi-js > .fi-section {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+}
+.fi-js-widget-bare .fi-wi-js > .fi-section > .fi-section-content-ctn > .fi-section-content {
+    padding: 0 !important;
+}
