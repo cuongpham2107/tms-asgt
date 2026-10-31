@@ -208,9 +208,10 @@
         <div>
             <span class="text-xs text-gray-500 dark:text-gray-400">Đơn hàng</span>
             <span class="ml-2 text-sm font-bold text-gray-900 dark:text-white">{{ $orderCodes ?: '—' }}</span>
-            @if (filled($customerCodes))
-                <span class="ml-1 text-xs font-semibold text-primary-600 dark:text-primary-400" title="Mã khách hàng">({{ $customerCodes }})</span>
-            @endif
+        </div>
+        <div>
+            <span class="text-xs text-gray-500 dark:text-gray-400">Khách hàng</span>
+            <span class="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">{{ $customerCodes ?: '—' }}</span>
         </div>
         <div>
             <span class="text-xs text-gray-500 dark:text-gray-400">Xe</span>
