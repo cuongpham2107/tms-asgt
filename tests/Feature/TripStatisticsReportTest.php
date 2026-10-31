@@ -824,3 +824,23 @@ test('pagination uses the filament component and its page methods', function () 
         ->set('perPage', 50)
         ->assertSet('page', 1);
 });
+
+test('chargeable weight column is hidden on the HHHK tab only', function () {
+    Livewire::test(TripStatisticsReport::class, ['activeTab' => 'HHHK'])->assertDontSee('Trọng tải cước');
+    Livewire::test(TripStatisticsReport::class, ['activeTab' => 'external'])->assertSee('Trọng tải cước');
+});
+
+test('last month preset does not overflow into the current month on the 31st', function () {
+    // 31/10 − 1 tháng không được tràn sang 01/10
+    Carbon::setTestNow('2026-10-31 09:00:00');
+
+    $component = Livewire::test(TripStatisticsReport::class)
+        ->call('setDatePreset', 'lastMonth')
+        ->assertSet('startDate', '2026-09-01')
+        ->assertSet('endDate', '2026-09-30');
+
+    expect($component->instance()->isDatePresetActive('lastMonth'))->toBeTrue()
+        ->and($component->instance()->isDatePresetActive('thisMonth'))->toBeFalse();
+
+    Carbon::setTestNow();
+});

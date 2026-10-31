@@ -245,8 +245,8 @@ class TripStatisticsReport extends Page
                 $this->endDate = now()->format('Y-m-d'),
             ],
             'lastMonth' => [
-                $this->startDate = now()->subMonth()->startOfMonth()->format('Y-m-d'),
-                $this->endDate = now()->subMonth()->endOfMonth()->format('Y-m-d'),
+                $this->startDate = now()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d'),
+                $this->endDate = now()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
             ],
             default => null,
         };
@@ -265,7 +265,7 @@ class TripStatisticsReport extends Page
             $this->startDate === $yesterday && $this->endDate === $yesterday => 'yesterday',
             $this->startDate === now()->subDays(6)->format('Y-m-d') && $this->endDate === $today => 'last7days',
             $this->startDate === now()->startOfMonth()->format('Y-m-d') && $this->endDate === $today => 'thisMonth',
-            $this->startDate === now()->subMonth()->startOfMonth()->format('Y-m-d') && $this->endDate === now()->subMonth()->endOfMonth()->format('Y-m-d') => 'lastMonth',
+            $this->startDate === now()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === now()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d') => 'lastMonth',
             default => null,
         };
     }
@@ -284,7 +284,7 @@ class TripStatisticsReport extends Page
             'yesterday' => $this->startDate === $yesterday && $this->endDate === $yesterday,
             'last7days' => $this->startDate === now()->subDays(6)->format('Y-m-d') && $this->endDate === $today,
             'thisMonth' => $this->startDate === now()->startOfMonth()->format('Y-m-d') && $this->endDate === $today,
-            'lastMonth' => $this->startDate === now()->subMonth()->startOfMonth()->format('Y-m-d') && $this->endDate === now()->subMonth()->endOfMonth()->format('Y-m-d'),
+            'lastMonth' => $this->startDate === now()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === now()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
             default => false,
         };
     }
