@@ -11,6 +11,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Filament\Pages\VehicleDispatchBoard;
+use App\Filament\Widgets\VehicleDispatchTable;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
@@ -30,6 +31,26 @@ use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
+
+function dispatchWidgetConfiguration(array $props = []): array
+{
+    return Livewire::test(VehicleDispatchTable::class, $props)
+        ->instance()
+        ->getRendererConfiguration();
+}
+
+function dispatchWidgetRowFor(string $plate, array $props = []): ?array
+{
+    foreach (dispatchWidgetConfiguration($props)['groups'] as $group) {
+        foreach ($group['rows'] as $row) {
+            if (str_contains($row['bsx'], $plate)) {
+                return $row;
+            }
+        }
+    }
+
+    return null;
+}
 
 beforeEach(function () {
     $admin = User::factory()->create();
@@ -54,9 +75,10 @@ test('vehicle dispatch board page renders successfully with company vehicles', f
         'is_active' => true,
     ]);
 
+    expect(dispatchWidgetConfiguration()['title'])->toContain('KIỂM SOÁT TÌNH TRẠNG XE');
+
     Livewire::test(VehicleDispatchBoard::class)
         ->assertStatus(200)
-        ->assertSee('KIỂM SOÁT TÌNH TRẠNG XE')
         ->assertSee('20C-12345')
         ->assertDontSee('29H-99999')
         ->assertHasNoErrors();
@@ -117,10 +139,9 @@ test('dispatch board classifies vehicles by owner code into company or rented', 
     expect(VehicleDispatchBoard::getOwnerCategory($company))->toBe('Xe CTY')
         ->and(VehicleDispatchBoard::getOwnerCategory($rented))->toBe('Xe thuê');
 
-    Livewire::test(VehicleDispatchBoard::class)
-        ->assertSee('Phân loại')
-        ->assertSee('Xe CTY')
-        ->assertSee('Xe thuê');
+    expect(dispatchWidgetConfiguration()['columns'])->toContain('Phân loại')
+        ->and(dispatchWidgetRowFor('20C-ASGT-01')['ownerCategory'])->toBe('Xe CTY')
+        ->and(dispatchWidgetRowFor('20C-RENT-01')['ownerCategory'])->toBe('Xe thuê');
 });
 
 test('vehicle dispatch board only shows company vehicles', function () {
@@ -249,10 +270,11 @@ test('vehicle dispatch board allows clicking trip status when driver swap is act
     expect(VehicleDispatchBoard::canClickTripStatus($vehicle))->toBeTrue()
         ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đảo lái');
 
+    $row = dispatchWidgetRowFor($vehicle->plate_number);
+    expect($row['statusAction']['name'] ?? null)->toBe('reassign_driver')
+        ->and($row['statusLabel'])->toBe('Đảo lái');
+
     Livewire::test(VehicleDispatchBoard::class)
-        ->assertStatus(200)
-        ->assertSee('mountTableAction(\'reassign_driver\', \''.$vehicle->id.'\')', false)
-        ->assertSee('Đảo lái')
         ->mountTableAction('reassign_driver', $vehicle)
         ->assertHasNoTableActionErrors();
 });
@@ -288,10 +310,11 @@ test('vehicle dispatch board allows clicking trip status when trip is paused due
     expect(VehicleDispatchBoard::canClickTripStatus($vehicle))->toBeTrue()
         ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Tạm dừng (Sửa Km)');
 
+    $row = dispatchWidgetRowFor($vehicle->plate_number);
+    expect($row['statusAction']['name'] ?? null)->toBe('resolve_km_report')
+        ->and($row['statusLabel'])->toBe('Tạm dừng (Sửa Km)');
+
     Livewire::test(VehicleDispatchBoard::class)
-        ->assertStatus(200)
-        ->assertSee('mountTableAction(\'resolve_km_report\', \''.$vehicle->id.'\')', false)
-        ->assertSee('Tạm dừng (Sửa Km)')
         ->mountTableAction('resolve_km_report', $vehicle)
         ->assertHasNoTableActionErrors();
 });
@@ -350,10 +373,10 @@ test('vehicle dispatch board prioritizes resolve_km_report when a driver swap tr
 
     expect(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Tạm dừng (Sửa Km)');
 
+    $row = dispatchWidgetRowFor($vehicle->plate_number);
+    expect($row['statusAction']['name'] ?? null)->toBe('resolve_km_report');
+
     Livewire::test(VehicleDispatchBoard::class)
-        ->assertStatus(200)
-        ->assertSee('mountTableAction(\'resolve_km_report\', \''.$vehicle->id.'\')', false)
-        ->assertDontSee('mountTableAction(\'reassign_driver\', \''.$vehicle->id.'\')', false)
         ->mountTableAction('resolve_km_report', $vehicle)
         ->assertHasNoTableActionErrors();
 });
@@ -737,11 +760,10 @@ test('vehicle dispatch board prioritizes paused trip over pending trip so km rep
         ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Tạm dừng (Sửa Km)')
         ->and(VehicleDispatchBoard::canClickTripStatus($vehicle))->toBeTrue();
 
-    // Trên Livewire component, phải thấy action resolve_km_report
-    Livewire::test(VehicleDispatchBoard::class)
-        ->assertStatus(200)
-        ->assertSee('mountTableAction(\'resolve_km_report\', \''.$vehicle->id.'\')', false)
-        ->assertSee('Tạm dừng (Sửa Km)');
+    // Widget phải mở action resolve_km_report cho chuyến bị pause
+    $row = dispatchWidgetRowFor($vehicle->plate_number);
+    expect($row['statusAction']['name'] ?? null)->toBe('resolve_km_report')
+        ->and($row['statusLabel'])->toBe('Tạm dừng (Sửa Km)');
 });
 
 test('vehicle dispatch board distinguishes idle vehicle and pending trip with different colors', function () {
@@ -903,10 +925,8 @@ test('vehicle dispatch board counts waiting orders in pending trips correctly an
         ->and(VehicleDispatchBoard::getTodayTripsCount($vehicle))->toBe(1);
 
     // Kiểm tra trên giao diện component hiển thị cột Đơn chờ và số lượng 2
-    Livewire::test(VehicleDispatchBoard::class)
-        ->assertStatus(200)
-        ->assertSee('Đơn chờ')
-        ->assertSee('29C-WAITING-ORDERS');
+    expect(dispatchWidgetConfiguration()['columns'])->toContain('Đơn chờ')
+        ->and(dispatchWidgetRowFor('29C-WAITING-ORDERS')['waitingOrders'])->toBe(2);
 });
 
 test('vehicle dispatch board only shows shift label when driver has an open active shift from app login', function () {
@@ -1076,8 +1096,10 @@ test('vehicle dispatch board calculates km over and highlights background based 
         ->assertSee('bg-orange-400')
         ->assertSee('29C-KM-DANGER')
         ->assertSee('3.120')
-        ->assertSee('bg-rose-500')
-        ->assertSeeHtml('rgb(59 130 246 / 0.22) 50%');
+        ->assertSee('bg-rose-500');
+
+    expect(dispatchWidgetRowFor('29C-KM-NORMAL')['kmOverFill'])->toBe(50)
+        ->and(dispatchWidgetRowFor('29C-KM-WARN')['kmOverClass'])->toContain('bg-orange-400');
 });
 
 test('vehicle dispatch board renders loading overlay and spam click protection for modals', function () {
@@ -1093,7 +1115,6 @@ test('vehicle dispatch board renders loading overlay and spam click protection f
         ->assertSee('wire:target="openTripModal, openGpsModal"', false)
         ->assertSee('Đang tải dữ liệu...')
         ->assertSee('Vui lòng đợi trong giây lát')
-        ->assertSee('wire:click="openTripModal('.$vehicle->id.')"', false)
         ->call('openGpsModal', $vehicle->id)
         ->assertDispatched('open-modal', id: 'vehicle-gps-modal')
         ->call('openTripModal', $vehicle->id)
@@ -1589,10 +1610,9 @@ test('idle engine status shows minutes and turns red after 20 minutes', function
 test('dispatch board shows a refresh countdown driven by a single timer', function () {
     $this->actingAs(User::factory()->create());
 
-    Livewire::test(VehicleDispatchBoard::class)
-        ->assertSeeHtml('secondsLeft: '.VehicleDispatchBoard::REFRESH_SECONDS)
-        ->assertSee('Làm mới sau')
-        ->assertDontSeeHtml('wire:poll');
+    Livewire::test(VehicleDispatchBoard::class)->assertOk();
+
+    expect(dispatchWidgetConfiguration()['refreshSeconds'])->toBe(VehicleDispatchBoard::REFRESH_SECONDS);
 });
 
 test('dispatch board shows the new trip status right after a TripUpdated event', function () {
@@ -1606,12 +1626,13 @@ test('dispatch board shows the new trip status right after a TripUpdated event',
         'trip_code' => 'TRIP-LIVE',
     ]);
 
-    $page = Livewire::test(VehicleDispatchBoard::class)
-        ->assertSee(TripStatus::Started->getLabel())
-        ->assertDontSee(TripStatus::ArrivedPickup->getLabel());
+    expect(dispatchWidgetRowFor('20C-LIVE')['statusLabel'])->toBe(TripStatus::Started->getLabel());
 
     $trip->update(['status' => TripStatus::ArrivedPickup]);
 
-    $page->call('onTripUpdated', ['trip_id' => $trip->id, 'action' => 'updated'])
-        ->assertSee(TripStatus::ArrivedPickup->getLabel());
+    Livewire::test(VehicleDispatchBoard::class)
+        ->call('onTripUpdated', ['trip_id' => $trip->id, 'action' => 'updated'])
+        ->assertOk();
+
+    expect(dispatchWidgetRowFor('20C-LIVE')['statusLabel'])->toBe(TripStatus::ArrivedPickup->getLabel());
 });
