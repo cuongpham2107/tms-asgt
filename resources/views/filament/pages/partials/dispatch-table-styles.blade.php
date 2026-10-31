@@ -59,4 +59,11 @@
         line-height: 1rem;
         white-space: nowrap;
     }
+    /* Header cao đúng bằng dòng dữ liệu (36px) cho mọi bảng custom */
+    .dispatch-table thead th {
+        height: 36px;
+        padding-top: 0;
+        padding-bottom: 0;
+        vertical-align: middle;
+    }
 </style>
