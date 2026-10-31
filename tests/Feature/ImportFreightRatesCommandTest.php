@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\VehicleType;
+use App\Models\BillingZone;
 use App\Models\Customer;
 use App\Models\FreightRate;
 use App\Models\Location;
@@ -48,22 +49,22 @@ beforeEach(function () {
 
     $this->file = makeFreightWorkbook([
         '5. Địa điểm' => [
-            'C2' => 'FUKANG', 'I2' => 'Công Ty Fukang, Kcn Quang Châu, Bắc Ninh',
-            'C3' => 'ALSC', 'I3' => 'Công Ty Nhà Ga Als, Nội Bài, Hà Nội',
-            'C4' => 'ALSE', 'I4' => 'Als Đông Hà Nội, Kcn Vsip, Bắc Ninh',
-            'C5' => 'AKZO', 'I5' => 'Nhà máy AKZONOBEL, KCN Quế Võ 1, Bắc Ninh',
-            'C6' => 'ENKEI', 'I6' => 'CÔNG TY TNHH ENKEI VIỆT NAM, Lô N2, KCN Thăng Long',
+            'C2' => 'FUKANG', 'D2' => 'KCN QUANG CHÂU', 'J2' => 'Kcn Quang Châu',
+            'C3' => 'ALSC', 'D3' => 'NỘI BÀI',
+            'C4' => 'ALSE', 'D4' => 'KCN VSIP BẮC NINH',
+            'C5' => 'AKZO', 'D5' => 'KCN QUẾ VÕ 1',
+            'C6' => 'ENKEI', 'D6' => 'KCN THĂNG LONG',
         ],
         '3.1 Đơn giá 1 điểm trả' => [
             'J1' => 1.25, 'K1' => 1.5, 'L1' => 2.5, 'M1' => 3.5, 'N1' => 5, 'O1' => 7, 'P1' => 8, 'Q1' => 10, 'R1' => 14, 'S1' => '10 CÁNH DƠI',
-            'B2' => 'GCR', 'D2' => 'ASGS (SAFO)', 'G2' => 'Công Ty Fukang, Kcn Quang Châu, Bắc Ninh', 'H2' => 'Công Ty Nhà Ga Als, Nội Bài, Hà Nội',
+            'B2' => 'GCR', 'D2' => 'ASGS (SAFO)', 'E2' => 'Kcn Quang Châu', 'F2' => 'Nội Bài',
             'J2' => 750000, 'N2' => 1300000, 'Q2' => 0, 'S2' => 2600000,
-            // Điểm đến không có trong danh mục địa điểm → bỏ qua và báo lại
-            'B3' => 'GCR', 'D3' => 'ASGS (SAFO)', 'G3' => 'Công Ty Fukang, Kcn Quang Châu, Bắc Ninh', 'H3' => 'Kcn Yên Bình, Thái Nguyên', 'J3' => 900000,
+            // Cụm chưa có địa điểm nào → vẫn nhập giá, báo lại để gán cụm cho địa điểm
+            'B3' => 'GCR', 'D3' => 'ASGS (SAFO)', 'E3' => 'Kcn Quang Châu', 'F3' => 'Kcn Yên Bình', 'J3' => 900000,
         ],
         '3.4 Đơn giá 2 điểm trả ALSE' => [
             'L1' => 1.25, 'M1' => 5, 'N1' => 8, 'O1' => 10,
-            'D2' => 'ALSE', 'H2' => 'Công Ty Fukang, Kcn Quang Châu, Bắc Ninh', 'I2' => 'Als Đông Hà Nội, Kcn Vsip, Bắc Ninh', 'J2' => 'Công Ty Nhà Ga Als, Nội Bài, Hà Nội',
+            'D2' => 'ALSE', 'E2' => 'Kcn Quang Châu', 'F2' => 'Kcn Vsip Bắc Ninh', 'G2' => 'Nội Bài',
             'N2' => 1520000,
         ],
         '3.2 Đơn giá VFC Lạnh' => [
@@ -75,10 +76,10 @@ beforeEach(function () {
             'A5' => 'Quế Võ Thăng Long', 'B5' => 'Thường', 'C5' => 'VFC', 'G5' => 741280.79, 'J5' => 1563851.46,
         ],
         '6.1 VFC code tìm giá thường' => [
-            'B2' => 'VFC', 'F2' => 'quế võ thăng long', 'G2' => 'Nhà máy AKZONOBEL, KCN Quế Võ 1, Bắc Ninh', 'H2' => 'CÔNG TY TNHH ENKEI VIỆT NAM, Lô N2, KCN Thăng Long',
+            'B2' => 'VFC', 'D2' => 'Kcn Quế Võ 1', 'E2' => 'Kcn Thăng Long', 'F2' => 'quế võ thăng long',
         ],
         '6.2 VFC code tìm giá lạnh' => [
-            'C3' => 'VFC', 'G3' => 'Đông Anh', 'H3' => 'Nhà máy AKZONOBEL, KCN Quế Võ 1, Bắc Ninh', 'I3' => 'CÔNG TY TNHH ENKEI VIỆT NAM, Lô N2, KCN Thăng Long',
+            'C3' => 'VFC', 'E3' => 'Kcn Quế Võ 1', 'F3' => 'Kcn Thăng Long', 'G3' => 'Đông Anh',
         ],
         '4. Phụ phí' => [
             'F1' => 1.25, 'G1' => 1.5, 'H1' => 2.5, 'I1' => 3.5, 'J1' => 5, 'K1' => 7, 'L1' => 8, 'M1' => 10, 'N1' => 14,
@@ -98,12 +99,19 @@ afterEach(function () {
 
 test('imports freight rates and waiting fees from the price workbook', function () {
     $this->artisan('freight-rates:import', ['--file' => $this->file])
-        ->expectsOutputToContain('Kcn Yên Bình, Thái Nguyên')
+        ->expectsOutputToContain('KCN YÊN BÌNH')
         ->assertSuccessful();
 
+    // Sheet 5: tạo khu vực theo cột D (tên cột J) và gán cho địa điểm theo mã cột C
+    $quangChau = BillingZone::where('code', 'KCN QUANG CHÂU')->firstOrFail();
+    $noiBai = BillingZone::where('code', 'NỘI BÀI')->firstOrFail();
+    expect($quangChau->name)->toBe('Kcn Quang Châu')
+        ->and($this->fukang->fresh()->billing_zone_id)->toBe($quangChau->id)
+        ->and($this->alsc->fresh()->billing_zone_id)->toBe($noiBai->id);
+
     $safoRates = FreightRate::where('customer_id', $this->safo->id)
-        ->where('origin_location_id', $this->fukang->id)
-        ->where('destination_location_id', $this->alsc->id)
+        ->where('origin_zone_id', $quangChau->id)
+        ->where('destination_zone_id', $noiBai->id)
         ->get();
 
     // 1 dòng giá thường (ô 10T = 0 bị bỏ qua) + 1 dòng xe cánh dơi cho cột "10 CÁNH DƠI"
@@ -115,13 +123,16 @@ test('imports freight rates and waiting fees from the price workbook', function 
     // Giá 2 điểm trả: tuyến điểm đi → điểm trả đầu, loại hình "2 điểm trả"
     $twoDrop = FreightRate::where('customer_id', $this->alse->id)->firstOrFail();
     expect($twoDrop->rate_type)->toBe('2 điểm trả')
-        ->and($twoDrop->destination_location_id)->toBe($this->alseWarehouse->id)
+        ->and($twoDrop->destinationZone->code)->toBe('KCN VSIP BẮC NINH')
         ->and($twoDrop->priceFor(8))->toBe(1_520_000.0);
 
     $vfcCold = FreightRate::where('customer_id', $this->vfc->id)->where('rate_type', 'Hàng lạnh')->firstOrFail();
-    expect($vfcCold->origin_location_id)->toBe($this->akzo->id)
-        ->and($vfcCold->destination_location_id)->toBe($this->enkei->id)
+    expect($vfcCold->originZone->code)->toBe('KCN QUẾ VÕ 1')
+        ->and($vfcCold->destinationZone->code)->toBe('KCN THĂNG LONG')
         ->and($vfcCold->priceFor(1.25))->toBe(727_500.0);
+
+    // Khu vực chỉ có trong bảng giá vẫn được tạo để gán địa điểm sau
+    expect(BillingZone::where('code', 'KCN YÊN BÌNH')->firstOrFail()->destinationRates()->exists())->toBeTrue();
 
     $vfcNormal = FreightRate::where('customer_id', $this->vfc->id)->where('rate_type', '')->firstOrFail();
     expect($vfcNormal->prices)->toEqual(['2' => 741_280.79, '7' => 1_563_851.46]);
@@ -145,16 +156,18 @@ test('dry run reports without writing anything', function () {
         ->assertSuccessful();
 
     expect(FreightRate::count())->toBe(0)
-        ->and(WaitingFeeRate::count())->toBe(0);
+        ->and(WaitingFeeRate::count())->toBe(0)
+        ->and(BillingZone::count())->toBe(0)
+        ->and($this->fukang->fresh()->billing_zone_id)->toBeNull();
 });
 
 test('running the import twice updates instead of duplicating', function () {
     $this->artisan('freight-rates:import', ['--file' => $this->file])->assertSuccessful();
-    $counts = [FreightRate::count(), WaitingFeeRate::count()];
+    $counts = [FreightRate::count(), WaitingFeeRate::count(), BillingZone::count()];
 
     $this->artisan('freight-rates:import', ['--file' => $this->file])->assertSuccessful();
 
-    expect([FreightRate::count(), WaitingFeeRate::count()])->toBe($counts);
+    expect([FreightRate::count(), WaitingFeeRate::count(), BillingZone::count()])->toBe($counts);
 });
 
 test('missing file fails clearly', function () {

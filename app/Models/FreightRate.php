@@ -14,8 +14,8 @@ class FreightRate extends Model
 {
     protected $fillable = [
         'customer_id',
-        'origin_location_id',
-        'destination_location_id',
+        'origin_zone_id',
+        'destination_zone_id',
         'cargo_type',
         'rate_type',
         'vehicle_type',
@@ -87,14 +87,14 @@ class FreightRate extends Model
         return $this->belongsTo(Customer::class);
     }
 
-    public function originLocation(): BelongsTo
+    public function originZone(): BelongsTo
     {
-        return $this->belongsTo(Location::class, 'origin_location_id');
+        return $this->belongsTo(BillingZone::class, 'origin_zone_id');
     }
 
-    public function destinationLocation(): BelongsTo
+    public function destinationZone(): BelongsTo
     {
-        return $this->belongsTo(Location::class, 'destination_location_id');
+        return $this->belongsTo(BillingZone::class, 'destination_zone_id');
     }
 
     /**
@@ -126,14 +126,14 @@ class FreightRate extends Model
     }
 
     /**
-     * Mã giá dạng Excel: KH + điểm đi + điểm đến + loại hàng + loại hình + loại xe + trọng tải.
+     * Mã giá dạng Excel: KH + khu vực đi + khu vực đến + loại hàng + loại hình + loại xe + trọng tải.
      */
     public function priceCode(float|string|null $tonnage): string
     {
         return implode('', array_filter([
             $this->customer?->code,
-            $this->originLocation?->code,
-            $this->destinationLocation?->code,
+            $this->originZone?->code,
+            $this->destinationZone?->code,
             $this->cargo_type?->value,
             $this->rate_type,
             $this->vehicle_type?->value,

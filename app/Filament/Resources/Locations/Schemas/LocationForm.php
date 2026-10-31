@@ -70,6 +70,13 @@ class LocationForm
                     ->prefixIcon(Heroicon::OutlinedHashtag)
                     ->placeholder('VD: HAN-01')
                     ->required(),
+                Select::make('billing_zone_id')
+                    ->label('Khu vực tính cước')
+                    ->prefixIcon(Heroicon::OutlinedSquares2x2)
+                    ->relationship('billingZone', 'code')
+                    ->searchable(['code', 'name'])
+                    ->preload()
+                    ->helperText('Các địa điểm cùng khu vực dùng chung đơn giá vận chuyển.'),
                 TextInput::make('name')
                     ->label('Tên địa điểm')
                     ->prefixIcon(Heroicon::OutlinedMapPin)

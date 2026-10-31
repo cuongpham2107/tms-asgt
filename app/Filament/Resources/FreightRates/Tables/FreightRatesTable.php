@@ -21,11 +21,11 @@ class FreightRatesTable extends BaseTable
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
-                TextColumn::make('originLocation.code')
-                    ->label('Điểm đi')
+                TextColumn::make('originZone.code')
+                    ->label('Khu vực đi')
                     ->searchable(['code', 'name']),
-                TextColumn::make('destinationLocation.code')
-                    ->label('Điểm đến')
+                TextColumn::make('destinationZone.code')
+                    ->label('Khu vực đến')
                     ->searchable(['code', 'name']),
                 TextColumn::make('cargo_type')
                     ->label('Loại hàng')
@@ -73,14 +73,14 @@ class FreightRatesTable extends BaseTable
                     ->options(fn (): array => FreightRate::query()->distinct()->pluck('rate_type', 'rate_type')
                         ->mapWithKeys(fn (string $type): array => [$type => $type === '' ? 'Chuẩn' : $type])
                         ->all()),
-                SelectFilter::make('origin_location_id')
-                    ->label('Điểm đi')
-                    ->relationship('originLocation', 'code')
+                SelectFilter::make('origin_zone_id')
+                    ->label('Khu vực đi')
+                    ->relationship('originZone', 'code')
                     ->searchable()
                     ->preload(),
-                SelectFilter::make('destination_location_id')
-                    ->label('Điểm đến')
-                    ->relationship('destinationLocation', 'code')
+                SelectFilter::make('destination_zone_id')
+                    ->label('Khu vực đến')
+                    ->relationship('destinationZone', 'code')
                     ->searchable()
                     ->preload(),
             ]);

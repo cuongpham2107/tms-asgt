@@ -22,6 +22,7 @@ class Location extends Model
         'loc_type',
         'is_active',
         'area_id',
+        'billing_zone_id',
     ];
 
     protected $appends = ['coordinates'];
@@ -95,6 +96,11 @@ class Location extends Model
     public function area(): BelongsTo
     {
         return $this->belongsTo(Area::class, 'area_id');
+    }
+
+    public function billingZone(): BelongsTo
+    {
+        return $this->belongsTo(BillingZone::class);
     }
 
     protected static function booted(): void

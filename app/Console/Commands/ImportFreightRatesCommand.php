@@ -14,7 +14,7 @@ class ImportFreightRatesCommand extends Command
         {--file= : Đường dẫn file Excel bảng giá (mặc định "docs/QUY TRÌNH THỰC HIỆN SỐ LIỆU.xlsx")}
         {--dry-run : Chỉ phân tích và báo cáo, không ghi vào database}';
 
-    protected $description = 'Nhập đơn giá vận chuyển và phí giờ chờ từ file Excel bảng giá (sheet 3.1–3.4, 4, 6.1, 6.2)';
+    protected $description = 'Tạo khu vực tính cước, gán địa điểm và nhập đơn giá vận chuyển, phí giờ chờ từ file Excel bảng giá (sheet 3.1–3.4, 4, 6.1, 6.2)';
 
     public function handle(FreightRateExcelImporter $importer): int
     {
@@ -33,18 +33,20 @@ class ImportFreightRatesCommand extends Command
         $report = $importer->import($path, $isDryRun);
 
         $this->table(['Hạng mục', 'Số dòng'], [
+            ['Khu vực tính cước (tạo mới)', "{$report['zones']} ({$report['zones_created']})"],
+            ['Địa điểm được gán khu vực (sheet 5)', $report['locations_assigned']],
             ['Đơn giá vận chuyển', $report['freight_rates']],
             ['Phí giờ chờ', $report['waiting_fees']],
-            ['Địa chỉ chưa có trong danh mục địa điểm', count($report['missing_locations'])],
+            ['Khu vực có giá nhưng chưa có địa điểm nào', count($report['zones_without_locations'])],
         ]);
 
-        if ($report['missing_locations'] !== []) {
-            $this->warn('Các địa chỉ dưới đây chưa khớp địa điểm nào (sheet 5 cột I → mã cột C → locations.code), dòng giá tương ứng đã bỏ qua:');
+        if ($report['zones_without_locations'] !== []) {
+            $this->warn('Các khu vực dưới đây đã có giá nhưng chưa địa điểm nào thuộc khu vực — thêm địa điểm vào khu vực thì đơn mới tra được giá:');
             $this->table(
-                ['Địa chỉ trong bảng giá', 'Số dòng giá', 'Ví dụ'],
-                collect($report['missing_locations'])
+                ['Mã khu vực', 'Số dòng giá', 'Ví dụ'],
+                collect($report['zones_without_locations'])
                     ->sortByDesc(fn (array $sources): int => count($sources))
-                    ->map(fn (array $sources, string $address): array => [$address, count($sources), $sources[0]])
+                    ->map(fn (array $sources, string $zone): array => [$zone, count($sources), $sources[0]])
                     ->values()
                     ->all(),
             );

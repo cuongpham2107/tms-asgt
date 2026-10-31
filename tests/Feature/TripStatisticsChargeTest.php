@@ -8,6 +8,7 @@ use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
 use App\Filament\Pages\TripStatisticsReport;
 use App\Models\Area;
+use App\Models\BillingZone;
 use App\Models\Customer;
 use App\Models\FeeType;
 use App\Models\FreightRate;
@@ -34,8 +35,8 @@ beforeEach(function () {
 
     $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true, 'sort_order' => 1]);
     $customer = Customer::create(['code' => 'SAFO', 'name' => 'SAFO', 'is_active' => true]);
-    $pickup = Location::create(['code' => 'FUKANG', 'name' => 'Fukang', 'loc_type' => 'pickup', 'is_active' => true]);
-    $delivery = Location::create(['code' => 'ALSC', 'name' => 'Nhà ga ALSC', 'loc_type' => 'delivery', 'is_active' => true]);
+    $pickup = Location::create(['code' => 'FUKANG', 'billing_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id, 'name' => 'Fukang', 'loc_type' => 'pickup', 'is_active' => true]);
+    $delivery = Location::create(['code' => 'ALSC', 'billing_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id, 'name' => 'Nhà ga ALSC', 'loc_type' => 'delivery', 'is_active' => true]);
     $vehicle = Vehicle::create([
         'plate_number' => '20C04368',
         'owner' => 'ASGL',
@@ -55,8 +56,8 @@ beforeEach(function () {
 
     $this->rate = FreightRate::create([
         'customer_id' => $customer->id,
-        'origin_location_id' => $pickup->id,
-        'destination_location_id' => $delivery->id,
+        'origin_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id,
+        'destination_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id,
         'cargo_type' => CargoType::Gcr,
         'prices' => ['5' => 1_300_000],
     ]);

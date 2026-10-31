@@ -29,7 +29,7 @@ class OrderChargeCalculator
             return $charge;
         }
 
-        $order->loadMissing(['deliveryPoints', 'trip.vehicle']);
+        $order->loadMissing(['pickupLocation', 'deliveryPoints.location', 'trip.vehicle']);
         $chargeDate = $order->planned_loading_at ?? $order->created_at ?? now();
 
         if (! $charge->exists) {
@@ -72,7 +72,7 @@ class OrderChargeCalculator
             'return_trip_percent' => (float) ($attributes['return_trip_percent'] ?? 0),
         ]);
 
-        $order->loadMissing(['deliveryPoints', 'trip.vehicle']);
+        $order->loadMissing(['pickupLocation', 'deliveryPoints.location', 'trip.vehicle']);
         $this->applyFreightRate($order, $draft, $order->planned_loading_at ?? $order->created_at ?? now());
 
         return $draft;
@@ -101,13 +101,13 @@ class OrderChargeCalculator
     }
 
     /**
-     * Tuyến điểm đi → điểm trả đầu tiên, không có thì thử chiều ngược lại; bảng giá phải có đơn giá cho trọng tải tính cước.
-     * Giá đúng loại xe được ưu tiên hơn giá áp mọi loại xe.
+     * Tuyến khu vực tính cước của điểm đi → khu vực của điểm trả đầu tiên, không có thì thử chiều ngược lại;
+     * bảng giá phải có đơn giá cho trọng tải tính cước. Giá đúng loại xe được ưu tiên hơn giá áp mọi loại xe.
      */
     private function findFreightRate(Order $order, OrderCharge $charge, CarbonInterface $date): ?FreightRate
     {
-        $origin = $order->pickup_location_id;
-        $destination = $order->deliveryPoints->sortBy('sequence')->pluck('location_id')->filter()->first();
+        $origin = $order->pickupLocation?->billing_zone_id;
+        $destination = $order->deliveryPoints->sortBy('sequence')->first()?->location?->billing_zone_id;
 
         if ($origin === null || $destination === null || $charge->cargo_type === null || $charge->chargeable_tonnage === null) {
             return null;
@@ -117,10 +117,10 @@ class OrderChargeCalculator
 
         foreach ([[$origin, $destination], [$destination, $origin]] as [$from, $to]) {
             $rate = FreightRate::query()
-                ->with(['customer', 'originLocation', 'destinationLocation'])
+                ->with(['customer', 'originZone', 'destinationZone'])
                 ->where('customer_id', $charge->customer_id)
-                ->where('origin_location_id', $from)
-                ->where('destination_location_id', $to)
+                ->where('origin_zone_id', $from)
+                ->where('destination_zone_id', $to)
                 ->where('cargo_type', $charge->cargo_type)
                 ->where('rate_type', $charge->rate_type)
                 ->where(fn (Builder $q) => $q->whereNull('vehicle_type')->orWhere('vehicle_type', $vehicleType))

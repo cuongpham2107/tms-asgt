@@ -8,6 +8,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
 use App\Models\Area;
+use App\Models\BillingZone;
 use App\Models\Customer;
 use App\Models\FreightRate;
 use App\Models\Location;
@@ -31,8 +32,8 @@ beforeEach(function () {
 
     $this->area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true, 'sort_order' => 1]);
     $this->customer = Customer::create(['code' => 'ASGS (SAFO)', 'name' => 'SAFO', 'is_active' => true]);
-    $this->pickup = Location::create(['code' => 'FUKANG', 'name' => 'Fukang', 'loc_type' => 'pickup', 'is_active' => true]);
-    $this->delivery = Location::create(['code' => 'ALSC', 'name' => 'Nhà ga ALSC', 'loc_type' => 'delivery', 'is_active' => true]);
+    $this->pickup = Location::create(['code' => 'FUKANG', 'billing_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id, 'name' => 'Fukang', 'loc_type' => 'pickup', 'is_active' => true]);
+    $this->delivery = Location::create(['code' => 'ALSC', 'billing_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id, 'name' => 'Nhà ga ALSC', 'loc_type' => 'delivery', 'is_active' => true]);
 
     $this->vehicle = Vehicle::create([
         'plate_number' => '20C04368',
@@ -75,8 +76,8 @@ beforeEach(function () {
 
     $this->rate = FreightRate::create([
         'customer_id' => $this->customer->id,
-        'origin_location_id' => $this->pickup->id,
-        'destination_location_id' => $this->delivery->id,
+        'origin_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id,
+        'destination_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id,
         'cargo_type' => CargoType::Gcr,
         'prices' => ['1.25' => 750_000, '5' => 1_275_000],
     ]);
@@ -104,8 +105,8 @@ test('completing an external order calculates its charge automatically', functio
 test('rate type is taken from the order and picks the matching rate', function () {
     $coldRate = FreightRate::create([
         'customer_id' => $this->customer->id,
-        'origin_location_id' => $this->pickup->id,
-        'destination_location_id' => $this->delivery->id,
+        'origin_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id,
+        'destination_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id,
         'cargo_type' => CargoType::Gcr,
         'rate_type' => 'Hàng lạnh',
         'prices' => ['5' => 2_000_000],
@@ -119,6 +120,27 @@ test('rate type is taken from the order and picks the matching rate', function (
     expect($charge->rate_type)->toBe('Hàng lạnh')
         ->and($charge->freight_rate_id)->toBe($coldRate->id)
         ->and((float) $charge->base_price)->toBe(2_000_000.0);
+});
+
+test('any location in the same billing zone uses the zone rate', function () {
+    // SEV, ALSB… cùng khu vực "KCN QUANG CHÂU" dùng chung đơn giá của khu vực
+    $otherPickup = Location::create(['code' => 'SEV', 'billing_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id, 'name' => 'SEV', 'loc_type' => 'pickup', 'is_active' => true]);
+    $order = ($this->makeOrder)(['pickup_location_id' => $otherPickup->id]);
+    $order->update(['status' => OrderStatus::Completed]);
+
+    $charge = OrderCharge::where('order_id', $order->id)->firstOrFail();
+
+    expect($charge->freight_rate_id)->toBe($this->rate->id)
+        ->and((float) $charge->base_price)->toBe(1_275_000.0)
+        ->and($charge->price_code)->toContain('KCN QUANG CHÂUNỘI BÀI');
+});
+
+test('location without a billing zone gets no price', function () {
+    $this->pickup->update(['billing_zone_id' => null]);
+    $order = ($this->makeOrder)();
+    $order->update(['status' => OrderStatus::Completed]);
+
+    expect(OrderCharge::where('order_id', $order->id)->firstOrFail()->base_price)->toBeNull();
 });
 
 test('hhhk orders are not charged', function () {
@@ -141,8 +163,8 @@ test('return trip is charged at 50 percent by default', function () {
 
 test('rate is found when the route is stored in the opposite direction', function () {
     $this->rate->update([
-        'origin_location_id' => $this->delivery->id,
-        'destination_location_id' => $this->pickup->id,
+        'origin_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id,
+        'destination_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id,
     ]);
 
     $order = ($this->makeOrder)();

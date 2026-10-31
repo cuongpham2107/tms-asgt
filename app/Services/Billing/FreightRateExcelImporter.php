@@ -4,6 +4,7 @@ namespace App\Services\Billing;
 
 use App\Enums\CargoType;
 use App\Enums\VehicleType;
+use App\Models\BillingZone;
 use App\Models\Customer;
 use App\Models\FreightRate;
 use App\Models\Location;
@@ -19,9 +20,10 @@ use ZipArchive;
 /**
  * Nhập bảng giá từ file "QUY TRÌNH THỰC HIỆN SỐ LIỆU.xlsx" (sheet 3.1, 3.2, 3.3, 3.4, 4 + tra cứu 5, 6.1, 6.2).
  *
- * Giá khoá theo địa điểm cụ thể: địa chỉ đầy đủ trong bảng giá → sheet 5 cột I → mã nhà máy cột C → locations.code.
- * Dòng nào có địa chỉ không khớp danh mục địa điểm thì bỏ qua và ghi vào cảnh báo.
- * Chạy lại nhiều lần không nhân đôi: cùng khoá thì cập nhật giá.
+ * - Tạo khu vực tính cước (billing_zones) từ sheet 5 cột D/J và cột "Điểm đi/đến viết tắt" của các bảng giá.
+ * - Gán khu vực cho địa điểm: sheet 5 mã nhà máy cột C → locations.code, khu vực cột D.
+ * - Đơn giá khoá theo khách hàng + khu vực đi + khu vực đến + loại hàng + loại hình + loại xe.
+ * Chạy lại nhiều lần không nhân đôi: cùng mã khu vực / cùng khoá giá thì cập nhật.
  */
 class FreightRateExcelImporter
 {
@@ -53,8 +55,11 @@ class FreightRateExcelImporter
 
     private Spreadsheet $workbook;
 
-    /** @var array<string, list<int>> địa chỉ đầy đủ (chuẩn hoá) → id địa điểm */
-    private array $locationIdsByAddress = [];
+    /** @var array<string, string> mã khu vực → tên hiển thị */
+    private array $zoneNames = [];
+
+    /** @var array<int, string> id địa điểm → mã khu vực theo sheet 5 */
+    private array $zoneCodeByLocationId = [];
 
     /** @var array<string, int> mã KH (chuẩn hoá) → id */
     private array $customerIds = [];
@@ -68,11 +73,11 @@ class FreightRateExcelImporter
     /** @var array<string, string> */
     private array $warnings = [];
 
-    /** @var array<string, list<string>> địa chỉ chưa có trong danh mục → các dòng giá bị bỏ qua */
-    private array $missingLocations = [];
+    /** @var array<string, list<string>> mã khu vực có giá → các dòng giá */
+    private array $zoneRateSources = [];
 
     /**
-     * @return array{freight_rates: int, waiting_fees: int, warnings: list<string>, missing_locations: array<string, list<string>>}
+     * @return array{freight_rates: int, waiting_fees: int, zones: int, zones_created: int, locations_assigned: int, warnings: list<string>, zones_without_locations: array<string, list<string>>}
      */
     public function import(string $path, bool $dryRun = false): array
     {
@@ -80,7 +85,7 @@ class FreightRateExcelImporter
         $this->customerIds = Customer::query()->pluck('id', 'code')
             ->mapWithKeys(fn (int $id, string $code): array => [$this->normalize($code) => $id])
             ->all();
-        $this->buildLocationIndex($path);
+        $this->readLocationZones($path);
 
         $this->readOneDropRates();
         $this->readTwoDropRates();
@@ -88,9 +93,30 @@ class FreightRateExcelImporter
         $this->readVfcRates(self::SHEET_VFC_COLD_CODES, self::SHEET_VFC_COLD, normal: false);
         $this->readWaitingFees();
 
+        $existingZoneIds = BillingZone::query()->pluck('id', 'code')->all();
+        $locationsToAssign = Location::query()->get(['id', 'billing_zone_id'])
+            ->filter(fn (Location $location): bool => isset($this->zoneCodeByLocationId[$location->id])
+                && $location->billing_zone_id !== ($existingZoneIds[$this->zoneCodeByLocationId[$location->id]] ?? false));
+        $zonesWithLocations = Location::query()->whereNotNull('billing_zone_id')->with('billingZone:id,code')->get()
+            ->pluck('billingZone.code')
+            ->merge($this->zoneCodeByLocationId)
+            ->flip();
+
         if (! $dryRun) {
-            DB::transaction(function (): void {
+            DB::transaction(function () use ($locationsToAssign): void {
+                $zoneIds = [];
+                foreach ($this->zoneNames as $code => $name) {
+                    $zoneIds[$code] = BillingZone::firstOrCreate(['code' => $code], ['name' => $name])->id;
+                }
+                foreach ($locationsToAssign as $location) {
+                    $location->update(['billing_zone_id' => $zoneIds[$this->zoneCodeByLocationId[$location->id]]]);
+                }
                 foreach ($this->freightRates as $rate) {
+                    $rate = [
+                        ...collect($rate)->except(['origin_zone', 'destination_zone'])->all(),
+                        'origin_zone_id' => $zoneIds[$rate['origin_zone']],
+                        'destination_zone_id' => $zoneIds[$rate['destination_zone']],
+                    ];
                     FreightRate::updateOrCreate(collect($rate)->except(['prices', 'notes'])->all(), collect($rate)->only(['prices', 'notes'])->all());
                 }
                 foreach ($this->waitingFees as $fee) {
@@ -105,8 +131,11 @@ class FreightRateExcelImporter
         return [
             'freight_rates' => count($this->freightRates),
             'waiting_fees' => count($this->waitingFees),
+            'zones' => count($this->zoneNames),
+            'zones_created' => count(array_diff_key($this->zoneNames, $existingZoneIds)),
+            'locations_assigned' => $locationsToAssign->count(),
             'warnings' => array_values($this->warnings),
-            'missing_locations' => $this->missingLocations,
+            'zones_without_locations' => array_diff_key($this->zoneRateSources, $zonesWithLocations->all()),
         ];
     }
 
@@ -130,31 +159,48 @@ class FreightRateExcelImporter
         return $reader->load($path);
     }
 
-    private function buildLocationIndex(string $path): void
+    /**
+     * Sheet 5: mỗi mã nhà máy (cột C) thuộc khu vực cột D (mã viết tắt), cột J là tên hiển thị.
+     */
+    private function readLocationZones(string $path): void
     {
-        $idsByCode = [];
-        $idsByName = [];
-        foreach (Location::query()->get(['id', 'code', 'name', 'address']) as $location) {
-            $idsByCode[$this->normalize($location->code)][] = $location->id;
-            $idsByName[$this->normalize($location->name)][] = $location->id;
-            $idsByName[$this->normalize($location->name.', '.$location->address)][] = $location->id;
+        $zoneByLocationCode = [];
+        foreach ($this->locationSheetRows($path) as [$locationCode, $zoneCode, $zoneName]) {
+            $zone = $this->zone($zoneCode, $zoneName);
+            if ($this->normalize($locationCode) !== '' && $zone !== null) {
+                $zoneByLocationCode[$this->normalize($locationCode)] = $zone;
+            }
         }
 
-        $this->locationIdsByAddress = $idsByName;
-
-        foreach ($this->locationSheetRows($path) as [$code, $address]) {
-            $ids = $idsByCode[$this->normalize($code)] ?? [];
-            if ($this->normalize($address) !== '' && $ids !== []) {
-                $this->locationIdsByAddress[$this->normalize($address)] = $ids;
+        foreach (Location::query()->get(['id', 'code']) as $location) {
+            $zone = $zoneByLocationCode[$this->normalize($location->code)] ?? null;
+            if ($zone !== null) {
+                $this->zoneCodeByLocationId[$location->id] = $zone;
             }
         }
     }
 
     /**
-     * Đọc streaming sheet "5. Địa điểm" (cột C mã nhà máy, cột I tên + địa chỉ).
+     * Ghi nhận khu vực, trả về mã chuẩn hoá (null nếu ô trống).
+     */
+    private function zone(?string $code, ?string $name = null): ?string
+    {
+        $code = BillingZone::normalizeCode($code);
+        if ($code === null) {
+            return null;
+        }
+
+        $name = trim((string) preg_replace('/\s+/u', ' ', (string) $name));
+        $this->zoneNames[$code] ??= $name !== '' ? $name : mb_convert_case(mb_strtolower($code), MB_CASE_TITLE);
+
+        return $code;
+    }
+
+    /**
+     * Đọc streaming sheet "5. Địa điểm" (cột C mã nhà máy, cột D mã khu vực, cột J tên khu vực).
      * Sheet này có định dạng tới cột XFA (~70MB XML) nên không nạp bằng PhpSpreadsheet được — tốn vài GB RAM.
      *
-     * @return \Generator<int, array{0: string, 1: string}>
+     * @return \Generator<int, array{0: string, 1: string, 2: string}>
      */
     private function locationSheetRows(string $path): \Generator
     {
@@ -189,7 +235,7 @@ class FreightRateExcelImporter
                 continue;
             }
 
-            $values = ['C' => '', 'I' => ''];
+            $values = ['C' => '', 'D' => '', 'J' => ''];
             foreach (simplexml_load_string($reader->readOuterXml())->c as $cell) {
                 $column = preg_replace('/\d+/', '', (string) $cell['r']);
                 if (! array_key_exists($column, $values)) {
@@ -200,7 +246,7 @@ class FreightRateExcelImporter
                 $values[$column] = (string) $cell['t'] === 's' ? ($sharedStrings[(int) $raw] ?? '') : $raw;
             }
 
-            yield [$values['C'], $values['I']];
+            yield [$values['C'], $values['D'], $values['J']];
         }
 
         $reader->close();
@@ -243,7 +289,7 @@ class FreightRateExcelImporter
                 customer: $this->cell($sheet, "D{$row}"),
                 cargoType: $this->cell($sheet, "B{$row}"),
                 rateType: $this->cell($sheet, "C{$row}"),
-                addresses: [$this->cell($sheet, "G{$row}"), $this->cell($sheet, "H{$row}")],
+                zones: [$this->cell($sheet, "E{$row}"), $this->cell($sheet, "F{$row}")],
                 tiers: $tiers,
             );
         }
@@ -265,7 +311,7 @@ class FreightRateExcelImporter
                 customer: $this->cell($sheet, "D{$row}"),
                 cargoType: $this->cell($sheet, "B{$row}"),
                 rateType: self::TWO_DROP_RATE_TYPE,
-                addresses: [$this->cell($sheet, "H{$row}"), $this->cell($sheet, "I{$row}")],
+                zones: [$this->cell($sheet, "E{$row}"), $this->cell($sheet, "F{$row}")],
                 tiers: $tiers,
             );
         }
@@ -294,7 +340,7 @@ class FreightRateExcelImporter
             }
         }
 
-        [$customerCol, $codeCol, $originCol, $destinationCol, $firstRow] = $normal ? ['B', 'F', 'G', 'H', 2] : ['C', 'G', 'H', 'I', 3];
+        [$customerCol, $codeCol, $originCol, $destinationCol, $firstRow] = $normal ? ['B', 'F', 'D', 'E', 2] : ['C', 'G', 'E', 'F', 3];
 
         foreach ($this->rows($codesSheet, $firstRow) as $row) {
             $code = $this->cell($codesSheet, "{$codeCol}{$row}");
@@ -315,7 +361,7 @@ class FreightRateExcelImporter
                 customer: $this->cell($codesSheet, "{$customerCol}{$row}"),
                 cargoType: 'GCR',
                 rateType: $normal ? '' : self::VFC_COLD_RATE_TYPE,
-                addresses: [$this->cell($codesSheet, "{$originCol}{$row}"), $this->cell($codesSheet, "{$destinationCol}{$row}")],
+                zones: [$this->cell($codesSheet, "{$originCol}{$row}"), $this->cell($codesSheet, "{$destinationCol}{$row}")],
                 tiers: $tiers,
                 source: "{$codesSheetName}!{$row}",
             );
@@ -325,7 +371,7 @@ class FreightRateExcelImporter
     /**
      * Một dòng Excel → một dòng giá cho mỗi (tuyến, loại xe), đơn giá các bậc tải gom vào cột prices.
      *
-     * @param  array{0: string, 1: string}  $addresses  [điểm đi, điểm đến]
+     * @param  array{0: string, 1: string}  $zones  [khu vực điểm đi, khu vực điểm đến] — cột "viết tắt" của bảng giá
      * @param  array<string, array{tonnage: float|int, vehicle_type: ?VehicleType}>  $tiers  cột → bậc tải
      */
     private function addRates(
@@ -334,27 +380,20 @@ class FreightRateExcelImporter
         string $customer,
         string $cargoType,
         string $rateType,
-        array $addresses,
+        array $zones,
         array $tiers,
         ?string $source = null,
     ): void {
         $source ??= "{$sheet->getTitle()}!{$row}";
         $customerId = $this->customerId($customer, $source);
 
-        if ($customerId === null || in_array('', $addresses, true)) {
+        if ($customerId === null || BillingZone::normalizeCode($zones[0]) === null || BillingZone::normalizeCode($zones[1]) === null) {
             return;
         }
 
-        $locationIds = [];
-        foreach ($addresses as $address) {
-            $ids = $this->locationIdsByAddress[$this->normalize($address)] ?? null;
-            if ($ids === null) {
-                $this->missingLocations[trim($address)][] = $source;
-
-                return;
-            }
-            $locationIds[] = $ids;
-        }
+        [$origin, $destination] = [$this->zone($zones[0], $zones[0]), $this->zone($zones[1], $zones[1])];
+        $this->zoneRateSources[$origin][] = $source;
+        $this->zoneRateSources[$destination][] = $source;
 
         $pricesByVehicleType = [];
         foreach ($tiers as $column => $tier) {
@@ -364,36 +403,33 @@ class FreightRateExcelImporter
             }
         }
 
-        // Mã địa điểm trùng (cùng mã, khác khu vực) → nhập giá cho từng địa điểm.
-        foreach ($this->combinations($locationIds) as [$origin, $destination]) {
-            foreach ($pricesByVehicleType as $vehicleType => $prices) {
-                $rate = [
-                    'customer_id' => $customerId,
-                    'origin_location_id' => $origin,
-                    'destination_location_id' => $destination,
-                    'cargo_type' => CargoType::tryFrom(strtoupper($cargoType)) ?? CargoType::Gcr,
-                    'rate_type' => trim($rateType),
-                    'vehicle_type' => $vehicleType === '' ? null : VehicleType::from($vehicleType),
-                    'effective_from' => null,
-                    'effective_to' => null,
-                ];
+        foreach ($pricesByVehicleType as $vehicleType => $prices) {
+            $rate = [
+                'customer_id' => $customerId,
+                'origin_zone' => $origin,
+                'destination_zone' => $destination,
+                'cargo_type' => CargoType::tryFrom(strtoupper($cargoType)) ?? CargoType::Gcr,
+                'rate_type' => trim($rateType),
+                'vehicle_type' => $vehicleType === '' ? null : VehicleType::from($vehicleType),
+                'effective_from' => null,
+                'effective_to' => null,
+            ];
 
-                $key = implode('|', [$customerId, $origin, $destination, $rate['cargo_type']->value, $rate['rate_type'], $vehicleType]);
-                $existing = $this->freightRates[$key] ?? null;
+            $key = implode('|', [$customerId, $origin, $destination, $rate['cargo_type']->value, $rate['rate_type'], $vehicleType]);
+            $existing = $this->freightRates[$key] ?? null;
 
-                foreach ($prices as $tonnage => $price) {
-                    $previous = $existing['prices'][$tonnage] ?? null;
-                    if ($previous !== null && (float) $previous !== $price) {
-                        $this->warn("{$source}: trùng tuyến với {$existing['notes']} nhưng khác giá ở bậc {$tonnage}T — lấy giá dòng sau");
-                    }
+            foreach ($prices as $tonnage => $price) {
+                $previous = $existing['prices'][$tonnage] ?? null;
+                if ($previous !== null && (float) $previous !== $price) {
+                    $this->warn("{$source}: trùng tuyến với {$existing['notes']} nhưng khác giá ở bậc {$tonnage}T — lấy giá dòng sau");
                 }
-
-                $this->freightRates[$key] = [
-                    ...$rate,
-                    'prices' => array_replace($existing['prices'] ?? [], $prices),
-                    'notes' => "Import từ Excel ({$source})",
-                ];
             }
+
+            $this->freightRates[$key] = [
+                ...$rate,
+                'prices' => array_replace($existing['prices'] ?? [], $prices),
+                'notes' => "Import từ Excel ({$source})",
+            ];
         }
     }
 
@@ -558,27 +594,5 @@ class FreightRateExcelImporter
     private function warn(string $message): void
     {
         $this->warnings[$message] = $message;
-    }
-
-    /**
-     * Tích Descartes các danh sách id địa điểm.
-     *
-     * @param  list<list<int>>  $lists
-     * @return list<list<int>>
-     */
-    private function combinations(array $lists): array
-    {
-        $result = [[]];
-        foreach ($lists as $ids) {
-            $next = [];
-            foreach ($result as $prefix) {
-                foreach (array_unique($ids) as $id) {
-                    $next[] = [...$prefix, $id];
-                }
-            }
-            $result = $next;
-        }
-
-        return $result;
     }
 }

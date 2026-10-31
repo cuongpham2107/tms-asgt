@@ -1,9 +1,11 @@
 <?php
 
 use App\Enums\CargoType;
+use App\Filament\Resources\BillingZones\Pages\ListBillingZones;
 use App\Filament\Resources\FeeTypes\Pages\ListFeeTypes;
 use App\Filament\Resources\FreightRates\Pages\ListFreightRates;
 use App\Filament\Resources\WaitingFeeRates\Pages\ListWaitingFeeRates;
+use App\Models\BillingZone;
 use App\Models\Customer;
 use App\Models\FeeType;
 use App\Models\FreightRate;
@@ -21,15 +23,15 @@ beforeEach(function () {
     $this->actingAs(User::factory()->create());
 
     $this->customer = Customer::create(['code' => 'SAFO', 'name' => 'SAFO', 'is_active' => true]);
-    $this->origin = Location::create(['code' => 'FUKANG', 'name' => 'Fukang', 'loc_type' => 'pickup', 'is_active' => true]);
-    $this->destination = Location::create(['code' => 'ALSC', 'name' => 'Nhà ga ALSC', 'loc_type' => 'delivery', 'is_active' => true]);
+    $this->origin = Location::create(['code' => 'FUKANG', 'billing_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id, 'name' => 'Fukang', 'loc_type' => 'pickup', 'is_active' => true]);
+    $this->destination = Location::create(['code' => 'ALSC', 'billing_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id, 'name' => 'Nhà ga ALSC', 'loc_type' => 'delivery', 'is_active' => true]);
 });
 
 test('freight rate list shows rates and creates a route with prices per tonnage', function () {
     $rate = FreightRate::create([
         'customer_id' => $this->customer->id,
-        'origin_location_id' => $this->origin->id,
-        'destination_location_id' => $this->destination->id,
+        'origin_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id,
+        'destination_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id,
         'cargo_type' => CargoType::Gcr,
         'prices' => ['5' => 1_300_000],
     ]);
@@ -39,8 +41,8 @@ test('freight rate list shows rates and creates a route with prices per tonnage'
         ->assertSee('1.300.000')
         ->callAction('create', data: [
             'customer_id' => $this->customer->id,
-            'origin_location_id' => $this->origin->id,
-            'destination_location_id' => $this->destination->id,
+            'origin_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id,
+            'destination_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id,
             'cargo_type' => CargoType::Dangerous->value,
             'prices' => ['2,5' => '800.000', '8' => '2200000'],
         ])
@@ -48,7 +50,8 @@ test('freight rate list shows rates and creates a route with prices per tonnage'
 
     $created = FreightRate::where('cargo_type', 'DGR')->firstOrFail();
 
-    expect($created->priceFor(2.5))->toBe(800_000.0)
+    expect($created->originZone->code)->toBe('KCN QUANG CHÂU')
+        ->and($created->priceFor(2.5))->toBe(800_000.0)
         ->and($created->priceFor(8))->toBe(2_200_000.0)
         ->and($created->priceFor(5))->toBeNull();
 });
@@ -69,4 +72,34 @@ test('waiting fee and fee type lists render their records', function () {
 
     expect(WaitingFeeRate::latest('id')->first()->tierFor(8))->toEqual(['tonnage' => 8, 'fee' => 70_000, 'free_minutes' => 120]);
     Livewire::test(ListFeeTypes::class)->assertCanSeeTableRecords(FeeType::orderBy('sort')->limit(10)->get());
+});
+
+test('billing zone form creates a zone and moves locations into it', function () {
+    $oldZone = BillingZone::create(['code' => 'CŨ', 'name' => 'Cũ']);
+    $this->origin->update(['billing_zone_id' => $oldZone->id]);
+
+    Livewire::test(ListBillingZones::class)
+        ->callAction('create', data: [
+            'code' => 'kcn  yên phong',
+            'name' => 'Kcn Yên Phong',
+            'location_ids' => [$this->origin->id, $this->destination->id],
+        ])
+        ->assertHasNoActionErrors();
+
+    $zone = BillingZone::where('code', 'KCN YÊN PHONG')->firstOrFail();
+
+    expect($this->origin->fresh()->billing_zone_id)->toBe($zone->id)
+        ->and($this->destination->fresh()->billing_zone_id)->toBe($zone->id);
+
+    // Bỏ chọn địa điểm thì gỡ khỏi khu vực
+    Livewire::test(ListBillingZones::class)
+        ->callTableAction('edit', $zone, data: ['location_ids' => [$this->origin->id]])
+        ->assertHasNoTableActionErrors();
+
+    expect($this->destination->fresh()->billing_zone_id)->toBeNull()
+        ->and($this->origin->fresh()->billing_zone_id)->toBe($zone->id);
+
+    Livewire::test(ListBillingZones::class)
+        ->assertCanSeeTableRecords([$zone])
+        ->assertSee('FUKANG');
 });

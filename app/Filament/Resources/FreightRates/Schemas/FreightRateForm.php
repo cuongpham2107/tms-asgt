@@ -5,6 +5,7 @@ namespace App\Filament\Resources\FreightRates\Schemas;
 use App\Enums\CargoType;
 use App\Enums\VehicleType;
 use App\Models\FreightRate;
+use App\Models\Location;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -34,8 +35,8 @@ class FreightRateForm
                             ->placeholder('Để trống = giá chuẩn')
                             ->datalist(fn (): array => FreightRate::query()->where('rate_type', '!=', '')->distinct()->pluck('rate_type')->all())
                             ->dehydrateStateUsing(fn (?string $state): string => trim((string) $state)),
-                        self::locationSelect('origin_location_id', 'originLocation', 'Điểm đi')->required(),
-                        self::locationSelect('destination_location_id', 'destinationLocation', 'Điểm đến')->required(),
+                        self::zoneSelect('origin_zone_id', 'originZone', 'Khu vực điểm đi'),
+                        self::zoneSelect('destination_zone_id', 'destinationZone', 'Khu vực điểm đến'),
                     ]),
                 Section::make('Giá')
                     ->columns(2)
@@ -73,12 +74,27 @@ class FreightRateForm
             ]);
     }
 
-    private static function locationSelect(string $name, string $relationship, string $label): Select
+    /**
+     * Khu vực tính cước, gợi ý các địa điểm thuộc khu vực để kiểm tra chọn đúng.
+     */
+    private static function zoneSelect(string $name, string $relationship, string $label): Select
     {
         return Select::make($name)
             ->label($label)
             ->relationship($relationship, 'code')
             ->searchable(['code', 'name'])
-            ->preload();
+            ->preload()
+            ->required()
+            ->live()
+            ->helperText(function (?string $state): ?string {
+                if (blank($state)) {
+                    return null;
+                }
+                $codes = Location::query()->where('billing_zone_id', $state)->orderBy('code')->pluck('code');
+
+                return $codes->isEmpty()
+                    ? 'Chưa có địa điểm nào thuộc khu vực này'
+                    : 'Gồm: '.$codes->implode(', ');
+            });
     }
 }
