@@ -103,11 +103,6 @@
                                     Chạy rỗng
                                 </x-filament::badge>
                             @endif
-                            @foreach ($customerCodes as $customerCode)
-                                <x-filament::badge color="info" size="xs" title="Mã khách hàng">
-                                    {{ $customerCode }}
-                                </x-filament::badge>
-                            @endforeach
                         </div>
 
                         <div class="flex items-center gap-2">
@@ -136,7 +131,7 @@
 
                     {{-- Nội dung thông tin chi tiết của chuyến --}}
                     <div class="p-4 space-y-3.5">
-                        <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
                             <div>
                                 <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400 block">Lái xe</span>
                                 <span class="text-xs font-semibold text-gray-900 dark:text-white mt-0.5 block truncate" title="{{ $t->driver?->name }}">
@@ -184,8 +179,20 @@
                             </div>
                         @endif
 
-                        {{-- Danh sách đơn hàng trong chuyến --}}
-                        @if ($t->orders->isNotEmpty())
+                        {{-- Chuyến chỉ có 1 đơn: hiện gọn 1 dòng, khỏi khối "Danh sách đơn hàng" --}}
+                        @if ($t->orders->count() === 1)
+                            @php $singleOrder = $t->orders->first(); @endphp
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-gray-100 dark:border-white/5 pt-2.5 text-xs">
+                                <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Đơn hàng</span>
+                                <span class="font-bold text-gray-900 dark:text-white">{{ $singleOrder->order_code }}</span>
+                                <x-filament::badge size="xs" :color="$singleOrder->status?->getColor() ?? 'gray'">
+                                    {{ $singleOrder->status?->getLabel() ?? (string) $singleOrder->status }}
+                                </x-filament::badge>
+                                @if ($singleOrder->customer)
+                                    <span class="text-[11px] font-semibold text-gray-500 dark:text-gray-400">({{ $singleOrder->customer->code }})</span>
+                                @endif
+                            </div>
+                        @elseif ($t->orders->isNotEmpty())
                             <div class="border-t border-gray-100 dark:border-white/5 pt-3">
                                 <div class="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2.5 flex items-center justify-between">
                                     <span>Danh sách đơn hàng ({{ $t->orders->count() }} đơn)</span>
