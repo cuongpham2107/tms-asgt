@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Trips\Tables;
 
 use App\Enums\CheckpointType;
+use App\Enums\MapTile;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -27,7 +28,6 @@ use App\Services\OsrmService;
 use App\Services\Trip\Handlers\CompletedHandler;
 use App\Services\Trip\TripCheckpointOsmValidationService;
 use App\Services\TripKmAdjustmentService;
-use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
@@ -887,18 +887,7 @@ class TripsTable extends BaseTable
             'geoJsonColors' => [],
             'geoJsonData' => [],
             'infoText' => '',
-            'tileLayersUrl' => [
-                [
-                    TileLayer::OpenStreetMap->getLabel(),
-                    TileLayer::OpenStreetMap->getUrl(),
-                    TileLayer::OpenStreetMap->getAttribution(),
-                ],
-                [
-                    'Vệ tinh',
-                    'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-                    '&copy; Google Maps',
-                ],
-            ],
+            'tileLayersUrl' => MapTile::config(),
             'layerGroupsData' => [],
             'layersData' => $layers,
             'zoomConfig' => ['max' => 18, 'min' => 0],

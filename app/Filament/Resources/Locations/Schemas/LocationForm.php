@@ -3,8 +3,8 @@
 namespace App\Filament\Resources\Locations\Schemas;
 
 use App\Enums\LocationType;
+use App\Enums\MapTile;
 use App\Models\Area;
-use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Services\GeoSearchService;
@@ -105,7 +105,7 @@ class LocationForm
                     ->height(350)
                     ->center(21.0285, 105.8542)
                     ->zoom(13)
-                    ->tileLayersUrl(TileLayer::OpenStreetMap)
+                    ->tileLayersUrl(MapTile::options())
                     ->geoSearchControl()
                     ->geoSearchProvider('nominatim')
                     ->fullscreenControl()

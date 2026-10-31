@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Tables;
 
+use App\Enums\MapTile;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -19,7 +20,6 @@ use App\Models\Trip;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
 use App\Services\OsrmService;
-use EduardoRibeiroDev\FilamentLeaflet\Enums\TileLayer;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
@@ -561,11 +561,7 @@ class OrdersTable extends BaseTable
             'geoJsonColors' => [],
             'geoJsonData' => [],
             'infoText' => '',
-            'tileLayersUrl' => [[
-                TileLayer::OpenStreetMap->getLabel(),
-                TileLayer::OpenStreetMap->getUrl(),
-                TileLayer::OpenStreetMap->getAttribution(),
-            ]],
+            'tileLayersUrl' => MapTile::config(),
             'layerGroupsData' => [],
             'layersData' => $layers,
             'zoomConfig' => ['max' => 10, 'min' => 0],

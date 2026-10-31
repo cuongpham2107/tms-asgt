@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Enums\CheckpointType;
+use App\Enums\MapTile;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
@@ -223,11 +224,7 @@ class GoogleMapTracking extends Page
 
     protected function getTileLayersUrl(): TileLayer|string|array
     {
-        return [
-            'Bản đồ đường' => TileLayer::OpenStreetMap,
-            'Vệ tinh' => 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-            'Bản đồ nhanh (Carto)' => 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-        ];
+        return MapTile::options();
     }
 
     /**

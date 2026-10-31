@@ -692,9 +692,9 @@
             scrollWheelZoom: true,
         }).setView(mapData.center, 12);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener noreferrer">OpenStreetMap</a>',
+        L.tileLayer(@js(\App\Enums\MapTile::Streets->value), {
+            maxZoom: 20,
+            attribution: @js(\App\Enums\MapTile::Streets->attribution()),
         }).addTo(map);
 
         markersLayer = L.layerGroup().addTo(map);
