@@ -71,6 +71,9 @@ interface WireMethods {
 
 type Wire = JsWidgetUtilities<WireMethods>['$wire']
 
+const TRAVELED_COLOR = '#4338ca'
+const PLANNED_COLOR = '#ea580c'
+
 const escapeHtml = (value: unknown): string =>
     String(value ?? '').replace(
         /[&<>"']/g,
@@ -272,19 +275,23 @@ function MapCanvas({ configuration, selectedIds, onSelect }: { configuration: Sn
 
         // Lộ trình cũ của xe vừa bỏ chọn ẩn ngay, không chờ server trả về.
         configuration.routes.filter((route) => selectedIds.includes(route.vehicleId)).forEach((route) => {
-            if (route.traveled.length >= 2) {
-                const line = L.polyline(route.traveled.map(([lat, lng]) => [lat, lng] as [number, number]), { color: '#2563eb', weight: 5, opacity: 0.9 })
-                line.bindTooltip('Đã đi')
+            // Viền trắng dưới mỗi đường để tách khỏi đường xá của nền bản đồ; kế hoạch vẽ sau để nằm trên.
+            const drawLine = (points: readonly (readonly [number, number])[], options: L.PolylineOptions, tooltip: string) => {
+                if (points.length < 2) {
+                    return
+                }
+
+                const latlngs = points.map(([lat, lng]) => [lat, lng] as [number, number])
+                const casing = L.polyline(latlngs, { color: '#ffffff', weight: (options.weight ?? 4) + 4, opacity: 0.95, interactive: false })
+                const line = L.polyline(latlngs, { ...options, lineCap: 'round', lineJoin: 'round' })
+                line.bindTooltip(tooltip, { sticky: true })
+                casing.addTo(map)
                 line.addTo(map)
-                routeLayersRef.current.push(line)
+                routeLayersRef.current.push(casing, line)
             }
 
-            if (route.planned.length >= 2) {
-                const line = L.polyline(route.planned.map(([lat, lng]) => [lat, lng] as [number, number]), { color: '#e11d48', weight: 4, opacity: 0.85, dashArray: '8 8' })
-                line.bindTooltip('Kế hoạch còn lại')
-                line.addTo(map)
-                routeLayersRef.current.push(line)
-            }
+            drawLine(route.traveled, { color: TRAVELED_COLOR, weight: 5, opacity: 1 }, 'Đã đi')
+            drawLine(route.planned, { color: PLANNED_COLOR, weight: 4, opacity: 1, dashArray: '2 9' }, 'Kế hoạch còn lại')
 
             route.checkpoints.forEach((checkpoint) => {
                 const dot = L.circleMarker([checkpoint.lat, checkpoint.lng], {
@@ -302,7 +309,7 @@ function MapCanvas({ configuration, selectedIds, onSelect }: { configuration: Sn
             route.stops.forEach((stop) => {
                 const dot = L.circleMarker([stop.lat, stop.lng], {
                     radius: 7,
-                    color: '#e11d48',
+                    color: PLANNED_COLOR,
                     fillColor: '#ffffff',
                     fillOpacity: 1,
                     weight: 3,
@@ -663,11 +670,11 @@ function VehicleTracking({ configuration, wire }: { configuration: Snapshot<Conf
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                         <span className="font-bold text-gray-700 dark:text-gray-200">Lộ trình xe đang chọn:</span>
                         <span className="inline-flex items-center gap-1.5 font-medium">
-                            <span className="inline-block h-1 w-6 rounded" style={{ backgroundColor: '#2563eb' }} />
+                            <span className="inline-block h-1.5 w-6 rounded" style={{ backgroundColor: TRAVELED_COLOR }} />
                             Đã đi
                         </span>
                         <span className="inline-flex items-center gap-1.5 font-medium">
-                            <span className="inline-block w-6" style={{ borderBottom: '3px dashed #e11d48' }} />
+                            <span className="inline-block w-6" style={{ borderBottom: `3px dotted ${PLANNED_COLOR}` }} />
                             Kế hoạch còn lại
                         </span>
                         <span className="inline-flex items-center gap-1.5 font-medium">
@@ -687,7 +694,7 @@ function VehicleTracking({ configuration, wire }: { configuration: Snapshot<Conf
                             Kết thúc
                         </span>
                         <span className="inline-flex items-center gap-1.5 font-medium">
-                            <span className="h-3 w-3 rounded-full border-[3px] border-red-600 bg-white" />
+                            <span className="h-3 w-3 rounded-full border-[3px] bg-white" style={{ borderColor: PLANNED_COLOR }} />
                             Điểm chưa tới
                         </span>
                     </div>
