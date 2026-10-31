@@ -3,7 +3,7 @@
     $photos = $trip->photos()
         ->with([
             'tripCheckpoint.driver',
-            'tripCheckpoint.order',
+            'tripCheckpoint.order.pickupLocation',
             'tripCheckpoint.deliveryPoint.location',
         ])
         ->orderBy('trip_checkpoints.occurred_at', 'asc')
@@ -14,7 +14,7 @@
         $cp = $photo->tripCheckpoint;
         $cpType = $cp?->checkpoint_type;
         $orderCode = $cp?->order?->order_code;
-        $pointCode = $cp?->deliveryPoint?->location?->code ?? $cp?->deliveryPoint?->location?->name;
+        $pointCode = $cp?->pointLocation()?->code ?? $cp?->pointLocation()?->name;
 
         return [
             'id' => $photo->id,

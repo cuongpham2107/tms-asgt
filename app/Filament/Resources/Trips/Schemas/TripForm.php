@@ -233,7 +233,7 @@ class TripForm
                     ->columnSpanFull()
                     ->hidden(fn (?Model $record) => $record?->is_empty_run || $record?->checkpoints->isEmpty())
                     ->schema([
-                        // Repeater cho xe thuê ngoài không có lái xe (4 cột: Loại, Đơn hàng, Giờ, Điểm giao)
+                        // Repeater cho xe thuê ngoài không có lái xe (4 cột: Loại, Đơn hàng, Giờ, Điểm)
                         Repeater::make('checkpoints_rent')
                             ->relationship('checkpoints')
                             ->label('Danh sách mốc hành trình')
@@ -242,7 +242,7 @@ class TripForm
                                 TableColumn::make('Loại')->width('220px'),
                                 TableColumn::make('Đơn hàng')->width('180px'),
                                 TableColumn::make('Giờ')->width('220px'),
-                                TableColumn::make('Điểm giao')->width('110px'),
+                                TableColumn::make('Điểm')->width('110px'),
                             ])
                             ->orderColumn('created_at')
                             ->compact()
@@ -332,7 +332,8 @@ class TripForm
                                             ->mapWithKeys(fn ($dp) => [$dp->id => $dp->location?->code ?? 'DP#'.$dp->id])
                                             ->toArray();
                                     })
-                                    ->placeholder('Chọn điểm')
+                                    ->placeholder(fn ($get): string => self::pickupPointLabel($get) ?? 'Chọn điểm')
+                                    ->disabled(fn ($get): bool => self::isPickupCheckpoint($get))
                                     ->searchable()
                                     ->native(false)
                                     ->nullable()
@@ -350,7 +351,7 @@ class TripForm
                             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->columnSpanFull(),
 
-                        // Repeater cho xe công ty hoặc xe thuê ngoài có tài xế (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm giao)
+                        // Repeater cho xe công ty hoặc xe thuê ngoài có tài xế (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm)
                         Repeater::make('checkpoints')
                             ->relationship('checkpoints')
                             ->label('Danh sách mốc hành trình')
@@ -361,7 +362,7 @@ class TripForm
                                 TableColumn::make('Tài xế')->width('160px'),
                                 TableColumn::make('Km')->width('100px'),
                                 TableColumn::make('Giờ')->width('160px'),
-                                TableColumn::make('Điểm giao')->width('110px'),
+                                TableColumn::make('Điểm')->width('110px'),
                             ])
                             ->orderColumn('created_at')
                             ->compact()
@@ -501,7 +502,8 @@ class TripForm
                                             ->mapWithKeys(fn ($dp) => [$dp->id => $dp->location?->code ?? 'DP#'.$dp->id])
                                             ->toArray();
                                     })
-                                    ->placeholder('Chọn điểm')
+                                    ->placeholder(fn ($get): string => self::pickupPointLabel($get) ?? 'Chọn điểm')
+                                    ->disabled(fn ($get): bool => self::isPickupCheckpoint($get))
                                     ->searchable()
                                     ->native(false)
                                     ->nullable()
@@ -656,5 +658,27 @@ class TripForm
             : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
 
         return $type?->getNextType();
+    }
+
+    /**
+     * Mốc lấy hàng không lưu điểm riêng: điểm lấy chính là điểm lấy hàng của đơn.
+     */
+    private static function isPickupCheckpoint(callable $get): bool
+    {
+        $raw = $get('checkpoint_type');
+        $type = $raw instanceof CheckpointType ? $raw : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
+
+        return in_array($type, [CheckpointType::ArrivedPickup, CheckpointType::LeftPickup], true);
+    }
+
+    private static function pickupPointLabel(callable $get): ?string
+    {
+        if (! self::isPickupCheckpoint($get) || blank($get('order_id'))) {
+            return null;
+        }
+
+        $location = Order::with('pickupLocation:id,code,name')->find($get('order_id'))?->pickupLocation;
+
+        return $location?->code ?? $location?->name;
     }
 }

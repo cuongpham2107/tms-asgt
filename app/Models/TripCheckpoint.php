@@ -71,6 +71,17 @@ class TripCheckpoint extends Model
         return $this->belongsTo(OrderDeliveryPoint::class, 'delivery_point_id');
     }
 
+    /**
+     * Địa điểm của mốc: mốc lấy hàng là điểm lấy của đơn (không lưu riêng), còn lại là điểm giao.
+     * Cần eager load `order.pickupLocation` và `deliveryPoint.location`.
+     */
+    public function pointLocation(): ?Location
+    {
+        return in_array($this->checkpoint_type, [CheckpointType::ArrivedPickup, CheckpointType::LeftPickup], true)
+            ? $this->order?->pickupLocation
+            : $this->deliveryPoint?->location;
+    }
+
     public function photos(): HasMany
     {
         return $this->hasMany(TripPhoto::class);

@@ -7,13 +7,16 @@ use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Filament\Resources\Trips\Pages\ListTrips;
+use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Models\Area;
 use App\Models\Customer;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -268,4 +271,55 @@ test('chuyến nhiều đơn: mốc kết thúc xe ở cuối đóng chuyến v�
         ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed)
         ->and($otherOrder->fresh()->status)->toBe(OrderStatus::Completed)
         ->and($this->cancelledOrder->fresh()->status)->toBe(OrderStatus::Cancelled);
+});
+
+test('mốc lấy hàng hiện điểm lấy hàng của đơn ở cột Điểm, không cho chọn điểm giao', function () {
+    $pickup = Location::create(['code' => 'SEMV-PICKUP', 'name' => 'Điểm lấy test', 'area_id' => $this->area->id]);
+    $this->order->update(['pickup_location_id' => $pickup->id]);
+
+    foreach ([CheckpointType::ArrivedPickup, CheckpointType::ArrivedDelivery] as $minutes => $type) {
+        TripCheckpoint::create([
+            'trip_id' => $this->trip->id,
+            'checkpoint_type' => $type->value,
+            'order_id' => $this->order->id,
+            'driver_id' => $this->driver->id,
+            'km_reading' => 100010 + $minutes,
+            'occurred_at' => now()->subMinutes(60 - $minutes),
+        ]);
+    }
+
+    $form = Schema::make(Livewire::new(ListTrips::class));
+    TripForm::configure($form);
+    $form->record($this->trip->fresh());
+    $form->loadStateFromRelationships();
+
+    [$pickupRow, $deliveryRow] = array_values(array_map(
+        fn ($row) => $row->getFlatComponents()['delivery_point_id'],
+        $form->getFlatComponents()['checkpoints']->getChildSchemas(),
+    ));
+
+    expect($pickupRow->getPlaceholder())->toBe('SEMV-PICKUP')
+        ->and($pickupRow->isDisabled())->toBeTrue()
+        ->and($deliveryRow->getPlaceholder())->toBe('Chọn điểm')
+        ->and($deliveryRow->isDisabled())->toBeFalse();
+});
+
+test('popup hành trình hiện điểm lấy hàng cho mốc lấy hàng', function () {
+    $pickup = Location::create(['code' => 'SEMV-PICKUP', 'name' => 'Điểm lấy test', 'area_id' => $this->area->id]);
+    $this->order->update(['pickup_location_id' => $pickup->id]);
+
+    $checkpoint = TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'checkpoint_type' => CheckpointType::LeftPickup->value,
+        'order_id' => $this->order->id,
+        'driver_id' => $this->driver->id,
+        'km_reading' => 100010,
+        'occurred_at' => now()->subHour(),
+    ]);
+
+    expect($checkpoint->fresh()->pointLocation()?->is($pickup))->toBeTrue();
+
+    $html = view('filament.resources.trips.components.trip-timeline-popup', ['trip' => $this->trip->fresh()])->render();
+
+    expect($html)->toContain('SEMV-PICKUP');
 });

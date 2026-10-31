@@ -11,14 +11,14 @@
             'customer',
             'pickupLocation',
             'tripCheckpoints' => fn ($q) => $q
-                ->with(['driver', 'deliveryPoint.location', 'photos'])
+                ->with(['driver', 'deliveryPoint.location', 'order.pickupLocation', 'photos'])
                 ->orderBy('occurred_at', 'desc'),
         ])
         ->orderBy('planned_loading_at')
         ->get();
 
     $tripCheckpoints = $trip->checkpoints()
-        ->with(['driver', 'deliveryPoint.location', 'photos'])
+        ->with(['driver', 'deliveryPoint.location', 'order.pickupLocation', 'photos'])
         ->whereNull('order_id')
         ->orderBy('occurred_at', 'desc')
         ->get();
@@ -104,7 +104,7 @@
         $html .= '</p>';
         $html .= '<span class="shrink-0 text-xs text-gray-400 dark:text-gray-500">'.e($cp->occurred_at?->format('H:i d/m/Y') ?? '—').'</span>';
         $html .= '</div>';
-        $html .= '<p class="text-sm text-gray-500 dark:text-gray-400">'.e($cp->deliveryPoint?->location?->code ?? $cp->deliveryPoint?->location?->code ?? '—').'</p>';
+        $html .= '<p class="text-sm text-gray-500 dark:text-gray-400">'.e($cp->pointLocation()?->code ?? $cp->pointLocation()?->name ?? '—').'</p>';
 
         $hasExtra = $cp->km_reading || ($cp->gps_lat && $cp->gps_lng) || $cp->voice_note;
         if ($hasExtra) {

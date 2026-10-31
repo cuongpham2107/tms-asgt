@@ -38,6 +38,7 @@ class ViewTripTimeline extends Page
             'driver',
             'orders.deliveryPoints.location',
             'checkpoints.deliveryPoint.location',
+            'checkpoints.order.pickupLocation',
             'checkpoints.photos',
         ]);
     }
@@ -78,7 +79,8 @@ class ViewTripTimeline extends Page
                     'occurred_at' => $cp->occurred_at?->format('H:i d/m/Y') ?? '—',
                     'occurred_at_iso' => $cp->occurred_at?->toIso8601String(),
                     'address' => $cp->deliveryPoint?->address
-                        ?? $cp->deliveryPoint?->location?->name
+                        ?? $cp->pointLocation()?->address
+                        ?? $cp->pointLocation()?->name
                         ?? '—',
                     'driver_name' => $trip->driver?->name,
                     'km_reading' => $cp->km_reading !== null
