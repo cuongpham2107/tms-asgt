@@ -437,11 +437,10 @@ test('vehicle dispatch board shows list of all trips in the day when clicking ve
     Livewire::test(VehicleDispatchBoard::class)
         ->call('openTripModal', $vehicle->id)
         ->assertDispatched('open-modal', id: 'vehicle-trip-modal')
-        ->assertSee('TRIP-TODAY-001')
-        ->assertSee('TRIP-TODAY-002')
-        ->assertDontSee('TRIP-YESTERDAY-999')
+        // Mã chuyến đã ẩn khỏi modal; số chuyến kiểm tra qua badge và tổng.
         ->assertSee('Chuyến 1')
         ->assertSee('Chuyến 2')
+        ->assertDontSee('Chuyến 3')
         ->assertSee('Tổng: 2 chuyến');
 });
 
@@ -888,9 +887,6 @@ test('vehicle trip modal displays pending trips and prioritizes in-progress over
     Livewire::test(VehicleDispatchBoard::class)
         ->call('openTripModal', $vehicle->id)
         ->assertDispatched('open-modal', id: 'vehicle-trip-modal')
-        ->assertSee('TRIP-DELIVERING-NOW')
-        ->assertSee('TRIP-PENDING-MIDDAY')
-        ->assertSee('TRIP-COMPLETED-EARLY')
         ->assertSee('1 đang chạy')
         ->assertSee('1 chờ chạy')
         ->assertSee('1 hoàn thành')

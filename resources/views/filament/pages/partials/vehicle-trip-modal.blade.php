@@ -41,7 +41,7 @@
                 </x-filament::badge>
             @endif
             @if ($pendingCount > 0)
-                <x-filament::badge color="purple" size="sm">
+                <x-filament::badge color="info" size="sm">
                     {{ $pendingCount }} chờ chạy
                 </x-filament::badge>
             @endif
@@ -95,14 +95,11 @@
                     {{-- Tiêu đề của chuyến xe --}}
                     <div class="px-4 py-2.5 bg-gray-50/60 dark:bg-white/[0.02] border-b border-gray-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
-                            <x-filament::badge :color="$isActive ? 'warning' : ($isPending ? 'purple' : ($isCompleted ? 'success' : 'gray'))" size="sm">
+                            <x-filament::badge :color="$isActive ? 'warning' : ($isPending ? 'info' : ($isCompleted ? 'success' : 'gray'))" size="sm">
                                 Chuyến {{ $index + 1 }}
                             </x-filament::badge>
-                            <span class="font-bold text-sm text-gray-900 dark:text-white">
-                                {{ $t->trip_code }}
-                            </span>
                             @if ($t->is_empty_run)
-                                <x-filament::badge color="purple" size="xs">
+                                <x-filament::badge color="info" size="xs">
                                     Chạy rỗng
                                 </x-filament::badge>
                             @endif
@@ -114,7 +111,7 @@
                         </div>
 
                         <div class="flex items-center gap-2">
-                            <x-filament::badge :color="$t->status?->getColor() ?? ($isCompleted ? 'success' : ($isActive ? 'warning' : ($isPending ? 'purple' : 'gray')))" size="sm">
+                            <x-filament::badge :color="$t->status?->getColor() ?? ($isCompleted ? 'success' : ($isActive ? 'warning' : ($isPending ? 'info' : 'gray')))" size="sm">
                                 @if ($isActive && ! $isCompleted)
                                     <span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse me-1"></span>
                                 @endif
@@ -139,15 +136,12 @@
 
                     {{-- Nội dung thông tin chi tiết của chuyến --}}
                     <div class="p-4 space-y-3.5">
-                        <div class="grid grid-cols-2 gap-3 text-xs lg:grid-cols-4">
+                        <div class="grid grid-cols-2 gap-3 text-xs">
                             <div>
                                 <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400 block">Lái xe</span>
                                 <span class="text-xs font-semibold text-gray-900 dark:text-white mt-0.5 block truncate" title="{{ $t->driver?->name }}">
                                     {{ $t->driver?->name ?? '—' }}
                                 </span>
-                                @if ($t->driver?->phone)
-                                    <span class="text-[11px] text-gray-500 dark:text-gray-400 font-mono">{{ $t->driver->phone }}</span>
-                                @endif
                             </div>
 
                             <div>
@@ -206,7 +200,7 @@
                                                 </x-filament::badge>
                                                 @if ($order->customer)
                                                     <span class="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[260px]">
-                                                        ({{ $order->customer->code }} · {{ $order->customer->name }})
+                                                        ({{ $order->customer->code }})
                                                     </span>
                                                 @endif
                                             </div>
