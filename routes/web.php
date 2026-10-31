@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\MapboxController;
 use App\Http\Controllers\PublicTripTrackingController;
 use App\Http\Controllers\TripPhotoDownloadController;
 use App\Http\Middleware\ValidateTrackingSignature;
@@ -20,9 +19,6 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/trips/{trip}/photos/download', [TripPhotoDownloadController::class, 'downloadAll'])
         ->name('trips.photos.download-zip');
 });
-
-// Mapbox helper for map matching (server-side)
-Route::post('/mapbox/match', [MapboxController::class, 'match']);
 
 // Chính sách quyền riêng tư (Privacy Policy) cho Apple App Store & Google Play Console
 Route::get('/privacy-policy', function () {

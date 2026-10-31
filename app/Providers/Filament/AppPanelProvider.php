@@ -111,14 +111,6 @@ class AppPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ])
-            ->renderHook(
-                'panels::head.start',
-                fn (): string => '<link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">'
-            )
-            ->renderHook(
-                'panels::body.end',
-                fn (): string => '<script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>'
-            );
+            ]);
     }
 }
