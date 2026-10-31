@@ -900,7 +900,7 @@ class TripStatisticsReport extends Page
             ->modalDescription(fn (array $arguments): ?string => $this->findCharge($arguments)?->isLocked()
                 ? 'Dòng đã xuất bảng kê nên đang bị khoá. Mở khoá để sửa.'
                 : 'Đổi loại hình / trọng tải tính cước xong hãy bấm "Tính lại" để tra lại đơn giá.')
-            ->modalWidth(Width::MaxContent)
+            ->modalWidth(Width::SixExtraLarge)
             ->modalSubmitActionLabel('Lưu')
             ->fillForm(function (array $arguments): array {
                 $charge = $this->resolveCharge((int) ($arguments['orderId'] ?? 0));
