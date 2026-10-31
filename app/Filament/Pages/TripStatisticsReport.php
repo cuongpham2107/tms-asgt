@@ -38,7 +38,6 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Enums\FontFamily;
 use Filament\Support\Enums\FontWeight;
-use Filament\Support\Enums\TextSize;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
@@ -1174,16 +1173,12 @@ class TripStatisticsReport extends Page
                     $entry('summary_vat', 'VAT', Heroicon::OutlinedDocumentText, fn (Get $get): string => $money($totals($get)['vat_amount']))
                         ->helperText(fn (Get $get): string => 'Thuế suất '.$percent($get('vat_percent'))),
                 ]),
-            Section::make()
+            Section::make('Thanh toán')
+                ->icon(Heroicon::OutlinedCheckBadge)
+                ->iconColor('primary')
                 ->compact()
-                ->extraAttributes(['class' => 'ring-2 ring-primary-500/40 bg-primary-50/60 dark:bg-primary-500/10'])
                 ->schema([
-                    TextEntry::make('summary_total')
-                        ->label('Thanh toán')
-                        ->icon(Heroicon::OutlinedCheckBadge)
-                        ->iconColor('primary')
-                        ->state(fn (Get $get): string => $money($totals($get)['total']))
-                        ->size(TextSize::Large)
+                    $entry('summary_total', 'Tổng thanh toán', Heroicon::OutlinedBanknotes, fn (Get $get): string => $money($totals($get)['total']), 'primary')
                         ->weight(FontWeight::Bold)
                         ->color('primary'),
                 ]),
