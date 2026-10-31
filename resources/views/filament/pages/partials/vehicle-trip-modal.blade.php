@@ -87,6 +87,7 @@
                             : ($isCompleted ? 'border-s-4 border-s-emerald-500' : 'border-s-4 border-s-gray-300 dark:border-s-gray-600'));
                     
                     $pickupName = $t->startLocation?->name ?? ($t->orders->first()?->pickupLocation?->name ?? $t->orders->first()?->pickup_address);
+                    $customerCodes = $t->orders->map(fn ($order) => $order->customer?->code)->filter()->unique();
                     $deliveryNames = $t->endLocation?->name ?? $t->orders->flatMap->deliveryPoints->map(fn($dp) => $dp->location?->name ?? $dp->address)->filter()->unique()->join(', ');
                 @endphp
 
@@ -105,6 +106,11 @@
                                     Chạy rỗng
                                 </x-filament::badge>
                             @endif
+                            @foreach ($customerCodes as $customerCode)
+                                <x-filament::badge color="info" size="xs" title="Mã khách hàng">
+                                    {{ $customerCode }}
+                                </x-filament::badge>
+                            @endforeach
                         </div>
 
                         <div class="flex items-center gap-2">
@@ -198,7 +204,7 @@
                                                     <span class="font-bold text-gray-900 dark:text-white">{{ $order->order_code }}</span>
                                                     @if ($order->customer)
                                                         <span class="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[220px]">
-                                                            ({{ $order->customer->name }})
+                                                            ({{ $order->customer->code }} · {{ $order->customer->name }})
                                                         </span>
                                                     @endif
                                                 </div>

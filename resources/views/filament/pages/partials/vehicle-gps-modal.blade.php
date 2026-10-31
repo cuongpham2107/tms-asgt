@@ -1,3 +1,11 @@
+@php
+    $gpsCustomerCodes = $vehicle->active_trip?->orders
+        ->map(fn ($order) => $order->customer?->code)
+        ->filter()
+        ->unique()
+        ?? collect();
+@endphp
+
 <div class="space-y-4 text-sm">
     <div class="grid grid-cols-2 gap-3 bg-gray-50/70 dark:bg-white/5 p-3.5 rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10">
         <div>
@@ -8,6 +16,16 @@
             <div class="text-xs text-gray-500 dark:text-gray-400 font-medium">Tốc độ hiện tại</div>
             <div class="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {{ $vehicle->gps_speed !== null ? round((float) $vehicle->gps_speed) . ' km/h' : '0 km/h' }}
+            </div>
+        </div>
+        <div class="col-span-2">
+            <div class="text-xs text-gray-500 dark:text-gray-400 font-medium">Mã khách hàng</div>
+            <div class="mt-0.5 flex flex-wrap items-center gap-1.5">
+                @forelse ($gpsCustomerCodes as $customerCode)
+                    <x-filament::badge color="info" size="sm">{{ $customerCode }}</x-filament::badge>
+                @empty
+                    <span class="text-xs text-gray-400">—</span>
+                @endforelse
             </div>
         </div>
         <div class="col-span-2">

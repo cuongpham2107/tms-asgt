@@ -1,10 +1,12 @@
 <?php
 
+use App\Enums\CargoType;
 use App\Enums\CheckpointType;
 use App\Enums\DriverWorkShift;
 use App\Enums\GeoCheckStatus;
 use App\Enums\OnDutyLocation;
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\ShiftType;
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
@@ -441,6 +443,42 @@ test('vehicle dispatch board shows list of all trips in the day when clicking ve
         ->assertSee('Chuyến 1')
         ->assertSee('Chuyến 2')
         ->assertSee('Tổng: 2 chuyến');
+});
+
+test('trip modal and gps modal show the customer code', function () {
+    $driver = User::factory()->create();
+    $customer = Customer::create(['code' => 'SAFO', 'name' => 'SAFO', 'is_active' => true]);
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '29C-CUSTOMER-CODE',
+        'type' => VehicleOwnerType::Company,
+        'is_active' => true,
+        'gps_lat' => 21.03,
+        'gps_lng' => 105.85,
+    ]);
+
+    $trip = Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Started,
+        'started_at' => now()->startOfDay()->addHours(9),
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-CODE-01',
+        'type' => OrderType::Hhhk,
+        'area_id' => Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true, 'sort_order' => 1])->id,
+        'customer_id' => $customer->id,
+        'created_by' => $driver->id,
+        'trip_id' => $trip->id,
+        'cargo_type' => CargoType::Gcr,
+        'status' => OrderStatus::Completed,
+    ]);
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->call('openTripModal', $vehicle->id)
+        ->assertSee('SAFO')
+        ->call('openGpsModal', $vehicle->id)
+        ->assertSee('SAFO');
 });
 
 test('vehicle dispatch board shows friendly empty state when vehicle has no trips today', function () {
