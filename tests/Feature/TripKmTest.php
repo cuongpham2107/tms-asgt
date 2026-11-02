@@ -107,26 +107,6 @@ test('calculates km for trip with 1 order', function () {
     expect((float) $trip->total_km_empty)->toBe(10.0);
 });
 
-test('calculates km for trip with 2 sequential orders', function () {
-    $trip = createTripWithOrder($this, 20000);
-    $orderA = createOrderOnTrip($trip, $this->driver, $this->area, $this->customer);
-    $orderB = createOrderOnTrip($trip, $this->driver, $this->area, $this->customer);
-
-    createCheckpoint($trip, $orderA, CheckpointType::ArrivedPickup->value, 20010);
-    createCheckpoint($trip, $orderA, CheckpointType::Completed->value, 20040);
-    createCheckpoint($trip, $orderB, CheckpointType::ArrivedPickup->value, 20060);
-    createCheckpoint($trip, $orderB, CheckpointType::Completed->value, 20100);
-
-    $trip->update(['end_km' => 20100]);
-    app(TripKmCalculatorService::class)->calculate($trip);
-
-    $trip->refresh();
-    // loaded: (20040-20010) + (20100-20060) = 30 + 40 = 70
-    expect((float) $trip->total_km_loaded)->toBe(70.0);
-    // empty: total(100) - loaded(70) = 30
-    expect((float) $trip->total_km_empty)->toBe(30.0);
-});
-
 test('calculates partial km for incomplete trip (driver swap scenario)', function () {
     $trip = createTripWithOrder($this, 30000);
     $order = createOrderOnTrip($trip, $this->driver, $this->area, $this->customer);

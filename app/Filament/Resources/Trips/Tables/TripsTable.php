@@ -95,7 +95,7 @@ class TripsTable extends BaseTable
                     ->wrap(),
 
                 TextColumn::make('order_count')
-                    ->label('Số đơn')
+                    ->label('Đơn hàng')
                     ->html()
                     ->weight(FontWeight::Bold)
                     ->alignCenter()
@@ -233,7 +233,6 @@ class TripsTable extends BaseTable
                                             <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Chuyến & Đơn hàng</div>
                                             <div class="mt-1.5 flex items-center justify-between">
                                                 <span class="text-sm font-bold text-primary-600 dark:text-primary-400">{{ $trip->trip_code }}</span>
-                                                <span class="text-xs font-medium text-gray-500">{{ $trip->orders->count() }} đơn</span>
                                             </div>
                                             <div class="text-xs text-gray-600 dark:text-gray-300 mt-1 truncate" title="{{ $trip->orders->pluck('order_code')->implode(', ') }}">
                                                 {{ $trip->orders->isNotEmpty() ? $trip->orders->pluck('order_code')->implode(', ') : 'Chưa có đơn hàng' }}

@@ -3,7 +3,6 @@
 namespace App\Services\Trip;
 
 use App\Enums\CheckpointType;
-use App\Enums\OrderDeliveryPointStatus;
 use App\Models\DriverShift;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
@@ -12,7 +11,7 @@ use Illuminate\Support\Collection;
 
 class CheckpointFactory
 {
-    /** Các checkpoint_type áp dụng cho toàn bộ orders trong trip (nhánh A). */
+    /** Các checkpoint_type áp dụng cho cả trip, gắn vào đơn duy nhất của trip (nhánh A). */
     private const TRIP_WIDE_TYPES = [
         CheckpointType::Started,
         CheckpointType::ArrivedPickup,
@@ -32,120 +31,66 @@ class CheckpointFactory
     }
 
     /**
-     * Nhánh A: tạo 1 checkpoint cho mỗi order trong trip.
+     * Nhánh A: tạo checkpoint cho đơn duy nhất của trip (trip không có đơn → không tạo).
      *
      * @return Collection<int, TripCheckpoint>
      */
     private function createForAllOrders(Trip $trip, array $payload, CheckpointType $type): Collection
     {
-        return $trip->orders
-            ->reject(function ($order) use ($trip, $type) {
-                if ($type === CheckpointType::DriverSwap) {
-                    return false;
-                }
+        $order = $trip->orders->first();
 
-                $existing = TripCheckpoint::where('trip_id', $trip->id)
-                    ->where('order_id', $order->id)
-                    ->where('checkpoint_type', $type->value)
-                    ->first();
+        if ($order === null) {
+            return collect();
+        }
 
-                if ($existing && $existing->driver_id !== $trip->driver_id && $existing->km_reading === null) {
-                    $existing->delete();
+        if ($type !== CheckpointType::DriverSwap) {
+            $existing = TripCheckpoint::where('trip_id', $trip->id)
+                ->where('order_id', $order->id)
+                ->where('checkpoint_type', $type->value)
+                ->first();
 
-                    return false;
-                }
+            if ($existing && $existing->driver_id !== $trip->driver_id && $existing->km_reading === null) {
+                $existing->delete();
+            } elseif ($existing !== null) {
+                return collect();
+            }
+        }
 
-                return $existing !== null;
-            })
-            ->map(fn ($order) => TripCheckpoint::create(
-                $this->buildData($trip, $payload, $type, $order->id, $payload['delivery_point_id'] ?? null)
-            ));
+        return collect([TripCheckpoint::create(
+            $this->buildData($trip, $payload, $type, $order->id, $payload['delivery_point_id'] ?? null)
+        )]);
     }
 
     /**
-     * Nhánh B: tạo checkpoint cho nhóm orders cùng location_id (hoặc đơn lẻ nếu không có location).
+     * Nhánh B: tạo checkpoint cho điểm giao được chọn (hoặc đơn lẻ nếu không qua điểm cố định).
      *
      * @return Collection<int, TripCheckpoint>
      */
     private function createForDeliveryGroup(Trip $trip, array $payload, CheckpointType $type): Collection
     {
-        $deliveryPoints = $this->resolveDeliveryGroup($trip, $payload);
-
-        $created = collect();
-
-        foreach ($deliveryPoints as $dp) {
-            $existing = TripCheckpoint::where('trip_id', $trip->id)
-                ->where('order_id', $dp->order_id)
-                ->where('checkpoint_type', $type->value)
-                ->where('delivery_point_id', $dp->id)
-                ->first();
-
-            if ($existing && $existing->driver_id !== $trip->driver_id && $existing->km_reading === null) {
-                $existing->delete();
-                $existing = null;
-            }
-
-            if ($existing !== null) {
-                continue;
-            }
-
-            $created->push(TripCheckpoint::create(
-                $this->buildData($trip, $payload, $type, $dp->order_id, $dp->id)
-            ));
-        }
-
-        return $created;
-    }
-
-    /**
-     * Tìm tất cả OrderDeliveryPoints cùng location_id với điểm được chọn.
-     * Đối với order sở hữu điểm chọn, giữ nguyên điểm được chọn (tránh ghi đè khi 1 order có nhiều điểm trùng location).
-     * Đối với các order khác trong trip có cùng location_id, chọn điểm chưa giao tiếp theo.
-     * Fallback về order đơn lẻ nếu không có location grouping.
-     *
-     * Luôn trả về Collection<int, OrderDeliveryPoint> — không dùng stdClass.
-     *
-     * @return Collection<int, OrderDeliveryPoint>
-     */
-    private function resolveDeliveryGroup(Trip $trip, array $payload): Collection
-    {
         $deliveryPointId = $payload['delivery_point_id'] ?? null;
+        $point = $deliveryPointId !== null ? OrderDeliveryPoint::find($deliveryPointId) : null;
+        $orderId = $point?->order_id ?? $payload['order_id'] ?? null;
 
-        if ($deliveryPointId !== null) {
-            $point = OrderDeliveryPoint::find($deliveryPointId);
-
-            if ($point !== null) {
-                if ($point->location_id === null) {
-                    return collect([$point]);
-                }
-
-                $groupedPoints = collect([$point]);
-
-                $otherOrderPoints = OrderDeliveryPoint::where('location_id', $point->location_id)
-                    ->where('order_id', '!=', $point->order_id)
-                    ->whereHas('order', fn ($q) => $q->where('trip_id', $trip->id))
-                    ->where('status', '!=', OrderDeliveryPointStatus::Delivered->value)
-                    ->orderBy('sequence')
-                    ->get()
-                    ->groupBy('order_id')
-                    ->map(fn ($points) => $points->first());
-
-                return $groupedPoints->merge($otherOrderPoints->values());
-            }
-        }
-
-        // Không có delivery_point_id → fallback về order đơn lẻ từ payload
-        $orderId = $payload['order_id'] ?? null;
         if ($orderId === null) {
             return collect();
         }
 
-        // Tạo unsaved model để giữ type nhất quán, id = null (giao không qua điểm cố định)
-        $stub = new OrderDeliveryPoint;
-        $stub->order_id = $orderId;
-        $stub->id = null;
+        $existing = TripCheckpoint::where('trip_id', $trip->id)
+            ->where('order_id', $orderId)
+            ->where('checkpoint_type', $type->value)
+            ->where('delivery_point_id', $point?->id)
+            ->first();
 
-        return collect([$stub]);
+        if ($existing && $existing->driver_id !== $trip->driver_id && $existing->km_reading === null) {
+            $existing->delete();
+        } elseif ($existing !== null) {
+            return collect();
+        }
+
+        return collect([TripCheckpoint::create(
+            $this->buildData($trip, $payload, $type, $orderId, $point?->id)
+        )]);
     }
 
     /**

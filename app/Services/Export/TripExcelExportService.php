@@ -162,26 +162,17 @@ class TripExcelExportService
      */
     public function convertOrdersToTripsCollection(Collection $orders): Collection
     {
-        $tripMap = collect();
-        $unassignedOrders = collect();
+        [$assignedOrders, $unassignedOrders] = $orders->partition(fn (Order $order): bool => $order->trip !== null);
 
-        foreach ($orders as $order) {
-            if ($order->trip) {
-                $tripId = $order->trip->id;
-                if (! $tripMap->has($tripId)) {
-                    $trip = clone $order->trip;
-                    $trip->setRelation('orders', collect([$order]));
-                    $tripMap->put($tripId, $trip);
-                } else {
-                    $tripMap->get($tripId)->orders->push($order);
-                }
-            } else {
-                $unassignedOrders->push($order);
-            }
-        }
+        $trips = $assignedOrders->map(function (Order $order): Trip {
+            $trip = clone $order->trip;
+            $trip->setRelation('orders', collect([$order]));
+
+            return $trip;
+        });
 
         // Tạo chuyến ảo cho đơn chưa gán chuyến để vẫn hiển thị trên bảng
-        foreach ($unassignedOrders as $order) {
+        $syntheticTrips = $unassignedOrders->map(function (Order $order): Trip {
             $syntheticTrip = new Trip([
                 'trip_code' => $order->order_code,
                 'started_at' => $order->planned_loading_at,
@@ -190,10 +181,11 @@ class TripExcelExportService
             $syntheticTrip->setRelation('checkpoints', collect());
             $syntheticTrip->setRelation('vehicle', null);
             $syntheticTrip->setRelation('driver', null);
-            $tripMap->push($syntheticTrip);
-        }
 
-        return $tripMap->values();
+            return $syntheticTrip;
+        });
+
+        return $trips->concat($syntheticTrips)->values();
     }
 
     /**
@@ -310,28 +302,8 @@ class TripExcelExportService
 
         // 3. Đổ dữ liệu từ các dòng đã lọc
         $row = 5;
-        foreach ($this->groupRowsByTrip($rows) as $tripRow) {
-            $this->writeTripSummaryRowFromData($sheet, $row, $tripRow);
-
-            if (count($tripRow['orders']) > 1) {
-                $sheet->getStyle("A{$row}:AA{$row}")->getFont()->setBold(true);
-                $sheet->getStyle("A{$row}:AA{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('F1F5F9');
-
-                foreach ($tripRow['orders'] as $orderRow) {
-                    $row++;
-                    // Dòng đơn con: các cột theo chuyến (xe, lái xe, km không hàng) đã có ở dòng chuyến
-                    $this->writeTripSummaryRowFromData($sheet, $row, [
-                        ...$orderRow,
-                        'code' => '└ '.$orderRow['code'],
-                        'plate_number' => '',
-                        'vehicle_owner' => '',
-                        'vehicle_type' => '',
-                        'driver_name' => '',
-                        'km_empty' => 0,
-                    ]);
-                }
-            }
-
+        foreach ($rows as $rowData) {
+            $this->writeTripSummaryRowFromData($sheet, $row, $rowData);
             $row++;
         }
 
@@ -453,7 +425,7 @@ class TripExcelExportService
 
                 $serviceType = $order->type === OrderType::Hhhk ? 'HHHK' : 'Hàng ngoài';
 
-                $rows->push([...$this->formatTripSummaryRowData(
+                $rows->push($this->formatTripSummaryRowData(
                     trip: $trip,
                     order: $order,
                     serviceType: $serviceType,
@@ -478,59 +450,11 @@ class TripExcelExportService
                     gw: (float) ($order->total_weight ?? 0),
                     cargoType: $order->cargo_type?->value ?? ($order->cargo_type instanceof CargoType ? $order->cargo_type->getLabel() : ''),
                     chargeableWeight: (float) ($order->chargeable_weight ?? 0)
-                ), 'trip_code' => $trip->trip_code, 'trip_km_loaded' => (float) ($trip->total_km_loaded ?? 0)]);
+                ));
             }
         }
 
         return $rows;
-    }
-
-    /**
-     * Gom các dòng theo đơn thành dòng theo chuyến. Mỗi phần tử là dòng chuyến kèm 'orders' (các dòng đơn);
-     * chuyến chỉ có 1 đơn thì dòng chuyến chính là dòng đơn đó.
-     *
-     * @param  Collection<int, array<string, mixed>>  $rows
-     * @return Collection<int, array<string, mixed>>
-     */
-    public function groupRowsByTrip(Collection $rows): Collection
-    {
-        return $rows
-            ->groupBy(fn (array $row): string => (string) $row['trip_id'])
-            ->map(function (Collection $orders): array {
-                $first = $orders->first();
-
-                if ($orders->count() === 1) {
-                    return [...$first, 'orders' => [$first]];
-                }
-
-                $times = fn (string $key): Collection => $orders->pluck($key)->filter()->map(fn (mixed $value): Carbon => Carbon::parse($value));
-                $join = fn (string $key): string => $orders->pluck($key)->filter()->unique()->implode('; ');
-                [$timeA, $timeB, $timeC, $timeD] = [$times('time_a')->min(), $times('time_b')->max(), $times('time_c')->min(), $times('time_d')->max()];
-
-                return [
-                    ...$first,
-                    ...$this->tripDurations($timeA, $timeB, $timeC, $timeD),
-                    'order_id' => null,
-                    'customer_id' => $orders->pluck('customer_id')->unique()->count() === 1 ? $first['customer_id'] : null,
-                    'code' => $first['trip_code'] ?? $first['code'],
-                    'journey' => $join('journey'),
-                    'time_a' => $timeA,
-                    'time_b' => $timeB,
-                    'time_c' => $timeC,
-                    'time_d' => $timeD,
-                    'customer' => $join('customer'),
-                    'warehouse' => $join('warehouse'),
-                    'note' => $join('note'),
-                    'cargo_type' => $join('cargo_type'),
-                    'is_return_trip' => $orders->contains('is_return_trip', true),
-                    'km_loaded' => ($first['trip_km_loaded'] ?? 0) > 0 ? $first['trip_km_loaded'] : $orders->sum('km_loaded'),
-                    'pcs' => $orders->sum('pcs'),
-                    'gw' => $orders->sum('gw'),
-                    'chargeable_weight' => $orders->sum('chargeable_weight'),
-                    'orders' => $orders->values()->all(),
-                ];
-            })
-            ->values();
     }
 
     /**

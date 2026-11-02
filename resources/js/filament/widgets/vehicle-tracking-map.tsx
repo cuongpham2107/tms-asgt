@@ -28,7 +28,6 @@ interface VehicleRow {
     updated: string | null
     stale: boolean
     tripCode: string | null
-    ordersCount: number
     orders: PopupOrder[]
 }
 
@@ -105,7 +104,7 @@ const vehiclePopup = (vehicle: Snapshot<VehicleRow>): string => `
         <div class="trk-row">👤 <strong>${escapeHtml(vehicle.driver)}</strong>${vehicle.phone ? ` · ${escapeHtml(vehicle.phone)}` : ''}</div>
         ${
             vehicle.tripCode
-                ? `<div class="trk-row">🚚 Chuyến <strong>${escapeHtml(vehicle.tripCode)}</strong> · ${vehicle.ordersCount} đơn</div>`
+                ? `<div class="trk-row">🚚 Chuyến <strong>${escapeHtml(vehicle.tripCode)}</strong></div>`
                 : '<div class="trk-row trk-muted">Không có chuyến đang chạy</div>'
         }
         ${vehicle.orders
@@ -440,7 +439,7 @@ function VehicleCard({ vehicle, selected, onSelect, onToggle }: VehicleCardProps
                 <div className="flex items-center justify-between pl-6.5 pt-0.5 text-xs">
                     {vehicle.tripCode ? (
                         <span className="inline-flex items-center gap-1 font-mono font-bold text-blue-700 dark:text-blue-300">
-                            {vehicle.tripCode} ({vehicle.ordersCount} đơn)
+                            {vehicle.tripCode}
                         </span>
                     ) : (
                         <span />

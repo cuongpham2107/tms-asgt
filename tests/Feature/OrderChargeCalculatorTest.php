@@ -55,7 +55,10 @@ beforeEach(function () {
             'type' => OrderType::External,
             'area_id' => $this->area->id,
             'customer_id' => $this->customer->id,
-            'trip_id' => $this->trip->id,
+            // Mỗi chuyến 1 đơn: đơn đầu dùng $this->trip, đơn sau có chuyến riêng.
+            'trip_id' => $this->trip->orders()->exists()
+                ? Trip::create(['trip_code' => 'TRIP-'.fake()->unique()->numberBetween(2, 99999), 'vehicle_id' => $this->vehicle->id, 'status' => TripStatus::Delivered])->id
+                : $this->trip->id,
             'pickup_location_id' => $this->pickup->id,
             'cargo_type' => CargoType::Gcr,
             'total_weight' => 1200,

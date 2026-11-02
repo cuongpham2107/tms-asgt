@@ -172,28 +172,30 @@ test('counts finished trips like the driver app and skips unfinished or out of r
         ->and($lines->pluck('status')->map->value->all())->toBe(['completed', 'cancelled', 'driver_swap']);
 });
 
-test('lists the order codes of each trip and ignores draft orders', function () {
-    $trip = monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 50, 40);
+test('lists the order code of each trip and ignores draft orders', function () {
     $area = Area::create(['type' => OrderType::Hhhk, 'code' => 'OC', 'name' => 'Order codes']);
     $customer = Customer::create(['code' => 'OC', 'name' => 'Order codes', 'is_active' => true]);
-    foreach (['ASG-102' => OrderStatus::Completed, 'ASG-101' => OrderStatus::Completed, 'ASG-999' => OrderStatus::Draft] as $code => $status) {
+    $trips = [];
+    foreach (['ASG-101' => OrderStatus::Completed, 'ASG-999' => OrderStatus::Draft] as $code => $status) {
+        $trips[$code] = monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 50, 40);
         Order::create([
             'order_code' => $code,
             'type' => OrderType::Hhhk,
             'area_id' => $area->id,
             'customer_id' => $customer->id,
-            'trip_id' => $trip->id,
+            'trip_id' => $trips[$code]->id,
             'status' => $status,
             'created_by' => $this->driverA->id,
         ]);
     }
 
-    $line = app(DriverMonthlyKmReportService::class)
+    $lines = app(DriverMonthlyKmReportService::class)
         ->tripLines($this->month, $this->month->copy()->endOfMonth())
-        ->firstWhere('trip_id', $trip->id);
+        ->keyBy('trip_id');
 
-    expect($line['order_codes'])->toBe(['ASG-101', 'ASG-102'])
-        ->and($line['is_empty'])->toBeFalse();
+    expect($lines[$trips['ASG-101']->id]['order_codes'])->toBe(['ASG-101'])
+        ->and($lines[$trips['ASG-101']->id]['is_empty'])->toBeFalse()
+        ->and($lines[$trips['ASG-999']->id]['order_codes'])->toBe([]);
 });
 
 test('splits a swapped trip between drivers and counts it for each of them', function () {

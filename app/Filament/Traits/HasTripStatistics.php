@@ -26,8 +26,6 @@ trait HasTripStatistics
 {
     protected ?Collection $cachedBaseRows = null;
 
-    protected ?Collection $cachedTripRows = null;
-
     protected function getBaseRowsCacheKey(): string
     {
         $userId = Auth::id() ?? 'guest';
@@ -45,7 +43,6 @@ trait HasTripStatistics
     public function clearBaseRowsCache(): void
     {
         $this->cachedBaseRows = null;
-        $this->cachedTripRows = null;
         Cache::forget($this->getBaseRowsCacheKey());
     }
 
@@ -332,16 +329,6 @@ trait HasTripStatistics
         };
     }
 
-    /**
-     * Mỗi chuyến một dòng, kèm các dòng đơn trong 'orders'.
-     *
-     * @return Collection<int, array<string, mixed>>
-     */
-    public function getTripRows(): Collection
-    {
-        return $this->cachedTripRows ??= app(TripExcelExportService::class)->groupRowsByTrip($this->getAllRows());
-    }
-
     public function getActiveTabTitle(): string
     {
         return match ($this->activeTab) {
@@ -365,20 +352,9 @@ trait HasTripStatistics
 
         $rows = [];
 
-        foreach ($paginator->items() as $index => $tripRow) {
+        foreach ($paginator->items() as $index => $row) {
             $stt = ($paginator->currentPage() - 1) * $paginator->perPage() + $index + 1;
-            $orders = $tripRow['orders'];
-
-            if (count($orders) > 1) {
-                $tripTotal = collect($orders)->sum(fn (array $order): float => (float) $charges->get($order['order_id'])?->total);
-                $rows[] = $this->reactRow($tripRow, 'trip', $stt, $charges, $tripTotal);
-
-                foreach ($orders as $orderRow) {
-                    $rows[] = $this->reactRow($orderRow, 'order', null, $charges);
-                }
-            } else {
-                $rows[] = $this->reactRow($orders[0], 'single', $stt, $charges);
-            }
+            $rows[] = $this->reactRow($row, $stt, $charges);
         }
 
         return [
@@ -396,18 +372,17 @@ trait HasTripStatistics
      * @param  Collection<int, OrderCharge>  $charges
      * @return array<string, mixed>
      */
-    private function reactRow(array $row, string $variant, ?int $stt, Collection $charges, ?float $tripTotal = null): array
+    private function reactRow(array $row, int $stt, Collection $charges): array
     {
         $charge = filled($row['order_id'] ?? null) ? $charges->get($row['order_id']) : null;
         $time = fn (mixed $value): ?string => $value ? Carbon::parse($value)->format('H:i d/m') : null;
         $positive = fn (mixed $value): ?float => (float) $value > 0 ? (float) $value : null;
 
         return [
-            'key' => $variant.'-'.$row['trip_id'].'-'.($row['order_id'] ?? 'trip'),
+            'key' => 'single-'.$row['trip_id'].'-'.($row['order_id'] ?? 'trip'),
             'stt' => $stt,
-            'variant' => $variant,
+            'variant' => 'single',
             'orderId' => $row['order_id'] ?? null,
-            'ordersCount' => $variant === 'trip' ? count($row['orders'] ?? []) : null,
             'code' => $row['code'] ?? null,
             'plate' => $row['plate_number'] ?? null,
             'date' => filled($row['date'] ?? null) ? Carbon::parse($row['date'])->format('d/m/Y') : null,
@@ -439,7 +414,6 @@ trait HasTripStatistics
             'gw' => $positive($row['gw'] ?? 0),
             'cargoType' => $row['cargo_type'] ?? null,
             'chargeableWeight' => $positive($row['chargeable_weight'] ?? 0),
-            'tripTotal' => $tripTotal,
             'charge' => $charge === null ? null : [
                 'priceCode' => $charge->price_code,
                 'rateType' => $charge->rate_type ?: 'Chuẩn',
@@ -520,19 +494,18 @@ trait HasTripStatistics
     public function getSummaryMetrics(): array
     {
         $rows = $this->getAllRows();
-        $tripRows = $this->getTripRows();
 
         $totalRecords = $rows->whereNotNull('order_id')->count();
-        $totalTrips = $tripRows->count();
-        $totalKmLoaded = $tripRows->sum('km_loaded');
-        $totalKmEmpty = $tripRows->sum('km_empty');
+        $totalTrips = $rows->count();
+        $totalKmLoaded = $rows->sum('km_loaded');
+        $totalKmEmpty = $rows->sum('km_empty');
         $totalPcs = $rows->sum('pcs');
         $totalGw = $rows->sum('gw');
         $totalChargeableWeight = $rows->sum('chargeable_weight');
 
-        $rowsWithDuration = $tripRows->whereNotNull('time_total_trip');
+        $rowsWithDuration = $rows->whereNotNull('time_total_trip');
         $avgDuration = $rowsWithDuration->isNotEmpty() ? (int) round($rowsWithDuration->avg('time_total_trip')) : 0;
-        $countWaiting22h = $tripRows->filter(fn (array $r) => ($r['time_waiting_22h'] ?? 0) > 0)->count();
+        $countWaiting22h = $rows->filter(fn (array $r) => ($r['time_waiting_22h'] ?? 0) > 0)->count();
 
         return [
             'total_records' => $totalRecords,
@@ -553,7 +526,7 @@ trait HasTripStatistics
 
     public function getPaginator(): LengthAwarePaginatorContract
     {
-        $rows = $this->getTripRows();
+        $rows = $this->getAllRows();
         $total = $rows->count();
         $perPage = max(10, $this->perPage);
         $currentPage = max(1, $this->page);
@@ -591,7 +564,7 @@ trait HasTripStatistics
      */
     public function getChargesForRows(iterable $rows): Collection
     {
-        $orderIds = collect($rows)->flatMap(fn (array $row): array => $row['orders'] ?? [$row])->pluck('order_id')->filter()->unique();
+        $orderIds = collect($rows)->pluck('order_id')->filter()->unique();
 
         if ($orderIds->isEmpty()) {
             return collect();

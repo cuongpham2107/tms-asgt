@@ -58,7 +58,7 @@ class DriverNotificationService
     }
 
     /**
-     * Gửi push notification khi chuyến đi được phát lệnh (SendTripAction).
+     * Gửi push notification khi chuyến đi được phát lệnh (chưa dùng: mỗi chuyến chỉ 1 đơn, phát lệnh theo đơn).
      */
     public function sendTripDispatched(Trip $trip, int $orderCount = 0): bool
     {

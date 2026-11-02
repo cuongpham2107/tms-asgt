@@ -121,7 +121,7 @@ test('vehicle dispatch board summary stats correctly count vehicles', function (
         ->and($stats['stopped'])->toBe(1);
 });
 
-test('dispatch board classifies vehicles by owner code into company or rented', function () {
+test('dispatch board shows owner name for company vehicles and rent prefix for rented', function () {
     $company = Vehicle::factory()->create([
         'plate_number' => '20C-ASGT-01',
         'owner' => 'ASGT',
@@ -130,20 +130,26 @@ test('dispatch board classifies vehicles by owner code into company or rented', 
         'is_active' => true,
     ]);
 
-    $rented = Vehicle::factory()->create([
-        'plate_number' => '20C-RENT-01',
-        'owner' => 'HMA',
+    $otherCompany = Vehicle::factory()->create([
+        'plate_number' => '20C-CLS-01',
+        'owner' => 'CLS',
         'type' => VehicleOwnerType::Company,
         'status' => VehicleStatus::On,
         'is_active' => true,
     ]);
 
-    expect(VehicleDispatchBoard::getOwnerCategory($company))->toBe('Xe CTY')
-        ->and(VehicleDispatchBoard::getOwnerCategory($rented))->toBe('Xe thuê');
+    $rented = Vehicle::factory()->make([
+        'owner' => 'ACE',
+        'type' => VehicleOwnerType::Rent,
+    ]);
+
+    expect(VehicleDispatchBoard::getOwnerCategory($company))->toBe('ASGT')
+        ->and(VehicleDispatchBoard::getOwnerCategory($otherCompany))->toBe('CLS')
+        ->and(VehicleDispatchBoard::getOwnerCategory($rented))->toBe('Thuê+ACE');
 
     expect(dispatchWidgetConfiguration()['columns'])->toContain('Phân loại')
-        ->and(dispatchWidgetRowFor('20C-ASGT-01')['ownerCategory'])->toBe('Xe CTY')
-        ->and(dispatchWidgetRowFor('20C-RENT-01')['ownerCategory'])->toBe('Xe thuê');
+        ->and(dispatchWidgetRowFor('20C-ASGT-01')['ownerCategory'])->toBe('ASGT')
+        ->and(dispatchWidgetRowFor('20C-CLS-01')['ownerCategory'])->toBe('CLS');
 });
 
 test('vehicle dispatch board only shows company vehicles', function () {
@@ -919,11 +925,11 @@ test('vehicle dispatch board counts waiting orders in pending trips correctly an
         'created_by' => auth()->id(),
     ]);
 
-    // 2. Chuyến chờ chạy (Pending) với 3 đơn hàng: 2 đơn hợp lệ, 1 đơn đã huỷ
-    $pendingTrip = Trip::factory()->create([
+    // 2. Ba chuyến chờ chạy (Pending), mỗi chuyến 1 đơn: 2 đơn hợp lệ, 1 đơn đã huỷ
+    [$pendingTrip, $pendingTrip2, $pendingTrip3] = Trip::factory()->count(3)->create([
         'vehicle_id' => $vehicle->id,
         'status' => TripStatus::Pending,
-    ]);
+    ])->all();
 
     Order::create([
         'order_code' => 'ORD-WAIT-01',
@@ -936,7 +942,7 @@ test('vehicle dispatch board counts waiting orders in pending trips correctly an
 
     Order::create([
         'order_code' => 'ORD-WAIT-02',
-        'trip_id' => $pendingTrip->id,
+        'trip_id' => $pendingTrip2->id,
         'customer_id' => $customer->id,
         'area_id' => $area->id,
         'status' => OrderStatus::Assigned,
@@ -945,7 +951,7 @@ test('vehicle dispatch board counts waiting orders in pending trips correctly an
 
     Order::create([
         'order_code' => 'ORD-CANCELLED-03',
-        'trip_id' => $pendingTrip->id,
+        'trip_id' => $pendingTrip3->id,
         'customer_id' => $customer->id,
         'area_id' => $area->id,
         'status' => OrderStatus::Cancelled,
@@ -1477,8 +1483,8 @@ test('alert level boundaries for speed and km over', function (float $value, flo
     'km 3000' => [3000, 2600, 2800, 3000, 'red'],
 ]);
 
-test('company vehicles do not show km over while rented vehicles still do', function () {
-    $company = Vehicle::factory()->create([
+test('km over only applies to company vehicles not owned by ASGT', function () {
+    $asgt = Vehicle::factory()->create([
         'plate_number' => '20C-ASGT-KM',
         'owner' => 'ASGT',
         'type' => VehicleOwnerType::Company,
@@ -1488,9 +1494,9 @@ test('company vehicles do not show km over while rented vehicles still do', func
         'is_active' => true,
     ]);
 
-    $rented = Vehicle::factory()->create([
-        'plate_number' => '20C-RENT-KM',
-        'owner' => 'HMA',
+    $otherCompany = Vehicle::factory()->create([
+        'plate_number' => '20C-CLS-KM',
+        'owner' => 'CLS',
         'type' => VehicleOwnerType::Company,
         'current_mileage' => 13500,
         'monthly_start_km' => 10000,
@@ -1498,13 +1504,24 @@ test('company vehicles do not show km over while rented vehicles still do', func
         'is_active' => true,
     ]);
 
-    $companyData = VehicleDispatchBoard::getKmOverData($company);
-    expect($companyData['text'])->toBe('—')
-        ->and($companyData['status'])->toBe('none')
-        ->and($companyData['fillPercent'])->toBe(0)
-        ->and($companyData['cellClass'])->toContain('text-gray-400');
+    $rented = Vehicle::factory()->create([
+        'plate_number' => '20C-RENT-KM',
+        'owner' => 'ACE',
+        'type' => VehicleOwnerType::Rent,
+        'current_mileage' => 13500,
+        'monthly_start_km' => 10000,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
 
-    expect(VehicleDispatchBoard::getKmOverData($rented)['text'])->toBe('3.500');
+    $asgtData = VehicleDispatchBoard::getKmOverData($asgt);
+    expect($asgtData['text'])->toBe('—')
+        ->and($asgtData['status'])->toBe('none')
+        ->and($asgtData['fillPercent'])->toBe(0)
+        ->and($asgtData['cellClass'])->toContain('text-gray-400');
+
+    expect(VehicleDispatchBoard::getKmOverData($otherCompany)['text'])->toBe('3.500')
+        ->and(VehicleDispatchBoard::getKmOverData($rented)['text'])->toBe('—');
 });
 
 test('speed and km over cells use the alert colors', function () {

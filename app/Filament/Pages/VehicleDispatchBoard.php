@@ -629,11 +629,13 @@ class VehicleDispatchBoard extends Page implements HasTable
     // ─── Formatting Helpers ──────────────────────────────────────────
 
     /**
-     * Xe nhà là xe có chủ xe thuộc công ty (ASGT); mọi chủ xe khác là xe thuê ngoài.
+     * Nhãn cột Phân loại: xe công ty hiện chủ xe, xe thuê ngoài hiện "Thuê+chủ xe".
      */
     public static function getOwnerCategory(Vehicle $record): string
     {
-        return in_array(mb_strtoupper(trim((string) $record->owner)), ['ASGT'], true) ? 'Xe CTY' : 'Xe thuê';
+        $owner = (string) $record->owner;
+
+        return $record->isRent() ? 'Thuê+'.$owner : $owner;
     }
 
     public static function renderBsx(Vehicle $record): string
@@ -786,7 +788,7 @@ class VehicleDispatchBoard extends Page implements HasTable
             TripStatus::Pending => 'bg-purple-600 text-white font-bold',
             TripStatus::Started => 'bg-sky-500 text-white font-bold',
             TripStatus::ArrivedPickup => 'bg-amber-500 text-white font-bold',
-            TripStatus::Delivering => 'bg-emerald-600 text-white font-bold',
+            TripStatus::Delivering => 'bg-blue-600 text-white font-bold',
             TripStatus::ArrivedDelivery => 'bg-fuchsia-600 text-white font-bold',
             TripStatus::Delivered => 'bg-teal-600 text-white font-bold',
             TripStatus::Completed => 'bg-green-700 text-white font-bold',
@@ -1335,14 +1337,14 @@ class VehicleDispatchBoard extends Page implements HasTable
      */
     public static function getKmOverData(Vehicle $record): array
     {
-        // Xe công ty không theo dõi định mức KM over.
-        if (self::getOwnerCategory($record) === 'Xe CTY') {
+        // Chỉ kiểm soát KM của xe công ty không phải ASGT; xe thuê ngoài không theo dõi.
+        if (! $record->isCompany() || mb_strtoupper(trim((string) $record->owner)) === 'ASGT') {
             return [
                 'text' => '—',
                 'delta' => null,
                 'status' => 'none',
                 'cellClass' => 'text-gray-400',
-                'tooltip' => 'Xe công ty không theo dõi KM over',
+                'tooltip' => 'Xe ASGT và xe thuê ngoài không theo dõi KM over',
                 'fillPercent' => 0,
             ];
         }

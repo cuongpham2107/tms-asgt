@@ -218,8 +218,7 @@ class VehicleTrackingMap extends Widget
             'updated' => $lastUpdate?->format('H:i d/m'),
             'stale' => $lastUpdate === null || $lastUpdate->lt(now()->subMinutes(30)),
             'tripCode' => $trip?->trip_code,
-            'ordersCount' => $orders->count(),
-            'orders' => $orders->take(2)->map(function (Order $order): array {
+            'orders' => $orders->map(function (Order $order): array {
                 return [
                     'code' => $order->order_code,
                     'customer' => $order->customer?->name ?? 'Khách lẻ',

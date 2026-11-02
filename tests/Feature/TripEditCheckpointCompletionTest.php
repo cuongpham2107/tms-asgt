@@ -73,14 +73,6 @@ beforeEach(function () {
         'status' => OrderStatus::InTransit,
     ]);
 
-    $this->cancelledOrder = Order::create([
-        'order_code' => 'ORD-COMPLETE-CANCELLED',
-        'area_id' => $this->area->id,
-        'customer_id' => $this->customer->id,
-        'created_by' => $this->admin->id,
-        'trip_id' => $this->trip->id,
-        'status' => OrderStatus::Cancelled,
-    ]);
 });
 
 function editTripTableForCompletion()
@@ -112,8 +104,7 @@ test('checkpoint hoàn thành chuyển order sang hoàn thành và trip sang đ�
 
     expect($trip->status)->toBe(TripStatus::Delivered)
         ->and($trip->completed_at)->toBeNull()
-        ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed)
-        ->and($this->cancelledOrder->fresh()->status)->toBe(OrderStatus::Cancelled);
+        ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed);
 });
 
 test('checkpoint kết thúc xe tự chuyển trip và order sang hoàn thành', function () {
@@ -204,49 +195,7 @@ test('thêm checkpoint hoàn thành trong form hoàn thành order, trip sang đ�
     expect($started->fresh())->not->toBeNull();
 });
 
-test('chuyến nhiều đơn: giao xong một đơn không đóng chuyến và đơn còn lại', function () {
-    $otherOrder = Order::create([
-        'order_code' => 'ORD-COMPLETE-02',
-        'area_id' => $this->area->id,
-        'customer_id' => $this->customer->id,
-        'created_by' => $this->admin->id,
-        'trip_id' => $this->trip->id,
-        'status' => OrderStatus::InTransit,
-    ]);
-
-    TripCheckpoint::create([
-        'trip_id' => $this->trip->id,
-        'checkpoint_type' => CheckpointType::Completed->value,
-        'order_id' => $this->order->id,
-        'driver_id' => $this->driver->id,
-        'km_reading' => 100120,
-        'occurred_at' => now()->subMinutes(10),
-    ]);
-
-    editTripTableForCompletion()
-        ->mountTableAction('edit', $this->trip)
-        ->fillForm(['driver_id' => $this->driver->id])
-        ->callMountedTableAction()
-        ->assertHasNoTableActionErrors();
-
-    $trip = $this->trip->fresh();
-
-    expect($trip->status)->toBe(TripStatus::Delivering)
-        ->and($trip->completed_at)->toBeNull()
-        ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed)
-        ->and($otherOrder->fresh()->status)->toBe(OrderStatus::InTransit);
-});
-
-test('chuyến nhiều đơn: mốc kết thúc xe ở cuối đóng chuyến và mọi đơn chưa huỷ', function () {
-    $otherOrder = Order::create([
-        'order_code' => 'ORD-COMPLETE-02',
-        'area_id' => $this->area->id,
-        'customer_id' => $this->customer->id,
-        'created_by' => $this->admin->id,
-        'trip_id' => $this->trip->id,
-        'status' => OrderStatus::InTransit,
-    ]);
-
+test('mốc hoàn thành rồi kết thúc xe ở cuối đóng chuyến và đơn', function () {
     foreach ([[CheckpointType::Completed, 100120, 10], [CheckpointType::End, 100150, 5]] as [$type, $km, $minutesAgo]) {
         TripCheckpoint::create([
             'trip_id' => $this->trip->id,
@@ -268,9 +217,7 @@ test('chuyến nhiều đơn: mốc kết thúc xe ở cuối đóng chuyến v�
 
     expect($trip->status)->toBe(TripStatus::Completed)
         ->and((float) $trip->end_km)->toBe(100150.0)
-        ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed)
-        ->and($otherOrder->fresh()->status)->toBe(OrderStatus::Completed)
-        ->and($this->cancelledOrder->fresh()->status)->toBe(OrderStatus::Cancelled);
+        ->and($this->order->fresh()->status)->toBe(OrderStatus::Completed);
 });
 
 test('mốc lấy hàng hiện điểm lấy hàng của đơn ở cột Điểm, không cho chọn điểm giao', function () {

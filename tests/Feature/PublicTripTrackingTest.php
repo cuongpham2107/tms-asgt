@@ -288,23 +288,21 @@ test('chuyến hoàn thành được báo is_finished true', function () {
         ->assertJsonPath('is_finished', true);
 });
 
-test('dữ liệu bản đồ sắp đúng thứ tự điểm và gộp điểm trùng liền kề', function () {
+test('dữ liệu bản đồ có điểm lấy và điểm giao của đơn theo tuyến OSRM', function () {
     fakeOsrmRoute();
 
     ['trip' => $trip, 'pickup' => $pickup, 'delivery' => $delivery] = publicTrackingFixtures();
 
-    publicTrackingOrder($trip, $pickup, $delivery, ['planned_loading_at' => now()->addHours(2)]);
-    publicTrackingOrder($trip, $pickup, $delivery, ['planned_loading_at' => now()->addHour()]);
+    publicTrackingOrder($trip, $pickup, $delivery);
 
     $map = app(TripTrackingMapService::class)->buildMapData($trip->fresh());
 
-    // 2 đơn dùng cùng kho lấy + cùng kho giao => mỗi toạ độ chỉ xuất hiện 1 lần liền kề.
     expect($map['points'])->toHaveCount(2)
-        ->and($map['pickups'])->toHaveCount(2)
-        ->and($map['deliveries'])->toHaveCount(2)
+        ->and($map['pickups'])->toHaveCount(1)
+        ->and($map['deliveries'])->toHaveCount(1)
         ->and($map['route_source'])->toBe('osrm')
-        ->and(collect($map['markers'])->pluck('type')->all())->toBe(['pickup', 'pickup', 'delivery', 'delivery'])
-        ->and(collect($map['markers'])->pluck('label')->all())->toBe(['1', '2', '1', '2']);
+        ->and(collect($map['markers'])->pluck('type')->all())->toBe(['pickup', 'delivery'])
+        ->and(collect($map['markers'])->pluck('label')->all())->toBe(['1', '1']);
 });
 
 test('osrm lỗi vẫn trả trang với tuyến dự phòng', function () {

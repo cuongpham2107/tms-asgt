@@ -189,7 +189,6 @@ class FullWorkflowTest extends Command
         $scenarios = [
             'scenario1',
             'scenario2',
-            'scenario3',
             'scenario4',
             'scenario5',
             'scenario6',
@@ -211,11 +210,10 @@ class FullWorkflowTest extends Command
             collect([
                 [1, 'HHHK order A→B', $results['scenario1'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
                 [2, 'External order', $results['scenario2'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
-                [3, '2 orders same trip', $results['scenario3'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
-                [4, 'Driver swap mid-trip', $results['scenario4'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
-                [5, 'Return trip (empty)', $results['scenario5'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
-                [6, 'Rented vehicle', $results['scenario6'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
-                [7, 'Shift KM summary', $results['scenario7'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
+                [3, 'Driver swap mid-trip', $results['scenario4'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
+                [4, 'Return trip (empty)', $results['scenario5'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
+                [5, 'Rented vehicle', $results['scenario6'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
+                [6, 'Shift KM summary', $results['scenario7'] ? '<fg=green>PASS</>' : '<fg=red>FAIL</>'],
             ])->toArray()
         );
 
@@ -484,62 +482,6 @@ class FullWorkflowTest extends Command
         $this->cinfo('Trip status', $trip->status->getLabel());
 
         return $order->status === OrderStatus::Completed;
-    }
-
-    // ═════════════════════════════════════════════════════════════════════
-    // SCENARIO 3: 2 orders same trip
-    // ═════════════════════════════════════════════════════════════════════
-
-    private function scenario3(int $num): bool
-    {
-        $this->section("SCENARIO {$num} — 2 HHHK orders, same trip, sequential delivery");
-        $km = 70000;
-
-        $order1 = $this->createOrderData('FW-S3A', OrderType::Hhhk, $this->hhhkArea, $this->pickup->id, $this->delivery->id);
-        $order2 = $this->createOrderData('FW-S3B', OrderType::Hhhk, $this->hhhkArea, $this->pickup->id, $this->delivery2->id);
-        $dp1 = $order1->deliveryPoints()->first();
-        $dp2 = $order2->deliveryPoints()->first();
-
-        $trip = Trip::create([
-            'trip_code' => Trip::generateTripCode(),
-            'vehicle_id' => $this->companyVehicle->id,
-            'driver_id' => $this->driverA->id,
-            'status' => TripStatus::Pending,
-        ]);
-
-        $order1->update(['trip_id' => $trip->id, 'status' => OrderStatus::Assigned, 'trip_sequence' => 0]);
-        $order2->update(['trip_id' => $trip->id, 'status' => OrderStatus::Assigned, 'trip_sequence' => 1]);
-        $order1->update(['status' => OrderStatus::Sent, 'sent_at' => now()]);
-        $order2->update(['status' => OrderStatus::Sent, 'sent_at' => now()]);
-        $this->ok('Orders', "{$order1->order_code} + {$order2->order_code} → Trip {$trip->trip_code}");
-
-        $this->startDriverShift($this->driverA, $this->companyVehicle, $this->tokenA);
-        $this->sendCheckpoint($this->tokenA, $trip, 'started', null);
-        $this->sendCheckpoint($this->tokenA, $trip, 'arrived_pickup', $km + 10);
-        $this->sendCheckpoint($this->tokenA, $trip, 'left_pickup', null);
-
-        // Deliver order 1
-        $this->sendCheckpoint($this->tokenA, $trip, 'arrived_delivery', null, $order1->id, $dp1->id);
-        $this->sendCheckpoint($this->tokenA, $trip, 'completed', $km + 60, $order1->id, $dp1->id);
-
-        // Deliver order 2
-        $this->sendCheckpoint($this->tokenA, $trip, 'arrived_delivery', null, $order2->id, $dp2->id);
-        $this->sendCheckpoint($this->tokenA, $trip, 'completed', $km + 100, $order2->id, $dp2->id);
-
-        $this->endDriverShift($this->driverA, $km + 100, $this->tokenA);
-
-        $order1->refresh();
-        $order2->refresh();
-        $trip->refresh();
-
-        $this->cinfo('Order 1 loaded_km', number_format((float) $order1->loaded_km, 1).' km');
-        $this->cinfo('Order 2 loaded_km', number_format((float) $order2->loaded_km, 1).' km');
-        $this->cinfo('Trip loaded (union)', number_format((float) $trip->total_km_loaded, 1).' km');
-        $this->cinfo('Trip empty', number_format((float) $trip->total_km_empty, 1).' km');
-
-        return $order1->status === OrderStatus::Completed
-            && $order2->status === OrderStatus::Completed
-            && $trip->status === TripStatus::Completed;
     }
 
     // ═════════════════════════════════════════════════════════════════════

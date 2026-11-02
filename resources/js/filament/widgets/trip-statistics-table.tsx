@@ -22,10 +22,9 @@ interface Charge {
 
 interface Row {
     key: string
-    stt: number | null
-    variant: 'trip' | 'order' | 'single'
+    stt: number
+    variant: 'single'
     orderId: number | null
-    ordersCount: number | null
     code: string | null
     plate: string | null
     date: string | null
@@ -57,7 +56,6 @@ interface Row {
     gw: number | null
     cargoType: string | null
     chargeableWeight: number | null
-    tripTotal: number | null
     charge: Charge | null
 }
 
@@ -165,8 +163,6 @@ const chipActive: Record<string, string> = {
     emerald: 'bg-emerald-50 ring-emerald-400 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
     amber: 'bg-amber-50 ring-amber-400 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
 }
-
-const isChild = (row: Row) => row.variant === 'order'
 
 const Icon = ({ path, className = '' }: { path: string; className?: string }) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className={`h-4 w-4 ${className}`} aria-hidden="true">
@@ -310,7 +306,7 @@ function Actions({ row, page }: { row: Row; page: PageApi }) {
 
 function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Column[] {
     const columns: Column[] = [
-        { key: 'stt', label: 'STT', align: 'center', width: 50, sticky: 0, extra: 'px-2.5 text-gray-400 font-mono', render: (row) => row.stt ?? '' },
+        { key: 'stt', label: 'STT', align: 'center', width: 50, sticky: 0, extra: 'px-2.5 text-gray-400 font-mono', render: (row) => row.stt },
         {
             key: 'code',
             label: 'Mã đơn hàng',
@@ -318,17 +314,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             width: 140,
             sticky: 1,
             extra: 'px-3 font-semibold text-gray-900 dark:text-gray-100 truncate',
-            render: (row) =>
-                isChild(row) ? (
-                    <span className="font-medium text-gray-700 dark:text-gray-300">
-                        <span className="text-gray-400">└</span> {row.code}
-                    </span>
-                ) : (
-                    <>
-                        {row.code || '—'}
-                        {row.variant === 'trip' && <span className="ml-1 text-[10px] font-medium text-gray-500">({row.ordersCount} đơn)</span>}
-                    </>
-                ),
+            render: (row) => row.code || '—',
         },
         {
             key: 'plate',
@@ -337,7 +323,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             width: 110,
             sticky: 2,
             extra: 'px-3 font-mono font-medium text-gray-800 dark:text-gray-200',
-            render: (row) => (isChild(row) ? '' : row.plate || '—'),
+            render: (row) => row.plate || '—',
         },
         { key: 'date', label: 'Ngày', align: 'center', minWidth: 90, extra: 'px-3 text-gray-600 dark:text-gray-400', render: (row) => row.date || '—' },
         { key: 'journey', label: 'Hành trình', minWidth: 130, extra: 'px-3.5 font-medium text-gray-800 dark:text-gray-200', render: (row) => row.journey || '—' },
@@ -378,11 +364,11 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             minWidth: 95,
             extra: 'px-3',
             render: (row) =>
-                isChild(row) || !row.vehicleOwner
+                !row.vehicleOwner
                     ? ''
                     : badge(row.vehicleOwner, row.vehicleOwner === 'Xe công ty' ? 'info' : row.vehicleOwner === 'Xe thuê' ? 'warning' : 'gray'),
         },
-        { key: 'vehicleType', label: 'Loại xe', align: 'center', minWidth: 90, extra: 'px-3 text-gray-600 dark:text-gray-400', render: (row) => (isChild(row) ? '' : row.vehicleType ?? '') },
+        { key: 'vehicleType', label: 'Loại xe', align: 'center', minWidth: 90, extra: 'px-3 text-gray-600 dark:text-gray-400', render: (row) => row.vehicleType ?? '' },
         { key: 'note', label: 'Ghi chú', minWidth: 100, extra: 'px-3 text-gray-500 max-w-[140px] truncate', render: (row) => <span title={row.note ?? ''}>{row.note || '—'}</span> },
         {
             key: 'isReturnTrip',
@@ -392,7 +378,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             extra: 'px-2.5',
             render: (row) => (row.isReturnTrip ? badge('Quay đầu', 'success') : <span className="text-gray-300 dark:text-gray-600">—</span>),
         },
-        { key: 'driverName', label: 'Họ tên lái xe', minWidth: 120, extra: 'px-3 font-medium text-gray-800 dark:text-gray-200', render: (row) => (isChild(row) ? '' : row.driverName || '—') },
+        { key: 'driverName', label: 'Họ tên lái xe', minWidth: 120, extra: 'px-3 font-medium text-gray-800 dark:text-gray-200', render: (row) => row.driverName || '—' },
         { key: 'kmLoaded', label: 'Km có hàng', align: 'right', minWidth: 85, extra: 'px-3 font-mono', render: (row) => (row.kmLoaded !== null ? row.kmLoaded.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '—') },
         {
             key: 'kmEmpty',
@@ -400,7 +386,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             align: 'right',
             minWidth: 85,
             extra: 'px-3 font-mono text-gray-500',
-            render: (row) => (isChild(row) ? '' : row.kmEmpty !== null ? row.kmEmpty.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '—'),
+            render: (row) => (row.kmEmpty !== null ? row.kmEmpty.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '—'),
         },
         { key: 'pcs', label: 'PCS', align: 'right', minWidth: 110, extra: 'px-1.5 font-mono text-xs', render: (row, page) => <MetricCell row={row} field="total_packages" value={row.pcs} page={page} /> },
         { key: 'gw', label: 'GW (kg)', align: 'right', minWidth: 125, extra: 'px-1.5 font-mono text-xs', render: (row, page) => <MetricCell row={row} field="total_weight" value={row.gw} page={page} /> },
@@ -479,7 +465,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                 minWidth: 120,
                 extra: 'px-3 font-mono font-bold text-sky-700 dark:text-sky-300',
                 titleClassName: 'font-bold text-sky-300',
-                render: (row) => (row.charge ? money(row.charge.total) : row.variant === 'trip' ? money(row.tripTotal) : '—'),
+                render: (row) => (row.charge ? money(row.charge.total) : '—'),
             },
             { key: 'actions', label: 'Thao tác', align: 'center', minWidth: 120, extra: 'px-2', render: (row, page) => <Actions row={row} page={page} /> },
         )
@@ -511,7 +497,6 @@ function RowView({ row, columns, page }: { row: Row; columns: Column[]; page: Pa
     const tone = rowTone(row)
     const rowClass = [
         'dispatch-row whitespace-nowrap group',
-        row.variant === 'trip' ? 'bg-slate-100 dark:bg-gray-800 font-semibold' : '',
         tone === 'locked' ? 'bg-emerald-50 dark:bg-emerald-950' : '',
         tone === 'missing' ? 'bg-amber-50 dark:bg-amber-950' : '',
     ]
@@ -523,9 +508,7 @@ function RowView({ row, columns, page }: { row: Row; columns: Column[]; page: Pa
             ? 'bg-emerald-50 dark:bg-emerald-950'
             : tone === 'missing'
               ? 'bg-amber-50 dark:bg-amber-950'
-              : row.variant === 'trip'
-                ? 'bg-slate-100 dark:bg-gray-800'
-                : 'bg-white dark:bg-gray-900'
+              : 'bg-white dark:bg-gray-900'
 
     return (
         <tr className={rowClass}>

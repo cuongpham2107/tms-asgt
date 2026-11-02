@@ -179,12 +179,19 @@ test('orders index sorts sent orders by sent_at fifo', function () {
         'created_at' => Carbon::parse('2026-10-21 08:00:00'),
     ]);
 
+    $trip2 = Trip::create([
+        'trip_code' => 'TRIP-ORDERS-02',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Pending,
+    ]);
+
     $ord1 = Order::create([
         'order_code' => 'ORD-EARLIER',
         'type' => 'HHHK',
         'area_id' => $this->area->id,
         'customer_id' => $this->customer->id,
-        'trip_id' => $trip->id,
+        'trip_id' => $trip2->id,
         'status' => OrderStatus::Sent,
         'created_by' => $this->driver->id,
         'sent_at' => Carbon::parse('2026-10-21 08:30:00'),

@@ -36,7 +36,8 @@ class LocationController extends Controller
         if (filled($area_id)) {
             $query->where('area_id', $area_id);
         }
-        $locations = $query->paginate($limit);
+        // Sắp theo mã để phân trang ổn định (cuộn tải thêm không lặp/thiếu điểm)
+        $locations = $query->orderBy('code')->orderBy('id')->paginate($limit);
 
         return response()->json($locations);
     }

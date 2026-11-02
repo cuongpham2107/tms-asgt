@@ -309,7 +309,7 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                                             </span>
                                         </td>
 
-                                        <td className={`${cellClass} px-2 text-center`}>{badge(row.ownerCategory, row.ownerCategory === 'Xe CTY' ? 'info' : 'warning')}</td>
+                                        <td className={`${cellClass} px-2 text-center`}>{badge(row.ownerCategory, row.ownerCategory.startsWith('Thuê+') ? 'warning' : 'info')}</td>
 
                                         <td className={`${cellClass} px-1 text-center`}>{row.orderType ? badge(row.orderType, row.orderTypeColor) : <span className="text-gray-400">—</span>}</td>
 

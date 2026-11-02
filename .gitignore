@@ -27,6 +27,7 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 database/database_backup_*
+.codegraph/
 .mimocode/
 .omo/
 *firebase-credentials*.json

@@ -282,65 +282,6 @@ test('scenario 2: external order full lifecycle', function () {
 
 // ─── Scenario 3: 2 đơn HHHK cùng trip ────────────────────────────────────────
 
-test('scenario 3: two HHHK orders in same trip delivered sequentially', function () {
-    $vehicle = $this->companyVehicle;
-    $vehicle->update(['current_mileage' => 70000, 'status' => VehicleStatus::On]);
-    $driver = $this->driverA;
-
-    [$order1, $dp1] = fwCreateOrder(
-        $this->hhhkArea, $this->customer, $driver, 'HHHK-003A',
-        'Carton A', $this->pickupLocation->id, $this->deliveryLocation->id,
-    );
-    [$order2, $dp2] = fwCreateOrder(
-        $this->hhhkArea, $this->customer, $driver, 'HHHK-003B',
-        'Carton B', $this->pickupLocation->id, $this->deliveryLocation2->id,
-    );
-
-    $trip = Trip::create([
-        'trip_code' => Trip::generateTripCode(),
-        'vehicle_id' => $vehicle->id,
-        'driver_id' => $driver->id,
-        'status' => TripStatus::Pending,
-    ]);
-
-    $order1->update(['trip_id' => $trip->id, 'status' => OrderStatus::Sent, 'sent_at' => now(), 'trip_sequence' => 0]);
-    $order2->update(['trip_id' => $trip->id, 'status' => OrderStatus::Sent, 'sent_at' => now(), 'trip_sequence' => 1]);
-
-    fwStartShift($driver, $vehicle);
-
-    fwPostCheckpoint($driver, $trip, CheckpointType::Started->value);
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedPickup->value, kmReading: 70010);
-    fwPostCheckpoint($driver, $trip, CheckpointType::LeftPickup->value);
-
-    // Giao đơn 1
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order1->id, deliveryPointId: $dp1->id);
-    fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 70060, orderId: $order1->id, deliveryPointId: $dp1->id);
-
-    // Giao đơn 2
-    fwPostCheckpoint($driver, $trip, CheckpointType::ArrivedDelivery->value, orderId: $order2->id, deliveryPointId: $dp2->id);
-    fwPostCheckpoint($driver, $trip, CheckpointType::Completed->value, kmReading: 70100, orderId: $order2->id, deliveryPointId: $dp2->id);
-
-    fwCompleteTrip($driver, $trip, 70100);
-
-    fwEndShift($driver, 70100);
-
-    $order1->refresh();
-    $order2->refresh();
-    $trip->refresh();
-
-    expect($order1->status)->toBe(OrderStatus::Completed);
-    expect($order2->status)->toBe(OrderStatus::Completed);
-    expect((float) $order1->loaded_km)->toBe(50.0);   // 70060 - 70010
-    expect((float) $order2->loaded_km)->toBe(90.0);   // 70100 - 70010
-    expect($trip->status)->toBe(TripStatus::Completed);
-    expect((float) $trip->total_km)->toBe(100.0);
-    // Union: từ pickup(70010) đến deliver cuối(70100) = 90 loaded, empty = 10
-    expect((float) $trip->total_km_loaded)->toBe(90.0);
-    expect((float) $trip->total_km_empty)->toBe(10.0);
-});
-
-// ─── Scenario 4: Đảo lái giữa chuyến ─────────────────────────────────────────
-
 test('scenario 4: driver swap mid-trip with KM split correctly', function () {
     $vehicle = $this->companyVehicle;
     $vehicle->update(['current_mileage' => 80000, 'status' => VehicleStatus::On]);

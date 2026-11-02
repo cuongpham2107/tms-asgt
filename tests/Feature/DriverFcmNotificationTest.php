@@ -16,7 +16,6 @@ use App\Filament\Resources\Trips\Actions\CreateEmptyRunAction;
 use App\Filament\Resources\Trips\Actions\DriverSwapAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
-use App\Filament\Resources\Trips\Actions\SendTripAction;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
@@ -224,57 +223,6 @@ test('driver notification service resolves driver from active shift if trip driv
     $result = $service->sendTripDispatched($trip, 1);
 
     expect($result)->toBeTrue();
-});
-
-test('send trip action updates order status and sends fcm notification to driver', function () {
-    $area = Area::create(['code' => 'AREA-002', 'name' => 'Khu vực 2']);
-    $customer = Customer::create(['name' => 'Khách Hàng 2', 'code' => 'CUST-002', 'is_active' => true]);
-    $driver = User::factory()->create(['fcm_token' => 'driver_action_token']);
-    $vehicle = Vehicle::create([
-        'plate_number' => '29C-999.00',
-        'vehicle_type' => VehicleType::Normal,
-        'owner' => 'ASGT',
-        'is_active' => true,
-        'status' => VehicleStatus::On,
-        'type' => VehicleOwnerType::Company,
-    ]);
-
-    $trip = Trip::create([
-        'trip_code' => 'TRIP-ACTION-004',
-        'vehicle_id' => $vehicle->id,
-        'driver_id' => $driver->id,
-        'status' => TripStatus::Pending,
-    ]);
-
-    $order1 = Order::create([
-        'order_code' => 'ASG-101',
-        'status' => OrderStatus::Assigned,
-        'area_id' => $area->id,
-        'customer_id' => $customer->id,
-        'created_by' => $driver->id,
-        'trip_id' => $trip->id,
-    ]);
-    $order2 = Order::create([
-        'order_code' => 'ASG-102',
-        'status' => OrderStatus::Draft,
-        'area_id' => $area->id,
-        'customer_id' => $customer->id,
-        'created_by' => $driver->id,
-        'trip_id' => $trip->id,
-    ]);
-
-    $mockMessaging = Mockery::mock(Messaging::class);
-    $mockMessaging->shouldReceive('send')->once()->andReturn([]);
-    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
-
-    $action = SendTripAction::make();
-    $action->record($trip);
-    $action->call();
-
-    expect($order1->refresh()->status)->toBe(OrderStatus::Sent)
-        ->and($order2->refresh()->status)->toBe(OrderStatus::Sent)
-        ->and($order1->sent_at)->not->toBeNull()
-        ->and($order2->sent_at)->not->toBeNull();
 });
 
 test('create single order with send_immediately sends fcm notification', function () {

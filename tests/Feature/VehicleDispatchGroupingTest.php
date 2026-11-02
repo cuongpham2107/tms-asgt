@@ -129,20 +129,6 @@ test('chuyến đang giao ưu tiên hơn chuyến pending có id lớn hơn', fu
         ->and(VehicleDispatchBoard::resolveVehicleLocationGroup(dispatchVehicle($vehicle)))->toBe('BN');
 });
 
-test('chuyến nhiều đơn lấy điểm giao của đơn cuối cùng', function () {
-    $pickup = dispatchLocation('PICK-NB', 'Sóc Sơn, Hà Nội');
-    $deliveryNB = dispatchLocation('DEL-NB', 'Sóc Sơn, Hà Nội');
-    $deliveryBN = dispatchLocation('DEL-BN', 'Yên Phong, Bắc Ninh');
-
-    $vehicle = dispatchVehicleWithGps('29C-GROUP-04', 'Nội Bài, Hà Nội');
-    $trip = dispatchTrip($vehicle);
-
-    dispatchOrder($trip, $pickup, $deliveryNB, 'ORD-GROUP-04A', now()->subHours(2)->toDateTimeString());
-    dispatchOrder($trip, $pickup, $deliveryBN, 'ORD-GROUP-04B', now()->subHour()->toDateTimeString());
-
-    expect(VehicleDispatchBoard::resolveVehicleLocationGroup(dispatchVehicle($vehicle)))->toBe('BN');
-});
-
 test('không có điểm giao thì dùng điểm kết thúc chuyến', function () {
     $endBN = dispatchLocation('END-BN', 'Yên Phong, Bắc Ninh');
 

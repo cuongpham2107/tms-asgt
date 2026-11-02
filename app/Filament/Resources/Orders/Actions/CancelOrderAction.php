@@ -50,21 +50,11 @@ class CancelOrderAction
                         'cancel_reason' => $data['cancel_reason'] ?? null,
                     ]);
 
+                    // Mỗi chuyến chỉ có 1 đơn: huỷ đơn là huỷ luôn chuyến.
                     if ($record->trip_id !== null) {
-                        $remainingActive = Order::query()
-                            ->where('trip_id', $record->trip_id)
-                            ->where('id', '!=', $record->id)
-                            ->whereNotIn('status', [
-                                OrderStatus::Cancelled->value,
-                                OrderStatus::Completed->value,
-                            ])
-                            ->exists();
-
-                        if (! $remainingActive) {
-                            Trip::query()->whereKey($record->trip_id)->update([
-                                'status' => TripStatus::Cancelled->value,
-                            ]);
-                        }
+                        Trip::query()->whereKey($record->trip_id)->update([
+                            'status' => TripStatus::Cancelled->value,
+                        ]);
                     }
 
                     try {

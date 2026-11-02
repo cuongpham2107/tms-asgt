@@ -108,7 +108,7 @@ test('trip stats overview widget renders successfully', function () {
         ->assertHasNoErrors();
 });
 
-test('trip resolves orders and lists pickups/deliveries correctly', function () {
+test('trip lists pickup and delivery points of its order in order', function () {
     $vehicle = Vehicle::create([
         'plate_number' => '51C-777.77',
         'vehicle_type' => VehicleType::Normal,
@@ -138,7 +138,7 @@ test('trip resolves orders and lists pickups/deliveries correctly', function () 
         'name' => 'Test Customer',
     ]);
 
-    $order1 = Order::create([
+    $order = Order::create([
         'order_code' => 'ORD-1',
         'trip_id' => $trip->id,
         'area_id' => $area->id,
@@ -148,51 +148,16 @@ test('trip resolves orders and lists pickups/deliveries correctly', function () 
         'pickup_address' => 'Pickup A',
         'status' => OrderStatus::Sent,
     ]);
-    $order1->deliveryPoints()->create([
-        'address' => 'Delivery A',
-        'sequence' => 1,
-    ]);
-
-    $order2 = Order::create([
-        'order_code' => 'ORD-2',
-        'trip_id' => $trip->id,
-        'area_id' => $area->id,
-        'customer_id' => $customer->id,
-        'created_by' => $driver->id,
-        'planned_loading_at' => now()->addMinutes(10),
-        'pickup_address' => 'Pickup B',
-        'status' => OrderStatus::Sent,
-    ]);
-    $order2->deliveryPoints()->create([
-        'address' => 'Delivery B',
-        'sequence' => 1,
-    ]);
-
-    $order3 = Order::create([
-        'order_code' => 'ORD-3',
-        'trip_id' => $trip->id,
-        'area_id' => $area->id,
-        'customer_id' => $customer->id,
-        'created_by' => $driver->id,
-        'planned_loading_at' => now()->addMinutes(20),
-        'pickup_address' => 'Pickup C',
-        'status' => OrderStatus::Sent,
-    ]);
-    $order3->deliveryPoints()->create([
-        'address' => 'Delivery C',
-        'sequence' => 1,
-    ]);
+    foreach (['Delivery A', 'Delivery B', 'Delivery C'] as $sequence => $address) {
+        $order->deliveryPoints()->create(['address' => $address, 'sequence' => $sequence + 1]);
+    }
 
     $trip->load('orders.pickupLocation', 'orders.deliveryPoints');
 
-    expect($trip->orders->count())->toBe(3);
-    expect($trip->orders->pluck('order_code')->toArray())->toBe(['ORD-1', 'ORD-2', 'ORD-3']);
+    expect($trip->orders->pluck('order_code')->toArray())->toBe(['ORD-1']);
 
-    $pickups = TripsTable::getPickupLocations($trip);
-    $deliveries = TripsTable::getDeliveryDestination($trip);
-
-    expect($pickups)->toBe('Pickup A → Pickup B → Pickup C');
-    expect($deliveries)->toBe('Delivery A → Delivery B → Delivery C');
+    expect(TripsTable::getPickupLocations($trip))->toBe('Pickup A');
+    expect(TripsTable::getDeliveryDestination($trip))->toBe('Delivery A → Delivery B → Delivery C');
 });
 
 test('TripsTable and TripResource preserve repeated locations in route (ALSB -> ACSV -> ALSC -> ACSV)', function () {
