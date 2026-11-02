@@ -777,7 +777,7 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         if ($activeTrip->isPaused()) {
-            return 'bg-amber-500 text-white font-bold animate-pulse';
+            return 'bg-yellow-400 text-gray-900 font-bold animate-pulse';
         }
 
         $status = $activeTrip->status instanceof TripStatus
@@ -790,11 +790,11 @@ class VehicleDispatchBoard extends Page implements HasTable
             TripStatus::ArrivedPickup => 'bg-amber-500 text-white font-bold',
             TripStatus::Delivering => 'bg-blue-600 text-white font-bold',
             TripStatus::ArrivedDelivery => 'bg-fuchsia-600 text-white font-bold',
-            TripStatus::Delivered => 'bg-teal-600 text-white font-bold',
+            TripStatus::Delivered => 'bg-cyan-600 text-white font-bold',
             TripStatus::Completed => 'bg-green-700 text-white font-bold',
             TripStatus::DriverSwap => 'bg-rose-600 text-white font-bold',
             TripStatus::Cancelled => 'bg-gray-400 text-white font-semibold',
-            TripStatus::ReturnTrip => 'bg-indigo-600 text-white font-semibold',
+            TripStatus::ReturnTrip => 'bg-slate-600 text-white font-semibold',
             default => 'bg-blue-600 text-white font-bold',
         };
     }
