@@ -51,7 +51,7 @@ export default function DashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       refresh();
-    }, [refresh])
+    }, [token])
   );
 
   // Tự động tải lại khi có Push Notification (chuyến mới, đơn mới, đảo lái...) hoặc khi mở lại app

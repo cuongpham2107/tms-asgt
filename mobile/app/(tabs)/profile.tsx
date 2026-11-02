@@ -89,7 +89,7 @@ export default function ProfileScreen() {
           })
           .catch(() => null);
       }
-    }, [token, setShift])
+    }, [token])
   );
 
   const driver = localDriver;

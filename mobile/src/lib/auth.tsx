@@ -1,4 +1,11 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
 
 interface AuthState {
   token: string | null;
@@ -10,24 +17,65 @@ interface AuthState {
 }
 
 const AuthContext = createContext<AuthState>({
-  token: null, shiftId: null, shift: null,
-  setAuth: () => {}, setShift: () => {}, logout: () => {},
+  token: null,
+  shiftId: null,
+  shift: null,
+  setAuth: () => {},
+  setShift: () => {},
+  logout: () => {},
 });
 
-export function useAuth() { return useContext(AuthContext); }
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [shiftId, setShiftId] = useState<string | null>(null);
-  const [shift, setShift] = useState<any | null>(null);
-  return (
-    <AuthContext.Provider value={{
-      token, shiftId, shift,
-      setAuth: (t, s, sh) => { setToken(t); if (s) setShiftId(s); setShift(sh ?? null); },
-      setShift: (sh) => { setShift(sh ?? null); setShiftId(sh?.id ? String(sh.id) : null); },
-      logout: () => { setToken(null); setShiftId(null); setShift(null); },
-    }}>
-      {children}
-    </AuthContext.Provider>
+  const [shift, setShiftState] = useState<any | null>(null);
+
+  const setAuth = useCallback((t: string, s?: string, sh?: any) => {
+    setToken(t);
+    if (s) setShiftId(s);
+    setShiftState(sh ?? null);
+  }, []);
+
+  const setShift = useCallback((sh: any) => {
+    const next = sh ?? null;
+    setShiftState((prev: any) => {
+      if (prev === next) return prev;
+      if (
+        prev &&
+        next &&
+        prev.id === next.id &&
+        prev.end_time === next.end_time &&
+        prev.total_km === next.total_km &&
+        prev.vehicle?.current_mileage === next.vehicle?.current_mileage
+      ) {
+        return prev;
+      }
+      return next;
+    });
+    setShiftId(next?.id ? String(next.id) : null);
+  }, []);
+
+  const logout = useCallback(() => {
+    setToken(null);
+    setShiftId(null);
+    setShiftState(null);
+  }, []);
+
+  const value = useMemo(
+    () => ({
+      token,
+      shiftId,
+      shift,
+      setAuth,
+      setShift,
+      logout,
+    }),
+    [token, shiftId, shift, setAuth, setShift, logout]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -352,7 +352,7 @@ export default function TripDetailScreen() {
         useCallback(() => {
             clearNotificationBadge();
             load();
-        }, [load]),
+        }, [token, tripId]),
     );
 
     useRefreshOnNotification(refreshAll);
