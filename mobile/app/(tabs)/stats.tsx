@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
-import { api } from "../../src/lib/api";
+import { api, getStatsPeriodDates } from "../../src/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 
 const fmt = (v: any) => v != null ? parseInt(v).toLocaleString("vi-VN") : "-";
@@ -14,10 +14,10 @@ const statusBadge: Record<string, { label: string; bg: string; color: string; bo
 };
 
 const periods = [
-  { key: "all", label: "Tất cả" },
   { key: "today", label: "Hôm nay" },
   { key: "week", label: "Tuần này" },
   { key: "month", label: "Tháng này" },
+  { key: "last_month", label: "Tháng trước" },
 ];
 
 export default function StatsScreen() {
@@ -26,40 +26,29 @@ export default function StatsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
-  const [activePeriod, setActivePeriod] = useState("all");
+  const [activePeriod, setActivePeriod] = useState("today");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const getPeriodDates = (period: string) => {
-    const now = new Date();
-    const to = now.toISOString().slice(0, 10);
-    if (period === "today") return { from: to, to };
-    if (period === "week") {
-      const d = new Date(now); d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1));
-      return { from: d.toISOString().slice(0, 10), to };
-    }
-    if (period === "month") {
-      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      return { from, to };
-    }
-    return {};
-  };
-
   const filteredHistory = useMemo(() => {
-    if (activePeriod === "all" || !history.length) return history;
-    const { from, to } = getPeriodDates(activePeriod);
+    if (!history.length) return history;
+    const { from, to } = getStatsPeriodDates(activePeriod);
+    if (!from || !to) return history;
+    const pad = (n: number) => String(n).padStart(2, "0");
     return history.filter((t: any) => {
-      const d = t.completed_at || t.started_at || t.created_at;
-      if (!d) return true;
-      const date = new Date(d).toISOString().slice(0, 10);
-      return date >= from! && date <= to!;
+      const raw = t.started_at || t.completed_at || t.created_at;
+      if (!raw) return true;
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return true;
+      const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      return date >= from && date <= to;
     });
   }, [history, activePeriod]);
 
   const load = async () => {
     if (!token) return;
-    const { from, to } = getPeriodDates(activePeriod);
+    const { from, to } = getStatsPeriodDates(activePeriod);
     setPage(1);
     const [statsRes, histRes] = await Promise.all([
       api.stats(activePeriod, token).catch(() => null),
@@ -85,7 +74,7 @@ export default function StatsScreen() {
     if (loading || loadingMore || !hasMore || !token) return;
     setLoadingMore(true);
     const nextPage = page + 1;
-    const { from, to } = getPeriodDates(activePeriod);
+    const { from, to } = getStatsPeriodDates(activePeriod);
     const histRes = await api.trips.history({
       page: nextPage,
       per_page: 15,
@@ -161,12 +150,17 @@ export default function StatsScreen() {
         )}
 
         {/* Period filter */}
-        <View style={{ flexDirection: "row", gap: 6, paddingHorizontal: 16, marginTop: 12 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ flexDirection: "row", gap: 6, paddingHorizontal: 16 }}
+          style={{ marginTop: 12 }}
+        >
           {periods.map((p) => { const active = activePeriod === p.key;
             return <TouchableOpacity key={p.key} style={[s.periodTab, active && { backgroundColor: "#4F46E5" }]} onPress={() => setActivePeriod(p.key)} activeOpacity={0.7}>
               <Text style={[s.periodText, active && { color: "#fff" }]}>{p.label}</Text></TouchableOpacity>;
           })}
-        </View>
+        </ScrollView>
 
         {/* Trips history */}
         <Text style={s.sectionTitle}>📋 Lịch sử chuyến đi ({filteredHistory.length})</Text>

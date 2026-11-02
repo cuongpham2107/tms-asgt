@@ -446,6 +446,11 @@ class TripsTable extends BaseTable
 
                             $service->recalculateAfterEdit($record);
                             $service->closePendingReportsAfterEdit($record, Auth::id());
+
+                            try {
+                                app(DriverNotificationService::class)->sendTripKmUpdated($record);
+                            } catch (\Throwable) {
+                            }
                         }),
 
                     ResolveKmReportAction::make(),

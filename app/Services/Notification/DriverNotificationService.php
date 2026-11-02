@@ -70,9 +70,9 @@ class DriverNotificationService
             return false;
         }
 
-        $countText = $orderCount > 0 ? " với {$orderCount} đơn hàng" : '';
-        $title = "Lệnh vận chuyển mới: #{$trip->trip_code}";
-        $body = "Bạn có chuyến đi mới #{$trip->trip_code}{$countText} cần thực hiện trong ca.";
+        $summary = $this->formatTripSummary($trip);
+        $title = "Lệnh vận chuyển mới: {$summary}";
+        $body = "Bạn có lệnh vận chuyển mới ({$summary}) cần thực hiện trong ca.";
 
         $data = [
             'type' => 'trip_dispatched',
@@ -97,16 +97,9 @@ class DriverNotificationService
             return false;
         }
 
-        $trip->loadMissing(['startLocation', 'endLocation']);
-        $route = '';
-        if ($trip->startLocation || $trip->endLocation) {
-            $from = $trip->startLocation?->code ?? '—';
-            $to = $trip->endLocation?->code ?? '—';
-            $route = " ({$from} → {$to})";
-        }
-
-        $title = "Chuyến không hàng mới: #{$trip->trip_code}";
-        $body = "Bạn có chuyến không hàng mới #{$trip->trip_code}{$route} cần thực hiện trong ca.";
+        $summary = $this->formatTripSummary($trip, emptyRunFallback: true);
+        $title = "Chuyến không hàng mới: {$summary}";
+        $body = "Bạn được gán chuyến không hàng mới ({$summary}) cần thực hiện trong ca.";
 
         $data = [
             'type' => 'empty_run_dispatched',
@@ -142,9 +135,9 @@ class DriverNotificationService
             return false;
         }
 
-        $tripText = $trip ? " (Chuyến #{$trip->trip_code})" : '';
-        $title = "Đơn hàng mới: {$order->order_code}";
-        $body = "Bạn vừa nhận được đơn hàng mới {$order->order_code}{$tripText}.";
+        $summary = $this->formatOrderSummary($order, $trip);
+        $title = "Đơn hàng mới: {$summary}";
+        $body = "Bạn vừa nhận lệnh vận chuyển mới ({$summary}).";
 
         $data = [
             'type' => 'order_sent',
@@ -163,12 +156,12 @@ class DriverNotificationService
     public function sendTripDriverSwapped(Trip $trip, User $newDriver, ?User $oldDriver = null, float $handoverKm = 0): bool
     {
         $orderCount = $trip->orders()->count();
-        $countText = $orderCount > 0 ? " với {$orderCount} đơn hàng" : '';
+        $summary = $this->formatTripSummary($trip);
         $fromText = $oldDriver ? " từ tài xế {$oldDriver->name}" : '';
-        $kmText = $handoverKm > 0 ? ' (Km bàn giao: '.number_format($handoverKm, 1, ',', '.').')' : '';
+        $kmText = $handoverKm > 0 ? ' (Km bàn giao: '.number_format($handoverKm, 0, ',', '.').')' : '';
 
-        $title = "Bàn giao chuyến đi: #{$trip->trip_code}";
-        $body = "Bạn nhận bàn giao chuyến đi #{$trip->trip_code}{$fromText}{$countText}{$kmText}.";
+        $title = "Bàn giao chuyến đi: {$summary}";
+        $body = "Bạn nhận bàn giao ({$summary}){$fromText}{$kmText}.";
 
         $data = [
             'type' => 'trip_driver_swapped',
@@ -188,9 +181,10 @@ class DriverNotificationService
      */
     public function sendTripDriverSwapHandover(Trip $trip, User $oldDriver, ?User $newDriver = null): bool
     {
+        $summary = $this->formatTripSummary($trip);
         $toText = $newDriver ? " cho tài xế {$newDriver->name}" : '';
-        $title = "Đã chuyển giao chuyến: #{$trip->trip_code}";
-        $body = "Chuyến đi #{$trip->trip_code} đã được chuyển giao{$toText}.";
+        $title = "Đã chuyển giao chuyến: {$summary}";
+        $body = "Chuyến ({$summary}) đã được bàn giao{$toText}.";
 
         $data = [
             'type' => 'trip_driver_swap_handover',
@@ -209,9 +203,10 @@ class DriverNotificationService
     public function sendTripReassigned(Trip $trip, User $newDriver, ?User $oldDriver = null, int $orderCount = 0): bool
     {
         $count = $orderCount > 0 ? $orderCount : $trip->orders()->count();
-        $countText = $count > 0 ? " với {$count} đơn hàng" : '';
-        $title = "Điều phối chuyến đi: #{$trip->trip_code}";
-        $body = "Bạn được gán thực hiện chuyến đi #{$trip->trip_code}{$countText}.";
+        $summary = $this->formatTripSummary($trip);
+        $fromText = $oldDriver ? " (điều phối từ tài xế {$oldDriver->name})" : '';
+        $title = "Điều phối chuyến đi: {$summary}";
+        $body = "Bạn được gán thực hiện ({$summary}){$fromText}.";
 
         $data = [
             'type' => 'trip_reassigned',
@@ -228,8 +223,9 @@ class DriverNotificationService
      */
     public function sendTripUnassigned(Trip $trip, User $oldDriver): bool
     {
-        $title = "Hủy gán chuyến đi: #{$trip->trip_code}";
-        $body = "Chuyến đi #{$trip->trip_code} đã được điều phối lại cho phương tiện/lái xe khác.";
+        $summary = $this->formatTripSummary($trip);
+        $title = "Hủy gán chuyến đi: {$summary}";
+        $body = "Chuyến ({$summary}) đã được điều phối lại cho phương tiện/lái xe khác.";
 
         $data = [
             'type' => 'trip_unassigned',
@@ -253,9 +249,10 @@ class DriverNotificationService
             return false;
         }
 
+        $summary = $this->formatTripSummary($trip);
         $reasonText = filled($reason) ? " Lý do: {$reason}" : '';
-        $title = "Huỷ chuyến đi: #{$trip->trip_code}";
-        $body = "Chuyến đi #{$trip->trip_code} đã bị huỷ.{$reasonText}";
+        $title = "Huỷ chuyến đi: {$summary}";
+        $body = "Chuyến ({$summary}) đã bị huỷ.{$reasonText}";
 
         $data = [
             'type' => 'trip_cancelled',
@@ -289,9 +286,10 @@ class DriverNotificationService
             return false;
         }
 
+        $summary = $this->formatOrderSummary($order, $trip);
         $reasonText = filled($reason) ? " Lý do: {$reason}" : '';
-        $title = "Huỷ đơn hàng: {$order->order_code}";
-        $body = "Đơn hàng {$order->order_code} đã bị huỷ.{$reasonText}";
+        $title = "Huỷ đơn hàng: {$summary}";
+        $body = "Đơn hàng ({$summary}) đã bị huỷ.{$reasonText}";
 
         $data = [
             'type' => 'order_cancelled',
@@ -326,8 +324,9 @@ class DriverNotificationService
             return false;
         }
 
-        $title = "Thu hồi lệnh đơn hàng: {$order->order_code}";
-        $body = "Lệnh vận chuyển cho đơn hàng {$order->order_code} đã được thu hồi.";
+        $summary = $this->formatOrderSummary($order, $trip);
+        $title = "Thu hồi lệnh đơn hàng: {$summary}";
+        $body = "Lệnh vận chuyển ({$summary}) đã được thu hồi.";
 
         $data = [
             'type' => 'order_recalled',
@@ -337,6 +336,166 @@ class DriverNotificationService
         ];
 
         return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push notification khi điều hành xác nhận cập nhật hoặc từ chối báo cáo sai lệch số Km.
+     */
+    public function sendTripKmUpdated(Trip $trip, ?float $updatedKm = null, ?string $adminNote = null, bool $rejected = false): bool
+    {
+        $trip->refresh()->loadMissing(['vehicle', 'driver', 'shift.driver']);
+        $driver = $this->resolveDriverForTrip($trip);
+
+        if ($driver === null) {
+            Log::info("DriverNotification: Chuyến #{$trip->trip_code} không có lái xe để gửi thông báo cập nhật Km.");
+
+            return false;
+        }
+
+        $effectiveKm = $updatedKm ?? ($trip->vehicle?->current_mileage !== null ? (float) $trip->vehicle->current_mileage : null);
+        $kmFormatted = $effectiveKm !== null ? number_format($effectiveKm, 0, ',', '.').' km' : '';
+        $summary = $this->formatTripSummary($trip);
+        $noteText = filled($adminNote) ? ($rejected ? " Lý do: {$adminNote}" : " Ghi chú: {$adminNote}") : '';
+
+        if ($rejected) {
+            $title = "Từ chối báo sai Km: {$summary}";
+            $kmSuffix = $kmFormatted !== '' ? " Km xe hiện tại: {$kmFormatted}." : '';
+            $body = "Báo cáo sai lệch Km ({$summary}) đã bị từ chối.{$kmSuffix}{$noteText}";
+        } else {
+            $title = "Đã cập nhật số Km: {$summary}";
+            $kmSuffix = $kmFormatted !== '' ? " thành {$kmFormatted}" : '';
+            $body = "Điều hành đã cập nhật số Km ({$summary}){$kmSuffix}.{$noteText}";
+        }
+
+        $data = [
+            'type' => $rejected ? 'trip_km_rejected' : 'trip_km_updated',
+            'trip_id' => (string) $trip->id,
+            'trip_code' => (string) $trip->trip_code,
+            'vehicle_km' => (string) ($trip->vehicle?->current_mileage ?? $effectiveKm ?? ''),
+            'corrected_km' => (string) ($effectiveKm ?? ''),
+        ];
+
+        return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
+     * Chuẩn hoá chuỗi hiển thị thống nhất cho chuyến: Mã đơn • BSX • Điểm đi → Điểm đến.
+     */
+    protected function formatTripSummary(Trip $trip, bool $emptyRunFallback = false): string
+    {
+        $trip->loadMissing([
+            'vehicle',
+            'startLocation',
+            'endLocation',
+            'orders.pickupLocation',
+            'orders.deliveryPoints.location',
+        ]);
+
+        $orderCodes = $trip->orders
+            ->pluck('order_code')
+            ->filter()
+            ->values()
+            ->implode(', ');
+
+        $primaryLabel = match (true) {
+            $orderCodes !== '' => $orderCodes,
+            $emptyRunFallback && $trip->trip_code !== null => "#{$trip->trip_code}",
+            $trip->is_empty_run => $trip->trip_code ? "#{$trip->trip_code}" : 'Chuyến không hàng',
+            $trip->trip_code !== null => "#{$trip->trip_code}",
+            default => "#{$trip->id}",
+        };
+
+        $plate = $trip->vehicle?->plate_number;
+        $route = $this->extractTripRoute($trip);
+
+        return collect([$primaryLabel, $plate, $route])
+            ->filter(fn (?string $part): bool => filled($part))
+            ->implode(' • ');
+    }
+
+    /**
+     * Chuẩn hoá chuỗi hiển thị thống nhất cho đơn hàng: Mã đơn • BSX • Điểm đi → Điểm đến.
+     */
+    protected function formatOrderSummary(Order $order, ?Trip $trip = null): string
+    {
+        $order->loadMissing(['pickupLocation', 'deliveryPoints.location', 'trip.vehicle']);
+        $trip?->loadMissing(['vehicle', 'startLocation', 'endLocation']);
+
+        $plate = $trip?->vehicle?->plate_number ?? $order->trip?->vehicle?->plate_number;
+        $route = $this->extractOrderRoute($order) ?? ($trip ? $this->extractTripRoute($trip) : null);
+
+        return collect([$order->order_code, $plate, $route])
+            ->filter(fn (?string $part): bool => filled($part))
+            ->implode(' • ');
+    }
+
+    protected function extractOrderRoute(Order $order): ?string
+    {
+        $codes = [];
+
+        $pickup = $order->pickupLocation?->code ?? $order->pickup_address;
+        if (filled($pickup)) {
+            $codes[] = $pickup;
+        }
+
+        foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
+            $dest = $dp->location?->code ?? $dp->address;
+            if (filled($dest)) {
+                $codes[] = $dest;
+            }
+        }
+
+        return $this->joinDedupedCodes($codes);
+    }
+
+    protected function extractTripRoute(Trip $trip): ?string
+    {
+        if ($trip->orders->isNotEmpty()) {
+            $codes = [];
+            foreach ($trip->orders->sortBy('planned_loading_at') as $order) {
+                $pickup = $order->pickupLocation?->code ?? $order->pickup_address;
+                if (filled($pickup)) {
+                    $codes[] = $pickup;
+                }
+                foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
+                    $dest = $dp->location?->code ?? $dp->address;
+                    if (filled($dest)) {
+                        $codes[] = $dest;
+                    }
+                }
+            }
+
+            $joined = $this->joinDedupedCodes($codes);
+            if ($joined !== null) {
+                return $joined;
+            }
+        }
+
+        $from = $trip->startLocation?->code;
+        $to = $trip->endLocation?->code;
+
+        if (filled($from) && filled($to)) {
+            return "{$from} → {$to}";
+        }
+
+        return $from ?? $to;
+    }
+
+    /**
+     * @param  list<string>  $codes
+     */
+    protected function joinDedupedCodes(array $codes): ?string
+    {
+        $deduped = [];
+        foreach ($codes as $code) {
+            if ($deduped === [] || end($deduped) !== $code) {
+                $deduped[] = $code;
+            }
+        }
+
+        return count($deduped) >= 2
+            ? implode(' → ', $deduped)
+            : ($deduped[0] ?? null);
     }
 
     /**

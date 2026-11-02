@@ -10,6 +10,7 @@ use App\Enums\VehicleStatus;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
+use App\Services\Notification\DriverNotificationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -155,7 +156,9 @@ class TripKmAdjustmentService
         ?int $adminId = null,
         array $otherCheckpointKms = [],
     ): void {
-        DB::transaction(function () use ($report, $correctedKm, $targetCheckpointId, $adminNote, $adminId, $otherCheckpointKms) {
+        $resolvedTrip = null;
+
+        DB::transaction(function () use ($report, $correctedKm, $targetCheckpointId, $adminNote, $adminId, $otherCheckpointKms, &$resolvedTrip) {
             $freshReport = TripKmReport::where('id', $report->id)->lockForUpdate()->first();
             if (! $freshReport || $freshReport->status !== TripKmReportStatus::Pending) {
                 return;
@@ -225,7 +228,16 @@ class TripKmAdjustmentService
                 'resolved_by' => $adminId,
                 'resolved_at' => now(),
             ]);
+
+            $resolvedTrip = $trip;
         });
+
+        if ($resolvedTrip !== null) {
+            try {
+                app(DriverNotificationService::class)->sendTripKmUpdated($resolvedTrip, $correctedKm, $adminNote, rejected: false);
+            } catch (\Throwable) {
+            }
+        }
     }
 
     /**
@@ -233,7 +245,9 @@ class TripKmAdjustmentService
      */
     public function rejectReport(TripKmReport $report, ?string $adminNote, ?int $adminId = null): void
     {
-        DB::transaction(function () use ($report, $adminNote, $adminId) {
+        $rejectedTrip = null;
+
+        DB::transaction(function () use ($report, $adminNote, $adminId, &$rejectedTrip) {
             $freshReport = TripKmReport::where('id', $report->id)->lockForUpdate()->first();
             if (! $freshReport || $freshReport->status !== TripKmReportStatus::Pending) {
                 return;
@@ -250,7 +264,16 @@ class TripKmAdjustmentService
                 'is_paused' => false,
                 'paused_reason' => null,
             ]);
+
+            $rejectedTrip = $freshReport->trip;
         });
+
+        if ($rejectedTrip !== null) {
+            try {
+                app(DriverNotificationService::class)->sendTripKmUpdated($rejectedTrip, null, $adminNote, rejected: true);
+            } catch (\Throwable) {
+            }
+        }
     }
 
     /**

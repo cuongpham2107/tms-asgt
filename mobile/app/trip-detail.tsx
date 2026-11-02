@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
     View,
     Text,
@@ -13,14 +13,17 @@ import {
     Image,
     Keyboard,
     Pressable,
+    Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
 import { api, type GeofenceError } from "../src/lib/api";
 import GeofenceBlockedModal from "../src/components/GeofenceBlockedModal";
+import CheckpointTimeline from "../src/components/CheckpointTimeline";
+import OrderPanel from "../src/components/OrderPanel";
 import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
-import { clearNotificationBadge } from "../src/lib/notifications";
+import { clearNotificationBadge, useRefreshOnNotification } from "../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { getFastGpsCoordinates } from "../src/lib/location";
@@ -135,7 +138,63 @@ export default function TripDetailScreen() {
     const [reportNote, setReportNote] = useState("");
     const [reportPhoto, setReportPhoto] = useState<string | null>(null);
     const [submittingReport, setSubmittingReport] = useState(false);
+    const lastSuggestedVehicleKmRef = useRef("");
     const userId = shift?.driver?.id;
+
+    const handlePressPhone = async (rawPhone: string) => {
+        const digits = rawPhone.replace(/\D/g, "");
+        const url = digits.startsWith("84") ? `tel:+${digits}` : `tel:${digits}`;
+        try {
+            const supported = await Linking.canOpenURL(url);
+            if (supported) {
+                await Linking.openURL(url);
+            } else {
+                showAlert(
+                    "Thông báo",
+                    `Thiết bị không hỗ trợ gọi trực tiếp số: ${rawPhone}`,
+                );
+            }
+        } catch {
+            showAlert("Thông báo", `Không thể mở ứng dụng cuộc gọi cho số: ${rawPhone}`);
+        }
+    };
+
+    const renderTextWithPhones = (text: string | null | undefined) => {
+        if (!text) return null;
+        const regex = /(?:\+?84[\s.-]*|0)[\d\s.-]{8,15}\d/g;
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+        let match: RegExpExecArray | null;
+
+        regex.lastIndex = 0;
+        while ((match = regex.exec(text)) !== null) {
+            const fullMatch = match[0];
+            const digits = fullMatch.replace(/\D/g, "");
+            if (digits.length >= 9 && digits.length <= 12) {
+                if (match.index > lastIndex) {
+                    parts.push(text.substring(lastIndex, match.index));
+                }
+                parts.push(
+                    <Text
+                        key={match.index}
+                        style={{
+                            color: "#2563EB",
+                            fontWeight: "700",
+                            textDecorationLine: "underline",
+                        }}
+                        onPress={() => handlePressPhone(fullMatch)}
+                    >
+                        {fullMatch}
+                    </Text>,
+                );
+                lastIndex = match.index + fullMatch.length;
+            }
+        }
+        if (lastIndex < text.length) {
+            parts.push(text.substring(lastIndex));
+        }
+        return parts.length > 0 ? parts : text;
+    };
 
     // Format: bỏ .0, hiển thị số nguyên
     const fmt = (v: any) =>
@@ -159,7 +218,7 @@ export default function TripDetailScreen() {
         const typeLabels: Record<string, string> = {
             started: "Bắt đầu chuyến",
             arrived_pickup: "Đến lấy hàng",
-            left_pickup: "Rời lấy hàng",
+            left_pickup: "Bắt đầu đi giao hàng",
             arrived_delivery: "Đến giao hàng",
             completed: "Hoàn thành",
             driver_swap: "Đảo lái",
@@ -257,7 +316,7 @@ export default function TripDetailScreen() {
             setReportReason(KM_REASONS[0]);
             setReportNote("");
             setReportPhoto(null);
-            await load();
+            await refreshAll();
         } catch (e: any) {
             showAlert("Lỗi gửi báo cáo", e.message);
         } finally {
@@ -270,7 +329,10 @@ export default function TripDetailScreen() {
         return getFastGpsCoordinates();
     };
 
-    const load = async () => {
+    // Đổi giá trị để khung đơn nhúng bên dưới tải lại cùng lúc
+    const [orderReloadToken, setOrderReloadToken] = useState(0);
+
+    const load = useCallback(async () => {
         if (!token || !tripId) return;
         try {
             const r = await api.trips.detail(String(tripId), token);
@@ -280,20 +342,44 @@ export default function TripDetailScreen() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [token, tripId]);
+
+    const refreshAll = useCallback(async () => {
+        setOrderReloadToken((t) => t + 1);
+        await load();
+    }, [load]);
+
     useFocusEffect(
         useCallback(() => {
             clearNotificationBadge();
             load();
-        }, [token, trip?.id, params.id]),
+        }, [load]),
     );
+
+    useRefreshOnNotification(refreshAll);
+
+    // Khi đang tạm dừng chờ Điều hành xác nhận báo sai lệch Km trên web,
+    // tự động kiểm tra định kỳ để cập nhật ngay cả khi thông báo đẩy bị tắt hoặc trễ.
+    useEffect(() => {
+        if (!detail?.is_paused || !token || !tripId) return;
+        const interval = setInterval(() => {
+            refreshAll();
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [detail?.is_paused, token, tripId, refreshAll]);
+
     const onRefresh = async () => {
         setRefreshing(true);
-        await load();
+        await refreshAll();
         setRefreshing(false);
     };
 
     const currentStatus = detail?.status || trip?.status || "pending";
+    const tripOrders: any[] = detail?.orders || trip?.orders || [];
+    const isTripClosed = ["completed", "cancelled"].includes(currentStatus);
+    const isOrderDone =
+        isTripClosed ||
+        (tripOrders.length > 0 && tripOrders.every((o: any) => o.status === "completed"));
     const isReturnTrip = currentStatus === "return_trip";
     const isSwapped = detail && userId && detail.driver_id !== userId;
     const currentShiftId = shift?.id;
@@ -335,15 +421,37 @@ export default function TripDetailScreen() {
     }, [rawOrders]);
     const hasIncompleteOrders =
         orders.length > 0 && orders.some((o: any) => o.status !== "completed");
+    const tripCheckpoints: any[] = detail?.checkpoints || trip?.checkpoints || [];
+    const orderHasEndCheckpoint = (o: any) =>
+        (o.trip_checkpoints || []).some((cp: any) => cp.checkpoint_type === "end") ||
+        tripCheckpoints.some(
+            (cp: any) => cp.checkpoint_type === "end" && (!cp.order_id || cp.order_id === o.id),
+        );
+    // Ẩn thanh "Kết thúc chuyến" khi đơn trong chuyến vẫn đang hiển thị nút "Kết thúc đơn hàng"
+    const hasOrdersAwaitingEnd =
+        orders.length > 0 &&
+        orders.some((o: any) => o.status !== "completed" || !orderHasEndCheckpoint(o));
+    const showStickyCompleteBar =
+        canComplete && (isReturnTrip || orders.length === 0 || !hasOrdersAwaitingEnd);
+    const showHandover = canComplete && hasIncompleteOrders && !isReturnTrip;
+    // Đã bàn giao (đảo lái) thì không còn báo sai lệch km cho chuyến này
+    const showReportKm =
+        !isSwapped && !!shift && isCurrentShift && !isOrderDone && currentStatus !== "driver_swap";
 
     // Auto lấy km hiện tại của xe
     const vehicleKm = detail?.vehicle?.km_reading ?? trip?.vehicle?.km_reading;
 
-    // Auto-fill KM input for return trip with vehicle's current mileage
+    // Auto-fill KM input và tự cập nhật khi điều hành chỉnh Km xe trên web
     useEffect(() => {
         if (vehicleKm != null) {
-            if (!startKmInput) setStartKmInput(String(Math.round(vehicleKm)));
-            if (!completeKm) setCompleteKm(String(Math.round(vehicleKm)));
+            const nextKm = String(Math.round(Number(vehicleKm)));
+            setStartKmInput((prev) =>
+                !prev || prev === lastSuggestedVehicleKmRef.current ? nextKm : prev,
+            );
+            setCompleteKm((prev) =>
+                !prev || prev === lastSuggestedVehicleKmRef.current ? nextKm : prev,
+            );
+            lastSuggestedVehicleKmRef.current = nextKm;
         }
     }, [vehicleKm]);
 
@@ -362,31 +470,7 @@ export default function TripDetailScreen() {
                 body.gps_lng = gps.gps_lng;
             }
             await api.trips.checkpoint(String(tripId), body, token);
-            const updated = await load();
-            const currentOrders: any[] =
-                updated?.orders || detail?.orders || trip?.orders || [];
-            const targetOrder =
-                currentOrders.find((o: any) => o.status !== "completed") ||
-                currentOrders[0];
-            if (targetOrder) {
-                router.push({
-                    pathname: "/order-detail",
-                    params: {
-                        id: targetOrder.id,
-                        order: JSON.stringify({
-                            ...targetOrder,
-                            trip_id: trip?.id || params.id,
-                            vehicle:
-                                updated?.vehicle ||
-                                detail?.vehicle ||
-                                trip?.vehicle,
-                            is_swapped: isSwapped,
-                        }),
-                    },
-                });
-            } else {
-                showAlert("Thành công", "Đã bắt đầu chuyến");
-            }
+            await load();
         } catch (e: any) {
             const msg = e.message || "";
             let targetTripId: string | number | undefined = e.active_trip_id;
@@ -529,6 +613,8 @@ export default function TripDetailScreen() {
                     : "Đã kết thúc chuyến",
             );
             setShowCompleteModal(false);
+            // Tải lại cả chuyến lẫn khung đơn nhúng để giao diện chuyển sang trạng thái mới (đảo lái/hoàn thành)
+            setOrderReloadToken((t) => t + 1);
             await load();
         } catch (e: any) {
             if (e.geofence) {
@@ -567,14 +653,136 @@ export default function TripDetailScreen() {
         statusConfig[effectiveTrip?.status || currentStatus] ||
         statusConfig["pending"];
 
+    // Chuyến đang chạy: các bước của đơn hiện ngay trong trang (mỗi chuyến 1 đơn)
+    const showOrderPanel = !isTripClosed && currentStatus !== "pending" && orders.length > 0;
+    const kmAndActions = (
+        <>
+        {/* Km stats — ẩn với chuyến quay đầu */}
+        {!isReturnTrip && (
+            <View style={s.kmStrip}>
+                {[
+                    {
+                        icon: "speedometer-outline",
+                        label: "Tổng km",
+                        value: fmt(detail?.total_km ?? trip?.total_km),
+                        color: "#4F46E5",
+                        bg: "#EEF2FF",
+                    },
+                    {
+                        icon: "cube-outline",
+                        label: "Có hàng",
+                        value: fmt(
+                            detail?.total_km_loaded ??
+                                trip?.total_km_loaded,
+                        ),
+                        color: "#3B82F6",
+                        bg: "#EFF6FF",
+                    },
+                    {
+                        icon: "arrow-down-circle-outline",
+                        label: "Bắt đầu",
+                        value: fmt(detail?.start_km ?? trip?.start_km),
+                        color: "#10B981",
+                        bg: "#ECFDF5",
+                    },
+                    {
+                        icon: "arrow-up-circle-outline",
+                        label:
+                            currentStatus === "completed"
+                                ? "Kết thúc"
+                                : currentStatus === "pending"
+                                  ? "Km hiện tại của xe"
+                                  : "Km xe",
+                        value: fmt(
+                            currentStatus === "completed"
+                                ? (detail?.end_km ?? trip?.end_km)
+                                : vehicleKm,
+                        ),
+                        color: "#F59E0B",
+                        bg: "#FFFBEB",
+                    },
+                ]
+                    // Chưa bắt đầu: chỉ cần km hiện tại của xe
+                    .filter((_, i) => currentStatus !== "pending" || i === 3)
+                    .map((st2, i) => (
+                    <View key={i} style={s.kmCell}>
+                        <Text style={s.kmLabel}>{st2.label}</Text>
+                        <Text style={[s.kmValue, { color: st2.color }]} numberOfLines={1}>
+                            {st2.value}
+                        </Text>
+                    </View>
+                ))}
+            </View>
+        )}
+
+        {/* Hai nút phụ chung 1 hàng: bàn giao (đảo lái) và báo sai lệch km */}
+        {(showHandover || showReportKm) && (
+            <View style={s.actionRow}>
+                {showHandover && (
+                    <TouchableOpacity
+                        style={[s.actionBtnHandoff, s.actionRowBtn]}
+                        onPress={() => {
+                            setCompleteKm(
+                                String(
+                                    vehicleKm != null
+                                        ? Math.round(vehicleKm)
+                                        : "",
+                                ),
+                            );
+                            setShowCompleteModal(true);
+                        }}
+                        disabled={completing}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons
+                            name="swap-horizontal"
+                            size={18}
+                            color="#B45309"
+                        />
+                        <Text style={s.actionRowText}>
+                            {completing ? "Đang xử lý..." : "Bàn giao chuyến"}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+                {showReportKm && (
+                    <TouchableOpacity
+                        style={[s.reportKmBtn, s.actionRowBtn, s.reportKmRowBtn]}
+                        onPress={() => {
+                            setReportKm(
+                                vehicleKm != null
+                                    ? String(Math.round(vehicleKm))
+                                    : "",
+                            );
+                            setShowReportModal(true);
+                        }}
+                    >
+                        <Ionicons
+                            name="warning-outline"
+                            size={18}
+                            color="#DC2626"
+                        />
+                        <Text style={[s.actionRowText, { color: "#B91C1C" }]}>
+                            Báo sai lệch Km
+                        </Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+        )}
+        </>
+    );
+
     return (
         <KeyboardAvoidingView
             style={{ flex: 1 }}
-            behavior={Platform.OS === "android" ? "padding" : undefined}
-            keyboardVerticalOffset={Platform.OS === "android" ? 88 : 0}
+            // Android đã có `adjustResize` nên không cộng dồn thêm padding (tránh tự đóng bàn phím)
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
         >
             <ScrollView
                 style={s.container}
+                keyboardShouldPersistTaps="always"
+                keyboardDismissMode="none"
+                automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -593,6 +801,20 @@ export default function TripDetailScreen() {
                         />
                         <Text style={s.swappedBannerText}>
                             Chuyến đã bàn giao — chỉ xem
+                        </Text>
+                    </View>
+                )}
+
+                {/* Tạm dừng chờ xác nhận Km banner */}
+                {detail?.is_paused && (
+                    <View style={s.pausedBanner}>
+                        <Ionicons
+                            name="hourglass-outline"
+                            size={18}
+                            color="#B45309"
+                        />
+                        <Text style={s.pausedBannerText}>
+                            Đang chờ Điều hành xác nhận báo sai lệch Km — màn hình sẽ tự động cập nhật.
                         </Text>
                     </View>
                 )}
@@ -648,6 +870,64 @@ export default function TripDetailScreen() {
                             </Text>
                         </View>
                     )}
+                    {/* Mỗi chuyến 1 đơn: mã đơn nằm ngay dưới biển số */}
+                    {orders.map((o: any) => {
+                        return (
+                            <View key={o.id} style={{ marginTop: 8 }}>
+                            {/* Mã đơn và Badges */}
+                            <View
+                                style={{
+                                    flexDirection: "row",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        flex: 1,
+                                    }}
+                                >
+                                    <Text style={s.orderCode}>
+                                        {o.order_code}
+                                    </Text>
+                                    <View
+                                        style={{
+                                            paddingHorizontal: 5,
+                                            paddingVertical: 2,
+                                            borderRadius: 4,
+                                            backgroundColor:
+                                                o.type === "HHHK"
+                                                    ? "#E0F2FE"
+                                                    : "#FEF3C7",
+                                            marginLeft: 6,
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontSize: 10,
+                                                fontWeight: "700",
+                                                color:
+                                                    o.type ===
+                                                    "HHHK"
+                                                        ? "#0369A1"
+                                                        : "#B45309",
+                                            }}
+                                        >
+                                            {o.type_label || o.type}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                                {!!o.planned_loading_at && (
+                                    <Text style={s.loadingTime}>
+                                        🕐 Đóng hàng: {formatDateTimeHM(o.planned_loading_at)}
+                                    </Text>
+                                )}
+                            </View>
+                        );
+                    })}
                     {canStart && (
                         <TouchableOpacity
                             style={[
@@ -667,40 +947,6 @@ export default function TripDetailScreen() {
                             </Text>
                         </TouchableOpacity>
                     )}
-                    {canComplete && hasIncompleteOrders && !isReturnTrip && (
-                        <TouchableOpacity
-                            style={[
-                                s.actionBtnHandoff,
-                                {
-                                    marginTop:
-                                        detail?.route || trip?.route ? 8 : 12,
-                                },
-                            ]}
-                            onPress={() => {
-                                setCompleteKm(
-                                    String(
-                                        vehicleKm != null
-                                            ? Math.round(vehicleKm)
-                                            : "",
-                                    ),
-                                );
-                                setShowCompleteModal(true);
-                            }}
-                            disabled={completing}
-                            activeOpacity={0.8}
-                        >
-                            <Ionicons
-                                name="swap-horizontal"
-                                size={16}
-                                color="#B45309"
-                            />
-                            <Text style={s.actionBtnHandoffText}>
-                                {completing
-                                    ? "Đang xử lý..."
-                                    : "Bàn giao chuyến chưa xong"}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
                     {!canStart && !shift && (
                         <View style={s.warnBox}>
                             <Text style={s.warnText}>
@@ -710,97 +956,11 @@ export default function TripDetailScreen() {
                     )}
                 </View>
 
-                {/* Km stats — ẩn với chuyến quay đầu */}
-                {!isReturnTrip && (
-                    <View style={s.statsGrid}>
-                        {[
-                            {
-                                icon: "speedometer-outline",
-                                label: "Tổng Km",
-                                value: fmt(detail?.total_km ?? trip?.total_km),
-                                color: "#4F46E5",
-                                bg: "#EEF2FF",
-                            },
-                            {
-                                icon: "cube-outline",
-                                label: "Km có hàng",
-                                value: fmt(
-                                    detail?.total_km_loaded ??
-                                        trip?.total_km_loaded,
-                                ),
-                                color: "#3B82F6",
-                                bg: "#EFF6FF",
-                            },
-                            {
-                                icon: "arrow-down-circle-outline",
-                                label: "Km bắt đầu",
-                                value: fmt(detail?.start_km ?? trip?.start_km),
-                                color: "#10B981",
-                                bg: "#ECFDF5",
-                            },
-                            {
-                                icon: "arrow-up-circle-outline",
-                                label:
-                                    currentStatus === "completed"
-                                        ? "Km kết thúc"
-                                        : "Km xe",
-                                value: fmt(
-                                    currentStatus === "completed"
-                                        ? (detail?.end_km ?? trip?.end_km)
-                                        : vehicleKm,
-                                ),
-                                color: "#F59E0B",
-                                bg: "#FFFBEB",
-                            },
-                        ].map((st2, i) => (
-                            <View key={i} style={s.statCard}>
-                                <View
-                                    style={[
-                                        s.statIcon,
-                                        { backgroundColor: st2.bg },
-                                    ]}
-                                >
-                                    <Ionicons
-                                        name={st2.icon as any}
-                                        size={20}
-                                        color={st2.color}
-                                    />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={s.statLabel}>{st2.label}</Text>
-                                    <Text style={s.statValue}>{st2.value}</Text>
-                                </View>
-                            </View>
-                        ))}
-                    </View>
-                )}
+                {/* Km + nút phụ: khi đang làm đơn thì nằm ngay trên khung cập nhật chốt chặng */}
+                {!showOrderPanel && kmAndActions}
 
-                {/* Nút báo sai lệch số Km */}
-                {!isSwapped && !!shift && isCurrentShift && (
-                    <TouchableOpacity
-                        style={s.reportKmBtn}
-                        onPress={() => {
-                            setReportKm(
-                                vehicleKm != null
-                                    ? String(Math.round(vehicleKm))
-                                    : "",
-                            );
-                            setShowReportModal(true);
-                        }}
-                    >
-                        <Ionicons
-                            name="warning-outline"
-                            size={15}
-                            color="#D97706"
-                        />
-                        <Text style={s.reportKmBtnText}>
-                            Báo sai lệch Km đồng hồ
-                        </Text>
-                    </TouchableOpacity>
-                )}
-
-                {/* Thời gian */}
-                {detail?.started_at && (
+                {/* Thời gian: chuyến có đơn đã có lịch sử chốt chặng bên dưới */}
+                {detail?.started_at && orders.length === 0 && (
                     <View style={s.timeCard}>
                         <View style={s.timeRow}>
                             <Ionicons
@@ -1016,6 +1176,10 @@ export default function TripDetailScreen() {
                                             keyboardType="numeric"
                                             value={completeKm}
                                             onChangeText={setCompleteKm}
+                                            autoCorrect={false}
+                                            autoComplete="off"
+                                            importantForAutofill="no"
+                                            textContentType="none"
                                         />
                                     </>
                                 ) : (
@@ -1036,6 +1200,10 @@ export default function TripDetailScreen() {
                                             keyboardType="numeric"
                                             value={startKmInput}
                                             onChangeText={setStartKmInput}
+                                            autoCorrect={false}
+                                            autoComplete="off"
+                                            importantForAutofill="no"
+                                            textContentType="none"
                                         />
                                         {!!shift ? (
                                             <TouchableOpacity
@@ -1076,24 +1244,6 @@ export default function TripDetailScreen() {
                     </View>
                 ) : (
                     <>
-                        <View style={s.sectionHeader}>
-                            <Text style={s.sectionTitle}>
-                                📦 Đơn hàng ({orders.length})
-                            </Text>
-                        </View>
-                        {hasIncompleteOrders && (
-                            <View style={s.orderGuideBanner}>
-                                <Ionicons
-                                    name="arrow-down-circle"
-                                    size={16}
-                                    color="#4F46E5"
-                                />
-                                <Text style={s.orderGuideText}>
-                                    Bấm vào đơn hàng bên dưới để tiến hành
-                                    lấy/giao hàng
-                                </Text>
-                            </View>
-                        )}
                         {orders.length === 0 ? (
                             <View style={s.empty}>
                                 <Ionicons
@@ -1107,320 +1257,201 @@ export default function TripDetailScreen() {
                             </View>
                         ) : (
                             orders.map((o: any, i: number) => {
-                                const osText =
-                                    orderStatusLabel[o.status] || o.status;
-                                const osColor =
-                                    o.status === "completed"
-                                        ? "#059669"
-                                        : o.status === "in_transit"
-                                          ? "#D97706"
-                                          : o.status === "driver_swap"
-                                            ? "#8B5CF6"
-                                            : "#4F46E5";
-                                const isCardActive = o.status !== "completed";
+                                const orderDeliveryPoints: any[] = o.delivery_points || [];
+                                const pickupCode =
+                                    o.pickup_location?.code ||
+                                    o.pickup_address?.split(",")[0] ||
+                                    "Điểm lấy hàng";
+                                const pickupAddr =
+                                    o.pickup_location?.address || o.pickup_address || null;
                                 return (
-                                    <TouchableOpacity
-                                        key={o.id}
-                                        style={[
-                                            s.orderCard,
-                                            o.status === "in_transit"
-                                                ? {
-                                                      borderColor: "#F59E0B",
-                                                      borderWidth: 1.5,
-                                                  }
-                                                : o.status === "sent"
-                                                  ? {
-                                                        borderColor: "#6366F1",
-                                                        borderWidth: 1.5,
-                                                    }
-                                                  : { borderColor: "#E5E7EB" },
-                                        ]}
-                                        activeOpacity={0.8}
-                                        onPress={() => {
-                                            router.push({
-                                                pathname: "/order-detail",
-                                                params: {
-                                                    id: o.id,
-                                                    order: JSON.stringify({
-                                                        ...o,
-                                                        trip_id:
-                                                            trip?.id ||
-                                                            params.id,
-                                                        vehicle:
-                                                            detail?.vehicle ||
-                                                            trip?.vehicle,
-                                                        is_swapped: isSwapped,
-                                                    }),
-                                                },
-                                            });
-                                        }}
-                                    >
-                                        {/* Tuyến đường nếu có */}
-                                        {(() => {
-                                            const codes: string[] = [];
-                                            if (o.pickup_location?.code)
-                                                codes.push(
-                                                    o.pickup_location.code,
-                                                );
-                                            (o.delivery_points || []).forEach(
-                                                (dp: any) => {
-                                                    if (dp.location?.code)
-                                                        codes.push(
-                                                            dp.location.code,
-                                                        );
-                                                },
-                                            );
-                                            if (codes.length > 0)
-                                                return (
-                                                    <View style={s.routeWrap}>
-                                                        <Ionicons
-                                                            name="navigate"
-                                                            size={12}
-                                                            color="#4F46E5"
-                                                        />
-                                                        <Text
-                                                            style={s.orderRoute}
-                                                        >
-                                                            {codes.join(
-                                                                "  →  ",
-                                                            )}
-                                                        </Text>
-                                                    </View>
-                                                );
-                                            return null;
-                                        })()}
-
-                                        {/* Mã đơn và Badges */}
-                                        <View
-                                            style={{
-                                                flexDirection: "row",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                            }}
-                                        >
-                                            <View
-                                                style={{
-                                                    flexDirection: "row",
-                                                    alignItems: "center",
-                                                    flex: 1,
-                                                }}
-                                            >
-                                                <Text style={s.orderCode}>
-                                                    {o.order_code}
+                                    <View key={o.id}>
+                                    {/* Chuyến đang chờ: hiển thị thông tin đơn hàng dạng tĩnh (chỉ đọc, không bấm chuyển trang) */}
+                                    {currentStatus === "pending" && (
+                                        <View style={s.pendingOrderCard}>
+                                            <View style={s.pendingOrderHeader}>
+                                                <Ionicons
+                                                    name="document-text-outline"
+                                                    size={16}
+                                                    color="#4F46E5"
+                                                />
+                                                <Text style={s.pendingOrderTitle}>
+                                                    Thông tin đơn hàng
+                                                    {orders.length > 1 && o.order_code
+                                                        ? ` • ${o.order_code}`
+                                                        : ""}
                                                 </Text>
-                                                <View
-                                                    style={{
-                                                        paddingHorizontal: 5,
-                                                        paddingVertical: 2,
-                                                        borderRadius: 4,
-                                                        backgroundColor:
-                                                            o.type === "HHHK"
-                                                                ? "#E0F2FE"
-                                                                : "#FEF3C7",
-                                                        marginLeft: 6,
-                                                    }}
-                                                >
-                                                    <Text
-                                                        style={{
-                                                            fontSize: 10,
-                                                            fontWeight: "700",
-                                                            color:
-                                                                o.type ===
-                                                                "HHHK"
-                                                                    ? "#0369A1"
-                                                                    : "#B45309",
-                                                        }}
-                                                    >
-                                                        {o.type_label || o.type}
+                                            </View>
+
+                                            {/* Điểm lấy -> Điểm giao */}
+                                            <View style={s.pendingRouteBlock}>
+                                                <View style={s.pendingRouteRow}>
+                                                    <View
+                                                        style={[
+                                                            s.pendingRouteDot,
+                                                            { backgroundColor: "#10B981" },
+                                                        ]}
+                                                    />
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={s.pendingRouteCode}>
+                                                            {pickupCode}
+                                                        </Text>
+                                                        {pickupAddr ? (
+                                                            <Text style={s.pendingRouteAddr}>
+                                                                {pickupAddr}
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+                                                </View>
+
+                                                {orderDeliveryPoints.length > 0 ? (
+                                                    orderDeliveryPoints.map((dp: any, dpIdx: number) => {
+                                                        const dpCode =
+                                                            dp.code ||
+                                                            dp.location?.code ||
+                                                            `Điểm ${dp.sequence || dpIdx + 1}`;
+                                                        const dpAddr =
+                                                            dp.address ||
+                                                            dp.location?.address ||
+                                                            null;
+                                                        const isLastDp =
+                                                            dpIdx === orderDeliveryPoints.length - 1;
+                                                        return (
+                                                            <View key={dp.id ?? dpIdx}>
+                                                                <View style={s.pendingRouteArrow}>
+                                                                    <Ionicons
+                                                                        name="arrow-down"
+                                                                        size={13}
+                                                                        color="#D1D5DB"
+                                                                    />
+                                                                </View>
+                                                                <View style={s.pendingRouteRow}>
+                                                                    <View
+                                                                        style={[
+                                                                            s.pendingRouteDot,
+                                                                            {
+                                                                                backgroundColor: isLastDp
+                                                                                    ? "#EF4444"
+                                                                                    : "#3B82F6",
+                                                                            },
+                                                                        ]}
+                                                                    />
+                                                                    <View style={{ flex: 1 }}>
+                                                                        <Text style={s.pendingRouteCode}>
+                                                                            {dpCode}
+                                                                        </Text>
+                                                                        {dpAddr ? (
+                                                                            <Text style={s.pendingRouteAddr}>
+                                                                                {dpAddr}
+                                                                            </Text>
+                                                                        ) : null}
+                                                                    </View>
+                                                                </View>
+                                                            </View>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <View>
+                                                        <View style={s.pendingRouteArrow}>
+                                                            <Ionicons
+                                                                name="arrow-down"
+                                                                size={13}
+                                                                color="#D1D5DB"
+                                                            />
+                                                        </View>
+                                                        <View style={s.pendingRouteRow}>
+                                                            <View
+                                                                style={[
+                                                                    s.pendingRouteDot,
+                                                                    { backgroundColor: "#9CA3AF" },
+                                                                ]}
+                                                            />
+                                                            <Text style={s.pendingRouteMuted}>
+                                                                Chưa có điểm giao cố định (chọn khi đi giao)
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                )}
+                                            </View>
+
+                                            {/* Chi tiết hàng hoá & thời gian */}
+                                            <View style={s.pendingMetaList}>
+                                                <View style={s.pendingMetaRow}>
+                                                    <Text style={s.pendingMetaLabel}>Hàng hoá</Text>
+                                                    <Text style={s.pendingMetaValue}>
+                                                        {o.cargo_name || o.cargo_type_label || "-"}
                                                     </Text>
                                                 </View>
+                                                <View style={s.pendingMetaRow}>
+                                                    <Text style={s.pendingMetaLabel}>Khách hàng</Text>
+                                                    <Text style={s.pendingMetaValue}>
+                                                        {o.customer?.code || o.customer?.name || "-"}
+                                                    </Text>
+                                                </View>
+                                                <View style={s.pendingMetaRow}>
+                                                    <Text style={s.pendingMetaLabel}>Số kiện / Tải trọng</Text>
+                                                    <Text style={s.pendingMetaValue}>
+                                                        {o.total_packages != null
+                                                            ? `${o.total_packages} kiện`
+                                                            : "-"}{" "}
+                                                        •{" "}
+                                                        {o.total_weight
+                                                            ? `${o.total_weight} tấn`
+                                                            : "-"}
+                                                    </Text>
+                                                </View>
+                                                {o.sent_at ? (
+                                                    <View style={s.pendingMetaRow}>
+                                                        <Text style={s.pendingMetaLabel}>Gửi lệnh</Text>
+                                                        <Text style={s.pendingMetaValue}>
+                                                            {formatDateTimeHM(o.sent_at)}
+                                                        </Text>
+                                                    </View>
+                                                ) : null}
+                                                {o.planned_loading_at ? (
+                                                    <View style={s.pendingMetaRow}>
+                                                        <Text style={s.pendingMetaLabel}>Giờ đóng hàng</Text>
+                                                        <Text style={s.pendingMetaValue}>
+                                                            {formatDateTimeHM(o.planned_loading_at)}
+                                                        </Text>
+                                                    </View>
+                                                ) : null}
                                             </View>
-                                            <View
-                                                style={[
-                                                    s.orderBadge,
-                                                    {
-                                                        backgroundColor:
-                                                            osColor + "20",
-                                                    },
-                                                ]}
-                                            >
-                                                <Text
-                                                    style={[
-                                                        s.orderBadgeText,
-                                                        { color: osColor },
-                                                    ]}
-                                                >
-                                                    {osText}
-                                                </Text>
-                                            </View>
+
+                                            {/* Ghi chú đơn hàng */}
+                                            {o.notes ? (
+                                                <View style={s.pendingNotesBox}>
+                                                    <Text style={s.pendingNotesLabel}>Ghi chú:</Text>
+                                                    <Text style={s.pendingNotesText} selectable>
+                                                        {renderTextWithPhones(o.notes)}
+                                                    </Text>
+                                                </View>
+                                            ) : null}
                                         </View>
-                                        {o.sent_at && (
-                                            <Text style={s.orderSent}>
-                                                📤 Gửi lệnh:{" "}
-                                                {formatDateTimeHM(o.sent_at)}
-                                            </Text>
-                                        )}
-
-                                        {/* Thông tin đơn hàng */}
-                                        <Text
-                                            style={s.orderCargo}
-                                            numberOfLines={1}
-                                        >
-                                            {o.cargo_name || "Chưa có tên hàng"}
-                                        </Text>
-                                        {o.customer?.name && (
-                                            <Text style={s.orderCustomer}>
-                                                {o.customer.name}
-                                            </Text>
-                                        )}
-                                        {o.planned_loading_at && (
-                                            <Text style={s.orderLoading}>
-                                                🕐 Đóng hàng:{" "}
-                                                {formatDateTimeHM(
-                                                    o.planned_loading_at,
-                                                )}
-                                            </Text>
-                                        )}
-                                        <Text style={s.orderKm}>
-                                            📏 loaded: {fmt(o.loaded_km)} km
-                                        </Text>
-
-                                        {/* CTA Action Button */}
-                                        {o.status === "sent" ? (
-                                            <View
-                                                style={[
-                                                    s.orderCtaBtn,
-                                                    {
-                                                        backgroundColor:
-                                                            "#4F46E5",
-                                                    },
-                                                ]}
-                                            >
-                                                <Ionicons
-                                                    name="location"
-                                                    size={16}
-                                                    color="#fff"
-                                                />
-                                                <Text style={s.orderCtaText}>
-                                                    Bấm để cập nhật mốc lấy hàng
-                                                </Text>
-                                                <Ionicons
-                                                    name="arrow-forward"
-                                                    size={15}
-                                                    color="#fff"
-                                                />
-                                            </View>
-                                        ) : o.status === "in_transit" ? (
-                                            <View
-                                                style={[
-                                                    s.orderCtaBtn,
-                                                    {
-                                                        backgroundColor:
-                                                            "#D97706",
-                                                    },
-                                                ]}
-                                            >
-                                                <Ionicons
-                                                    name="car"
-                                                    size={16}
-                                                    color="#fff"
-                                                />
-                                                <Text style={s.orderCtaText}>
-                                                    Bấm để cập nhật mốc giao
-                                                    hàng
-                                                </Text>
-                                                <Ionicons
-                                                    name="arrow-forward"
-                                                    size={15}
-                                                    color="#fff"
-                                                />
-                                            </View>
-                                        ) : o.status === "driver_swap" ? (
-                                            <View
-                                                style={[
-                                                    s.orderCtaBtn,
-                                                    {
-                                                        backgroundColor:
-                                                            "#8B5CF6",
-                                                    },
-                                                ]}
-                                            >
-                                                <Ionicons
-                                                    name="swap-horizontal"
-                                                    size={16}
-                                                    color="#fff"
-                                                />
-                                                <Text style={s.orderCtaText}>
-                                                    Đơn đảo lái — Xem chi tiết
-                                                </Text>
-                                                <Ionicons
-                                                    name="chevron-forward"
-                                                    size={15}
-                                                    color="#fff"
-                                                />
-                                            </View>
-                                        ) : o.status === "completed" ? (
-                                            <View
-                                                style={[
-                                                    s.orderCtaBtn,
-                                                    {
-                                                        backgroundColor:
-                                                            "#ECFDF5",
-                                                        borderWidth: 1,
-                                                        borderColor: "#A7F3D0",
-                                                    },
-                                                ]}
-                                            >
-                                                <Ionicons
-                                                    name="checkmark-circle"
-                                                    size={16}
-                                                    color="#059669"
-                                                />
-                                                <Text
-                                                    style={[
-                                                        s.orderCtaText,
-                                                        { color: "#059669" },
-                                                    ]}
-                                                >
-                                                    Đã hoàn thành các mốc
-                                                </Text>
-                                                <Ionicons
-                                                    name="chevron-forward"
-                                                    size={14}
-                                                    color="#059669"
-                                                />
-                                            </View>
-                                        ) : (
-                                            <View
-                                                style={[
-                                                    s.orderCtaBtn,
-                                                    {
-                                                        backgroundColor:
-                                                            "#F3F4F6",
-                                                    },
-                                                ]}
-                                            >
-                                                <Ionicons
-                                                    name="eye-outline"
-                                                    size={16}
-                                                    color="#4B5563"
-                                                />
-                                                <Text
-                                                    style={[
-                                                        s.orderCtaText,
-                                                        { color: "#4B5563" },
-                                                    ]}
-                                                >
-                                                    Xem chi tiết đơn hàng
-                                                </Text>
-                                                <Ionicons
-                                                    name="chevron-forward"
-                                                    size={14}
-                                                    color="#4B5563"
-                                                />
-                                            </View>
-                                        )}
-                                    </TouchableOpacity>
+                                    )}
+                                    {/* Chuyến đang chạy: làm các bước của đơn ngay tại đây (mỗi chuyến 1 đơn) */}
+                                    {showOrderPanel && (
+                                        <OrderPanel
+                                            embedded
+                                            beforeForm={kmAndActions}
+                                            order={{
+                                                ...o,
+                                                trip_id: trip?.id || params.id,
+                                                vehicle: detail?.vehicle || trip?.vehicle,
+                                                is_swapped: isSwapped,
+                                            }}
+                                            reloadToken={orderReloadToken}
+                                            onChanged={refreshAll}
+                                        />
+                                    )}
+                                    {/* Chuyến đã đóng: hiện luôn các mốc, không cần vào chi tiết đơn */}
+                                    {isTripClosed && (
+                                        <CheckpointTimeline
+                                            checkpoints={o.trip_checkpoints || []}
+                                            myDriverId={userId}
+                                        />
+                                    )}
+                                    </View>
                                 );
                             })
                         )}
@@ -1429,17 +1460,13 @@ export default function TripDetailScreen() {
 
                 <View
                     style={{
-                        height:
-                            canComplete &&
-                            (!hasIncompleteOrders || isReturnTrip)
-                                ? 100
-                                : 32,
+                        height: showStickyCompleteBar ? 100 : 32,
                     }}
                 />
             </ScrollView>
 
             {/* Sticky bottom — Kết thúc chuyến */}
-            {canComplete && (!hasIncompleteOrders || isReturnTrip) && (
+            {showStickyCompleteBar && (
                 <View style={s.stickyBar}>
                     {isReturnTrip && (returnStarted || hasStarted) ? (
                         <TouchableOpacity
@@ -1632,6 +1659,10 @@ export default function TripDetailScreen() {
                                 placeholderTextColor="#9CA3AF"
                                 keyboardType="numeric"
                                 returnKeyType="done"
+                                autoCorrect={false}
+                                autoComplete="off"
+                                importantForAutofill="no"
+                                textContentType="none"
                             />
 
                             <Text style={s.modalSectionLabel}>
@@ -1951,7 +1982,10 @@ export default function TripDetailScreen() {
                                 returnKeyType="done"
                                 value={completeKm}
                                 onChangeText={setCompleteKm}
-                                autoFocus
+                                autoCorrect={false}
+                                autoComplete="off"
+                                importantForAutofill="no"
+                                textContentType="none"
                             />
 
                             {hasIncompleteOrders && (
@@ -2108,9 +2142,9 @@ const s = StyleSheet.create({
     },
     heroCard: {
         backgroundColor: "#fff",
-        margin: 16,
-        marginBottom: 4,
-        padding: 16,
+        margin: 12,
+        marginBottom: 8,
+        padding: 12,
         borderRadius: 14,
         borderWidth: 1,
         borderColor: "#F3F4F6",
@@ -2148,33 +2182,35 @@ const s = StyleSheet.create({
         borderRadius: 12,
     },
     actionBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-    statsGrid: {
+    loadingTime: { fontSize: 12, color: "#6B7280", marginTop: 6 },
+    actionRow: {
         flexDirection: "row",
-        flexWrap: "wrap",
-        paddingHorizontal: 12,
         gap: 8,
+        marginHorizontal: 12,
         marginBottom: 8,
     },
-    statCard: {
-        width: "47.5%",
+    actionRowBtn: {
+        flex: 1,
+        marginHorizontal: 0,
+        marginBottom: 0,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+    },
+    reportKmRowBtn: { backgroundColor: "#FEF2F2", borderColor: "#FCA5A5" },
+    actionRowText: { fontSize: 13, fontWeight: "700", color: "#B45309" },
+    kmStrip: {
+        flexDirection: "row",
         backgroundColor: "#fff",
-        padding: 14,
-        borderRadius: 14,
+        marginHorizontal: 12,
+        marginBottom: 8,
+        paddingVertical: 8,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: "#F3F4F6",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
     },
-    statIcon: {
-        width: 42,
-        height: 42,
-        borderRadius: 12,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    statValue: { fontSize: 20, fontWeight: "800", color: "#111827" },
-    statLabel: { fontSize: 11, color: "#9CA3AF", marginBottom: 2 },
+    kmCell: { flex: 1, alignItems: "center" },
+    kmLabel: { fontSize: 11, color: "#9CA3AF", marginBottom: 2 },
+    kmValue: { fontSize: 15, fontWeight: "800" },
     timeCard: {
         backgroundColor: "#fff",
         marginHorizontal: 16,
@@ -2229,21 +2265,6 @@ const s = StyleSheet.create({
         color: "#4338CA",
         flex: 1,
     },
-    orderCtaBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        marginTop: 12,
-    },
-    orderCtaText: {
-        fontSize: 13,
-        fontWeight: "700",
-        color: "#fff",
-    },
     actionBtnHandoff: {
         flexDirection: "row",
         alignItems: "center",
@@ -2279,8 +2300,8 @@ const s = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
-        marginBottom: 10,
-        paddingBottom: 10,
+        marginBottom: 8,
+        paddingBottom: 8,
         borderBottomWidth: 1,
         borderBottomColor: "#F3F4F6",
     },
@@ -2428,14 +2449,14 @@ const s = StyleSheet.create({
         gap: 6,
         marginHorizontal: 16,
         marginBottom: 12,
-        paddingVertical: 8,
+        paddingVertical: 14,
         paddingHorizontal: 12,
         backgroundColor: "#FFFBEB",
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: "#FDE68A",
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: "#FCD34D",
     },
-    reportKmBtnText: { fontSize: 12, fontWeight: "700", color: "#B45309" },
+    reportKmBtnText: { fontSize: 15, fontWeight: "700", color: "#B45309" },
     photoPickerBtn: {
         flex: 1,
         flexDirection: "row",
@@ -2449,4 +2470,122 @@ const s = StyleSheet.create({
         borderColor: "#C7D2FE",
     },
     photoPickerBtnText: { fontSize: 13, fontWeight: "600", color: "#4F46E5" },
+    pausedBanner: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        backgroundColor: "#FFFBEB",
+        marginHorizontal: 12,
+        marginTop: 12,
+        marginBottom: 4,
+        padding: 12,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: "#FCD34D",
+    },
+    pausedBannerText: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#92400E",
+    },
+    pendingOrderCard: {
+        backgroundColor: "#fff",
+        marginHorizontal: 12,
+        marginBottom: 10,
+        padding: 14,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: "#E5E7EB",
+    },
+    pendingOrderHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 10,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F3F4F6",
+    },
+    pendingOrderTitle: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#111827",
+    },
+    pendingRouteBlock: {
+        marginBottom: 10,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F3F4F6",
+    },
+    pendingRouteRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 8,
+    },
+    pendingRouteDot: {
+        width: 9,
+        height: 9,
+        borderRadius: 5,
+        marginTop: 5,
+    },
+    pendingRouteArrow: {
+        paddingLeft: 2,
+        paddingVertical: 3,
+    },
+    pendingRouteCode: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#111827",
+    },
+    pendingRouteAddr: {
+        fontSize: 12,
+        color: "#6B7280",
+        marginTop: 1,
+    },
+    pendingRouteMuted: {
+        flex: 1,
+        fontSize: 13,
+        color: "#9CA3AF",
+        fontStyle: "italic",
+    },
+    pendingMetaList: {
+        gap: 6,
+    },
+    pendingMetaRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: 12,
+    },
+    pendingMetaLabel: {
+        fontSize: 12,
+        color: "#6B7280",
+    },
+    pendingMetaValue: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#111827",
+        textAlign: "right",
+    },
+    pendingNotesBox: {
+        marginTop: 10,
+        padding: 10,
+        borderRadius: 8,
+        backgroundColor: "#EEF2FF",
+        borderWidth: 1,
+        borderColor: "#E0E7FF",
+    },
+    pendingNotesLabel: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#4338CA",
+        marginBottom: 2,
+    },
+    pendingNotesText: {
+        fontSize: 13,
+        color: "#1F2937",
+        lineHeight: 18,
+    },
 });

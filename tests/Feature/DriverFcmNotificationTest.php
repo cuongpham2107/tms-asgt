@@ -23,9 +23,11 @@ use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\TripKmAdjustmentService;
 use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -831,4 +833,114 @@ test('logout clears fcm token and revokes access token', function () {
     $driver->refresh();
     expect($driver->fcm_token)->toBeNull();
     expect($driver->fcm_token_updated_at)->toBeNull();
+});
+
+test('driver notifications consistently format order code, plate number, and route', function () {
+    $oldDriver = User::factory()->create(['name' => 'Hoàng Thọ Khương', 'fcm_token' => 'old_tok']);
+    $newDriver = User::factory()->create(['name' => 'Nguyễn Văn Mới', 'fcm_token' => 'new_tok']);
+
+    $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài']);
+    $customer = Customer::create(['name' => 'ASGL', 'code' => 'ASGL', 'is_active' => true]);
+    $pickup = Location::create(['code' => 'NCTS', 'name' => 'Kho NCTS', 'area_id' => $area->id, 'is_active' => true]);
+    $delivery = Location::create(['code' => 'ACSV', 'name' => 'Kho ACSV', 'area_id' => $area->id, 'is_active' => true]);
+
+    $vehicle = Vehicle::create([
+        'plate_number' => '20C12345',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::Running,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'CD-2026-11-02-1501',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $newDriver->id,
+        'status' => TripStatus::DriverSwap,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-1891',
+        'status' => OrderStatus::DriverSwap,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'pickup_location_id' => $pickup->id,
+        'created_by' => $oldDriver->id,
+        'trip_id' => $trip->id,
+    ]);
+
+    $order->deliveryPoints()->create([
+        'location_id' => $delivery->id,
+        'sequence' => 1,
+    ]);
+
+    $expectedSummary = 'ASG-1891 • 20C12345 • NCTS → ACSV';
+
+    $mockMessaging = Mockery::mock(Messaging::class);
+    $mockMessaging->shouldReceive('send')
+        ->times(3)
+        ->with(Mockery::on(function (CloudMessage $message) use ($expectedSummary) {
+            $payload = $message->jsonSerialize();
+
+            return str_contains($payload['notification']['title'], $expectedSummary)
+                && str_contains($payload['notification']['body'], $expectedSummary);
+        }))
+        ->andReturn([]);
+
+    $service = new DriverNotificationService($mockMessaging);
+    expect($service->sendTripDriverSwapped($trip, $newDriver, $oldDriver, 1040))->toBeTrue()
+        ->and($service->sendTripReassigned($trip, $newDriver, $oldDriver))->toBeTrue()
+        ->and($service->sendOrderAssigned($order, $trip))->toBeTrue();
+});
+
+test('resolving or rejecting a km report sends push notification to the driver', function () {
+    $driver = User::factory()->create(['name' => 'Lái Xe Km', 'fcm_token' => 'driver_km_token']);
+
+    $vehicle = Vehicle::create([
+        'plate_number' => '29H-123.45',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+        'current_mileage' => 1035,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'CD-KM-001',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Pending,
+        'is_paused' => true,
+    ]);
+
+    $report = TripKmReport::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $driver->id,
+        'vehicle_id' => $vehicle->id,
+        'reported_km' => 1050,
+        'system_km' => 1035,
+        'status' => 'pending',
+    ]);
+
+    $mockMessaging = Mockery::mock(Messaging::class);
+    $mockMessaging->shouldReceive('send')
+        ->once()
+        ->with(Mockery::on(function (CloudMessage $message) use ($trip) {
+            $payload = $message->jsonSerialize();
+
+            return $payload['token'] === 'driver_km_token'
+                && str_contains($payload['notification']['title'], 'Đã cập nhật số Km')
+                && str_contains($payload['notification']['body'], '1.050 km')
+                && ($payload['data']['type'] ?? null) === 'trip_km_updated'
+                && ($payload['data']['trip_id'] ?? null) === (string) $trip->id
+                && ($payload['data']['corrected_km'] ?? null) === '1050';
+        }))
+        ->andReturn([]);
+    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
+
+    app(TripKmAdjustmentService::class)->resolveReport($report, 1050);
+
+    expect($vehicle->fresh()->current_mileage)->toEqual(1050);
 });

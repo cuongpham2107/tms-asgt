@@ -84,6 +84,43 @@ export function changePassword(
     });
 }
 
+export function getStatsPeriodDates(period?: string): { from?: string; to?: string } {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmtDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    const now = new Date();
+    const today = fmtDate(now);
+
+    if (!period || period === "today") {
+        return { from: today, to: today };
+    }
+
+    if (period === "week") {
+        const d = new Date(now);
+        const day = d.getDay();
+        d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
+        return { from: fmtDate(d), to: today };
+    }
+
+    if (period === "month") {
+        return {
+            from: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`,
+            to: today,
+        };
+    }
+
+    if (period === "last_month") {
+        const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+        return {
+            from: fmtDate(firstDay),
+            to: fmtDate(lastDay),
+        };
+    }
+
+    return {};
+}
+
 // ─── API endpoints ───────────────────────────────────────────────────
 
 export const api = {
@@ -203,19 +240,8 @@ export const api = {
     // Stats
     stats: (period?: string, t?: string) => {
         const token = t;
-        if (period && period !== 'all') {
-            const now = new Date();
-            const to = now.toISOString().slice(0, 10);
-            let from = to;
-            if (period === 'today') {
-                from = to;
-            } else if (period === 'week') {
-                const d = new Date(now);
-                d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1));
-                from = d.toISOString().slice(0, 10);
-            } else if (period === 'month') {
-                from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-            }
+        const { from, to } = getStatsPeriodDates(period);
+        if (from && to) {
             const qs = new URLSearchParams({ from_date: from, to_date: to });
             return fetchApi<{ data: any }>(`/trips/stats?${qs}`, token);
         }
@@ -230,11 +256,13 @@ export const api = {
     },
 
     // Locations
-    locations: (params: { search?: string; area_id?: number }, t: string) => {
+    locations: (params: { search?: string; area_id?: number; page?: number }, t: string) => {
         const qs = new URLSearchParams();
         if (params.search) qs.set("search", params.search);
         if (params.area_id) qs.set("area_id", String(params.area_id));
-        return fetchApi<{ data: any[] }>(`/locations?${qs}`, t);
+        if (params.page) qs.set("page", String(params.page));
+        qs.set("per_page", "30");
+        return fetchApi<{ data: any[]; current_page: number; last_page: number }>(`/locations?${qs}`, t);
     },
 
     // FCM Push Token
