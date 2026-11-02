@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\CargoType;
+use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -18,8 +19,10 @@ use App\Models\Order;
 use App\Models\OrderCharge;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Models\WaitingFeeRate;
 use App\Services\Billing\OrderChargeCalculator;
 use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
@@ -333,4 +336,78 @@ test('legend chips filter the external tab by charge status', function () {
     $page->call('toggleChargeStatus', 'missing')->assertSet('chargeStatus', null)
         ->call('toggleChargeStatus', 'locked');
     expect($page->instance()->getAllRows()->pluck('order_id')->all())->toBe([$this->order->id]);
+});
+
+test('edit charge modal pre-fills milestones and allows editing them', function () {
+    ($this->page)()
+        ->mountAction('editCharge', arguments: ['orderId' => $this->order->id])
+        ->fillForm([
+            'summary_requested_at' => '2026-10-21 09:00:00',
+            'summary_loading_at' => '2026-10-21 09:15:00',
+            'summary_departed_at' => '2026-10-21 10:45:00',
+            'summary_arrived_at' => '2026-10-21 12:00:00',
+            'summary_unloaded_at' => '2026-10-21 12:30:00',
+        ])
+        ->callMountedAction()
+        ->assertHasNoActionErrors();
+
+    expect($this->order->fresh()->planned_loading_at->format('Y-m-d H:i:s'))->toBe('2026-10-21 09:00:00');
+
+    $checkpoints = TripCheckpoint::where('order_id', $this->order->id)->get();
+    expect($checkpoints)->toHaveCount(4);
+
+    $tA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup);
+    $tB = $checkpoints->firstWhere('checkpoint_type', CheckpointType::LeftPickup);
+    $tC = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+    $tD = $checkpoints->firstWhere('checkpoint_type', CheckpointType::Completed);
+
+    expect($tA?->occurred_at->format('Y-m-d H:i:s'))->toBe('2026-10-21 09:15:00')
+        ->and($tB?->occurred_at->format('Y-m-d H:i:s'))->toBe('2026-10-21 10:45:00')
+        ->and($tC?->occurred_at->format('Y-m-d H:i:s'))->toBe('2026-10-21 12:00:00')
+        ->and($tD?->occurred_at->format('Y-m-d H:i:s'))->toBe('2026-10-21 12:30:00');
+
+    $dp = $this->order->deliveryPoints()->first();
+    expect($dp->arrived_at->format('Y-m-d H:i:s'))->toBe('2026-10-21 12:00:00')
+        ->and($dp->delivered_at->format('Y-m-d H:i:s'))->toBe('2026-10-21 12:30:00');
+
+    // Dữ liệu bảng thống kê phản ánh ngay các mốc mới sau khi lưu
+    $summary = app(TripExcelExportService::class)
+        ->getTripSummaryRowsFromOrders(Order::query()->whereKey($this->order->id))
+        ->firstWhere('order_id', $this->order->id);
+
+    expect($summary['time_a']->format('Y-m-d H:i:s'))->toBe('2026-10-21 09:15:00')
+        ->and($summary['time_b']->format('Y-m-d H:i:s'))->toBe('2026-10-21 10:45:00')
+        ->and($summary['time_c']->format('Y-m-d H:i:s'))->toBe('2026-10-21 12:00:00')
+        ->and($summary['time_d']->format('Y-m-d H:i:s'))->toBe('2026-10-21 12:30:00')
+        ->and($summary['time_loading'])->toBe(90)
+        ->and($summary['time_travel'])->toBe(75)
+        ->and($summary['time_unloading'])->toBe(30);
+});
+
+test('changing milestones recalculates waiting duration and waiting fee on the form', function () {
+    WaitingFeeRate::create([
+        'customer_id' => $this->order->customer_id,
+        'surcharge_type' => '',
+        'waiting_mode' => 'normal',
+        'fee_block_minutes' => 15,
+        'grace_minutes' => 5,
+        'tiers' => [
+            ['tonnage' => 5, 'free_minutes' => 30, 'fee' => 50_000],
+        ],
+    ]);
+
+    ($this->page)()
+        ->mountAction('editCharge', arguments: ['orderId' => $this->order->id])
+        ->fillForm([
+            'summary_loading_at' => '2026-10-21 09:00:00',
+            'summary_departed_at' => '2026-10-21 10:00:00',
+            'summary_arrived_at' => '2026-10-21 11:00:00',
+            'summary_unloaded_at' => '2026-10-21 11:45:00',
+        ])
+        // Tổng chờ: 60 + 45 = 105 phút; tính phí: 2 + 1 = 3 blocks × 50.000 = 150.000đ
+        ->assertMountedActionModalSee([
+            '150.000 đ',
+            "Đóng hàng 60' + hạ hàng 45'",
+            "miễn 30'/chặng → tính 45'",
+        ]);
 });

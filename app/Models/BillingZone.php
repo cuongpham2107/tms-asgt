@@ -18,6 +18,8 @@ class BillingZone extends Model
     /** @use HasFactory<BillingZoneFactory> */
     use HasFactory;
 
+    public $timestamps = false;
+
     protected $fillable = [
         'code',
         'name',

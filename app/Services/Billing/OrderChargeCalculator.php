@@ -148,6 +148,23 @@ class OrderChargeCalculator
      */
     private function waiting(Order $order, OrderCharge $charge, CarbonInterface $date): array
     {
+        return $this->previewWaiting($order, $charge, null, null, $date);
+    }
+
+    /**
+     * Tra trước phí giờ chờ theo thời lượng đóng/hạ hàng truyền vào (hoặc tự lấy theo đơn).
+     *
+     * @return array{minutes: int, fee: float, loading: int, unloading: int, rate: ?WaitingFeeRate, tier: ?array{tonnage: mixed, fee: mixed, free_minutes: mixed}, billable: int}
+     */
+    public function previewWaiting(
+        Order $order,
+        OrderCharge $charge,
+        ?int $loadingMinutes = null,
+        ?int $unloadingMinutes = null,
+        ?CarbonInterface $date = null
+    ): array {
+        $date ??= $order->planned_loading_at ?? $order->created_at ?? now();
+
         $rate = WaitingFeeRate::query()
             ->where('customer_id', $charge->customer_id)
             ->where('surcharge_type', $charge->surcharge_type)
@@ -161,12 +178,14 @@ class OrderChargeCalculator
             ->first(fn (WaitingFeeRate $rate): bool => $rate->tierFor($charge->chargeable_tonnage) !== null);
         $tier = $rate?->tierFor($charge->chargeable_tonnage);
 
-        $row = $order->trip_id === null ? [] : ($this->tripSummary
-            ->getTripSummaryRowsFromOrders(Order::query()->whereKey($order->id))
-            ->firstWhere('order_id', $order->id) ?? []);
+        if ($loadingMinutes === null || $unloadingMinutes === null) {
+            $row = $order->trip_id === null ? [] : ($this->tripSummary
+                ->getTripSummaryRowsFromOrders(Order::query()->whereKey($order->id))
+                ->firstWhere('order_id', $order->id) ?? []);
+            $loadingMinutes ??= (int) ($row['time_loading'] ?? 0);
+            $unloadingMinutes ??= (int) ($row['time_unloading'] ?? 0);
+        }
 
-        $loadingMinutes = (int) ($row['time_loading'] ?? 0);
-        $unloadingMinutes = (int) ($row['time_unloading'] ?? 0);
         $freeMinutes = (int) ($tier['free_minutes'] ?? 0);
         $billableMinutes = max(0, $loadingMinutes - $freeMinutes) + max(0, $unloadingMinutes - $freeMinutes);
 
@@ -184,9 +203,13 @@ class OrderChargeCalculator
     /**
      * Diễn giải phí giờ chờ tính tự động (hiện trong modal cước).
      */
-    public function explainWaiting(Order $order, OrderCharge $charge): string
-    {
-        $waiting = $this->waiting($order, $charge, $order->planned_loading_at ?? $order->created_at ?? now());
+    public function explainWaiting(
+        Order $order,
+        OrderCharge $charge,
+        ?int $loadingMinutes = null,
+        ?int $unloadingMinutes = null
+    ): string {
+        $waiting = $this->previewWaiting($order, $charge, $loadingMinutes, $unloadingMinutes, $order->planned_loading_at ?? $order->created_at ?? now());
         $legs = "Đóng hàng {$waiting['loading']}' + hạ hàng {$waiting['unloading']}'";
 
         if ($waiting['rate'] === null) {
