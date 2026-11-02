@@ -22,15 +22,9 @@ use App\Models\Vehicle;
 use App\Services\ShiftScheduleService;
 use BackedEnum;
 use Carbon\CarbonInterface;
-use Filament\Actions\Action;
 use Filament\Pages\Page;
-use Filament\Support\Enums\FontWeight;
-use Filament\Support\Enums\Width;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Enums\RecordActionsPosition;
-use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -345,285 +339,14 @@ class VehicleDispatchBoard extends Page implements HasTable
         $this->resetPage();
     }
 
-    public function filterOwnerType(string $value): void
-    {
-        $this->activeOwnerType = $value;
-        $this->resetPage();
-    }
-
-    public function filterStation(string $value): void
-    {
-        $this->activeStation = $value;
-        $this->resetPage();
-    }
-
-    public function filterMovementStatus(string $value): void
-    {
-        $this->activeMovementStatus = $value;
-        $this->resetPage();
-    }
-
-    public function getSummaryStats(): array
-    {
-        $vehicles = Vehicle::query()
-            ->where('is_active', true)
-            ->get();
-
-        $total = $vehicles->count();
-        $running = $vehicles->filter(fn (Vehicle $v) => (float) $v->gps_speed > 5)->count();
-        $idling = $vehicles->filter(function (Vehicle $v) {
-            $isRecent = false;
-            try {
-                $isRecent = $v->last_gps_update instanceof \DateTimeInterface
-                    && $v->last_gps_update->diffInMinutes(now()) <= 15;
-            } catch (\Throwable) {
-                $isRecent = false;
-            }
-
-            return ((float) $v->gps_speed <= 5 || $v->gps_speed === null)
-                && $isRecent
-                && $v->status === VehicleStatus::On;
-        })->count();
-        $stopped = max(0, $total - $running - $idling);
-
-        $activeTripVehicleIds = Trip::query()
-            ->whereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
-            ->whereNotNull('vehicle_id')
-            ->distinct()
-            ->pluck('vehicle_id')
-            ->all();
-
-        $withTrip = count($activeTripVehicleIds);
-        $available = max(0, $total - $withTrip);
-
-        return [
-            'total' => $total,
-            'running' => $running,
-            'idling' => $idling,
-            'stopped' => $stopped,
-            'with_trip' => $withTrip,
-            'available' => $available,
-        ];
-    }
-
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => $this->buildTableQuery())
-            ->poll('20s')
-            ->defaultSort('plate_number', 'asc')
-            ->paginated([25, 50, 100, 'all'])
-            ->defaultPaginationPageOption(50)
-            ->groups([
-                Group::make('driver_station')
-                    ->label('Địa điểm')
-                    ->getTitleFromRecordUsing(fn (Vehicle $record): string => match ($record->driver_station ?? '') {
-                        'BN' => 'Bắc Ninh (BN)',
-                        'NBA' => 'Nội Bài (NBA)',
-                        'TN' => 'Thái Nguyên (TN)',
-                        default => 'Chưa phân điểm / Khác',
-                    })
-                    ->collapsible(),
-            ])
-            ->defaultGroup('driver_station')
-            ->columns([
-                // 1. BSX
-                TextColumn::make('plate_number')
-                    ->label('BSX')
-                    ->weight(FontWeight::Bold)
-                    ->searchable()
-                    ->html()
-                    ->state(fn (Vehicle $record): string => self::renderBsx($record))
-                    ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
-
-                // 2. Loại đơn của đơn hiện tại (HHHK / Hàng ngoài)
-                TextColumn::make('order_type')
-                    ->label('Loại đơn')
-                    ->badge()
-                    ->alignCenter()
-                    ->placeholder('—')
-                    ->color(fn (Vehicle $record): ?string => self::getOrderType($record)?->getColor())
-                    ->state(fn (Vehicle $record): ?string => self::getOrderType($record)?->getLabel()),
-
-                // 3. Trạng thái chuyến / xe
-                TextColumn::make('trip_status')
-                    ->label('Trạng thái')
-                    ->badge()
-                    ->alignCenter()
-                    ->color(fn (Vehicle $record): string => self::getStatusBadgeColor($record))
-                    ->state(fn (Vehicle $record): string => self::getTripStatusLabel($record))
-                    ->icon(fn (Vehicle $record): ?string => match (true) {
-                        $record->active_trip?->isPaused() => 'heroicon-m-exclamation-triangle',
-                        $record->active_trip?->status === TripStatus::DriverSwap => 'heroicon-m-arrow-path',
-                        default => null,
-                    })
-                    ->tooltip(fn (Vehicle $record): ?string => match (true) {
-                        $record->active_trip?->isPaused() => 'Bấm để xử lý báo sai Km',
-                        $record->active_trip?->status === TripStatus::DriverSwap => 'Bấm để gán lại tài xế (Đảo lái)',
-                        default => null,
-                    })
-                    ->disabledClick(fn (Vehicle $record): bool => ! self::canClickTripStatus($record))
-                    ->action(function (Vehicle $record, HasTable $livewire): void {
-                        $trip = $record->active_trip;
-                        if (! $trip) {
-                            return;
-                        }
-
-                        if ($trip->isPaused()) {
-                            $livewire->mountTableAction('resolve_km_report', (string) $record->getKey());
-                        } elseif ($trip->status === TripStatus::DriverSwap) {
-                            $livewire->mountTableAction('reassign_driver', (string) $record->getKey());
-                        }
-                    }),
-
-                // 4. Điểm đi
-                TextColumn::make('pickup_location')
-                    ->label('Điểm đi')
-                    ->alignCenter()
-                    ->state(fn (Vehicle $record): string => self::getPickupPoint($record)),
-
-                // 5. Điểm đến
-                TextColumn::make('delivery_destination')
-                    ->label('Điểm đến')
-                    ->wrap()
-                    ->state(fn (Vehicle $record): string => self::getDeliveryPoint($record)),
-
-                // 6. Xe chờ
-                TextColumn::make('xe_cho')
-                    ->label('Xe chờ')
-                    ->alignCenter()
-                    ->html()
-                    ->tooltip(fn (Vehicle $record): string => self::getXeChoTooltip($record))
-                    ->state(fn (Vehicle $record): string => self::getXeCho($record)),
-
-                // 7. Vị trí thực tế trên GPS
-                TextColumn::make('gps_address')
-                    ->label('Vị trí thực tế trên GPS')
-                    ->wrap()
-                    ->tooltip(fn (Vehicle $record): ?string => $record->gps_address)
-                    ->state(fn (Vehicle $record): string => self::getGpsLocation($record)),
-
-                // 8. Tốc độ
-                TextColumn::make('gps_speed')
-                    ->label('Tốc độ')
-                    ->alignCenter()
-                    ->state(fn (Vehicle $record): string => self::getSpeed($record)),
-
-                // 9. Status (Động cơ / GPS)
-                TextColumn::make('movement_status')
-                    ->label('Status')
-                    ->badge()
-                    ->alignCenter()
-                    ->color(fn (Vehicle $record): string => self::getMovementStatusColor($record))
-                    ->state(fn (Vehicle $record): string => self::getMovementStatus($record)),
-
-                // 10. Chuyến
-                TextColumn::make('trip_count')
-                    ->label('Chuyến')
-                    ->alignCenter()
-                    ->weight(FontWeight::Bold)
-                    ->state(fn (Vehicle $record): int => self::getTodayTripsCount($record))
-                    ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
-
-                // 11. Đơn chờ
-                TextColumn::make('waiting_orders_count')
-                    ->label('Đơn chờ')
-                    ->alignCenter()
-                    ->weight(FontWeight::Bold)
-                    ->color(fn (Vehicle $record): string => self::getWaitingOrdersCount($record) > 0 ? 'purple' : 'gray')
-                    ->state(fn (Vehicle $record): int => self::getWaitingOrdersCount($record))
-                    ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
-
-                // 12. KM over
-                TextColumn::make('km_over')
-                    ->label('KM over')
-                    ->alignCenter()
-                    ->badge()
-                    ->color(fn (Vehicle $record): string => match (self::getKmOverData($record)['status']) {
-                        'danger' => 'danger',
-                        'warning', 'notice' => 'warning',
-                        default => 'gray',
-                    })
-                    ->tooltip(fn (Vehicle $record): string => self::getKmOverData($record)['tooltip'])
-                    ->state(fn (Vehicle $record): string => self::getKmOver($record)),
-
-                // Kiểm tra vị trí các mốc trong ca
-                TextColumn::make('geo_check')
-                    ->label('Vị trí mốc')
-                    ->alignCenter()
-                    ->badge()
-                    ->color(fn (Vehicle $record): string => match (true) {
-                        self::getGeoCheckData($record)['wrong'] > 0 => 'danger',
-                        self::getGeoCheckData($record)['checked'] > 0 => 'success',
-                        default => 'gray',
-                    })
-                    ->tooltip(fn (Vehicle $record): string => self::getGeoCheckData($record)['tooltip'])
-                    ->state(fn (Vehicle $record): string => self::getGeoCheckData($record)['label'])
-                    ->action(fn (Vehicle $record, VehicleDispatchBoard $livewire) => $livewire->openTripModal($record->id)),
-
-                // 12. Tên lái xe
-                TextColumn::make('driver_name')
-                    ->label('Tên lái xe')
-                    ->searchable(query: function (Builder $query, string $search) {
-                        $query->whereHas('driver', fn ($q) => $q->where('name', 'like', "%{$search}%"))
-                            ->orWhereHas('evenDriver', fn ($q) => $q->where('name', 'like', "%{$search}%"))
-                            ->orWhereHas('oddDriver', fn ($q) => $q->where('name', 'like', "%{$search}%"));
-                    })
-                    ->state(fn (Vehicle $record): string => self::getDriverName($record)),
-
-                // 13. Trực
-                TextColumn::make('driver_station_badge')
-                    ->label('Trực')
-                    ->alignCenter()
-                    ->badge()
-                    ->color(fn ($state): string => match ($state) {
-                        'BN' => 'warning',
-                        'NBA' => 'success',
-                        'TN' => 'info',
-                        default => 'gray',
-                    })
-                    ->state(fn (Vehicle $record): string => self::getDriverStation($record)),
-
-                // 14. Ca
-                TextColumn::make('shift_label')
-                    ->label('Ca')
-                    ->alignCenter()
-                    ->badge()
-                    ->color('gray')
-                    ->state(fn (Vehicle $record): string => self::getShiftLabel($record)),
-            ])
+            ->query(Vehicle::query())
             ->recordActions([
                 ReassignDriverAction::make('reassign_driver'),
                 ResolveKmReportAction::make('resolve_km_report'),
-
-                Action::make('view_trip')
-                    ->label('Chuyến xe')
-                    ->icon('heroicon-o-truck')
-                    ->color('primary')
-                    ->visible(fn (Vehicle $record): bool => self::getTodayTripsCount($record) > 0 || $record->active_trip !== null)
-                    ->modal()
-                    ->modalWidth(Width::FourExtraLarge)
-                    ->modalHeading(fn (Vehicle $record): string => 'Danh sách chuyến xe trong ca — '.$record->plate_number.' ('.self::getShiftDate()->format('d/m/Y').')')
-                    ->modalContent(fn (Vehicle $record, VehicleDispatchBoard $livewire) => view('filament.pages.partials.vehicle-trip-modal', [
-                        'vehicle' => $record,
-                        'trips' => $livewire->getTodayTripsForVehicle($record),
-                    ]))
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Đóng'),
-
-                Action::make('view_gps')
-                    ->label('Vị trí GPS')
-                    ->icon('heroicon-o-map-pin')
-                    ->color('success')
-                    ->visible(fn (Vehicle $record): bool => (float) $record->gps_lat !== 0.0 && (float) $record->gps_lng !== 0.0 && $record->gps_lat !== null)
-                    ->modal()
-                    ->modalHeading(fn (Vehicle $record): string => 'Vị trí xe '.$record->plate_number)
-                    ->modalContent(fn (Vehicle $record) => view('filament.pages.partials.vehicle-gps-modal', [
-                        'vehicle' => $record,
-                    ]))
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Đóng'),
-            ], position: RecordActionsPosition::AfterColumns);
+            ]);
     }
 
     // ─── Formatting Helpers ──────────────────────────────────────────
@@ -767,10 +490,10 @@ class VehicleDispatchBoard extends Page implements HasTable
 
         if ($activeTrip === null) {
             if ($record->status === VehicleStatus::Off) {
-                return 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-200 font-bold';
+                return 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-200 font-semibold';
             }
             if ($record->status === VehicleStatus::Bdsc) {
-                return 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-200 font-bold';
+                return 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-200 font-semibold';
             }
 
             return 'bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 font-normal';
@@ -785,17 +508,17 @@ class VehicleDispatchBoard extends Page implements HasTable
             : TripStatus::tryFrom((string) $activeTrip->status);
 
         return match ($status) {
-            TripStatus::Pending => 'bg-purple-600 text-white font-bold',
-            TripStatus::Started => 'bg-sky-500 text-white font-bold',
-            TripStatus::ArrivedPickup => 'bg-amber-500 text-white font-bold',
-            TripStatus::Delivering => 'bg-blue-600 text-white font-bold',
-            TripStatus::ArrivedDelivery => 'bg-fuchsia-600 text-white font-bold',
-            TripStatus::Delivered => 'bg-cyan-600 text-white font-bold',
-            TripStatus::Completed => 'bg-green-700 text-white font-bold',
+            TripStatus::Pending => 'bg-indigo-600 text-white font-semibold',
+            TripStatus::Started => 'bg-sky-600 text-white font-semibold',
+            TripStatus::ArrivedPickup => 'bg-amber-600 text-white font-semibold',
+            TripStatus::Delivering => 'bg-blue-600 text-white font-semibold',
+            TripStatus::ArrivedDelivery => 'bg-teal-600 text-white font-semibold',
+            TripStatus::Delivered => 'bg-emerald-600 text-white font-semibold',
+            TripStatus::Completed => 'bg-green-700 text-white font-semibold',
             TripStatus::DriverSwap => 'bg-rose-600 text-white font-bold',
             TripStatus::Cancelled => 'bg-gray-400 text-white font-semibold',
             TripStatus::ReturnTrip => 'bg-slate-600 text-white font-semibold',
-            default => 'bg-blue-600 text-white font-bold',
+            default => 'bg-blue-600 text-white font-semibold',
         };
     }
 
@@ -1016,16 +739,6 @@ class VehicleDispatchBoard extends Page implements HasTable
             'isAlert' => false,
             'isWarning' => false,
         ];
-    }
-
-    public static function getXeCho(Vehicle $record): string
-    {
-        return self::getXeChoData($record)['text'];
-    }
-
-    public static function getXeChoTooltip(Vehicle $record): string
-    {
-        return self::getXeChoData($record)['tooltip'];
     }
 
     /**
@@ -1389,11 +1102,6 @@ class VehicleDispatchBoard extends Page implements HasTable
             }.$tooltipDetails,
             'fillPercent' => $fillPercent,
         ];
-    }
-
-    public static function getKmOver(Vehicle $record): string
-    {
-        return self::getKmOverData($record)['text'];
     }
 
     public static function getDriverName(Vehicle $record): string

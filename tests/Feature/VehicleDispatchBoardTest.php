@@ -841,7 +841,7 @@ test('vehicle dispatch board distinguishes idle vehicle and pending trip with di
     $pendingVehicle->load('trips');
 
     expect(VehicleDispatchBoard::getTripStatusLabel($pendingVehicle))->toBe('Chờ chạy')
-        ->and(VehicleDispatchBoard::getTripStatusBadgeClass($pendingVehicle))->toContain('bg-purple-600', 'text-white', 'font-bold')
+        ->and(VehicleDispatchBoard::getTripStatusBadgeClass($pendingVehicle))->toContain('bg-indigo-600', 'text-white', 'font-semibold')
         ->and(TripStatus::Pending->getColor())->toBe('purple');
 });
 
