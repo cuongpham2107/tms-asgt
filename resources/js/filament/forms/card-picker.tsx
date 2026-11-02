@@ -73,8 +73,10 @@ function CardGrid(props: JsFieldProps<PickerValue, Configuration> & { mountActio
     const [busy, setBusy] = useState(false)
 
     const cardRefs = useRef(new Map<string, HTMLButtonElement>())
+    const gridRef = useRef<HTMLDivElement | null>(null)
     const sentinelRef = useRef<HTMLDivElement | null>(null)
     const previousSearch = useRef('')
+    const scrolledKeyRef = useRef('')
 
     const selectedKey = props.value === null || props.value === undefined ? '' : String(props.value)
     const isDisabled = props.isDisabled
@@ -124,8 +126,13 @@ function CardGrid(props: JsFieldProps<PickerValue, Configuration> & { mountActio
         [activeTab, search, config, suggestedCards],
     )
 
-    const visible = filtered.slice(0, limit)
-    const hasMore = filtered.length > limit
+    const selectedIndex = useMemo(
+        () => (selectedKey ? filtered.findIndex((card) => String(card.value) === selectedKey) : -1),
+        [filtered, selectedKey],
+    )
+    const effectiveLimit = selectedIndex >= limit ? Math.ceil((selectedIndex + 1) / BATCH_SIZE) * BATCH_SIZE : limit
+    const visible = filtered.slice(0, effectiveLimit)
+    const hasMore = filtered.length > effectiveLimit
 
     const tabs = useMemo(() => {
         if (config.mode === 'driver') {
@@ -156,11 +163,17 @@ function CardGrid(props: JsFieldProps<PickerValue, Configuration> & { mountActio
 
     // Đổi giá trị: nhảy đúng tab như bản Blade (xe công ty / xe ngoài) hoặc về "Tất cả".
     useEffect(() => {
+        scrolledKeyRef.current = ''
+
         if (!selectedKey) {
             return
         }
 
         const card = config.cards.find((candidate) => String(candidate.value) === selectedKey)
+
+        if (card && search !== '' && !matches(card, search)) {
+            setSearch('')
+        }
 
         if (config.mode === 'vehicle') {
             if (card && (card.type === 'company' || card.type === 'rent')) {
@@ -193,20 +206,48 @@ function CardGrid(props: JsFieldProps<PickerValue, Configuration> & { mountActio
 
     // Giữ thẻ đang chọn trong danh sách đã tải.
     useEffect(() => {
-        if (!selectedKey) {
+        if (effectiveLimit > limit) {
+            setLimit(effectiveLimit)
+        }
+    }, [effectiveLimit, limit])
+
+    useEffect(() => {
+        if (!selectedKey || scrolledKeyRef.current === selectedKey) {
             return
         }
 
-        const index = filtered.findIndex((card) => String(card.value) === selectedKey)
+        const element = cardRefs.current.get(selectedKey)
 
-        if (index >= limit) {
-            setLimit(Math.ceil((index + 1) / BATCH_SIZE) * BATCH_SIZE)
+        if (!element) {
+            return
         }
-    }, [filtered, selectedKey, limit])
 
-    useEffect(() => {
-        cardRefs.current.get(selectedKey)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, [selectedKey])
+        const frame = requestAnimationFrame(() => {
+            scrolledKeyRef.current = selectedKey
+            const container = gridRef.current
+
+            if (container && container.scrollHeight > container.clientHeight) {
+                const containerRect = container.getBoundingClientRect()
+                const elementRect = element.getBoundingClientRect()
+                const targetTop =
+                    container.scrollTop +
+                    (elementRect.top - containerRect.top) -
+                    container.clientHeight / 2 +
+                    elementRect.height / 2
+
+                container.scrollTo({
+                    top: Math.max(0, targetTop),
+                    behavior: 'smooth',
+                })
+
+                return
+            }
+
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        })
+
+        return () => cancelAnimationFrame(frame)
+    }, [selectedKey, activeTab, search, effectiveLimit])
 
     // Tải thêm khi cuộn tới cuối danh sách.
     useEffect(() => {
@@ -304,7 +345,7 @@ function CardGrid(props: JsFieldProps<PickerValue, Configuration> & { mountActio
                 </div>
             </div>
 
-            <div className="grid max-h-[60vh] grid-cols-1 gap-2.5 overflow-y-auto p-1.5 custom-scrollbar sm:grid-cols-2 md:grid-cols-3">
+            <div ref={gridRef} className="grid max-h-[60vh] grid-cols-1 gap-2.5 overflow-y-auto p-1.5 custom-scrollbar sm:grid-cols-2 md:grid-cols-3">
                 {visible.map((card) => {
                     const selected = String(card.value) === selectedKey
                     const dotClass = statusDotColors[card.statusDot ?? ''] ?? 'bg-gray-400'
