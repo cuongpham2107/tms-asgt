@@ -1063,3 +1063,63 @@ test('phone GPS updates the position of a vehicle without an EUP device', functi
 
     expect((float) $this->vehicle->fresh()->gps_lat)->toBe(10.9);
 });
+
+test('auto-created started checkpoint records geofence status and gps_accuracy', function () {
+    placeVehicleByEup($this->vehicle, 10.818889, 106.651944);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'order_id' => $this->order1->id,
+        'km_reading' => 50010,
+        'gps_lat' => 10.818889,
+        'gps_lng' => 106.651944,
+        'gps_accuracy' => 15,
+    ])->assertSuccessful();
+
+    $startedCp = TripCheckpoint::where('checkpoint_type', 'started')->first();
+    $pickupCp = TripCheckpoint::where('checkpoint_type', 'arrived_pickup')->first();
+
+    expect($startedCp)->not->toBeNull()
+        ->and($startedCp->vehicle_geo_status)->toBe(GeoCheckStatus::Valid)
+        ->and($startedCp->location_geo_status)->toBe(GeoCheckStatus::Skipped)
+        ->and($startedCp->gps_accuracy)->toBe(15)
+        ->and($pickupCp->gps_accuracy)->toBe(15);
+});
+
+test('completing a trip records geofence status, vehicle_id, and gps_accuracy on end checkpoint', function () {
+    $this->trip->update(['status' => TripStatus::Delivered, 'start_km' => 50000, 'started_at' => now()]);
+    $this->order1->update(['status' => OrderStatus::Completed->value]);
+    placeVehicleByEup($this->vehicle, 10.818889, 106.651944);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/complete", [
+        'end_km' => 50020,
+        'gps_lat' => 10.818889,
+        'gps_lng' => 106.651944,
+        'gps_accuracy' => 18.0,
+    ])->assertSuccessful();
+
+    $endCp = TripCheckpoint::where('checkpoint_type', 'end')->first();
+
+    expect($endCp)->not->toBeNull()
+        ->and($endCp->vehicle_id)->toBe($this->vehicle->id)
+        ->and($endCp->vehicle_geo_status)->toBe(GeoCheckStatus::Valid)
+        ->and((float) $endCp->gps_accuracy)->toBe(18.0);
+});
+
+test('missing phone GPS stays null on checkpoint instead of copying vehicle EUP coordinates', function () {
+    placeVehicleByEup($this->vehicle, 10.818889, 106.651944);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_pickup',
+        'order_id' => $this->order1->id,
+        'km_reading' => 50010,
+    ])->assertSuccessful();
+
+    $cp = TripCheckpoint::where('checkpoint_type', 'arrived_pickup')->first();
+
+    expect($cp->gps_lat)->toBeNull()
+        ->and($cp->gps_lng)->toBeNull()
+        ->and((float) $cp->eup_lat)->toBe(10.818889)
+        ->and($cp->vehicle_geo_status)->toBe(GeoCheckStatus::Unverified)
+        ->and($cp->location_geo_status)->toBe(GeoCheckStatus::Valid);
+});

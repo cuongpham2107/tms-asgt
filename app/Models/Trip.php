@@ -6,6 +6,7 @@ use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Services\ShiftKmCalculatorService;
+use App\Services\Trip\CheckpointGeofenceService;
 use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -259,9 +260,12 @@ class Trip extends Model
         return 'CD-'.now()->format('Y-m-d').'-'.$nextId;
     }
 
-    public function complete(?float $endKm = null, ?string $completedAt = null): void
+    /**
+     * @param  array<string, mixed>  $checkpointAttributes
+     */
+    public function complete(?float $endKm = null, ?string $completedAt = null, array $checkpointAttributes = []): void
     {
-        DB::transaction(function () use ($endKm, $completedAt) {
+        DB::transaction(function () use ($endKm, $completedAt, $checkpointAttributes) {
             $this->status = TripStatus::Completed;
             $this->completed_at = $completedAt ?? now();
             $this->end_km = $endKm ?? $this->end_km;
@@ -281,15 +285,17 @@ class Trip extends Model
             app(TripKmCalculatorService::class)->calculate($this);
             app(ShiftKmCalculatorService::class)->calculateForTrip($this);
 
-            $this->createMissingEndCheckpoints($endKmValue, $this->completed_at);
+            $this->createMissingEndCheckpoints($endKmValue, (string) $this->completed_at, $checkpointAttributes);
         });
     }
 
     /**
      * Tự động tạo end checkpoint cho các order đã completed nhưng chưa có end.
      * Chạy bên trong DB transaction của complete().
+     *
+     * @param  array<string, mixed>  $checkpointAttributes
      */
-    private function createMissingEndCheckpoints(float $endKm, string $occurredAt): void
+    private function createMissingEndCheckpoints(float $endKm, string $occurredAt, array $checkpointAttributes = []): void
     {
         $completedOrderIds = $this->orders()
             ->where('status', OrderStatus::Completed->value)
@@ -305,6 +311,17 @@ class Trip extends Model
 
         $missingOrderIds = $completedOrderIds->diff($existingEndOrderIds);
 
+        if ($missingOrderIds->isEmpty()) {
+            return;
+        }
+
+        if (! isset($checkpointAttributes['vehicle_geo_status'])) {
+            $geofenceAttrs = app(CheckpointGeofenceService::class)
+                ->check($this, CheckpointType::End, $checkpointAttributes)
+                ->toCheckpointAttributes();
+            $checkpointAttributes = [...$checkpointAttributes, ...$geofenceAttrs];
+        }
+
         foreach ($missingOrderIds as $orderId) {
             TripCheckpoint::create([
                 'checkpoint_type' => CheckpointType::End->value,
@@ -314,6 +331,8 @@ class Trip extends Model
                 'occurred_at' => $occurredAt,
                 'driver_id' => $this->driver_id,
                 'shift_id' => $this->shift_id,
+                'vehicle_id' => $this->vehicle_id,
+                ...$checkpointAttributes,
             ]);
         }
     }

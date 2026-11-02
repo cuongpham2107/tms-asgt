@@ -288,7 +288,13 @@ class TripCheckpointService
             'checkpoint_type' => CheckpointType::Started->value,
             'occurred_at' => $startOccurredAt,
             'km_reading' => $vehicleKm,
+            'gps_lat' => $payload['gps_lat'] ?? null,
+            'gps_lng' => $payload['gps_lng'] ?? null,
+            'gps_accuracy' => $payload['gps_accuracy'] ?? null,
         ];
+        $startPayload['geofence'] = $this->geofence
+            ->check($trip, CheckpointType::Started, $startPayload)
+            ->toCheckpointAttributes();
 
         $checkpoints = $this->checkpointFactory->create($trip, $startPayload, CheckpointType::Started);
 

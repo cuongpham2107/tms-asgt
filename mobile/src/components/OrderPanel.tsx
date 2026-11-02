@@ -26,7 +26,10 @@ import { useRefreshOnNotification } from "../lib/notifications";
 import { logUiEvent } from "../lib/ui-debug";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
-import { getFastGpsCoordinates } from "../lib/location";
+import {
+    getRequiredGpsCoordinates,
+    promptEnableGps,
+} from "../lib/location";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -498,15 +501,23 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
         showLoading();
 
         try {
+            // Bắt buộc bật GPS trên điện thoại mới cho gửi checkpoint
+            const gpsRes = await getRequiredGpsCoordinates();
+            if (!gpsRes.ok) {
+                promptEnableGps(gpsRes.reason);
+                return;
+            }
+
             const body: any = {
                 checkpoint_type: type,
                 occurred_at: localISO(),
             };
-            // Lấy toạ độ GPS nhanh (kèm timeout và cache fallback)
-            const gps = await getFastGpsCoordinates();
-            if (gps) {
-                body.gps_lat = gps.gps_lat;
-                body.gps_lng = gps.gps_lng;
+            if (gpsRes.coords) {
+                body.gps_lat = gpsRes.coords.gps_lat;
+                body.gps_lng = gpsRes.coords.gps_lng;
+                if (gpsRes.coords.gps_accuracy != null) {
+                    body.gps_accuracy = gpsRes.coords.gps_accuracy;
+                }
             }
             if (km) body.km_reading = parseFloat(km);
             if (d.id) body.order_id = d.id;

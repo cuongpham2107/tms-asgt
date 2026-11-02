@@ -26,7 +26,10 @@ import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { clearNotificationBadge, useRefreshOnNotification } from "../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import { getFastGpsCoordinates } from "../src/lib/location";
+import {
+    getRequiredGpsCoordinates,
+    promptEnableGps,
+} from "../src/lib/location";
 import * as ImagePicker from "expo-image-picker";
 
 const statusConfig: Record<
@@ -325,10 +328,6 @@ export default function TripDetailScreen() {
         }
     };
 
-    const getGps = async () => {
-        return getFastGpsCoordinates();
-    };
-
     // Đổi giá trị để khung đơn nhúng bên dưới tải lại cùng lúc
     const [orderReloadToken, setOrderReloadToken] = useState(0);
 
@@ -460,14 +459,21 @@ export default function TripDetailScreen() {
         setStarting(true);
         showLoading();
         try {
-            const gps = await getGps();
+            const gpsRes = await getRequiredGpsCoordinates();
+            if (!gpsRes.ok) {
+                promptEnableGps(gpsRes.reason);
+                return;
+            }
             const body: any = {
                 checkpoint_type: "started",
                 occurred_at: localISO(),
             };
-            if (gps) {
-                body.gps_lat = gps.gps_lat;
-                body.gps_lng = gps.gps_lng;
+            if (gpsRes.coords) {
+                body.gps_lat = gpsRes.coords.gps_lat;
+                body.gps_lng = gpsRes.coords.gps_lng;
+                if (gpsRes.coords.gps_accuracy != null) {
+                    body.gps_accuracy = gpsRes.coords.gps_accuracy;
+                }
             }
             await api.trips.checkpoint(String(tripId), body, token);
             await load();
@@ -561,22 +567,40 @@ export default function TripDetailScreen() {
                 setCompleting(true);
                 showLoading();
                 try {
+                    const gpsRes = await getRequiredGpsCoordinates();
+                    if (!gpsRes.ok) {
+                        promptEnableGps(gpsRes.reason);
+                        return;
+                    }
                     const cps = detail?.checkpoints || [];
                     const endCp = cps.find(
                         (cp: any) => cp.checkpoint_type === "end",
                     );
                     if (endCp) {
+                        const cpBody: any = {
+                            checkpoint_type: "end",
+                            km_reading: eKm,
+                            occurred_at: endCp.occurred_at,
+                        };
+                        if (gpsRes.coords) {
+                            cpBody.gps_lat = gpsRes.coords.gps_lat;
+                            cpBody.gps_lng = gpsRes.coords.gps_lng;
+                            if (gpsRes.coords.gps_accuracy != null) {
+                                cpBody.gps_accuracy = gpsRes.coords.gps_accuracy;
+                            }
+                        }
                         await api.trips.checkpoint(
                             String(tripId),
-                            {
-                                checkpoint_type: "end",
-                                km_reading: eKm,
-                                occurred_at: endCp.occurred_at,
-                            },
+                            cpBody,
                             token,
                         );
                     }
-                    await api.trips.complete(String(tripId), eKm, token);
+                    await api.trips.complete(
+                        String(tripId),
+                        eKm,
+                        token,
+                        gpsRes.coords ?? undefined,
+                    );
                     showAlert("Thành công", "Đã kết thúc chuyến quay đầu");
                     await load();
                 } catch (e: any) {
@@ -596,12 +620,16 @@ export default function TripDetailScreen() {
         setCompleting(true);
         showLoading();
         try {
-            const gps = await getGps();
+            const gpsRes = await getRequiredGpsCoordinates();
+            if (!gpsRes.ok) {
+                promptEnableGps(gpsRes.reason);
+                return;
+            }
             await api.trips.complete(
                 String(tripId),
                 km,
                 token,
-                gps ?? undefined,
+                gpsRes.coords ?? undefined,
             );
             const hasIncomplete = orders.some(
                 (o: any) => o.status !== "completed",

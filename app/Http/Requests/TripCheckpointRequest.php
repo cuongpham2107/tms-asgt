@@ -51,6 +51,7 @@ class TripCheckpointRequest extends FormRequest
             ],
             'gps_lat' => 'nullable|numeric',
             'gps_lng' => 'nullable|numeric',
+            'gps_accuracy' => 'nullable|numeric|min:0',
             'voice_note' => 'nullable|string',
             'photos' => 'nullable',
         ];

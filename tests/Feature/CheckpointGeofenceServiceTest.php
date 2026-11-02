@@ -236,15 +236,15 @@ test('arrival is valid when the vehicle entered the area in the last 5 minutes',
         ->and($result->locationDistanceM)->toBeBetween(300, 370);
 });
 
-test('leaving is valid when the vehicle was in the area in the last 10 minutes but not earlier only', function () {
+test('leaving is valid when the vehicle was in the area in the last 30 minutes but not earlier only', function () {
     $this->vehicle->update(['gps_lat' => 21.0 + GEO_FAR]);
-    logVehiclePoint($this->vehicle, 21.0 + GEO_NEAR, 8);
+    logVehiclePoint($this->vehicle, 21.0 + GEO_NEAR, 20);
     logVehiclePoint($this->vehicle, 21.0 + GEO_FAR, 0);
 
     $recent = ($this->check)(CheckpointType::LeftPickup, ['gps_lat' => 21.0 + GEO_FAR, 'gps_lng' => 105.0]);
 
     VehicleGpsLog::query()->delete();
-    logVehiclePoint($this->vehicle, 21.0 + GEO_NEAR, 15);
+    logVehiclePoint($this->vehicle, 21.0 + GEO_NEAR, 40);
     logVehiclePoint($this->vehicle, 21.0 + GEO_FAR, 5);
     logVehiclePoint($this->vehicle, 21.0 + GEO_FAR, 0);
 
@@ -283,4 +283,51 @@ test('without logs in the window the current vehicle position is used', function
     $result = ($this->check)(CheckpointType::ArrivedPickup, ['gps_lat' => 21.0 + GEO_FAR, 'gps_lng' => 105.0]);
 
     expect($result->locationStatus)->toBe(GeoCheckStatus::OutOfRange);
+});
+
+test('moving vehicle above 15 km/h expands the Layer A radius to compensate for EUP lag', function () {
+    $this->vehicle->update([
+        'gps_lat' => 21.0,
+        'gps_lng' => 105.0,
+        'gps_speed' => 54, // 15 m/s -> +900m over 60s -> effective radius 1400m
+        'last_gps_update' => now()->subMinute(),
+    ]);
+
+    // GEO_FAR (~667m) exceeds 500m base radius, but is within speed-compensated radius (1400m)
+    $withinCompensated = ($this->check)(CheckpointType::Started, ['gps_lat' => 21.0 + GEO_FAR, 'gps_lng' => 105.0]);
+    // 0.02 deg (~2.2 km) exceeds the 1500m cap
+    $beyondCap = ($this->check)(CheckpointType::Started, ['gps_lat' => 21.02, 'gps_lng' => 105.0]);
+
+    expect($withinCompensated->vehicleStatus)->toBe(GeoCheckStatus::Valid)
+        ->and($beyondCap->vehicleStatus)->toBe(GeoCheckStatus::OutOfRange);
+});
+
+test('Layer A rejection is exempted when vehicle EUP confirms it is inside the target location (SDV Wi-Fi interference case)', function () {
+    // Vehicle EUP is right at pickup (21.0, 105.0), but phone GPS jumped to southern Vietnam (10.517606, 105.9070208)
+    $this->vehicle->update(['gps_lat' => 21.0, 'gps_lng' => 105.0]);
+
+    $result = ($this->check)(CheckpointType::ArrivedPickup, [
+        'gps_lat' => 10.517606,
+        'gps_lng' => 105.9070208,
+    ]);
+
+    // Honest DB recording: vehicleStatus is still OutOfRange (~1,188 km), locationStatus is Valid
+    expect($result->vehicleStatus)->toBe(GeoCheckStatus::OutOfRange)
+        ->and($result->locationStatus)->toBe(GeoCheckStatus::Valid)
+        ->and($result->eupConfirmedAtLocation)->toBeTrue()
+        // Enforcement does NOT reject Layer A because EUP confirmed vehicle is in warehouse
+        ->and($result->rejection(true, true))->toBeNull();
+});
+
+test('custom geofence_radius_m on Location overrides the default 500m radius for Layer B', function () {
+    $this->pickup->update(['geofence_radius_m' => 900]);
+    $this->vehicle->update(['gps_lat' => 21.0 + GEO_FAR, 'gps_lng' => 105.0]); // ~667m
+
+    $result = ($this->check)(CheckpointType::ArrivedPickup, [
+        'gps_lat' => 21.0 + GEO_FAR,
+        'gps_lng' => 105.0,
+    ]);
+
+    expect($result->locationStatus)->toBe(GeoCheckStatus::Valid)
+        ->and($result->locationRadiusM)->toBe(900);
 });

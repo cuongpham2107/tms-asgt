@@ -20,6 +20,9 @@ final readonly class GeofenceResult
         public GeoCheckStatus $locationStatus,
         public ?int $locationDistanceM,
         public ?string $locationCode,
+        public ?int $vehicleRadiusM = null,
+        public ?int $locationRadiusM = null,
+        public bool $eupConfirmedAtLocation = false,
     ) {}
 
     /**
@@ -48,10 +51,12 @@ final readonly class GeofenceResult
     }
 
     /**
-     * @return array{message: string, layer: string, distance_m: ?int, target_code: ?string}|null
+     * @return array{message: string, layer: string, distance_m: ?int, radius_m: int, target_code: ?string}|null
      */
     public function rejection(bool $enforceVehicle, bool $enforceLocation): ?array
     {
+        $defaultRadius = (int) config('checkpoint_geofence.radius_m', 500);
+
         if ($enforceLocation && $this->locationStatus === GeoCheckStatus::OutOfRange) {
             return [
                 'message' => sprintf(
@@ -61,11 +66,14 @@ final readonly class GeofenceResult
                 ),
                 'layer' => 'location',
                 'distance_m' => $this->locationDistanceM,
+                'radius_m' => $this->locationRadiusM ?? $defaultRadius,
                 'target_code' => $this->locationCode,
             ];
         }
 
-        if ($enforceVehicle && $this->vehicleStatus === GeoCheckStatus::OutOfRange) {
+        // Nếu chính EUP của xe đã xác nhận xe đang ở trong kho hợp lệ, miễn chặn Lớp A
+        // (tránh chặn nhầm khi điện thoại bị nhiễu Wi-Fi trong nhà máy như kho Samsung SDV)
+        if ($enforceVehicle && $this->vehicleStatus === GeoCheckStatus::OutOfRange && ! $this->eupConfirmedAtLocation) {
             return [
                 'message' => sprintf(
                     'Vị trí điện thoại đang cách xe %s. Vui lòng gửi khi đang ở cạnh xe. Nếu bạn đang ở cạnh xe, vui lòng thử lại sau 1 phút hoặc liên hệ Điều hành.',
@@ -73,6 +81,7 @@ final readonly class GeofenceResult
                 ),
                 'layer' => 'vehicle',
                 'distance_m' => $this->vehicleDistanceM,
+                'radius_m' => $this->vehicleRadiusM ?? $defaultRadius,
                 'target_code' => null,
             ];
         }

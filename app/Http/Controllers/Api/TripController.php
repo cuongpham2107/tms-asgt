@@ -278,9 +278,10 @@ class TripController extends Controller
             'completed_at' => 'nullable|date',
             'gps_lat' => 'nullable|numeric',
             'gps_lng' => 'nullable|numeric',
+            'gps_accuracy' => 'nullable|numeric|min:0',
         ]);
 
-        app(CheckpointGeofenceService::class)->checkOrFail($trip, CheckpointType::End, $validated);
+        $geofenceResult = app(CheckpointGeofenceService::class)->checkOrFail($trip, CheckpointType::End, $validated);
 
         if ($trip->start_km !== null && (float) $validated['end_km'] < (float) $trip->start_km) {
             return response()->json(['message' => [
@@ -322,7 +323,13 @@ class TripController extends Controller
 
         if ($allOrdersDone) {
             // Tất cả orders đã xong → complete bình thường
-            $trip->complete(endKm: $endKm, completedAt: $completedAt);
+            $endCheckpointAttrs = [
+                'gps_lat' => $validated['gps_lat'] ?? null,
+                'gps_lng' => $validated['gps_lng'] ?? null,
+                'gps_accuracy' => isset($validated['gps_accuracy']) ? (int) round((float) $validated['gps_accuracy']) : null,
+                ...$geofenceResult->toCheckpointAttributes(),
+            ];
+            $trip->complete(endKm: $endKm, completedAt: $completedAt, checkpointAttributes: $endCheckpointAttrs);
         } else {
             // Còn orders chưa xong → driver_swap, tính partial km
             DB::transaction(function () use ($trip, $endKm, $completedAt) {

@@ -49,14 +49,28 @@ class CheckpointGeofenceService
         $eup = $vehicle !== null ? ($this->recentLoggedPosition($vehicle) ?? $this->freshEupPosition($vehicle)) : null;
         $phone = $this->position($payload['gps_lat'] ?? null, $payload['gps_lng'] ?? null);
 
-        [$vehicleStatus, $vehicleDistanceM] = $this->compare($eup !== null ? $phone : null, $eup);
+        $vehicleRadiusM = $this->effectiveVehicleRadiusM($eup);
+        [$vehicleStatus, $vehicleDistanceM] = $this->compare($eup !== null ? $phone : null, $eup, $vehicleRadiusM);
 
         $location = $this->targetLocation($type, $payload);
         $locationPosition = $location !== null ? $this->position($location->lat, $location->lng) : null;
+        $locationRadiusM = $this->effectiveLocationRadiusM($location);
+        $eupConfirmedAtLocation = false;
 
-        [$locationStatus, $locationDistanceM] = $locationPosition === null
-            ? [GeoCheckStatus::Skipped, null]
-            : ($this->compareTrackWithLocation($vehicle, $type, $locationPosition) ?? $this->compare($eup ?? $phone, $locationPosition));
+        if ($locationPosition === null) {
+            [$locationStatus, $locationDistanceM] = [GeoCheckStatus::Skipped, null];
+        } else {
+            $trackMatch = $this->compareTrackWithLocation($vehicle, $type, $locationPosition, $locationRadiusM);
+            if ($trackMatch !== null) {
+                [$locationStatus, $locationDistanceM] = $trackMatch;
+                $eupConfirmedAtLocation = ($locationStatus === GeoCheckStatus::Valid);
+            } elseif ($eup !== null) {
+                [$locationStatus, $locationDistanceM] = $this->compare($eup, $locationPosition, $locationRadiusM);
+                $eupConfirmedAtLocation = ($locationStatus === GeoCheckStatus::Valid);
+            } else {
+                [$locationStatus, $locationDistanceM] = $this->compare($phone, $locationPosition, $locationRadiusM);
+            }
+        }
 
         return new GeofenceResult(
             eupLat: $eup['lat'] ?? null,
@@ -68,6 +82,9 @@ class CheckpointGeofenceService
             locationStatus: $locationStatus,
             locationDistanceM: $locationDistanceM,
             locationCode: $location?->code,
+            vehicleRadiusM: $vehicleRadiusM,
+            locationRadiusM: $locationRadiusM,
+            eupConfirmedAtLocation: $eupConfirmedAtLocation,
         );
     }
 
@@ -91,7 +108,7 @@ class CheckpointGeofenceService
             throw new CheckpointGeofenceException($rejection['message'], [
                 'layer' => $rejection['layer'],
                 'distance_m' => $rejection['distance_m'],
-                'radius_m' => (int) config('checkpoint_geofence.radius_m'),
+                'radius_m' => $rejection['radius_m'] ?? (int) config('checkpoint_geofence.radius_m'),
                 'target_code' => $rejection['target_code'],
             ]);
         }
@@ -100,20 +117,60 @@ class CheckpointGeofenceService
     }
 
     /**
+     * Bán kính Lớp A có bù độ trễ theo tốc độ xe khi xe đang di chuyển (> 15 km/h).
+     *
+     * @param  array{lat: float, lng: float, recorded_at: CarbonInterface, speed: ?float}|null  $eup
+     */
+    private function effectiveVehicleRadiusM(?array $eup): int
+    {
+        $baseRadiusM = (int) config('checkpoint_geofence.radius_m', 500);
+        if ($eup === null) {
+            return $baseRadiusM;
+        }
+
+        $speedKmh = (float) ($eup['speed'] ?? 0);
+        $thresholdKmh = (float) config('checkpoint_geofence.moving_speed_threshold_kmh', 15);
+        if ($speedKmh <= $thresholdKmh) {
+            return $baseRadiusM;
+        }
+
+        $ageSeconds = isset($eup['recorded_at'])
+            ? max(60, (int) abs(now()->diffInSeconds($eup['recorded_at'])))
+            : 60;
+        $compensationM = (int) round(($speedKmh / 3.6) * $ageSeconds);
+        $maxRadiusM = (int) config('checkpoint_geofence.max_vehicle_radius_m', 1500);
+
+        return min($maxRadiusM, $baseRadiusM + $compensationM);
+    }
+
+    /**
+     * Bán kính Lớp B ưu tiên cấu hình riêng trên từng Location, mặc định fallback về config.
+     */
+    private function effectiveLocationRadiusM(?Location $location): int
+    {
+        $custom = $location?->geofence_radius_m;
+
+        return (is_numeric($custom) && (int) $custom > 0)
+            ? (int) $custom
+            : (int) config('checkpoint_geofence.radius_m', 500);
+    }
+
+    /**
      * @param  array{lat: float, lng: float}|null  $from
      * @param  array{lat: float, lng: float}|null  $to
      * @return array{0: GeoCheckStatus, 1: ?int}
      */
-    private function compare(?array $from, ?array $to): array
+    private function compare(?array $from, ?array $to, ?int $radiusM = null): array
     {
         if ($from === null || $to === null) {
             return [GeoCheckStatus::Unverified, null];
         }
 
+        $limitM = $radiusM ?? (int) config('checkpoint_geofence.radius_m', 500);
         $distanceM = (int) round($this->geo->calculateHaversineKm($from['lat'], $from['lng'], $to['lat'], $to['lng']) * 1000);
 
         return [
-            $distanceM <= (int) config('checkpoint_geofence.radius_m') ? GeoCheckStatus::Valid : GeoCheckStatus::OutOfRange,
+            $distanceM <= $limitM ? GeoCheckStatus::Valid : GeoCheckStatus::OutOfRange,
             $distanceM,
         ];
     }
@@ -146,7 +203,7 @@ class CheckpointGeofenceService
      * @param  array{lat: float, lng: float}  $location
      * @return array{0: GeoCheckStatus, 1: int}|null
      */
-    private function compareTrackWithLocation(?Vehicle $vehicle, CheckpointType $type, array $location): ?array
+    private function compareTrackWithLocation(?Vehicle $vehicle, CheckpointType $type, array $location, ?int $radiusM = null): ?array
     {
         if ($vehicle === null) {
             return null;
@@ -162,12 +219,13 @@ class CheckpointGeofenceService
             return null;
         }
 
+        $limitM = $radiusM ?? (int) config('checkpoint_geofence.radius_m', 500);
         $closestM = $points
             ->map(fn ($log): int => (int) round($this->geo->calculateHaversineKm((float) $log->lat, (float) $log->lng, $location['lat'], $location['lng']) * 1000))
             ->min();
 
         return [
-            $closestM <= (int) config('checkpoint_geofence.radius_m') ? GeoCheckStatus::Valid : GeoCheckStatus::OutOfRange,
+            $closestM <= $limitM ? GeoCheckStatus::Valid : GeoCheckStatus::OutOfRange,
             $closestM,
         ];
     }

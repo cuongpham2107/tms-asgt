@@ -18,6 +18,7 @@ class Location extends Model
         'address',
         'lat',
         'lng',
+        'geofence_radius_m',
         'coordinates',
         'loc_type',
         'is_active',
@@ -33,6 +34,7 @@ class Location extends Model
             'is_active' => 'boolean',
             'lat' => 'decimal:7',
             'lng' => 'decimal:7',
+            'geofence_radius_m' => 'integer',
             'loc_type' => LocationType::class,
         ];
     }
@@ -106,6 +108,9 @@ class Location extends Model
     protected static function booted(): void
     {
         static::saving(function (Location $location) {
+            if (! empty($location->code)) {
+                $location->code = mb_strtoupper(trim((string) $location->code));
+            }
             if (! empty($location->area_id) && ! is_numeric($location->area_id)) {
                 $area = Area::query()->where('code', $location->area_id)->first();
                 $location->area_id = $area?->id;

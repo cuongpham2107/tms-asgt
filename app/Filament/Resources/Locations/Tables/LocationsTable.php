@@ -42,6 +42,12 @@ class LocationsTable extends BaseTable
                     ->color(fn ($state): string => (is_object($state) && method_exists($state, 'getColor')) ? ($state->getColor() ?? 'gray') : 'gray')
                     ->formatStateUsing(fn ($state) => (is_object($state) && method_exists($state, 'getLabel')) ? $state->getLabel() : $state)
                     ->searchable(),
+                TextColumn::make('geofence_radius_m')
+                    ->label('Bán kính GPS')
+                    ->alignCenter()
+                    ->formatStateUsing(fn ($state): string => $state ? "{$state} m" : config('checkpoint_geofence.radius_m', 500).' m (mặc định)')
+                    ->color(fn ($state): string => $state ? 'primary' : 'gray')
+                    ->toggleable(),
                 IconColumn::make('is_active')
                     ->label('Hoạt động')
                     ->alignCenter()

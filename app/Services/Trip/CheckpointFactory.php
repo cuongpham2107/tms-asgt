@@ -120,8 +120,9 @@ class CheckpointFactory
             'checkpoint_type' => $type->value,
             'occurred_at' => $payload['occurred_at'] ?? now(),
             'km_reading' => $kmReading,
-            'gps_lat' => $payload['gps_lat'] ?? $trip->vehicle?->gps_lat,
-            'gps_lng' => $payload['gps_lng'] ?? $trip->vehicle?->gps_lng,
+            'gps_lat' => $payload['gps_lat'] ?? null,
+            'gps_lng' => $payload['gps_lng'] ?? null,
+            'gps_accuracy' => isset($payload['gps_accuracy']) ? (int) round((float) $payload['gps_accuracy']) : null,
             'voice_note' => $payload['voice_note'] ?? null,
             ...($payload['geofence'] ?? []),
         ];
