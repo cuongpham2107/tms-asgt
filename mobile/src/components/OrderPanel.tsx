@@ -146,6 +146,9 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
     });
     const suppressRefocus = useRef(false);
     const lastSuggestedKmRef = useRef("");
+    const prevVehicleKmRef = useRef<any>(null);
+    const prevReloadTokenRef = useRef(reloadToken);
+    const prevPausedRef = useRef<boolean | null>(null);
 
     const handleKmFocus = () => {
         const prev = kmFocusState.current;
@@ -266,12 +269,17 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
         label: d.status,
     };
     const tripId = d.trip_id;
-    const vehicleKm =
-        detail?.vehicle?.current_mileage ??
-        detail?.vehicle?.km_reading ??
-        order?.vehicle?.current_mileage ??
-        order?.vehicle?.km_reading ??
-        null;
+    const vehicleKm = embedded
+        ? (order?.vehicle?.km_reading ??
+           order?.vehicle?.current_mileage ??
+           detail?.vehicle?.km_reading ??
+           detail?.vehicle?.current_mileage ??
+           null)
+        : (detail?.vehicle?.current_mileage ??
+           detail?.vehicle?.km_reading ??
+           order?.vehicle?.current_mileage ??
+           order?.vehicle?.km_reading ??
+           null);
 
     // Format tel URI
     const formatTelUri = (rawPhone: string) => {
@@ -346,19 +354,38 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
     }, [d?.notes]);
 
     // Auto-fill KM từ km hiện tại của xe; tự động cập nhật khi điều hành sửa Km trên web
-    // (nếu tài xế chưa tự gõ giá trị khác với số gợi ý trước đó).
+    // hoặc khi chuyến vừa hết tạm dừng (admin duyệt báo sai km).
     useEffect(() => {
         if (vehicleKm != null) {
             const nextKm = String(Math.round(Number(vehicleKm)));
+            const vehicleKmChanged =
+                prevVehicleKmRef.current != null &&
+                String(Math.round(Number(prevVehicleKmRef.current))) !== nextKm;
+            const reloadTokenChanged = prevReloadTokenRef.current !== reloadToken;
+            const isPausedCurrent = order?.is_paused ?? detail?.is_paused ?? false;
+            const unpaused = prevPausedRef.current === true && !isPausedCurrent;
+
+            prevVehicleKmRef.current = vehicleKm;
+            prevReloadTokenRef.current = reloadToken;
+            prevPausedRef.current = isPausedCurrent;
+
+            // Khi Điều hành sửa Km trên web (vehicleKm đổi số) HOẶC chuyến vừa hết tạm dừng (unpaused)
+            // HOẶC reloadToken thay đổi và tài xế không đang gõ phím:
+            // Luôn cập nhật thẳng số km mới nhất vào ô input
+            const forceUpdate =
+                vehicleKmChanged ||
+                unpaused ||
+                (reloadTokenChanged && !kmFocusState.current.active);
+
             setKm((prev) => {
-                if (!prev || prev === lastSuggestedKmRef.current) {
+                if (!prev || prev === lastSuggestedKmRef.current || forceUpdate) {
                     return nextKm;
                 }
                 return prev;
             });
             lastSuggestedKmRef.current = nextKm;
         }
-    }, [vehicleKm, detail]);
+    }, [vehicleKm, detail, reloadToken, order?.is_paused]);
     // Find next pending delivery point (for multi-DP orders)
     const deliveryPoints: any[] = d.delivery_points || [];
     const nextPendingDp = deliveryPoints.find(

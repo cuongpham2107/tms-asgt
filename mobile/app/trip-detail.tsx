@@ -444,11 +444,14 @@ export default function TripDetailScreen() {
     useEffect(() => {
         if (vehicleKm != null) {
             const nextKm = String(Math.round(Number(vehicleKm)));
+            const isDifferent =
+                lastSuggestedVehicleKmRef.current !== "" &&
+                lastSuggestedVehicleKmRef.current !== nextKm;
             setStartKmInput((prev) =>
-                !prev || prev === lastSuggestedVehicleKmRef.current ? nextKm : prev,
+                !prev || prev === lastSuggestedVehicleKmRef.current || isDifferent ? nextKm : prev,
             );
             setCompleteKm((prev) =>
-                !prev || prev === lastSuggestedVehicleKmRef.current ? nextKm : prev,
+                !prev || prev === lastSuggestedVehicleKmRef.current || isDifferent ? nextKm : prev,
             );
             lastSuggestedVehicleKmRef.current = nextKm;
         }
@@ -1467,6 +1470,7 @@ export default function TripDetailScreen() {
                                                 trip_id: trip?.id || params.id,
                                                 vehicle: detail?.vehicle || trip?.vehicle,
                                                 is_swapped: isSwapped,
+                                                is_paused: detail?.is_paused ?? trip?.is_paused,
                                             }}
                                             reloadToken={orderReloadToken}
                                             onChanged={refreshAll}
