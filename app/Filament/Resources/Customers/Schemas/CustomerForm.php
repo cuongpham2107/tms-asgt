@@ -74,11 +74,19 @@ class CustomerForm
                             })
                             ->createOptionForm(fn (Schema $schema): array => LocationForm::configure($schema)->getComponents())
                             ->createOptionUsing(function (array $data): int {
+                                $areas = $data['areas'] ?? [];
+                                unset($data['areas']);
                                 if (! empty($data['area_id']) && ! is_numeric($data['area_id'])) {
                                     $area = Area::query()->where('code', $data['area_id'])->first();
                                     $data['area_id'] = $area?->id;
                                 }
+                                if (empty($data['area_id']) && ! empty($areas)) {
+                                    $data['area_id'] = $areas[0];
+                                }
                                 $location = Location::create($data);
+                                if (! empty($areas)) {
+                                    $location->areas()->sync($areas);
+                                }
 
                                 return $location->id;
                             })

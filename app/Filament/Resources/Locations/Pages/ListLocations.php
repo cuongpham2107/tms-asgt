@@ -38,13 +38,10 @@ class ListLocations extends ListRecords
         return [
             CreateAction::make()
                 ->label('Tạo địa điểm')
-                ->using(function (array $data): Location {
-                    if (! empty($data['area_id']) && ! is_numeric($data['area_id'])) {
-                        $area = Area::query()->where('code', $data['area_id'])->first();
-                        $data['area_id'] = $area?->id;
+                ->after(function (Location $record) {
+                    if (! $record->area_id && $record->areas()->exists()) {
+                        $record->updateQuietly(['area_id' => $record->areas()->first()?->id]);
                     }
-
-                    return Location::create($data);
                 }),
         ];
     }
@@ -79,7 +76,10 @@ class ListLocations extends ListRecords
         return $query
             ->when(
                 $this->areaFilter !== 'all',
-                fn (Builder $q) => $q->whereHas('area', fn ($q) => $q->where('code', $this->areaFilter)),
+                fn (Builder $q) => $q->where(function ($sq) {
+                    $sq->whereHas('areas', fn ($asq) => $asq->where('code', $this->areaFilter))
+                        ->orWhereHas('area', fn ($asq) => $asq->where('code', $this->areaFilter));
+                }),
             );
     }
 }

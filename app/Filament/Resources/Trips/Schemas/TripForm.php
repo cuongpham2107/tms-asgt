@@ -92,7 +92,10 @@ class TripForm
                                     return [];
                                 }
 
-                                return Location::where('area_id', $areaId)->pluck('code', 'id')->toArray();
+                                return Location::where(function ($q) use ($areaId) {
+                                    $q->whereHas('areas', fn ($sq) => $sq->where('areas.id', $areaId))
+                                        ->orWhere('area_id', $areaId);
+                                })->pluck('code', 'id')->toArray();
                             })
                             ->preload()
                             ->searchable()

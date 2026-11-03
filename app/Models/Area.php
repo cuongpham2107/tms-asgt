@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Area extends Model
@@ -30,7 +31,12 @@ class Area extends Model
         return $this->hasMany(Order::class, 'area_id');
     }
 
-    public function locations(): HasMany
+    public function locations(): BelongsToMany
+    {
+        return $this->belongsToMany(Location::class, 'area_location')->withTimestamps();
+    }
+
+    public function primaryLocations(): HasMany
     {
         return $this->hasMany(Location::class, 'area_id');
     }

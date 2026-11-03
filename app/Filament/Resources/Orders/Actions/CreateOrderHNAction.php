@@ -83,14 +83,27 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
                         ->createOptionUsing(function (array $data, Get $get): int {
                             $areaId = $data['area_id'] ?? $get('area_id');
+                            $areas = $data['areas'] ?? [];
+                            if (empty($areas) && $areaId) {
+                                $areas = [(int) $areaId];
+                            }
+                            unset($data['areas']);
+
                             if (is_string($areaId) && ! is_numeric($areaId)) {
                                 $area = Area::query()->where('code', $areaId)->first();
                                 $areaId = $area?->id;
                             }
 
-                            return Location::create(array_merge($data, [
+                            $location = Location::create(array_merge($data, [
+                                'area_id' => $areaId ? (int) $areaId : ($areas[0] ?? null),
                                 'is_active' => true,
-                            ]))->getKey();
+                            ]));
+
+                            if (! empty($areas)) {
+                                $location->areas()->sync($areas);
+                            }
+
+                            return $location->getKey();
                         })
                         ->columnSpan(['default' => 1, 'sm' => 2, 'md' => 2]),
                     // TextInput::make('pickup_contact')

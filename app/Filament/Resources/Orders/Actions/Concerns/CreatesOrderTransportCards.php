@@ -805,7 +805,10 @@ abstract class CreatesOrderTransportCards
             return Location::query()
                 ->select(['locations.id', 'locations.code'])
                 ->where('locations.is_active', true)
-                ->when($resolvedAreaId, fn ($query, $id) => $query->where('locations.area_id', $id))
+                ->when($resolvedAreaId, fn ($query, $id) => $query->where(function ($q) use ($id) {
+                    $q->whereHas('areas', fn ($sq) => $sq->where('areas.id', $id))
+                        ->orWhere('locations.area_id', $id);
+                }))
                 ->orderBy('locations.code', 'asc')
                 ->pluck('locations.code', 'locations.id')
                 ->toArray();
@@ -897,7 +900,14 @@ abstract class CreatesOrderTransportCards
 
                     if (filled($currentAreaId)) {
                         $location = (clone $query)
-                            ->where('locations.area_id', $currentAreaId)
+                            ->where(function ($q) use ($currentAreaId) {
+                                $q->whereExists(function ($sq) use ($currentAreaId) {
+                                    $sq->select(DB::raw(1))
+                                        ->from('area_location')
+                                        ->whereColumn('area_location.location_id', 'locations.id')
+                                        ->where('area_location.area_id', $currentAreaId);
+                                })->orWhere('locations.area_id', $currentAreaId);
+                            })
                             ->select(['locations.id', 'locations.area_id'])
                             ->first();
                     }
@@ -991,16 +1001,28 @@ abstract class CreatesOrderTransportCards
                             ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('../../area_id') ?? $get('area_id'))->getComponents())
                             ->createOptionUsing(function (array $data, Get $get): int {
                                 $areaId = $data['area_id'] ?? $get('../../area_id') ?? $get('area_id');
+                                $areas = $data['areas'] ?? [];
+                                if (empty($areas) && $areaId) {
+                                    $areas = [(int) $areaId];
+                                }
+                                unset($data['areas']);
+
                                 if (is_string($areaId) && ! is_numeric($areaId)) {
                                     $area = Area::query()->where('code', $areaId)->first();
                                     $areaId = $area?->id;
                                 }
 
-                                return Location::create(array_merge($data, [
-                                    'area_id' => $areaId ? (int) $areaId : null,
+                                $location = Location::create(array_merge($data, [
+                                    'area_id' => $areaId ? (int) $areaId : ($areas[0] ?? null),
                                     'loc_type' => $data['loc_type'] ?? LocationType::Delivery->value,
                                     'is_active' => true,
-                                ]))->getKey();
+                                ]));
+
+                                if (! empty($areas)) {
+                                    $location->areas()->sync($areas);
+                                }
+
+                                return $location->getKey();
                             }),
                         // TextInput::make('contact_person')
                         //     ->label('Người nhận')

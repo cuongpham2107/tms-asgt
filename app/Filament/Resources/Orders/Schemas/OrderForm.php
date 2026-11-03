@@ -106,7 +106,14 @@ class OrderForm extends CreatesOrderTransportCards
 
                                             if (filled($currentAreaId)) {
                                                 $firstLocation = (clone $query)
-                                                    ->where('locations.area_id', $currentAreaId)
+                                                    ->where(function ($q) use ($currentAreaId) {
+                                                        $q->whereExists(function ($sq) use ($currentAreaId) {
+                                                            $sq->select(DB::raw(1))
+                                                                ->from('area_location')
+                                                                ->whereColumn('area_location.location_id', 'locations.id')
+                                                                ->where('area_location.area_id', $currentAreaId);
+                                                        })->orWhere('locations.area_id', $currentAreaId);
+                                                    })
                                                     ->select(['locations.id', 'locations.area_id'])
                                                     ->first();
                                             }
@@ -265,7 +272,10 @@ class OrderForm extends CreatesOrderTransportCards
                                                         modifyQueryUsing: fn (Builder $query, Get $get) => $query
                                                             ->where(function (Builder $q) use ($get) {
                                                                 $q->where('is_active', true)
-                                                                    ->when($get('../../area_id'), fn ($q, $areaId) => $q->where('area_id', $areaId));
+                                                                    ->when($get('../../area_id'), fn ($q, $areaId) => $q->where(function ($sq) use ($areaId) {
+                                                                        $sq->whereHas('areas', fn ($asq) => $asq->where('areas.id', $areaId))
+                                                                            ->orWhere('locations.area_id', $areaId);
+                                                                    }));
                                                             })
                                                             ->when($get('location_id'), fn ($q, $id) => $q->orWhere('id', $id))
                                                     )

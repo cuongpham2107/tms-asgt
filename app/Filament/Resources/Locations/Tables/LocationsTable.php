@@ -18,8 +18,9 @@ class LocationsTable extends BaseTable
     {
         return parent::applyDefaults($table)
             ->columns([
-                TextColumn::make('area.code')
+                TextColumn::make('areas.code')
                     ->label('Khu vực')
+                    ->badge()
                     ->searchable(),
                 TextColumn::make('code')
                     ->label('Mã')

@@ -34,7 +34,10 @@ class LocationController extends Controller
             });
         }
         if (filled($area_id)) {
-            $query->where('area_id', $area_id);
+            $query->where(function ($q) use ($area_id) {
+                $q->whereHas('areas', fn ($sq) => $sq->where('areas.id', $area_id))
+                    ->orWhere('locations.area_id', $area_id);
+            });
         }
         // Sắp theo mã để phân trang ổn định (cuộn tải thêm không lặp/thiếu điểm)
         $locations = $query->orderBy('code')->orderBy('id')->paginate($limit);

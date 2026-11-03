@@ -25,46 +25,37 @@ class LocationForm
     {
         return $schema
             ->components([
-                Select::make('area_id')
-                    ->label('Khu vực')
-                    ->options(function (): array {
-                        return Area::query()
-                            ->where('is_active', true)
-                            ->select(['code', 'name'])
-                            ->get()
-                            ->unique('code')
-                            ->mapWithKeys(fn (Area $area): array => [
-                                $area->code => "{$area->code} - {$area->name}",
-                            ])
-                            ->toArray();
-                    })
-                    ->formatStateUsing(function ($state) {
-                        if (is_numeric($state)) {
-                            return Area::query()->find($state)?->code;
-                        }
-
-                        return $state;
-                    })
-                    ->dehydrateStateUsing(function ($state) {
-                        if (is_string($state) && ! is_numeric($state)) {
-                            return Area::query()->where('code', $state)->first()?->id;
-                        }
-
-                        return $state;
-                    })
-                    ->default(function () use ($defaultAreaId) {
+                Select::make('areas')
+                    ->label('Khu vực áp dụng')
+                    ->relationship('areas', 'name')
+                    ->getOptionLabelFromRecordUsing(fn (Area $record): string => "{$record->code} - {$record->name}")
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->native(false)
+                    ->required()
+                    ->default(function () use ($defaultAreaId): array {
                         $val = value($defaultAreaId);
 
-                        if (is_numeric($val)) {
-                            return Area::query()->find($val)?->code;
+                        if (blank($val)) {
+                            return [];
                         }
 
-                        return $val;
+                        if (is_array($val)) {
+                            return array_values(array_filter(array_map(function ($item) {
+                                return is_numeric($item) ? (int) $item : Area::query()->where('code', $item)->value('id');
+                            }, $val)));
+                        }
+
+                        if (is_numeric($val)) {
+                            return [(int) $val];
+                        }
+
+                        $id = Area::query()->where('code', $val)->value('id');
+
+                        return $id ? [$id] : [];
                     })
-                    ->searchable()
-                    ->preload()
-                    ->native(false)
-                    ->required(),
+                    ->helperText('Chọn các khu vực được phép sử dụng địa điểm này (ví dụ: kho ALSC thuộc cả NBA và ASG).'),
                 TextInput::make('code')
                     ->label('Mã')
                     ->prefixIcon(Heroicon::OutlinedHashtag)

@@ -100,6 +100,11 @@ class Location extends Model
         return $this->belongsTo(Area::class, 'area_id');
     }
 
+    public function areas(): BelongsToMany
+    {
+        return $this->belongsToMany(Area::class, 'area_location')->withTimestamps();
+    }
+
     public function billingZone(): BelongsTo
     {
         return $this->belongsTo(BillingZone::class);
@@ -122,6 +127,9 @@ class Location extends Model
             if ($location->area_id) {
                 Cache::forget('location-options-'.$location->area_id);
             }
+            foreach ($location->areas()->pluck('areas.id') as $areaId) {
+                Cache::forget('location-options-'.$areaId);
+            }
             Cache::forget('active-locations-with-coords-v2');
         });
 
@@ -129,6 +137,9 @@ class Location extends Model
             Cache::forget('location-options-all');
             if ($location->area_id) {
                 Cache::forget('location-options-'.$location->area_id);
+            }
+            foreach ($location->areas()->pluck('areas.id') as $areaId) {
+                Cache::forget('location-options-'.$areaId);
             }
             Cache::forget('active-locations-with-coords-v2');
         });
