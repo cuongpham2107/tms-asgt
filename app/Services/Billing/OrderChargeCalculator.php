@@ -4,6 +4,7 @@ namespace App\Services\Billing;
 
 use App\Enums\CargoType;
 use App\Enums\CheckpointType;
+use App\Enums\FreightPricingMethod;
 use App\Models\FreightRate;
 use App\Models\Order;
 use App\Models\OrderCharge;
@@ -12,6 +13,7 @@ use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * Tính cước cho 1 đơn hàng ngoài và lưu vào order_charges.
@@ -63,10 +65,24 @@ class OrderChargeCalculator
         return $charge;
     }
 
+    public static function parseKgToTons(mixed $weight): ?float
+    {
+        if (blank($weight)) {
+            return null;
+        }
+        $clean = str_replace(',', '.', trim((string) $weight));
+        if (! is_numeric($clean)) {
+            return null;
+        }
+        $val = (float) $clean;
+
+        return $val > 0 ? $val / 1000 : null;
+    }
+
     /**
      * Tra lại đơn giá theo các giá trị đang sửa trên form (chưa lưu) — dùng để xem trước.
      *
-     * @param  array{cargo_type?: mixed, rate_type?: ?string, chargeable_tonnage?: mixed, is_return_trip?: mixed, return_trip_percent?: mixed}  $attributes
+     * @param  array{cargo_type?: mixed, rate_type?: ?string, chargeable_tonnage?: mixed, delivery_notes?: ?array, is_return_trip?: mixed, return_trip_percent?: mixed}  $attributes
      */
     public function previewFreightRate(Order $order, OrderCharge $charge, array $attributes): OrderCharge
     {
@@ -79,6 +95,7 @@ class OrderChargeCalculator
             'cargo_type' => $cargoType ?? $charge->cargo_type ?? $order->cargo_type ?? CargoType::Gcr,
             'rate_type' => (string) ($attributes['rate_type'] ?? ''),
             'chargeable_tonnage' => is_numeric($attributes['chargeable_tonnage'] ?? null) ? $attributes['chargeable_tonnage'] : null,
+            'delivery_notes' => $attributes['delivery_notes'] ?? $charge->delivery_notes ?? [],
             'is_return_trip' => (bool) ($attributes['is_return_trip'] ?? false),
             'return_trip_percent' => (float) ($attributes['return_trip_percent'] ?? 0),
         ]);
@@ -94,9 +111,40 @@ class OrderChargeCalculator
         $rate = $this->findFreightRate($order, $charge, $date);
         $charge->freight_rate_id = $rate?->id;
         $charge->price_code = $rate?->priceCode($charge->chargeable_tonnage);
-        $charge->base_price = $rate === null
-            ? null
-            : $rate->priceFor($charge->chargeable_tonnage) * ($charge->is_return_trip ? (float) $charge->return_trip_percent / 100 : 1);
+
+        if ($rate === null) {
+            $charge->base_price = null;
+
+            return;
+        }
+
+        $multiplier = $charge->is_return_trip ? (float) $charge->return_trip_percent / 100 : 1;
+
+        $validNotes = collect($charge->delivery_notes ?? [])
+            ->filter(fn ($n) => filled($n['chargeable_weight'] ?? null));
+
+        if ($rate->pricing_method === FreightPricingMethod::ByWeightRange && $validNotes->isNotEmpty()) {
+            $totalBase = 0;
+            $allMatched = true;
+
+            foreach ($validNotes as $note) {
+                $ton = self::parseKgToTons($note['chargeable_weight']);
+                $price = $ton !== null ? $rate->priceFor($ton) : null;
+                if ($price !== null) {
+                    $totalBase += $price;
+                } else {
+                    $allMatched = false;
+                }
+            }
+
+            $charge->base_price = $allMatched ? round($totalBase * $multiplier) : null;
+
+            return;
+        }
+
+        $charge->base_price = $rate->priceFor($charge->chargeable_tonnage) !== null
+            ? round($rate->priceFor($charge->chargeable_tonnage) * $multiplier)
+            : null;
     }
 
     /**
@@ -120,7 +168,10 @@ class OrderChargeCalculator
         $origin = $order->pickupLocation?->billing_zone_id;
         $destination = $order->deliveryPoints->sortBy('sequence')->first()?->location?->billing_zone_id;
 
-        if ($origin === null || $destination === null || $charge->chargeable_tonnage === null) {
+        $validNotes = collect($charge->delivery_notes ?? [])
+            ->filter(fn ($n) => filled($n['chargeable_weight'] ?? null));
+
+        if ($origin === null || $destination === null || ($charge->chargeable_tonnage === null && $validNotes->isEmpty())) {
             return null;
         }
 
@@ -150,7 +201,7 @@ class OrderChargeCalculator
                     ->effectiveOn($date)
                     ->orderByDesc('vehicle_type')
                     ->get()
-                    ->first(fn (FreightRate $rate): bool => $rate->priceFor($charge->chargeable_tonnage) !== null);
+                    ->first(fn (FreightRate $r): bool => $this->rateCanPrice($r, $charge, $validNotes));
 
                 if ($rate !== null) {
                     return $rate;
@@ -159,6 +210,19 @@ class OrderChargeCalculator
         }
 
         return null;
+    }
+
+    private function rateCanPrice(FreightRate $rate, OrderCharge $charge, Collection $validNotes): bool
+    {
+        if ($rate->pricing_method === FreightPricingMethod::ByWeightRange && $validNotes->isNotEmpty()) {
+            return $validNotes->every(function ($note) use ($rate): bool {
+                $ton = self::parseKgToTons($note['chargeable_weight']);
+
+                return $ton !== null && $rate->priceFor($ton) !== null;
+            });
+        }
+
+        return $charge->chargeable_tonnage !== null && $rate->priceFor($charge->chargeable_tonnage) !== null;
     }
 
     /**
@@ -323,6 +387,32 @@ class OrderChargeCalculator
             $cargoNote = ($charge->cargo_type !== null && $rate->cargo_type !== $charge->cargo_type)
                 ? ' (áp dụng giá hàng thường)'
                 : '';
+
+            $validNotes = collect($charge->delivery_notes ?? [])
+                ->filter(fn ($n) => filled($n['chargeable_weight'] ?? null));
+
+            if ($validNotes->isNotEmpty() && $rate->pricing_method === FreightPricingMethod::ByWeightRange) {
+                $parts = [];
+                $totalBase = 0;
+                foreach ($validNotes->values() as $idx => $n) {
+                    $kgStr = str_replace(',', '.', trim((string) $n['chargeable_weight']));
+                    $kg = (float) $kgStr;
+                    $ton = $kg / 1000;
+                    $p = $rate->priceFor($ton);
+                    $tier = $rate->matchedTier($ton);
+                    $label = $tier['label'] ?? ($rate->tonnageKey($ton).'T');
+                    $noteNum = filled($n['number'] ?? null) ? "Phiếu {$n['number']}" : 'Phiếu '.($idx + 1);
+                    $parts[] = "{$noteNum} (".number_format($kg, 0, ',', '.')." kg · {$label}: ".number_format((float) $p, 0, ',', '.').' đ)';
+                    $totalBase += (float) $p;
+                }
+
+                $multiplier = $charge->is_return_trip ? (float) $charge->return_trip_percent / 100 : 1;
+                $finalBase = round($totalBase * $multiplier);
+
+                return "{$direction}{$cargoNote}: ".implode(' + ', $parts)
+                    .($validNotes->count() > 1 ? ' = '.number_format($finalBase, 0, ',', '.').' đ' : '')
+                    .($charge->is_return_trip ? ' × '.(float) $charge->return_trip_percent.'% quay đầu' : '');
+            }
 
             return "{$direction} · {$tonnage}T{$cargoNote}: "
                 .number_format((float) $rate->priceFor($charge->chargeable_tonnage), 0, ',', '.').' đ'

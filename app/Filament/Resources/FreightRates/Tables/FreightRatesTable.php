@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\FreightRates\Tables;
 
 use App\Enums\CargoType;
+use App\Enums\FreightPricingMethod;
 use App\Enums\FreightRateType;
 use App\Filament\BaseTable;
 use App\Models\FreightRate;
@@ -31,6 +32,10 @@ class FreightRatesTable extends BaseTable
                 TextColumn::make('cargo_type')
                     ->label('Loại hàng')
                     ->badge(),
+                TextColumn::make('pricing_method')
+                    ->label('Phương thức')
+                    ->badge()
+                    ->toggleable(),
                 TextColumn::make('rate_type')
                     ->label('Loại hình')
                     ->placeholder('Chuẩn')
@@ -39,16 +44,24 @@ class FreightRatesTable extends BaseTable
                     ->label('Loại xe')
                     ->placeholder('Mọi loại')
                     ->toggleable(),
-                TextColumn::make('prices')
-                    ->label('Đơn giá theo trọng tải')
-                    ->state(fn (FreightRate $record): array => collect($record->prices)
-                        ->map(fn ($price, $tonnage): string => str_replace('.', ',', (string) $tonnage).'T: '.number_format((float) $price, 0, ',', '.'))
-                        ->values()
-                        ->all())
+                TextColumn::make('prices_display')
+                    ->label('Đơn giá áp dụng')
+                    ->state(function (FreightRate $record): array {
+                        if ($record->pricing_method === FreightPricingMethod::ByWeightRange && ! empty($record->range_prices)) {
+                            return collect($record->range_prices)
+                                ->map(fn ($tier): string => ($tier['label'] ?? "{$tier['from']}-{$tier['to']}T").': '.number_format((float) ($tier['price'] ?? 0), 0, ',', '.'))
+                                ->all();
+                        }
+
+                        return collect($record->prices)
+                            ->map(fn ($price, $tonnage): string => str_replace('.', ',', (string) $tonnage).'T: '.number_format((float) $price, 0, ',', '.'))
+                            ->values()
+                            ->all();
+                    })
                     ->badge()
-                    ->color('gray')
+                    ->color(fn (FreightRate $record): string => $record->pricing_method === FreightPricingMethod::ByWeightRange ? 'info' : 'gray')
                     ->wrap()
-                    ->width('22rem'),
+                    ->width('24rem'),
                 TextColumn::make('effective_from')
                     ->label('Từ ngày')
                     ->date('d/m/Y')
@@ -66,6 +79,9 @@ class FreightRatesTable extends BaseTable
                     ->relationship('customer', 'code')
                     ->searchable()
                     ->preload(),
+                SelectFilter::make('pricing_method')
+                    ->label('Phương thức tính giá')
+                    ->options(FreightPricingMethod::class),
                 SelectFilter::make('cargo_type')
                     ->label('Loại hàng')
                     ->options(CargoType::class),

@@ -4,12 +4,16 @@ namespace App\Services\Export;
 
 use App\Enums\CargoType;
 use App\Enums\CheckpointType;
+use App\Enums\FreightPricingMethod;
 use App\Enums\OrderType;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
 use App\Models\FeeType;
+use App\Models\FreightRate;
 use App\Models\Order;
+use App\Models\OrderCharge;
 use App\Models\Trip;
+use App\Services\Billing\OrderChargeCalculator;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -729,7 +733,7 @@ class TripExcelExportService
             'Hàng quay đầu',
         ];
 
-        EloquentCollection::make($externalOrders->all())->load('charge.fees');
+        EloquentCollection::make($externalOrders->all())->load(['charge.fees', 'charge.freightRate']);
         $feeTypes = FeeType::query()->orderBy('sort')->get();
         $headers = [
             ...$headers,
@@ -852,7 +856,8 @@ class TripExcelExportService
     /**
      * Ghi các cột cước (từ cột U) cho 1 đơn hàng ngoài. Phiếu giao hàng đầu tiên nằm ở dòng gốc;
      * mỗi phiếu tách thêm sinh 1 dòng mới chép nguyên cột A–T của dòng gốc, chỉ khác số phiếu và trọng lượng.
-     * Tiền cước chỉ ghi ở dòng gốc để cộng tổng bảng kê không bị nhân đôi.
+     * Tiền cước chỉ ghi ở dòng gốc để cộng tổng bảng kê không bị nhân đôi (với loại tính giá theo xe).
+     * Riêng cước theo khoảng trọng tải (VFC): mỗi phiếu có đơn giá riêng theo bậc trọng tải của phiếu đó.
      *
      * @param  Collection<int, FeeType>  $feeTypes
      * @return int dòng trống kế tiếp
@@ -865,44 +870,145 @@ class TripExcelExportService
             return $nextRow;
         }
 
+        $rate = $charge->freightRate;
+        $isWeightRangeRate = ($rate !== null && $rate->pricing_method === FreightPricingMethod::ByWeightRange);
+
         $notes = array_values($charge->delivery_notes ?: [[]]);
-        $this->writeChargeColumns($sheet, $firstRow, $order, $feeTypes, $notes[0], withMoney: true);
+        $firstNote = $notes[0] ?? [];
+
+        if ($isWeightRangeRate) {
+            $firstTon = OrderChargeCalculator::parseKgToTons($firstNote['chargeable_weight'] ?? null);
+            if ($firstTon !== null) {
+                $sheet->setCellValue("I{$firstRow}", $firstTon);
+            }
+            $firstBasePrice = $this->calculateNoteBasePrice($rate, $charge, $firstTon, isSingle: count($notes) <= 1);
+            $firstPriceCode = $firstTon !== null ? $rate->priceCode($firstTon) : ($charge->price_code ?? '');
+
+            $this->writeChargeColumns(
+                sheet: $sheet,
+                row: $firstRow,
+                order: $order,
+                feeTypes: $feeTypes,
+                note: $firstNote,
+                withMoney: true,
+                customBasePrice: $firstBasePrice,
+                customPriceCode: $firstPriceCode,
+                isFirstNote: true,
+            );
+        } else {
+            $this->writeChargeColumns($sheet, $firstRow, $order, $feeTypes, $firstNote, withMoney: true);
+        }
 
         $orderColumns = $sheet->rangeToArray("A{$firstRow}:T{$firstRow}", null, false, false);
         foreach (array_slice($notes, 1) as $note) {
             $sheet->fromArray($orderColumns, null, "A{$nextRow}", true);
-            $this->writeChargeColumns($sheet, $nextRow, $order, $feeTypes, $note, withMoney: false);
+
+            if ($isWeightRangeRate) {
+                $noteTon = OrderChargeCalculator::parseKgToTons($note['chargeable_weight'] ?? null);
+                if ($noteTon !== null) {
+                    $sheet->setCellValue("I{$nextRow}", $noteTon);
+                }
+                $noteBasePrice = $this->calculateNoteBasePrice($rate, $charge, $noteTon, isSingle: false);
+                $notePriceCode = $noteTon !== null ? $rate->priceCode($noteTon) : ($charge->price_code ?? '');
+
+                $this->writeChargeColumns(
+                    sheet: $sheet,
+                    row: $nextRow,
+                    order: $order,
+                    feeTypes: $feeTypes,
+                    note: $note,
+                    withMoney: true,
+                    customBasePrice: $noteBasePrice,
+                    customPriceCode: $notePriceCode,
+                    isFirstNote: false,
+                );
+            } else {
+                $this->writeChargeColumns($sheet, $nextRow, $order, $feeTypes, $note, withMoney: false);
+            }
+
             $nextRow++;
         }
 
         return $nextRow;
     }
 
+    protected function calculateNoteBasePrice(FreightRate $rate, OrderCharge $charge, ?float $noteTon, bool $isSingle = false): ?float
+    {
+        if ($noteTon === null) {
+            return $isSingle && $charge->base_price !== null ? (float) $charge->base_price : null;
+        }
+
+        $tierPrice = $rate->priceFor($noteTon);
+        if ($tierPrice === null) {
+            return $isSingle && $charge->base_price !== null ? (float) $charge->base_price : null;
+        }
+
+        $multiplier = $charge->is_return_trip ? (float) $charge->return_trip_percent / 100 : 1;
+
+        return round($tierPrice * $multiplier);
+    }
+
     /**
      * @param  Collection<int, FeeType>  $feeTypes
      * @param  array{number?: ?string, actual_weight?: ?float, chargeable_weight?: ?float}  $note
      */
-    protected function writeChargeColumns(Worksheet $sheet, int $row, Order $order, Collection $feeTypes, array $note, bool $withMoney): void
-    {
+    protected function writeChargeColumns(
+        Worksheet $sheet,
+        int $row,
+        Order $order,
+        Collection $feeTypes,
+        array $note,
+        bool $withMoney,
+        ?float $customBasePrice = null,
+        ?string $customPriceCode = null,
+        bool $isFirstNote = true,
+    ): void {
         $charge = $order->charge;
         $feeAmounts = $charge->fees->pluck('amount', 'fee_type_id');
         $money = fn ($value): float|string => (! $withMoney || $value === null) ? '' : (float) $value;
-        $weight = fn ($value): float|string => $value === null || $value === '' ? '' : (float) $value;
+        $weight = function ($value): float|string {
+            if ($value === null || $value === '') {
+                return '';
+            }
+            $clean = str_replace(',', '.', trim((string) $value));
+
+            return is_numeric($clean) ? (float) $clean : '';
+        };
+
+        $priceCode = $customPriceCode ?? ($charge->price_code ?? '');
+        $basePrice = $customBasePrice ?? ($charge->base_price !== null ? (float) $charge->base_price : null);
+
+        if ($customBasePrice !== null) {
+            $fuelPercent = (float) $charge->fuel_adjustment_percent;
+            $adjustedPrice = round($basePrice * (1 + $fuelPercent / 100), -3);
+            $waitingFee = $isFirstNote ? (float) $charge->waiting_fee : 0;
+            $otherFees = $isFirstNote ? (float) $charge->other_fees_total : 0;
+            $subtotal = (float) $adjustedPrice + $waitingFee + $otherFees;
+            $vatPercent = (float) $charge->vat_percent;
+            $vatAmount = round($subtotal * $vatPercent / 100);
+            $total = $subtotal + $vatAmount;
+        } else {
+            $adjustedPrice = $charge->adjusted_price;
+            $waitingFee = $charge->waiting_fee;
+            $subtotal = $charge->subtotal;
+            $vatAmount = $charge->vat_amount;
+            $total = $charge->total;
+        }
 
         $values = [
-            $charge->price_code ?? '',
+            $priceCode,
             $charge->rate_type,
             $charge->surcharge_type,
-            $withMoney ? $charge->waiting_minutes : '',
-            $money($charge->base_price),
+            ($withMoney && $isFirstNote) ? $charge->waiting_minutes : '',
+            $money($basePrice),
             $withMoney ? (float) $charge->fuel_adjustment_percent : '',
-            $money($charge->adjusted_price),
-            $money($charge->waiting_fee),
-            ...$feeTypes->map(fn (FeeType $feeType): float|string => $money($feeAmounts->get($feeType->id))),
-            $money($charge->subtotal),
+            $money($adjustedPrice),
+            ($withMoney && $isFirstNote) ? $money($waitingFee) : '',
+            ...$feeTypes->map(fn (FeeType $feeType): float|string => ($withMoney && $isFirstNote) ? $money($feeAmounts->get($feeType->id)) : ''),
+            $money($subtotal),
             $withMoney ? (float) $charge->vat_percent : '',
-            $money($charge->vat_amount),
-            $money($charge->total),
+            $money($vatAmount),
+            $money($total),
             $note['number'] ?? '',
             $weight($note['actual_weight'] ?? null),
             $weight($note['chargeable_weight'] ?? null),

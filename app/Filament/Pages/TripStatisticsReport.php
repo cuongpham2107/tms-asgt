@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Enums\CargoType;
 use App\Enums\CheckpointType;
+use App\Enums\FreightPricingMethod;
 use App\Enums\FreightRateType;
 use App\Enums\OrderType;
 use App\Enums\SurchargeType;
@@ -608,11 +609,18 @@ class TripStatisticsReport extends Page
 
                 $charge->fill(Arr::only($data, self::EDITABLE_CHARGE_FIELDS));
                 $charge->delivery_notes = collect($data['delivery_notes'] ?? [])
-                    ->map(fn (array $note): array => [
-                        'number' => filled($note['number'] ?? null) ? trim($note['number']) : null,
-                        'actual_weight' => is_numeric($note['actual_weight'] ?? null) ? (float) $note['actual_weight'] : null,
-                        'chargeable_weight' => is_numeric($note['chargeable_weight'] ?? null) ? (float) $note['chargeable_weight'] : null,
-                    ])
+                    ->map(function (array $note): array {
+                        $raw = $note['chargeable_weight'] ?? null;
+                        $clean = $raw !== null ? str_replace(',', '.', trim((string) $raw)) : null;
+                        $act = $note['actual_weight'] ?? null;
+                        $actClean = $act !== null ? str_replace(',', '.', trim((string) $act)) : null;
+
+                        return [
+                            'number' => filled($note['number'] ?? null) ? trim($note['number']) : null,
+                            'actual_weight' => is_numeric($actClean) ? (float) $actClean : null,
+                            'chargeable_weight' => is_numeric($clean) ? (float) $clean : null,
+                        ];
+                    })
                     ->values()
                     ->all();
                 foreach (['return_trip_percent', 'fuel_adjustment_percent', 'vat_percent', 'waiting_minutes', 'waiting_fee'] as $field) {
@@ -693,11 +701,18 @@ class TripStatisticsReport extends Page
             }
             if (array_key_exists('delivery_notes', $formData) && is_array($formData['delivery_notes'])) {
                 $charge->delivery_notes = collect($formData['delivery_notes'])
-                    ->map(fn (array $note): array => [
-                        'number' => filled($note['number'] ?? null) ? trim($note['number']) : null,
-                        'actual_weight' => is_numeric($note['actual_weight'] ?? null) ? (float) $note['actual_weight'] : null,
-                        'chargeable_weight' => is_numeric($note['chargeable_weight'] ?? null) ? (float) $note['chargeable_weight'] : null,
-                    ])
+                    ->map(function (array $note): array {
+                        $raw = $note['chargeable_weight'] ?? null;
+                        $clean = $raw !== null ? str_replace(',', '.', trim((string) $raw)) : null;
+                        $act = $note['actual_weight'] ?? null;
+                        $actClean = $act !== null ? str_replace(',', '.', trim((string) $act)) : null;
+
+                        return [
+                            'number' => filled($note['number'] ?? null) ? trim($note['number']) : null,
+                            'actual_weight' => is_numeric($actClean) ? (float) $actClean : null,
+                            'chargeable_weight' => is_numeric($clean) ? (float) $clean : null,
+                        ];
+                    })
                     ->values()
                     ->all();
             }
@@ -947,8 +962,12 @@ class TripStatisticsReport extends Page
                     'destination_zone_id' => $existingRate?->destination_zone_id ?? $dZone,
                     'cargo_type' => $existingRate?->cargo_type ?? $charge?->cargo_type ?? CargoType::Gcr,
                     'rate_type' => $existingRate?->rate_type ?? $get('rate_type'),
+                    'pricing_method' => $existingRate?->pricing_method instanceof FreightPricingMethod
+                        ? $existingRate->pricing_method->value
+                        : ($existingRate?->pricing_method ?? FreightPricingMethod::ByVehicle->value),
                     'vehicle_type' => $existingRate?->vehicle_type,
                     'prices' => $prices,
+                    'range_prices' => $existingRate?->range_prices ?? [],
                     'notes' => $existingRate?->notes ?? ('Thêm từ modal cước đơn '.($order?->order_code ?? '')),
                 ];
             })
@@ -1005,15 +1024,31 @@ class TripStatisticsReport extends Page
 
         $money = fn (string $name, string $label): TextInput => self::moneyInput($name)->label($label);
 
-        // Đổi loại hình / trọng tải / quay đầu → tra lại đơn giá ngay trên form (chưa lưu).
+        // Đổi loại hình / trọng tải / phiếu giao hàng / quay đầu → tra lại đơn giá ngay trên form (chưa lưu).
         $refreshPrice = function (Get $get, Set $set, bool $notify = false) use (&$charge, $order): void {
             $charge ??= $order->charge ?? app(OrderChargeCalculator::class)->calculate($order);
             if ($charge === null || $charge->isLocked() || $order === null) {
                 return;
             }
 
+            $rawNotes = $get('delivery_notes') ?? [];
+            $validNotes = collect(is_array($rawNotes) ? $rawNotes : [])
+                ->filter(fn ($n): bool => filled($n['chargeable_weight'] ?? null))
+                ->map(function ($n): array {
+                    $raw = $n['chargeable_weight'];
+                    $clean = str_replace(',', '.', trim((string) $raw));
+
+                    return [
+                        'number' => $n['number'] ?? null,
+                        'chargeable_weight' => is_numeric($clean) ? (float) $clean : null,
+                    ];
+                })
+                ->filter(fn ($n): bool => $n['chargeable_weight'] !== null)
+                ->values();
+
             $tonnage = $get('chargeable_tonnage');
-            if (blank($tonnage)) {
+
+            if (blank($tonnage) && $validNotes->isEmpty()) {
                 $set('base_price', null);
                 $set('freight_rate_id', null);
                 $set('price_code', null);
@@ -1025,9 +1060,16 @@ class TripStatisticsReport extends Page
                 'cargo_type' => $get('cargo_type'),
                 'rate_type' => $get('rate_type'),
                 'chargeable_tonnage' => $tonnage,
+                'delivery_notes' => $validNotes->all(),
                 'is_return_trip' => $get('is_return_trip'),
                 'return_trip_percent' => $get('return_trip_percent'),
             ]);
+
+            $matchedRate = $draft->freight_rate_id ? FreightRate::find($draft->freight_rate_id) : null;
+            if ($matchedRate?->pricing_method === FreightPricingMethod::ByWeightRange && $validNotes->isNotEmpty()) {
+                $totalKg = $validNotes->sum('chargeable_weight');
+                $set('chargeable_tonnage', round($totalKg / 1000, 3));
+            }
 
             $set('base_price', $draft->base_price);
             $set('freight_rate_id', $draft->freight_rate_id);
@@ -1133,16 +1175,34 @@ class TripStatisticsReport extends Page
                                     ->hiddenLabel()
                                     ->table([
                                         TableColumn::make('Số phiếu giao hàng'),
-                                        TableColumn::make('Trọng lượng hàng thực tế (kg)'),
                                         TableColumn::make('Trọng lượng tính tiền (kg)'),
                                     ])
                                     ->compact()
                                     ->defaultItems(1)
                                     ->addActionLabel('Tách phiếu')
+                                    ->live()
+                                    ->afterStateUpdated(function (Get $get, Set $set) use ($refreshPrice, $refreshWaiting): void {
+                                        $refreshPrice($get, $set, notify: true);
+                                        $refreshWaiting($get, $set);
+                                    })
                                     ->schema([
-                                        TextInput::make('number'),
-                                        TextInput::make('actual_weight')->numeric()->minValue(0),
-                                        TextInput::make('chargeable_weight')->numeric()->minValue(0),
+                                        TextInput::make('number')
+                                            ->placeholder('VD: DN01'),
+                                        TextInput::make('chargeable_weight')
+                                            ->placeholder('VD: 4232 hoặc 4123.232')
+                                            ->inputMode('decimal')
+                                            ->extraInputAttributes([
+                                                'x-on:input' => "event.target.value = event.target.value.replace(/[^0-9.,]/g, '')",
+                                            ])
+                                            ->rules(['nullable', 'regex:/^[0-9]+([.,][0-9]+)?$/'])
+                                            ->validationMessages([
+                                                'regex' => 'Trọng lượng chỉ được nhập số hoặc số thập phân (VD: 4232 hoặc 4123.232).',
+                                            ])
+                                            ->live(debounce: 500)
+                                            ->afterStateUpdated(function (Get $get, Set $set) use ($refreshPrice, $refreshWaiting): void {
+                                                $refreshPrice($get, $set, notify: true);
+                                                $refreshWaiting($get, $set);
+                                            }),
                                     ]),
                             ]),
                         Section::make('Đơn giá & giờ chờ')
@@ -1203,6 +1263,7 @@ class TripStatisticsReport extends Page
         $priceNote = fn (Get $get): ?string => $charge === null || $order === null ? null : $calculator->explainPrice($order, (clone $charge)->fill([
             'rate_type' => (string) $get('rate_type'),
             'chargeable_tonnage' => is_numeric($get('chargeable_tonnage')) ? $get('chargeable_tonnage') : null,
+            'delivery_notes' => $get('delivery_notes') ?? [],
             'is_return_trip' => (bool) $get('is_return_trip'),
             'return_trip_percent' => (float) $get('return_trip_percent'),
         ]), filled($get('freight_rate_id')) ? (int) $get('freight_rate_id') : null);
@@ -1298,86 +1359,86 @@ class TripStatisticsReport extends Page
         }
 
         $sections[] = Section::make('Mốc thời gian')
-                ->icon(Heroicon::OutlinedClock)
-                ->iconColor('info')
-                ->compact()
-                ->disabled(fn (): bool => (bool) $charge?->isLocked())
-                ->schema([
-                    DateTimePicker::make('summary_requested_at')
-                        ->label('Yêu cầu')
-                        ->prefixIcon(Heroicon::OutlinedCalendarDays)
-                        ->displayFormat('H:i d/m/Y')
-                        ->seconds(false)
-                        ->native(false),
-                    DateTimePicker::make('summary_loading_at')
+            ->icon(Heroicon::OutlinedClock)
+            ->iconColor('info')
+            ->compact()
+            ->disabled(fn (): bool => (bool) $charge?->isLocked())
+            ->schema([
+                DateTimePicker::make('summary_requested_at')
+                    ->label('Yêu cầu')
+                    ->prefixIcon(Heroicon::OutlinedCalendarDays)
+                    ->displayFormat('H:i d/m/Y')
+                    ->seconds(false)
+                    ->native(false),
+                DateTimePicker::make('summary_loading_at')
+                    ->label('Đóng hàng')
+                    ->prefixIcon(Heroicon::OutlinedArrowDownTray)
+                    ->prefixIconColor('info')
+                    ->displayFormat('H:i d/m/Y')
+                    ->seconds(false)
+                    ->native(false)
+                    ->live(onBlur: true)
+                    ->afterStateUpdated($refreshWaiting),
+                DateTimePicker::make('summary_departed_at')
+                    ->label('Xe chạy')
+                    ->prefixIcon(Heroicon::OutlinedTruck)
+                    ->prefixIconColor('info')
+                    ->displayFormat('H:i d/m/Y')
+                    ->seconds(false)
+                    ->native(false)
+                    ->live(onBlur: true)
+                    ->afterStateUpdated($refreshWaiting),
+                DateTimePicker::make('summary_arrived_at')
+                    ->label('Đến nơi')
+                    ->prefixIcon(Heroicon::OutlinedMapPin)
+                    ->prefixIconColor('info')
+                    ->displayFormat('H:i d/m/Y')
+                    ->seconds(false)
+                    ->native(false)
+                    ->live(onBlur: true)
+                    ->afterStateUpdated($refreshWaiting),
+                DateTimePicker::make('summary_unloaded_at')
+                    ->label('Hạ hàng')
+                    ->prefixIcon(Heroicon::OutlinedArrowUpTray)
+                    ->prefixIconColor('info')
+                    ->displayFormat('H:i d/m/Y')
+                    ->seconds(false)
+                    ->native(false)
+                    ->live(onBlur: true)
+                    ->afterStateUpdated($refreshWaiting),
+                Grid::make(3)->schema([
+                    TextEntry::make('summary_loading_duration')
                         ->label('Đóng hàng')
-                        ->prefixIcon(Heroicon::OutlinedArrowDownTray)
-                        ->prefixIconColor('info')
-                        ->displayFormat('H:i d/m/Y')
-                        ->seconds(false)
-                        ->native(false)
-                        ->live(onBlur: true)
-                        ->afterStateUpdated($refreshWaiting),
-                    DateTimePicker::make('summary_departed_at')
-                        ->label('Xe chạy')
-                        ->prefixIcon(Heroicon::OutlinedTruck)
-                        ->prefixIconColor('info')
-                        ->displayFormat('H:i d/m/Y')
-                        ->seconds(false)
-                        ->native(false)
-                        ->live(onBlur: true)
-                        ->afterStateUpdated($refreshWaiting),
-                    DateTimePicker::make('summary_arrived_at')
-                        ->label('Đến nơi')
-                        ->prefixIcon(Heroicon::OutlinedMapPin)
-                        ->prefixIconColor('info')
-                        ->displayFormat('H:i d/m/Y')
-                        ->seconds(false)
-                        ->native(false)
-                        ->live(onBlur: true)
-                        ->afterStateUpdated($refreshWaiting),
-                    DateTimePicker::make('summary_unloaded_at')
+                        ->state(function (Get $get) use ($duration): string {
+                            $tA = $get('summary_loading_at') ? Carbon::parse($get('summary_loading_at')) : null;
+                            $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
+
+                            return $duration(($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : null);
+                        })
+                        ->badge()
+                        ->color('warning'),
+                    TextEntry::make('summary_travel_duration')
+                        ->label('Di chuyển')
+                        ->state(function (Get $get) use ($duration): string {
+                            $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
+                            $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
+
+                            return $duration(($tB && $tC) ? (int) abs($tC->diffInMinutes($tB)) : null);
+                        })
+                        ->badge()
+                        ->color('info'),
+                    TextEntry::make('summary_unloading_duration')
                         ->label('Hạ hàng')
-                        ->prefixIcon(Heroicon::OutlinedArrowUpTray)
-                        ->prefixIconColor('info')
-                        ->displayFormat('H:i d/m/Y')
-                        ->seconds(false)
-                        ->native(false)
-                        ->live(onBlur: true)
-                        ->afterStateUpdated($refreshWaiting),
-                    Grid::make(3)->schema([
-                        TextEntry::make('summary_loading_duration')
-                            ->label('Đóng hàng')
-                            ->state(function (Get $get) use ($duration): string {
-                                $tA = $get('summary_loading_at') ? Carbon::parse($get('summary_loading_at')) : null;
-                                $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
+                        ->state(function (Get $get) use ($duration): string {
+                            $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
+                            $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at')) : null;
 
-                                return $duration(($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : null);
-                            })
-                            ->badge()
-                            ->color('warning'),
-                        TextEntry::make('summary_travel_duration')
-                            ->label('Di chuyển')
-                            ->state(function (Get $get) use ($duration): string {
-                                $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
-                                $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
-
-                                return $duration(($tB && $tC) ? (int) abs($tC->diffInMinutes($tB)) : null);
-                            })
-                            ->badge()
-                            ->color('info'),
-                        TextEntry::make('summary_unloading_duration')
-                            ->label('Hạ hàng')
-                            ->state(function (Get $get) use ($duration): string {
-                                $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
-                                $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at')) : null;
-
-                                return $duration(($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null);
-                            })
-                            ->badge()
-                            ->color('warning'),
-                    ]),
-                ]);
+                            return $duration(($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null);
+                        })
+                        ->badge()
+                        ->color('warning'),
+                ]),
+            ]);
 
         if ($charge !== null && (bool) $order?->isExternal()) {
             $sections[] = Section::make('Tính giá')

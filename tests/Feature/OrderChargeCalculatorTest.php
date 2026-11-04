@@ -2,6 +2,7 @@
 
 use App\Enums\CargoType;
 use App\Enums\CheckpointType;
+use App\Enums\FreightPricingMethod;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -357,4 +358,103 @@ test('backfill command prices completed orders that had no rate yet and leaves t
         ->and((float) $noCharge->charge()->first()->base_price)->toBe(1_275_000.0)
         ->and((float) $manual->charge()->first()->base_price)->toBe(999_000.0)
         ->and($exported->charge()->first()->base_price)->toBeNull();
+});
+
+test('it calculates multi-note freight charges for weight range pricing method', function () {
+    $vfc = Customer::create(['code' => 'ASGS(VFC)', 'name' => 'VFC', 'is_active' => true]);
+    $ypZone = BillingZone::firstOrCreate(['code' => 'KCN YÊN PHONG'], ['name' => 'KCN Yên Phong, Bắc Ninh']);
+    $hpZone = BillingZone::firstOrCreate(['code' => 'HẢI PHÒNG'], ['name' => 'Các KCN Hải Phòng']);
+
+    $locYP = Location::create(['code' => 'YP', 'billing_zone_id' => $ypZone->id, 'name' => 'KCN Yên Phong', 'loc_type' => 'pickup', 'is_active' => true]);
+    $locHP = Location::create(['code' => 'HP', 'billing_zone_id' => $hpZone->id, 'name' => 'KCN Hải Phòng', 'loc_type' => 'delivery', 'is_active' => true]);
+
+    $vfcRate = FreightRate::create([
+        'customer_id' => $vfc->id,
+        'origin_zone_id' => $ypZone->id,
+        'destination_zone_id' => $hpZone->id,
+        'cargo_type' => CargoType::Gcr,
+        'rate_type' => '',
+        'pricing_method' => FreightPricingMethod::ByWeightRange,
+        'range_prices' => [
+            ['from' => 0, 'to' => 2, 'price' => 1_271_768, 'label' => 'Dưới 2T'],
+            ['from' => 2, 'to' => 3, 'price' => 1_447_740, 'label' => 'Từ 2T đến 3T'],
+            ['from' => 3, 'to' => 4, 'price' => 2_062_898, 'label' => 'Từ 3T đến 4T'],
+            ['from' => 4, 'to' => 7, 'price' => 2_682_969, 'label' => 'Từ 4T đến 7T'],
+        ],
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-VFC-01',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $vfc->id,
+        'trip_id' => $this->trip->id,
+        'pickup_location_id' => $locYP->id,
+        'cargo_type' => CargoType::Gcr,
+        'total_weight' => 10_000,
+        'chargeable_weight' => 10,
+        'status' => OrderStatus::Sent,
+        'created_by' => $this->user->id,
+    ]);
+
+    OrderDeliveryPoint::create(['order_id' => $order->id, 'location_id' => $locHP->id, 'sequence' => 1]);
+
+    $charge = OrderCharge::create([
+        'order_id' => $order->id,
+        'customer_id' => $vfc->id,
+        'cargo_type' => CargoType::Gcr,
+        'chargeable_tonnage' => 10,
+        'delivery_notes' => [
+            ['number' => 'DN01', 'chargeable_weight' => 7000],
+            ['number' => 'DN02', 'chargeable_weight' => '3000'],
+        ],
+    ]);
+
+    $calculator = app(OrderChargeCalculator::class);
+    $calculated = $calculator->calculate($order);
+
+    // 7T rơi vào "Từ 4T đến 7T" (2.682.969) + 3T rơi vào "Từ 3T đến 4T" (2.062.898) = 4.745.867 đ
+    expect((float) $calculated->base_price)->toBe(4_745_867.0);
+
+    $explanation = $calculator->explainPrice($order, $calculated, $vfcRate->id);
+    expect($explanation)->toContain('Phiếu DN01 (7.000 kg · Từ 4T đến 7T: 2.682.969 đ)')
+        ->and($explanation)->toContain('Phiếu DN02 (3.000 kg · Từ 3T đến 4T: 2.062.898 đ)')
+        ->and($explanation)->toContain('4.745.867 đ');
+});
+
+test('it handles decimal weight strings with comma and dot for weight range tiers', function () {
+    $vfc = Customer::firstOrCreate(['code' => 'ASGS(VFC)'], ['name' => 'VFC', 'is_active' => true]);
+    $ypZone = BillingZone::firstOrCreate(['code' => 'KCN YÊN PHONG'], ['name' => 'KCN Yên Phong, Bắc Ninh']);
+    $hpZone = BillingZone::firstOrCreate(['code' => 'HẢI PHÒNG'], ['name' => 'Các KCN Hải Phòng']);
+
+    $locYP = Location::firstOrCreate(['code' => 'YP'], ['billing_zone_id' => $ypZone->id, 'name' => 'KCN Yên Phong', 'loc_type' => 'pickup', 'is_active' => true]);
+    $locHP = Location::firstOrCreate(['code' => 'HP'], ['billing_zone_id' => $hpZone->id, 'name' => 'KCN Hải Phòng', 'loc_type' => 'delivery', 'is_active' => true]);
+
+    $rate = FreightRate::firstOrCreate([
+        'customer_id' => $vfc->id,
+        'origin_zone_id' => $ypZone->id,
+        'destination_zone_id' => $hpZone->id,
+    ], [
+        'cargo_type' => CargoType::Gcr,
+        'rate_type' => '',
+        'pricing_method' => FreightPricingMethod::ByWeightRange,
+        'range_prices' => [
+            ['from' => 0, 'to' => 2, 'price' => 1_271_768, 'label' => 'Dưới 2T'],
+            ['from' => 2, 'to' => 3, 'price' => 1_447_740, 'label' => 'Từ 2T đến 3T'],
+            ['from' => 3, 'to' => 4, 'price' => 2_062_898, 'label' => 'Từ 3T đến 4T'],
+            ['from' => 4, 'to' => 7, 'price' => 2_682_969, 'label' => 'Từ 4T đến 7T'],
+        ],
+    ]);
+
+    // 4123.232 kg = 4.123232 T -> rơi vào Từ 4T đến 7T (2.682.969)
+    expect($rate->priceFor(OrderChargeCalculator::parseKgToTons('4123.232')))->toBe(2_682_969.0);
+    expect($rate->priceFor(OrderChargeCalculator::parseKgToTons('4123,232')))->toBe(2_682_969.0);
+    // 3000 kg = 3T -> Từ 3T đến 4T
+    expect($rate->priceFor(OrderChargeCalculator::parseKgToTons('3000')))->toBe(2_062_898.0);
+    // 7000 kg = 7T -> Từ 4T đến 7T
+    expect($rate->priceFor(OrderChargeCalculator::parseKgToTons('7000')))->toBe(2_682_969.0);
+    // 1999 kg = 1.999T -> Dưới 2T
+    expect($rate->priceFor(OrderChargeCalculator::parseKgToTons('1999')))->toBe(1_271_768.0);
+    // 2000 kg = 2T -> Từ 2T đến 3T
+    expect($rate->priceFor(OrderChargeCalculator::parseKgToTons('2000')))->toBe(1_447_740.0);
 });
