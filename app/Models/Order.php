@@ -81,6 +81,16 @@ class Order extends Model implements HasTimeline
         ];
     }
 
+    public function isExternal(): bool
+    {
+        return $this->type === OrderType::External;
+    }
+
+    public function isHhhk(): bool
+    {
+        return $this->type === OrderType::Hhhk;
+    }
+
     public function area(): BelongsTo
     {
         return $this->belongsTo(Area::class);

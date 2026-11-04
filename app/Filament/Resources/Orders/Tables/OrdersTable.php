@@ -75,14 +75,16 @@ class OrdersTable extends BaseTable
                             </div>
                         HTML);
                     })
-                    ->html(),
+                    ->html()
+                    ->toggleable(),
 
                 TextColumn::make('status')
                     ->label('Trạng thái')
                     ->badge()
                     ->color(fn ($state): string => (is_object($state) && method_exists($state, 'getColor')) ? ($state->getColor() ?? 'gray') : 'gray')
                     ->icon(fn ($state): ?string => (is_object($state) && method_exists($state, 'getIcon')) ? $state->getIcon() : null)
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('transport_info')
                     ->label('Phương tiện / Lái xe')
                     ->state(fn (Order $record): string => $record->trip?->vehicle?->plate_number
@@ -90,24 +92,28 @@ class OrdersTable extends BaseTable
                         ?? '')
                     ->formatStateUsing(fn ($state, Order $record): HtmlString => self::renderTransportColumn($record))
                     ->html()
-                    ->hidden(fn (): bool => $type === 'plan'),
+                    ->hidden(fn (): bool => $type === 'plan')
+                    ->toggleable(),
                 TextColumn::make('customer.code')
                     ->label('Khách hàng')
                     ->weight('bold')
                     ->description(fn (Order $record): string => $record->cargo_name ?? '')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('route_timeline')
                     ->state(fn (Order $record): string => $record->order_code)
                     ->formatStateUsing(fn (Order $record): HtmlString => self::renderRouteTimeline($record))
                     ->label('Hành trình')
                     ->html()
-                    ->wrap(),
+                    ->wrap()
+                    ->toggleable(),
 
                 TextColumn::make('planned_loading_at')
                     ->label('Thời gian đóng hàng')
                     ->dateTime('H:i d/m/Y')
                     ->weight('bold')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('total_packages')
                     ->label('Tải trọng/Số kiện')
@@ -123,7 +129,8 @@ class OrdersTable extends BaseTable
                             HTML);
                     })
                     ->hidden(fn (): bool => $type === 'plan')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('chargeable_weight')
                     ->alignCenter()
                     ->label('Trọng tải tính cước')
@@ -138,19 +145,24 @@ class OrdersTable extends BaseTable
                     })
                     ->badge(fn (Order $record): bool => $record->type === OrderType::External && ($record->chargeable_weight === null || $record->chargeable_weight === ''))
                     ->color(fn (Order $record): ?string => ($record->type === OrderType::External && ($record->chargeable_weight === null || $record->chargeable_weight === '')) ? 'danger' : null)
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('notes')
                     ->label('Ghi chú')
-                    ->limit(50),
+                    ->limit(50)
+                    ->toggleable(),
                 ToggleColumn::make('is_return_trip')
-                    ->label('Chuyến quay đầu'),
+                    ->label('Chuyến quay đầu')
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->label('Ngày tạo')
                     ->dateTime('d/m/Y')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('createdBy.name')
                     ->label('Người tạo')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
                 TextColumn::make('updated_at')
                     ->label('Cập nhật')

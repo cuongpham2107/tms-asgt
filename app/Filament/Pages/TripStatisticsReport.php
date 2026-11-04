@@ -58,15 +58,15 @@ class TripStatisticsReport extends Page
 {
     use HasTripStatistics;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Tổng quan';
+    protected static string|UnitEnum|null $navigationGroup = 'Cước vận chuyển';
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-table-cells';
 
-    protected static ?string $navigationLabel = 'Thống kê';
+    protected static ?string $navigationLabel = 'Bảng kê';
 
     protected static ?string $title = 'Bảng thống kê tổng hợp các chuyến đã phục vụ';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 0;
 
     protected string $view = 'filament.pages.trip-statistics-report';
 
@@ -434,16 +434,36 @@ class TripStatisticsReport extends Page
         return Action::make('editCharge')
             ->label('Sửa cước')
             ->icon('heroicon-m-pencil-square')
-            ->modalHeading(fn (array $arguments): string => 'Cước đơn '.(Order::find($arguments['orderId'] ?? null)?->order_code ?? ''))
-            ->modalDescription(fn (array $arguments): ?string => $this->findCharge($arguments)?->isLocked()
-                ? 'Dòng cước đang ở trạng thái KHOÁ (đã xuất bảng kê). Nhấn "Mở khoá để sửa" bên dưới để tiếp tục chỉnh sửa.'
-                : 'Đổi loại hình / trọng tải tính cước xong hãy bấm "Tính lại giá" để tra lại đơn giá.')
-            ->modalWidth(Width::ScreenTwoExtraLarge)
+            ->modalHeading(function (array $arguments): string {
+                $order = Order::find($arguments['orderId'] ?? null);
+                $prefix = $order?->isExternal() ? 'Cước đơn ' : 'Mốc thời gian đơn ';
+
+                return $prefix.($order?->order_code ?? '');
+            })
+            ->modalDescription(function (array $arguments): ?string {
+                $order = Order::find($arguments['orderId'] ?? null);
+                if (! $order?->isExternal()) {
+                    return 'Chỉnh sửa các mốc thời gian thực tế của chuyến đi. Hệ thống sẽ tự động cập nhật thời lượng và các chỉ số liên quan.';
+                }
+
+                return $this->findCharge($arguments)?->isLocked()
+                    ? 'Dòng cước đang ở trạng thái KHOÁ (đã xuất bảng kê). Nhấn "Mở khoá để sửa" bên dưới để tiếp tục chỉnh sửa.'
+                    : 'Đổi loại hình / trọng tải tính cước xong hãy bấm "Tính lại giá" để tra lại đơn giá.';
+            })
+            ->modalWidth(function (array $arguments): Width {
+                $order = Order::find($arguments['orderId'] ?? null);
+
+                return $order?->isExternal() ? Width::ScreenTwoExtraLarge : Width::TwoExtraLarge;
+            })
             ->stickyModalHeader()
             ->stickyModalFooter()
-            ->modalSubmitActionLabel('Lưu cước')
+            ->modalSubmitActionLabel(function (array $arguments): string {
+                $order = Order::find($arguments['orderId'] ?? null);
+
+                return $order?->isExternal() ? 'Lưu cước' : 'Lưu thay đổi';
+            })
             ->modalSubmitAction(fn (Action $action, array $arguments): Action => $action
-                ->label('Lưu cước')
+                ->label(fn (): string => Order::find($arguments['orderId'] ?? null)?->isExternal() ? 'Lưu cước' : 'Lưu thay đổi')
                 ->icon('heroicon-m-check')
                 ->color('primary')
                 ->extraAttributes(['wire:key' => 'btn-save-charge-'.($this->findCharge($arguments)?->isLocked() ? 'locked' : 'unlocked')])
@@ -454,7 +474,7 @@ class TripStatisticsReport extends Page
                     ->label('Tính lại giá')
                     ->icon('heroicon-m-arrow-path')
                     ->color('info')
-                    ->visible(fn (): bool => ! (bool) $this->findCharge($arguments)?->isLocked())
+                    ->visible(fn (): bool => (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && ! (bool) $this->findCharge($arguments)?->isLocked())
                     ->action(function () use ($arguments): void {
                         $orderId = (int) ($arguments['orderId'] ?? 0);
                         $this->recalculateCharge($orderId);
@@ -465,7 +485,7 @@ class TripStatisticsReport extends Page
                     ->label('Mở khoá để sửa')
                     ->icon('heroicon-m-lock-open')
                     ->color('warning')
-                    ->visible(fn (): bool => (bool) $this->findCharge($arguments)?->isLocked())
+                    ->visible(fn (): bool => (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && (bool) $this->findCharge($arguments)?->isLocked())
                     ->requiresConfirmation()
                     ->modalHeading('Mở khoá dòng cước')
                     ->modalDescription('Mở khoá dòng cước đã xuất bảng kê để tiếp tục chỉnh sửa?')
@@ -480,7 +500,7 @@ class TripStatisticsReport extends Page
                     ->label('Khoá cước')
                     ->icon('heroicon-m-lock-closed')
                     ->color('gray')
-                    ->visible(fn (): bool => ! (bool) $this->findCharge($arguments)?->isLocked())
+                    ->visible(fn (): bool => (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && ! (bool) $this->findCharge($arguments)?->isLocked())
                     ->requiresConfirmation()
                     ->modalHeading('Khoá dòng cước')
                     ->modalDescription('Đánh dấu dòng cước này là đã xuất bảng kê (khoá chỉnh sửa)?')
@@ -494,31 +514,81 @@ class TripStatisticsReport extends Page
             ])
             ->fillForm(function (array $arguments): array {
                 $orderId = (int) ($arguments['orderId'] ?? 0);
-                $charge = $this->resolveCharge($orderId);
                 $order = Order::with(['trip', 'deliveryPoints', 'tripCheckpoints'])->find($orderId);
+                $charge = $order?->isExternal() ? $this->resolveCharge($orderId) : null;
                 $row = $order === null
                     ? []
                     : (app(TripExcelExportService::class)->getTripSummaryRowsFromOrders(Order::query()->whereKey($orderId))->firstWhere('order_id', $orderId) ?? []);
 
                 $formatTime = fn (mixed $value): ?string => $value instanceof Carbon ? $value->format('Y-m-d H:i:s') : ($value ? Carbon::parse($value)->format('Y-m-d H:i:s') : null);
 
-                return [
-                    ...$charge->only(self::EDITABLE_CHARGE_FIELDS),
-                    // Số thuần (bỏ ".00" của cột decimal) để mask tiền hiển thị "1,300,000".
-                    'base_price' => $charge->base_price === null ? null : (float) $charge->base_price,
-                    'waiting_fee' => (float) $charge->waiting_fee,
-                    'fees' => $this->feeRowsForForm($charge),
+                $data = [
+                    'total_packages' => $order?->total_packages,
+                    'total_weight' => $order?->total_weight !== null ? (float) $order->total_weight : null,
                     'summary_requested_at' => $formatTime($order?->planned_loading_at),
                     'summary_loading_at' => $formatTime($row['time_a'] ?? null),
                     'summary_departed_at' => $formatTime($row['time_b'] ?? null),
                     'summary_arrived_at' => $formatTime($row['time_c'] ?? null),
                     'summary_unloaded_at' => $formatTime($row['time_d'] ?? null),
                 ];
+
+                if ($charge !== null) {
+                    $data = [
+                        ...$data,
+                        ...$charge->only(self::EDITABLE_CHARGE_FIELDS),
+                        // Số thuần (bỏ ".00" của cột decimal) để mask tiền hiển thị "1,300,000".
+                        'base_price' => $charge->base_price === null ? null : (float) $charge->base_price,
+                        'waiting_fee' => (float) $charge->waiting_fee,
+                        'fees' => $this->feeRowsForForm($charge),
+                    ];
+                }
+
+                return $data;
             })
             ->schema(fn (array $arguments): array => $this->chargeFormSchema($this->findCharge($arguments), (int) ($arguments['orderId'] ?? 0)))
             ->action(function (array $data, array $arguments): void {
                 $orderId = (int) ($arguments['orderId'] ?? 0);
+                $order = Order::with('deliveryPoints')->find($orderId);
+
+                if ($order === null) {
+                    return;
+                }
+
+                if (array_key_exists('total_packages', $data)) {
+                    $order->total_packages = filled($data['total_packages']) ? max(0, (int) $data['total_packages']) : null;
+                }
+                if (array_key_exists('total_weight', $data)) {
+                    $order->total_weight = filled($data['total_weight']) ? max(0, round((float) $data['total_weight'], 2)) : null;
+                }
+                $order->save();
+
+                if ($order->deliveryPoints->count() === 1) {
+                    $dp = $order->deliveryPoints->first();
+                    if (array_key_exists('total_packages', $data)) {
+                        $dp->total_packages = $order->total_packages;
+                    }
+                    if (array_key_exists('total_weight', $data)) {
+                        $dp->total_weight = $order->total_weight;
+                    }
+                    $dp->save();
+                }
+
+                if (! $order->isExternal()) {
+                    $this->saveTimestamps($orderId, $data);
+
+                    $this->clearBaseRowsCache();
+                    $this->bumpDataVersion();
+
+                    Notification::make()->title('Đã lưu thay đổi')->success()->send();
+
+                    return;
+                }
+
                 $charge = $this->resolveCharge($orderId);
+
+                if ($charge === null) {
+                    return;
+                }
 
                 if ($charge->isLocked()) {
                     Notification::make()->title('Dòng cước đã khoá, không thể sửa')->warning()->send();
@@ -671,9 +741,12 @@ class TripStatisticsReport extends Page
         return OrderCharge::firstWhere('order_id', $arguments['orderId'] ?? null);
     }
 
-    private function resolveCharge(int $orderId): OrderCharge
+    private function resolveCharge(int $orderId): ?OrderCharge
     {
-        $order = Order::where('type', OrderType::External)->findOrFail($orderId);
+        $order = Order::find($orderId);
+        if ($order === null || ! $order->isExternal()) {
+            return null;
+        }
 
         return $order->charge ?? app(OrderChargeCalculator::class)->calculate($order);
     }
@@ -798,8 +871,13 @@ class TripStatisticsReport extends Page
 
     private function chargeFormSchema(?OrderCharge $charge, int $orderId): array
     {
-        $money = fn (string $name, string $label): TextInput => self::moneyInput($name)->label($label);
         $order = Order::find($orderId);
+
+        if ($order === null || ! $order->isExternal()) {
+            return $this->chargeSummarySchema($charge, $orderId, null, null);
+        }
+
+        $money = fn (string $name, string $label): TextInput => self::moneyInput($name)->label($label);
 
         // Đổi loại hình / trọng tải / quay đầu → tra lại đơn giá ngay trên form (chưa lưu).
         $refreshPrice = function (Get $get, Set $set) use ($charge): void {
@@ -997,7 +1075,7 @@ class TripStatisticsReport extends Page
         );
         $percent = fn (mixed $value): string => rtrim(rtrim(number_format((float) $value, 2, ',', '.'), '0'), ',').'%';
 
-        return [
+        $sections = [
             Section::make('Chuyến')
                 ->icon(Heroicon::OutlinedTruck)
                 ->iconColor('primary')
@@ -1020,6 +1098,27 @@ class TripStatisticsReport extends Page
                     $entry('summary_cargo_type', 'Loại hàng', Heroicon::OutlinedCube, $cargoType?->getLabel() ?? '—')
                         ->badge()
                         ->color($cargoType?->getColor() ?? 'gray'),
+                ]),
+            Section::make('Sản lượng hàng hoá')
+                ->icon(Heroicon::OutlinedCube)
+                ->iconColor('warning')
+                ->compact()
+                ->disabled(fn (): bool => (bool) $charge?->isLocked())
+                ->columns(2)
+                ->schema([
+                    TextInput::make('total_packages')
+                        ->label('Số kiện (PCS)')
+                        ->numeric()
+                        ->minValue(0)
+                        ->placeholder('0')
+                        ->prefixIcon(Heroicon::OutlinedSquare3Stack3d),
+                    TextInput::make('total_weight')
+                        ->label('Trọng lượng GW')
+                        ->numeric()
+                        ->minValue(0)
+                        ->placeholder('0.00')
+                        ->prefixIcon(Heroicon::OutlinedScale)
+                        ->suffix('kg'),
                 ]),
             Section::make('Mốc thời gian')
                 ->icon(Heroicon::OutlinedClock)
@@ -1102,7 +1201,10 @@ class TripStatisticsReport extends Page
                             ->color('warning'),
                     ]),
                 ]),
-            Section::make('Tính giá')
+        ];
+
+        if ($charge !== null && (bool) $order?->isExternal()) {
+            $sections[] = Section::make('Tính giá')
                 ->icon(Heroicon::OutlinedCalculator)
                 ->iconColor('success')
                 ->compact()
@@ -1123,8 +1225,9 @@ class TripStatisticsReport extends Page
                         ->weight(FontWeight::SemiBold),
                     $entry('summary_vat', 'VAT', Heroicon::OutlinedDocumentText, fn (Get $get): string => $money($totals($get)['vat_amount']))
                         ->helperText(fn (Get $get): string => 'Thuế suất '.$percent($get('vat_percent'))),
-                ]),
-            Section::make('Thanh toán')
+                ]);
+
+            $sections[] = Section::make('Thanh toán')
                 ->icon(Heroicon::OutlinedCheckBadge)
                 ->iconColor('primary')
                 ->compact()
@@ -1132,8 +1235,10 @@ class TripStatisticsReport extends Page
                     $entry('summary_total', 'Tổng thanh toán', Heroicon::OutlinedBanknotes, fn (Get $get): string => $money($totals($get)['total']), 'primary')
                         ->weight(FontWeight::Bold)
                         ->color('primary'),
-                ]),
-        ];
+                ]);
+        }
+
+        return $sections;
     }
 
     /**
