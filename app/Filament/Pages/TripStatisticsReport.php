@@ -1488,36 +1488,33 @@ class TripStatisticsReport extends Page
                 Grid::make(3)->schema([
                     TextEntry::make('summary_loading_duration')
                         ->label('Đóng hàng')
-                        ->inlineLabel()
+                        ->icon('heroicon-m-clock')
                         ->state(function (Get $get) use ($duration): string {
                             $tA = $get('summary_loading_at') ? Carbon::parse($get('summary_loading_at')) : null;
                             $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
 
                             return $duration(($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : null);
                         })
-                        ->badge()
                         ->color('warning'),
                     TextEntry::make('summary_travel_duration')
                         ->label('Di chuyển')
-                        ->inlineLabel()
+                        ->icon('heroicon-m-clock')
                         ->state(function (Get $get) use ($duration): string {
                             $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
                             $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
 
                             return $duration(($tB && $tC) ? (int) abs($tC->diffInMinutes($tB)) : null);
                         })
-                        ->badge()
                         ->color('info'),
                     TextEntry::make('summary_unloading_duration')
                         ->label('Hạ hàng')
-                        ->inlineLabel()
+                        ->icon('heroicon-m-clock')
                         ->state(function (Get $get) use ($duration): string {
                             $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
                             $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at')) : null;
 
                             return $duration(($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null);
                         })
-                        ->badge()
                         ->color('warning'),
                 ]),
             ]);
