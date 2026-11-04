@@ -1003,6 +1003,11 @@ class TripStatisticsReport extends Page
                 ->iconColor('primary')
                 ->compact()
                 ->schema([
+                    $entry('summary_order_code', 'Mã đơn', Heroicon::OutlinedDocumentText, $order?->order_code ?? $row['code'] ?? '—')
+                        ->badge()
+                        ->color('info')
+                        ->fontFamily(FontFamily::Mono)
+                        ->weight(FontWeight::Bold),
                     $entry('summary_vehicle', 'Biển số', Heroicon::OutlinedIdentification, $row['plate_number'] ?? '—')
                         ->badge()
                         ->color('gray')
