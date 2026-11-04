@@ -1,25 +1,23 @@
 {
     "$schema": "https://opencode.ai/config.json",
     "mcp": {
-        "laravel-boost": {
-            "type": "local",
-            "enabled": true,
-            "command": [
-                "php",
-                "artisan",
-                "boost:mcp"
-            ]
-        },
-        "codegraph": {
-          "type": "local",
-          "command": [
-            "codegraph",
-            "serve",
-            "--mcp",
-            "--path",
-            "/var/www/tms-asgt"
-          ],
-          "enabled": true
+        "servers": {
+            "laravel-boost": {
+                "type": "local",
+                "command": [
+                    "php",
+                    "artisan",
+                    "boost:mcp"
+                ]
+            },
+            "codegraph": {
+                "type": "local",
+                "command": [
+                    "codegraph",
+                    "serve",
+                    "--mcp"
+                ]
+            }
         }
     }
 }

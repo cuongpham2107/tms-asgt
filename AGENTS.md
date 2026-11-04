@@ -61,10 +61,10 @@ php artisan shield:generate --all --ignore-config-changes   # after adding a res
 - Scheduler (`routes/console.php`): EUP GPS sync every minute, monthly vehicle-km snapshot on the 23rd, auto-end driver shifts at 08:05 and 20:05.
 - External services to keep in mind: EUP GPS API (`EUP_API_*`), Firebase (`storage/firebase/firebase-credentials.json`), OSRM, Mapbox.
 - No CI. Verify locally: `vendor/bin/pint --dirty --format agent` then `php artisan test --compact`.
-- `opencode.json` and `.mcp.json` point CodeGraph at `/var/www/tms-asgt`, which does not exist on a local checkout — pass `projectPath` or fix the path.
 
 ## Working rules
 
+- Code intelligence: Dự án đã được index `.codegraph/`. Luôn ưu tiên dùng `codegraph_explore` (MCP) hoặc `codegraph explore` (CLI) TRƯỚC khi grep/read nhiều file để định vị symbol, trace call paths (callers/callees) và đánh giá blast radius.
 - Use `php artisan make:* --no-interaction`; follow sibling files for structure and naming.
 - Don't add dependencies, docs, or base folders without being asked.
 - Project skills live in `.agents/skills/` (filament-leaflet, laravel-best-practices, testing-best-practices, tailwindcss-development, …); load the matching one before working in that domain.

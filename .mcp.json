@@ -12,9 +12,7 @@
       "command": "codegraph",
       "args": [
         "serve",
-        "--mcp",
-        "--path",
-        "/var/www/tms-asgt"
+        "--mcp"
       ]
     }
   }
