@@ -28,6 +28,8 @@ class VehicleDocumentResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Giấy tờ xe';
 
+    protected static ?string $modelLabel = 'Giấy tờ xe';
+
     protected static ?string $pluralModelLabel = 'Giấy tờ xe';
 
     protected static string|UnitEnum|null $navigationGroup = 'Bảo dưỡng';

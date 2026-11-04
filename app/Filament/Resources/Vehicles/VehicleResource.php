@@ -63,6 +63,8 @@ class VehicleResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Phương tiện';
 
+    protected static ?string $modelLabel = 'Phương tiện';
+
     protected static ?string $pluralModelLabel = 'Phương tiện';
 
     protected static string|UnitEnum|null $navigationGroup = 'Quản lý';

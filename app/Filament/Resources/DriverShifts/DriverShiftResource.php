@@ -27,6 +27,8 @@ class DriverShiftResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Ca trực';
 
+    protected static ?string $modelLabel = 'Ca trực';
+
     protected static ?string $pluralModelLabel = 'Ca trực';
 
     protected static string|UnitEnum|null $navigationGroup = 'Hoạt động';

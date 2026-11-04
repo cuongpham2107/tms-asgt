@@ -20,7 +20,14 @@ class VehicleDispatchTable extends Widget
     use HasJsRenderer;
     use HasVehicleDispatchRows;
 
+    protected ?string $heading = 'Bảng kiểm soát tình trạng xe';
+
     protected int|string|array $columnSpan = 'full';
+
+    public function getHeading(): ?string
+    {
+        return $this->heading;
+    }
 
     #[Reactive]
     public ?string $searchQuery = null;

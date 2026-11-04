@@ -26,6 +26,8 @@ class UserResource extends Resource
 
     protected static ?string $navigationLabel = 'Tài xế';
 
+    protected static ?string $modelLabel = 'Tài xế';
+
     protected static ?string $pluralModelLabel = 'Tài xế';
 
     protected static string|UnitEnum|null $navigationGroup = 'Quản lý';

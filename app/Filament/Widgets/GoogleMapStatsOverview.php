@@ -10,6 +10,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class GoogleMapStatsOverview extends BaseWidget
 {
+    protected ?string $heading = 'Thống kê giám sát phương tiện';
+
     protected int|array|null $columns = 5;
 
     protected function getStats(): array

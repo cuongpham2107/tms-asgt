@@ -65,6 +65,8 @@ class LocationResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Địa điểm';
 
+    protected static ?string $modelLabel = 'Địa điểm';
+
     protected static ?string $pluralModelLabel = 'Địa điểm';
 
     protected static string|UnitEnum|null $navigationGroup = 'Quản lý';

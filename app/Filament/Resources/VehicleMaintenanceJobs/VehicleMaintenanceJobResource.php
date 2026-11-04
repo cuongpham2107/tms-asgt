@@ -26,6 +26,8 @@ class VehicleMaintenanceJobResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Công việc bảo dưỡng';
 
+    protected static ?string $modelLabel = 'Công việc bảo dưỡng';
+
     protected static ?string $pluralModelLabel = 'Công việc bảo dưỡng';
 
     protected static string|UnitEnum|null $navigationGroup = 'Bảo dưỡng';

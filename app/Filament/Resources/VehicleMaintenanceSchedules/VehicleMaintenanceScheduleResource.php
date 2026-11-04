@@ -26,6 +26,8 @@ class VehicleMaintenanceScheduleResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Lịch bảo dưỡng';
 
+    protected static ?string $modelLabel = 'Lịch bảo dưỡng';
+
     protected static ?string $pluralModelLabel = 'Lịch bảo dưỡng';
 
     protected static string|UnitEnum|null $navigationGroup = 'Bảo dưỡng';

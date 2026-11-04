@@ -17,7 +17,14 @@ class TripStatisticsTable extends Widget
     use HasJsRenderer;
     use HasTripStatistics;
 
+    protected ?string $heading = 'Bảng thống kê chuyến & cước';
+
     protected int|string|array $columnSpan = 'full';
+
+    public function getHeading(): ?string
+    {
+        return $this->heading;
+    }
 
     #[Reactive]
     public ?string $startDate = null;

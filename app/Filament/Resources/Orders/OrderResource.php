@@ -67,6 +67,8 @@ class OrderResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Đơn hàng';
 
+    protected static ?string $modelLabel = 'Đơn hàng';
+
     protected static ?string $pluralModelLabel = 'Đơn hàng';
 
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';

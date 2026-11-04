@@ -11,6 +11,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class DriverDutySummaryWidget extends BaseWidget
 {
+    protected ?string $heading = 'Tổng hợp ca trực lái xe';
+
     protected int|array|null $columns = 4;
 
     protected function getStats(): array

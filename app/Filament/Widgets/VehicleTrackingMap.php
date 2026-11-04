@@ -28,7 +28,14 @@ class VehicleTrackingMap extends Widget
 {
     use HasJsRenderer;
 
+    protected ?string $heading = 'Bản đồ giám sát phương tiện thực tế';
+
     private const DEFAULT_CENTER = [21.0285, 105.8542]; // Hà Nội Center
+
+    public function getHeading(): ?string
+    {
+        return $this->heading;
+    }
 
     /** Lộ trình đã đi chỉ vẽ trong N giờ gần nhất: có chuyến bị treo "đang chạy" nhiều ngày. */
     private const TRACK_WINDOW_HOURS = 8;

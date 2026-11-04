@@ -14,6 +14,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class OperationsStatsWidget extends BaseWidget
 {
+    protected ?string $heading = 'Chỉ số vận hành tổng quan';
+
     protected int|string|array $columnSpan = 'full';
 
     protected int|array|null $columns = [
