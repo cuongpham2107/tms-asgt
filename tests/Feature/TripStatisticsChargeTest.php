@@ -2,6 +2,7 @@
 
 use App\Enums\CargoType;
 use App\Enums\CheckpointType;
+use App\Enums\FreightPricingMethod;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -430,4 +431,70 @@ test('saving edit charge sets manually_updated_at and reflects in react table ro
     $rows = $page->instance()->getReactTableConfiguration()['rows'];
     expect($rows[0]['charge']['isEdited'])->toBeTrue()
         ->and($rows[0]['charge']['updatedAt'])->not->toBeNull();
+});
+
+test('base_price input is hidden when customer uses weight range pricing', function () {
+    $vfc = Customer::create(['code' => 'ASGS(VFC)', 'name' => 'VFC', 'is_active' => true]);
+    $ypZone = BillingZone::firstOrCreate(['code' => 'KCN YÊN PHONG'], ['name' => 'KCN Yên Phong, Bắc Ninh']);
+    $hpZone = BillingZone::firstOrCreate(['code' => 'HẢI PHÒNG'], ['name' => 'Các KCN Hải Phòng']);
+
+    $locYP = Location::create(['code' => 'YP', 'billing_zone_id' => $ypZone->id, 'name' => 'KCN Yên Phong', 'loc_type' => 'pickup', 'is_active' => true]);
+    $locHP = Location::create(['code' => 'HP', 'billing_zone_id' => $hpZone->id, 'name' => 'KCN Hải Phòng', 'loc_type' => 'delivery', 'is_active' => true]);
+
+    $vfcRate = FreightRate::create([
+        'customer_id' => $vfc->id,
+        'origin_zone_id' => $ypZone->id,
+        'destination_zone_id' => $hpZone->id,
+        'cargo_type' => CargoType::Gcr,
+        'rate_type' => '',
+        'pricing_method' => FreightPricingMethod::ByWeightRange,
+        'range_prices' => [
+            ['from' => 0, 'to' => 2, 'price' => 1_271_768, 'label' => 'Dưới 2T'],
+            ['from' => 2, 'to' => 3, 'price' => 1_447_740, 'label' => 'Từ 2T đến 3T'],
+            ['from' => 3, 'to' => 4, 'price' => 2_062_898, 'label' => 'Từ 3T đến 4T'],
+            ['from' => 4, 'to' => 7, 'price' => 2_682_969, 'label' => 'Từ 4T đến 7T'],
+        ],
+    ]);
+
+    $vfcTrip = Trip::create([
+        'trip_code' => 'TRIP-VFC-99',
+        'vehicle_id' => $this->trip->vehicle_id,
+        'driver_id' => $this->user->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-10-21 08:00:00'),
+        'completed_at' => Carbon::parse('2026-10-21 11:00:00'),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-VFC-TEST',
+        'type' => OrderType::External,
+        'area_id' => Area::first()->id,
+        'customer_id' => $vfc->id,
+        'trip_id' => $vfcTrip->id,
+        'pickup_location_id' => $locYP->id,
+        'cargo_type' => CargoType::Gcr,
+        'total_weight' => 10_000,
+        'chargeable_weight' => 10,
+        'planned_loading_at' => Carbon::parse('2026-10-21 08:00:00'),
+        'status' => OrderStatus::Completed,
+        'created_by' => $this->user->id,
+    ]);
+    OrderDeliveryPoint::create(['order_id' => $order->id, 'location_id' => $locHP->id, 'sequence' => 1]);
+
+    $charge = app(OrderChargeCalculator::class)->calculate($order);
+
+    // Mở modal cước: ô base_price (Đơn giá vận chuyển gốc) bị ẩn
+    ($this->page)()
+        ->mountAction('editCharge', arguments: ['orderId' => $order->id])
+        ->assertMountedActionModalDontSee(['Đơn giá vận chuyển gốc'])
+        ->fillForm([
+            'delivery_notes' => [
+                ['number' => 'DN01', 'chargeable_weight' => 7000],
+                ['number' => 'DN02', 'chargeable_weight' => 3000],
+            ],
+        ])
+        ->callMountedAction()
+        ->assertHasNoActionErrors();
+
+    expect((float) $charge->fresh()->base_price)->toBe(4_745_867.0);
 });

@@ -28,6 +28,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
@@ -628,6 +629,13 @@ class TripStatisticsReport extends Page
                 }
                 $charge->rate_type ??= '';
                 $charge->surcharge_type ??= '';
+
+                $matchedRate = $charge->freight_rate_id ? FreightRate::find($charge->freight_rate_id) : null;
+                $matchedRate ??= app(OrderChargeCalculator::class)->findFreightRate($order, $charge, $order->planned_loading_at ?? now());
+                if ($matchedRate?->pricing_method === FreightPricingMethod::ByWeightRange) {
+                    app(OrderChargeCalculator::class)->applyFreightRate($order, $charge, $order->planned_loading_at ?? now());
+                }
+
                 $charge->save();
 
                 $charge->fees()->delete();
@@ -1128,7 +1136,7 @@ class TripStatisticsReport extends Page
                         Section::make('Cách tính cước')
                             ->description('Đổi các ô này thì đơn giá được tra lại theo bảng giá.')
                             ->icon(Heroicon::OutlinedAdjustmentsHorizontal)
-                            ->columns(['default' => 1, 'sm' => 2, 'lg' => 4])
+                            ->columns(['default' => 1, 'sm' => 2, 'lg' => 3])
                             ->compact()
                             ->schema([
                                 Select::make('cargo_type')
@@ -1159,9 +1167,13 @@ class TripStatisticsReport extends Page
                                         return $tiers ? "Bậc giá có sẵn: {$tiers}" : null;
                                     }),
                                 Toggle::make('is_return_trip')->label('Chuyến quay đầu')->inline(false)
+                                    ->helperText('Đơn hàng là chiều về')
                                     ->live()->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
                                 TextInput::make('return_trip_percent')->label('% đơn giá khi quay đầu')->numeric()->minValue(0)->suffix('%')
-                                    ->visible(fn (Get $get): bool => (bool) $get('is_return_trip'))
+                                    ->default(50)
+                                    ->disabled(fn (Get $get): bool => ! (bool) $get('is_return_trip'))
+                                    ->dehydrated()
+                                    ->helperText('Mặc định 50% đơn giá')
                                     ->live(debounce: 500)->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
                                 Hidden::make('freight_rate_id'),
                                 Hidden::make('price_code'),
@@ -1176,6 +1188,7 @@ class TripStatisticsReport extends Page
                                     ->table([
                                         TableColumn::make('Số phiếu giao hàng'),
                                         TableColumn::make('Trọng lượng tính tiền (kg)'),
+                                        TableColumn::make('Đơn giá tạm tính'),
                                     ])
                                     ->compact()
                                     ->defaultItems(1)
@@ -1203,15 +1216,81 @@ class TripStatisticsReport extends Page
                                                 $refreshPrice($get, $set, notify: true);
                                                 $refreshWaiting($get, $set);
                                             }),
+                                        Placeholder::make('estimated_price')
+                                            ->hiddenLabel()
+                                            ->content(function (Get $get) use ($order, &$charge): string {
+                                                $weightRaw = $get('chargeable_weight');
+                                                if (blank($weightRaw)) {
+                                                    return '—';
+                                                }
+                                                $ton = OrderChargeCalculator::parseKgToTons($weightRaw);
+                                                if ($ton === null) {
+                                                    return '—';
+                                                }
+
+                                                $rateId = $get('../../freight_rate_id') ?: $charge?->freight_rate_id;
+                                                $rate = $rateId ? FreightRate::find($rateId) : null;
+                                                if ($rate === null && $order !== null) {
+                                                    $tempCharge = $charge ? (clone $charge) : new OrderCharge;
+                                                    $tempCharge->customer_id ??= $order->customer_id;
+                                                    $tempCharge->cargo_type = CargoType::tryFrom((string) $get('../../cargo_type')) ?? $tempCharge->cargo_type ?? CargoType::Gcr;
+                                                    $tempCharge->rate_type = (string) ($get('../../rate_type') ?? $tempCharge->rate_type ?? '');
+                                                    $rate = app(OrderChargeCalculator::class)->findFreightRate(
+                                                        $order,
+                                                        $tempCharge,
+                                                        $order->planned_loading_at ?? now()
+                                                    );
+                                                }
+
+                                                if ($rate === null) {
+                                                    return '—';
+                                                }
+
+                                                if ($rate->pricing_method === FreightPricingMethod::ByWeightRange) {
+                                                    $price = $rate->priceFor($ton);
+                                                    if ($price === null) {
+                                                        return 'Ngoài khoảng tải';
+                                                    }
+                                                    $isReturn = (bool) ($get('../../is_return_trip') ?? $charge?->is_return_trip ?? false);
+                                                    $returnPercent = (float) ($get('../../return_trip_percent') ?? $charge?->return_trip_percent ?? 50);
+                                                    $multiplier = $isReturn ? $returnPercent / 100 : 1;
+                                                    $finalPrice = round($price * $multiplier);
+
+                                                    $tier = $rate->matchedTier($ton);
+                                                    $tierLabel = $tier['label'] ?? '';
+
+                                                    return number_format($finalPrice, 0, ',', '.').' đ'.($tierLabel ? " ({$tierLabel})" : '');
+                                                }
+
+                                                return 'Theo chuyến xe';
+                                            }),
                                     ]),
                             ]),
                         Section::make('Đơn giá & giờ chờ')
                             ->icon(Heroicon::OutlinedBanknotes)
-                            ->columns(3)
+                            ->columns(['default' => 1, 'sm' => 2, 'lg' => 2])
                             ->compact()
                             ->schema([
                                 $money('base_price', 'Đơn giá vận chuyển gốc')->live(debounce: 500)
-                                    ->suffixAction($this->addFreightRateAction($charge, $refreshPrice, name: 'addFreightRate')),
+                                    ->suffixAction($this->addFreightRateAction($charge, $refreshPrice, name: 'addFreightRate'))
+                                    ->columnSpanFull()
+                                    ->hidden(function (Get $get) use ($charge, $order): bool {
+                                        $rateId = $get('freight_rate_id') ?: $charge?->freight_rate_id;
+                                        if ($rateId) {
+                                            $rate = FreightRate::find($rateId);
+                                            if ($rate?->pricing_method === FreightPricingMethod::ByWeightRange) {
+                                                return true;
+                                            }
+                                        }
+
+                                        $customerId = $charge?->customer_id ?? $order?->customer_id;
+                                        if ($customerId && FreightRate::where('customer_id', $customerId)->where('pricing_method', FreightPricingMethod::ByWeightRange)->exists()) {
+                                            return true;
+                                        }
+
+                                        return false;
+                                    })
+                                    ->dehydrated(),
                                 TextInput::make('fuel_adjustment_percent')->label('Tỷ lệ tăng/giảm dầu')->numeric()->suffix('%')->live(debounce: 500),
                                 TextInput::make('vat_percent')->label('VAT')->numeric()->minValue(0)->suffix('%')->live(debounce: 500),
                                 TextInput::make('waiting_minutes')->label('Thời gian chờ tính tiền')->hint('Đã trừ miễn phí từng chặng')->numeric()->minValue(0)->suffix('phút'),
@@ -1409,6 +1488,7 @@ class TripStatisticsReport extends Page
                 Grid::make(3)->schema([
                     TextEntry::make('summary_loading_duration')
                         ->label('Đóng hàng')
+                        ->inlineLabel()
                         ->state(function (Get $get) use ($duration): string {
                             $tA = $get('summary_loading_at') ? Carbon::parse($get('summary_loading_at')) : null;
                             $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
@@ -1419,6 +1499,7 @@ class TripStatisticsReport extends Page
                         ->color('warning'),
                     TextEntry::make('summary_travel_duration')
                         ->label('Di chuyển')
+                        ->inlineLabel()
                         ->state(function (Get $get) use ($duration): string {
                             $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
                             $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
@@ -1429,6 +1510,7 @@ class TripStatisticsReport extends Page
                         ->color('info'),
                     TextEntry::make('summary_unloading_duration')
                         ->label('Hạ hàng')
+                        ->inlineLabel()
                         ->state(function (Get $get) use ($duration): string {
                             $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
                             $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at')) : null;

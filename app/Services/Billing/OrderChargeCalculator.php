@@ -106,7 +106,7 @@ class OrderChargeCalculator
         return $draft;
     }
 
-    private function applyFreightRate(Order $order, OrderCharge $charge, CarbonInterface $date): void
+    public function applyFreightRate(Order $order, OrderCharge $charge, CarbonInterface $date): void
     {
         $rate = $this->findFreightRate($order, $charge, $date);
         $charge->freight_rate_id = $rate?->id;
@@ -163,7 +163,7 @@ class OrderChargeCalculator
      * Tuyến khu vực tính cước của điểm đi → khu vực của điểm trả đầu tiên, không có thì thử chiều ngược lại;
      * bảng giá phải có đơn giá cho trọng tải tính cước. Giá đúng loại xe được ưu tiên hơn giá áp mọi loại xe.
      */
-    private function findFreightRate(Order $order, OrderCharge $charge, CarbonInterface $date): ?FreightRate
+    public function findFreightRate(Order $order, OrderCharge $charge, CarbonInterface $date): ?FreightRate
     {
         $origin = $order->pickupLocation?->billing_zone_id;
         $destination = $order->deliveryPoints->sortBy('sequence')->first()?->location?->billing_zone_id;
