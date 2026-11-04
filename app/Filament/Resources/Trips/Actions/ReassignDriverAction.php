@@ -410,6 +410,15 @@ class ReassignDriverAction
         }
 
         if ($record instanceof Vehicle) {
+            if ($record->active_trip?->status === TripStatus::DriverSwap) {
+                return $record->active_trip;
+            }
+
+            $swapTrip = $record->trips()->where('status', TripStatus::DriverSwap->value)->latest('id')->first();
+            if ($swapTrip !== null) {
+                return $swapTrip;
+            }
+
             return $record->active_trip;
         }
 

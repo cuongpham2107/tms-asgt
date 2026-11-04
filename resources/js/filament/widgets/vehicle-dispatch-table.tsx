@@ -106,6 +106,7 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
     const [search, setSearch] = useState(configuration.filters.search)
     const [secondsLeft, setSecondsLeft] = useState(configuration.refreshSeconds)
     const [refreshing, setRefreshing] = useState(false)
+    const [loadingActionRowId, setLoadingActionRowId] = useState<number | null>(null)
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
     const previousSearch = useRef(configuration.filters.search)
 
@@ -162,9 +163,16 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
 
     const toggleGroup = (code: string) => setCollapsed((current) => ({ ...current, [code]: !current[code] }))
 
-    const callStatusAction = (row: Row) => {
-        if (row.statusAction) {
-            void page.mountTableAction(row.statusAction.name, row.id)
+    const callStatusAction = async (row: Row) => {
+        if (!row.statusAction || loadingActionRowId !== null) {
+            return
+        }
+
+        setLoadingActionRowId(row.id)
+        try {
+            await page.mountTableAction(row.statusAction.name, row.id)
+        } finally {
+            setLoadingActionRowId(null)
         }
     }
 
@@ -314,11 +322,21 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                                         <td className={`${cellClass} px-1 text-center`}>{row.orderType ? badge(row.orderType, row.orderTypeColor) : <span className="text-gray-400">—</span>}</td>
 
                                         <td
-                                            className={`status-cell ${cellClass} px-2 text-center text-[11px] select-none ${row.statusClass} ${row.statusAction ? 'cursor-pointer hover:opacity-85' : ''}`}
-                                            title={row.statusAction?.tooltip}
-                                            onClick={() => callStatusAction(row)}
+                                            className={`status-cell ${cellClass} px-2 text-center text-[11px] select-none ${row.statusClass} ${row.statusAction ? (loadingActionRowId === row.id ? 'cursor-wait opacity-75' : 'cursor-pointer hover:opacity-85') : ''}`}
+                                            title={loadingActionRowId === row.id ? 'Đang tải thao tác...' : row.statusAction?.tooltip}
+                                            onClick={() => void callStatusAction(row)}
                                         >
-                                            {row.statusLabel}
+                                            {loadingActionRowId === row.id ? (
+                                                <span className="inline-flex items-center justify-center gap-1 font-semibold">
+                                                    <svg className="h-3 w-3 animate-spin text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                                    </svg>
+                                                    <span>Đang tải...</span>
+                                                </span>
+                                            ) : (
+                                                row.statusLabel
+                                            )}
                                         </td>
 
                                         <td className={`${cellClass} px-1.5 text-center font-medium text-gray-800 dark:text-gray-200`}>

@@ -356,7 +356,6 @@ class Vehicle extends Model
         $inProgressTrip = $this->trips()
             ->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value])
             ->whereDoesntHave('checkpoints', fn (Builder $q) => $q->where('checkpoint_type', CheckpointType::End->value))
-            ->whereNull('end_km')
             ->where(function (Builder $q) {
                 $q->whereIn('status', [
                     TripStatus::Started->value,
@@ -368,6 +367,7 @@ class Vehicle extends Model
                     TripStatus::ReturnTrip->value,
                 ])->orWhere(function (Builder $sub) {
                     $sub->where('status', TripStatus::Completed->value)
+                        ->whereNull('end_km')
                         ->where(function (Builder $dateQ) {
                             $dateQ->whereDate('completed_at', today())
                                 ->orWhereDate('started_at', today())
