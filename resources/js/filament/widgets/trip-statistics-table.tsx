@@ -281,18 +281,6 @@ function Actions({ row, page }: { row: Row; page: PageApi }) {
             >
                 <Icon path={ICONS.edit} />
             </button>
-            <button
-                type="button"
-                className="rounded-md p-1 text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
-                title={row.charge ? 'Tính lại cước' : 'Tính cước'}
-                onClick={() => {
-                    if (!row.charge || window.confirm('Tra lại đơn giá và giờ chờ theo dữ liệu hiện tại? Đơn giá gốc và giờ chờ đã sửa tay sẽ bị thay.')) {
-                        void page.recalculateCharge(orderId)
-                    }
-                }}
-            >
-                <Icon path={ICONS.refresh} />
-            </button>
         </div>
     )
 }
@@ -441,22 +429,24 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             { key: 'fuelPercent', groupId: 5, label: '% dầu', align: 'right', minWidth: 70, extra: 'px-3 font-mono', render: (row) => (row.charge ? percent(row.charge.fuelPercent) : '—') },
             { key: 'adjustedPrice', groupId: 5, label: 'Đơn giá sau ĐC', align: 'right', minWidth: 120, extra: 'px-3 font-mono font-medium text-gray-900 dark:text-gray-100', render: (row) => money(row.charge?.adjustedPrice) },
             {
-                key: 'waitingFee',
+                key: 'waitingDuration',
                 groupId: 5,
                 label: 'Giờ chờ',
-                title: 'Chi phí giờ chờ (thời gian chờ đóng + hạ hàng)',
+                title: 'Thời gian chờ tính tiền (đã trừ thời gian miễn phí)',
                 align: 'right',
-                minWidth: 110,
+                minWidth: 85,
+                extra: 'px-3 font-mono text-gray-700 dark:text-gray-300',
+                render: (row) => row.charge?.waitingDuration ?? '—',
+            },
+            {
+                key: 'waitingFee',
+                groupId: 5,
+                label: 'Phí chờ',
+                title: 'Chi phí giờ chờ',
+                align: 'right',
+                minWidth: 105,
                 extra: 'px-3 font-mono',
-                render: (row) =>
-                    row.charge === null ? (
-                        '—'
-                    ) : (
-                        <span title={row.charge.waitingDuration ? `Chờ ${row.charge.waitingDuration} (đóng + hạ hàng)` : ''}>
-                            {row.charge.waitingFee > 0 ? money(row.charge.waitingFee) : '—'}
-                            {row.charge.waitingDuration && <span className="ml-1 text-[10px] text-gray-400">{row.charge.waitingDuration}</span>}
-                        </span>
-                    ),
+                render: (row) => (row.charge === null ? '—' : row.charge.waitingFee > 0 ? money(row.charge.waitingFee) : '—'),
             },
             {
                 key: 'otherFees',
@@ -486,7 +476,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                 titleClassName: 'font-bold text-sky-300',
                 render: (row) => (row.charge ? money(row.charge.total) : '—'),
             },
-            { key: 'actions', groupId: 5, label: 'Thao tác', align: 'center', minWidth: 120, extra: 'px-2', render: (row, page) => <Actions row={row} page={page} /> },
+            { key: 'actions', groupId: 5, label: 'Thao tác', align: 'center', minWidth: 60, extra: 'px-2', render: (row, page) => <Actions row={row} page={page} /> },
         )
     }
 

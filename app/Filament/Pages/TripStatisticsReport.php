@@ -437,11 +437,30 @@ class TripStatisticsReport extends Page
             ->modalHeading(fn (array $arguments): string => 'Cước đơn '.(Order::find($arguments['orderId'] ?? null)?->order_code ?? ''))
             ->modalDescription(fn (array $arguments): ?string => $this->findCharge($arguments)?->isLocked()
                 ? 'Dòng cước đang ở trạng thái KHOÁ (đã xuất bảng kê). Nhấn "Mở khoá để sửa" bên dưới để tiếp tục chỉnh sửa.'
-                : 'Đổi loại hình / trọng tải tính cước xong hãy bấm "Tính lại" để tra lại đơn giá.')
+                : 'Đổi loại hình / trọng tải tính cước xong hãy bấm "Tính lại giá" để tra lại đơn giá.')
             ->modalWidth(Width::ScreenTwoExtraLarge)
-            ->modalSubmitActionLabel('Lưu')
-            ->modalSubmitAction(fn (Action $action, array $arguments): Action => $action->visible(fn (): bool => ! (bool) $this->findCharge($arguments)?->isLocked()))
+            ->stickyModalHeader()
+            ->stickyModalFooter()
+            ->modalSubmitActionLabel('Lưu cước')
+            ->modalSubmitAction(fn (Action $action, array $arguments): Action => $action
+                ->label('Lưu cước')
+                ->icon('heroicon-m-check')
+                ->color('primary')
+                ->extraAttributes(['wire:key' => 'btn-save-charge-'.($this->findCharge($arguments)?->isLocked() ? 'locked' : 'unlocked')])
+                ->visible(fn (): bool => ! (bool) $this->findCharge($arguments)?->isLocked())
+            )
             ->extraModalFooterActions(fn (Action $action, array $arguments): array => [
+                Action::make('recalculateInsideModal')
+                    ->label('Tính lại giá')
+                    ->icon('heroicon-m-arrow-path')
+                    ->color('info')
+                    ->visible(fn (): bool => ! (bool) $this->findCharge($arguments)?->isLocked())
+                    ->action(function () use ($arguments): void {
+                        $orderId = (int) ($arguments['orderId'] ?? 0);
+                        $this->recalculateCharge($orderId);
+                        $this->unmountAction(cancelParentActions: true);
+                        $this->mountAction('editCharge', ['orderId' => $orderId]);
+                    }),
                 Action::make('unlockAndEdit')
                     ->label('Mở khoá để sửa')
                     ->icon('heroicon-m-lock-open')
@@ -454,6 +473,7 @@ class TripStatisticsReport extends Page
                     ->action(function () use ($arguments): void {
                         $orderId = (int) ($arguments['orderId'] ?? 0);
                         $this->unlockCharge($orderId);
+                        $this->unmountAction(cancelParentActions: true);
                         $this->mountAction('editCharge', ['orderId' => $orderId]);
                     }),
                 Action::make('lockChargeModal')
@@ -468,6 +488,7 @@ class TripStatisticsReport extends Page
                     ->action(function () use ($arguments): void {
                         $orderId = (int) ($arguments['orderId'] ?? 0);
                         $this->lockCharge($orderId);
+                        $this->unmountAction(cancelParentActions: true);
                         $this->mountAction('editCharge', ['orderId' => $orderId]);
                     }),
             ])
@@ -666,43 +687,72 @@ class TripStatisticsReport extends Page
      * @return array<int, mixed>
      */
     /**
-     * Tuyến chưa có đơn giá → mở đúng form "Thêm đơn giá vận chuyển", điền sẵn theo đơn (khách hàng, khu vực đi/đến,
-     * loại hàng, loại hình, bậc tải). Lưu xong thì gán khu vực cho địa điểm chưa có khu vực và tra lại đơn giá trên form.
-     * Tuyến đã có dòng giá cùng khoá thì gộp bậc tải vào dòng đó thay vì tạo trùng.
+     * Tuyến chưa có đơn giá hoặc chưa có bậc tải tương ứng → mở form "Đơn giá vận chuyển", điền sẵn theo tuyến
+     * (khách hàng, khu vực đi/đến, loại hàng, loại hình, các bậc tải đã có và thêm bậc tải hiện tại để nhập).
+     * Lưu xong thì gán khu vực cho địa điểm chưa có khu vực và tra lại đơn giá trên form.
      */
-    private function addFreightRateAction(?OrderCharge $charge, Closure $refreshPrice): Action
+    private function addFreightRateAction(?OrderCharge $charge, ?Closure $refreshPrice = null, string $name = 'addFreightRate'): Action
     {
         $order = $charge?->order?->loadMissing(['pickupLocation', 'deliveryPoints.location']);
         $pickup = $order?->pickupLocation;
         $delivery = $order?->deliveryPoints->sortBy('sequence')->first()?->location;
+        $pZone = $pickup?->billing_zone_id;
+        $dZone = $delivery?->billing_zone_id;
+        $customerId = $charge?->customer_id ?? $order?->customer_id;
 
-        return Action::make('addFreightRate')
-            ->icon(Heroicon::OutlinedPlusCircle)
-            ->tooltip('Thêm đơn giá vào bảng giá')
-            ->visible(fn (Get $get): bool => $charge !== null && ! $charge->isLocked() && blank($get('freight_rate_id')))
+        $findExistingRate = function () use ($charge, $customerId, $pZone, $dZone): ?FreightRate {
+            if ($charge?->freight_rate_id) {
+                $rate = FreightRate::find($charge->freight_rate_id);
+                if ($rate) {
+                    return $rate;
+                }
+            }
+            if ($customerId && $pZone && $dZone) {
+                return FreightRate::query()
+                    ->where('customer_id', $customerId)
+                    ->where(function ($q) use ($pZone, $dZone) {
+                        $q->where(fn ($sub) => $sub->where('origin_zone_id', $pZone)->where('destination_zone_id', $dZone))
+                            ->orWhere(fn ($sub) => $sub->where('origin_zone_id', $dZone)->where('destination_zone_id', $pZone));
+                    })
+                    ->latest('id')
+                    ->first();
+            }
+
+            return null;
+        };
+
+        return Action::make($name)
+            ->icon(fn (Get $get): Heroicon => blank($get('freight_rate_id')) && $findExistingRate() === null ? Heroicon::OutlinedPlusCircle : Heroicon::OutlinedPencilSquare)
+            ->tooltip(fn (Get $get): string => blank($get('freight_rate_id')) && $findExistingRate() === null ? 'Thêm đơn giá vào bảng giá' : 'Thêm / bổ sung bậc tải vào bảng giá')
+            ->visible(fn (): bool => $charge !== null && ! $charge->isLocked())
             ->model(FreightRate::class)
-            ->modalHeading('Thêm đơn giá vận chuyển')
+            ->modalHeading(fn (Get $get): string => blank($get('freight_rate_id')) && $findExistingRate() === null ? 'Thêm đơn giá vận chuyển' : 'Cập nhật đơn giá vận chuyển (bổ sung bậc tải)')
             ->modalDescription(collect([$pickup, $delivery])->filter(fn (?Location $location): bool => $location !== null && $location->billing_zone_id === null)
                 ->map(fn (Location $location): string => "Địa điểm {$location->code} chưa thuộc khu vực nào — khu vực chọn bên dưới sẽ được gán luôn.")
                 ->implode(' ') ?: null)
             ->modalSubmitActionLabel('Lưu đơn giá')
             ->schema(fn (Schema $schema): Schema => FreightRateForm::configure($schema))
-            ->fillForm(function (Get $get) use ($charge, $pickup, $delivery, $order): array {
+            ->fillForm(function (Get $get) use ($charge, $order, $customerId, $pZone, $dZone, $findExistingRate): array {
+                $existingRate = $findExistingRate();
                 $tonnage = $get('chargeable_tonnage');
                 $basePrice = $get('base_price');
-                $prices = [];
+                $prices = $existingRate?->prices ?? [];
                 if (filled($tonnage)) {
-                    $prices[FreightRate::tonnageKey($tonnage)] = filled($basePrice) ? (float) $basePrice : null;
+                    $tierKey = FreightRate::tonnageKey($tonnage);
+                    if (! array_key_exists($tierKey, $prices)) {
+                        $prices[$tierKey] = filled($basePrice) ? (float) $basePrice : null;
+                    }
                 }
 
                 return [
-                    'customer_id' => $charge?->customer_id,
-                    'origin_zone_id' => $pickup?->billing_zone_id,
-                    'destination_zone_id' => $delivery?->billing_zone_id,
-                    'cargo_type' => $charge?->cargo_type ?? CargoType::Gcr,
-                    'rate_type' => $get('rate_type'),
+                    'customer_id' => $existingRate?->customer_id ?? $customerId,
+                    'origin_zone_id' => $existingRate?->origin_zone_id ?? $pZone,
+                    'destination_zone_id' => $existingRate?->destination_zone_id ?? $dZone,
+                    'cargo_type' => $existingRate?->cargo_type ?? $charge?->cargo_type ?? CargoType::Gcr,
+                    'rate_type' => $existingRate?->rate_type ?? $get('rate_type'),
+                    'vehicle_type' => $existingRate?->vehicle_type,
                     'prices' => $prices,
-                    'notes' => 'Thêm từ modal cước đơn '.($order?->order_code ?? ''),
+                    'notes' => $existingRate?->notes ?? ('Thêm từ modal cước đơn '.($order?->order_code ?? '')),
                 ];
             })
             ->action(function (array $data, Get $get, Set $set) use ($charge, $pickup, $delivery, $refreshPrice): void {
@@ -732,16 +782,17 @@ class TripStatisticsReport extends Page
                 $finalPrice = $unitPrice !== null ? $unitPrice * ($isReturn ? $returnPercent / 100 : 1) : null;
 
                 $set('rate_type', $rate->rate_type);
-                $refreshPrice($get, $set);
+                if ($refreshPrice !== null) {
+                    $refreshPrice($get, $set);
+                }
 
-                // Nếu refreshPrice chưa tự áp được giá thì ưu tiên gán trực tiếp từ bảng giá vừa tạo
-                if (blank($get('base_price')) && $finalPrice !== null) {
+                if ($finalPrice !== null) {
                     $set('base_price', $finalPrice);
                     $set('freight_rate_id', $rate->id);
                     $set('price_code', $rate->priceCode($tonnage));
                 }
 
-                Notification::make()->title('Đã thêm đơn giá vào bảng giá')->success()->send();
+                Notification::make()->title('Đã lưu đơn giá vào bảng giá')->success()->send();
             });
     }
 
@@ -849,7 +900,7 @@ class TripStatisticsReport extends Page
                             ->compact()
                             ->schema([
                                 $money('base_price', 'Đơn giá vận chuyển gốc')->live(debounce: 500)
-                                    ->suffixAction($this->addFreightRateAction($charge, $refreshPrice)),
+                                    ->suffixAction($this->addFreightRateAction($charge, $refreshPrice, name: 'addFreightRate')),
                                 TextInput::make('fuel_adjustment_percent')->label('Tỷ lệ tăng/giảm dầu')->numeric()->suffix('%')->live(debounce: 500),
                                 TextInput::make('vat_percent')->label('VAT')->numeric()->minValue(0)->suffix('%')->live(debounce: 500),
                                 TextInput::make('waiting_minutes')->label('Thời gian chờ tính tiền')->hint('Đã trừ miễn phí từng chặng')->numeric()->minValue(0)->suffix('phút'),
@@ -879,7 +930,7 @@ class TripStatisticsReport extends Page
                                 Textarea::make('note')->label('Ghi chú cước')->rows(2),
                             ]),
                     ]),
-                Group::make($this->chargeSummarySchema($charge, $orderId, $refreshWaiting))->columnSpan(['lg' => 1]),
+                Group::make($this->chargeSummarySchema($charge, $orderId, $refreshWaiting, $refreshPrice))->columnSpan(['lg' => 1]),
             ]),
         ];
     }
@@ -889,7 +940,7 @@ class TripStatisticsReport extends Page
      *
      * @return array<int, mixed>
      */
-    private function chargeSummarySchema(?OrderCharge $charge, int $orderId, ?Closure $refreshWaiting = null): array
+    private function chargeSummarySchema(?OrderCharge $charge, int $orderId, ?Closure $refreshWaiting = null, ?Closure $refreshPrice = null): array
     {
         $order = Order::find($orderId);
         $row = $order === null
@@ -1056,7 +1107,8 @@ class TripStatisticsReport extends Page
                         ->color(fn (Get $get): string => $get('price_code') ? 'gray' : 'warning')
                         ->copyable(fn (Get $get): bool => (bool) $get('price_code')),
                     $entry('summary_base_price', 'Đơn giá gốc', Heroicon::OutlinedBanknotes, fn (Get $get): string => $money($number($get('base_price'))))
-                        ->helperText($priceNote),
+                        ->helperText($priceNote)
+                        ->suffixAction($this->addFreightRateAction($charge, $refreshPrice, name: 'addFreightRateSummary')),
                     $entry('summary_adjusted_price', 'Sau dầu', Heroicon::OutlinedBeaker, fn (Get $get): string => $money($totals($get)['adjusted_price']))
                         ->helperText(fn (Get $get): string => 'Tăng/giảm dầu '.$percent($get('fuel_adjustment_percent')).', làm tròn nghìn'),
                     $entry('summary_waiting_fee', 'Giờ chờ', Heroicon::OutlinedClock, fn (Get $get): string => $money((float) $number($get('waiting_fee'))))
