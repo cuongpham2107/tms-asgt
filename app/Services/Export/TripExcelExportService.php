@@ -468,12 +468,16 @@ class TripExcelExportService
         $time2 = ($timeB && $timeC) ? (int) abs($timeC->diffInMinutes($timeB)) : null;
         $time3 = ($timeC && $timeD) ? (int) abs($timeD->diffInMinutes($timeC)) : null;
 
-        // Thời gian cắt 22:00: Nếu thời gian hạ hàng D >= 22:00
+        // Thời gian cắt 22:00: Nếu thời gian hạ hàng D >= 22:00 và thời gian đến C < 22:00 thì lấy 22:00 - C
         $time4 = 0;
-        if ($timeC && $timeD && ($timeD->hour >= 22 || $timeD->isAfter($timeC->copy()->endOfDay()))) {
+        if ($timeC && $timeD) {
             $cutoff22 = $timeC->copy()->setTime(22, 0, 0);
-            $waitTo22 = (int) abs($cutoff22->diffInMinutes($timeC));
-            $time4 = ($time1 ?? 0) + ($time2 ?? 0) + $waitTo22;
+            $isArrivalBefore22 = $timeC->lt($cutoff22);
+            $isUnloadingAfter22 = $timeD->gte($cutoff22) || $timeD->isAfter($timeC->copy()->endOfDay());
+
+            if ($isArrivalBefore22 && $isUnloadingAfter22) {
+                $time4 = (int) abs($cutoff22->diffInMinutes($timeC));
+            }
         }
 
         return [

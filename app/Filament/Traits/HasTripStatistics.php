@@ -70,7 +70,7 @@ trait HasTripStatistics
     {
         return OrderCharge::query()
             ->whereIn('order_id', $rows->pluck('order_id')->filter())
-            ->get(['order_id', 'base_price', 'exported_at'])
+            ->get(['order_id', 'base_price', 'exported_at', 'manually_updated_at'])
             ->keyBy('order_id');
     }
 
@@ -429,6 +429,8 @@ trait HasTripStatistics
                 'total' => $charge->total === null ? null : (float) $charge->total,
                 'locked' => $charge->isLocked(),
                 'missing' => ! $charge->isLocked() && $charge->base_price === null,
+                'isEdited' => $charge->manually_updated_at !== null,
+                'updatedAt' => $charge->manually_updated_at?->format('H:i d/m/Y'),
             ],
         ];
     }

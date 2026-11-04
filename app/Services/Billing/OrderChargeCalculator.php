@@ -2,11 +2,13 @@
 
 namespace App\Services\Billing;
 
+use App\Enums\CheckpointType;
 use App\Models\FreightRate;
 use App\Models\Order;
 use App\Models\OrderCharge;
 use App\Models\WaitingFeeRate;
 use App\Services\Export\TripExcelExportService;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -115,6 +117,7 @@ class OrderChargeCalculator
         }
 
         $vehicleType = $order->trip?->vehicle?->vehicle_type;
+        $isStandardRate = blank($charge->rate_type) || $charge->rate_type === 'Chuẩn';
 
         foreach ([[$origin, $destination], [$destination, $origin]] as [$from, $to]) {
             $rate = FreightRate::query()
@@ -123,7 +126,11 @@ class OrderChargeCalculator
                 ->where('origin_zone_id', $from)
                 ->where('destination_zone_id', $to)
                 ->where('cargo_type', $charge->cargo_type)
-                ->where('rate_type', $charge->rate_type)
+                ->when(
+                    $isStandardRate,
+                    fn (Builder $q) => $q->where(fn (Builder $sq) => $sq->whereNull('rate_type')->orWhere('rate_type', '')->orWhere('rate_type', 'Chuẩn')),
+                    fn (Builder $q) => $q->where('rate_type', $charge->rate_type)
+                )
                 ->where(fn (Builder $q) => $q->whereNull('vehicle_type')->orWhere('vehicle_type', $vehicleType))
                 ->effectiveOn($date)
                 ->orderByDesc('vehicle_type')
@@ -153,8 +160,10 @@ class OrderChargeCalculator
 
     /**
      * Tra trước phí giờ chờ theo thời lượng đóng/hạ hàng truyền vào (hoặc tự lấy theo đơn).
+     * Với đơn nhiều điểm trả (hàng rớt điểm): miễn phí được trừ riêng cho từng điểm hạ hàng.
+     * "minutes" trả về là tổng thời gian chờ tính tiền (đã trừ thời gian miễn phí từng chặng).
      *
-     * @return array{minutes: int, fee: float, loading: int, unloading: int, rate: ?WaitingFeeRate, tier: ?array{tonnage: mixed, fee: mixed, free_minutes: mixed}, billable: int}
+     * @return array{minutes: int, fee: float, loading: int, unloading: int, unloading_legs: list<int>, billable_loading: int, billable_unloading: int, rate: ?WaitingFeeRate, tier: ?array{tonnage: mixed, fee: mixed, free_minutes: mixed}, billable: int}
      */
     public function previewWaiting(
         Order $order,
@@ -178,22 +187,64 @@ class OrderChargeCalculator
             ->first(fn (WaitingFeeRate $rate): bool => $rate->tierFor($charge->chargeable_tonnage) !== null);
         $tier = $rate?->tierFor($charge->chargeable_tonnage);
 
-        if ($loadingMinutes === null || $unloadingMinutes === null) {
+        $order->loadMissing(['deliveryPoints', 'tripCheckpoints', 'trip.checkpoints']);
+
+        $deliveryPoints = $order->deliveryPoints->sortBy('sequence')->values();
+        $isMultiPoint = $deliveryPoints->count() > 1;
+
+        if ($loadingMinutes === null) {
             $row = $order->trip_id === null ? [] : ($this->tripSummary
                 ->getTripSummaryRowsFromOrders(Order::query()->whereKey($order->id))
                 ->firstWhere('order_id', $order->id) ?? []);
-            $loadingMinutes ??= (int) ($row['time_loading'] ?? 0);
-            $unloadingMinutes ??= (int) ($row['time_unloading'] ?? 0);
+            $loadingMinutes = (int) ($row['time_loading'] ?? 0);
         }
 
         $freeMinutes = (int) ($tier['free_minutes'] ?? 0);
-        $billableMinutes = max(0, $loadingMinutes - $freeMinutes) + max(0, $unloadingMinutes - $freeMinutes);
+
+        if ($isMultiPoint && $unloadingMinutes === null) {
+            $checkpoints = $order->tripCheckpoints->isNotEmpty()
+                ? $order->tripCheckpoints
+                : ($order->trip?->checkpoints ?? collect());
+
+            $unloadingLegs = [];
+            foreach ($deliveryPoints as $dp) {
+                $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
+                $tC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery)?->occurred_at
+                    ?? $dp->arrived_at;
+                $tD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last()?->occurred_at
+                    ?? $dp->delivered_at;
+
+                $dur = ($tC && $tD) ? (int) abs(Carbon::parse($tD)->diffInMinutes(Carbon::parse($tC))) : 0;
+                $unloadingLegs[] = $dur;
+            }
+
+            $unloadingMinutes = array_sum($unloadingLegs);
+            $billableUnloading = 0;
+            foreach ($unloadingLegs as $dur) {
+                $billableUnloading += max(0, $dur - $freeMinutes);
+            }
+        } else {
+            if ($unloadingMinutes === null) {
+                $row ??= $order->trip_id === null ? [] : ($this->tripSummary
+                    ->getTripSummaryRowsFromOrders(Order::query()->whereKey($order->id))
+                    ->firstWhere('order_id', $order->id) ?? []);
+                $unloadingMinutes = (int) ($row['time_unloading'] ?? 0);
+            }
+            $unloadingLegs = [$unloadingMinutes];
+            $billableUnloading = max(0, $unloadingMinutes - $freeMinutes);
+        }
+
+        $billableLoading = max(0, $loadingMinutes - $freeMinutes);
+        $billableMinutes = $billableLoading + $billableUnloading;
 
         return [
-            'minutes' => $loadingMinutes + $unloadingMinutes,
+            'minutes' => $billableMinutes,
             'fee' => $rate === null ? 0.0 : (float) self::waitingFee($billableMinutes, (float) $tier['fee'], $rate->fee_block_minutes, $rate->grace_minutes),
             'loading' => $loadingMinutes,
             'unloading' => $unloadingMinutes,
+            'unloading_legs' => $unloadingLegs,
+            'billable_loading' => $billableLoading,
+            'billable_unloading' => $billableUnloading,
             'rate' => $rate,
             'tier' => $tier,
             'billable' => $billableMinutes,
@@ -210,7 +261,20 @@ class OrderChargeCalculator
         ?int $unloadingMinutes = null
     ): string {
         $waiting = $this->previewWaiting($order, $charge, $loadingMinutes, $unloadingMinutes, $order->planned_loading_at ?? $order->created_at ?? now());
-        $legs = "Đóng hàng {$waiting['loading']}' + hạ hàng {$waiting['unloading']}'";
+
+        $free = (int) ($waiting['tier']['free_minutes'] ?? 0);
+
+        if (count($waiting['unloading_legs']) > 1) {
+            $legParts = ["Đóng hàng {$waiting['loading']}' (tính {$waiting['billable_loading']}')"];
+            foreach ($waiting['unloading_legs'] as $idx => $dur) {
+                $pt = $idx + 1;
+                $billablePt = max(0, $dur - $free);
+                $legParts[] = "Điểm {$pt}: {$dur}' (tính {$billablePt}')";
+            }
+            $legs = implode(' + ', $legParts);
+        } else {
+            $legs = "Đóng hàng {$waiting['loading']}' + hạ hàng {$waiting['unloading']}'";
+        }
 
         if ($waiting['rate'] === null) {
             return $legs.' · chưa có phí giờ chờ cho khách '.($charge->customer?->code ?? '—')
@@ -221,7 +285,7 @@ class OrderChargeCalculator
         $blocks = intdiv($waiting['billable'], max(1, $rate->fee_block_minutes))
             + ($rate->grace_minutes < $waiting['billable'] % max(1, $rate->fee_block_minutes) ? 1 : 0);
 
-        return "{$legs} · miễn {$waiting['tier']['free_minutes']}'/chặng → tính {$waiting['billable']}'"
+        return "{$legs} · miễn {$free}'/chặng → tính {$waiting['billable']}'"
             ." = {$blocks} × ".number_format((float) $waiting['tier']['fee'], 0, ',', '.')." đ (block {$rate->fee_block_minutes}', lẻ quá {$rate->grace_minutes}' tính thêm 1 block)";
     }
 
@@ -233,22 +297,25 @@ class OrderChargeCalculator
         $tonnage = FreightRate::tonnageKey($charge->chargeable_tonnage);
         $rate = $freightRateId === null ? null : FreightRate::with(['originZone', 'destinationZone'])->find($freightRateId);
 
-        if ($rate !== null) {
-            return "{$rate->originZone?->name} → {$rate->destinationZone?->name} · {$tonnage}T: "
-                .number_format((float) $rate->priceFor($charge->chargeable_tonnage), 0, ',', '.').' đ'
-                .($charge->is_return_trip ? ' × '.(float) $charge->return_trip_percent.'% quay đầu' : '');
-        }
-
         $order->loadMissing(['pickupLocation.billingZone', 'deliveryPoints.location.billingZone']);
         $pickup = $order->pickupLocation;
         $delivery = $order->deliveryPoints->sortBy('sequence')->first()?->location;
+
+        if ($rate !== null) {
+            $isReverse = ($pickup?->billing_zone_id !== null && $rate->origin_zone_id !== $pickup->billing_zone_id);
+            $direction = "{$rate->originZone?->name} → {$rate->destinationZone?->name}".($isReverse ? ' (chiều đối ứng)' : '');
+
+            return "{$direction} · {$tonnage}T: "
+                .number_format((float) $rate->priceFor($charge->chargeable_tonnage), 0, ',', '.').' đ'
+                .($charge->is_return_trip ? ' × '.(float) $charge->return_trip_percent.'% quay đầu' : '');
+        }
 
         return match (true) {
             $pickup?->billingZone === null => 'Điểm lấy hàng '.($pickup?->code ?? '—').' chưa thuộc khu vực tính cước',
             $delivery?->billingZone === null => 'Điểm trả '.($delivery?->code ?? '—').' chưa thuộc khu vực tính cước',
             $tonnage === '' => 'Chưa có trọng tải tính cước',
-            default => 'Bảng giá chưa có tuyến '.$pickup->billingZone->name.' → '.$delivery->billingZone->name
-                .' (khách '.($charge->customer?->code ?? '—').', '.($charge->cargo_type?->value ?? '—')
+            default => 'Bảng giá chưa có tuyến '.$pickup->billingZone->name.' ⇄ '.$delivery->billingZone->name
+                .' (đã tìm cả 2 chiều đi và về cho khách '.($charge->customer?->code ?? '—').', '.($charge->cargo_type?->value ?? '—')
                 .', loại hình "'.($charge->rate_type ?: 'Chuẩn').'") bậc '.$tonnage.'T',
         };
     }

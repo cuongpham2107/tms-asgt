@@ -436,10 +436,41 @@ class TripStatisticsReport extends Page
             ->icon('heroicon-m-pencil-square')
             ->modalHeading(fn (array $arguments): string => 'Cước đơn '.(Order::find($arguments['orderId'] ?? null)?->order_code ?? ''))
             ->modalDescription(fn (array $arguments): ?string => $this->findCharge($arguments)?->isLocked()
-                ? 'Dòng đã xuất bảng kê nên đang bị khoá. Mở khoá để sửa.'
+                ? 'Dòng cước đang ở trạng thái KHOÁ (đã xuất bảng kê). Nhấn "Mở khoá để sửa" bên dưới để tiếp tục chỉnh sửa.'
                 : 'Đổi loại hình / trọng tải tính cước xong hãy bấm "Tính lại" để tra lại đơn giá.')
             ->modalWidth(Width::ScreenTwoExtraLarge)
             ->modalSubmitActionLabel('Lưu')
+            ->modalSubmitAction(fn (Action $action, array $arguments): Action => $action->visible(fn (): bool => ! (bool) $this->findCharge($arguments)?->isLocked()))
+            ->extraModalFooterActions(fn (Action $action, array $arguments): array => [
+                Action::make('unlockAndEdit')
+                    ->label('Mở khoá để sửa')
+                    ->icon('heroicon-m-lock-open')
+                    ->color('warning')
+                    ->visible(fn (): bool => (bool) $this->findCharge($arguments)?->isLocked())
+                    ->requiresConfirmation()
+                    ->modalHeading('Mở khoá dòng cước')
+                    ->modalDescription('Mở khoá dòng cước đã xuất bảng kê để tiếp tục chỉnh sửa?')
+                    ->modalSubmitActionLabel('Xác nhận mở khoá')
+                    ->action(function () use ($arguments): void {
+                        $orderId = (int) ($arguments['orderId'] ?? 0);
+                        $this->unlockCharge($orderId);
+                        $this->mountAction('editCharge', ['orderId' => $orderId]);
+                    }),
+                Action::make('lockChargeModal')
+                    ->label('Khoá cước')
+                    ->icon('heroicon-m-lock-closed')
+                    ->color('gray')
+                    ->visible(fn (): bool => ! (bool) $this->findCharge($arguments)?->isLocked())
+                    ->requiresConfirmation()
+                    ->modalHeading('Khoá dòng cước')
+                    ->modalDescription('Đánh dấu dòng cước này là đã xuất bảng kê (khoá chỉnh sửa)?')
+                    ->modalSubmitActionLabel('Xác nhận khoá')
+                    ->action(function () use ($arguments): void {
+                        $orderId = (int) ($arguments['orderId'] ?? 0);
+                        $this->lockCharge($orderId);
+                        $this->mountAction('editCharge', ['orderId' => $orderId]);
+                    }),
+            ])
             ->fillForm(function (array $arguments): array {
                 $orderId = (int) ($arguments['orderId'] ?? 0);
                 $charge = $this->resolveCharge($orderId);
@@ -497,6 +528,7 @@ class TripStatisticsReport extends Page
                     ->map(fn (array $fee): array => ['fee_type_id' => $fee['fee_type_id'], 'amount' => (float) $fee['amount']])
                     ->all());
 
+                $charge->manually_updated_at = now();
                 $charge->recalculateTotals()->save();
 
                 $this->saveTimestamps($orderId, $data);
@@ -537,9 +569,23 @@ class TripStatisticsReport extends Page
     {
         OrderCharge::where('order_id', $orderId)->update(['exported_at' => null, 'exported_by' => null]);
 
+        $this->clearBaseRowsCache();
         $this->bumpDataVersion();
 
         Notification::make()->title('Đã mở khoá dòng cước')->success()->send();
+    }
+
+    public function lockCharge(int $orderId): void
+    {
+        OrderCharge::where('order_id', $orderId)->update([
+            'exported_at' => now(),
+            'exported_by' => Auth::id(),
+        ]);
+
+        $this->clearBaseRowsCache();
+        $this->bumpDataVersion();
+
+        Notification::make()->title('Đã khoá dòng cước')->success()->send();
     }
 
     /**
@@ -641,16 +687,28 @@ class TripStatisticsReport extends Page
                 ->implode(' ') ?: null)
             ->modalSubmitActionLabel('Lưu đơn giá')
             ->schema(fn (Schema $schema): Schema => FreightRateForm::configure($schema))
-            ->fillForm(fn (Get $get): array => [
-                'customer_id' => $charge?->customer_id,
-                'origin_zone_id' => $pickup?->billing_zone_id,
-                'destination_zone_id' => $delivery?->billing_zone_id,
-                'cargo_type' => $charge?->cargo_type ?? CargoType::Gcr,
-                'rate_type' => $get('rate_type'),
-                'prices' => filled($get('chargeable_tonnage')) ? [FreightRate::tonnageKey($get('chargeable_tonnage')) => null] : [],
-                'notes' => 'Thêm từ modal cước đơn '.($order?->order_code ?? ''),
-            ])
-            ->action(function (array $data, Get $get, Set $set) use ($pickup, $delivery, $refreshPrice): void {
+            ->fillForm(function (Get $get) use ($charge, $pickup, $delivery, $order): array {
+                $tonnage = $get('chargeable_tonnage');
+                $basePrice = $get('base_price');
+                $prices = [];
+                if (filled($tonnage)) {
+                    $prices[FreightRate::tonnageKey($tonnage)] = filled($basePrice) ? (float) $basePrice : null;
+                }
+
+                return [
+                    'customer_id' => $charge?->customer_id,
+                    'origin_zone_id' => $pickup?->billing_zone_id,
+                    'destination_zone_id' => $delivery?->billing_zone_id,
+                    'cargo_type' => $charge?->cargo_type ?? CargoType::Gcr,
+                    'rate_type' => $get('rate_type'),
+                    'prices' => $prices,
+                    'notes' => 'Thêm từ modal cước đơn '.($order?->order_code ?? ''),
+                ];
+            })
+            ->action(function (array $data, Get $get, Set $set) use ($charge, $pickup, $delivery, $refreshPrice): void {
+                if (blank($data['rate_type'] ?? null) || $data['rate_type'] === 'Chuẩn') {
+                    $data['rate_type'] = '';
+                }
                 $key = Arr::only($data, ['customer_id', 'origin_zone_id', 'destination_zone_id', 'cargo_type', 'rate_type', 'vehicle_type', 'effective_from', 'effective_to']);
                 $rate = FreightRate::query()->firstOrNew($key);
                 $rate->fill(Arr::except($data, ['prices']));
@@ -660,11 +718,28 @@ class TripStatisticsReport extends Page
                 foreach ([[$pickup, $data['origin_zone_id']], [$delivery, $data['destination_zone_id']]] as [$location, $zoneId]) {
                     if ($location !== null && $location->billing_zone_id === null) {
                         $location->update(['billing_zone_id' => $zoneId]);
+                        $location->billing_zone_id = $zoneId;
                     }
                 }
 
+                // Nạp lại liên kết của order để previewFreightRate tra được khu vực vừa gán
+                $charge?->order?->load(['pickupLocation', 'deliveryPoints.location', 'trip.vehicle']);
+
+                $tonnage = $get('chargeable_tonnage');
+                $unitPrice = $rate->priceFor($tonnage);
+                $isReturn = (bool) $get('is_return_trip');
+                $returnPercent = (float) ($get('return_trip_percent') ?? 0);
+                $finalPrice = $unitPrice !== null ? $unitPrice * ($isReturn ? $returnPercent / 100 : 1) : null;
+
                 $set('rate_type', $rate->rate_type);
                 $refreshPrice($get, $set);
+
+                // Nếu refreshPrice chưa tự áp được giá thì ưu tiên gán trực tiếp từ bảng giá vừa tạo
+                if (blank($get('base_price')) && $finalPrice !== null) {
+                    $set('base_price', $finalPrice);
+                    $set('freight_rate_id', $rate->id);
+                    $set('price_code', $rate->priceCode($tonnage));
+                }
 
                 Notification::make()->title('Đã thêm đơn giá vào bảng giá')->success()->send();
             });
@@ -712,7 +787,7 @@ class TripStatisticsReport extends Page
                 'chargeable_tonnage' => is_numeric($get('chargeable_tonnage')) ? $get('chargeable_tonnage') : null,
             ]);
 
-            $preview = app(OrderChargeCalculator::class)->previewWaiting($order, $draft, $loading, $unloading);
+            $preview = app(OrderChargeCalculator::class)->previewWaiting($order, $draft, $loading, $order->deliveryPoints->count() > 1 ? null : $unloading);
 
             $set('waiting_minutes', $preview['minutes']);
             $set('waiting_fee', $preview['fee']);
@@ -777,7 +852,7 @@ class TripStatisticsReport extends Page
                                     ->suffixAction($this->addFreightRateAction($charge, $refreshPrice)),
                                 TextInput::make('fuel_adjustment_percent')->label('Tỷ lệ tăng/giảm dầu')->numeric()->suffix('%')->live(debounce: 500),
                                 TextInput::make('vat_percent')->label('VAT')->numeric()->minValue(0)->suffix('%')->live(debounce: 500),
-                                TextInput::make('waiting_minutes')->label('Thời gian chờ')->hint('Đóng hàng + hạ hàng')->numeric()->minValue(0)->suffix('phút'),
+                                TextInput::make('waiting_minutes')->label('Thời gian chờ tính tiền')->hint('Đã trừ miễn phí từng chặng')->numeric()->minValue(0)->suffix('phút'),
                                 $money('waiting_fee', 'Chi phí giờ chờ')->live(debounce: 500),
                             ]),
                         Section::make('Phí khác & ghi chú')

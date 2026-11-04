@@ -35,6 +35,7 @@ class OrderCharge extends Model
         'total',
         'exported_at',
         'exported_by',
+        'manually_updated_at',
     ];
 
     protected $attributes = [
@@ -64,6 +65,7 @@ class OrderCharge extends Model
             'vat_amount' => 'decimal:2',
             'total' => 'decimal:2',
             'exported_at' => 'datetime',
+            'manually_updated_at' => 'datetime',
         ];
     }
 

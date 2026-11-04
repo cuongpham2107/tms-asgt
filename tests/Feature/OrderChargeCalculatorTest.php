@@ -253,9 +253,8 @@ test('waiting minutes come from loading and unloading checkpoints', function (ar
 
     $charge = app(OrderChargeCalculator::class)->calculate($order);
 
-    // Thời gian chờ = đóng hàng 150' + hạ hàng 30' = 180'.
-    // Tính phí: đóng 150' − 60' miễn = 90'; hạ 30' < 60' → 0' ⇒ 90' = 1 giờ + 30' (> 19') ⇒ 2 giờ
-    expect($charge->waiting_minutes)->toBe(180)
+    // Thời gian chờ tính tiền: đóng 150' − 60' miễn = 90'; hạ 30' < 60' → 0' ⇒ 90' = 1 giờ + 30' (> 19') ⇒ 2 giờ
+    expect($charge->waiting_minutes)->toBe(90)
         ->and((float) $charge->waiting_fee)->toBe(100_000.0)
         ->and(app(OrderChargeCalculator::class)->explainWaiting($order, $charge))
         ->toContain("Đóng hàng 150' + hạ hàng 30' · miễn 60'/chặng → tính 90' = 2 × 50.000 đ");
@@ -264,6 +263,73 @@ test('waiting minutes come from loading and unloading checkpoints', function (ar
     // Chưa phân biệt kiểu chờ: khách chỉ có dòng "nổ máy" vẫn dùng dòng đó
     'chỉ có dòng nổ máy' => [['waiting_mode' => WaitingFeeRate::MODE_ENGINE_ON]],
 ]);
+
+test('multi-point order deducts free minutes per delivery point for waiting time', function () {
+    WaitingFeeRate::create([
+        'customer_id' => $this->customer->id,
+        'surcharge_type' => '',
+        'fee_block_minutes' => 60,
+        'grace_minutes' => 19,
+        'tiers' => [
+            ['tonnage' => 1.25, 'fee' => 50_000, 'free_minutes' => 60],
+            ['tonnage' => 5, 'fee' => 50_000, 'free_minutes' => 60],
+        ],
+    ]);
+
+    $order = ($this->makeOrder)(['chargeable_weight' => 5]);
+
+    // Tạo thêm 2 điểm trả (tổng 3 điểm trả)
+    $delivery2 = Location::create(['code' => 'DELIV2', 'billing_zone_id' => $this->delivery->billing_zone_id, 'name' => 'Điểm 2', 'loc_type' => 'delivery', 'is_active' => true]);
+    $delivery3 = Location::create(['code' => 'DELIV3', 'billing_zone_id' => $this->delivery->billing_zone_id, 'name' => 'Điểm 3', 'loc_type' => 'delivery', 'is_active' => true]);
+
+    $dp1 = $order->deliveryPoints()->first();
+    $dp2 = OrderDeliveryPoint::create(['order_id' => $order->id, 'location_id' => $delivery2->id, 'sequence' => 2]);
+    $dp3 = OrderDeliveryPoint::create(['order_id' => $order->id, 'location_id' => $delivery3->id, 'sequence' => 3]);
+
+    // Đóng hàng: 185' (10:00 -> 13:05) -> tính 185 - 60 = 125'
+    TripCheckpoint::create(['trip_id' => $this->trip->id, 'order_id' => $order->id, 'checkpoint_type' => CheckpointType::ArrivedPickup, 'occurred_at' => Carbon::parse('2026-10-21 10:00')]);
+    TripCheckpoint::create(['trip_id' => $this->trip->id, 'order_id' => $order->id, 'checkpoint_type' => CheckpointType::LeftPickup, 'occurred_at' => Carbon::parse('2026-10-21 13:05')]);
+
+    // Điểm 1: 116' (14:00 -> 15:56) -> tính 116 - 60 = 56'
+    TripCheckpoint::create(['trip_id' => $this->trip->id, 'order_id' => $order->id, 'delivery_point_id' => $dp1->id, 'checkpoint_type' => CheckpointType::ArrivedDelivery, 'occurred_at' => Carbon::parse('2026-10-21 14:00')]);
+    TripCheckpoint::create(['trip_id' => $this->trip->id, 'order_id' => $order->id, 'delivery_point_id' => $dp1->id, 'checkpoint_type' => CheckpointType::Completed, 'occurred_at' => Carbon::parse('2026-10-21 15:56')]);
+
+    // Điểm 2: 30' (16:30 -> 17:00) -> tính 0'
+    TripCheckpoint::create(['trip_id' => $this->trip->id, 'order_id' => $order->id, 'delivery_point_id' => $dp2->id, 'checkpoint_type' => CheckpointType::ArrivedDelivery, 'occurred_at' => Carbon::parse('2026-10-21 16:30')]);
+    TripCheckpoint::create(['trip_id' => $this->trip->id, 'order_id' => $order->id, 'delivery_point_id' => $dp2->id, 'checkpoint_type' => CheckpointType::Completed, 'occurred_at' => Carbon::parse('2026-10-21 17:00')]);
+
+    // Điểm 3: 46' (17:30 -> 18:16) -> tính 0'
+    TripCheckpoint::create(['trip_id' => $this->trip->id, 'order_id' => $order->id, 'delivery_point_id' => $dp3->id, 'checkpoint_type' => CheckpointType::ArrivedDelivery, 'occurred_at' => Carbon::parse('2026-10-21 17:30')]);
+    TripCheckpoint::create(['trip_id' => $this->trip->id, 'order_id' => $order->id, 'delivery_point_id' => $dp3->id, 'checkpoint_type' => CheckpointType::Completed, 'occurred_at' => Carbon::parse('2026-10-21 18:16')]);
+
+    $charge = app(OrderChargeCalculator::class)->calculate($order);
+
+    // Tổng thời gian chờ tính tiền: 125' (đóng) + 56' (điểm 1) + 0' (điểm 2) + 0' (điểm 3) = 181'
+    // 181' = 3 block 60' lẻ 1' (<= 19') => 3 block * 50.000 = 150.000 đ
+    expect($charge->waiting_minutes)->toBe(181)
+        ->and((float) $charge->waiting_fee)->toBe(150_000.0)
+        ->and(app(OrderChargeCalculator::class)->explainWaiting($order, $charge))
+        ->toContain("Đóng hàng 185' (tính 125') + Điểm 1: 116' (tính 56') + Điểm 2: 30' (tính 0') + Điểm 3: 46' (tính 0')")
+        ->toContain("miễn 60'/chặng → tính 181' = 3 × 50.000 đ");
+});
+
+test('freight rate matches reverse route and handles standard rate type correctly', function () {
+    // Chỉ có bảng giá chiều ngược lại: NỘI BÀI -> KCN QUANG CHÂU
+    $this->rate->update([
+        'origin_zone_id' => $this->delivery->billing_zone_id,
+        'destination_zone_id' => $this->pickup->billing_zone_id,
+        'rate_type' => '',
+        'prices' => ['5' => 1_400_000],
+    ]);
+
+    // Đơn có điểm đi KCN QUANG CHÂU -> điểm trả NỘI BÀI (chiều ngược lại của bảng giá)
+    $order = ($this->makeOrder)(['chargeable_weight' => 5, 'rate_type' => 'Chuẩn']);
+    $charge = app(OrderChargeCalculator::class)->calculate($order);
+
+    expect((float) $charge->base_price)->toBe(1_400_000.0)
+        ->and(app(OrderChargeCalculator::class)->explainPrice($order, $charge, $charge->freight_rate_id))
+        ->toContain('(chiều đối ứng)');
+});
 
 test('backfill command prices completed orders that had no rate yet and leaves the rest alone', function () {
     $prices = $this->rate->prices;

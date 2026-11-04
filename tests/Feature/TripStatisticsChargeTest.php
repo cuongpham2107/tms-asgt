@@ -411,3 +411,23 @@ test('changing milestones recalculates waiting duration and waiting fee on the f
             "miễn 30'/chặng → tính 45'",
         ]);
 });
+
+test('saving edit charge sets manually_updated_at and reflects in react table row', function () {
+    expect($this->charge->fresh()->manually_updated_at)->toBeNull();
+
+    ($this->page)()
+        ->mountAction('editCharge', arguments: ['orderId' => $this->order->id])
+        ->fillForm([
+            'base_price' => 1_400_000,
+        ])
+        ->callMountedAction();
+
+    $freshCharge = $this->charge->fresh();
+    expect($freshCharge->manually_updated_at)->not->toBeNull()
+        ->and((float) $freshCharge->base_price)->toBe(1_400_000.0);
+
+    $page = ($this->page)();
+    $rows = $page->instance()->getReactTableConfiguration()['rows'];
+    expect($rows[0]['charge']['isEdited'])->toBeTrue()
+        ->and($rows[0]['charge']['updatedAt'])->not->toBeNull();
+});
