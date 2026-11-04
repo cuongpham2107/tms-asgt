@@ -448,7 +448,7 @@ class TripStatisticsReport extends Page
 
                 return $this->findCharge($arguments)?->isLocked()
                     ? 'Dòng cước đang ở trạng thái KHOÁ (đã xuất bảng kê). Nhấn "Mở khoá để sửa" bên dưới để tiếp tục chỉnh sửa.'
-                    : 'Đổi loại hình / trọng tải tính cước xong hãy bấm "Tính lại giá" để tra lại đơn giá.';
+                    : 'Khi đổi loại hình hoặc trọng tải tính cước, đơn giá và giờ chờ sẽ tự động cập nhật ngay theo bảng giá.';
             })
             ->modalWidth(function (array $arguments): Width {
                 $order = Order::find($arguments['orderId'] ?? null);
@@ -475,9 +475,15 @@ class TripStatisticsReport extends Page
                     ->icon('heroicon-m-arrow-path')
                     ->color('info')
                     ->visible(fn (): bool => (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && ! (bool) $this->findCharge($arguments)?->isLocked())
-                    ->action(function () use ($arguments): void {
+                    ->action(function () use ($action, $arguments): void {
                         $orderId = (int) ($arguments['orderId'] ?? 0);
-                        $this->recalculateCharge($orderId);
+                        $formData = $action->getRawData();
+                        if (empty($formData)) {
+                            $editAction = collect($this->mountedActions)->firstWhere('name', 'editCharge');
+                            $formData = $editAction['data'] ?? [];
+                        }
+
+                        $this->recalculateCharge($orderId, $formData);
                         $this->unmountAction(cancelParentActions: true);
                         $this->mountAction('editCharge', ['orderId' => $orderId]);
                     }),
@@ -539,6 +545,7 @@ class TripStatisticsReport extends Page
                     $data = [
                         ...$data,
                         ...$charge->only(self::EDITABLE_CHARGE_FIELDS),
+                        'cargo_type' => $charge->cargo_type?->value ?? $order?->cargo_type?->value,
                         // Số thuần (bỏ ".00" của cột decimal) để mask tiền hiển thị "1,300,000".
                         'base_price' => $charge->base_price === null ? null : (float) $charge->base_price,
                         'waiting_fee' => (float) $charge->waiting_fee,
@@ -634,7 +641,7 @@ class TripStatisticsReport extends Page
             });
     }
 
-    public function recalculateCharge(int $orderId): void
+    public function recalculateCharge(int $orderId, ?array $formData = null): void
     {
         $order = Order::find($orderId);
 
@@ -642,15 +649,74 @@ class TripStatisticsReport extends Page
             return;
         }
 
-        $charge = app(OrderChargeCalculator::class)->calculate($order);
+        $charge = $this->resolveCharge($orderId);
 
-        $this->bumpDataVersion();
+        if ($charge === null) {
+            return;
+        }
 
         if ($charge->isLocked()) {
             Notification::make()->title('Dòng cước đã khoá, không tính lại')->warning()->send();
 
             return;
         }
+
+        if ($formData !== null && ! empty($formData)) {
+            if (array_key_exists('cargo_type', $formData)) {
+                $charge->cargo_type = filled($formData['cargo_type']) ? CargoType::tryFrom((string) $formData['cargo_type']) : $charge->cargo_type;
+            }
+            if (array_key_exists('chargeable_tonnage', $formData)) {
+                $charge->chargeable_tonnage = filled($formData['chargeable_tonnage']) && is_numeric($formData['chargeable_tonnage'])
+                    ? (float) $formData['chargeable_tonnage']
+                    : null;
+            }
+            if (array_key_exists('rate_type', $formData)) {
+                $charge->rate_type = (string) ($formData['rate_type'] ?? '');
+            }
+            if (array_key_exists('surcharge_type', $formData)) {
+                $charge->surcharge_type = (string) ($formData['surcharge_type'] ?? '');
+            }
+            if (array_key_exists('is_return_trip', $formData)) {
+                $charge->is_return_trip = (bool) ($formData['is_return_trip'] ?? false);
+            }
+            if (array_key_exists('return_trip_percent', $formData)) {
+                $charge->return_trip_percent = (float) ($formData['return_trip_percent'] ?? 0);
+            }
+            if (array_key_exists('fuel_adjustment_percent', $formData)) {
+                $charge->fuel_adjustment_percent = (float) ($formData['fuel_adjustment_percent'] ?? 0);
+            }
+            if (array_key_exists('vat_percent', $formData)) {
+                $charge->vat_percent = (float) ($formData['vat_percent'] ?? 0);
+            }
+            if (array_key_exists('note', $formData)) {
+                $charge->note = $formData['note'];
+            }
+            if (array_key_exists('delivery_notes', $formData) && is_array($formData['delivery_notes'])) {
+                $charge->delivery_notes = collect($formData['delivery_notes'])
+                    ->map(fn (array $note): array => [
+                        'number' => filled($note['number'] ?? null) ? trim($note['number']) : null,
+                        'actual_weight' => is_numeric($note['actual_weight'] ?? null) ? (float) $note['actual_weight'] : null,
+                        'chargeable_weight' => is_numeric($note['chargeable_weight'] ?? null) ? (float) $note['chargeable_weight'] : null,
+                    ])
+                    ->values()
+                    ->all();
+            }
+            if (array_key_exists('fees', $formData) && is_array($formData['fees'])) {
+                $charge->fees()->delete();
+                $charge->fees()->createMany(collect($formData['fees'])
+                    ->filter(fn (array $fee): bool => filled($fee['fee_type_id'] ?? null) && (float) ($fee['amount'] ?? 0) > 0)
+                    ->map(fn (array $fee): array => ['fee_type_id' => $fee['fee_type_id'], 'amount' => (float) $fee['amount']])
+                    ->all());
+            }
+
+            $this->saveTimestamps($orderId, $formData);
+            $charge->save();
+        }
+
+        $charge = app(OrderChargeCalculator::class)->calculate($order, $charge);
+
+        $this->clearBaseRowsCache();
+        $this->bumpDataVersion();
 
         Notification::make()
             ->title($charge->base_price === null ? 'Chưa tìm thấy giá phù hợp' : 'Đã tính lại cước')
@@ -688,6 +754,7 @@ class TripStatisticsReport extends Page
     private const EDITABLE_CHARGE_FIELDS = [
         'freight_rate_id',
         'price_code',
+        'cargo_type',
         'rate_type',
         'surcharge_type',
         'chargeable_tonnage',
@@ -752,6 +819,60 @@ class TripStatisticsReport extends Page
         }
 
         return $order->charge ?? app(OrderChargeCalculator::class)->calculate($order);
+    }
+
+    private function getAvailableTiersText(?Order $order, ?OrderCharge $charge): ?string
+    {
+        if ($order === null) {
+            return null;
+        }
+
+        $order->loadMissing(['pickupLocation', 'deliveryPoints.location']);
+        $customerId = $charge?->customer_id ?? $order->customer_id;
+        $date = $order->planned_loading_at ?? $order->created_at ?? now();
+        $origin = $order->pickupLocation?->billing_zone_id;
+        $destination = $order->deliveryPoints->sortBy('sequence')->first()?->location?->billing_zone_id;
+
+        if ($customerId === null || $origin === null || $destination === null) {
+            return null;
+        }
+
+        $primaryCargoType = $charge?->cargo_type ?? $order->cargo_type ?? CargoType::Gcr;
+        $cargoTypes = [$primaryCargoType];
+        if ($primaryCargoType !== CargoType::Gcr) {
+            $cargoTypes[] = CargoType::Gcr;
+        }
+
+        $rates = collect();
+        foreach ($cargoTypes as $cargoType) {
+            $found = FreightRate::query()
+                ->where('customer_id', $customerId)
+                ->where(function ($q) use ($origin, $destination) {
+                    $q->where(fn ($sub) => $sub->where('origin_zone_id', $origin)->where('destination_zone_id', $destination))
+                        ->orWhere(fn ($sub) => $sub->where('origin_zone_id', $destination)->where('destination_zone_id', $origin));
+                })
+                ->where('cargo_type', $cargoType)
+                ->effectiveOn($date)
+                ->get();
+
+            if ($found->isNotEmpty()) {
+                $rates = $found;
+                break;
+            }
+        }
+
+        $allTiers = [];
+        foreach ($rates as $r) {
+            $allTiers = array_merge($allTiers, array_keys($r->prices ?? []));
+        }
+        $allTiers = array_unique(array_filter($allTiers, fn ($t) => is_numeric($t)));
+        if (empty($allTiers)) {
+            return null;
+        }
+
+        sort($allTiers, SORT_NUMERIC);
+
+        return implode(', ', array_map(fn ($t) => $t.' tấn', $allTiers));
     }
 
     /**
@@ -880,17 +1001,30 @@ class TripStatisticsReport extends Page
             return $this->chargeSummarySchema($charge, $orderId, null, null);
         }
 
+        $charge ??= $this->resolveCharge($orderId);
+
         $money = fn (string $name, string $label): TextInput => self::moneyInput($name)->label($label);
 
         // Đổi loại hình / trọng tải / quay đầu → tra lại đơn giá ngay trên form (chưa lưu).
-        $refreshPrice = function (Get $get, Set $set) use ($charge): void {
-            if ($charge === null || $charge->isLocked() || $charge->order === null) {
+        $refreshPrice = function (Get $get, Set $set, bool $notify = false) use (&$charge, $order): void {
+            $charge ??= $order->charge ?? app(OrderChargeCalculator::class)->calculate($order);
+            if ($charge === null || $charge->isLocked() || $order === null) {
                 return;
             }
 
-            $draft = app(OrderChargeCalculator::class)->previewFreightRate($charge->order, $charge, [
+            $tonnage = $get('chargeable_tonnage');
+            if (blank($tonnage)) {
+                $set('base_price', null);
+                $set('freight_rate_id', null);
+                $set('price_code', null);
+
+                return;
+            }
+
+            $draft = app(OrderChargeCalculator::class)->previewFreightRate($order, $charge, [
+                'cargo_type' => $get('cargo_type'),
                 'rate_type' => $get('rate_type'),
-                'chargeable_tonnage' => $get('chargeable_tonnage'),
+                'chargeable_tonnage' => $tonnage,
                 'is_return_trip' => $get('is_return_trip'),
                 'return_trip_percent' => $get('return_trip_percent'),
             ]);
@@ -898,10 +1032,28 @@ class TripStatisticsReport extends Page
             $set('base_price', $draft->base_price);
             $set('freight_rate_id', $draft->freight_rate_id);
             $set('price_code', $draft->price_code);
+
+            if ($notify) {
+                if ($draft->base_price !== null) {
+                    Notification::make()
+                        ->title('Đã tự động cập nhật đơn giá theo bảng giá')
+                        ->body(($draft->price_code ? "Mã giá: {$draft->price_code} — " : '').number_format((float) $draft->base_price, 0, ',', '.').' đ')
+                        ->success()
+                        ->send();
+                } else {
+                    $availableTiers = $this->getAvailableTiersText($order, $charge);
+                    Notification::make()
+                        ->title("Chưa có đơn giá cho trọng tải {$tonnage} tấn")
+                        ->body($availableTiers ? "Bảng giá hiện có các bậc: {$availableTiers}. Nhấn icon '+' để bổ sung vào bảng giá." : 'Chưa có bảng giá cho tuyến này.')
+                        ->warning()
+                        ->send();
+                }
+            }
         };
 
         // Đổi mốc thời gian / loại phụ phí / trọng tải → tính lại giờ chờ ngay trên form (chưa lưu).
-        $refreshWaiting = function (Get $get, Set $set) use ($charge, $order): void {
+        $refreshWaiting = function (Get $get, Set $set) use (&$charge, $order): void {
+            $charge ??= $order->charge;
             if ($charge === null || $charge->isLocked() || $order === null) {
                 return;
             }
@@ -934,23 +1086,41 @@ class TripStatisticsReport extends Page
                         Section::make('Cách tính cước')
                             ->description('Đổi các ô này thì đơn giá được tra lại theo bảng giá.')
                             ->icon(Heroicon::OutlinedAdjustmentsHorizontal)
-                            ->columns(3)
+                            ->columns(['default' => 1, 'sm' => 2, 'lg' => 4])
                             ->compact()
                             ->schema([
+                                Select::make('cargo_type')
+                                    ->label('Loại hàng tính cước')
+                                    ->options([
+                                        CargoType::Gcr->value => 'Hàng thường (GCR)',
+                                        CargoType::Dangerous->value => 'Hàng nguy hiểm (DGR)',
+                                    ])
+                                    ->default(fn () => $charge?->cargo_type?->value ?? $order?->cargo_type?->value ?? CargoType::Gcr->value)
+                                    ->live()
+                                    ->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
                                 FreightRateType::select('rate_type')->label('Loại hình tính cước')
-                                    ->live()->afterStateUpdated($refreshPrice),
+                                    ->live()->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
                                 SurchargeType::select('surcharge_type')->label('Loại hình tính phụ phí')
                                     ->live()->afterStateUpdated($refreshWaiting),
                                 TextInput::make('chargeable_tonnage')->label('Trọng tải tính cước')->numeric()->minValue(0)->suffix('tấn')
                                     ->live(debounce: 500)->afterStateUpdated(function (Get $get, Set $set) use ($refreshPrice, $refreshWaiting): void {
-                                        $refreshPrice($get, $set);
+                                        $refreshPrice($get, $set, notify: true);
                                         $refreshWaiting($get, $set);
+                                    })
+                                    ->helperText(function (Get $get) use ($order, &$charge): ?string {
+                                        $tempCharge = $charge ? (clone $charge) : null;
+                                        if ($tempCharge && $get('cargo_type')) {
+                                            $tempCharge->cargo_type = CargoType::tryFrom((string) $get('cargo_type'));
+                                        }
+                                        $tiers = $this->getAvailableTiersText($order, $tempCharge);
+
+                                        return $tiers ? "Bậc giá có sẵn: {$tiers}" : null;
                                     }),
                                 Toggle::make('is_return_trip')->label('Chuyến quay đầu')->inline(false)
-                                    ->live()->afterStateUpdated($refreshPrice),
+                                    ->live()->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
                                 TextInput::make('return_trip_percent')->label('% đơn giá khi quay đầu')->numeric()->minValue(0)->suffix('%')
                                     ->visible(fn (Get $get): bool => (bool) $get('is_return_trip'))
-                                    ->live(debounce: 500)->afterStateUpdated($refreshPrice),
+                                    ->live(debounce: 500)->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
                                 Hidden::make('freight_rate_id'),
                                 Hidden::make('price_code'),
                             ]),

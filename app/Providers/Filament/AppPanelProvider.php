@@ -94,7 +94,22 @@ class AppPanelProvider extends PanelProvider
                     ->navigationIcon('heroicon-o-shield-check')
                     ->activeNavigationIcon('heroicon-s-shield-check')
                     ->navigationGroup('Cấu hình')
-                    ->navigationSort(3),
+                    ->navigationSort(3)
+                    ->gridColumns([
+                        'default' => 1,
+                        'sm' => 2,
+                        'lg' => 3
+                    ])
+                    ->sectionColumnSpan(1)
+                    ->checkboxListColumns([
+                        'default' => 1,
+                        'sm' => 2,
+                        'lg' => 4,
+                    ])
+                    ->resourceCheckboxListColumns([
+                        'default' => 1,
+                        'sm' => 2,
+                    ]),
                 FilamentFullCalendarPlugin::make()
                     ->selectable()
                     ->editable(),

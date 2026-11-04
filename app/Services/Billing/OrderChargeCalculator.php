@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Enums\CargoType;
 use App\Enums\CheckpointType;
 use App\Models\FreightRate;
 use App\Models\Order;
@@ -23,9 +24,9 @@ class OrderChargeCalculator
 {
     public function __construct(private readonly TripExcelExportService $tripSummary) {}
 
-    public function calculate(Order $order): OrderCharge
+    public function calculate(Order $order, ?OrderCharge $charge = null): OrderCharge
     {
-        $charge = OrderCharge::firstOrNew(['order_id' => $order->id]);
+        $charge ??= OrderCharge::firstOrNew(['order_id' => $order->id]);
 
         if ($charge->isLocked()) {
             return $charge;
@@ -49,6 +50,7 @@ class OrderChargeCalculator
             ]);
         }
 
+        $charge->chargeable_tonnage ??= $order->chargeable_weight;
         $charge->trip_id = $order->trip_id;
 
         $this->applyFreightRate($order, $charge, $chargeDate);
@@ -68,7 +70,13 @@ class OrderChargeCalculator
      */
     public function previewFreightRate(Order $order, OrderCharge $charge, array $attributes): OrderCharge
     {
+        $cargoType = $attributes['cargo_type'] ?? null;
+        if (is_string($cargoType)) {
+            $cargoType = CargoType::tryFrom($cargoType);
+        }
+
         $draft = (clone $charge)->fill([
+            'cargo_type' => $cargoType ?? $charge->cargo_type ?? $order->cargo_type ?? CargoType::Gcr,
             'rate_type' => (string) ($attributes['rate_type'] ?? ''),
             'chargeable_tonnage' => is_numeric($attributes['chargeable_tonnage'] ?? null) ? $attributes['chargeable_tonnage'] : null,
             'is_return_trip' => (bool) ($attributes['is_return_trip'] ?? false),
@@ -112,33 +120,41 @@ class OrderChargeCalculator
         $origin = $order->pickupLocation?->billing_zone_id;
         $destination = $order->deliveryPoints->sortBy('sequence')->first()?->location?->billing_zone_id;
 
-        if ($origin === null || $destination === null || $charge->cargo_type === null || $charge->chargeable_tonnage === null) {
+        if ($origin === null || $destination === null || $charge->chargeable_tonnage === null) {
             return null;
         }
 
         $vehicleType = $order->trip?->vehicle?->vehicle_type;
         $isStandardRate = blank($charge->rate_type) || $charge->rate_type === 'Chuẩn';
 
-        foreach ([[$origin, $destination], [$destination, $origin]] as [$from, $to]) {
-            $rate = FreightRate::query()
-                ->with(['customer', 'originZone', 'destinationZone'])
-                ->where('customer_id', $charge->customer_id)
-                ->where('origin_zone_id', $from)
-                ->where('destination_zone_id', $to)
-                ->where('cargo_type', $charge->cargo_type)
-                ->when(
-                    $isStandardRate,
-                    fn (Builder $q) => $q->where(fn (Builder $sq) => $sq->whereNull('rate_type')->orWhere('rate_type', '')->orWhere('rate_type', 'Chuẩn')),
-                    fn (Builder $q) => $q->where('rate_type', $charge->rate_type)
-                )
-                ->where(fn (Builder $q) => $q->whereNull('vehicle_type')->orWhere('vehicle_type', $vehicleType))
-                ->effectiveOn($date)
-                ->orderByDesc('vehicle_type')
-                ->get()
-                ->first(fn (FreightRate $rate): bool => $rate->priceFor($charge->chargeable_tonnage) !== null);
+        $primaryCargoType = $charge->cargo_type ?? $order->cargo_type ?? CargoType::Gcr;
+        $cargoTypes = [$primaryCargoType];
+        if ($primaryCargoType !== CargoType::Gcr) {
+            $cargoTypes[] = CargoType::Gcr;
+        }
 
-            if ($rate !== null) {
-                return $rate;
+        foreach ($cargoTypes as $cargoType) {
+            foreach ([[$origin, $destination], [$destination, $origin]] as [$from, $to]) {
+                $rate = FreightRate::query()
+                    ->with(['customer', 'originZone', 'destinationZone'])
+                    ->where('customer_id', $charge->customer_id)
+                    ->where('origin_zone_id', $from)
+                    ->where('destination_zone_id', $to)
+                    ->where('cargo_type', $cargoType)
+                    ->when(
+                        $isStandardRate,
+                        fn (Builder $q) => $q->where(fn (Builder $sq) => $sq->whereNull('rate_type')->orWhere('rate_type', '')->orWhere('rate_type', 'Chuẩn')),
+                        fn (Builder $q) => $q->where('rate_type', $charge->rate_type)
+                    )
+                    ->where(fn (Builder $q) => $q->whereNull('vehicle_type')->orWhere('vehicle_type', $vehicleType))
+                    ->effectiveOn($date)
+                    ->orderByDesc('vehicle_type')
+                    ->get()
+                    ->first(fn (FreightRate $rate): bool => $rate->priceFor($charge->chargeable_tonnage) !== null);
+
+                if ($rate !== null) {
+                    return $rate;
+                }
             }
         }
 
@@ -304,8 +320,11 @@ class OrderChargeCalculator
         if ($rate !== null) {
             $isReverse = ($pickup?->billing_zone_id !== null && $rate->origin_zone_id !== $pickup->billing_zone_id);
             $direction = "{$rate->originZone?->name} → {$rate->destinationZone?->name}".($isReverse ? ' (chiều đối ứng)' : '');
+            $cargoNote = ($charge->cargo_type !== null && $rate->cargo_type !== $charge->cargo_type)
+                ? ' (áp dụng giá hàng thường)'
+                : '';
 
-            return "{$direction} · {$tonnage}T: "
+            return "{$direction} · {$tonnage}T{$cargoNote}: "
                 .number_format((float) $rate->priceFor($charge->chargeable_tonnage), 0, ',', '.').' đ'
                 .($charge->is_return_trip ? ' × '.(float) $charge->return_trip_percent.'% quay đầu' : '');
         }
