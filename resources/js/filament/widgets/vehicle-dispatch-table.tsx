@@ -59,7 +59,9 @@ interface PageApi {
     openTripModal(vehicleId: number): Promise<unknown>
     openGpsModal(vehicleId: number): Promise<unknown>
     openTimelineModal(tripId: number): Promise<unknown>
-    mountTableAction(name: string, record: number): Promise<unknown>
+    openDriverSwapModal(vehicleId: number): Promise<unknown>
+    openStatusAction?(name: string, vehicleId: number): Promise<unknown>
+    mountTableAction(name: string, record: number | string): Promise<unknown>
     sortTable(column: string): Promise<unknown>
 }
 
@@ -170,7 +172,22 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
 
         setLoadingActionRowId(row.id)
         try {
-            await page.mountTableAction(row.statusAction.name, row.id)
+            if (row.statusAction.name === 'reassign_driver') {
+                if (typeof page.openDriverSwapModal === 'function') {
+                    await page.openDriverSwapModal(row.id)
+                } else if (typeof page.openStatusAction === 'function') {
+                    await page.openStatusAction(row.statusAction.name, row.id)
+                }
+            } else if (typeof page.openStatusAction === 'function') {
+                await page.openStatusAction(row.statusAction.name, row.id)
+            } else {
+                await page.mountTableAction(row.statusAction.name, String(row.id))
+            }
+        } catch (error: any) {
+            console.error('[VehicleDispatchTable] callStatusAction failed:', error)
+            if (error?.status === 419) {
+                window.location.reload()
+            }
         } finally {
             setLoadingActionRowId(null)
         }

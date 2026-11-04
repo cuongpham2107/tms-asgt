@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Enums\CheckpointType;
+use App\Enums\DriverSwapReason;
 use App\Enums\EupCarStatus;
 use App\Enums\GeoCheckStatus;
 use App\Enums\OnDutyLocation;
@@ -88,6 +89,12 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public ?int $selectedVehicleIdForGps = null;
 
+    public ?int $selectedVehicleIdForSwap = null;
+
+    public ?int $swapNewDriverId = null;
+
+    public string $swapReason = 'cargo_not_unloaded';
+
     /** Tăng sau khi dữ liệu đổi (Echo/refresh) để widget React vẽ lại. */
     public int $dataVersion = 0;
 
@@ -127,6 +134,93 @@ class VehicleDispatchBoard extends Page implements HasTable
     {
         $this->selectedTripIdForTimeline = $tripId;
         $this->dispatch('open-modal', id: 'vehicle-timeline-modal');
+    }
+
+    public function openDriverSwapModal(int $vehicleId): void
+    {
+        $this->selectedVehicleIdForSwap = $vehicleId;
+        $this->swapNewDriverId = null;
+        $this->swapReason = DriverSwapReason::CargoNotUnloaded->value;
+        $this->resetErrorBag();
+        $this->dispatch('open-modal', id: 'vehicle-swap-driver-modal');
+    }
+
+    public function openStatusAction(string $name, int $vehicleId): void
+    {
+        if ($name === 'reassign_driver') {
+            $this->openDriverSwapModal($vehicleId);
+
+            return;
+        }
+
+        $this->mountTableAction($name, (string) $vehicleId);
+        $this->dispatch('open-modal', id: "fi-{$this->getId()}-action-0");
+    }
+
+    public function getSelectedVehicleForSwap(): ?Vehicle
+    {
+        return $this->selectedVehicleIdForSwap ? Vehicle::find($this->selectedVehicleIdForSwap) : null;
+    }
+
+    public function getSelectedTripForSwap(): ?Trip
+    {
+        if (! $this->selectedVehicleIdForSwap) {
+            return null;
+        }
+
+        $vehicle = Vehicle::find($this->selectedVehicleIdForSwap);
+
+        return $vehicle ? ReassignDriverAction::resolveTrip($vehicle) : null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getAvailableDriversForSwap(): array
+    {
+        return ReassignDriverAction::getDriverOptions($this->getSelectedTripForSwap());
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getAvailableDriversListForSwap(): array
+    {
+        return ReassignDriverAction::getDriverListForPicker($this->getSelectedTripForSwap());
+    }
+
+    public function getSwapHandoverInfo(): string
+    {
+        return ReassignDriverAction::getHandoverInfo($this->getSelectedTripForSwap());
+    }
+
+    public function submitDriverSwap(): void
+    {
+        $trip = $this->getSelectedTripForSwap();
+        if (! $trip) {
+            $this->dispatch('close-modal', id: 'vehicle-swap-driver-modal');
+
+            return;
+        }
+
+        if (! $this->swapNewDriverId) {
+            $this->addError('swapNewDriverId', 'Vui lòng chọn tài xế mới.');
+
+            return;
+        }
+
+        $success = ReassignDriverAction::executeSwap($trip, [
+            'new_driver_id' => $this->swapNewDriverId,
+            'reason' => $this->swapReason,
+        ]);
+
+        if ($success) {
+            $this->dispatch('close-modal', id: 'vehicle-swap-driver-modal');
+            $this->selectedVehicleIdForSwap = null;
+            $this->swapNewDriverId = null;
+            $this->flushCachedTableRecords();
+            $this->dataVersion++;
+        }
     }
 
     public function getSelectedTripForTimeline(): ?Trip
