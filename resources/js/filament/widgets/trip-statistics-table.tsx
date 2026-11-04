@@ -125,13 +125,13 @@ interface Column {
     render: (row: Row, page: PageApi) => ReactNode
 }
 
-const money = (value: number | null | undefined): string => (value === null || value === undefined ? '—' : value.toLocaleString('vi-VN'))
+const money = (value: number | null | undefined): string => (!value ? '0' : value.toLocaleString('vi-VN'))
 
 const count = (value: number): string => value.toLocaleString('vi-VN')
 
 const weight = (value: number | null): string =>
-    value === null
-        ? '—'
+    !value
+        ? '0'
         : value.toLocaleString('vi-VN', {
               minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
               maximumFractionDigits: 2,
@@ -378,7 +378,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             render: (row) => (row.isReturnTrip ? badge('Quay đầu', 'success') : <span className="text-gray-300 dark:text-gray-600">—</span>),
         },
         { key: 'driverName', groupId: 3, label: 'Họ tên lái xe', minWidth: 120, extra: 'px-3 font-medium text-gray-800 dark:text-gray-200', render: (row) => row.driverName || '—' },
-        { key: 'kmLoaded', groupId: 4, label: 'Km có hàng', align: 'right', minWidth: 85, extra: 'px-3 font-mono', render: (row) => (row.kmLoaded !== null ? row.kmLoaded.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '—') },
+        { key: 'kmLoaded', groupId: 4, label: 'Km có hàng', align: 'right', minWidth: 85, extra: 'px-3 font-mono', render: (row) => (row.kmLoaded !== null ? row.kmLoaded.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '0') },
         {
             key: 'kmEmpty',
             groupId: 4,
@@ -386,7 +386,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             align: 'right',
             minWidth: 85,
             extra: 'px-3 font-mono text-gray-500',
-            render: (row) => (row.kmEmpty !== null ? row.kmEmpty.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '—'),
+            render: (row) => (row.kmEmpty !== null ? row.kmEmpty.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '0'),
         },
         { key: 'pcs', groupId: 4, label: 'PCS', align: 'right', minWidth: 110, extra: 'px-1.5 font-mono text-xs', render: (row, page) => <MetricCell row={row} field="total_packages" value={row.pcs} page={page} /> },
         { key: 'gw', groupId: 4, label: 'GW (kg)', align: 'right', minWidth: 125, extra: 'px-1.5 font-mono text-xs', render: (row, page) => <MetricCell row={row} field="total_weight" value={row.gw} page={page} /> },
@@ -401,7 +401,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             align: 'right',
             minWidth: 95,
             extra: 'px-3 font-mono font-semibold text-gray-900 dark:text-gray-100',
-            render: (row) => (row.chargeableWeight !== null ? row.chargeableWeight.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '—'),
+            render: (row) => (row.chargeableWeight !== null ? row.chargeableWeight.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '0'),
         })
     }
 
@@ -424,9 +424,9 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                 minWidth: 110,
                 extra: 'px-3 font-mono',
                 render: (row) =>
-                    row.charge === null ? '—' : row.charge.basePrice === null ? <span className="font-sans font-medium text-amber-700 dark:text-amber-400">Chưa có giá</span> : money(row.charge.basePrice),
+                    row.charge === null ? '0' : row.charge.basePrice === null ? <span className="font-sans font-medium text-amber-700 dark:text-amber-400">Chưa có giá</span> : money(row.charge.basePrice),
             },
-            { key: 'fuelPercent', groupId: 5, label: '% dầu', align: 'right', minWidth: 70, extra: 'px-3 font-mono', render: (row) => (row.charge ? percent(row.charge.fuelPercent) : '—') },
+            { key: 'fuelPercent', groupId: 5, label: '% dầu', align: 'right', minWidth: 70, extra: 'px-3 font-mono', render: (row) => (row.charge ? percent(row.charge.fuelPercent) : '0%') },
             { key: 'adjustedPrice', groupId: 5, label: 'Đơn giá sau ĐC', align: 'right', minWidth: 120, extra: 'px-3 font-mono font-medium text-gray-900 dark:text-gray-100', render: (row) => money(row.charge?.adjustedPrice) },
             {
                 key: 'waitingDuration',
@@ -436,7 +436,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                 align: 'right',
                 minWidth: 85,
                 extra: 'px-3 font-mono text-gray-700 dark:text-gray-300',
-                render: (row) => row.charge?.waitingDuration ?? '—',
+                render: (row) => row.charge?.waitingDuration || '0',
             },
             {
                 key: 'waitingFee',
@@ -446,7 +446,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                 align: 'right',
                 minWidth: 105,
                 extra: 'px-3 font-mono',
-                render: (row) => (row.charge === null ? '—' : row.charge.waitingFee > 0 ? money(row.charge.waitingFee) : '—'),
+                render: (row) => (row.charge && row.charge.waitingFee > 0 ? money(row.charge.waitingFee) : '0'),
             },
             {
                 key: 'otherFees',
@@ -455,7 +455,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                 align: 'right',
                 minWidth: 100,
                 extra: 'px-3 font-mono',
-                render: (row) => <span title={row.charge?.otherFeesCount ? `${row.charge.otherFeesCount} khoản phí` : ''}>{row.charge && row.charge.otherFees > 0 ? money(row.charge.otherFees) : '—'}</span>,
+                render: (row) => <span title={row.charge?.otherFeesCount ? `${row.charge.otherFeesCount} khoản phí` : ''}>{row.charge && row.charge.otherFees > 0 ? money(row.charge.otherFees) : '0'}</span>,
             },
             {
                 key: 'vat',
@@ -464,7 +464,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                 align: 'right',
                 minWidth: 90,
                 extra: 'px-3 font-mono',
-                render: (row) => <span title={row.charge ? `VAT ${row.charge.vatPercent}%` : ''}>{row.charge && row.charge.vatAmount > 0 ? money(row.charge.vatAmount) : '—'}</span>,
+                render: (row) => <span title={row.charge ? `VAT ${row.charge.vatPercent}%` : ''}>{row.charge && row.charge.vatAmount > 0 ? money(row.charge.vatAmount) : '0'}</span>,
             },
             {
                 key: 'total',
@@ -474,7 +474,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                 minWidth: 120,
                 extra: 'px-3 font-mono font-bold text-sky-700 dark:text-sky-300',
                 titleClassName: 'font-bold text-sky-300',
-                render: (row) => (row.charge ? money(row.charge.total) : '—'),
+                render: (row) => (row.charge && row.charge.total > 0 ? money(row.charge.total) : '0'),
             },
             { key: 'actions', groupId: 5, label: 'Thao tác', align: 'center', minWidth: 60, extra: 'px-2', render: (row, page) => <Actions row={row} page={page} /> },
         )
