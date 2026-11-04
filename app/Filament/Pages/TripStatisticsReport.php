@@ -1488,7 +1488,7 @@ class TripStatisticsReport extends Page
                 Grid::make(3)->schema([
                     TextEntry::make('summary_loading_duration')
                         ->label('Đóng hàng')
-                        ->icon('heroicon-m-clock')
+                        ->inlineLabel()
                         ->state(function (Get $get) use ($duration): string {
                             $tA = $get('summary_loading_at') ? Carbon::parse($get('summary_loading_at')) : null;
                             $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
@@ -1498,7 +1498,7 @@ class TripStatisticsReport extends Page
                         ->color('warning'),
                     TextEntry::make('summary_travel_duration')
                         ->label('Di chuyển')
-                        ->icon('heroicon-m-clock')
+                        ->inlineLabel()
                         ->state(function (Get $get) use ($duration): string {
                             $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
                             $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
@@ -1508,7 +1508,7 @@ class TripStatisticsReport extends Page
                         ->color('info'),
                     TextEntry::make('summary_unloading_duration')
                         ->label('Hạ hàng')
-                        ->icon('heroicon-m-clock')
+                        ->inlineLabel()
                         ->state(function (Get $get) use ($duration): string {
                             $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
                             $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at')) : null;
