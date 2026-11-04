@@ -523,14 +523,17 @@ class TripStatisticsReport extends Page
                 $formatTime = fn (mixed $value): ?string => $value instanceof Carbon ? $value->format('Y-m-d H:i:s') : ($value ? Carbon::parse($value)->format('Y-m-d H:i:s') : null);
 
                 $data = [
-                    'total_packages' => $order?->total_packages,
-                    'total_weight' => $order?->total_weight !== null ? (float) $order->total_weight : null,
                     'summary_requested_at' => $formatTime($order?->planned_loading_at),
                     'summary_loading_at' => $formatTime($row['time_a'] ?? null),
                     'summary_departed_at' => $formatTime($row['time_b'] ?? null),
                     'summary_arrived_at' => $formatTime($row['time_c'] ?? null),
                     'summary_unloaded_at' => $formatTime($row['time_d'] ?? null),
                 ];
+
+                if (! (bool) $order?->isExternal()) {
+                    $data['total_packages'] = $order?->total_packages;
+                    $data['total_weight'] = $order?->total_weight !== null ? (float) $order->total_weight : null;
+                }
 
                 if ($charge !== null) {
                     $data = [
@@ -554,26 +557,26 @@ class TripStatisticsReport extends Page
                     return;
                 }
 
-                if (array_key_exists('total_packages', $data)) {
-                    $order->total_packages = filled($data['total_packages']) ? max(0, (int) $data['total_packages']) : null;
-                }
-                if (array_key_exists('total_weight', $data)) {
-                    $order->total_weight = filled($data['total_weight']) ? max(0, round((float) $data['total_weight'], 2)) : null;
-                }
-                $order->save();
-
-                if ($order->deliveryPoints->count() === 1) {
-                    $dp = $order->deliveryPoints->first();
+                if (! $order->isExternal()) {
                     if (array_key_exists('total_packages', $data)) {
-                        $dp->total_packages = $order->total_packages;
+                        $order->total_packages = filled($data['total_packages']) ? max(0, (int) $data['total_packages']) : null;
                     }
                     if (array_key_exists('total_weight', $data)) {
-                        $dp->total_weight = $order->total_weight;
+                        $order->total_weight = filled($data['total_weight']) ? max(0, round((float) $data['total_weight'], 2)) : null;
                     }
-                    $dp->save();
-                }
+                    $order->save();
 
-                if (! $order->isExternal()) {
+                    if ($order->deliveryPoints->count() === 1) {
+                        $dp = $order->deliveryPoints->first();
+                        if (array_key_exists('total_packages', $data)) {
+                            $dp->total_packages = $order->total_packages;
+                        }
+                        if (array_key_exists('total_weight', $data)) {
+                            $dp->total_weight = $order->total_weight;
+                        }
+                        $dp->save();
+                    }
+
                     $this->saveTimestamps($orderId, $data);
 
                     $this->clearBaseRowsCache();
@@ -1099,11 +1102,13 @@ class TripStatisticsReport extends Page
                         ->badge()
                         ->color($cargoType?->getColor() ?? 'gray'),
                 ]),
-            Section::make('Sản lượng hàng hoá')
+        ];
+
+        if (! (bool) $order?->isExternal()) {
+            $sections[] = Section::make('Sản lượng hàng hoá')
                 ->icon(Heroicon::OutlinedCube)
                 ->iconColor('warning')
                 ->compact()
-                ->disabled(fn (): bool => (bool) $charge?->isLocked())
                 ->columns(2)
                 ->schema([
                     TextInput::make('total_packages')
@@ -1119,8 +1124,10 @@ class TripStatisticsReport extends Page
                         ->placeholder('0.00')
                         ->prefixIcon(Heroicon::OutlinedScale)
                         ->suffix('kg'),
-                ]),
-            Section::make('Mốc thời gian')
+                ]);
+        }
+
+        $sections[] = Section::make('Mốc thời gian')
                 ->icon(Heroicon::OutlinedClock)
                 ->iconColor('info')
                 ->compact()
@@ -1200,8 +1207,7 @@ class TripStatisticsReport extends Page
                             ->badge()
                             ->color('warning'),
                     ]),
-                ]),
-        ];
+                ]);
 
         if ($charge !== null && (bool) $order?->isExternal()) {
             $sections[] = Section::make('Tính giá')
