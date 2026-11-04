@@ -217,7 +217,7 @@ test('trip statistics report calculates waiting 22h correctly when delivery exte
     // time1 = 18:00 - 17:00 = 60 mins
     // time2 = 19:00 - 18:00 = 60 mins
     // time3 = 22:45 - 19:00 = 225 mins
-    // time4 (22h wait) = 22:00 - 19:00 = 180 mins (khi C < 22:00 và D >= 22:00)
+    // time4 (22h wait) = time1 (60) + time2 (60) + (22:00 - 19:00 = 180) = 300 mins (khi C < 22:00 và D >= 22:00)
     TripCheckpoint::create([
         'trip_id' => $trip->id,
         'order_id' => $order->id,
@@ -259,7 +259,7 @@ test('trip statistics report calculates waiting 22h correctly when delivery exte
     expect($nightRow['time_loading'])->toBe(60);
     expect($nightRow['time_travel'])->toBe(60);
     expect($nightRow['time_unloading'])->toBe(225);
-    expect($nightRow['time_waiting_22h'])->toBe(180); // 22:00 - 19:00
+    expect($nightRow['time_waiting_22h'])->toBe(300); // 60 + 60 + 180
     expect($nightRow['time_total_trip'])->toBe(345); // 60 + 60 + 225
 });
 
