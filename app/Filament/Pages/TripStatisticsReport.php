@@ -659,7 +659,7 @@ class TripStatisticsReport extends Page
 
     public function recalculateCharge(int $orderId, ?array $formData = null): void
     {
-        $order = Order::find($orderId);
+        $order = Order::with('customer')->find($orderId);
 
         if ($order === null || $order->type !== OrderType::External) {
             return;
@@ -836,7 +836,7 @@ class TripStatisticsReport extends Page
 
     private function resolveCharge(int $orderId): ?OrderCharge
     {
-        $order = Order::find($orderId);
+        $order = Order::with('customer')->find($orderId);
         if ($order === null || ! $order->isExternal()) {
             return null;
         }
@@ -1022,7 +1022,7 @@ class TripStatisticsReport extends Page
 
     private function chargeFormSchema(?OrderCharge $charge, int $orderId): array
     {
-        $order = Order::find($orderId);
+        $order = Order::with('customer')->find($orderId);
 
         if ($order === null || ! $order->isExternal()) {
             return $this->chargeSummarySchema($charge, $orderId, null, null);
@@ -1332,7 +1332,7 @@ class TripStatisticsReport extends Page
      */
     private function chargeSummarySchema(?OrderCharge $charge, int $orderId, ?Closure $refreshWaiting = null, ?Closure $refreshPrice = null): array
     {
-        $order = Order::find($orderId);
+        $order = Order::with('customer')->find($orderId);
         $row = $order === null
             ? []
             : (app(TripExcelExportService::class)->getTripSummaryRowsFromOrders(Order::query()->whereKey($orderId))->firstWhere('order_id', $orderId) ?? []);
@@ -1397,6 +1397,11 @@ class TripStatisticsReport extends Page
                     $entry('summary_order_code', 'Mã đơn', Heroicon::OutlinedDocumentText, $order?->order_code ?? $row['code'] ?? '—')
                         ->badge()
                         ->color('info')
+                        ->fontFamily(FontFamily::Mono)
+                        ->weight(FontWeight::Bold),
+                    $entry('summary_customer_code', 'Khách hàng', Heroicon::OutlinedBuildingOffice, $order?->customer?->code ?? $row['customer'] ?? '—')
+                        ->badge()
+                        ->color('gray')
                         ->fontFamily(FontFamily::Mono)
                         ->weight(FontWeight::Bold),
                     $entry('summary_vehicle', 'Biển số', Heroicon::OutlinedIdentification, $row['plate_number'] ?? '—')
