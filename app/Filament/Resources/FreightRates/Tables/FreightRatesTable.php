@@ -8,6 +8,7 @@ use App\Enums\FreightRateType;
 use App\Filament\BaseTable;
 use App\Models\FreightRate;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
@@ -98,6 +99,9 @@ class FreightRatesTable extends BaseTable
                     ->relationship('destinationZone', 'name')
                     ->searchable()
                     ->preload(),
-            ]);
+            ], layout: FiltersLayout::AboveContent)
+            // Bộ lọc hiện sẵn phía trên bảng như bảng tài xế, chọn là lọc ngay.
+            ->filtersFormColumns(['sm' => 2, 'md' => 3, 'xl' => 6])
+            ->deferFilters(false);
     }
 }

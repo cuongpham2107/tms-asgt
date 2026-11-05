@@ -107,3 +107,21 @@ test('billing zone form creates a zone and moves locations into it', function ()
         ->assertCanSeeTableRecords([$zone])
         ->assertSee('FUKANG');
 });
+
+test('freight rate list filters by customer and route zones right away', function () {
+    $quangChau = BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu']);
+    $noiBai = BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài']);
+    $clc = Customer::create(['code' => 'CLC', 'name' => 'CLC', 'is_active' => true]);
+
+    $safoRate = FreightRate::create(['customer_id' => $this->customer->id, 'origin_zone_id' => $quangChau->id, 'destination_zone_id' => $noiBai->id, 'cargo_type' => CargoType::Gcr, 'prices' => ['5' => 1_300_000]]);
+    $clcRate = FreightRate::create(['customer_id' => $clc->id, 'origin_zone_id' => $noiBai->id, 'destination_zone_id' => $quangChau->id, 'cargo_type' => CargoType::Gcr, 'prices' => ['5' => 900_000]]);
+
+    Livewire::test(ListFreightRates::class)
+        ->filterTable('customer_id', $clc->id)
+        ->assertCanSeeTableRecords([$clcRate])
+        ->assertCanNotSeeTableRecords([$safoRate])
+        ->resetTableFilters()
+        ->filterTable('origin_zone_id', $quangChau->id)
+        ->assertCanSeeTableRecords([$safoRate])
+        ->assertCanNotSeeTableRecords([$clcRate]);
+});
