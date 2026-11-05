@@ -333,6 +333,18 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->stripCharacters(',')
                                     ->numeric()
                                     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
+                                TextInput::make('pallet_count')
+                                    ->label('Số pallet')
+                                    ->numeric()
+                                    ->integer()
+                                    ->minValue(0)
+                                    ->visible(fn (Get $get): bool => self::isExternalOrder($get))
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
+                                TextInput::make('bill_number')
+                                    ->label('Số Bill/AWB')
+                                    ->maxLength(255)
+                                    ->visible(fn (Get $get): bool => self::isExternalOrder($get))
+                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
                                 Textarea::make('notes')
                                     ->label('Ghi chú')
                                     ->columnSpanFull(),

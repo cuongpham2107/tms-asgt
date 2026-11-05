@@ -38,8 +38,11 @@ class OrderChargeCalculator
         $chargeDate = $order->planned_loading_at ?? $order->created_at ?? now();
 
         if (! $charge->exists) {
+            $order->loadMissing('customer');
             $charge->fill([
                 'customer_id' => $order->customer_id,
+                'fuel_adjustment_percent' => (float) ($order->customer?->fuel_adjustment_percent ?? 0),
+                'cancel_trip_percent' => (float) ($order->customer?->cancel_trip_percent ?? 0),
                 'cargo_type' => $order->cargo_type,
                 'rate_type' => (string) $order->rate_type,
                 'chargeable_tonnage' => $order->chargeable_weight,
@@ -82,7 +85,7 @@ class OrderChargeCalculator
     /**
      * Tra lại đơn giá theo các giá trị đang sửa trên form (chưa lưu) — dùng để xem trước.
      *
-     * @param  array{cargo_type?: mixed, rate_type?: ?string, chargeable_tonnage?: mixed, delivery_notes?: ?array, is_return_trip?: mixed, return_trip_percent?: mixed}  $attributes
+     * @param  array{cargo_type?: mixed, rate_type?: ?string, chargeable_tonnage?: mixed, delivery_notes?: ?array, is_return_trip?: mixed, return_trip_percent?: mixed, is_cancelled_trip?: mixed, cancel_trip_percent?: mixed}  $attributes
      */
     public function previewFreightRate(Order $order, OrderCharge $charge, array $attributes): OrderCharge
     {
@@ -98,6 +101,8 @@ class OrderChargeCalculator
             'delivery_notes' => $attributes['delivery_notes'] ?? $charge->delivery_notes ?? [],
             'is_return_trip' => (bool) ($attributes['is_return_trip'] ?? false),
             'return_trip_percent' => (float) ($attributes['return_trip_percent'] ?? 0),
+            'is_cancelled_trip' => (bool) ($attributes['is_cancelled_trip'] ?? false),
+            'cancel_trip_percent' => (float) ($attributes['cancel_trip_percent'] ?? 0),
         ]);
 
         $order->loadMissing(['pickupLocation', 'deliveryPoints.location', 'trip.vehicle']);
@@ -118,7 +123,7 @@ class OrderChargeCalculator
             return;
         }
 
-        $multiplier = $charge->is_return_trip ? (float) $charge->return_trip_percent / 100 : 1;
+        $multiplier = $charge->priceMultiplier();
 
         $validNotes = collect($charge->delivery_notes ?? [])
             ->filter(fn ($n) => filled($n['chargeable_weight'] ?? null));
@@ -406,17 +411,17 @@ class OrderChargeCalculator
                     $totalBase += (float) $p;
                 }
 
-                $multiplier = $charge->is_return_trip ? (float) $charge->return_trip_percent / 100 : 1;
+                $multiplier = $charge->priceMultiplier();
                 $finalBase = round($totalBase * $multiplier);
 
                 return "{$direction}{$cargoNote}: ".implode(' + ', $parts)
                     .($validNotes->count() > 1 ? ' = '.number_format($finalBase, 0, ',', '.').' đ' : '')
-                    .($charge->is_return_trip ? ' × '.(float) $charge->return_trip_percent.'% quay đầu' : '');
+                    .$charge->priceMultiplierLabel();
             }
 
             return "{$direction} · {$tonnage}T{$cargoNote}: "
                 .number_format((float) $rate->priceFor($charge->chargeable_tonnage), 0, ',', '.').' đ'
-                .($charge->is_return_trip ? ' × '.(float) $charge->return_trip_percent.'% quay đầu' : '');
+                .$charge->priceMultiplierLabel();
         }
 
         return match (true) {

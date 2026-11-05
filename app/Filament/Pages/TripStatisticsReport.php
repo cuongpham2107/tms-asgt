@@ -10,6 +10,7 @@ use App\Enums\OrderType;
 use App\Enums\SurchargeType;
 use App\Filament\Resources\FreightRates\Schemas\FreightRateForm;
 use App\Filament\Traits\HasTripStatistics;
+use App\Models\Customer;
 use App\Models\FeeType;
 use App\Models\FreightRate;
 use App\Models\Location;
@@ -18,6 +19,8 @@ use App\Models\OrderCharge;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Services\Billing\OrderChargeCalculator;
+use App\Services\Export\BillingStatement\BillingStatementExporter;
+use App\Services\Export\BillingStatement\BillingStatementTemplates;
 use App\Services\Export\TripExcelExportService;
 use App\Services\Import\OrderPackagesImporter;
 use BackedEnum;
@@ -53,6 +56,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use UnitEnum;
 
@@ -327,7 +331,105 @@ class TripStatisticsReport extends Page
                 ->icon('heroicon-m-arrow-down-tray')
                 ->color('success')
                 ->action(fn (): StreamedResponse => $this->exportExcel()),
+            $this->exportBillingStatementAction(),
         ];
+    }
+
+    /**
+     * Xuất bảng kê đối chiếu theo mẫu Excel của khách — lấy đúng các dòng đang hiển thị (đã lọc 1 khách).
+     */
+    private function exportBillingStatementAction(): Action
+    {
+        $customer = fn (): ?Customer => $this->customerId ? Customer::find($this->customerId) : null;
+        $templates = fn (): array => BillingStatementTemplates::optionsForCustomerCode($customer()?->code);
+        $defaultTitle = function (?string $templateKey): string {
+            $template = BillingStatementTemplates::all()[$templateKey] ?? null;
+            $period = Carbon::parse($this->endDate ?? now())->format('m/Y');
+
+            return $template === null ? '' : "{$template['title']} THÁNG {$period}";
+        };
+
+        return Action::make('exportBillingStatement')
+            ->label('Xuất bảng kê')
+            ->icon(Heroicon::OutlinedDocumentText)
+            ->color('success')
+            ->visible(fn (): bool => $this->activeTab === 'external')
+            ->disabled(fn (): bool => $templates() === [])
+            ->tooltip(fn (): ?string => match (true) {
+                $this->customerId === null => 'Lọc 1 khách hàng trước khi xuất bảng kê',
+                $templates() === [] => 'Khách này chưa có mẫu bảng kê',
+                default => null,
+            })
+            ->modalHeading('Xuất bảng kê đối chiếu')
+            ->modalDescription('Xuất đúng các dòng đang hiển thị trên bảng. Dòng đã có giá sẽ bị khoá sau khi xuất.')
+            ->modalWidth(Width::Large)
+            ->modalSubmitActionLabel('Xuất file')
+            ->fillForm(function () use ($templates, $defaultTitle): array {
+                $templateKey = array_key_first($templates());
+
+                return [
+                    'template' => $templateKey,
+                    'title' => $defaultTitle($templateKey),
+                    'sign_date' => now()->format('Y-m-d'),
+                ];
+            })
+            ->schema([
+                Select::make('template')
+                    ->label('Mẫu bảng kê')
+                    ->options($templates)
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(fn (?string $state, Set $set) => $set('title', $defaultTitle($state))),
+                TextInput::make('title')->label('Tiêu đề')->required()->maxLength(255),
+                DatePicker::make('sign_date')->label('Ngày ký')->native(false)->displayFormat('d/m/Y')->required(),
+                Grid::make(3)->schema([
+                    TextInput::make('invoice_symbol')->label('Ký hiệu HĐ GTGT')->maxLength(50),
+                    TextInput::make('invoice_number')->label('Số HĐ')->maxLength(50),
+                    DatePicker::make('invoice_date')->label('Ngày HĐ')->native(false)->displayFormat('d/m/Y'),
+                ]),
+            ])
+            ->action(function (array $data) use ($customer): ?StreamedResponse {
+                $selectedCustomer = $customer();
+                if ($selectedCustomer === null) {
+                    Notification::make()->title('Lọc 1 khách hàng trước khi xuất bảng kê')->warning()->send();
+
+                    return null;
+                }
+
+                $result = app(BillingStatementExporter::class)->build($this->getAllRows(), $selectedCustomer, $data['template'], $data);
+
+                if ($result['order_ids'] === []) {
+                    Notification::make()->title('Không có đơn nào của khách này trong bảng đang hiển thị')->warning()->send();
+
+                    return null;
+                }
+
+                // Khoá sau khi đã dựng xong file, và chỉ khoá dòng đã có giá.
+                OrderCharge::query()
+                    ->whereIn('order_id', $result['order_ids'])
+                    ->whereNotNull('base_price')
+                    ->whereNull('exported_at')
+                    ->update(['exported_at' => now(), 'exported_by' => Auth::id()]);
+                $this->clearBaseRowsCache();
+                $this->bumpDataVersion();
+
+                if ($result['unmapped_fees'] !== []) {
+                    Notification::make()
+                        ->title('Có phí không có cột riêng trong mẫu')
+                        ->body(implode(', ', $result['unmapped_fees']).' — đã ghi vào cột Ghi chú và vẫn cộng trong Tổng.')
+                        ->warning()
+                        ->send();
+                }
+
+                $spreadsheet = $result['spreadsheet'];
+                $filename = 'Bang-ke-'.str($selectedCustomer->code)->slug().'-'.now()->format('Ymd-His').'.xlsx';
+
+                return response()->streamDownload(
+                    fn () => (new Xlsx($spreadsheet))->save('php://output'),
+                    $filename,
+                    ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+                );
+            });
     }
 
     public function resetFilters(): void
@@ -624,7 +726,7 @@ class TripStatisticsReport extends Page
                     })
                     ->values()
                     ->all();
-                foreach (['return_trip_percent', 'fuel_adjustment_percent', 'vat_percent', 'waiting_minutes', 'waiting_fee'] as $field) {
+                foreach (['return_trip_percent', 'cancel_trip_percent', 'fuel_adjustment_percent', 'vat_percent', 'waiting_minutes', 'waiting_fee'] as $field) {
                     $charge->{$field} ??= 0;
                 }
                 $charge->rate_type ??= '';
@@ -638,12 +740,7 @@ class TripStatisticsReport extends Page
 
                 $charge->save();
 
-                $charge->fees()->delete();
-                // Form liệt kê sẵn mọi loại phí với số tiền 0 — chỉ lưu những phí có tiền.
-                $charge->fees()->createMany(collect($data['fees'] ?? [])
-                    ->filter(fn (array $fee): bool => filled($fee['fee_type_id'] ?? null) && (float) ($fee['amount'] ?? 0) > 0)
-                    ->map(fn (array $fee): array => ['fee_type_id' => $fee['fee_type_id'], 'amount' => (float) $fee['amount']])
-                    ->all());
+                $this->saveChargeFees($charge, $data['fees'] ?? []);
 
                 $charge->manually_updated_at = now();
                 $charge->recalculateTotals()->save();
@@ -698,6 +795,12 @@ class TripStatisticsReport extends Page
             if (array_key_exists('return_trip_percent', $formData)) {
                 $charge->return_trip_percent = (float) ($formData['return_trip_percent'] ?? 0);
             }
+            if (array_key_exists('is_cancelled_trip', $formData)) {
+                $charge->is_cancelled_trip = (bool) ($formData['is_cancelled_trip'] ?? false);
+            }
+            if (array_key_exists('cancel_trip_percent', $formData)) {
+                $charge->cancel_trip_percent = (float) ($formData['cancel_trip_percent'] ?? 0);
+            }
             if (array_key_exists('fuel_adjustment_percent', $formData)) {
                 $charge->fuel_adjustment_percent = (float) ($formData['fuel_adjustment_percent'] ?? 0);
             }
@@ -725,11 +828,7 @@ class TripStatisticsReport extends Page
                     ->all();
             }
             if (array_key_exists('fees', $formData) && is_array($formData['fees'])) {
-                $charge->fees()->delete();
-                $charge->fees()->createMany(collect($formData['fees'])
-                    ->filter(fn (array $fee): bool => filled($fee['fee_type_id'] ?? null) && (float) ($fee['amount'] ?? 0) > 0)
-                    ->map(fn (array $fee): array => ['fee_type_id' => $fee['fee_type_id'], 'amount' => (float) $fee['amount']])
-                    ->all());
+                $this->saveChargeFees($charge, $formData['fees']);
             }
 
             $this->saveTimestamps($orderId, $formData);
@@ -783,6 +882,8 @@ class TripStatisticsReport extends Page
         'chargeable_tonnage',
         'is_return_trip',
         'return_trip_percent',
+        'is_cancelled_trip',
+        'cancel_trip_percent',
         'delivery_notes',
         'base_price',
         'fuel_adjustment_percent',
@@ -806,13 +907,27 @@ class TripStatisticsReport extends Page
     }
 
     /**
+     * Hệ số nhân đơn giá theo các ô quay đầu / huỷ chuyến đang nhập trên form.
+     */
+    private function formPriceMultiplier(Get $get, string $prefix = ''): float
+    {
+        return (new OrderCharge)->fill([
+            'is_return_trip' => (bool) $get($prefix.'is_return_trip'),
+            'return_trip_percent' => (float) ($get($prefix.'return_trip_percent') ?? 0),
+            'is_cancelled_trip' => (bool) $get($prefix.'is_cancelled_trip'),
+            'cancel_trip_percent' => (float) ($get($prefix.'cancel_trip_percent') ?? 0),
+        ])->priceMultiplier();
+    }
+
+    /**
      * Mọi loại phí đang dùng (theo thứ tự danh mục) kèm số tiền đã nhập, chưa nhập thì 0.
      *
-     * @return list<array{fee_type_id: int, amount: float}>
+     * @return list<array{fee_type_id: int, amount: float, note: ?string}>
      */
     private function feeRowsForForm(OrderCharge $charge): array
     {
         $amounts = $charge->fees->pluck('amount', 'fee_type_id');
+        $notes = $charge->fees->pluck('note', 'fee_type_id');
 
         return FeeType::query()
             ->where('is_active', true)
@@ -822,8 +937,28 @@ class TripStatisticsReport extends Page
             ->map(fn (FeeType $feeType): array => [
                 'fee_type_id' => $feeType->id,
                 'amount' => (float) ($amounts->get($feeType->id) ?? 0),
+                'note' => $notes->get($feeType->id),
             ])
             ->all();
+    }
+
+    /**
+     * Ghi lại phí khác của dòng cước. Form liệt kê sẵn mọi loại phí với số tiền 0 — chỉ lưu những phí có tiền.
+     *
+     * @param  array<int|string, array{fee_type_id?: mixed, amount?: mixed, note?: ?string}>  $fees
+     */
+    private function saveChargeFees(OrderCharge $charge, array $fees): void
+    {
+        $charge->fees()->delete();
+        $charge->fees()->createMany(collect($fees)
+            ->filter(fn (array $fee): bool => filled($fee['fee_type_id'] ?? null) && (float) ($fee['amount'] ?? 0) > 0)
+            ->map(fn (array $fee): array => [
+                'fee_type_id' => $fee['fee_type_id'],
+                'amount' => (float) $fee['amount'],
+                'note' => filled($fee['note'] ?? null) ? trim((string) $fee['note']) : null,
+            ])
+            ->values()
+            ->all());
     }
 
     /**
@@ -1001,9 +1136,7 @@ class TripStatisticsReport extends Page
 
                 $tonnage = $get('chargeable_tonnage');
                 $unitPrice = $rate->priceFor($tonnage);
-                $isReturn = (bool) $get('is_return_trip');
-                $returnPercent = (float) ($get('return_trip_percent') ?? 0);
-                $finalPrice = $unitPrice !== null ? $unitPrice * ($isReturn ? $returnPercent / 100 : 1) : null;
+                $finalPrice = $unitPrice !== null ? $unitPrice * $this->formPriceMultiplier($get) : null;
 
                 $set('rate_type', $rate->rate_type);
                 if ($refreshPrice !== null) {
@@ -1071,6 +1204,8 @@ class TripStatisticsReport extends Page
                 'delivery_notes' => $validNotes->all(),
                 'is_return_trip' => $get('is_return_trip'),
                 'return_trip_percent' => $get('return_trip_percent'),
+                'is_cancelled_trip' => $get('is_cancelled_trip'),
+                'cancel_trip_percent' => $get('cancel_trip_percent'),
             ]);
 
             $matchedRate = $draft->freight_rate_id ? FreightRate::find($draft->freight_rate_id) : null;
@@ -1166,15 +1301,34 @@ class TripStatisticsReport extends Page
 
                                         return $tiers ? "Bậc giá có sẵn: {$tiers}" : null;
                                     }),
-                                Toggle::make('is_return_trip')->label('Chuyến quay đầu')->inline(false)
-                                    ->helperText('Đơn hàng là chiều về')
-                                    ->live()->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
-                                TextInput::make('return_trip_percent')->label('% đơn giá khi quay đầu')->numeric()->minValue(0)->suffix('%')
-                                    ->default(50)
-                                    ->disabled(fn (Get $get): bool => ! (bool) $get('is_return_trip'))
-                                    ->dehydrated()
-                                    ->helperText('Mặc định 50% đơn giá')
-                                    ->live(debounce: 500)->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
+                                // Mỗi cặp "bật/tắt + %" nằm chung 1 ô để hàng thứ 2 thẳng cột với hàng loại hình.
+                                Grid::make(['default' => 2])
+                                    ->schema([
+                                        Toggle::make('is_return_trip')->label('Quay đầu')->inline(false)
+                                            ->hintIcon(Heroicon::OutlinedInformationCircle, 'Đơn hàng là chiều về, tính theo % đơn giá bên cạnh (mặc định 50%)')
+                                            ->live()->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
+                                        TextInput::make('return_trip_percent')->label('% đơn giá')->numeric()->minValue(0)->suffix('%')
+                                            ->default(50)
+                                            ->disabled(fn (Get $get): bool => ! (bool) $get('is_return_trip'))
+                                            ->dehydrated()
+                                            ->live(debounce: 500)->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
+                                    ]),
+                                Grid::make(['default' => 2])
+                                    ->schema([
+                                        Toggle::make('is_cancelled_trip')->label('Huỷ chuyến')->inline(false)
+                                            ->hintIcon(Heroicon::OutlinedInformationCircle, 'Tính theo % huỷ chuyến của khách, sửa được ở ô bên cạnh')
+                                            ->live()->afterStateUpdated(function (Get $get, Set $set, ?bool $state) use ($refreshPrice, $order): void {
+                                                if ($state && (float) $get('cancel_trip_percent') <= 0) {
+                                                    $set('cancel_trip_percent', (float) ($order->customer?->cancel_trip_percent ?? 0));
+                                                }
+                                                $refreshPrice($get, $set, notify: true);
+                                            }),
+                                        TextInput::make('cancel_trip_percent')->label('% đơn giá')->numeric()->minValue(0)->maxValue(100)->suffix('%')
+                                            ->default(fn (): float => (float) ($order->customer?->cancel_trip_percent ?? 0))
+                                            ->disabled(fn (Get $get): bool => ! (bool) $get('is_cancelled_trip'))
+                                            ->dehydrated()
+                                            ->live(debounce: 500)->afterStateUpdated(fn (Get $get, Set $set) => $refreshPrice($get, $set, notify: true)),
+                                    ]),
                                 Hidden::make('freight_rate_id'),
                                 Hidden::make('price_code'),
                             ]),
@@ -1262,10 +1416,7 @@ class TripStatisticsReport extends Page
                                                     if ($price === null) {
                                                         return 'Ngoài khoảng tải';
                                                     }
-                                                    $isReturn = (bool) ($get('../../is_return_trip') ?? $charge?->is_return_trip ?? false);
-                                                    $returnPercent = (float) ($get('../../return_trip_percent') ?? $charge?->return_trip_percent ?? 50);
-                                                    $multiplier = $isReturn ? $returnPercent / 100 : 1;
-                                                    $finalPrice = round($price * $multiplier);
+                                                    $finalPrice = round($price * $this->formPriceMultiplier($get, '../../'));
 
                                                     $tier = $rate->matchedTier($ton);
                                                     $tierLabel = $tier['label'] ?? '';
@@ -1316,6 +1467,7 @@ class TripStatisticsReport extends Page
                                     ->table([
                                         TableColumn::make('Loại phí')->markAsRequired(),
                                         TableColumn::make('Số tiền (đ)')->markAsRequired(),
+                                        TableColumn::make('Ghi chú'),
                                     ])
                                     ->compact()
                                     ->defaultItems(0)
@@ -1327,6 +1479,7 @@ class TripStatisticsReport extends Page
                                             ->distinct()
                                             ->required(),
                                         self::moneyInput('amount')->required()->live(debounce: 500),
+                                        TextInput::make('note')->placeholder('VD: 3 điểm rớt, vé cao tốc…')->maxLength(255),
                                     ]),
                                 Textarea::make('note')->label('Ghi chú cước')->rows(2),
                             ]),
@@ -1356,6 +1509,8 @@ class TripStatisticsReport extends Page
             'delivery_notes' => $get('delivery_notes') ?? [],
             'is_return_trip' => (bool) $get('is_return_trip'),
             'return_trip_percent' => (float) $get('return_trip_percent'),
+            'is_cancelled_trip' => (bool) $get('is_cancelled_trip'),
+            'cancel_trip_percent' => (float) $get('cancel_trip_percent'),
         ]), filled($get('freight_rate_id')) ? (int) $get('freight_rate_id') : null);
 
         $waitingNote = function (Get $get) use ($charge, $order, $calculator): ?string {

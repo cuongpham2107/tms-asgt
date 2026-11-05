@@ -498,3 +498,25 @@ test('base_price input is hidden when customer uses weight range pricing', funct
 
     expect((float) $charge->fresh()->base_price)->toBe(4_745_867.0);
 });
+
+test('edit charge saves fee notes and charges a cancelled trip at the cancel percent', function () {
+    $dropFee = FeeType::where('code', 'extra_drop')->firstOrFail();
+
+    ($this->page)()
+        ->callAction('editCharge', data: [
+            'chargeable_tonnage' => 5,
+            'is_cancelled_trip' => true,
+            'cancel_trip_percent' => 70,
+            'fees' => [
+                ['fee_type_id' => $dropFee->id, 'amount' => 100_000, 'note' => '1 điểm rớt'],
+            ],
+        ], arguments: ['orderId' => $this->order->id])
+        ->assertHasNoActionErrors();
+
+    $charge = $this->charge->fresh(['fees']);
+
+    expect($charge->is_cancelled_trip)->toBeTrue()
+        ->and((float) $charge->base_price)->toBe(910_000.0)
+        ->and($charge->fees->first()->note)->toBe('1 điểm rớt')
+        ->and((float) $charge->other_fees_total)->toBe(100_000.0);
+});

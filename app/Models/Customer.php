@@ -18,6 +18,9 @@ class Customer extends Model
         'phone',
         'email',
         'address',
+        'tax_code',
+        'fuel_adjustment_percent',
+        'cancel_trip_percent',
         'location_id',
         'contact_person',
         'is_active',
@@ -27,6 +30,8 @@ class Customer extends Model
     {
         return [
             'is_active' => 'boolean',
+            'fuel_adjustment_percent' => 'decimal:2',
+            'cancel_trip_percent' => 'decimal:2',
         ];
     }
 

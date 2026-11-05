@@ -95,6 +95,24 @@ class CustomerForm
                             ->label('Địa chỉ đầy đủ')
                             ->prefixIcon(Heroicon::OutlinedMapPin)
                             ->columnSpanFull(),
+                        TextInput::make('tax_code')
+                            ->label('Mã số thuế')
+                            ->maxLength(50),
+                        TextInput::make('fuel_adjustment_percent')
+                            ->label('% tăng/giảm giá dầu')
+                            ->helperText('Áp cho cước tính mới; cước đã tính giữ nguyên.')
+                            ->numeric()
+                            ->minValue(-100)
+                            ->maxValue(100)
+                            ->default(0)
+                            ->suffix('%'),
+                        TextInput::make('cancel_trip_percent')
+                            ->label('% đơn giá khi huỷ chuyến')
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(100)
+                            ->default(0)
+                            ->suffix('%'),
                         Toggle::make('is_active')
                             ->label('Trạng thái hoạt động')
                             ->default(true)

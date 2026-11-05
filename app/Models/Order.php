@@ -63,6 +63,8 @@ class Order extends Model implements HasTimeline
         'cancel_reason',
         'notes',
         'loaded_km',
+        'bill_number',
+        'pallet_count',
     ];
 
     protected function casts(): array

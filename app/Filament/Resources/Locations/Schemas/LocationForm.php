@@ -88,6 +88,10 @@ class LocationForm
                     ->suffix('m')
                     ->placeholder(fn (): string => 'Mặc định: '.config('checkpoint_geofence.radius_m', 500).'m')
                     ->helperText('Để trống sẽ dùng bán kính mặc định (500m). Các kho/cảng rộng (NCTS, ASG, SDV, SEVT...) có thể đặt 800–1200m.'),
+                TextInput::make('old_address')
+                    ->label('Địa chỉ cũ (trước sáp nhập)')
+                    ->maxLength(255)
+                    ->columnSpanFull(),
                 Textarea::make('address')
                     ->label('Địa chỉ')
                     ->placeholder('Nhập địa chỉ đầy đủ')

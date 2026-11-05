@@ -16,6 +16,7 @@ class Location extends Model
         'code',
         'name',
         'address',
+        'old_address',
         'lat',
         'lng',
         'geofence_radius_m',

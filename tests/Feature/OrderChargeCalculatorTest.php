@@ -458,3 +458,45 @@ test('it handles decimal weight strings with comma and dot for weight range tier
     // 2000 kg = 2T -> Từ 2T đến 3T
     expect($rate->priceFor(OrderChargeCalculator::parseKgToTons('2000')))->toBe(1_447_740.0);
 });
+
+test('new charge snapshots the customer fuel percent and rounds the adjusted price up to the thousand', function () {
+    $this->customer->update(['fuel_adjustment_percent' => 16.14]);
+    $order = ($this->makeOrder)();
+    $order->update(['status' => OrderStatus::Completed]);
+
+    $charge = OrderCharge::where('order_id', $order->id)->firstOrFail();
+
+    // 1.275.000 × 1,1614 = 1.480.785 → làm tròn lên nghìn = 1.481.000; đổi % của khách sau đó không ảnh hưởng cước đã tính.
+    expect((float) $charge->fuel_adjustment_percent)->toBe(16.14)
+        ->and((float) $charge->adjusted_price)->toBe(1_481_000.0);
+
+    $this->customer->update(['fuel_adjustment_percent' => 20]);
+    app(OrderChargeCalculator::class)->calculate($order->fresh(), $charge->fresh());
+
+    expect((float) $charge->fresh()->fuel_adjustment_percent)->toBe(16.14);
+});
+
+test('adjusted price is always rounded up like excel roundup', function (float $base, float $percent, float $expected) {
+    expect(OrderCharge::computeTotals($base, $percent, 0, 0, 0)['adjusted_price'])->toBe($expected);
+})->with([
+    'small remainder still goes up' => [1_000_100, 0, 1_001_000.0],
+    'exact thousand stays' => [1_000_000, 0, 1_000_000.0],
+    'fuel percent result rounds up' => [1_000_000, 15.26, 1_153_000.0],
+    'binary float noise does not add a thousand' => [2_000_000, 0.35, 2_007_000.0],
+]);
+
+test('cancelled trip is charged at the customer cancel percent', function () {
+    $this->customer->update(['cancel_trip_percent' => 35]);
+    $order = ($this->makeOrder)();
+    $order->update(['status' => OrderStatus::Completed]);
+
+    $charge = OrderCharge::where('order_id', $order->id)->firstOrFail();
+    expect((float) $charge->cancel_trip_percent)->toBe(35.0)
+        ->and((float) $charge->base_price)->toBe(1_275_000.0);
+
+    $charge->update(['is_cancelled_trip' => true]);
+    $charge = app(OrderChargeCalculator::class)->calculate($order->fresh(), $charge->fresh());
+
+    expect((float) $charge->base_price)->toBe(446_250.0)
+        ->and((float) $charge->adjusted_price)->toBe(447_000.0);
+});

@@ -21,6 +21,8 @@ class OrderCharge extends Model
         'chargeable_tonnage',
         'is_return_trip',
         'return_trip_percent',
+        'is_cancelled_trip',
+        'cancel_trip_percent',
         'delivery_notes',
         'note',
         'base_price',
@@ -53,6 +55,8 @@ class OrderCharge extends Model
             'chargeable_tonnage' => 'decimal:2',
             'is_return_trip' => 'boolean',
             'return_trip_percent' => 'decimal:2',
+            'is_cancelled_trip' => 'boolean',
+            'cancel_trip_percent' => 'decimal:2',
             'delivery_notes' => 'array',
             'base_price' => 'decimal:2',
             'fuel_adjustment_percent' => 'decimal:2',
@@ -99,6 +103,30 @@ class OrderCharge extends Model
         return $this->hasMany(OrderChargeFee::class);
     }
 
+    /**
+     * Hệ số nhân đơn giá gốc: hàng quay đầu × % quay đầu, huỷ chuyến × % huỷ chuyến.
+     */
+    public function priceMultiplier(): float
+    {
+        return ($this->is_return_trip ? (float) $this->return_trip_percent / 100 : 1)
+            * ($this->is_cancelled_trip ? (float) $this->cancel_trip_percent / 100 : 1);
+    }
+
+    public function priceMultiplierLabel(): string
+    {
+        return ($this->is_return_trip ? ' × '.(float) $this->return_trip_percent.'% quay đầu' : '')
+            .($this->is_cancelled_trip ? ' × '.(float) $this->cancel_trip_percent.'% huỷ chuyến' : '');
+    }
+
+    /**
+     * Làm tròn lên hàng nghìn như hàm ROUNDUP(x, -3) của Excel.
+     * Làm tròn 2 chữ số trước để sai số dấu phẩy động không đẩy lên thêm 1.000.
+     */
+    public static function roundUpThousand(float $amount): float
+    {
+        return ceil(round($amount, 2) / 1000) * 1000;
+    }
+
     public function isLocked(): bool
     {
         return $this->exported_at !== null;
@@ -106,7 +134,7 @@ class OrderCharge extends Model
 
     /**
      * Tính lại đơn giá sau điều chỉnh và các tổng tiền từ các trường đang có.
-     * Đơn giá sau điều chỉnh làm tròn đến hàng nghìn (theo bảng tính Excel).
+     * Đơn giá sau điều chỉnh làm tròn LÊN hàng nghìn (ROUNDUP như bảng kê Excel).
      */
     public function recalculateTotals(): static
     {
@@ -130,7 +158,7 @@ class OrderCharge extends Model
      */
     public static function computeTotals(?float $basePrice, float $fuelPercent, float $waitingFee, float $otherFees, float $vatPercent): array
     {
-        $adjustedPrice = $basePrice === null ? null : round($basePrice * (1 + $fuelPercent / 100), -3);
+        $adjustedPrice = $basePrice === null ? null : self::roundUpThousand($basePrice * (1 + $fuelPercent / 100));
         $subtotal = (float) $adjustedPrice + $waitingFee + $otherFees;
         $vatAmount = round($subtotal * $vatPercent / 100);
 
