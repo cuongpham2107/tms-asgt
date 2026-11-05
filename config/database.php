@@ -44,6 +44,15 @@ return [
             'transaction_mode' => 'IMMEDIATE',
         ],
 
+        'ai' => [
+            'driver' => 'sqlite',
+            'database' => env('AI_DB_DATABASE', database_path('ai.sqlite')),
+            'prefix' => '',
+            'foreign_key_constraints' => false,
+            'busy_timeout' => 5000,
+            'journal_mode' => 'WAL',
+        ],
+
         'mysql' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),

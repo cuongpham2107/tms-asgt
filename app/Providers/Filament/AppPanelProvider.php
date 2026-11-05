@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
+use App\Livewire\DataAssistantChat;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Enums\UserMenuPosition;
 use Filament\Http\Middleware\Authenticate;
@@ -14,6 +15,7 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -21,6 +23,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Blade;
 // use Openplain\FilamentShadcnTheme\Color;
 
 use Illuminate\View\Middleware\ShareErrorsFromSession;
@@ -98,7 +101,7 @@ class AppPanelProvider extends PanelProvider
                     ->gridColumns([
                         'default' => 1,
                         'sm' => 2,
-                        'lg' => 3
+                        'lg' => 3,
                     ])
                     ->sectionColumnSpan(1)
                     ->checkboxListColumns([
@@ -126,6 +129,13 @@ class AppPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            // Popup "Trợ lý dữ liệu" (chat AI chỉ đọc). @persist giữ khung chat khi chuyển trang trong chế độ SPA.
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => DataAssistantChat::canUse(auth()->user())
+                    ? Blade::render("@persist('data-assistant') @livewire('data-assistant-chat') @endpersist")
+                    : '',
+            );
     }
 }
