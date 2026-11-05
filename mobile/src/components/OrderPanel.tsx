@@ -573,8 +573,7 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
             setKm("");
             setPhotos([]);
             setSelectedLoc(null);
-            await loadDetail(); // refresh
-            onChanged?.();
+            await Promise.all([loadDetail(), Promise.resolve(onChanged?.())]);
         } catch (e: any) {
             if (e.geofence) {
                 setGeofenceBlock({ error: e.geofence, type });

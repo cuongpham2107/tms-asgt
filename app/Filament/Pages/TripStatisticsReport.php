@@ -1187,6 +1187,7 @@ class TripStatisticsReport extends Page
                                     ->hiddenLabel()
                                     ->table([
                                         TableColumn::make('Số phiếu giao hàng'),
+                                        TableColumn::make('Trọng lượng thực tế (kg)'),
                                         TableColumn::make('Trọng lượng tính tiền (kg)'),
                                         TableColumn::make('Đơn giá tạm tính'),
                                     ])
@@ -1201,6 +1202,16 @@ class TripStatisticsReport extends Page
                                     ->schema([
                                         TextInput::make('number')
                                             ->placeholder('VD: DN01'),
+                                        TextInput::make('actual_weight')
+                                            ->placeholder('VD: 4232 hoặc 4123.232')
+                                            ->inputMode('decimal')
+                                            ->extraInputAttributes([
+                                                'x-on:input' => "event.target.value = event.target.value.replace(/[^0-9.,]/g, '')",
+                                            ])
+                                            ->rules(['nullable', 'regex:/^[0-9]+([.,][0-9]+)?$/'])
+                                            ->validationMessages([
+                                                'regex' => 'Trọng lượng chỉ được nhập số hoặc số thập phân (VD: 4232 hoặc 4123.232).',
+                                            ]),
                                         TextInput::make('chargeable_weight')
                                             ->placeholder('VD: 4232 hoặc 4123.232')
                                             ->inputMode('decimal')
