@@ -300,22 +300,32 @@
         .da-md td.is-num { font-weight: 600; }
         .da-chip-link { display: inline-block; padding: 1px 7px; border-radius: 6px; background: var(--da-accent-soft); color: var(--da-accent); font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-decoration: none; transition: background .15s, color .15s; }
         .da-chip-link:hover { background: var(--da-accent); color: #fff; }
-        .da-chart { margin: 10px 0 0; padding: 10px 12px 8px; border: 1px solid var(--da-line); border-radius: 12px; background: linear-gradient(180deg, var(--da-accent-soft), transparent 70%); }
-        .da-chart figcaption { font-size: 12px; font-weight: 700; color: var(--da-muted); margin-bottom: 6px; }
-        .da-line { display: block; width: 100%; height: auto; color: var(--da-accent); overflow: visible; }
-        .da-line .da-baseline { stroke: var(--da-line); stroke-width: 1; }
-        .da-line .da-dot { fill: var(--da-surface); stroke: currentColor; stroke-width: 1.5; }
-        .da-line .da-dot.is-peak { fill: currentColor; }
-        .da-line .da-axis { font-size: 10px; fill: var(--da-muted); }
-        .da-line .da-peak { font-size: 10.5px; font-weight: 700; fill: var(--da-ink); }
-        .dark .da-line .da-peak { fill: #f8fafc; }
-        .da-bars { display: grid; gap: 6px; }
-        .da-bar-row { display: grid; grid-template-columns: minmax(64px, 30%) 1fr auto; align-items: center; gap: 8px; font-size: 12.5px; }
-        .da-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .da-bar-track { height: 10px; border-radius: 999px; background: rgba(148, 163, 184, .18); overflow: hidden; }
-        .da-bar-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #38bdf8, var(--da-accent)); transform-origin: left; animation: da-grow .6s cubic-bezier(.16, 1, .3, 1); }
+        .da-chart { margin: 10px 0 0; padding: 12px 12px 6px; border: 1px solid var(--da-line); border-radius: 12px; background: var(--da-surface); }
+        .da-chart figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; margin-bottom: 6px; font-size: 12.5px; font-weight: 700; }
+        .da-chart-meta { font-size: 11.5px; font-weight: 500; color: var(--da-muted); }
+        .da-plot { display: block; width: 100%; height: auto; color: var(--da-accent); overflow: visible; font-variant-numeric: tabular-nums; }
+        .da-plot .da-gridline { stroke: var(--da-line); stroke-width: 1; stroke-dasharray: 3 4; }
+        .da-plot .da-baseline { stroke: #cbd5e1; stroke-width: 1; }
+        .dark .da-plot .da-baseline { stroke: #334155; }
+        .da-plot .da-axis { font-size: 10px; fill: var(--da-muted); }
+        .da-plot .da-curve { filter: drop-shadow(0 2px 3px rgba(0, 143, 213, .25)); }
+        .da-plot .da-dot { fill: var(--da-surface); stroke: currentColor; stroke-width: 2; opacity: 0; transition: opacity .15s; cursor: default; }
+        .da-plot .da-dot:hover, .da-plot .da-dot.is-marked { opacity: 1; }
+        .da-plot .da-dot.is-marked { fill: currentColor; stroke: var(--da-surface); }
+        .da-plot .da-peak { font-size: 10.5px; font-weight: 700; fill: var(--da-ink); paint-order: stroke; stroke: var(--da-surface); stroke-width: 3px; }
+        .dark .da-plot .da-peak, .dark .da-plot .da-col-value { fill: #f8fafc; }
+        .da-plot .da-col path { opacity: .78; transition: opacity .15s; }
+        .da-plot .da-col.is-peak path, .da-plot .da-col:hover path { opacity: 1; }
+        .da-plot .da-col-value { font-size: 10px; font-weight: 700; fill: var(--da-ink); }
+        .da-bars { display: grid; gap: 7px; padding: 2px 0 6px; }
+        .da-bar-row { display: grid; grid-template-columns: 18px minmax(60px, 28%) 1fr auto; align-items: center; gap: 8px; font-size: 12.5px; }
+        .da-bar-rank { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; background: var(--da-bot); color: var(--da-muted); font-size: 10.5px; font-weight: 700; }
+        .da-bar-row:nth-child(-n+3) .da-bar-rank { background: var(--da-accent-soft); color: var(--da-accent); }
+        .da-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+        .da-bar-track { height: 8px; border-radius: 999px; background: var(--da-bot); overflow: hidden; }
+        .da-bar-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, rgba(0, 143, 213, .55), var(--da-accent)); transform-origin: left; animation: da-grow .6s cubic-bezier(.16, 1, .3, 1); }
         .da-bar-row:first-child .da-bar-fill { background: linear-gradient(90deg, var(--da-accent), #1e3a5f); }
-        .da-bar-value { font-weight: 700; font-variant-numeric: tabular-nums; }
+        .da-bar-value { min-width: 52px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
         @keyframes da-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
         .da-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
         .da-badge.is-success { background: #dcfce7; color: #15803d; }

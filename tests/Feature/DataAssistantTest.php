@@ -13,9 +13,13 @@ use App\Filament\Resources\Trips\TripResource;
 use App\Livewire\DataAssistantChat;
 use App\Models\Area;
 use App\Models\Customer;
+use App\Models\DriverShift;
+use App\Models\DriverSwap;
 use App\Models\Order;
 use App\Models\OrderCharge;
+use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -250,6 +254,53 @@ it('thống kê linh hoạt: gom theo xe, theo ngày, doanh thu theo khách và 
     expect($external)->toContain('loại đơn = external')->toContain('Số đơn: 2 · Đơn xong chưa có cước: 1 · Có cước chưa xuất bảng kê: 1');
 });
 
+it('thống kê bấm sai vị trí theo tài xế và thời gian từ lúc đến điểm đến lúc giao xong', function () {
+    ($this->grant)('ViewAny:Trip');
+    $point = OrderDeliveryPoint::create(['order_id' => $this->chargedOrder->id, 'sequence' => 1]);
+    $press = fn (string $type, string $at, ?string $geo, ?int $pointId = null) => TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'order_id' => $this->chargedOrder->id,
+        'delivery_point_id' => $pointId,
+        'driver_id' => $this->trip->driver_id,
+        'checkpoint_type' => $type,
+        'occurred_at' => Carbon::parse($at),
+        'location_geo_status' => $geo,
+        'vehicle_geo_status' => 'valid',
+    ]);
+    $press('arrived_pickup', '2026-10-20 08:30', 'out_of_range');
+    $press('left_pickup', '2026-10-20 09:00', 'valid');
+    $press('arrived_delivery', '2026-10-20 10:00', 'valid', $point->id);
+    $press('completed', '2026-10-20 10:45', 'out_of_range', $point->id);
+    $range = ['date_from' => '2026-10-01', 'date_to' => '2026-10-31'];
+
+    $wrong = (string) (new AggregateData)->handle(new Request([...$range, 'dataset' => 'checkpoints', 'group_by' => ['driver'], 'metrics' => ['checked', 'wrong_location', 'wrong_rate']]));
+    $stops = (string) (new AggregateData)->handle(new Request([...$range, 'dataset' => 'stops', 'metrics' => ['count', 'avg_minutes']]));
+    $pickup = (string) (new AggregateData)->handle(new Request([...$range, 'dataset' => 'trips', 'vehicle' => $this->trip->vehicle->plate_number, 'metrics' => ['avg_pickup_minutes']]));
+
+    expect($wrong)
+        ->toContain('Mốc đã kiểm tra vị trí: 4 · Bấm sai vị trí điểm: 2 · Tỉ lệ sai vị trí: 50,0%')
+        ->toContain('LƯU Ý')
+        ->toContain('| ['.$this->trip->driver->name.'](');
+    expect($stops)->toContain('Số điểm giao: 1 · TB phút tại điểm (đến → giao xong): 45');
+    expect($pickup)->toContain('TB phút lấy hàng (đến → rời điểm lấy): 30');
+});
+
+it('thống kê ca trực (bỏ km nhập sai) và đảo lái theo lý do', function () {
+    ($this->grant)('ViewAny:DriverShift', 'ViewAny:Trip');
+    $driver = $this->trip->driver;
+    $shift = DriverShift::create(['driver_id' => $driver->id, 'shift_type' => 'full', 'start_time' => Carbon::parse('2026-10-20 06:00'), 'end_time' => Carbon::parse('2026-10-20 18:00'), 'total_km' => 150]);
+    DriverShift::create(['driver_id' => $driver->id, 'shift_type' => 'full', 'start_time' => Carbon::parse('2026-10-21 06:00'), 'end_time' => Carbon::parse('2026-10-21 12:00'), 'total_km' => 416193]);
+    $this->trip->update(['shift_id' => $shift->id]);
+    (new DriverSwap)->forceFill(['trip_id' => $this->trip->id, 'from_driver_id' => $driver->id, 'to_driver_id' => $this->user->id, 'reason' => 'cargo_not_unloaded', 'created_by' => $this->user->id, 'created_at' => Carbon::parse('2026-10-20 12:00')])->save();
+    $range = ['date_from' => '2026-10-01', 'date_to' => '2026-10-31'];
+
+    $shifts = (string) (new AggregateData)->handle(new Request([...$range, 'dataset' => 'shifts', 'metrics' => ['count', 'hours', 'km', 'bad_km', 'completed_trips', 'no_trip']]));
+    $swaps = (string) (new AggregateData)->handle(new Request([...$range, 'dataset' => 'swaps', 'group_by' => ['status'], 'metrics' => ['count']]));
+
+    expect($shifts)->toContain('Số ca: 2 · Tổng giờ trực: 18 · Km trong ca (bỏ ca nhập km sai): 150 · Ca nhập km sai (> 2.000 km): 1 · Chuyến hoàn thành: 1 · Ca không chạy chuyến: 1');
+    expect($swaps)->toContain('| Lý do | Số lần đảo lái |')->toContain('| Hàng chưa hạ được | 1 |');
+});
+
 it('thống kê linh hoạt từ chối khi không có quyền', function () {
     expect((string) (new AggregateData)->handle(new Request(['dataset' => 'charges', 'metrics' => ['revenue']])))
         ->toContain('không có quyền')
@@ -264,15 +315,16 @@ it('vẽ biểu đồ cột và đường từ khối chart, bỏ qua JSON hỏn
     $broken = $renderer->render("```chart\n{khong phai json}\n```");
 
     expect($bar)
-        ->toContain('<figure class="da-chart"><figcaption>Cước theo khách</figcaption>')
+        ->toContain('<figure class="da-chart"><figcaption><span>Cước theo khách</span>')
+        ->toContain('Tổng 18,8 tr')
         ->toContain('style="width: 100%"')
         ->toContain('style="width: 50%"')
         ->toContain('12,5 tr')
         ->toContain('&lt;b&gt;ALSB&lt;/b&gt;')
         ->not->toContain('<b>ALSB</b>');
     expect($line)
-        ->toContain('<svg class="da-line"')
-        ->toContain('<polyline')
-        ->toContain('9 chuyến');
+        ->toContain('<svg class="da-plot"')
+        ->toContain('class="da-col is-peak"')
+        ->toContain('03/10: 5 chuyến');
     expect($broken)->not->toContain('da-chart')->not->toContain('DACHART');
 });

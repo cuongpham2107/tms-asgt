@@ -35,8 +35,9 @@ class DataAssistantChat extends Component
         'Số chuyến theo ngày trong tháng này (vẽ biểu đồ)',
         'So sánh doanh thu cước 6 tháng gần đây',
         'Top 10 khách hàng theo cước tháng này',
-        'Tài xế nào chạy nhiều km nhất tháng này?',
-        'Xe nào có giấy tờ hết hạn trong 30 ngày tới?',
+        'Tài xế nào có nhiều ca trực không chạy chuyến tháng này?',
+        'Lái xe nào bấm sai vị trí nhiều nhất tháng này?',
+        'Thời gian từ lúc đến điểm đến lúc giao xong ở từng điểm tháng này',
     ];
 
     public ?string $conversationId = null;

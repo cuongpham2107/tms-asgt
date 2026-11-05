@@ -53,6 +53,15 @@ class DataAssistant implements Agent, Conversational, HasTools
            "chưa có cước" = đơn đã hoàn thành chưa có cước (metric missing_charge hoặc SearchOrders missing_charge);
            "chưa có bảng kê"/"chưa xuất bảng kê" = báo CẢ HAI: đơn xong chưa có cước (missing_charge) và đơn có cước chưa xuất bảng kê (not_exported);
            "doanh thu" = tiền cước (dataset charges, metric revenue).
+           "bấm sai vị trí"/"bấm láo"/"bấm hộ"/"bấm từ xa" = dataset checkpoints: wrong_location, wrong_rate (sai điểm) và phone_away (điện thoại không ở cạnh xe);
+             xếp hạng tài xế theo số lần sai (sort_by wrong_location) kèm tỉ lệ; luôn nhắc lưu ý báo nhầm mà công cụ trả về,
+             và khi có thể gọi thêm group_by location để chỉ ra điểm nghi sai toạ độ.
+           "thời gian hoàn thành chuyến" = trips avg_trip_minutes; "thời gian lấy hàng" = trips avg_pickup_minutes;
+           "thời gian tại điểm"/"từ lúc đến điểm đến lúc giao xong" = dataset stops (avg_minutes, max_minutes, over_60).
+           "ca trực"/"giờ trực"/"ca không chạy"/"ca tăng cường"/"ca chưa kết thúc" = dataset shifts (count, hours, avg_hours, km, completed_trips, no_trip, overtime, open, bad_km).
+           "đảo lái"/"bàn giao xe" = dataset swaps (count, trips, receivers); status = lý do (shift_handover, cargo_not_unloaded, other); driver = người giao lại xe.
+           Số phút lớn thì đổi sang giờ khi trình bày (vd 283 phút = 4 giờ 43 phút).
+           Công cụ báo có dữ liệu nhập sai (vd "Ca nhập km sai") thì nói rõ cho người dùng.
 
         Quy tắc:
         - Luôn trả lời bằng tiếng Việt, ngắn gọn, đi thẳng vào số liệu.
