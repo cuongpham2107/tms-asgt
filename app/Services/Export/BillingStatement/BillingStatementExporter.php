@@ -316,7 +316,7 @@ class BillingStatementExporter
         $sheet->getStyle('C'.($totalRow + 5))->getFont()->setBold(true);
         $sheet->getStyle($rightColumn.($totalRow + 5))->getFont()->setBold(true);
 
-        $sheet->freezePane('A'.$firstDataRow);
+        $sheet->freezePane($this->firstScrollingColumn($columns).$firstDataRow);
     }
 
     /**
@@ -354,6 +354,23 @@ class BillingStatementExporter
         // 2 dòng tiêu đề cao như file mẫu để chữ xuống dòng không bị cắt.
         $sheet->getRowDimension($row)->setRowHeight(self::HEADER_ROW_HEIGHT);
         $sheet->getRowDimension($row + 1)->setRowHeight(self::HEADER_ROW_HEIGHT);
+    }
+
+    /**
+     * Cố định các cột thông tin chuyến (STT … lộ trình, tải trọng) khi kéo ngang.
+     * Cột đầu tiên được cuộn là cột ngay sau "tải trọng" (không có thì sau "điểm trả").
+     *
+     * @param  list<array{0: string, 1: string, 2: ?string}>  $columns
+     */
+    private function firstScrollingColumn(array $columns): string
+    {
+        $keys = array_column($columns, 0);
+        $lastFrozen = array_search('tonnage', $keys, true);
+        if ($lastFrozen === false) {
+            $lastFrozen = array_search('drop', $keys, true);
+        }
+
+        return $lastFrozen === false ? 'A' : Coordinate::stringFromColumnIndex($lastFrozen + 2);
     }
 
     private function closeGroup(Worksheet $sheet, ?int $groupStart, int $nextIndex, int $row): void
