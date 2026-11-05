@@ -112,6 +112,7 @@ class CustomerForm
                         TextInput::make('fuel_adjustment_percent')
                             ->label('% tăng/giảm giá dầu')
                             ->hintIcon(Heroicon::OutlinedInformationCircle, 'Số âm là giảm giá. Đơn giá sau điều chỉnh làm tròn lên hàng nghìn.')
+                            ->required()
                             ->numeric()
                             ->minValue(-100)
                             ->maxValue(100)
@@ -119,6 +120,7 @@ class CustomerForm
                             ->suffix('%'),
                         TextInput::make('cancel_trip_percent')
                             ->label('% đơn giá khi huỷ chuyến')
+                            ->required()
                             ->numeric()
                             ->minValue(0)
                             ->maxValue(100)

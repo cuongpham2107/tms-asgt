@@ -520,3 +520,26 @@ test('edit charge saves fee notes and charges a cancelled trip at the cancel per
         ->and($charge->fees->first()->note)->toBe('1 điểm rớt')
         ->and((float) $charge->other_fees_total)->toBe(100_000.0);
 });
+
+test('customer info can be edited from inside the charge modal', function () {
+    $customer = $this->order->customer;
+
+    ($this->page)()
+        ->callAction([
+            TestAction::make('editCharge')->arguments(['orderId' => $this->order->id]),
+            TestAction::make('editCustomer')->schemaComponent('summary_customer_code'),
+        ], data: [
+            'name' => $customer->name,
+            'code' => $customer->code,
+            'tax_code' => '0107372515',
+            'fuel_adjustment_percent' => 16.68,
+            'cancel_trip_percent' => 70,
+        ])
+        ->assertHasNoActionErrors();
+
+    $customer->refresh();
+
+    expect($customer->tax_code)->toBe('0107372515')
+        ->and((float) $customer->fuel_adjustment_percent)->toBe(16.68)
+        ->and((float) $customer->cancel_trip_percent)->toBe(70.0);
+});

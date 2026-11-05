@@ -8,6 +8,7 @@ use App\Enums\FreightPricingMethod;
 use App\Enums\FreightRateType;
 use App\Enums\OrderType;
 use App\Enums\SurchargeType;
+use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\FreightRates\Schemas\FreightRateForm;
 use App\Filament\Traits\HasTripStatistics;
 use App\Models\Customer;
@@ -1046,6 +1047,36 @@ class TripStatisticsReport extends Page
      * (khách hàng, khu vực đi/đến, loại hàng, loại hình, các bậc tải đã có và thêm bậc tải hiện tại để nhập).
      * Lưu xong thì gán khu vực cho địa điểm chưa có khu vực và tra lại đơn giá trên form.
      */
+    /**
+     * Sửa nhanh thông tin khách hàng (MST, % dầu, % huỷ chuyến…) ngay trong modal cước.
+     */
+    private function editCustomerAction(?Customer $customer): Action
+    {
+        return Action::make('editCustomer')
+            ->icon(Heroicon::OutlinedPencilSquare)
+            ->tooltip('Sửa thông tin khách hàng')
+            ->hidden($customer === null)
+            ->record($customer)
+            // Cùng quyền với menu Khách hàng (Shield: Update:Customer), không có quyền thì ẩn nút.
+            ->authorize('update')
+            ->modalHeading(fn (): string => 'Sửa khách hàng '.($customer?->name ?? ''))
+            ->modalWidth(Width::ThreeExtraLarge)
+            ->modalSubmitActionLabel('Lưu khách hàng')
+            ->fillForm(fn (): array => $customer?->attributesToArray() ?? [])
+            ->schema(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents())
+            ->action(function (array $data) use ($customer): void {
+                $customer?->update($data);
+                $this->clearBaseRowsCache();
+                $this->bumpDataVersion();
+
+                Notification::make()
+                    ->title('Đã lưu khách hàng')
+                    ->body('% dầu và % huỷ chuyến mới chỉ áp cho cước tính mới.')
+                    ->success()
+                    ->send();
+            });
+    }
+
     private function addFreightRateAction(?OrderCharge $charge, ?Closure $refreshPrice = null, string $name = 'addFreightRate'): Action
     {
         $order = $charge?->order?->loadMissing(['pickupLocation', 'deliveryPoints.location']);
@@ -1569,7 +1600,8 @@ class TripStatisticsReport extends Page
                         ->badge()
                         ->color('gray')
                         ->fontFamily(FontFamily::Mono)
-                        ->weight(FontWeight::Bold),
+                        ->weight(FontWeight::Bold)
+                        ->suffixAction($this->editCustomerAction($order?->customer)),
                     $entry('summary_vehicle', 'Biển số', Heroicon::OutlinedIdentification, $row['plate_number'] ?? '—')
                         ->badge()
                         ->color('gray')
