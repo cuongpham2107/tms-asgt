@@ -272,6 +272,7 @@ class BillingStatementExporter
         $sheet->setCellValue('A5', $options['title'] ?? $template['title']);
         $sheet->mergeCells("A5:{$lastColumn}5");
         $sheet->getStyle('A5')->getFont()->setBold(true)->setSize(18);
+        $sheet->getRowDimension(5)->setRowHeight(30);
         $sheet->getStyle('A5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $invoice = $this->invoiceLine($options);

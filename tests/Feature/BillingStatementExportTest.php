@@ -142,6 +142,7 @@ test('billing statement follows the customer template and writes the stored char
         ->and($sheet->getCell('Z13')->getValue())->toContain('phố cổ')
         ->and($sheet->getCell('AA13')->getValue())->toBeNull()
         ->and($sheet->getStyle('A11')->getFill()->getStartColor()->getARGB())->toBe('FF92D050')
+        ->and($sheet->getRowDimension(5)->getRowHeight())->toBe(30.0)
         ->and($sheet->getRowDimension(11)->getRowHeight())->toBe(50.0)
         ->and($sheet->getRowDimension(12)->getRowHeight())->toBe(50.0)
         ->and($sheet->getCell('Y14')->getValue())->toBe('=SUM(Y13:Y13)')
