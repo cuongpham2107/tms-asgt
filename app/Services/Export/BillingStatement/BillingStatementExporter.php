@@ -44,6 +44,8 @@ class BillingStatementExporter
     /** Màu nền tiêu đề cột như các file mẫu. */
     private const HEADER_FILL = 'FF92D050';
 
+    private const HEADER_ROW_HEIGHT = 50;
+
     private const FORMAT_DATE = 'dd/mm/yyyy';
 
     private const FORMAT_TIME = 'hh:mm';
@@ -345,7 +347,9 @@ class BillingStatementExporter
         $sheet->getStyle($range)->getFont()->setBold(true);
         $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::HEADER_FILL);
         $sheet->getStyle($range)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
-        $sheet->getRowDimension($row + 1)->setRowHeight(45);
+        // 2 dòng tiêu đề cao như file mẫu để chữ xuống dòng không bị cắt.
+        $sheet->getRowDimension($row)->setRowHeight(self::HEADER_ROW_HEIGHT);
+        $sheet->getRowDimension($row + 1)->setRowHeight(self::HEADER_ROW_HEIGHT);
     }
 
     private function closeGroup(Worksheet $sheet, ?int $groupStart, int $nextIndex, int $row): void
