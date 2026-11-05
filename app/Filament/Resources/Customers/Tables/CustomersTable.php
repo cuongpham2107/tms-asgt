@@ -47,15 +47,6 @@ class CustomersTable extends BaseTable
                     ->label('Hoạt động')
                     ->alignCenter()
                     ->boolean(),
-            ])
-            ->recordActions([
-                // ViewAction::make('view')
-                //     ->label('')
-                //     ->color('gray')
-                //     ->modalDescription('Xem chi tiết thông tin khách hàng'),
-                EditAction::make()
-                    ->label('')
-                    ->tooltip('Sửa'),
-            ], position: RecordActionsPosition::BeforeColumns);
+            ]);
     }
 }

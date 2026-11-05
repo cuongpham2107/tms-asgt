@@ -41,7 +41,7 @@ class WaitingFeeRatesTable extends BaseTable
                     ->badge()
                     ->color('gray')
                     ->wrap()
-                    ->width('22rem'),
+                    ->width('46rem'),
                 TextColumn::make('grace_minutes')
                     ->label('Miễn thêm (phút)')
                     ->numeric(),

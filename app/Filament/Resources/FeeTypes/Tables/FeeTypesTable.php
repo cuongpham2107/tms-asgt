@@ -9,13 +9,13 @@ use Filament\Tables\Table;
 
 class FeeTypesTable extends BaseTable
 {
-    /**
-     * Loại phí đã dùng trong cước đơn hàng không xoá được (khoá ngoại restrict) — tắt "Đang dùng" thay vì xoá.
-     */
-    protected static function getDefaultToolbarActions(): array
-    {
-        return [];
-    }
+    // /**
+    //  * Loại phí đã dùng trong cước đơn hàng không xoá được (khoá ngoại restrict) — tắt "Đang dùng" thay vì xoá.
+    //  */
+    // protected static function getDefaultToolbarActions(): array
+    // {
+    //     return [];
+    // }
 
     public static function configure(Table $table): Table
     {

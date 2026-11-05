@@ -41,8 +41,7 @@ abstract class BaseTable
         return [
             EditAction::make()
                 ->label('Sửa')
-                ->iconButton()
-                ->icon('heroicon-o-pencil-square'),
+                ->iconButton(),
         ];
     }
 
@@ -87,6 +86,10 @@ abstract class BaseTable
             ->persistSortInSession()
             ->emptyStateIcon('heroicon-o-bookmark')
             ->emptyStateHeading('Chưa có dữ liệu')
-            ->emptyStateDescription('Dữ liệu sẽ xuất hiện ở đây sau khi bạn thêm mới.');
+            ->emptyStateDescription('Dữ liệu sẽ xuất hiện ở đây sau khi bạn thêm mới.')
+            // Trang hiện ngay, dữ liệu tải ngay sau (bảng lớn)
+            ->deferLoading()
+            ->paginated([10, 25, 50, 100])
+            ->defaultPaginationPageOption(25);
     }
 }
