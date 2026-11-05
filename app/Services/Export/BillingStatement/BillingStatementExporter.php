@@ -46,6 +46,9 @@ class BillingStatementExporter
 
     private const HEADER_ROW_HEIGHT = 50;
 
+    /** Chiều cao 1 dòng chữ (pt) ở cỡ chữ 11. */
+    private const LINE_HEIGHT = 15;
+
     private const FORMAT_DATE = 'dd/mm/yyyy';
 
     private const FORMAT_TIME = 'hh:mm';
@@ -367,6 +370,7 @@ class BillingStatementExporter
      */
     private function writeDataRow(Worksheet $sheet, array $columns, int $row, array $values): void
     {
+        $lines = 1;
         foreach ($columns as $index => [$key]) {
             $cell = Coordinate::stringFromColumnIndex($index + 1).$row;
             $value = $this->valueFor($key, $values);
@@ -393,6 +397,9 @@ class BillingStatementExporter
             }
 
             $sheet->setCellValue($cell, $value);
+            if (is_string($value)) {
+                $lines = max($lines, $this->wrappedLines($value, $this->columnWidth($key)));
+            }
             if (str_ends_with($key, '_kg')) {
                 $sheet->getStyle($cell)->getNumberFormat()->setFormatCode('#,##0.###');
             }
@@ -400,6 +407,21 @@ class BillingStatementExporter
                 $sheet->getStyle($cell)->getNumberFormat()->setFormatCode(self::FORMAT_MONEY);
             }
         }
+
+        // Excel không tự giãn dòng có chữ xuống dòng khi mở file do code tạo, nên đặt chiều cao theo số dòng chữ.
+        $sheet->getRowDimension($row)->setRowHeight($lines * self::LINE_HEIGHT + 3);
+    }
+
+    /**
+     * Ước lượng số dòng chữ khi xuống dòng trong ô rộng $width ký tự.
+     * ponytail: đếm ký tự, không đo font thật; chữ hoa dài có thể thiếu 1 dòng — tăng LINE_HEIGHT nếu cần.
+     */
+    private function wrappedLines(string $text, float $width): int
+    {
+        $charsPerLine = max(1, (int) floor($width * 0.9));
+
+        return (int) collect(preg_split('/\R/u', $text))
+            ->sum(fn (string $line): int => max(1, (int) ceil(mb_strlen($line) / $charsPerLine)));
     }
 
     /**

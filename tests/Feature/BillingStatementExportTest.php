@@ -245,3 +245,12 @@ test('vfc statement lists delivery note numbers and summed weights in one row', 
         ->and($sheet->getCell('J13')->getValue())->toBe(1052.5)
         ->and($sheet->getCell('A14')->getValue())->toBe('Tổng');
 });
+
+test('data rows grow tall enough for long wrapped addresses', function () {
+    $this->order->pickupLocation->update(['address' => str_repeat('Khu công nghiệp Yên Bình, Vạn Xuân, Thái Nguyên ', 3)]);
+    $rows = ($this->page)()->instance()->getAllRows();
+
+    $sheet = app(BillingStatementExporter::class)->build($rows, $this->customer, 'ALSB')['spreadsheet']->getActiveSheet();
+
+    expect($sheet->getRowDimension(13)->getRowHeight())->toBeGreaterThanOrEqual(33.0);
+});
