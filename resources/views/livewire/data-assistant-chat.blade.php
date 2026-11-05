@@ -167,7 +167,13 @@
                     <p class="da-muted">Hỏi bằng tiếng Việt như nói chuyện. Kết quả có link, bấm vào để mở thẳng chuyến, đơn, xe hoặc bảng kê.</p>
                     <div class="da-samples">
                         @foreach (\App\Livewire\DataAssistantChat::SAMPLE_QUESTIONS as $sample)
-                            <button type="button" class="da-sample" x-on:click="send(@js($sample))">{{ $sample }}</button>
+                            <button type="button" class="da-sample" x-on:click="send(@js($sample['question']))">
+                                <span class="da-sample-topic">
+                                    <x-filament::icon :icon="$sample['icon']" class="da-sample-icon" />
+                                    {{ $sample['topic'] }}
+                                </span>
+                                <span class="da-sample-text">{{ $sample['question'] }}</span>
+                            </button>
                         @endforeach
                     </div>
                 </div>
@@ -260,9 +266,12 @@
         .da-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
         .da-welcome-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
         .da-muted { color: var(--da-muted); font-size: 13px; }
-        .da-samples { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
-        .da-sample { text-align: left; padding: 10px 12px; border: 1px solid var(--da-line); border-radius: 12px; transition: border-color .15s, background .15s, transform .15s; }
-        .da-sample:hover { border-color: var(--da-accent); background: var(--da-accent-soft); transform: translateX(2px); }
+        .da-samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 14px; }
+        .da-sample { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 10px 12px; border: 1px solid var(--da-line); border-radius: 12px; background: var(--da-surface); transition: border-color .15s, background .15s, transform .15s, box-shadow .15s; }
+        .da-sample:hover { border-color: var(--da-accent); background: var(--da-accent-soft); transform: translateY(-2px); box-shadow: 0 6px 14px -8px rgba(0, 143, 213, .5); }
+        .da-sample-topic { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--da-accent); }
+        .da-sample-icon { width: 15px; height: 15px; }
+        .da-sample-text { font-size: 13px; line-height: 1.4; }
         .da-followups { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -4px; }
         .da-followups-label { width: 100%; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--da-muted); }
         .da-chip { padding: 6px 11px; border-radius: 999px; border: 1px solid var(--da-accent); color: var(--da-accent); background: var(--da-surface); font-size: 13px; text-align: left; line-height: 1.35; transition: background .15s, color .15s, transform .15s; }

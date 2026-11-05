@@ -29,15 +29,20 @@ class DataAssistantChat extends Component
 
     private const SESSION_KEY = 'data_assistant.conversation_id';
 
-    /** @var list<string> */
+    /**
+     * Câu hỏi gợi ý ở màn hình chào, chia theo nhóm nghiệp vụ.
+     *
+     * @var list<array{topic: string, icon: string, question: string}>
+     */
     public const SAMPLE_QUESTIONS = [
-        'Tháng này đơn nào đã hoàn thành mà chưa có cước?',
-        'Số chuyến theo ngày trong tháng này (vẽ biểu đồ)',
-        'So sánh doanh thu cước 6 tháng gần đây',
-        'Top 10 khách hàng theo cước tháng này',
-        'Tài xế nào có nhiều ca trực không chạy chuyến tháng này?',
-        'Lái xe nào bấm sai vị trí nhiều nhất tháng này?',
-        'Thời gian từ lúc đến điểm đến lúc giao xong ở từng điểm tháng này',
+        ['topic' => 'Vận hành', 'icon' => 'heroicon-o-truck', 'question' => 'Hôm qua có bao nhiêu chuyến, xe nào chạy nhiều nhất?'],
+        ['topic' => 'Xu hướng', 'icon' => 'heroicon-o-chart-bar', 'question' => 'Số chuyến theo ngày trong tháng này'],
+        ['topic' => 'Bảng kê', 'icon' => 'heroicon-o-document-text', 'question' => 'Hàng ngoài nào tháng này chưa có cước hoặc chưa xuất bảng kê?'],
+        ['topic' => 'Doanh thu', 'icon' => 'heroicon-o-banknotes', 'question' => 'So sánh doanh thu cước 6 tháng gần đây'],
+        ['topic' => 'Khách hàng', 'icon' => 'heroicon-o-building-office-2', 'question' => 'Top 10 khách hàng theo cước tháng này'],
+        ['topic' => 'Tài xế', 'icon' => 'heroicon-o-map-pin', 'question' => 'Lái xe nào bấm sai vị trí nhiều nhất tháng này?'],
+        ['topic' => 'Điểm giao', 'icon' => 'heroicon-o-clock', 'question' => 'Điểm nào giao lâu nhất (từ lúc đến tới lúc giao xong)?'],
+        ['topic' => 'Ca trực', 'icon' => 'heroicon-o-calendar-days', 'question' => 'Tài xế nào nhiều ca trực không chạy chuyến tháng này?'],
     ];
 
     public ?string $conversationId = null;
