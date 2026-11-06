@@ -1,10 +1,11 @@
 import { useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, ScrollView, TouchableWithoutFeedback, Keyboard } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
 import { api } from "../src/lib/api";
 import { showAlert } from "../src/lib/alert";
+import { formatKmInput, parseKmInput } from "../src/lib/format";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { getFastGpsCoordinates } from "../src/lib/location";
@@ -103,7 +104,7 @@ export default function ShiftScreen() {
   }
 
   async function handleEndShift() {
-    const km = parseFloat(endKm);
+    const km = parseKmInput(endKm);
     if (!km || km <= 0) { Alert.alert("Thiếu", "Nhập số Km kết thúc"); return; }
     if (!shift?.id) return;
 
@@ -143,64 +144,68 @@ export default function ShiftScreen() {
   }
 
   return (
-    <View style={s.container}>
-      {!showEnd ? (
-        <>
-          <Text style={s.title}>Bắt đầu ca làm việc</Text>
-          <Text style={s.subtitle}>Chọn loại ca để bắt đầu</Text>
-          {shiftOptions.map((opt) => (
-            <TouchableOpacity key={opt.key} style={s.card} onPress={() => startShift(opt.key)} disabled={loading}>
-              <Text style={s.cardTitle}>{opt.label}</Text>
-              <Text style={s.cardDesc}>{opt.desc}</Text>
-            </TouchableOpacity>
-          ))}
-          {loading && <Text style={s.loading}>Đang tạo ca...</Text>}
-        </>
-      ) : (
-        <>
-          <Text style={s.title}>Kết thúc ca làm việc</Text>
-          <Text style={s.subtitle}>Ca đang hoạt động — nhập Km đồng hồ để kết thúc</Text>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={s.container}>
+        {!showEnd ? (
+          <>
+            <Text style={s.title}>Bắt đầu ca làm việc</Text>
+            <Text style={s.subtitle}>Chọn loại ca để bắt đầu</Text>
+            {shiftOptions.map((opt) => (
+              <TouchableOpacity key={opt.key} style={s.card} onPress={() => startShift(opt.key)} disabled={loading}>
+                <Text style={s.cardTitle}>{opt.label}</Text>
+                <Text style={s.cardDesc}>{opt.desc}</Text>
+              </TouchableOpacity>
+            ))}
+            {loading && <Text style={s.loading}>Đang tạo ca...</Text>}
+          </>
+        ) : (
+          <>
+            <Text style={s.title}>Kết thúc ca làm việc</Text>
+            <Text style={s.subtitle}>Ca đang hoạt động — nhập Km đồng hồ để kết thúc</Text>
 
-          {activeWarning && (
-            <TouchableOpacity
-              style={s.warnBox}
-              activeOpacity={0.8}
-              onPress={() => {
-                if (activeWarningTripId) {
-                  router.push({
-                    pathname: "/trip-detail",
-                    params: { id: String(activeWarningTripId) },
-                  });
-                }
-              }}
-            >
-              <View style={s.warnHeader}>
-                <Ionicons name="information-circle" size={18} color="#2563EB" />
-                <Text style={s.warnTitle}>Chú ý</Text>
-                <Ionicons name="chevron-forward" size={16} color="#2563EB" style={{ marginLeft: "auto" }} />
-              </View>
-              <Text style={s.warnText}>{activeWarning}</Text>
-              <Text style={s.warnHint}>Nhấn vào đây để xem chi tiết chuyến dở dang</Text>
-            </TouchableOpacity>
-          )}
+            {activeWarning && (
+              <TouchableOpacity
+                style={s.warnBox}
+                activeOpacity={0.8}
+                onPress={() => {
+                  if (activeWarningTripId) {
+                    router.push({
+                      pathname: "/trip-detail",
+                      params: { id: String(activeWarningTripId) },
+                    });
+                  }
+                }}
+              >
+                <View style={s.warnHeader}>
+                  <Ionicons name="information-circle" size={18} color="#2563EB" />
+                  <Text style={s.warnTitle}>Chú ý</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#2563EB" style={{ marginLeft: "auto" }} />
+                </View>
+                <Text style={s.warnText}>{activeWarning}</Text>
+                <Text style={s.warnHint}>Nhấn vào đây để xem chi tiết chuyến dở dang</Text>
+              </TouchableOpacity>
+            )}
 
-          <View style={s.endCard}>
-            <Text style={s.endLabel}>Km đồng hồ hiện tại</Text>
-            <TextInput
-              style={s.endInput}
-              placeholder="Nhập số Km đồng hồ"
-              placeholderTextColor="#D1D5DB"
-              keyboardType="numeric"
-              value={endKm}
-              onChangeText={setEndKm}
-            />
-          </View>
-          <TouchableOpacity style={[s.endBtn, ending && s.btnDisabled]} onPress={handleEndShift} disabled={ending}>
-            <Text style={s.endBtnText}>{ending ? "Đang xử lý..." : "Kết thúc ca"}</Text>
-          </TouchableOpacity>
-        </>
-      )}
-    </View>
+            <View style={s.endCard}>
+              <Text style={s.endLabel}>Km đồng hồ hiện tại</Text>
+              <TextInput
+                style={s.endInput}
+                placeholder="Nhập số Km đồng hồ"
+                placeholderTextColor="#D1D5DB"
+                keyboardType="number-pad"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+                value={formatKmInput(endKm)}
+                onChangeText={(t) => setEndKm(t.replace(/\D/g, ""))}
+              />
+            </View>
+            <TouchableOpacity style={[s.endBtn, ending && s.btnDisabled]} onPress={handleEndShift} disabled={ending}>
+              <Text style={s.endBtnText}>{ending ? "Đang xử lý..." : "Kết thúc ca"}</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 

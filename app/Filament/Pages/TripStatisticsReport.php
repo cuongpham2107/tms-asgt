@@ -363,7 +363,7 @@ class TripStatisticsReport extends Page
                 default => null,
             })
             ->modalHeading('Xuất bảng kê đối chiếu')
-            ->modalDescription('Xuất đúng các dòng đang hiển thị trên bảng. Dòng đã có giá sẽ bị khoá sau khi xuất.')
+            ->modalDescription('Xuất đúng các dòng đang hiển thị trên bảng theo mẫu của khách hàng.')
             ->modalWidth(Width::Large)
             ->modalSubmitActionLabel('Xuất file')
             ->fillForm(function () use ($templates, $defaultTitle): array {
@@ -373,6 +373,7 @@ class TripStatisticsReport extends Page
                     'template' => $templateKey,
                     'title' => $defaultTitle($templateKey),
                     'sign_date' => now()->format('Y-m-d'),
+                    'lock_after_export' => false,
                 ];
             })
             ->schema([
@@ -389,6 +390,10 @@ class TripStatisticsReport extends Page
                     TextInput::make('invoice_number')->label('Số HĐ')->maxLength(50),
                     DatePicker::make('invoice_date')->label('Ngày HĐ')->native(false)->displayFormat('d/m/Y'),
                 ]),
+                Toggle::make('lock_after_export')
+                    ->label('Khoá dòng cước sau khi xuất')
+                    ->helperText('Bật nếu đây là bảng kê chính thức chốt công nợ để khoá chỉnh sửa')
+                    ->default(false),
             ])
             ->action(function (array $data) use ($customer): ?StreamedResponse {
                 $selectedCustomer = $customer();
@@ -406,14 +411,16 @@ class TripStatisticsReport extends Page
                     return null;
                 }
 
-                // Khoá sau khi đã dựng xong file, và chỉ khoá dòng đã có giá.
-                OrderCharge::query()
-                    ->whereIn('order_id', $result['order_ids'])
-                    ->whereNotNull('base_price')
-                    ->whereNull('exported_at')
-                    ->update(['exported_at' => now(), 'exported_by' => Auth::id()]);
-                $this->clearBaseRowsCache();
-                $this->bumpDataVersion();
+                // Chỉ khoá dòng đã có giá nếu người dùng chọn khoá sau khi xuất.
+                if ($data['lock_after_export'] ?? false) {
+                    OrderCharge::query()
+                        ->whereIn('order_id', $result['order_ids'])
+                        ->whereNotNull('base_price')
+                        ->whereNull('exported_at')
+                        ->update(['exported_at' => now(), 'exported_by' => Auth::id()]);
+                    $this->clearBaseRowsCache();
+                    $this->bumpDataVersion();
+                }
 
                 if ($result['unmapped_fees'] !== []) {
                     Notification::make()
@@ -1977,13 +1984,6 @@ class TripStatisticsReport extends Page
     {
         $rows = $this->getAllRows();
         $trips = $this->getFilteredTrips();
-
-        OrderCharge::query()
-            ->whereIn('order_id', $rows->pluck('order_id')->filter())
-            ->whereNull('exported_at')
-            ->update(['exported_at' => now(), 'exported_by' => Auth::id()]);
-
-        $this->bumpDataVersion();
 
         $tabSuffix = match ($this->activeTab) {
             'HHHK' => 'HHHK',

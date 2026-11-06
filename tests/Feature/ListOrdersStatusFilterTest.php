@@ -125,3 +125,61 @@ test('list orders shows cancelled orders only when cancelled status is selected'
         ->assertCanSeeTableRecords([$cancelledOrder])
         ->assertCanNotSeeTableRecords([$sentOrder]);
 });
+
+test('list orders scopes completed and cancelled counts and table to current month when date range is blank', function () {
+    // Current month completed order
+    $currentCompleted = Order::create([
+        'order_code' => 'ORD-CURR-COMPLETED',
+        'type' => 'HHHK',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Completed,
+        'planned_loading_at' => now()->startOfMonth()->addDays(2),
+        'created_by' => $this->user->id,
+    ]);
+
+    // Past month completed order
+    $pastCompleted = Order::create([
+        'order_code' => 'ORD-PAST-COMPLETED',
+        'type' => 'HHHK',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Completed,
+        'planned_loading_at' => now()->subMonthsNoOverflow(2)->startOfMonth(),
+        'created_by' => $this->user->id,
+    ]);
+
+    // Past month cancelled order
+    $pastCancelled = Order::create([
+        'order_code' => 'ORD-PAST-CANCELLED',
+        'type' => 'HHHK',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Cancelled,
+        'planned_loading_at' => now()->subMonthsNoOverflow(2)->startOfMonth(),
+        'created_by' => $this->user->id,
+    ]);
+
+    // Current month cancelled order
+    $currentCancelled = Order::create([
+        'order_code' => 'ORD-CURR-CANCELLED',
+        'type' => 'HHHK',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Cancelled,
+        'planned_loading_at' => now()->startOfMonth()->addDays(3),
+        'created_by' => $this->user->id,
+    ]);
+
+    $component = Livewire::test(ListOrders::class);
+
+    // Verify count only includes current month
+    expect($component->instance()->getOrderStatusCount('completed'))->toBe(1)
+        ->and($component->instance()->getOrderStatusCount('cancelled'))->toBe(1);
+
+    // When clicking completed filter, only sees current month completed
+    $component->loadTable()
+        ->call('filterStatus', 'completed')
+        ->assertCanSeeTableRecords([$currentCompleted])
+        ->assertCanNotSeeTableRecords([$pastCompleted]);
+});

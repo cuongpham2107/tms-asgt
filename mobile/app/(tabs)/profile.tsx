@@ -245,7 +245,11 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView style={s.container}>
+    <ScrollView
+      style={s.container}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
       {/* Header với background + avatar */}
       <View style={s.headerBg}>
         <View style={s.header}>
@@ -414,6 +418,7 @@ export default function ProfileScreen() {
               contentContainerStyle={{ paddingBottom: 8 }}
               showsVerticalScrollIndicator={true}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
             >
               {passwordError ? <Text style={s.modalError}>{passwordError}</Text> : null}
 

@@ -378,6 +378,8 @@ export default function TripsScreen() {
             <FlatList
                 data={filtered}
                 keyExtractor={(t) => String(t.id)}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 onEndReached={loadMore}
                 onEndReachedThreshold={0.3}
                 ListHeaderComponent={

@@ -227,9 +227,9 @@ class ListTrips extends ListRecords
                 $running += (int) ($statusCounts[$rs] ?? 0);
             }
 
-            $completed = (int) ($statusCounts[TripStatus::Completed->value] ?? 0)
+            $rawCompleted = (int) ($statusCounts[TripStatus::Completed->value] ?? 0)
                 + (int) ($statusCounts[TripStatus::Delivered->value] ?? 0);
-            $cancelled = (int) ($statusCounts[TripStatus::Cancelled->value] ?? 0);
+            $rawCancelled = (int) ($statusCounts[TripStatus::Cancelled->value] ?? 0);
             $returnTrip = (int) ($statusCounts[TripStatus::ReturnTrip->value] ?? 0);
             $driverSwap = (int) ($statusCounts[TripStatus::DriverSwap->value] ?? 0);
 
@@ -241,7 +241,21 @@ class ListTrips extends ListRecords
                 ->count();
 
             // Active total excluding completed and cancelled
-            $activeTotal = $total - $completed - $cancelled;
+            $activeTotal = $total - $rawCompleted - $rawCancelled;
+
+            if (blank($this->dateFrom) && blank($this->dateTo)) {
+                $monthQuery = $this->applyDateRangeFilter(clone $baseQuery, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString());
+                $completed = (int) (clone $monthQuery)
+                    ->whereIn('trips.status', [TripStatus::Completed->value, TripStatus::Delivered->value])
+                    ->count();
+                $cancelled = (int) (clone $monthQuery)
+                    ->where('trips.status', TripStatus::Cancelled->value)
+                    ->count();
+                $total = $activeTotal + $completed + $cancelled;
+            } else {
+                $completed = $rawCompleted;
+                $cancelled = $rawCancelled;
+            }
 
             return [
                 'total' => $total,
@@ -441,6 +455,10 @@ class ListTrips extends ListRecords
     private function applyActiveFilters(Builder $query, string $except = ''): Builder
     {
         return $this->applyDateRangeFilter($query, $this->dateFrom, $this->dateTo)
+            ->when(
+                $except !== 'status' && in_array($this->activeStatusFilter, ['completed', 'cancelled']) && blank($this->dateFrom) && blank($this->dateTo),
+                fn (Builder $query): Builder => $this->applyDateRangeFilter($query, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()),
+            )
             ->when($except !== 'status' && $this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
             ->when($except !== 'status' && $this->activeStatusFilter === 'all', fn (Builder $query): Builder => $query->whereNotIn('trips.status', [TripStatus::Completed->value, TripStatus::Delivered->value, TripStatus::Cancelled->value]))
             ->when($except !== 'vehicleOwner' && $this->vehicleOwner !== 'all', fn (Builder $query): Builder => $query->whereHas('vehicle', fn (Builder $q) => $q->where('type', $this->vehicleOwner)))
@@ -693,15 +711,31 @@ class ListTrips extends ListRecords
                     });
                 },
             )
-            ->when(filled($this->dateFrom) || filled($this->dateTo), function (Builder $query) use ($actionRecordId): Builder {
-                return $query->where(function (Builder $dateQuery) use ($actionRecordId): void {
-                    $this->applyDateRangeFilter($dateQuery, $this->dateFrom, $this->dateTo);
+            ->when(
+                filled($this->dateFrom) || filled($this->dateTo),
+                function (Builder $query) use ($actionRecordId): Builder {
+                    return $query->where(function (Builder $dateQuery) use ($actionRecordId): void {
+                        $this->applyDateRangeFilter($dateQuery, $this->dateFrom, $this->dateTo);
 
-                    if ($actionRecordId) {
-                        $dateQuery->orWhere('trips.id', $actionRecordId);
+                        if ($actionRecordId) {
+                            $dateQuery->orWhere('trips.id', $actionRecordId);
+                        }
+                    });
+                },
+                function (Builder $query) use ($actionRecordId): Builder {
+                    if (in_array($this->activeStatusFilter, ['completed', 'cancelled'])) {
+                        return $query->where(function (Builder $dateQuery) use ($actionRecordId): void {
+                            $this->applyDateRangeFilter($dateQuery, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString());
+
+                            if ($actionRecordId) {
+                                $dateQuery->orWhere('trips.id', $actionRecordId);
+                            }
+                        });
                     }
-                });
-            })
+
+                    return $query;
+                },
+            )
             ->when(filled($this->tripSearch), function (Builder $query) use ($actionRecordId): Builder {
                 $search = trim((string) $this->tripSearch);
 

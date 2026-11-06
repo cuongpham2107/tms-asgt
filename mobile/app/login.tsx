@@ -163,8 +163,8 @@ export default function LoginScreen() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 24 }}
-        keyboardShouldPersistTaps="always"
-        keyboardDismissMode="none"
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <TouchableOpacity activeOpacity={0.9} onPress={handleLogoPress}>
           <Image source={require("../assets/icon.png")} style={s.logo} />

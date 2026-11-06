@@ -381,20 +381,14 @@ class ListOrders extends ListRecords
                 fn (Builder $q): Builder => $q->whereHas('area', fn (Builder $aq): Builder => $aq->where('code', $this->activePlaceFilter)),
             )
             ->when($this->showMineOnly, fn (Builder $q): Builder => $q->where('orders.created_by', Auth::id()))
-            ->when(filled($this->startDate) || filled($this->endDate), function (Builder $q): Builder {
-                if (filled($this->startDate) && filled($this->endDate)) {
-                    return $q->whereBetween('orders.planned_loading_at', [
-                        Carbon::parse($this->startDate)->startOfDay(),
-                        Carbon::parse($this->endDate)->endOfDay(),
-                    ]);
-                }
-
-                if (filled($this->startDate)) {
-                    return $q->where('orders.planned_loading_at', '>=', Carbon::parse($this->startDate)->startOfDay());
-                }
-
-                return $q->where('orders.planned_loading_at', '<=', Carbon::parse($this->endDate)->endOfDay());
-            });
+            ->when(
+                filled($this->startDate) || filled($this->endDate),
+                fn (Builder $q): Builder => $this->applyDateRangeFilter($q, $this->startDate, $this->endDate),
+                fn (Builder $q): Builder => $q->when(
+                    ! in_array('status', $excludeFilters) && in_array($this->activeStatusFilter, ['completed', 'cancelled']),
+                    fn (Builder $sq): Builder => $this->applyDateRangeFilter($sq, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()),
+                ),
+            );
     }
 
     /**
@@ -430,7 +424,9 @@ class ListOrders extends ListRecords
     protected function getOrderStatusCounts(): array
     {
         return $this->getMemoized('order_status_counts', function (): array {
-            $counts = $this->crossFilteredQuery(['status'])
+            $baseQuery = $this->crossFilteredQuery(['status']);
+
+            $counts = (clone $baseQuery)
                 ->selectRaw('orders.status, count(*) as count')
                 ->groupBy('orders.status')
                 ->pluck('count', 'status')
@@ -443,6 +439,15 @@ class ListOrders extends ListRecords
                 }
             }
 
+            $completed = (int) ($counts[OrderStatus::Completed->value] ?? 0);
+            $cancelled = (int) ($counts[OrderStatus::Cancelled->value] ?? 0);
+
+            if (blank($this->startDate) && blank($this->endDate)) {
+                $monthQuery = $this->applyDateRangeFilter(clone $baseQuery, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString());
+                $completed = (int) (clone $monthQuery)->where('orders.status', OrderStatus::Completed->value)->count();
+                $cancelled = (int) (clone $monthQuery)->where('orders.status', OrderStatus::Cancelled->value)->count();
+            }
+
             return [
                 'all' => $activeCount,
                 'draft' => (int) ($counts[OrderStatus::Draft->value] ?? 0),
@@ -450,8 +455,8 @@ class ListOrders extends ListRecords
                 'sent' => (int) ($counts[OrderStatus::Sent->value] ?? 0),
                 'in_transit' => (int) ($counts[OrderStatus::InTransit->value] ?? 0),
                 'driver_swap' => (int) ($counts[OrderStatus::DriverSwap->value] ?? 0),
-                'completed' => (int) ($counts[OrderStatus::Completed->value] ?? 0),
-                'cancelled' => (int) ($counts[OrderStatus::Cancelled->value] ?? 0),
+                'completed' => $completed,
+                'cancelled' => $cancelled,
             ];
         });
     }
@@ -553,23 +558,52 @@ class ListOrders extends ListRecords
                 });
             })
 
-            // Date range filter (by planned_loading_at). Supports start, end or both.
-            ->when(filled($this->startDate) || filled($this->endDate), function (Builder $query): Builder {
-                if (filled($this->startDate) && filled($this->endDate)) {
-                    return $query->whereBetween('planned_loading_at', [
-                        Carbon::parse($this->startDate)->startOfDay(),
-                        Carbon::parse($this->endDate)->endOfDay(),
-                    ]);
-                }
+            ->when(
+                filled($this->startDate) || filled($this->endDate),
+                fn (Builder $query): Builder => $this->applyDateRangeFilter($query, $this->startDate, $this->endDate),
+                function (Builder $query): Builder {
+                    if (in_array($this->activeStatusFilter, ['completed', 'cancelled'])) {
+                        return $this->applyDateRangeFilter($query, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString());
+                    }
 
-                if (filled($this->startDate)) {
-                    return $query->where('planned_loading_at', '>=', Carbon::parse($this->startDate)->startOfDay());
-                }
-
-                return $query->where('planned_loading_at', '<=', Carbon::parse($this->endDate)->endOfDay());
-            });
+                    return $query;
+                },
+            );
 
         return $query;
+    }
+
+    private function applyDateRangeFilter(Builder $query, ?string $startDate, ?string $endDate): Builder
+    {
+        $from = filled($startDate) ? Carbon::parse($startDate)->startOfDay() : null;
+        $to = filled($endDate) ? Carbon::parse($endDate)->endOfDay() : null;
+
+        if (! $from && ! $to) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $dateQuery) use ($from, $to): void {
+            $dateQuery
+                ->where(function (Builder $planned) use ($from, $to): void {
+                    $planned->whereNotNull('orders.planned_loading_at');
+                    $this->applyDateBound($planned, 'orders.planned_loading_at', $from, $to);
+                })
+                ->orWhere(function (Builder $unplanned) use ($from, $to): void {
+                    $unplanned->whereNull('orders.planned_loading_at');
+                    $this->applyDateBound($unplanned, 'orders.created_at', $from, $to);
+                });
+        });
+    }
+
+    private function applyDateBound(Builder $query, string $column, ?Carbon $from, ?Carbon $to): void
+    {
+        if ($from && $to) {
+            $query->whereBetween($column, [$from, $to]);
+        } elseif ($from) {
+            $query->where($column, '>=', $from);
+        } else {
+            $query->where($column, '<=', $to);
+        }
     }
 
     /**

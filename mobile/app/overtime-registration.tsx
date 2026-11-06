@@ -224,6 +224,7 @@ export default function OvertimeRegistrationScreen() {
       contentContainerStyle={s.contentContainer}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     >
       {/* 1. Chọn ngày tăng cường */}
       <View style={s.section}>

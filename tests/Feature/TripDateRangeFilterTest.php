@@ -124,3 +124,25 @@ test('date bounds are inclusive of the whole end day', function () {
         ->set('dateTo', '2026-10-31')
         ->assertCanSeeTableRecords([$lateTrip]);
 });
+
+test('list trips scopes completed and cancelled counts and table to current month when date range is blank', function () {
+    Carbon::setTestNow('2026-11-06 12:00:00');
+
+    $currentCompleted = makeTrip('TRIP-CURR-COMPLETED', '2026-11-02 08:00:00', '2026-11-02 07:00:00', TripStatus::Completed);
+    $pastCompleted = makeTrip('TRIP-PAST-COMPLETED', '2026-10-15 08:00:00', '2026-10-15 07:00:00', TripStatus::Completed);
+
+    $currentCancelled = makeTrip('TRIP-CURR-CANCELLED', '2026-11-03 08:00:00', '2026-11-03 07:00:00', TripStatus::Cancelled);
+    $pastCancelled = makeTrip('TRIP-PAST-CANCELLED', '2026-10-10 08:00:00', '2026-10-10 07:00:00', TripStatus::Cancelled);
+
+    $component = Livewire::test(ListTrips::class)->loadTable()
+        ->set('orderType', 'all')
+        ->set('activePlaceFilter', 'all')
+        ->set('vehicleOwner', 'all');
+
+    expect($component->instance()->getTripStatusCount('completed'))->toBe(1)
+        ->and($component->instance()->getTripStatusCount('cancelled'))->toBe(1);
+
+    $component->call('filterStatus', 'completed')
+        ->assertCanSeeTableRecords([$currentCompleted])
+        ->assertCanNotSeeTableRecords([$pastCompleted]);
+});

@@ -167,6 +167,7 @@ test('export action downloads the statement and locks only priced charges', func
             'template' => 'ALSB',
             'title' => 'BẢNG KÊ ALSB',
             'sign_date' => '2026-10-26',
+            'lock_after_export' => true,
         ])
         ->assertHasNoActionErrors()
         ->assertFileDownloaded();
@@ -182,6 +183,7 @@ test('export action does not lock charges that have no price', function () {
             'template' => 'ALSB',
             'title' => 'BẢNG KÊ ALSB',
             'sign_date' => '2026-10-26',
+            'lock_after_export' => true,
         ])
         ->assertFileDownloaded();
 

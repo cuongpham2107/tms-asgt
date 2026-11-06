@@ -244,9 +244,13 @@ test('recalculate looks up the rate again', function () {
     expect((float) $this->charge->fresh()->base_price)->toBe(1_500_000.0);
 });
 
-test('exporting excel locks the exported charges and unlock reopens them', function () {
+test('exporting excel does not lock charges, lockCharge locks and unlockCharge reopens them', function () {
     $component = ($this->page)();
     $component->instance()->exportExcel();
+
+    expect($this->charge->fresh()->isLocked())->toBeFalse();
+
+    $component->call('lockCharge', $this->order->id);
 
     expect($this->charge->fresh()->isLocked())->toBeTrue()
         ->and($this->charge->fresh()->exported_by)->toBe($this->user->id);

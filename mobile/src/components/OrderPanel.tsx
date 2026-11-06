@@ -12,6 +12,7 @@ import {
     Modal,
     Image,
     KeyboardAvoidingView,
+    Keyboard,
     Platform,
     Linking,
 } from "react-native";
@@ -94,8 +95,8 @@ const formatDateTimeHM = (val: string | null | undefined) => {
     return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 };
 
-/** Ô km kiểu nhập tiền: hiện 403.718, state chỉ giữ chữ số. */
-const formatKmInput = (digits: string) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+import { formatKmInput } from "../lib/format";
+export { formatKmInput };
 
 interface OrderPanelProps {
     /** Đơn kèm trip_id, vehicle, is_swapped (từ danh sách/chi tiết chuyến) */
@@ -602,8 +603,8 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
         : {
               style: s.container,
               showsVerticalScrollIndicator: false,
-              keyboardShouldPersistTaps: "always" as const,
-              keyboardDismissMode: "none" as const,
+              keyboardShouldPersistTaps: "handled" as const,
+              keyboardDismissMode: "on-drag" as const,
               automaticallyAdjustKeyboardInsets: Platform.OS === "ios",
               refreshControl: (
                   <RefreshControl
@@ -961,6 +962,7 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                             data={locations}
                             keyExtractor={(loc: any) => String(loc.id)}
                             keyboardShouldPersistTaps="handled"
+                            keyboardDismissMode="on-drag"
                             contentContainerStyle={{ paddingBottom: 24 }}
                             onEndReached={loadMoreLocations}
                             onEndReachedThreshold={0.4}
@@ -1209,6 +1211,8 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                         placeholder="Số Km hiện tại"
                                         placeholderTextColor="#D1D5DB"
                                         keyboardType="number-pad"
+                                        returnKeyType="done"
+                                        onSubmitEditing={Keyboard.dismiss}
                                         value={formatKmInput(km)}
                                         onChangeText={(text) => setKm(text.replace(/\D/g, ""))}
                                         onFocus={handleKmFocus}

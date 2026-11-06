@@ -24,6 +24,7 @@ import CheckpointTimeline from "../src/components/CheckpointTimeline";
 import OrderPanel from "../src/components/OrderPanel";
 import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
 import { clearNotificationBadge, useRefreshOnNotification } from "../src/lib/notifications";
+import { formatKmInput, parseKmInput } from "../src/lib/format";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import {
@@ -283,7 +284,7 @@ export default function TripDetailScreen() {
     };
 
     const handleSubmitReport = async () => {
-        const km = parseFloat(reportKm);
+        const km = parseKmInput(reportKm);
         if (!km || km < 0) {
             showAlert(
                 "Thiếu thông tin",
@@ -443,7 +444,7 @@ export default function TripDetailScreen() {
     // Auto-fill KM input và tự cập nhật khi điều hành chỉnh Km xe trên web
     useEffect(() => {
         if (vehicleKm != null) {
-            const nextKm = String(Math.round(Number(vehicleKm)));
+            const nextKm = String(Math.round(Number(vehicleKm))).replace(/\D/g, "");
             const isDifferent =
                 lastSuggestedVehicleKmRef.current !== "" &&
                 lastSuggestedVehicleKmRef.current !== nextKm;
@@ -514,7 +515,7 @@ export default function TripDetailScreen() {
     };
 
     const handleStartReturn = async () => {
-        const sKm = parseFloat(startKmInput);
+        const sKm = parseKmInput(startKmInput);
         if (!sKm) {
             showAlert("Thiếu", "Nhập Km bắt đầu");
             return;
@@ -549,7 +550,7 @@ export default function TripDetailScreen() {
     };
 
     const handleCompleteReturn = async () => {
-        const eKm = parseFloat(completeKm);
+        const eKm = parseKmInput(completeKm);
         if (!eKm) {
             showAlert("Thiếu", "Nhập Km kết thúc");
             return;
@@ -754,11 +755,9 @@ export default function TripDetailScreen() {
                         style={[s.actionBtnHandoff, s.actionRowBtn]}
                         onPress={() => {
                             setCompleteKm(
-                                String(
-                                    vehicleKm != null
-                                        ? Math.round(vehicleKm)
-                                        : "",
-                                ),
+                                vehicleKm != null
+                                    ? String(Math.round(Number(vehicleKm))).replace(/\D/g, "")
+                                    : "",
                             );
                             setShowCompleteModal(true);
                         }}
@@ -781,7 +780,7 @@ export default function TripDetailScreen() {
                         onPress={() => {
                             setReportKm(
                                 vehicleKm != null
-                                    ? String(Math.round(vehicleKm))
+                                    ? String(Math.round(Number(vehicleKm))).replace(/\D/g, "")
                                     : "",
                             );
                             setShowReportModal(true);
@@ -811,8 +810,8 @@ export default function TripDetailScreen() {
         >
             <ScrollView
                 style={s.container}
-                keyboardShouldPersistTaps="always"
-                keyboardDismissMode="none"
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
                 refreshControl={
                     <RefreshControl
@@ -1204,9 +1203,11 @@ export default function TripDetailScreen() {
                                             ]}
                                             placeholder="Km kết thúc"
                                             placeholderTextColor="#D1D5DB"
-                                            keyboardType="numeric"
-                                            value={completeKm}
-                                            onChangeText={setCompleteKm}
+                                            keyboardType="number-pad"
+                                            returnKeyType="done"
+                                            onSubmitEditing={Keyboard.dismiss}
+                                            value={formatKmInput(completeKm)}
+                                            onChangeText={(text) => setCompleteKm(text.replace(/\D/g, ""))}
                                             autoCorrect={false}
                                             autoComplete="off"
                                             importantForAutofill="no"
@@ -1228,9 +1229,11 @@ export default function TripDetailScreen() {
                                             ]}
                                             placeholder="Km bắt đầu"
                                             placeholderTextColor="#D1D5DB"
-                                            keyboardType="numeric"
-                                            value={startKmInput}
-                                            onChangeText={setStartKmInput}
+                                            keyboardType="number-pad"
+                                            returnKeyType="done"
+                                            onSubmitEditing={Keyboard.dismiss}
+                                            value={formatKmInput(startKmInput)}
+                                            onChangeText={(text) => setStartKmInput(text.replace(/\D/g, ""))}
                                             autoCorrect={false}
                                             autoComplete="off"
                                             importantForAutofill="no"
@@ -1545,11 +1548,9 @@ export default function TripDetailScreen() {
                             ]}
                             onPress={() => {
                                 setCompleteKm(
-                                    String(
-                                        vehicleKm != null
-                                            ? Math.round(vehicleKm)
-                                            : "",
-                                    ),
+                                    vehicleKm != null
+                                        ? String(Math.round(Number(vehicleKm))).replace(/\D/g, "")
+                                        : "",
                                 );
                                 setShowCompleteModal(true);
                             }}
@@ -1639,6 +1640,7 @@ export default function TripDetailScreen() {
                             contentContainerStyle={{ paddingBottom: 12 }}
                             showsVerticalScrollIndicator={true}
                             keyboardShouldPersistTaps="handled"
+                            keyboardDismissMode="on-drag"
                         >
                             {/* Hiển thị bước hiện tại */}
                             {(() => {
@@ -1685,12 +1687,13 @@ export default function TripDetailScreen() {
                             </Text>
                             <TextInput
                                 style={[s.modalKmInput, { marginBottom: 12 }]}
-                                value={reportKm}
-                                onChangeText={setReportKm}
-                                placeholder="VD: 100085"
+                                value={formatKmInput(reportKm)}
+                                onChangeText={(text) => setReportKm(text.replace(/\D/g, ""))}
+                                placeholder="VD: 100.085"
                                 placeholderTextColor="#9CA3AF"
-                                keyboardType="numeric"
+                                keyboardType="number-pad"
                                 returnKeyType="done"
+                                onSubmitEditing={Keyboard.dismiss}
                                 autoCorrect={false}
                                 autoComplete="off"
                                 importantForAutofill="no"
@@ -1942,6 +1945,7 @@ export default function TripDetailScreen() {
                             contentContainerStyle={{ paddingBottom: 10 }}
                             showsVerticalScrollIndicator={true}
                             keyboardShouldPersistTaps="handled"
+                            keyboardDismissMode="on-drag"
                         >
                             <Text style={s.modalSectionLabel}>
                                 Trạng thái đơn hàng ({orders.length})
@@ -2010,10 +2014,11 @@ export default function TripDetailScreen() {
                                 style={s.modalKmInput}
                                 placeholder="Km hiện tại"
                                 placeholderTextColor="#D1D5DB"
-                                keyboardType="numeric"
+                                keyboardType="number-pad"
                                 returnKeyType="done"
-                                value={completeKm}
-                                onChangeText={setCompleteKm}
+                                onSubmitEditing={Keyboard.dismiss}
+                                value={formatKmInput(completeKm)}
+                                onChangeText={(text) => setCompleteKm(text.replace(/\D/g, ""))}
                                 autoCorrect={false}
                                 autoComplete="off"
                                 importantForAutofill="no"
