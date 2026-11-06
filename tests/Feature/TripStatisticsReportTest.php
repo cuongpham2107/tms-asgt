@@ -24,6 +24,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 uses(RefreshDatabase::class);
@@ -829,4 +830,249 @@ test('last month preset does not overflow into the current month on the 31st', f
         ->and($component->instance()->isDatePresetActive('thisMonth'))->toBeFalse();
 
     Carbon::setTestNow();
+});
+
+test('editCharge modal displays and saves timestamps for multiple delivery points', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-MULTI-DP',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-10-05 08:00:00'),
+        'completed_at' => Carbon::parse('2026-10-05 12:00:00'),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-MULTI-DP',
+        'trip_id' => $trip->id,
+        'customer_id' => $this->customer->id,
+        'area_id' => $this->area->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'cargo_type' => CargoType::Gcr,
+        'type' => OrderType::External,
+        'status' => OrderStatus::Completed,
+        'created_by' => $this->driver->id,
+        'planned_loading_at' => Carbon::parse('2026-10-05 07:30:00'),
+    ]);
+
+    $dp1 = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->deliveryLocation->id,
+        'sequence' => 1,
+        'arrived_at' => Carbon::parse('2026-10-05 09:00:00'),
+        'delivered_at' => Carbon::parse('2026-10-05 09:30:00'),
+        'total_packages' => 20,
+        'total_weight' => 500,
+    ]);
+
+    $loc2 = Location::create([
+        'code' => 'KHO-2',
+        'name' => 'Kho Phụ 2',
+        'loc_type' => 'delivery',
+        'is_active' => true,
+    ]);
+
+    $dp2 = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $loc2->id,
+        'sequence' => 2,
+        'arrived_at' => Carbon::parse('2026-10-05 10:15:00'),
+        'delivered_at' => Carbon::parse('2026-10-05 11:00:00'),
+        'total_packages' => 10,
+        'total_weight' => 250,
+    ]);
+
+    $component = Livewire::test(TripStatisticsReport::class)
+        ->mountAction('editCharge', ['orderId' => $order->id]);
+
+    $formData = $component->instance()->mountedActions[0]['data'];
+    expect($formData['delivery_points'])->toHaveKey($dp1->id)
+        ->and($formData['delivery_points'])->toHaveKey($dp2->id)
+        ->and($formData['delivery_points'][$dp1->id]['arrived_at'])->toBe('2026-10-05 09:00:00')
+        ->and($formData['delivery_points'][$dp2->id]['delivered_at'])->toBe('2026-10-05 11:00:00');
+
+    // Chỉnh sửa thời gian mốc các điểm trả hàng
+    $component->setActionData([
+        'summary_requested_at' => '2026-10-05 07:45:00',
+        'summary_loading_at' => '2026-10-05 08:00:00',
+        'summary_departed_at' => '2026-10-05 08:30:00',
+        'delivery_points' => [
+            $dp1->id => [
+                'arrived_at' => '2026-10-05 09:10:00',
+                'delivered_at' => '2026-10-05 09:40:00',
+            ],
+            $dp2->id => [
+                'arrived_at' => '2026-10-05 10:30:00',
+                'delivered_at' => '2026-10-05 11:15:00',
+            ],
+        ],
+    ])
+        ->callMountedAction()
+        ->assertHasNoActionErrors();
+
+    expect($dp1->fresh()->arrived_at->format('Y-m-d H:i:s'))->toBe('2026-10-05 09:10:00')
+        ->and($dp1->fresh()->delivered_at->format('Y-m-d H:i:s'))->toBe('2026-10-05 09:40:00')
+        ->and($dp2->fresh()->arrived_at->format('Y-m-d H:i:s'))->toBe('2026-10-05 10:30:00')
+        ->and($dp2->fresh()->delivered_at->format('Y-m-d H:i:s'))->toBe('2026-10-05 11:15:00');
+
+    // Kiểm tra checkpoint tương ứng đã được lưu/cập nhật
+    $cp1Arrived = TripCheckpoint::where('order_id', $order->id)
+        ->where('delivery_point_id', $dp1->id)
+        ->where('checkpoint_type', CheckpointType::ArrivedDelivery)
+        ->first();
+    expect($cp1Arrived)->not->toBeNull()
+        ->and($cp1Arrived->occurred_at->format('Y-m-d H:i:s'))->toBe('2026-10-05 09:10:00');
+
+    $cp2Completed = TripCheckpoint::where('order_id', $order->id)
+        ->where('delivery_point_id', $dp2->id)
+        ->where('checkpoint_type', CheckpointType::Completed)
+        ->first();
+    expect($cp2Completed)->not->toBeNull()
+        ->and($cp2Completed->occurred_at->format('Y-m-d H:i:s'))->toBe('2026-10-05 11:15:00');
+});
+
+test('trip statistics correctly calculates durations for multi-delivery point orders', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-MULTI-POINTS',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-10-05 08:30:00'),
+        'completed_at' => Carbon::parse('2026-10-05 11:15:00'),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-MULTI-CALC',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer2->id,
+        'created_by' => $this->driver->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'planned_loading_at' => Carbon::parse('2026-10-05 08:00:00'),
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    // A = 08:00, B = 08:30 -> Loading = 30m
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'occurred_at' => Carbon::parse('2026-10-05 08:00:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'checkpoint_type' => CheckpointType::LeftPickup,
+        'occurred_at' => Carbon::parse('2026-10-05 08:30:00'),
+    ]);
+
+    // DP1: Arrived C1 = 09:10, Delivered D1 = 09:40
+    // Travel leg 1: 08:30 -> 09:10 = 40m
+    // Unloading drop 1: 09:10 -> 09:40 = 30m
+    $dp1 = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->deliveryLocation->id,
+        'sequence' => 1,
+        'arrived_at' => Carbon::parse('2026-10-05 09:10:00'),
+        'delivered_at' => Carbon::parse('2026-10-05 09:40:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp1->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery,
+        'occurred_at' => Carbon::parse('2026-10-05 09:10:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp1->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'occurred_at' => Carbon::parse('2026-10-05 09:40:00'),
+    ]);
+
+    // DP2: Arrived C2 = 10:30, Delivered D2 = 11:15
+    // Travel leg 2: 09:40 -> 10:30 = 50m
+    // Unloading drop 2: 10:30 -> 11:15 = 45m
+    $dp2 = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->deliveryLocation->id,
+        'sequence' => 2,
+        'arrived_at' => Carbon::parse('2026-10-05 10:30:00'),
+        'delivered_at' => Carbon::parse('2026-10-05 11:15:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp2->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery,
+        'occurred_at' => Carbon::parse('2026-10-05 10:30:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp2->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'occurred_at' => Carbon::parse('2026-10-05 11:15:00'),
+    ]);
+
+    $service = app(TripExcelExportService::class);
+    $rows = $service->getTripSummaryRowsFromOrders(Order::query()->whereKey($order->id));
+    $row = $rows->first();
+
+    // Total Travel = Leg 1 (40) + Leg 2 (50) = 90 mins
+    // Total Unloading = Drop 1 (30) + Drop 2 (45) = 75 mins
+    // Total Loading = 30 mins
+    // Total Trip = 30 + 90 + 75 = 195 mins
+    expect($row['time_loading'])->toBe(30)
+        ->and($row['time_travel'])->toBe(90)
+        ->and($row['time_unloading'])->toBe(75)
+        ->and($row['time_waiting_22h'])->toBe(0)
+        ->and($row['time_total_trip'])->toBe(195);
+});
+
+test('adjusted_at takes precedence over occurred_at for checkpoints and excel export', function () {
+    $cp = TripCheckpoint::create([
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'occurred_at' => Carbon::parse('2026-10-05 08:00:00'),
+        'adjusted_at' => Carbon::parse('2026-10-05 08:15:00'),
+    ]);
+
+    expect($cp->effectiveOccurredAt()->format('H:i'))->toBe('08:15');
+
+    $cpWithoutAdjusted = TripCheckpoint::create([
+        'checkpoint_type' => CheckpointType::LeftPickup,
+        'occurred_at' => Carbon::parse('2026-10-05 08:45:00'),
+    ]);
+
+    expect($cpWithoutAdjusted->effectiveOccurredAt()->format('H:i'))->toBe('08:45');
+});
+
+test('sheet 1 trip summary simplifies multi-point journey to first and last point only', function () {
+    $service = app(TripExcelExportService::class);
+    $spreadsheet = new Spreadsheet;
+    $sheet = $spreadsheet->getActiveSheet();
+
+    $service->writeTripSummaryRowFromData($sheet, 5, [
+        'service_type' => 'Hàng ngoài',
+        'code' => 'ORD-MULTI-TEST',
+        'date' => Carbon::parse('2026-11-06'),
+        'plate_number' => '29C-12345',
+        'journey' => 'NEWWING -> NCTS -> ALSC -> ALSE',
+    ]);
+
+    expect($sheet->getCell('E5')->getValue())->toBe('NEWWING -> ALSE');
+
+    // Single delivery point preserves both points
+    $service->writeTripSummaryRowFromData($sheet, 6, [
+        'service_type' => 'Hàng ngoài',
+        'code' => 'ORD-SINGLE-TEST',
+        'date' => Carbon::parse('2026-11-06'),
+        'plate_number' => '29C-12345',
+        'journey' => 'NEWWING -> ALSE',
+    ]);
+
+    expect($sheet->getCell('E6')->getValue())->toBe('NEWWING -> ALSE');
 });

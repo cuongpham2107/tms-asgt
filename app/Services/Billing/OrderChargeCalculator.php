@@ -291,7 +291,7 @@ class OrderChargeCalculator
         Order $order,
         OrderCharge $charge,
         ?int $loadingMinutes = null,
-        ?int $unloadingMinutes = null,
+        array|int|null $unloadingMinutes = null,
         ?CarbonInterface $date = null
     ): array {
         $date ??= $order->planned_loading_at ?? $order->created_at ?? now();
@@ -323,7 +323,14 @@ class OrderChargeCalculator
 
         $freeMinutes = (int) ($tier['free_minutes'] ?? 0);
 
-        if ($isMultiPoint && $unloadingMinutes === null) {
+        if (is_array($unloadingMinutes)) {
+            $unloadingLegs = $unloadingMinutes;
+            $unloadingMinutes = array_sum($unloadingLegs);
+            $billableUnloading = 0;
+            foreach ($unloadingLegs as $dur) {
+                $billableUnloading += max(0, $dur - $freeMinutes);
+            }
+        } elseif ($isMultiPoint && $unloadingMinutes === null) {
             $checkpoints = $order->tripCheckpoints->isNotEmpty()
                 ? $order->tripCheckpoints
                 : ($order->trip?->checkpoints ?? collect());
@@ -331,12 +338,12 @@ class OrderChargeCalculator
             $unloadingLegs = [];
             foreach ($deliveryPoints as $dp) {
                 $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
-                $tC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery)?->occurred_at
-                    ?? $dp->arrived_at;
-                $tD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last()?->occurred_at
-                    ?? $dp->delivered_at;
+                $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+                $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+                $tC = $cpC?->effectiveOccurredAt() ?? $dp->arrived_at;
+                $tD = $cpD?->effectiveOccurredAt() ?? $dp->delivered_at;
 
-                $dur = ($tC && $tD) ? (int) abs(Carbon::parse($tD)->diffInMinutes(Carbon::parse($tC))) : 0;
+                $dur = ($tC && $tD) ? (int) abs(Carbon::parse($tD)->second(0)->diffInMinutes(Carbon::parse($tC)->second(0))) : 0;
                 $unloadingLegs[] = $dur;
             }
 
@@ -380,7 +387,7 @@ class OrderChargeCalculator
         Order $order,
         OrderCharge $charge,
         ?int $loadingMinutes = null,
-        ?int $unloadingMinutes = null
+        array|int|null $unloadingMinutes = null
     ): string {
         $waiting = $this->previewWaiting($order, $charge, $loadingMinutes, $unloadingMinutes, $order->planned_loading_at ?? $order->created_at ?? now());
 

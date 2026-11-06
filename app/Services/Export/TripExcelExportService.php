@@ -360,9 +360,11 @@ class TripExcelExportService
             // Nếu chuyến rỗng không có đơn hàng (Empty Run)
             if ($orders->isEmpty()) {
                 $checkpoints = $trip->checkpoints;
-                $tA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::Started)?->occurred_at;
+                $cpA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::Started);
+                $tA = $cpA?->effectiveOccurredAt() ?? $trip->started_at;
                 $tB = $tA;
-                $tC = $checkpoints->firstWhere('checkpoint_type', CheckpointType::Completed)?->occurred_at ?? $trip->completed_at;
+                $cpC = $checkpoints->firstWhere('checkpoint_type', CheckpointType::Completed);
+                $tC = $cpC?->effectiveOccurredAt() ?? $trip->completed_at;
                 $tD = $tC;
 
                 $startLoc = $trip->startLocation?->code ?? '';
@@ -403,19 +405,23 @@ class TripExcelExportService
             foreach ($orders as $order) {
                 $checkpoints = $order->tripCheckpoints->isNotEmpty() ? $order->tripCheckpoints : $trip->checkpoints;
 
-                // Các mốc thời gian A, B, C, D
-                $tA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup)?->occurred_at
+                // Các mốc thời gian A, B, C, D (ưu tiên adjusted_at nếu đã hiệu chỉnh)
+                $cpA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup);
+                $tA = $cpA?->effectiveOccurredAt()
                     ?? $order->planned_loading_at
                     ?? $trip->started_at;
 
-                $tB = $checkpoints->firstWhere('checkpoint_type', CheckpointType::LeftPickup)?->occurred_at
+                $cpB = $checkpoints->firstWhere('checkpoint_type', CheckpointType::LeftPickup);
+                $tB = $cpB?->effectiveOccurredAt()
                     ?? $trip->started_at
                     ?? $tA;
 
-                $tC = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery)?->occurred_at
+                $cpC = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+                $tC = $cpC?->effectiveOccurredAt()
                     ?? $order->deliveryPoints->first()?->arrived_at;
 
-                $tD = $checkpoints->where('checkpoint_type', CheckpointType::Completed)->last()?->occurred_at
+                $cpD = $checkpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+                $tD = $cpD?->effectiveOccurredAt()
                     ?? $order->deliveryPoints->last()?->delivered_at
                     ?? $trip->completed_at;
 
@@ -462,26 +468,115 @@ class TripExcelExportService
     }
 
     /**
-     * Thời lượng (phút) từ 4 mốc: đóng hàng A → xe chạy B → đến C → hạ hàng D.
+     * Thời lượng (phút) từ các mốc thời gian: đóng hàng A → xe chạy B → đến C → hạ hàng D.
+     * Với đơn nhiều điểm trả (hàng rớt điểm):
+     * - TG di chuyển (2): tổng các chặng di chuyển (B -> C1, D1 -> C2, D2 -> C3, ...)
+     * - TG hạ hàng (3): tổng thời gian hạ hàng tại các kho (C1 -> D1, C2 -> D2, ...)
+     * - Cắt 22:00: nếu có điểm hạ hàng đến trước 22:00 và hoàn thành sau 22:00.
      *
      * @return array{time_loading: ?int, time_travel: ?int, time_unloading: ?int, time_waiting_22h: int, time_total_trip: ?int}
      */
-    private function tripDurations(?Carbon $timeA, ?Carbon $timeB, ?Carbon $timeC, ?Carbon $timeD): array
-    {
-        $time1 = ($timeA && $timeB) ? (int) abs($timeB->diffInMinutes($timeA)) : null;
-        $time2 = ($timeB && $timeC) ? (int) abs($timeC->diffInMinutes($timeB)) : null;
-        $time3 = ($timeC && $timeD) ? (int) abs($timeD->diffInMinutes($timeC)) : null;
+    public function tripDurations(
+        ?Carbon $timeA,
+        ?Carbon $timeB,
+        ?Carbon $timeC,
+        ?Carbon $timeD,
+        ?Order $order = null,
+        ?Trip $trip = null
+    ): array {
+        $minute = fn (?Carbon $t): ?Carbon => $t?->copy()->second(0);
+        $mA = $minute($timeA);
+        $mB = $minute($timeB);
+        $mC = $minute($timeC);
+        $mD = $minute($timeD);
+
+        $time1 = ($mA && $mB) ? (int) abs($mB->diffInMinutes($mA)) : null;
+
+        if ($order !== null) {
+            if (! $order->relationLoaded('deliveryPoints')) {
+                $order->loadMissing(['deliveryPoints.location', 'tripCheckpoints']);
+            }
+
+            if ($order->deliveryPoints->count() > 1) {
+                $deliveryPoints = $order->deliveryPoints->sortBy('sequence')->values();
+                $checkpoints = $order->relationLoaded('tripCheckpoints') && $order->tripCheckpoints->isNotEmpty()
+                    ? $order->tripCheckpoints
+                    : (($trip && $trip->relationLoaded('checkpoints')) ? $trip->checkpoints : collect());
+
+                $totalTravel = 0;
+                $hasTravel = false;
+                $totalUnloading = 0;
+                $hasUnloading = false;
+                $prevDelivered = $mB;
+                $time4 = 0;
+
+                foreach ($deliveryPoints as $dp) {
+                    $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
+                    $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+                    $rawC = $cpC?->effectiveOccurredAt() ?? $dp->arrived_at;
+
+                    $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+                    $rawD = $cpD?->effectiveOccurredAt() ?? $dp->delivered_at;
+
+                    $dpC = $rawC ? Carbon::parse($rawC)->second(0) : null;
+                    $dpD = $rawD ? Carbon::parse($rawD)->second(0) : null;
+
+                    // Chặng di chuyển tới điểm này
+                    if ($prevDelivered && $dpC) {
+                        $totalTravel += (int) abs($dpC->diffInMinutes($prevDelivered));
+                        $hasTravel = true;
+                    }
+
+                    // Chặng hạ hàng tại điểm này
+                    if ($dpC && $dpD) {
+                        $unloadingHere = (int) abs($dpD->diffInMinutes($dpC));
+                        $totalUnloading += $unloadingHere;
+                        $hasUnloading = true;
+
+                        // Kiểm tra điểm này có bị cắt 22:00 không
+                        $cutoff22 = $dpC->copy()->setTime(22, 0, 0);
+                        $isArrivalBefore22 = $dpC->lt($cutoff22);
+                        $isUnloadingAfter22 = $dpD->gte($cutoff22) || $dpD->isAfter($dpC->copy()->endOfDay());
+
+                        if ($isArrivalBefore22 && $isUnloadingAfter22 && $time4 === 0) {
+                            $waitTo22 = (int) abs($cutoff22->diffInMinutes($dpC));
+                            $time4 = ($time1 ?? 0) + $totalTravel + ($totalUnloading - $unloadingHere) + $waitTo22;
+                        }
+                    }
+
+                    if ($dpD) {
+                        $prevDelivered = $dpD;
+                    }
+                }
+
+                $time2 = $hasTravel ? $totalTravel : null;
+                $time3 = $hasUnloading ? $totalUnloading : null;
+
+                return [
+                    'time_loading' => $time1,
+                    'time_travel' => $time2,
+                    'time_unloading' => $time3,
+                    'time_waiting_22h' => $time4,
+                    'time_total_trip' => ($time1 !== null || $time2 !== null || $time3 !== null)
+                        ? (($time1 ?? 0) + ($time2 ?? 0) + ($time3 ?? 0))
+                        : null,
+                ];
+            }
+        }
+
+        $time2 = ($mB && $mC) ? (int) abs($mC->diffInMinutes($mB)) : null;
+        $time3 = ($mC && $mD) ? (int) abs($mD->diffInMinutes($mC)) : null;
 
         // Thời gian cắt 22:00: Nếu thời gian hạ hàng D >= 22:00 và thời gian đến C < 22:00
         // thì lấy: TG đóng (1) + TG chạy (2) + (22:00 - C)
         $time4 = 0;
-        if ($timeC && $timeD) {
-            $cutoff22 = $timeC->copy()->setTime(22, 0, 0);
-            $isArrivalBefore22 = $timeC->lt($cutoff22);
-            $isUnloadingAfter22 = $timeD->gte($cutoff22) || $timeD->isAfter($timeC->copy()->endOfDay());
+        if ($mC && $mD) {
+            $cutoff22 = $mC->copy()->setTime(22, 0, 0);
+            $isArrivalBefore22 = $mC->lt($cutoff22);
+            $isUnloadingAfter22 = $mD->gte($cutoff22) || $mD->isAfter($mC->copy()->endOfDay());
 
             if ($isArrivalBefore22 && $isUnloadingAfter22) {
-                $waitTo22 = (int) abs($cutoff22->diffInMinutes($timeC));
+                $waitTo22 = (int) abs($cutoff22->diffInMinutes($mC));
                 $time4 = ($time1 ?? 0) + ($time2 ?? 0) + $waitTo22;
             }
         }
@@ -495,6 +590,33 @@ class TripExcelExportService
                 ? (($time1 ?? 0) + ($time2 ?? 0) + ($time3 ?? 0))
                 : null,
         ];
+    }
+
+    /**
+     * Định dạng số phút sang định dạng giờ và phút (ví dụ: 1h 30p, 45p, 0p).
+     */
+    public function formatDuration(?int $minutes): string
+    {
+        if ($minutes === null) {
+            return '';
+        }
+
+        if ($minutes <= 0) {
+            return '0p';
+        }
+
+        $hours = intdiv($minutes, 60);
+        $mins = $minutes % 60;
+
+        if ($hours > 0 && $mins > 0) {
+            return "{$hours}h {$mins}p";
+        }
+
+        if ($hours > 0) {
+            return "{$hours}h";
+        }
+
+        return "{$mins}p";
     }
 
     /**
@@ -576,7 +698,7 @@ class TripExcelExportService
             'time_b' => $timeB,
             'time_c' => $timeC,
             'time_d' => $timeD,
-            ...$this->tripDurations($timeA, $timeB, $timeC, $timeD),
+            ...$this->tripDurations($timeA, $timeB, $timeC, $timeD, $order, $trip),
             'customer' => $customer,
             'warehouse' => $warehouse,
             'vehicle_owner' => $ownerLabel,
@@ -608,17 +730,26 @@ class TripExcelExportService
         $sheet->setCellValue("B{$row}", $data['code'] ?? '');
         $sheet->setCellValue("C{$row}", $date ? $date->format('d/m/Y') : '');
         $sheet->setCellValue("D{$row}", $data['plate_number'] ?? '');
-        $sheet->setCellValue("E{$row}", $data['journey'] ?? '');
+
+        // Tab "Bảng tổng hợp chuyến phục vụ": nếu giao nhiều điểm, chỉ hiển thị điểm lấy và điểm trả cuối cùng
+        $journey = (string) ($data['journey'] ?? '');
+        if (str_contains($journey, ' -> ')) {
+            $parts = array_values(array_filter(array_map('trim', explode(' -> ', $journey))));
+            if (count($parts) > 2) {
+                $journey = $parts[0].' -> '.end($parts);
+            }
+        }
+        $sheet->setCellValue("E{$row}", $journey);
         $sheet->setCellValue("F{$row}", $timeA ? $timeA->format('d/m/Y H:i') : '');
         $sheet->setCellValue("G{$row}", $timeB ? $timeB->format('d/m/Y H:i') : '');
         $sheet->setCellValue("H{$row}", $timeC ? $timeC->format('d/m/Y H:i') : '');
         $sheet->setCellValue("I{$row}", $timeD ? $timeD->format('d/m/Y H:i') : '');
 
-        $sheet->setCellValue("J{$row}", $data['time_loading'] ?? '');
-        $sheet->setCellValue("K{$row}", $data['time_travel'] ?? '');
-        $sheet->setCellValue("L{$row}", $data['time_unloading'] ?? '');
-        $sheet->setCellValue("M{$row}", ($data['time_waiting_22h'] ?? 0) > 0 ? $data['time_waiting_22h'] : 0);
-        $sheet->setCellValue("N{$row}", $data['time_total_trip'] ?? '');
+        $sheet->setCellValue("J{$row}", $data['time_loading'] !== null ? $this->formatDuration((int) $data['time_loading']) : '');
+        $sheet->setCellValue("K{$row}", $data['time_travel'] !== null ? $this->formatDuration((int) $data['time_travel']) : '');
+        $sheet->setCellValue("L{$row}", $data['time_unloading'] !== null ? $this->formatDuration((int) $data['time_unloading']) : '');
+        $sheet->setCellValue("M{$row}", ($data['time_waiting_22h'] ?? 0) > 0 ? $this->formatDuration((int) $data['time_waiting_22h']) : 0);
+        $sheet->setCellValue("N{$row}", $data['time_total_trip'] !== null ? $this->formatDuration((int) $data['time_total_trip']) : '');
 
         $sheet->setCellValue("O{$row}", $data['customer'] ?? '');
         $sheet->setCellValue("P{$row}", $data['warehouse'] ?? '');
@@ -1026,10 +1157,14 @@ class TripExcelExportService
         $deliveryPoint = $order->deliveryPoints->first();
 
         $tReq = $order->planned_loading_at;
-        $tA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup)?->occurred_at ?? $tReq;
-        $tB = $checkpoints->firstWhere('checkpoint_type', CheckpointType::LeftPickup)?->occurred_at ?? $trip?->started_at ?? $tA;
-        $tC = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery)?->occurred_at ?? $deliveryPoint?->arrived_at;
-        $tD = $checkpoints->where('checkpoint_type', CheckpointType::Completed)->last()?->occurred_at ?? $deliveryPoint?->delivered_at ?? $trip?->completed_at;
+        $cpA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup);
+        $tA = $cpA?->effectiveOccurredAt() ?? $tReq;
+        $cpB = $checkpoints->firstWhere('checkpoint_type', CheckpointType::LeftPickup);
+        $tB = $cpB?->effectiveOccurredAt() ?? $trip?->started_at ?? $tA;
+        $cpC = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+        $tC = $cpC?->effectiveOccurredAt() ?? $deliveryPoint?->arrived_at;
+        $cpD = $checkpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+        $tD = $cpD?->effectiveOccurredAt() ?? $deliveryPoint?->delivered_at ?? $trip?->completed_at;
 
         $durLoading = ($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : null;
         $durTravel = ($tB && $tC) ? (int) abs($tC->diffInMinutes($tB)) : null;
@@ -1052,9 +1187,9 @@ class TripExcelExportService
         $sheet->setCellValue("L{$row}", $tB ? $tB->format('d/m/Y H:i') : '');
         $sheet->setCellValue("M{$row}", $tC ? $tC->format('d/m/Y H:i') : '');
         $sheet->setCellValue("N{$row}", $tD ? $tD->format('d/m/Y H:i') : '');
-        $sheet->setCellValue("O{$row}", $durLoading ?? '');
-        $sheet->setCellValue("P{$row}", $durTravel ?? '');
-        $sheet->setCellValue("Q{$row}", $durUnloading ?? '');
+        $sheet->setCellValue("O{$row}", $durLoading !== null ? $this->formatDuration($durLoading) : '');
+        $sheet->setCellValue("P{$row}", $durTravel !== null ? $this->formatDuration($durTravel) : '');
+        $sheet->setCellValue("Q{$row}", $durUnloading !== null ? $this->formatDuration($durUnloading) : '');
         $sheet->setCellValue("R{$row}", $order->notes ?? '');
         $sheet->setCellValue("S{$row}", '');
         $sheet->setCellValue("T{$row}", $order->is_return_trip ? 'Hàng quay đầu' : '');
@@ -1074,6 +1209,7 @@ class TripExcelExportService
         $pickupText = $order->pickupLocation?->name ?: ($order->pickup_address ?: ($order->pickupLocation?->code ?? ''));
 
         $currentRow = $startRow;
+        $prevDelivered = null;
         foreach ($deliveryPoints as $idx => $dp) {
             $isFirst = ($idx === 0);
             $isLast = ($idx === $deliveryPoints->count() - 1);
@@ -1081,21 +1217,31 @@ class TripExcelExportService
             $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
 
             $tReq = $order->planned_loading_at;
+            $cpA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup);
             $tA = $isFirst
-                ? ($checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup)?->occurred_at ?? $tReq)
+                ? ($cpA?->effectiveOccurredAt() ?? $tReq)
                 : null;
+            $cpB = $checkpoints->firstWhere('checkpoint_type', CheckpointType::LeftPickup);
             $tB = $isFirst
-                ? ($checkpoints->firstWhere('checkpoint_type', CheckpointType::LeftPickup)?->occurred_at ?? $trip?->started_at ?? $tA)
+                ? ($cpB?->effectiveOccurredAt() ?? $trip?->started_at ?? $tA)
                 : null;
 
-            $tC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery)?->occurred_at
-                ?? $dp->arrived_at;
-            $tD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last()?->occurred_at
-                ?? $dp->delivered_at;
+            if ($isFirst) {
+                $prevDelivered = $tB;
+            }
+
+            $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+            $tC = $cpC?->effectiveOccurredAt() ?? $dp->arrived_at;
+            $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+            $tD = $cpD?->effectiveOccurredAt() ?? $dp->delivered_at;
 
             $durLoading = ($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : null;
-            $durTravel = ($tB && $tC) ? (int) abs($tC->diffInMinutes($tB)) : null;
+            $durTravel = ($prevDelivered && $tC) ? (int) abs($tC->diffInMinutes($prevDelivered)) : null;
             $durUnloading = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null;
+
+            if ($tD) {
+                $prevDelivered = $tD;
+            }
 
             $deliveryText = $dp->location?->name ?: ($dp->address ?: ($dp->location?->code ?? ''));
 
@@ -1113,9 +1259,9 @@ class TripExcelExportService
             $sheet->setCellValue("L{$currentRow}", $tB ? $tB->format('d/m/Y H:i') : '');
             $sheet->setCellValue("M{$currentRow}", $tC ? $tC->format('d/m/Y H:i') : '');
             $sheet->setCellValue("N{$currentRow}", $tD ? $tD->format('d/m/Y H:i') : '');
-            $sheet->setCellValue("O{$currentRow}", $durLoading ?? '');
-            $sheet->setCellValue("P{$currentRow}", $durTravel ?? '');
-            $sheet->setCellValue("Q{$currentRow}", $durUnloading ?? '');
+            $sheet->setCellValue("O{$currentRow}", $durLoading !== null ? $this->formatDuration($durLoading) : '');
+            $sheet->setCellValue("P{$currentRow}", $durTravel !== null ? $this->formatDuration($durTravel) : '');
+            $sheet->setCellValue("Q{$currentRow}", $durUnloading !== null ? $this->formatDuration($durUnloading) : '');
             $sheet->setCellValue("R{$currentRow}", $isFirst ? ($order->notes ?? '') : '');
             $sheet->setCellValue("S{$currentRow}", '');
             $sheet->setCellValue("T{$currentRow}", ($isLast && $order->is_return_trip) ? 'Hàng quay đầu' : '');

@@ -172,10 +172,10 @@ test('it exports trip summary sheet with hhhk order details and journey', functi
     expect($sheet1->getCell('B5')->getValue())->toBe('ORD-HHHK-01');
     expect($sheet1->getCell('D5')->getValue())->toBe('20C04357');
     expect($sheet1->getCell('E5')->getValue())->toBe('ASG -> ALSC'); // Hành trình ghép
-    expect($sheet1->getCell('J5')->getValue())->toBe(30); // 8:45 - 8:15 = 30 phút
-    expect($sheet1->getCell('K5')->getValue())->toBe(30); // 9:15 - 8:45 = 30 phút
-    expect($sheet1->getCell('L5')->getValue())->toBe(30); // 9:45 - 9:15 = 30 phút
-    expect($sheet1->getCell('N5')->getValue())->toBe(90); // Tổng = 90 phút
+    expect($sheet1->getCell('J5')->getValue())->toBe('30p'); // 8:45 - 8:15 = 30 phút
+    expect($sheet1->getCell('K5')->getValue())->toBe('30p'); // 9:15 - 8:45 = 30 phút
+    expect($sheet1->getCell('L5')->getValue())->toBe('30p'); // 9:45 - 9:15 = 30 phút
+    expect($sheet1->getCell('N5')->getValue())->toBe('1h 30p'); // Tổng = 90 phút
     expect($sheet1->getCell('O5')->getValue())->toBe('ASGL');
     expect($sheet1->getCell('P5')->getValue())->toBe('ALSC');
     expect($sheet1->getCell('Q5')->getValue())->toBe('Xe công ty');

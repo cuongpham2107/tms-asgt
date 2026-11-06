@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CheckpointType;
 use App\Enums\GeoCheckStatus;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,6 +20,7 @@ class TripCheckpoint extends Model
         'delivery_point_id',
         'checkpoint_type',
         'occurred_at',
+        'adjusted_at',
         'km_reading',
         'gps_lat',
         'gps_lng',
@@ -42,6 +44,7 @@ class TripCheckpoint extends Model
         return [
             'created_at' => 'datetime',
             'occurred_at' => 'datetime',
+            'adjusted_at' => 'datetime',
             'km_reading' => 'decimal:1',
             'gps_lat' => 'decimal:7',
             'gps_lng' => 'decimal:7',
@@ -56,6 +59,14 @@ class TripCheckpoint extends Model
             'location_distance_m' => 'integer',
             'location_geo_status' => GeoCheckStatus::class,
         ];
+    }
+
+    /**
+     * Mốc thời gian hiệu lực (ưu tiên mốc đã điều chỉnh phục vụ đối soát cước).
+     */
+    public function effectiveOccurredAt(): ?Carbon
+    {
+        return $this->adjusted_at ?? $this->occurred_at;
     }
 
     public function trip(): BelongsTo

@@ -42,6 +42,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
@@ -56,6 +57,7 @@ use Filament\Support\RawJs;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -563,10 +565,17 @@ class TripStatisticsReport extends Page
                     ? 'Dòng cước đang ở trạng thái KHOÁ (đã xuất bảng kê). Nhấn "Mở khoá để sửa" bên dưới để tiếp tục chỉnh sửa.'
                     : 'Khi đổi loại hình hoặc trọng tải tính cước, đơn giá và giờ chờ sẽ tự động cập nhật ngay theo bảng giá.';
             })
-            ->modalWidth(function (array $arguments): Width {
+            ->modalWidth(function (array $arguments): Width|string {
                 $order = Order::find($arguments['orderId'] ?? null);
 
-                return $order?->isExternal() ? Width::ScreenTwoExtraLarge : Width::TwoExtraLarge;
+                return $order?->isExternal() ? 'max-w-[96vw]' : Width::FiveExtraLarge;
+            })
+            ->extraModalWindowAttributes(function (array $arguments): array {
+                $order = Order::find($arguments['orderId'] ?? null);
+
+                return $order?->isExternal()
+                    ? ['style' => 'width: 96vw; max-width: 1750px;']
+                    : ['style' => 'width: 92vw; max-width: 1100px;'];
             })
             ->stickyModalHeader()
             ->stickyModalFooter()
@@ -633,7 +642,7 @@ class TripStatisticsReport extends Page
             ])
             ->fillForm(function (array $arguments): array {
                 $orderId = (int) ($arguments['orderId'] ?? 0);
-                $order = Order::with(['trip', 'deliveryPoints', 'tripCheckpoints'])->find($orderId);
+                $order = Order::with(['trip', 'deliveryPoints.location', 'tripCheckpoints'])->find($orderId);
                 $charge = $order?->isExternal() ? $this->resolveCharge($orderId) : null;
                 $row = $order === null
                     ? []
@@ -641,12 +650,32 @@ class TripStatisticsReport extends Page
 
                 $formatTime = fn (mixed $value): ?string => $value instanceof Carbon ? $value->format('Y-m-d H:i:s') : ($value ? Carbon::parse($value)->format('Y-m-d H:i:s') : null);
 
+                $deliveryPoints = $order?->deliveryPoints->sortBy('sequence')->values() ?? collect();
+                $checkpoints = $order?->tripCheckpoints->isNotEmpty()
+                    ? $order->tripCheckpoints
+                    : ($order?->trip?->checkpoints ?? collect());
+
+                $deliveryPointsData = [];
+                foreach ($deliveryPoints as $dp) {
+                    $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
+                    $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+                    $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+                    $tC = $cpC?->effectiveOccurredAt() ?? $dp->arrived_at;
+                    $tD = $cpD?->effectiveOccurredAt() ?? $dp->delivered_at;
+
+                    $deliveryPointsData[$dp->id] = [
+                        'arrived_at' => $formatTime($tC),
+                        'delivered_at' => $formatTime($tD),
+                    ];
+                }
+
                 $data = [
                     'summary_requested_at' => $formatTime($order?->planned_loading_at),
                     'summary_loading_at' => $formatTime($row['time_a'] ?? null),
                     'summary_departed_at' => $formatTime($row['time_b'] ?? null),
                     'summary_arrived_at' => $formatTime($row['time_c'] ?? null),
                     'summary_unloaded_at' => $formatTime($row['time_d'] ?? null),
+                    'delivery_points' => $deliveryPointsData,
                 ];
 
                 if (! (bool) $order?->isExternal()) {
@@ -970,11 +999,11 @@ class TripStatisticsReport extends Page
 
         if ($customerId && $amounts->isNotEmpty()) {
             $query->where(function (Builder $q) use ($customerId, $amounts): void {
-                $q->where(fn (Builder $sq) => $sq->where('is_active', true)->where('customer_id', $customerId))
+                $q->where(fn (Builder $sq) => $sq->where('is_active', true)->availableFor($customerId))
                     ->orWhereIn('id', $amounts->keys());
             });
         } elseif ($customerId) {
-            $query->where('is_active', true)->where('customer_id', $customerId);
+            $query->where('is_active', true)->availableFor($customerId);
         } elseif ($amounts->isNotEmpty()) {
             $query->whereIn('id', $amounts->keys());
         } else {
@@ -1339,27 +1368,41 @@ class TripStatisticsReport extends Page
 
             $tA = $get('summary_loading_at') ? Carbon::parse($get('summary_loading_at')) : null;
             $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
-            $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
-            $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at')) : null;
-
             $loading = ($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : 0;
-            $unloading = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : 0;
+
+            $deliveryPoints = $order->deliveryPoints->sortBy('sequence')->values();
+            if ($deliveryPoints->count() > 1) {
+                $unloadingLegs = [];
+                foreach ($deliveryPoints as $dp) {
+                    $tC = $get("delivery_points.{$dp->id}.arrived_at") ? Carbon::parse($get("delivery_points.{$dp->id}.arrived_at")) : null;
+                    $tD = $get("delivery_points.{$dp->id}.delivered_at") ? Carbon::parse($get("delivery_points.{$dp->id}.delivered_at")) : null;
+                    $unloadingLegs[] = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : 0;
+                }
+                $unloading = $unloadingLegs;
+            } else {
+                $singleDp = $deliveryPoints->first();
+                $tC = ($singleDp ? $get("delivery_points.{$singleDp->id}.arrived_at") : null) ?? $get('summary_arrived_at');
+                $tD = ($singleDp ? $get("delivery_points.{$singleDp->id}.delivered_at") : null) ?? $get('summary_unloaded_at');
+                $tC = $tC ? Carbon::parse($tC) : null;
+                $tD = $tD ? Carbon::parse($tD) : null;
+                $unloading = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : 0;
+            }
 
             $draft = (clone $charge)->fill([
                 'surcharge_type' => (string) ($get('surcharge_type') ?? ''),
                 'chargeable_tonnage' => is_numeric($get('chargeable_tonnage')) ? $get('chargeable_tonnage') : null,
             ]);
 
-            $preview = app(OrderChargeCalculator::class)->previewWaiting($order, $draft, $loading, $order->deliveryPoints->count() > 1 ? null : $unloading);
+            $preview = app(OrderChargeCalculator::class)->previewWaiting($order, $draft, $loading, $unloading);
 
             $set('waiting_minutes', $preview['minutes']);
             $set('waiting_fee', $preview['fee']);
         };
 
         return [
-            Grid::make(['default' => 1, 'lg' => 3])->schema([
+            Grid::make(['default' => 1, 'lg' => 12])->schema([
                 Grid::make(1)
-                    ->columnSpan(['lg' => 2])
+                    ->columnSpan(['lg' => 7])
                     ->disabled(fn (): bool => (bool) $charge?->isLocked())
                     ->schema([
                         Section::make('Cách tính cước')
@@ -1610,7 +1653,7 @@ class TripStatisticsReport extends Page
                                 Textarea::make('note')->label('Ghi chú cước')->rows(2),
                             ]),
                     ]),
-                Group::make($this->chargeSummarySchema($charge, $orderId, $refreshWaiting, $refreshPrice))->columnSpan(['lg' => 1]),
+                Group::make($this->chargeSummarySchema($charge, $orderId, $refreshWaiting, $refreshPrice))->columnSpan(['lg' => 5]),
             ]),
         ];
     }
@@ -1622,7 +1665,8 @@ class TripStatisticsReport extends Page
      */
     private function chargeSummarySchema(?OrderCharge $charge, int $orderId, ?Closure $refreshWaiting = null, ?Closure $refreshPrice = null): array
     {
-        $order = Order::with('customer')->find($orderId);
+        $order = Order::with(['customer', 'pickupLocation', 'deliveryPoints.location', 'tripCheckpoints'])->find($orderId);
+        $deliveryPoints = $order?->deliveryPoints->sortBy('sequence')->values() ?? collect();
         $row = $order === null
             ? []
             : (app(TripExcelExportService::class)->getTripSummaryRowsFromOrders(Order::query()->whereKey($orderId))->firstWhere('order_id', $orderId) ?? []);
@@ -1639,18 +1683,31 @@ class TripStatisticsReport extends Page
             'cancel_trip_percent' => (float) $get('cancel_trip_percent'),
         ]), filled($get('freight_rate_id')) ? (int) $get('freight_rate_id') : null);
 
-        $waitingNote = function (Get $get) use ($charge, $order, $calculator): ?string {
+        $waitingNote = function (Get $get) use ($charge, $order, $calculator, $deliveryPoints): ?string {
             if ($charge === null || $order === null) {
                 return null;
             }
 
             $tA = $get('summary_loading_at') ? Carbon::parse($get('summary_loading_at')) : null;
             $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
-            $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
-            $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at')) : null;
-
             $loading = ($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : null;
-            $unloading = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null;
+
+            if ($deliveryPoints->count() > 1) {
+                $unloadingLegs = [];
+                foreach ($deliveryPoints as $dp) {
+                    $tC = $get("delivery_points.{$dp->id}.arrived_at") ? Carbon::parse($get("delivery_points.{$dp->id}.arrived_at")) : null;
+                    $tD = $get("delivery_points.{$dp->id}.delivered_at") ? Carbon::parse($get("delivery_points.{$dp->id}.delivered_at")) : null;
+                    $unloadingLegs[] = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : 0;
+                }
+                $unloading = $unloadingLegs;
+            } else {
+                $singleDp = $deliveryPoints->first();
+                $tC = ($singleDp ? $get("delivery_points.{$singleDp->id}.arrived_at") : null) ?? $get('summary_arrived_at');
+                $tD = ($singleDp ? $get("delivery_points.{$singleDp->id}.delivered_at") : null) ?? $get('summary_unloaded_at');
+                $tC = $tC ? Carbon::parse($tC) : null;
+                $tD = $tD ? Carbon::parse($tD) : null;
+                $unloading = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null;
+            }
 
             $draft = (clone $charge)->fill([
                 'surcharge_type' => (string) ($get('surcharge_type') ?? ''),
@@ -1735,36 +1792,22 @@ class TripStatisticsReport extends Page
                 ]);
         }
 
-        $sections[] = Section::make('Mốc thời gian')
-            ->icon(Heroicon::OutlinedClock)
-            ->iconColor('info')
-            ->compact()
-            ->disabled(fn (): bool => (bool) $charge?->isLocked())
-            ->schema([
-                DateTimePicker::make('summary_requested_at')
-                    ->label('Yêu cầu')
-                    ->prefixIcon(Heroicon::OutlinedCalendarDays)
-                    ->displayFormat('H:i d/m/Y')
-                    ->seconds(false)
-                    ->native(false),
-                DateTimePicker::make('summary_loading_at')
-                    ->label('Đóng hàng')
-                    ->prefixIcon(Heroicon::OutlinedArrowDownTray)
-                    ->prefixIconColor('info')
-                    ->displayFormat('H:i d/m/Y')
-                    ->seconds(false)
-                    ->native(false)
-                    ->live(onBlur: true)
-                    ->afterStateUpdated($refreshWaiting),
-                DateTimePicker::make('summary_departed_at')
-                    ->label('Xe chạy')
-                    ->prefixIcon(Heroicon::OutlinedTruck)
-                    ->prefixIconColor('info')
-                    ->displayFormat('H:i d/m/Y')
-                    ->seconds(false)
-                    ->native(false)
-                    ->live(onBlur: true)
-                    ->afterStateUpdated($refreshWaiting),
+        $deliveryPointFields = [];
+
+        if ($deliveryPoints->count() <= 1) {
+            $dp = $deliveryPoints->first();
+            $dpName = $dp ? ($dp->location?->name ?: ($dp->address ?: ($dp->location?->code ?? 'Điểm trả'))) : null;
+            $extraParts = [];
+            if ($dp?->total_packages) {
+                $extraParts[] = "{$dp->total_packages} kiện";
+            }
+            if ($dp?->total_weight) {
+                $extraParts[] = number_format((float) $dp->total_weight, 0, ',', '.').' kg';
+            }
+            $extraStr = $extraParts !== [] ? ' ('.implode(' · ', $extraParts).')' : '';
+            $title = $dpName ? "Điểm trả: {$dpName}{$extraStr}" : null;
+
+            $singleFields = [
                 DateTimePicker::make('summary_arrived_at')
                     ->label('Đến nơi')
                     ->prefixIcon(Heroicon::OutlinedMapPin)
@@ -1783,38 +1826,233 @@ class TripStatisticsReport extends Page
                     ->native(false)
                     ->live(onBlur: true)
                     ->afterStateUpdated($refreshWaiting),
-                Grid::make(3)->schema([
-                    TextEntry::make('summary_loading_duration')
-                        ->label('Đóng hàng')
-                        ->inlineLabel()
-                        ->state(function (Get $get) use ($duration): string {
-                            $tA = $get('summary_loading_at') ? Carbon::parse($get('summary_loading_at')) : null;
-                            $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
+                Placeholder::make('summary_single_durations')
+                    ->hiddenLabel()
+                    ->columnSpanFull()
+                    ->content(function (Get $get) use ($duration): HtmlString {
+                        $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
+                        $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
+                        $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at')) : null;
 
-                            return $duration(($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : null);
-                        })
-                        ->color('warning'),
-                    TextEntry::make('summary_travel_duration')
-                        ->label('Di chuyển')
-                        ->inlineLabel()
-                        ->state(function (Get $get) use ($duration): string {
-                            $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
-                            $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
+                        $travel = $duration(($tB && $tC) ? (int) abs($tC->diffInMinutes($tB)) : null);
+                        $unloading = $duration(($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null);
 
-                            return $duration(($tB && $tC) ? (int) abs($tC->diffInMinutes($tB)) : null);
-                        })
-                        ->color('info'),
-                    TextEntry::make('summary_unloading_duration')
+                        return new HtmlString(<<<HTML
+                            <div class="flex items-center justify-between gap-4 rounded-lg bg-gray-50/80 dark:bg-gray-800/50 px-3.5 py-1.5 text-xs border border-gray-200/80 dark:border-gray-700/60 -mt-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="inline-flex items-center gap-1 font-medium text-gray-500 dark:text-gray-400">
+                                        <svg class="w-3.5 h-3.5 text-sky-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                        </svg>
+                                        Di chuyển:
+                                    </span>
+                                    <span class="inline-flex items-center font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/80 px-2 py-0.5 rounded border border-sky-200/80 dark:border-sky-800 text-xs">
+                                        {$travel}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="inline-flex items-center gap-1 font-medium text-gray-500 dark:text-gray-400">
+                                        <svg class="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                        </svg>
+                                        Hạ hàng:
+                                    </span>
+                                    <span class="inline-flex items-center font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/80 px-2 py-0.5 rounded border border-amber-200/80 dark:border-amber-800 text-xs">
+                                        {$unloading}
+                                    </span>
+                                </div>
+                            </div>
+                        HTML);
+                    }),
+            ];
+
+            $deliveryPointFields = $title
+                ? [Fieldset::make($title)->columns(2)->schema($singleFields)]
+                : [Grid::make(2)->schema($singleFields)];
+        } else {
+            foreach ($deliveryPoints as $idx => $dp) {
+                $dpName = $dp->location?->name ?: ($dp->address ?: ($dp->location?->code ?? 'Điểm giao'));
+                $extraParts = [];
+                if ($dp->total_packages) {
+                    $extraParts[] = "{$dp->total_packages} kiện";
+                }
+                if ($dp->total_weight) {
+                    $extraParts[] = number_format((float) $dp->total_weight, 0, ',', '.').' kg';
+                }
+                $extraStr = $extraParts !== [] ? ' ('.implode(' · ', $extraParts).')' : '';
+                $title = 'Điểm trả #'.($idx + 1).": {$dpName}{$extraStr}";
+
+                $deliveryPointFields[] = Fieldset::make($title)->columns(2)->schema([
+                    DateTimePicker::make("delivery_points.{$dp->id}.arrived_at")
+                        ->label('Đến nơi')
+                        ->prefixIcon(Heroicon::OutlinedMapPin)
+                        ->prefixIconColor('info')
+                        ->displayFormat('H:i d/m/Y')
+                        ->seconds(false)
+                        ->native(false)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated($refreshWaiting),
+                    DateTimePicker::make("delivery_points.{$dp->id}.delivered_at")
                         ->label('Hạ hàng')
-                        ->inlineLabel()
-                        ->state(function (Get $get) use ($duration): string {
-                            $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at')) : null;
-                            $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at')) : null;
+                        ->prefixIcon(Heroicon::OutlinedArrowUpTray)
+                        ->prefixIconColor('info')
+                        ->displayFormat('H:i d/m/Y')
+                        ->seconds(false)
+                        ->native(false)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated($refreshWaiting),
+                    Placeholder::make("dp_{$dp->id}_durations")
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->content(function (Get $get) use ($duration, $dp, $idx, $deliveryPoints): HtmlString {
+                            $prevTime = ($idx === 0)
+                                ? ($get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null)
+                                : ($get("delivery_points.{$deliveryPoints[$idx - 1]->id}.delivered_at") ? Carbon::parse($get("delivery_points.{$deliveryPoints[$idx - 1]->id}.delivered_at")) : null);
+                            $currArrived = $get("delivery_points.{$dp->id}.arrived_at") ? Carbon::parse($get("delivery_points.{$dp->id}.arrived_at")) : null;
+                            $tD = $get("delivery_points.{$dp->id}.delivered_at") ? Carbon::parse($get("delivery_points.{$dp->id}.delivered_at")) : null;
 
-                            return $duration(($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null);
-                        })
-                        ->color('warning'),
+                            $travel = $duration(($prevTime && $currArrived) ? (int) abs($currArrived->diffInMinutes($prevTime)) : null);
+                            $unloading = $duration(($currArrived && $tD) ? (int) abs($tD->diffInMinutes($currArrived)) : null);
+
+                            return new HtmlString(<<<HTML
+                                <div class="flex items-center justify-between gap-4 rounded-lg bg-gray-50/80 dark:bg-gray-800/50 px-3.5 py-1.5 text-xs border border-gray-200/80 dark:border-gray-700/60 -mt-1">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="inline-flex items-center gap-1 font-medium text-gray-500 dark:text-gray-400">
+                                            <svg class="w-3.5 h-3.5 text-sky-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                            </svg>
+                                            Di chuyển:
+                                        </span>
+                                        <span class="inline-flex items-center font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/80 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 text-xs">
+                                            {$travel}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="inline-flex items-center gap-1 font-medium text-gray-500 dark:text-gray-400">
+                                            <svg class="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                            </svg>
+                                            Hạ hàng:
+                                        </span>
+                                        <span class="inline-flex items-center font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/80 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 text-xs">
+                                            {$unloading}
+                                        </span>
+                                    </div>
+                                </div>
+                            HTML);
+                        }),
+                ]);
+            }
+
+            if ($deliveryPoints->count() > 1) {
+                $deliveryPointFields[] = Placeholder::make('summary_totals')
+                    ->hiddenLabel()
+                    ->columnSpanFull()
+                    ->content(function (Get $get) use ($duration, $deliveryPoints): HtmlString {
+                        $totalMins = 0;
+                        $hasTravel = false;
+                        foreach ($deliveryPoints as $idx => $dp) {
+                            $prevTime = ($idx === 0)
+                                ? ($get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null)
+                                : ($get("delivery_points.{$deliveryPoints[$idx - 1]->id}.delivered_at") ? Carbon::parse($get("delivery_points.{$deliveryPoints[$idx - 1]->id}.delivered_at")) : null);
+                            $currArrived = $get("delivery_points.{$dp->id}.arrived_at") ? Carbon::parse($get("delivery_points.{$dp->id}.arrived_at")) : null;
+                            if ($prevTime && $currArrived) {
+                                $totalMins += (int) abs($currArrived->diffInMinutes($prevTime));
+                                $hasTravel = true;
+                            }
+                        }
+
+                        $totalUnload = 0;
+                        $hasUnload = false;
+                        foreach ($deliveryPoints as $dp) {
+                            $tC = $get("delivery_points.{$dp->id}.arrived_at") ? Carbon::parse($get("delivery_points.{$dp->id}.arrived_at")) : null;
+                            $tD = $get("delivery_points.{$dp->id}.delivered_at") ? Carbon::parse($get("delivery_points.{$dp->id}.delivered_at")) : null;
+                            if ($tC && $tD) {
+                                $totalUnload += (int) abs($tD->diffInMinutes($tC));
+                                $hasUnload = true;
+                            }
+                        }
+
+                        $travelStr = $hasTravel ? $duration($totalMins) : '—';
+                        $unloadStr = $hasUnload ? $duration($totalUnload) : '—';
+
+                        return new HtmlString(<<<HTML
+                            <div class="flex items-center justify-between rounded-xl bg-gradient-to-r from-sky-50/70 via-gray-50/80 to-amber-50/70 dark:from-sky-950/20 dark:via-gray-800/40 dark:to-amber-950/20 px-4 py-2.5 border border-gray-200 dark:border-gray-700 mt-1">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-2 h-2 rounded-full bg-sky-500"></div>
+                                    <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">Tổng di chuyển:</span>
+                                    <span class="inline-flex items-center text-xs font-bold text-sky-700 dark:text-sky-300 bg-white dark:bg-gray-900 px-2.5 py-1 rounded-md border border-sky-300 dark:border-sky-800 shadow-xs">
+                                        {$travelStr}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-2 h-2 rounded-full bg-amber-500"></div>
+                                    <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">Tổng hạ hàng:</span>
+                                    <span class="inline-flex items-center text-xs font-bold text-amber-700 dark:text-amber-300 bg-white dark:bg-gray-900 px-2.5 py-1 rounded-md border border-amber-300 dark:border-amber-800 shadow-xs">
+                                        {$unloadStr}
+                                    </span>
+                                </div>
+                            </div>
+                        HTML);
+                    });
+            }
+        }
+
+        $sections[] = Section::make('Mốc thời gian')
+            ->icon(Heroicon::OutlinedClock)
+            ->iconColor('info')
+            ->compact()
+            ->disabled(fn (): bool => (bool) $charge?->isLocked())
+            ->schema([
+                DateTimePicker::make('summary_requested_at')
+                    ->label('Yêu cầu')
+                    ->prefixIcon(Heroicon::OutlinedCalendarDays)
+                    ->displayFormat('H:i d/m/Y')
+                    ->seconds(false)
+                    ->native(false),
+                Grid::make(2)->schema([
+                    DateTimePicker::make('summary_loading_at')
+                        ->label('Đóng hàng')
+                        ->prefixIcon(Heroicon::OutlinedArrowDownTray)
+                        ->prefixIconColor('info')
+                        ->displayFormat('H:i d/m/Y')
+                        ->seconds(false)
+                        ->native(false)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated($refreshWaiting),
+                    DateTimePicker::make('summary_departed_at')
+                        ->label('Xe chạy')
+                        ->prefixIcon(Heroicon::OutlinedTruck)
+                        ->prefixIconColor('info')
+                        ->displayFormat('H:i d/m/Y')
+                        ->seconds(false)
+                        ->native(false)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated($refreshWaiting),
                 ]),
+                Placeholder::make('summary_loading_duration')
+                    ->hiddenLabel()
+                    ->columnSpanFull()
+                    ->content(function (Get $get) use ($duration): HtmlString {
+                        $tA = $get('summary_loading_at') ? Carbon::parse($get('summary_loading_at')) : null;
+                        $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
+                        $val = $duration(($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : null);
+
+                        return new HtmlString(<<<HTML
+                            <div class="flex items-center justify-between rounded-lg bg-amber-50/70 dark:bg-amber-950/30 px-3.5 py-1.5 text-xs border border-amber-200/80 dark:border-amber-800/50 -mt-1 mb-1">
+                                <span class="inline-flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-200">
+                                    <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Thời gian đóng hàng:
+                                </span>
+                                <span class="inline-flex items-center font-bold text-amber-800 dark:text-amber-200 bg-white dark:bg-amber-900/60 px-2.5 py-0.5 rounded border border-amber-300 dark:border-amber-700 shadow-xs text-xs">
+                                    {$val}
+                                </span>
+                            </div>
+                        HTML);
+                    }),
+                ...$deliveryPointFields,
             ]);
 
         if ($charge !== null && (bool) $order?->isExternal()) {
@@ -1877,10 +2115,7 @@ class TripStatisticsReport extends Page
             $order->save();
         }
 
-        $firstDeliveryPoint = $order->deliveryPoints->sortBy('sequence')->first();
-        $lastDeliveryPoint = $order->deliveryPoints->sortBy('sequence')->last();
-
-        // 2. Các mốc checkpoint A, B, C, D
+        // 2. Các mốc checkpoint A, B (lấy hàng)
         if (array_key_exists('summary_loading_at', $data)) {
             $timeA = filled($data['summary_loading_at']) ? Carbon::parse($data['summary_loading_at']) : null;
             $this->syncTripCheckpoint($order, $trip, CheckpointType::ArrivedPickup, $timeA);
@@ -1891,33 +2126,66 @@ class TripStatisticsReport extends Page
             $this->syncTripCheckpoint($order, $trip, CheckpointType::LeftPickup, $timeB);
         }
 
-        if (array_key_exists('summary_arrived_at', $data)) {
-            $timeC = filled($data['summary_arrived_at']) ? Carbon::parse($data['summary_arrived_at']) : null;
-            if ($firstDeliveryPoint !== null) {
-                $firstDeliveryPoint->update(['arrived_at' => $timeC]);
-            }
-            $this->syncTripCheckpoint($order, $trip, CheckpointType::ArrivedDelivery, $timeC, $firstDeliveryPoint?->id);
-        }
+        // 3. Các mốc checkpoint C, D cho từng điểm trả hàng
+        if (! empty($data['delivery_points']) && is_array($data['delivery_points'])) {
+            foreach ($data['delivery_points'] as $dpId => $pointTimes) {
+                $dp = $order->deliveryPoints->firstWhere('id', (int) $dpId);
+                if ($dp === null) {
+                    continue;
+                }
 
-        if (array_key_exists('summary_unloaded_at', $data)) {
-            $timeD = filled($data['summary_unloaded_at']) ? Carbon::parse($data['summary_unloaded_at']) : null;
-            if ($lastDeliveryPoint !== null) {
-                $lastDeliveryPoint->update(['delivered_at' => $timeD]);
+                $timeC = filled($pointTimes['arrived_at'] ?? null) ? Carbon::parse($pointTimes['arrived_at']) : null;
+                $timeD = filled($pointTimes['delivered_at'] ?? null) ? Carbon::parse($pointTimes['delivered_at']) : null;
+
+                $dp->update([
+                    'arrived_at' => $timeC,
+                    'delivered_at' => $timeD,
+                ]);
+
+                $this->syncTripCheckpoint($order, $trip, CheckpointType::ArrivedDelivery, $timeC, $dp->id);
+                $this->syncTripCheckpoint($order, $trip, CheckpointType::Completed, $timeD, $dp->id);
             }
-            $this->syncTripCheckpoint($order, $trip, CheckpointType::Completed, $timeD, $lastDeliveryPoint?->id);
+        } else {
+            $firstDeliveryPoint = $order->deliveryPoints->sortBy('sequence')->first();
+            $lastDeliveryPoint = $order->deliveryPoints->sortBy('sequence')->last();
+
+            if (array_key_exists('summary_arrived_at', $data)) {
+                $timeC = filled($data['summary_arrived_at']) ? Carbon::parse($data['summary_arrived_at']) : null;
+                if ($firstDeliveryPoint !== null) {
+                    $firstDeliveryPoint->update(['arrived_at' => $timeC]);
+                }
+                $this->syncTripCheckpoint($order, $trip, CheckpointType::ArrivedDelivery, $timeC, $firstDeliveryPoint?->id);
+            }
+
+            if (array_key_exists('summary_unloaded_at', $data)) {
+                $timeD = filled($data['summary_unloaded_at']) ? Carbon::parse($data['summary_unloaded_at']) : null;
+                if ($lastDeliveryPoint !== null) {
+                    $lastDeliveryPoint->update(['delivered_at' => $timeD]);
+                }
+                $this->syncTripCheckpoint($order, $trip, CheckpointType::Completed, $timeD, $lastDeliveryPoint?->id);
+            }
         }
 
         if ($trip !== null && $trip->orders()->count() <= 1) {
             $tripUpdates = [];
             $timeA = filled($data['summary_loading_at'] ?? null) ? Carbon::parse($data['summary_loading_at']) : null;
             $timeB = filled($data['summary_departed_at'] ?? null) ? Carbon::parse($data['summary_departed_at']) : null;
-            $timeD = filled($data['summary_unloaded_at'] ?? null) ? Carbon::parse($data['summary_unloaded_at']) : null;
+
+            $lastDeliveryTime = null;
+            if (! empty($data['delivery_points']) && is_array($data['delivery_points'])) {
+                $lastDp = $order->deliveryPoints->sortBy('sequence')->last();
+                if ($lastDp && filled($data['delivery_points'][$lastDp->id]['delivered_at'] ?? null)) {
+                    $lastDeliveryTime = Carbon::parse($data['delivery_points'][$lastDp->id]['delivered_at']);
+                }
+            } elseif (array_key_exists('summary_unloaded_at', $data)) {
+                $lastDeliveryTime = filled($data['summary_unloaded_at']) ? Carbon::parse($data['summary_unloaded_at']) : null;
+            }
 
             if (array_key_exists('summary_departed_at', $data) || array_key_exists('summary_loading_at', $data)) {
                 $tripUpdates['started_at'] = $timeB ?? $timeA;
             }
-            if (array_key_exists('summary_unloaded_at', $data)) {
-                $tripUpdates['completed_at'] = $timeD;
+            if ($lastDeliveryTime !== null) {
+                $tripUpdates['completed_at'] = $lastDeliveryTime;
             }
             if ($tripUpdates !== []) {
                 $trip->update($tripUpdates);
@@ -1935,7 +2203,10 @@ class TripStatisticsReport extends Page
         $checkpoint = TripCheckpoint::query()
             ->where('order_id', $order->id)
             ->where('checkpoint_type', $type)
-            ->when($deliveryPointId !== null, fn ($q) => $q->where('delivery_point_id', $deliveryPointId))
+            ->when($deliveryPointId !== null, fn ($q) => $q->where(function (Builder $sub) use ($deliveryPointId): void {
+                $sub->where('delivery_point_id', $deliveryPointId)
+                    ->orWhereNull('delivery_point_id');
+            }))
             ->first();
 
         if ($checkpoint === null && $trip !== null) {
@@ -1961,7 +2232,7 @@ class TripStatisticsReport extends Page
         }
 
         if ($checkpoint !== null) {
-            $checkpoint->occurred_at = $time;
+            $checkpoint->adjusted_at = $time;
             if ($deliveryPointId !== null && $checkpoint->delivery_point_id === null) {
                 $checkpoint->delivery_point_id = $deliveryPointId;
             }
@@ -1973,6 +2244,7 @@ class TripStatisticsReport extends Page
                 'delivery_point_id' => $deliveryPointId,
                 'checkpoint_type' => $type,
                 'occurred_at' => $time,
+                'adjusted_at' => $time,
                 'driver_id' => $trip?->driver_id,
                 'shift_id' => $trip?->shift_id,
                 'vehicle_id' => $trip?->vehicle_id,
