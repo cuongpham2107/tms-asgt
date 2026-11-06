@@ -1050,7 +1050,7 @@ class TripStatisticsReport extends Page
     /**
      * Sửa nhanh thông tin khách hàng (MST, % dầu, % huỷ chuyến…) ngay trong modal cước.
      */
-    private function editCustomerAction(?Customer $customer): Action
+    private function editCustomerAction(?Customer $customer, bool $isChargeLocked = false): Action
     {
         return Action::make('editCustomer')
             ->icon(Heroicon::OutlinedPencilSquare)
@@ -1064,14 +1064,22 @@ class TripStatisticsReport extends Page
             ->modalSubmitActionLabel('Lưu khách hàng')
             ->fillForm(fn (): array => $customer?->attributesToArray() ?? [])
             ->schema(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents())
-            ->action(function (array $data) use ($customer): void {
+            ->action(function (array $data, Set $set) use ($customer, $isChargeLocked): void {
                 $customer?->update($data);
                 $this->clearBaseRowsCache();
                 $this->bumpDataVersion();
 
+                // Đang mở cước của đơn này thì đổ luôn % mới vào form; các cước khác đã tính giữ nguyên.
+                if (! $isChargeLocked) {
+                    $set('fuel_adjustment_percent', (float) $customer?->fuel_adjustment_percent);
+                    $set('cancel_trip_percent', (float) $customer?->cancel_trip_percent);
+                }
+
                 Notification::make()
                     ->title('Đã lưu khách hàng')
-                    ->body('% dầu và % huỷ chuyến mới chỉ áp cho cước tính mới.')
+                    ->body($isChargeLocked
+                        ? 'Cước đơn này đã khoá nên giữ nguyên. % dầu và % huỷ chuyến mới áp cho cước tính mới.'
+                        : 'Đã điền % dầu và % huỷ chuyến mới vào cước đơn này — bấm "Lưu cước" để lưu. Cước các đơn khác đã tính giữ nguyên.')
                     ->success()
                     ->send();
             });
@@ -1601,7 +1609,7 @@ class TripStatisticsReport extends Page
                         ->color('gray')
                         ->fontFamily(FontFamily::Mono)
                         ->weight(FontWeight::Bold)
-                        ->suffixAction($this->editCustomerAction($order?->customer)),
+                        ->suffixAction($this->editCustomerAction($order?->customer, (bool) $charge?->isLocked())),
                     $entry('summary_vehicle', 'Biển số', Heroicon::OutlinedIdentification, $row['plate_number'] ?? '—')
                         ->badge()
                         ->color('gray')

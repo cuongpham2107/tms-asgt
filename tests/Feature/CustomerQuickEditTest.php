@@ -129,3 +129,16 @@ test('customer code must stay unique but may keep its own value', function () {
     expect($this->customer->fresh()->tax_code)->toBe('2300478023')
         ->and((float) $this->customer->fresh()->cancel_trip_percent)->toBe(35.0);
 });
+
+test('changing the fuel percent of the customer fills it into the open charge form', function () {
+    ($this->allowCustomerUpdate)();
+
+    ($this->page)()
+        ->callAction($this->editCustomer, data: ['name' => 'ALS Bắc Ninh', 'code' => 'ALSB', 'fuel_adjustment_percent' => 5, 'cancel_trip_percent' => 30])
+        ->assertHasNoActionErrors()
+        ->assertSchemaStateSet(['fuel_adjustment_percent' => 5, 'cancel_trip_percent' => 30], 'mountedActionSchema0')
+        ->callMountedAction()
+        ->assertHasNoActionErrors();
+
+    expect((float) $this->order->charge()->first()->fuel_adjustment_percent)->toBe(5.0);
+});
