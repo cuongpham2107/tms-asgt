@@ -57,11 +57,11 @@
     >
         {{-- Toolbar: Toggle Filters Button + Date Range + Search --}}
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
                 <button
                     type="button"
                     x-on:click="isFiltersOpen = !isFiltersOpen"
-                    class="toolbar-toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-xs transition cursor-pointer"
+                    class="order-1 sm:order-none toolbar-toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-xs transition cursor-pointer"
                 >
                     <x-filament::icon icon="heroicon-o-funnel" class="h-4 w-4 text-primary-500" />
                     <span>Bộ lọc</span>
@@ -72,7 +72,7 @@
                     />
                 </button>
 
-                <div class="w-[380px] sm:w-[420px]">
+                <div class="order-2 sm:order-none w-full sm:w-[380px] lg:w-[420px]">
                     {{ $this->dateRangeForm }}
                 </div>
 
@@ -82,13 +82,13 @@
                     color="gray"
                     size="sm"
                     icon="heroicon-o-arrow-down-tray"
-                    class="toolbar-toggle-btn"
+                    class="order-1 sm:order-none toolbar-toggle-btn"
                 >
                     Xuất Excel
                 </x-filament::button>
             </div>
 
-            <div class="flex-1 min-w-0 sm:max-w-md">
+            <div class="w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:max-w-md">
                 {{ $this->searchForm }}
             </div>
         </div>
