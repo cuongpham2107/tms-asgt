@@ -999,11 +999,11 @@ class TripStatisticsReport extends Page
 
         if ($customerId && $amounts->isNotEmpty()) {
             $query->where(function (Builder $q) use ($customerId, $amounts): void {
-                $q->where(fn (Builder $sq) => $sq->where('is_active', true)->availableFor($customerId))
+                $q->where(fn (Builder $sq) => $sq->where('is_active', true)->where('customer_id', $customerId))
                     ->orWhereIn('id', $amounts->keys());
             });
         } elseif ($customerId) {
-            $query->where('is_active', true)->availableFor($customerId);
+            $query->where('is_active', true)->where('customer_id', $customerId);
         } elseif ($amounts->isNotEmpty()) {
             $query->whereIn('id', $amounts->keys());
         } else {

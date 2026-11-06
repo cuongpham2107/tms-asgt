@@ -41,7 +41,8 @@ beforeEach(function () {
     $this->actingAs($this->user);
 
     $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true, 'sort_order' => 1]);
-    $customer = Customer::create(['code' => 'SAFO', 'name' => 'SAFO', 'is_active' => true]);
+    $this->customer = Customer::create(['code' => 'SAFO', 'name' => 'SAFO', 'is_active' => true]);
+    $customer = $this->customer;
     $pickup = Location::create(['code' => 'FUKANG', 'billing_zone_id' => BillingZone::firstOrCreate(['code' => 'KCN QUANG CHÂU'], ['name' => 'Kcn Quang Châu'])->id, 'name' => 'Fukang', 'loc_type' => 'pickup', 'is_active' => true]);
     $delivery = Location::create(['code' => 'ALSC', 'billing_zone_id' => BillingZone::firstOrCreate(['code' => 'NỘI BÀI'], ['name' => 'Nội Bài'])->id, 'name' => 'Nhà ga ALSC', 'loc_type' => 'delivery', 'is_active' => true]);
     $vehicle = Vehicle::create([
@@ -181,19 +182,27 @@ test('changing tonnage or return trip looks up the price again on the form', fun
         ->and($charge->price_code)->toEndWith('-8');
 });
 
-test('other fees list every fee type with zero and only stores non-zero ones', function () {
+test('other fees only list customer fee types and stores non-zero ones', function () {
+    $customerFee = FeeType::create([
+        'code' => 'cust_fee_test',
+        'name' => 'Phí riêng khách hàng',
+        'customer_id' => $this->customer->id,
+        'is_active' => true,
+    ]);
+
     $component = ($this->page)()->mountAction('editCharge', arguments: ['orderId' => $this->order->id]);
 
     $fees = collect($component->instance()->mountedActions[0]['data']['fees']);
-    expect($fees)->toHaveCount(FeeType::where('is_active', true)->count())
-        ->and($fees->sum('amount'))->toEqual(0);
+    expect($fees)->toHaveCount(1)
+        ->and((int) $fees->first()['fee_type_id'])->toBe($customerFee->id)
+        ->and((float) $fees->first()['amount'])->toEqual(0.0);
 
     $forkliftId = FeeType::where('code', 'forklift')->value('id');
     $component
-        ->fillForm(['fees' => $fees->map(fn (array $fee): array => [
-            ...$fee,
-            'amount' => (int) $fee['fee_type_id'] === $forkliftId ? 150_000 : 0,
-        ])->all()])
+        ->fillForm(['fees' => [
+            ['fee_type_id' => $customerFee->id, 'amount' => 0],
+            ['fee_type_id' => $forkliftId, 'amount' => 150_000],
+        ]])
         ->callMountedAction()
         ->assertHasNoActionErrors();
 
