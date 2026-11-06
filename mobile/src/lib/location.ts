@@ -16,7 +16,7 @@ export interface GpsLookupResult {
 }
 
 const MAX_CURRENT_ACCURACY_M = 800;
-const MAX_CACHED_AGE_MS = 120000;
+const MAX_CACHED_AGE_MS = 180000;
 const MAX_CACHED_ACCURACY_M = 300;
 
 /**
@@ -58,7 +58,7 @@ export function promptEnableGps(reason?: GpsFailureReason) {
  *    (Server sẽ đối chiếu qua thiết bị định vị EUP của xe).
  */
 export async function getRequiredGpsCoordinates(
-    timeoutMs: number = 1500
+    timeoutMs: number = 1000
 ): Promise<GpsLookupResult> {
     try {
         const servicesEnabled = await Location.hasServicesEnabledAsync().catch(
@@ -161,7 +161,7 @@ export async function getRequiredGpsCoordinates(
  * Ưu tiên đọc cache trong 5 phút gần nhất (~10ms), hoặc lấy nhanh tối đa 800ms.
  */
 export async function getFastGpsCoordinates(
-    timeoutMs: number = 800
+    timeoutMs: number = 500
 ): Promise<GpsCoordinates | null> {
     try {
         // 1. Đọc toạ độ cache gần nhất trước
