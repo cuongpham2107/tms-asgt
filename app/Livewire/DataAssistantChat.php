@@ -5,7 +5,6 @@ namespace App\Livewire;
 use App\Ai\Agents\DataAssistant;
 use App\Ai\AnswerRenderer;
 use App\Models\User;
-use BezhanSalleh\FilamentShield\Support\Utils;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -50,12 +49,11 @@ class DataAssistantChat extends Component
     public ?string $error = null;
 
     /**
-     * super_admin luôn được dùng (Shield ở dự án này không cấp quyền qua Gate, nên quyền mới chưa tự gán cho super_admin).
+     * Chỉ người có quyền tùy chỉnh Shield "Use:DataAssistant" mới thấy nút chat (gán ở Cấu hình → Phân quyền).
      */
     public static function canUse(?User $user): bool
     {
-        return $user !== null
-            && ($user->hasRole(Utils::getSuperAdminName()) || $user->can(self::PERMISSION));
+        return $user !== null && $user->can(self::PERMISSION);
     }
 
     public function mount(): void

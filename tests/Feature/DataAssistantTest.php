@@ -199,11 +199,24 @@ it('hiện nút chat nổi trên trang admin cho người có quyền', function
     $this->get('/app')->assertOk()->assertSee('da-fab', false)->assertSee('Hỏi dữ liệu');
 });
 
-it('super_admin thấy nút chat dù chưa được gán quyền riêng', function () {
+it('nút chat chỉ dựa vào quyền tùy chỉnh Use:DataAssistant, kể cả với super_admin', function () {
     Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
     $this->user->assignRole('super_admin');
 
+    $this->get('/app')->assertOk()->assertDontSee('da-fab', false);
+
+    ($this->grant)(DataAssistantChat::PERMISSION);
+
     $this->get('/app')->assertOk()->assertSee('da-fab', false);
+});
+
+it('migration tạo quyền Use:DataAssistant và gán sẵn cho super_admin', function () {
+    $role = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
+
+    (require database_path('migrations/2026_11_06_081507_add_use_data_assistant_permission.php'))->up();
+
+    expect(Permission::where('name', DataAssistantChat::PERMISSION)->exists())->toBeTrue()
+        ->and($role->fresh()->hasPermissionTo(DataAssistantChat::PERMISSION))->toBeTrue();
 });
 
 it('tách câu hỏi gợi ý cuối câu trả lời thành nút hỏi tiếp', function () {
