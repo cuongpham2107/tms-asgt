@@ -11,13 +11,17 @@ class OrderChargeFee extends Model
         'order_charge_id',
         'fee_type_id',
         'amount',
+        'quantity',
         'note',
+        'is_auto',
     ];
 
     protected function casts(): array
     {
         return [
             'amount' => 'decimal:2',
+            'quantity' => 'decimal:2',
+            'is_auto' => 'boolean',
         ];
     }
 

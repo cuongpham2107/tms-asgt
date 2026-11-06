@@ -232,6 +232,26 @@ test('per drop layout writes one row per delivery point with the money on the fi
         ->and($sheet->getCell("{$totalColumn}15")->getValue())->toBe("=SUM({$totalColumn}13:{$totalColumn}14)");
 });
 
+test('billing statement writes base price and waiting fee properly', function () {
+    $this->charge->update([
+        'waiting_minutes' => 150,
+        'waiting_fee' => 120_000,
+    ]);
+    $this->charge->recalculateTotals()->save();
+
+    $rows = ($this->page)()->instance()->getAllRows();
+    $result = app(BillingStatementExporter::class)->build($rows, $this->customer, 'ALSB', [
+        'title' => 'BẢNG KÊ ĐỐI CHIẾU VẬN CHUYỂN HÀNG ALSB',
+        'sign_date' => '2026-10-26',
+    ]);
+    $sheet = $result['spreadsheet']->getActiveSheet();
+
+    expect($sheet->getCell('R13')->getValue())->toBe(1_000_000.0)
+        ->and($sheet->getCell('S13')->getValue())->toBe(1_162_000.0)
+        ->and($sheet->getCell('T13')->getValue())->toBe(120_000.0)
+        ->and($sheet->getCell('T13')->getStyle()->getNumberFormat()->getFormatCode())->toBe('#,##0');
+});
+
 test('vfc statement lists delivery note numbers and summed weights in one row', function () {
     $this->customer->update(['code' => 'ASGS (VFC)']);
     $this->charge->update(['delivery_notes' => [

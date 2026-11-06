@@ -4,7 +4,9 @@ namespace App\Services\Billing;
 
 use App\Enums\CargoType;
 use App\Enums\CheckpointType;
+use App\Enums\FeeCalcMethod;
 use App\Enums\FreightPricingMethod;
+use App\Models\FeeType;
 use App\Models\FreightRate;
 use App\Models\Order;
 use App\Models\OrderCharge;
@@ -63,9 +65,44 @@ class OrderChargeCalculator
         $waiting = $this->waiting($order, $charge, $chargeDate);
         [$charge->waiting_minutes, $charge->waiting_fee] = [$waiting['minutes'], $waiting['fee']];
 
+        $charge->save();
+        $this->applyAutoFees($order, $charge);
         $charge->recalculateTotals()->save();
 
         return $charge;
+    }
+
+    /**
+     * Thêm các phí riêng của khách bật "Tự cộng cho mọi đơn" (VD: bốc xếp theo thùng).
+     * Chỉ thay các dòng phí tự động; loại phí kế toán đã chọn/nhập tay thì giữ nguyên, không cộng thêm.
+     */
+    public function applyAutoFees(Order $order, OrderCharge $charge): void
+    {
+        $charge->fees()->where('is_auto', true)->delete();
+        $manualFeeTypeIds = $charge->fees()->pluck('fee_type_id')->all();
+
+        FeeType::query()
+            ->where('customer_id', $charge->customer_id)
+            ->where('is_active', true)
+            ->where('auto_apply', true)
+            ->where('calc_method', '!=', FeeCalcMethod::Manual)
+            ->whereNotIn('id', $manualFeeTypeIds)
+            ->orderBy('sort')
+            ->get()
+            ->each(function (FeeType $feeType) use ($order, $charge): void {
+                $fee = $feeType->calculate($feeType->suggestedQuantity($order), $charge->base_price === null ? null : (float) $charge->base_price);
+                if ($fee !== null && $fee['amount'] > 0) {
+                    $charge->fees()->create([
+                        'fee_type_id' => $feeType->id,
+                        'amount' => $fee['amount'],
+                        'quantity' => $fee['quantity'],
+                        'note' => $fee['note'] ?: null,
+                        'is_auto' => true,
+                    ]);
+                }
+            });
+
+        $charge->unsetRelation('fees');
     }
 
     public static function parseKgToTons(mixed $weight): ?float

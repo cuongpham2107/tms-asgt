@@ -78,6 +78,37 @@ Quy tắc tính cước:
 - **VAT**: kế toán điền trong modal sửa cước (mặc định 0%).
 - **Rớt điểm và các phí khác**: nhập tay số tiền trong mục "Phí khác & ghi chú", mỗi dòng phí có thêm ô ghi chú.
 
+## 4b. Phí riêng của khách
+
+Menu **Danh mục phí**:
+- Phí **không chọn khách** là phí dùng chung, kế toán nhập tay số tiền như trước.
+- Phí **có chọn khách** là phí riêng, có **cách tính** và **đơn giá**.
+
+| Cách tính | Số tiền = | Số lượng gợi ý |
+|---|---|---|
+| Cố định / đơn | Đơn giá × số lượng | 1 |
+| Theo số pallet | Đơn giá × số pallet | Số pallet của đơn |
+| Theo số thùng/kiện | Đơn giá × số thùng | Số kiện của đơn |
+| Theo mỗi điểm rớt | Đơn giá × số điểm | Số điểm trả từ điểm thứ 2 |
+| % đơn giá chính | Đơn giá gốc × % | 1 |
+
+Trong **modal Cước đơn**, mục "Phí khác & ghi chú" chỉ liệt kê phí dùng chung và phí riêng của khách đang mở:
+- Khi chọn một phí riêng hoặc nhập **Số lượng**, hệ thống tự tính số tiền theo đơn giá.
+- Sửa số lượng thì số tiền tự tính lại.
+- Số tiền vẫn sửa tay được.
+- Ví dụ SAFO trả UPS → ALSC → ALSE: nhập số lượng 1 ở "Rớt điểm trong NBA" và 1 ở "Rớt điểm ALSE".
+
+Phí bật **"Tự cộng cho mọi đơn của khách"** (ví dụ bốc xếp SDS HN theo thùng) thì hệ thống tự thêm khi đơn hoàn thành hoặc khi bấm "Tính lại". Khi tính lại, chỉ các phí tự cộng này được thay. Phí kế toán đã chọn hoặc nhập tay thì giữ nguyên, không cộng trùng.
+
+**Mã phí** là nhóm cột trong bảng kê, nên nhiều mức phí dùng chung một mã. Ví dụ 4 mức rớt điểm của SAFO đều mang mã `extra_drop` và cùng vào cột "Chi phí rớt điểm".
+
+Tạo dữ liệu mẫu theo bảng phụ phí của sếp. Có thể chạy lại nhiều lần mà không tạo trùng:
+
+```bash
+php artisan fee-types:seed-samples --dry-run
+php artisan fee-types:seed-samples
+```
+
 ## 5. Mã nguồn chính
 
 - `app/Services/Export/BillingStatement/BillingStatementExporter.php`: dựng file bảng kê.

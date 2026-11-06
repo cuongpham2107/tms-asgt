@@ -38,6 +38,7 @@ test('freight rate list shows rates and creates a route with prices per tonnage'
     ]);
 
     Livewire::test(ListFreightRates::class)
+        ->loadTable()
         ->assertCanSeeTableRecords([$rate])
         ->assertSee('1.300.000')
         ->callAction('create', data: [
@@ -63,6 +64,7 @@ test('waiting fee and fee type lists render their records', function () {
     $waitingFee = WaitingFeeRate::create(['customer_id' => $this->customer->id, 'tiers' => [['tonnage' => 5, 'fee' => 50_000, 'free_minutes' => 120]]]);
 
     Livewire::test(ListWaitingFeeRates::class)
+        ->loadTable()
         ->assertCanSeeTableRecords([$waitingFee])
         ->callAction('create', data: [
             'customer_id' => $this->customer->id,
@@ -74,7 +76,7 @@ test('waiting fee and fee type lists render their records', function () {
         ->assertHasNoActionErrors();
 
     expect(WaitingFeeRate::latest('id')->first()->tierFor(8))->toEqual(['tonnage' => 8, 'fee' => 70_000, 'free_minutes' => 120]);
-    Livewire::test(ListFeeTypes::class)->assertCanSeeTableRecords(FeeType::orderBy('sort')->limit(10)->get());
+    Livewire::test(ListFeeTypes::class)->loadTable()->assertCanSeeTableRecords(FeeType::orderBy('sort')->limit(10)->get());
 });
 
 test('billing zone form creates a zone and moves locations into it', function () {
@@ -82,6 +84,7 @@ test('billing zone form creates a zone and moves locations into it', function ()
     $this->origin->update(['billing_zone_id' => $oldZone->id]);
 
     Livewire::test(ListBillingZones::class)
+        ->loadTable()
         ->callAction('create', data: [
             // Chỉ nhập tên, mã tự tạo
             'name' => 'kcn  yên phong',
@@ -97,6 +100,7 @@ test('billing zone form creates a zone and moves locations into it', function ()
 
     // Bỏ chọn địa điểm thì gỡ khỏi khu vực
     Livewire::test(ListBillingZones::class)
+        ->loadTable()
         ->callTableAction('edit', $zone, data: ['location_ids' => [$this->origin->id]])
         ->assertHasNoTableActionErrors();
 
@@ -104,6 +108,7 @@ test('billing zone form creates a zone and moves locations into it', function ()
         ->and($this->origin->fresh()->billing_zone_id)->toBe($zone->id);
 
     Livewire::test(ListBillingZones::class)
+        ->loadTable()
         ->assertCanSeeTableRecords([$zone])
         ->assertSee('FUKANG');
 });
@@ -117,6 +122,7 @@ test('freight rate list filters by customer and route zones right away', functio
     $clcRate = FreightRate::create(['customer_id' => $clc->id, 'origin_zone_id' => $noiBai->id, 'destination_zone_id' => $quangChau->id, 'cargo_type' => CargoType::Gcr, 'prices' => ['5' => 900_000]]);
 
     Livewire::test(ListFreightRates::class)
+        ->loadTable()
         ->filterTable('customer_id', $clc->id)
         ->assertCanSeeTableRecords([$clcRate])
         ->assertCanNotSeeTableRecords([$safoRate])

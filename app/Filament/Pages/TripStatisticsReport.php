@@ -908,6 +908,31 @@ class TripStatisticsReport extends Page
     }
 
     /**
+     * Loại phí riêng của khách có đơn giá (không phải nhập tay), null nếu là phí nhập tay.
+     */
+    private static function pricedFeeType(mixed $feeTypeId): ?FeeType
+    {
+        $feeType = blank($feeTypeId) ? null : FeeType::find($feeTypeId);
+
+        return $feeType !== null && $feeType->customer_id !== null && $feeType->method()->isAuto() && $feeType->amount !== null ? $feeType : null;
+    }
+
+    /**
+     * Điền số tiền + ghi chú của dòng phí theo số lượng đang nhập và đơn giá gốc trên form.
+     */
+    private static function fillFeeAmount(Get $get, Set $set, FeeType $feeType, ?float $quantity = null): void
+    {
+        $quantity ??= (float) $get('quantity');
+        $basePrice = str_replace(',', '', (string) $get('../../base_price'));
+        $fee = $feeType->calculate($quantity, is_numeric($basePrice) ? (float) $basePrice : null);
+
+        $set('amount', $fee === null || $quantity <= 0 ? 0 : $fee['amount']);
+        if ($fee !== null && $quantity > 0 && blank($get('note'))) {
+            $set('note', $fee['note'] ?: null);
+        }
+    }
+
+    /**
      * Hệ số nhân đơn giá theo các ô quay đầu / huỷ chuyến đang nhập trên form.
      */
     private function formPriceMultiplier(Get $get, string $prefix = ''): float
@@ -923,20 +948,22 @@ class TripStatisticsReport extends Page
     /**
      * Mọi loại phí đang dùng (theo thứ tự danh mục) kèm số tiền đã nhập, chưa nhập thì 0.
      *
-     * @return list<array{fee_type_id: int, amount: float, note: ?string}>
+     * @return list<array{fee_type_id: int, quantity: ?float, amount: float, note: ?string}>
      */
     private function feeRowsForForm(OrderCharge $charge): array
     {
         $amounts = $charge->fees->pluck('amount', 'fee_type_id');
         $notes = $charge->fees->pluck('note', 'fee_type_id');
+        $quantities = $charge->fees->pluck('quantity', 'fee_type_id');
 
         return FeeType::query()
-            ->where('is_active', true)
+            ->where(fn ($query) => $query->where('is_active', true)->availableFor($charge->customer_id))
             ->orWhereIn('id', $amounts->keys())
             ->orderBy('sort')
             ->get()
             ->map(fn (FeeType $feeType): array => [
                 'fee_type_id' => $feeType->id,
+                'quantity' => $quantities->get($feeType->id) === null ? null : (float) $quantities->get($feeType->id),
                 'amount' => (float) ($amounts->get($feeType->id) ?? 0),
                 'note' => $notes->get($feeType->id),
             ])
@@ -946,17 +973,22 @@ class TripStatisticsReport extends Page
     /**
      * Ghi lại phí khác của dòng cước. Form liệt kê sẵn mọi loại phí với số tiền 0 — chỉ lưu những phí có tiền.
      *
-     * @param  array<int|string, array{fee_type_id?: mixed, amount?: mixed, note?: ?string}>  $fees
+     * @param  array<int|string, array{fee_type_id?: mixed, quantity?: mixed, amount?: mixed, note?: ?string}>  $fees
      */
     private function saveChargeFees(OrderCharge $charge, array $fees): void
     {
+        // Phí tự động giữ nguyên số tiền thì vẫn là tự động (tính lại được); sửa số tiền thì thành phí nhập tay.
+        $autoAmounts = $charge->fees()->where('is_auto', true)->pluck('amount', 'fee_type_id');
+
         $charge->fees()->delete();
         $charge->fees()->createMany(collect($fees)
             ->filter(fn (array $fee): bool => filled($fee['fee_type_id'] ?? null) && (float) ($fee['amount'] ?? 0) > 0)
             ->map(fn (array $fee): array => [
                 'fee_type_id' => $fee['fee_type_id'],
                 'amount' => (float) $fee['amount'],
+                'quantity' => is_numeric($fee['quantity'] ?? null) ? (float) $fee['quantity'] : null,
                 'note' => filled($fee['note'] ?? null) ? trim((string) $fee['note']) : null,
+                'is_auto' => $autoAmounts->has($fee['fee_type_id']) && (float) $autoAmounts[$fee['fee_type_id']] === (float) $fee['amount'],
             ])
             ->values()
             ->all());
@@ -1505,8 +1537,9 @@ class TripStatisticsReport extends Page
                                     ->hiddenLabel()
                                     ->table([
                                         TableColumn::make('Loại phí')->markAsRequired(),
-                                        TableColumn::make('Số tiền (đ)')->markAsRequired(),
-                                        TableColumn::make('Ghi chú'),
+                                        TableColumn::make('Số lượng')->width('10rem'),
+                                        TableColumn::make('Số tiền (đ)')->width('12rem')->markAsRequired(),
+                                        // TableColumn::make('Ghi chú'),
                                     ])
                                     ->compact()
                                     ->defaultItems(0)
@@ -1514,11 +1547,42 @@ class TripStatisticsReport extends Page
                                     ->live()
                                     ->schema([
                                         Select::make('fee_type_id')
-                                            ->options(fn (): array => FeeType::where('is_active', true)->orderBy('sort')->pluck('name', 'id')->all())
+                                            ->options(fn (): array => FeeType::query()
+                                                ->with('customer')
+                                                ->where('is_active', true)
+                                                ->availableFor($charge?->customer_id ?? $order?->customer_id)
+                                                ->orderBy('sort')
+                                                ->get()
+                                                ->mapWithKeys(fn (FeeType $feeType): array => [$feeType->id => $feeType->optionLabel()])
+                                                ->all())
                                             ->distinct()
-                                            ->required(),
+                                            ->required()
+                                            ->live()
+                                            ->afterStateUpdated(function (Get $get, Set $set, ?int $state) use ($order): void {
+                                                $feeType = self::pricedFeeType($state);
+                                                if ($feeType !== null && $order !== null) {
+                                                    $suggested = $feeType->suggestedQuantity($order);
+                                                    if ($suggested !== null && (float) $get('quantity') <= 0) {
+                                                        $set('quantity', $suggested);
+                                                        self::fillFeeAmount($get, $set, $feeType, (float) $suggested);
+                                                    }
+                                                }
+                                            }),
+                                        TextInput::make('quantity')
+                                            ->hiddenLabel()
+                                            ->numeric()
+                                            ->minValue(0)
+                                            ->suffix(fn (Get $get): ?string => self::pricedFeeType($get('fee_type_id'))?->method()->quantityLabel())
+                                            ->visible(fn (Get $get): bool => self::pricedFeeType($get('fee_type_id')) !== null)
+                                            ->live(debounce: 500)
+                                            ->afterStateUpdated(function (Get $get, Set $set): void {
+                                                $feeType = self::pricedFeeType($get('fee_type_id'));
+                                                if ($feeType !== null) {
+                                                    self::fillFeeAmount($get, $set, $feeType);
+                                                }
+                                            }),
                                         self::moneyInput('amount')->required()->live(debounce: 500),
-                                        TextInput::make('note')->placeholder('VD: 3 điểm rớt, vé cao tốc…')->maxLength(255),
+                                        // TextInput::make('note')->placeholder('VD: 3 điểm rớt, vé cao tốc…')->maxLength(255),
                                     ]),
                                 Textarea::make('note')->label('Ghi chú cước')->rows(2),
                             ]),
