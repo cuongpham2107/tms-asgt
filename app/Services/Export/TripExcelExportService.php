@@ -1130,38 +1130,33 @@ class TripExcelExportService
         return $currentRow;
     }
 
-    protected function buildJourneyString(Order $order): string
+    public function buildJourneyString(Order $order): string
     {
+        $order->loadMissing(['pickupLocation', 'deliveryPoints.location']);
+
         $pickupCode = $order->pickupLocation?->code;
         if (! $pickupCode && $order->pickup_address) {
             $pickupCode = $this->extractLocationShortName($order->pickup_address);
         }
 
-        $deliveryPoints = $order->deliveryPoints;
-        if ($deliveryPoints->isEmpty()) {
-            return trim((string) $pickupCode);
+        $points = collect();
+        if ($pickupCode) {
+            $points->push($pickupCode);
         }
 
-        if ($deliveryPoints->count() === 1) {
-            $dp = $deliveryPoints->first();
-            $delivCode = $dp?->location?->code ?: $this->extractLocationShortName($dp?->address ?? '');
-
-            if ($pickupCode && $delivCode) {
-                return "{$pickupCode} -> {$delivCode}";
+        $deliveryPoints = $order->deliveryPoints->sortBy('sequence');
+        foreach ($deliveryPoints as $dp) {
+            $code = $dp->location?->code ?: $this->extractLocationShortName($dp->address ?? '');
+            if ($code) {
+                $points->push($code);
             }
-
-            return trim("{$pickupCode}{$delivCode}");
         }
 
-        // Với đơn nhiều điểm: Ghép điểm đóng đầu tiên + điểm trả cuối cùng
-        $lastDp = $deliveryPoints->sortBy('sequence')->last();
-        $lastCode = $lastDp?->location?->code ?: $this->extractLocationShortName($lastDp?->address ?? '');
-
-        if ($pickupCode && $lastCode) {
-            return "{$pickupCode} -> {$lastCode}";
+        if ($points->isNotEmpty()) {
+            return $points->implode(' -> ');
         }
 
-        return trim("{$pickupCode}{$lastCode}");
+        return trim((string) $pickupCode);
     }
 
     protected function extractLocationShortName(string $address): string

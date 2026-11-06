@@ -53,6 +53,7 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
@@ -946,7 +947,8 @@ class TripStatisticsReport extends Page
     }
 
     /**
-     * Mọi loại phí đang dùng (theo thứ tự danh mục) kèm số tiền đã nhập, chưa nhập thì 0.
+     * Mọi loại phí đang dùng kèm số tiền đã nhập; nạp sẵn các loại phí riêng của khách hàng.
+     * Các loại phí dùng chung (không gán khách hàng) không tự nạp trừ khi đã có dữ liệu lưu.
      *
      * @return list<array{fee_type_id: int, quantity: ?float, amount: float, note: ?string}>
      */
@@ -955,10 +957,24 @@ class TripStatisticsReport extends Page
         $amounts = $charge->fees->pluck('amount', 'fee_type_id');
         $notes = $charge->fees->pluck('note', 'fee_type_id');
         $quantities = $charge->fees->pluck('quantity', 'fee_type_id');
+        $customerId = $charge->customer_id ?? $charge->order?->customer_id;
 
-        return FeeType::query()
-            ->where(fn ($query) => $query->where('is_active', true)->availableFor($charge->customer_id))
-            ->orWhereIn('id', $amounts->keys())
+        $query = FeeType::query();
+
+        if ($customerId && $amounts->isNotEmpty()) {
+            $query->where(function (Builder $q) use ($customerId, $amounts): void {
+                $q->where(fn (Builder $sq) => $sq->where('is_active', true)->where('customer_id', $customerId))
+                    ->orWhereIn('id', $amounts->keys());
+            });
+        } elseif ($customerId) {
+            $query->where('is_active', true)->where('customer_id', $customerId);
+        } elseif ($amounts->isNotEmpty()) {
+            $query->whereIn('id', $amounts->keys());
+        } else {
+            return [];
+        }
+
+        return $query
             ->orderBy('sort')
             ->get()
             ->map(fn (FeeType $feeType): array => [
@@ -1681,7 +1697,7 @@ class TripStatisticsReport extends Page
                         ->weight(FontWeight::Bold),
                     $entry('summary_driver', 'Lái xe', Heroicon::OutlinedUser, $row['driver_name'] ?? '—')
                         ->weight(FontWeight::Bold),
-                    $entry('summary_journey', 'Hành trình', Heroicon::OutlinedMap, $row['journey'] ?? '—')
+                    $entry('summary_journey', 'Hành trình', Heroicon::OutlinedMap, $row['journey'] ?? ($order ? app(TripExcelExportService::class)->buildJourneyString($order) : '—'))
                         ->weight(FontWeight::Medium),
                     $entry('summary_cargo_type', 'Loại hàng', Heroicon::OutlinedCube, $cargoType?->getLabel() ?? '—')
                         ->badge()
