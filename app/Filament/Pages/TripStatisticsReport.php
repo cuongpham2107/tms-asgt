@@ -251,25 +251,25 @@ class TripStatisticsReport extends Page
 
     public function syncDatePreset(): void
     {
+        if ($this->datePreset !== null && $this->matchesPresetDates($this->datePreset)) {
+            return;
+        }
+
         $today = now()->format('Y-m-d');
         $yesterday = now()->subDay()->format('Y-m-d');
 
         $this->datePreset = match (true) {
+            $this->startDate === now()->startOfMonth()->format('Y-m-d') && $this->endDate === $today => 'thisMonth',
             $this->startDate === $today && $this->endDate === $today => 'today',
             $this->startDate === $yesterday && $this->endDate === $yesterday => 'yesterday',
             $this->startDate === now()->subDays(6)->format('Y-m-d') && $this->endDate === $today => 'last7days',
-            $this->startDate === now()->startOfMonth()->format('Y-m-d') && $this->endDate === $today => 'thisMonth',
             $this->startDate === now()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === now()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d') => 'lastMonth',
             default => null,
         };
     }
 
-    public function isDatePresetActive(string $preset): bool
+    private function matchesPresetDates(string $preset): bool
     {
-        if ($this->datePreset === $preset) {
-            return true;
-        }
-
         $today = now()->format('Y-m-d');
         $yesterday = now()->subDay()->format('Y-m-d');
 
@@ -281,6 +281,11 @@ class TripStatisticsReport extends Page
             'lastMonth' => $this->startDate === now()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === now()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
             default => false,
         };
+    }
+
+    public function isDatePresetActive(string $preset): bool
+    {
+        return $this->datePreset === $preset;
     }
 
     private const DATE_PRESETS = [

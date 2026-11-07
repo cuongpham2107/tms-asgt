@@ -457,6 +457,16 @@ test('trip statistics report date preset buttons update dates and active state c
     // Reset filters quay về Tháng này
     $component->call('resetFilters');
     expect($component->instance()->isDatePresetActive('thisMonth'))->toBeTrue();
+
+    // Khi ngày trùng nhau (ví dụ: ngày 7 của tháng thì 7 ngày qua và tháng này cùng khoảng 01 -> 07)
+    // chỉ có 1 nút được active duy nhất theo datePreset đang chọn
+    $component->call('setDatePreset', 'thisMonth');
+    expect($component->instance()->isDatePresetActive('thisMonth'))->toBeTrue()
+        ->and($component->instance()->isDatePresetActive('last7days'))->toBeFalse();
+
+    $component->call('setDatePreset', 'last7days');
+    expect($component->instance()->isDatePresetActive('last7days'))->toBeTrue()
+        ->and($component->instance()->isDatePresetActive('thisMonth'))->toBeFalse();
 });
 
 test('trip statistics report only includes completed trips', function () {
