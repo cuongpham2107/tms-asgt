@@ -28,6 +28,8 @@ const GEO_FAR = 0.006;
 
 beforeEach(function () {
     $this->freezeTime();
+    // Cố định bán kính nhỏ để các khoảng cách mẫu (~330m / ~667m) phân biệt được trong/ngoài vùng
+    config(['checkpoint_geofence.radius_m' => 500, 'checkpoint_geofence.vehicle_radius_m' => 500, 'checkpoint_geofence.max_vehicle_radius_m' => 1500]);
 
     $driver = User::factory()->create();
     $this->vehicle = Vehicle::create([

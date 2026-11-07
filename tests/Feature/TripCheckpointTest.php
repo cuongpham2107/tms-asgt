@@ -947,14 +947,14 @@ function placeVehicleByEup(Vehicle $vehicle, float $lat, float $lng): void
 }
 
 test('geofence result is stored on the checkpoint without blocking when enforcement is off', function () {
-    // Xe cách điểm lấy hàng ~667m, tài xế đứng cạnh xe.
-    placeVehicleByEup($this->vehicle, 10.818889 + 0.006, 106.651944);
+    // Xe cách điểm lấy hàng ~1.1km, tài xế đứng cạnh xe.
+    placeVehicleByEup($this->vehicle, 10.818889 + 0.01, 106.651944);
 
     $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_pickup',
         'order_id' => $this->order1->id,
         'km_reading' => 50010,
-        'gps_lat' => 10.818889 + 0.006,
+        'gps_lat' => 10.818889 + 0.01,
         'gps_lng' => 106.651944,
     ])->assertSuccessful();
 
@@ -964,9 +964,9 @@ test('geofence result is stored on the checkpoint without blocking when enforcem
         ->sole();
 
     expect($checkpoint->location_geo_status)->toBe(GeoCheckStatus::OutOfRange)
-        ->and($checkpoint->location_distance_m)->toBeBetween(600, 700)
+        ->and($checkpoint->location_distance_m)->toBeBetween(1050, 1150)
         ->and($checkpoint->vehicle_geo_status)->toBe(GeoCheckStatus::Valid)
-        ->and((float) $checkpoint->eup_lat)->toBe(10.824889);
+        ->and((float) $checkpoint->eup_lat)->toBe(10.828889);
 });
 
 test('enforced driver-to-vehicle check rejects the checkpoint and saves nothing', function () {
@@ -983,8 +983,8 @@ test('enforced driver-to-vehicle check rejects the checkpoint and saves nothing'
         ->assertUnprocessable()
         ->assertJsonPath('message', fn (string $message) => str_contains($message, 'cách xe'))
         ->assertJsonPath('geofence.layer', 'vehicle')
-        ->assertJsonPath('geofence.radius_m', 500)
-        ->assertJsonPath('geofence.distance_m', fn (int $m) => $m > 500);
+        ->assertJsonPath('geofence.radius_m', 3000)
+        ->assertJsonPath('geofence.distance_m', fn (int $m) => $m > 3000);
 
     expect(TripCheckpoint::count())->toBe(0)
         ->and($this->trip->fresh()->status)->toBe(TripStatus::Pending)

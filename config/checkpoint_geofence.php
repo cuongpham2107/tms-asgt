@@ -7,11 +7,14 @@ return [
     | Bán kính kiểm tra (mét)
     |--------------------------------------------------------------------------
     |
-    | Dùng chung cho cả hai lớp: GPS điện thoại ↔ xe (EUP) và xe ↔ location.
+    | radius_m: Lớp B (xe ↔ location), Location có geofence_radius_m thì dùng giá trị đó.
+    | vehicle_radius_m: Lớp A (GPS điện thoại ↔ xe EUP).
     |
     */
 
-    'radius_m' => (int) env('CHECKPOINT_GEOFENCE_RADIUS_M', 500),
+    'radius_m' => (int) env('CHECKPOINT_GEOFENCE_RADIUS_M', 1000),
+
+    'vehicle_radius_m' => (int) env('CHECKPOINT_GEOFENCE_VEHICLE_RADIUS_M', 3000),
 
     /*
     |--------------------------------------------------------------------------
@@ -26,7 +29,7 @@ return [
 
     'moving_speed_threshold_kmh' => (float) env('CHECKPOINT_GEOFENCE_MOVING_SPEED_KMH', 15),
 
-    'max_vehicle_radius_m' => (int) env('CHECKPOINT_GEOFENCE_MAX_VEHICLE_RADIUS_M', 1500),
+    'max_vehicle_radius_m' => (int) env('CHECKPOINT_GEOFENCE_MAX_VEHICLE_RADIUS_M', 4000),
 
     /*
     |--------------------------------------------------------------------------

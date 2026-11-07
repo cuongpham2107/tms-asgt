@@ -31,7 +31,7 @@ class ReevaluateCheckpointsCommand extends Command
         $ordersById = DB::table('orders')->select('id', 'pickup_location_id')->get()->keyBy('id');
         $dpById = DB::table('order_delivery_points')->select('id', 'order_id', 'location_id')->get()->keyBy('id');
 
-        $baseRadiusM = (int) config('checkpoint_geofence.radius_m', 500);
+        $baseRadiusM = (int) config('checkpoint_geofence.radius_m', 1000);
         $movingSpeedThreshold = (float) config('checkpoint_geofence.moving_speed_threshold_kmh', 15);
         $maxVehicleRadiusM = (int) config('checkpoint_geofence.max_vehicle_radius_m', 1500);
         $arriveWindow = (int) config('checkpoint_geofence.track_window_arrive_seconds', 900);
