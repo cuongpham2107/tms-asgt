@@ -315,7 +315,7 @@ test('page statement tab shows the read-only trip list of the period', function 
     Livewire::withQueryParams(['period' => 'month', 'date' => '2026-10-15', 'tab' => 'statement'])
         ->test(DriverMonthlyKmReport::class)
         ->assertSuccessful()
-        ->assertSee(['Bảng kê chuyến', 'ORD-MON', 'Bắt đầu chuyến', '08:00 15/10', '09:40 15/10'])
+        ->assertSee(['Bảng kê chuyến', 'ORD-MON', 'Bắt đầu → kết thúc', '08:00 15/10', '09:40 15/10', 'Toàn đội xe'])
         ->assertDontSee(['Cước', 'Tổng tiền']);
 });
 
@@ -331,4 +331,65 @@ test('page statement tab paginates the trip list', function () {
         ->assertDontSee($last->trip_code)
         ->call('nextPage')
         ->assertSee($last->trip_code);
+});
+
+test('driver performance averages travel and waiting time per driver', function () {
+    $row = fn (int $driverId, int $tripId, ?int $orderId, ?int $loading, ?int $travel, ?int $unloading, float $kmLoaded, float $kmEmpty = 0): array => [
+        'driver_id' => $driverId,
+        'driver_name' => 'LX '.$driverId,
+        'trip_id' => $tripId,
+        'order_id' => $orderId,
+        'time_loading' => $loading,
+        'time_travel' => $travel,
+        'time_unloading' => $unloading,
+        'km_loaded' => $kmLoaded,
+        'km_empty' => $kmEmpty,
+    ];
+    $rows = collect([
+        $row(1, 10, 100, 30, 60, 30, 50),
+        $row(1, 11, 101, 100, 120, 50, 70),
+        $row(2, 12, null, 0, 30, 0, 0, 20),
+        $row(2, 13, 102, null, null, null, 5),
+    ]);
+
+    $performance = app(DriverMonthlyKmReportService::class)->driverPerformance($rows)->keyBy('driver_id');
+
+    expect($performance[1])->toMatchArray([
+        'trip_count' => 2,
+        'order_count' => 2,
+        'km_total' => 120.0,
+        'avg_travel' => 90,
+        'avg_wait' => 105,
+        'wait_percent' => 54,
+        'avg_speed' => 40.0,
+        'long_wait_count' => 1,
+    ])->and($performance[2])->toMatchArray([
+        'trip_count' => 2,
+        'km_total' => 25.0,
+        'avg_travel' => 30,
+        'avg_wait' => 0,
+        'avg_speed' => 50.0,
+        'long_wait_count' => 0,
+    ]);
+});
+
+test('page statement tab filters trips and ranks drivers', function () {
+    $this->actingAs($this->driverA);
+    monthlySwapTrip($this);
+    $emptyTrip = monthlyTrip($this, $this->driverA, '2026-10-03 08:00', 10, 0);
+
+    $page = Livewire::withQueryParams(['period' => 'month', 'date' => '2026-10-15', 'tab' => 'statement'])
+        ->test(DriverMonthlyKmReport::class);
+
+    expect($page->instance()->driverRanking()->pluck('driver_name')->all())->toContain('Tài xế A', 'Tài xế B');
+
+    $page->set('serviceType', 'Xe không hàng')
+        ->assertSee($emptyTrip->trip_code)
+        ->assertDontSee('ORD-MON')
+        ->set('serviceType', '')
+        ->call('selectDriver', $this->driverB->id)
+        ->assertSee('ORD-MON')
+        ->assertDontSee($emptyTrip->trip_code)
+        ->call('resetStatementFilters')
+        ->assertSee([$emptyTrip->trip_code, 'ORD-MON']);
 });

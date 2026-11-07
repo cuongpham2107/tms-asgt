@@ -24,6 +24,9 @@ use Illuminate\Support\Collection;
  */
 class DriverMonthlyKmReportService
 {
+    /** Một lần chờ (đóng + hạ) dài hơn ngưỡng này bị tính là chờ lâu. */
+    public const LONG_WAIT_MINUTES = 120;
+
     /**
      * Phần km của từng tài xế trên từng chuyến trong khoảng [$from, $to].
      *
@@ -160,11 +163,69 @@ class DriverMonthlyKmReportService
 
                 return [
                     ...$row,
+                    'driver_id' => $tripsById[$row['trip_id']]->driver_id,
                     'trip_started_at' => $checkpoints->firstWhere('checkpoint_type', CheckpointType::Started)?->effectiveOccurredAt(),
                     'trip_ended_at' => $checkpoints->where('checkpoint_type', CheckpointType::End)->last()?->effectiveOccurredAt(),
                 ];
             })
             ->values();
+    }
+
+    /**
+     * Đánh giá từng lái xe trên các dòng bảng kê: thời gian chạy (B→C), thời gian chờ (đóng A→B + hạ C→D), tốc độ.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function driverPerformance(Collection $rows): Collection
+    {
+        return $rows
+            ->groupBy('driver_id')
+            ->map(fn (Collection $driverRows, int|string $driverId): array => [
+                'driver_id' => (int) $driverId,
+                'driver_name' => $driverRows->first()['driver_name'],
+                ...$this->performance($driverRows),
+            ])
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return array{trip_count: int, order_count: int, km_total: float, avg_travel: ?int, avg_wait: ?int, wait_percent: int, avg_speed: ?float, long_wait_count: int}
+     */
+    public function performance(Collection $rows): array
+    {
+        // Chuyến không hàng chỉ có km rỗng; dòng có đơn tính km có hàng của đơn (giống trang Bảng kê)
+        $rowKm = fn (array $row): float => (float) ($row['order_id'] === null ? $row['km_empty'] : $row['km_loaded']);
+        $travels = $rows->pluck('time_travel')->reject(fn (?int $minutes): bool => $minutes === null);
+        $waits = $rows->map(fn (array $row): ?int => self::waitMinutes($row))->reject(fn (?int $minutes): bool => $minutes === null);
+        $travelMinutes = $travels->sum();
+        $busyMinutes = $travelMinutes + $waits->sum();
+
+        return [
+            'trip_count' => $rows->pluck('trip_id')->unique()->count(),
+            'order_count' => $rows->whereNotNull('order_id')->count(),
+            'km_total' => round($rows->sum($rowKm), 1),
+            'avg_travel' => $travels->isEmpty() ? null : (int) round($travels->avg()),
+            'avg_wait' => $waits->isEmpty() ? null : (int) round($waits->avg()),
+            'wait_percent' => $busyMinutes > 0 ? (int) round($waits->sum() / $busyMinutes * 100) : 0,
+            'avg_speed' => $travelMinutes > 0 ? round($rows->sum($rowKm) / ($travelMinutes / 60), 1) : null,
+            'long_wait_count' => $waits->filter(fn (int $minutes): bool => $minutes > self::LONG_WAIT_MINUTES)->count(),
+        ];
+    }
+
+    /**
+     * Thời gian chờ của một dòng = TG đóng (A→B) + TG hạ (C→D); null khi chưa có mốc nào.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public static function waitMinutes(array $row): ?int
+    {
+        if ($row['time_loading'] === null && $row['time_unloading'] === null) {
+            return null;
+        }
+
+        return (int) $row['time_loading'] + (int) $row['time_unloading'];
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Enums\OnDutyLocation;
 use App\Enums\TripStatus;
 use App\Services\DriverMonthlyKmReportService;
+use App\Services\Export\TripExcelExportService;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -59,6 +60,26 @@ class DriverMonthlyKmReport extends Page
 
     #[Url]
     public int $statementPerPage = 25;
+
+    /** Bộ lọc tab bảng kê: loại hình ('HHHK' | 'Hàng ngoài' | 'Xe không hàng'), mã khách, mã kho. */
+    #[Url]
+    public string $serviceType = '';
+
+    #[Url]
+    public string $customer = '';
+
+    #[Url]
+    public string $warehouse = '';
+
+    /** Cột xếp hạng lái xe và chiều sắp xếp. */
+    #[Url]
+    public string $rankSort = 'trip_count';
+
+    #[Url]
+    public bool $rankDesc = true;
+
+    /** @var list<string> */
+    public const RANK_COLUMNS = ['trip_count', 'km_total', 'avg_travel', 'avg_wait', 'wait_percent', 'avg_speed', 'long_wait_count'];
 
     public function mount(): void
     {
@@ -241,24 +262,92 @@ class DriverMonthlyKmReport extends Page
     }
 
     /**
-     * Bảng kê chỉ xem trong kỳ: theo lái xe đang chọn, nếu chưa chọn thì lọc theo ô tìm tên / mã NV.
+     * Dòng bảng kê trong kỳ đã qua bộ lọc loại hình / khách / kho / ô tìm lái xe (chưa lọc theo lái xe đang chọn).
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    #[Computed]
+    public function filteredStatementRows(): Collection
+    {
+        $needle = mb_strtolower(trim($this->search));
+
+        return $this->periodStatementRows()
+            ->when($this->serviceType !== '', fn (Collection $rows): Collection => $rows->where('service_type', $this->serviceType))
+            ->when($this->customer !== '', fn (Collection $rows): Collection => $rows->where('customer', $this->customer))
+            ->when($this->warehouse !== '', fn (Collection $rows): Collection => $rows->where('warehouse', $this->warehouse))
+            ->when($needle !== '', fn (Collection $rows): Collection => $rows->filter(fn (array $row): bool => str_contains(mb_strtolower($row['driver_name']), $needle)))
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    #[Computed]
+    public function periodStatementRows(): Collection
+    {
+        [$from, $to] = $this->periodRange();
+
+        return app(DriverMonthlyKmReportService::class)->statementRows($from, $to);
+    }
+
+    /**
+     * Dòng bảng kê hiển thị ở bảng chuyến: thêm lọc theo lái xe đang chọn.
      *
      * @return Collection<int, array<string, mixed>>
      */
     #[Computed]
     public function statementRows(): Collection
     {
-        [$from, $to] = $this->periodRange();
-        $rows = app(DriverMonthlyKmReportService::class)->statementRows($from, $to, $this->driverId);
-        $needle = mb_strtolower(trim($this->search));
+        return $this->driverId === null
+            ? $this->filteredStatementRows()
+            : $this->filteredStatementRows()->where('driver_id', $this->driverId)->values();
+    }
 
-        if ($this->driverId !== null || $needle === '') {
-            return $rows;
-        }
+    /**
+     * @return array{serviceTypes: list<string>, customers: list<string>, warehouses: list<string>, drivers: array<int, string>}
+     */
+    #[Computed]
+    public function statementFilterOptions(): array
+    {
+        $rows = $this->periodStatementRows();
+        $distinct = fn (string $key): array => $rows->pluck($key)->filter()->unique()->sort()->values()->all();
 
-        return $rows
-            ->filter(fn (array $row): bool => str_contains(mb_strtolower($row['driver_name']), $needle))
+        return [
+            'serviceTypes' => ['HHHK', 'Hàng ngoài', 'Xe không hàng'],
+            'customers' => $distinct('customer'),
+            'warehouses' => $distinct('warehouse'),
+            'drivers' => $rows->pluck('driver_name', 'driver_id')->filter()->sort()->all(),
+        ];
+    }
+
+    /**
+     * Xếp hạng lái xe theo cột đang chọn; lái xe thiếu số liệu cột đó xếp cuối.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    #[Computed]
+    public function driverRanking(): Collection
+    {
+        $column = in_array($this->rankSort, self::RANK_COLUMNS, true) ? $this->rankSort : 'trip_count';
+        $ranking = app(DriverMonthlyKmReportService::class)->driverPerformance($this->filteredStatementRows());
+
+        [$withValue, $withoutValue] = $ranking->partition(fn (array $row): bool => $row[$column] !== null);
+
+        return $withValue
+            ->sortBy($column, SORT_REGULAR, $this->rankDesc)
+            ->concat($withoutValue)
             ->values();
+    }
+
+    /**
+     * Số liệu chung của các dòng đang lọc, làm mốc so sánh cho từng lái xe.
+     *
+     * @return array<string, mixed>
+     */
+    #[Computed]
+    public function fleetPerformance(): array
+    {
+        return app(DriverMonthlyKmReportService::class)->performance($this->filteredStatementRows());
     }
 
     /**
@@ -273,19 +362,32 @@ class DriverMonthlyKmReport extends Page
         return new LengthAwarePaginator($rows->forPage($this->getPage(), $perPage)->values(), $rows->count(), $perPage, $this->getPage());
     }
 
-    public function updatedTab(): void
+    public function sortRanking(string $column): void
     {
+        if (! in_array($column, self::RANK_COLUMNS, true)) {
+            return;
+        }
+
+        $this->rankDesc = $this->rankSort === $column ? ! $this->rankDesc : true;
+        $this->rankSort = $column;
+    }
+
+    public function resetStatementFilters(): void
+    {
+        $this->reset('serviceType', 'customer', 'warehouse', 'driverId', 'search');
         $this->resetPage();
     }
 
-    public function updatedSearch(): void
+    public function updated(string $property): void
     {
-        $this->resetPage();
+        if (in_array($property, ['tab', 'search', 'statementPerPage', 'serviceType', 'customer', 'warehouse', 'driverId'], true)) {
+            $this->resetPage();
+        }
     }
 
-    public function updatedStatementPerPage(): void
+    public static function formatMinutes(?int $minutes): string
     {
-        $this->resetPage();
+        return $minutes === null ? '—' : app(TripExcelExportService::class)->formatDuration($minutes);
     }
 
     public function selectDriver(int $driverId): void
@@ -322,6 +424,6 @@ class DriverMonthlyKmReport extends Page
         $this->period = $period;
         $this->date = $anchor->toDateString();
         $this->resetPage();
-        unset($this->tripLines, $this->allDriverRows, $this->driverRows, $this->driverGroups, $this->totals, $this->selectedTrips, $this->statementRows, $this->statementPage);
+        unset($this->tripLines, $this->allDriverRows, $this->driverRows, $this->driverGroups, $this->totals, $this->selectedTrips, $this->statementRows, $this->statementPage, $this->periodStatementRows, $this->filteredStatementRows, $this->statementFilterOptions, $this->driverRanking, $this->fleetPerformance);
     }
 }
