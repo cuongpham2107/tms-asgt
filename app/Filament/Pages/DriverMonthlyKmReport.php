@@ -22,9 +22,9 @@ class DriverMonthlyKmReport extends Page
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-truck';
 
-    protected static ?string $navigationLabel = 'Thống kê tài xế';
+    protected static ?string $navigationLabel = 'Báo cáo tài xế';
 
-    protected static ?string $title = 'Tổng hợp chuyến & km tài xế';
+    protected static ?string $title = 'Báo cáo chuyến, km & bảng kê tài xế';
 
     protected static ?int $navigationSort = 5;
 
@@ -49,10 +49,18 @@ class DriverMonthlyKmReport extends Page
     #[Url]
     public string $search = '';
 
+    /** Tab đang xem: 'summary' (tổng hợp km) hoặc 'statement' (bảng kê chỉ xem, không có tiền). */
+    #[Url]
+    public string $tab = 'summary';
+
     public function mount(): void
     {
         if (! array_key_exists($this->period, self::PERIODS)) {
             $this->period = 'month';
+        }
+
+        if (! in_array($this->tab, ['summary', 'statement'], true)) {
+            $this->tab = 'summary';
         }
 
         if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->date)) {
@@ -225,6 +233,27 @@ class DriverMonthlyKmReport extends Page
             : $this->tripLines()->where('driver_id', $this->driverId)->values();
     }
 
+    /**
+     * Bảng kê chỉ xem trong kỳ: theo lái xe đang chọn, nếu chưa chọn thì lọc theo ô tìm tên / mã NV.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    #[Computed]
+    public function statementRows(): Collection
+    {
+        [$from, $to] = $this->periodRange();
+        $rows = app(DriverMonthlyKmReportService::class)->statementRows($from, $to, $this->driverId);
+        $needle = mb_strtolower(trim($this->search));
+
+        if ($this->driverId !== null || $needle === '') {
+            return $rows;
+        }
+
+        return $rows
+            ->filter(fn (array $row): bool => str_contains(mb_strtolower($row['driver_name']), $needle))
+            ->values();
+    }
+
     public function selectDriver(int $driverId): void
     {
         $this->driverId = $this->driverId === $driverId ? null : $driverId;
@@ -257,6 +286,6 @@ class DriverMonthlyKmReport extends Page
     {
         $this->period = $period;
         $this->date = $anchor->toDateString();
-        unset($this->tripLines, $this->allDriverRows, $this->driverRows, $this->driverGroups, $this->totals, $this->selectedTrips);
+        unset($this->tripLines, $this->allDriverRows, $this->driverRows, $this->driverGroups, $this->totals, $this->selectedTrips, $this->statementRows);
     }
 }

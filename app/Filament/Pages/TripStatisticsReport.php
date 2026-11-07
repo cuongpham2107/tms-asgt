@@ -305,7 +305,7 @@ class TripStatisticsReport extends Page
     }
 
     /**
-     * Cùng bố cục với các page Thống kê tài xế / Kiểm soát xe: khoảng thời gian và công cụ nằm ở header.
+     * Cùng bố cục với các page Báo cáo tài xế / Kiểm soát xe: khoảng thời gian và công cụ nằm ở header.
      */
     protected function getHeaderActions(): array
     {

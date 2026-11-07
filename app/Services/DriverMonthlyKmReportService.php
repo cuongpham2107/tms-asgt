@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\CheckpointType;
 use App\Enums\OnDutyLocation;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
@@ -9,6 +10,7 @@ use App\Models\DriverShift;
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\User;
+use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -119,6 +121,50 @@ class DriverMonthlyKmReportService
     public function driverRows(Carbon $from, Carbon $to): Collection
     {
         return $this->summarize($this->tripLines($from, $to));
+    }
+
+    /**
+     * Dòng bảng kê chỉ xem (không có cước/phí) của các chuyến hoàn thành trong kỳ, cùng nguồn với trang Bảng kê,
+     * kèm giờ bắt đầu / kết thúc chuyến lấy từ checkpoint started / end.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function statementRows(Carbon $from, Carbon $to, ?int $driverId = null): Collection
+    {
+        $trips = Trip::query()
+            ->with([
+                'vehicle',
+                'driver',
+                'orders.customer',
+                'orders.area',
+                'orders.pickupLocation',
+                'orders.deliveryPoints.location',
+                'orders.tripCheckpoints',
+                'checkpoints',
+                'startLocation',
+                'endLocation',
+            ])
+            ->where('status', TripStatus::Completed)
+            ->when($driverId !== null, fn (Builder $q): Builder => $q->where('driver_id', $driverId))
+            ->where(fn (Builder $q): Builder => $q
+                ->whereBetween('started_at', [$from, $to])
+                ->orWhere(fn (Builder $o): Builder => $o->whereNull('started_at')->whereBetween('created_at', [$from, $to])))
+            ->orderBy('started_at')
+            ->get();
+
+        $tripsById = $trips->keyBy('id');
+
+        return app(TripExcelExportService::class)->getTripSummaryRows($trips)
+            ->map(function (array $row) use ($tripsById): array {
+                $checkpoints = $tripsById[$row['trip_id']]->checkpoints;
+
+                return [
+                    ...$row,
+                    'trip_started_at' => $checkpoints->firstWhere('checkpoint_type', CheckpointType::Started)?->effectiveOccurredAt(),
+                    'trip_ended_at' => $checkpoints->where('checkpoint_type', CheckpointType::End)->last()?->effectiveOccurredAt(),
+                ];
+            })
+            ->values();
     }
 
     /**

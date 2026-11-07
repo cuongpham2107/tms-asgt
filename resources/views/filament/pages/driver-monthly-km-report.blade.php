@@ -1,9 +1,5 @@
 <x-filament-panels::page>
     @php
-        $totals = $this->totals;
-        $groups = $this->driverGroups;
-        $selectedTrips = $this->selectedTrips;
-        $selectedDriver = $this->allDriverRows->firstWhere('driver_id', $this->driverId);
         $navy = 'background-color: rgb(30 58 95 / var(--tw-bg-opacity, 1));';
         $weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
     @endphp
@@ -32,6 +28,25 @@
                 />
             @endif
         </div>
+
+        <x-filament::tabs>
+            <x-filament::tabs.item :active="$tab === 'summary'" wire:click="$set('tab', 'summary')" icon="heroicon-m-chart-bar">
+                Tổng hợp km
+            </x-filament::tabs.item>
+            <x-filament::tabs.item :active="$tab === 'statement'" wire:click="$set('tab', 'statement')" icon="heroicon-m-document-text">
+                Bảng kê chuyến
+            </x-filament::tabs.item>
+        </x-filament::tabs>
+
+        @if ($tab === 'statement')
+            @include('filament.pages.partials.driver-monthly-km-statement', ['navy' => $navy])
+        @else
+        @php
+            $totals = $this->totals;
+            $groups = $this->driverGroups;
+            $selectedTrips = $this->selectedTrips;
+            $selectedDriver = $this->allDriverRows->firstWhere('driver_id', $this->driverId);
+        @endphp
 
         <div class="grid grid-cols-1 items-start gap-3 xl:grid-cols-5">
             {{-- Bảng tổng hợp theo lái xe --}}
@@ -308,5 +323,6 @@
                 @endif
             </div>
         </div>
+        @endif
     </div>
 </x-filament-panels::page>

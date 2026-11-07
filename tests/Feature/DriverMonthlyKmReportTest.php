@@ -289,3 +289,32 @@ test('page lists drivers and shows the trips of the selected driver', function (
         ->call('selectDriver', $this->driverA->id)
         ->assertSee([$trip->trip_code, '123.0', '100.0', '81% có hàng', '1 chuyến (1 không hàng)', 'Không hàng']);
 });
+
+test('statement rows list completed trips with start and end times from checkpoints and no charge data', function () {
+    $trip = monthlySwapTrip($this);
+    monthlyTrip($this, $this->driverA, '2026-10-03 08:00', 10, 0);
+    monthlyTrip($this, $this->driverA, '2026-10-04 08:00', 10, 0, TripStatus::Cancelled);
+    monthlyTrip($this, $this->driverA, '2026-11-02 08:00', 10, 0);
+
+    $service = app(DriverMonthlyKmReportService::class);
+    $rows = $service->statementRows($this->month, $this->month->copy()->endOfMonth());
+    $row = $rows->firstWhere('trip_id', $trip->id);
+
+    expect($rows)->toHaveCount(2)
+        ->and($row['code'])->toBe('ORD-MON')
+        ->and($row['trip_started_at']->format('Y-m-d H:i'))->toBe('2026-10-15 08:00')
+        ->and($row['trip_ended_at']->format('Y-m-d H:i'))->toBe('2026-10-15 09:40')
+        ->and(array_keys($row))->not->toContain('charge', 'total', 'base_price')
+        ->and($service->statementRows($this->month, $this->month->copy()->endOfMonth(), $this->driverB->id)->pluck('trip_id')->all())->toBe([$trip->id]);
+});
+
+test('page statement tab shows the read-only trip list of the period', function () {
+    $this->actingAs($this->driverA);
+    monthlySwapTrip($this);
+
+    Livewire::withQueryParams(['period' => 'month', 'date' => '2026-10-15', 'tab' => 'statement'])
+        ->test(DriverMonthlyKmReport::class)
+        ->assertSuccessful()
+        ->assertSee(['Bảng kê chuyến', 'ORD-MON', 'Bắt đầu chuyến', '08:00 15/10', '09:40 15/10'])
+        ->assertDontSee(['Cước', 'Tổng tiền']);
+});
