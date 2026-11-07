@@ -11,13 +11,17 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
+use Livewire\WithPagination;
 use UnitEnum;
 
 class DriverMonthlyKmReport extends Page
 {
+    use WithPagination;
+
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-truck';
@@ -52,6 +56,9 @@ class DriverMonthlyKmReport extends Page
     /** Tab đang xem: 'summary' (tổng hợp km) hoặc 'statement' (bảng kê chỉ xem, không có tiền). */
     #[Url]
     public string $tab = 'summary';
+
+    #[Url]
+    public int $statementPerPage = 25;
 
     public function mount(): void
     {
@@ -254,8 +261,36 @@ class DriverMonthlyKmReport extends Page
             ->values();
     }
 
+    /**
+     * @return LengthAwarePaginator<int, array<string, mixed>>
+     */
+    #[Computed]
+    public function statementPage(): LengthAwarePaginator
+    {
+        $rows = $this->statementRows();
+        $perPage = in_array($this->statementPerPage, [25, 50, 100], true) ? $this->statementPerPage : 25;
+
+        return new LengthAwarePaginator($rows->forPage($this->getPage(), $perPage)->values(), $rows->count(), $perPage, $this->getPage());
+    }
+
+    public function updatedTab(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedStatementPerPage(): void
+    {
+        $this->resetPage();
+    }
+
     public function selectDriver(int $driverId): void
     {
+        $this->resetPage();
         $this->driverId = $this->driverId === $driverId ? null : $driverId;
     }
 
@@ -286,6 +321,7 @@ class DriverMonthlyKmReport extends Page
     {
         $this->period = $period;
         $this->date = $anchor->toDateString();
-        unset($this->tripLines, $this->allDriverRows, $this->driverRows, $this->driverGroups, $this->totals, $this->selectedTrips, $this->statementRows);
+        $this->resetPage();
+        unset($this->tripLines, $this->allDriverRows, $this->driverRows, $this->driverGroups, $this->totals, $this->selectedTrips, $this->statementRows, $this->statementPage);
     }
 }

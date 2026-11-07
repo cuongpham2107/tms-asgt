@@ -318,3 +318,17 @@ test('page statement tab shows the read-only trip list of the period', function 
         ->assertSee(['Bảng kê chuyến', 'ORD-MON', 'Bắt đầu chuyến', '08:00 15/10', '09:40 15/10'])
         ->assertDontSee(['Cước', 'Tổng tiền']);
 });
+
+test('page statement tab paginates the trip list', function () {
+    $this->actingAs($this->driverA);
+    foreach (range(1, 26) as $day) {
+        monthlyTrip($this, $this->driverA, sprintf('2026-10-%02d 08:00', $day), 10, 0);
+    }
+    $last = Trip::orderByDesc('started_at')->first();
+
+    Livewire::withQueryParams(['period' => 'month', 'date' => '2026-10-15', 'tab' => 'statement'])
+        ->test(DriverMonthlyKmReport::class)
+        ->assertDontSee($last->trip_code)
+        ->call('nextPage')
+        ->assertSee($last->trip_code);
+});

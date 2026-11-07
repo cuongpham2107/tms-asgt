@@ -1,6 +1,7 @@
 {{-- Bảng kê chuyến chỉ xem: cùng dữ liệu trang Bảng kê nhưng bỏ toàn bộ cước/phí, thêm giờ bắt đầu / kết thúc chuyến --}}
 @php
-    $rows = $this->statementRows;
+    $paginator = $this->statementPage;
+    $rows = collect($paginator->items());
     $time = fn ($value): ?string => $value ? \Carbon\Carbon::parse($value)->format('H:i d/m') : null;
     $duration = fn (?int $minutes): string => $minutes === null ? '—' : app(\App\Services\Export\TripExcelExportService::class)->formatDuration($minutes);
     $num = fn ($value, int $decimals = 1): string => (float) $value > 0 ? number_format((float) $value, $decimals) : '';
@@ -40,7 +41,7 @@
                         'bg-gray-50/40 dark:bg-white/[0.015]' => $index % 2 !== 0,
                     ])
                 >
-                    <td class="border-r border-gray-100 px-2 py-1.5 text-center text-gray-500 dark:border-white/5">{{ $index + 1 }}</td>
+                    <td class="border-r border-gray-100 px-2 py-1.5 text-center text-gray-500 dark:border-white/5">{{ $paginator->firstItem() + $index }}</td>
                     <td class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 dark:border-white/5">{{ filled($row['date']) ? \Carbon\Carbon::parse($row['date'])->format('d/m/Y') : '—' }}</td>
                     <td class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 font-semibold text-gray-900 dark:border-white/5 dark:text-gray-100">{{ $row['code'] }}</td>
                     <td class="whitespace-nowrap border-r border-gray-100 px-2 py-1.5 dark:border-white/5">{{ $row['service_type'] }}</td>
@@ -73,3 +74,11 @@
         </tbody>
     </table>
 </div>
+
+@if ($paginator->total() > 0)
+    <x-filament::pagination
+        :paginator="$paginator"
+        :page-options="[25, 50, 100]"
+        current-page-option-property="statementPerPage"
+    />
+@endif
