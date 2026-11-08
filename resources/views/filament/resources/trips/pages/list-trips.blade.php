@@ -56,12 +56,12 @@
         class="space-y-3"
     >
         {{-- Toolbar: Toggle Filters Button + Date Range + Search --}}
-        <div class="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
-            <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+        <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 sm:gap-3">
+            <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto shrink-0">
                 <button
                     type="button"
                     x-on:click="isFiltersOpen = !isFiltersOpen"
-                    class="order-1 sm:order-none toolbar-toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-xs transition cursor-pointer shrink-0"
+                    class="order-1 sm:order-none toolbar-toggle-btn inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-semibold shadow-xs transition cursor-pointer shrink-0"
                 >
                     <x-filament::icon icon="heroicon-o-funnel" class="h-4 w-4 text-primary-500" />
                     <span>Bộ lọc</span>
@@ -72,7 +72,7 @@
                     />
                 </button>
 
-                <div class="order-2 sm:order-none w-full sm:w-[280px] lg:w-[320px]">
+                <div class="order-2 sm:order-none w-full sm:w-[260px] lg:w-[280px] shrink-0">
                     {{ $this->dateRangeForm }}
                 </div>
 
@@ -88,7 +88,7 @@
                 </x-filament::button>
             </div>
 
-            <div class="w-full sm:w-64 lg:w-72 xl:w-80">
+            <div class="w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-xs lg:max-w-sm">
                 {{ $this->searchForm }}
             </div>
         </div>
