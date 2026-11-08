@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Enums\OnDutyLocation;
 use App\Enums\TripStatus;
 use App\Filament\Pages\DriverMonthlyKmReport;
+use App\Filament\Traits\HasTableLoadingSkeleton;
 use App\Services\DriverMonthlyKmReportService;
 use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
@@ -22,15 +23,21 @@ use Livewire\Attributes\Renderless;
 class DriverMonthlyKmTable extends Widget
 {
     use HasJsRenderer;
-
-    /** Chiều cao khung chờ trong lúc widget tải sau trang (defer), tránh giật bố cục. */
-    protected ?string $placeholderHeight = '28rem';
+    use HasTableLoadingSkeleton;
 
     protected int|string|array $columnSpan = 'full';
 
     public string $period = 'month';
 
     public string $date = '';
+
+    /**
+     * @return array<int, string>
+     */
+    protected function getSkeletonColumns(): array
+    {
+        return ['Điểm trực', 'Tên lái xe', 'Mã NV', 'Chuyến', 'Chuyến KH', 'Km CH', 'Km KH', 'Tổng km', '% có hàng'];
+    }
 
     public function getRenderer(): string
     {

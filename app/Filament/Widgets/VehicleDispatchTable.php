@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Enums\TripStatus;
 use App\Filament\Pages\VehicleDispatchBoard;
+use App\Filament\Traits\HasTableLoadingSkeleton;
 use App\Filament\Traits\HasVehicleDispatchRows;
 use App\Models\Vehicle;
 use Filament\Widgets\Concerns\HasJsRenderer;
@@ -18,10 +19,15 @@ use Livewire\Attributes\Reactive;
 class VehicleDispatchTable extends Widget
 {
     use HasJsRenderer;
+    use HasTableLoadingSkeleton;
     use HasVehicleDispatchRows;
 
-    /** Chiều cao khung chờ trong lúc widget tải sau trang (defer), tránh giật bố cục. */
-    protected ?string $placeholderHeight = '28rem';
+    /** @var array<int, string> */
+    private const COLUMNS = [
+        'Địa điểm', 'HT', 'BSX', 'Phân loại', 'Loại đơn', 'Trạng thái', 'Điểm đi', 'Điểm đến',
+        'Xe chờ', 'Vị trí thực tế trên GPS', 'Tốc độ', 'Status', 'Chuyến', 'Đơn chờ', 'KM over',
+        'Tên lái xe', 'Trực', 'Ca',
+    ];
 
     protected ?string $heading = 'Bảng kiểm soát tình trạng xe';
 
@@ -51,6 +57,14 @@ class VehicleDispatchTable extends Widget
     #[Reactive]
     public int $dataVersion = 0;
 
+    /**
+     * @return array<int, string>
+     */
+    protected function getSkeletonColumns(): array
+    {
+        return self::COLUMNS;
+    }
+
     public function getRenderer(): string
     {
         return Vite::asset('resources/js/filament/widgets/vehicle-dispatch-table.tsx');
@@ -73,11 +87,7 @@ class VehicleDispatchTable extends Widget
 
         return [
             'title' => 'KIỂM SOÁT TÌNH TRẠNG XE 🚛',
-            'columns' => [
-                'Địa điểm', 'HT', 'BSX', 'Phân loại', 'Loại đơn', 'Trạng thái', 'Điểm đi', 'Điểm đến',
-                'Xe chờ', 'Vị trí thực tế trên GPS', 'Tốc độ', 'Status', 'Chuyến', 'Đơn chờ', 'KM over',
-                'Tên lái xe', 'Trực', 'Ca',
-            ],
+            'columns' => self::COLUMNS,
             'groups' => $groups,
             'filters' => ['search' => (string) $this->searchQuery],
             'sort' => ['by' => $this->sortBy, 'direction' => $this->sortDirection],

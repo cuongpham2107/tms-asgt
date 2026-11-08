@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Traits\HasTableLoadingSkeleton;
 use App\Filament\Traits\HasTripStatistics;
 use Filament\Widgets\Concerns\HasJsRenderer;
 use Filament\Widgets\Widget;
@@ -15,10 +16,8 @@ use Livewire\Attributes\Reactive;
 class TripStatisticsTable extends Widget
 {
     use HasJsRenderer;
+    use HasTableLoadingSkeleton;
     use HasTripStatistics;
-
-    /** Chiều cao khung chờ trong lúc widget tải sau trang (defer), tránh giật bố cục. */
-    protected ?string $placeholderHeight = '28rem';
 
     protected ?string $heading = 'Bảng thống kê chuyến & cước';
 
@@ -59,6 +58,14 @@ class TripStatisticsTable extends Widget
     /** Page tăng số này sau mỗi lần ghi dữ liệu để widget vẽ lại bảng. */
     #[Reactive]
     public int $dataVersion = 0;
+
+    /**
+     * @return array<int, string>
+     */
+    protected function getSkeletonColumns(): array
+    {
+        return ['STT', 'Mã đơn hàng', 'BSX', 'Ngày', 'Hành trình', 'TG đóng hàng (A)', 'TG xe chạy (B)', 'TG đến (C)', 'TG hạ hàng (D)', 'Khách hàng', 'Họ tên lái xe', 'Km có hàng'];
+    }
 
     public function getRenderer(): string
     {
