@@ -77,8 +77,7 @@ interface PageApi {
 interface WidgetMethods {
     readonly $parent: PageApi
     loadReport(period: Period, date: string): Promise<Configuration>
-    loadStatement(period: Period, date: string): Promise<StatementRow[]>
-    loadEvaluation(period: Period, date: string): Promise<Evaluation>
+    loadDetails(period: Period, date: string): Promise<{ statement: StatementRow[]; evaluation: Evaluation }>
 }
 
 type Wire = JsWidgetUtilities<WidgetMethods>['$wire']
@@ -507,6 +506,46 @@ const Pagination = ({ page, lastPage, total, perPage, onPage, onPerPage }: {
     )
 }
 
+/** Độ rộng thanh skeleton thay đổi theo ô để trông giống dữ liệu thật thay vì một khối đều. */
+const skeletonWidth = (row: number, column: number): string => `${45 + ((row * 7 + column * 13) % 50)}%`
+
+const SkeletonRows = ({ columns, rows = 10 }: { columns: number; rows?: number }) => (
+    <tbody className="divide-y divide-gray-100 dark:divide-white/5" aria-busy="true">
+        {Array.from({ length: rows }, (_, row) => (
+            <tr key={row} className={zebra(row)}>
+                {Array.from({ length: columns }, (_, column) => (
+                    <td key={column} className="border-r border-gray-100 px-2 py-2.5 last:border-r-0 dark:border-white/5">
+                        <div className="h-2.5 animate-pulse rounded bg-gray-200 motion-reduce:animate-none dark:bg-white/10" style={{ width: skeletonWidth(row, column) }} />
+                    </td>
+                ))}
+            </tr>
+        ))}
+    </tbody>
+)
+
+/** Khung bảng đang tải: giữ đầu bảng navy như bảng thật để bố cục không nhảy khi dữ liệu về. */
+const SkeletonCard = ({ title, columns, rows = 12, className = '' }: { title: string; columns: number; rows?: number; className?: string }) => (
+    <div className={`${card} ${className}`} role="status" aria-label="Đang tải dữ liệu">
+        <table className="dispatch-table w-full border-collapse font-sans text-xs">
+            <thead>
+                <tr style={NAVY}>
+                    <th colSpan={columns} className="border-b border-white/10 px-4 py-2.5 text-center text-sm font-bold uppercase tracking-wider text-white sm:text-base">
+                        {title}
+                    </th>
+                </tr>
+                <tr style={NAVY}>
+                    {Array.from({ length: columns }, (_, column) => (
+                        <th key={column} className={th}>
+                            <div className="mx-auto h-2.5 w-3/5 rounded bg-white/20" />
+                        </th>
+                    ))}
+                </tr>
+            </thead>
+            <SkeletonRows columns={columns} rows={rows} />
+        </table>
+    </div>
+)
+
 const Statement = ({ rows, loading, error, periodLabel, perPage, onPerPage, onOpenTrip }: {
     rows: StatementRow[]
     loading: boolean
@@ -543,7 +582,10 @@ const Statement = ({ rows, loading, error, periodLabel, perPage, onPerPage, onOp
                         </tr>
                     </thead>
 
-                    <tbody className={`divide-y divide-gray-100 transition-opacity dark:divide-white/5 ${loading && rows.length > 0 ? 'opacity-50' : ''}`}>
+                    {loading ? (
+                        <SkeletonRows columns={STATEMENT_HEADERS.length} />
+                    ) : (
+                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                         {visible.length === 0 && (
                             <tr>
                                 <td colSpan={STATEMENT_HEADERS.length} className={`px-3 py-8 text-center ${error ? 'text-rose-600' : 'text-gray-500'}`}>
@@ -584,10 +626,11 @@ const Statement = ({ rows, loading, error, periodLabel, perPage, onPerPage, onOp
                             </tr>
                         ))}
                     </tbody>
+                    )}
                 </table>
             </div>
 
-            {rows.length > 0 && <Pagination page={current} lastPage={lastPage} total={rows.length} perPage={perPage} onPage={setPage} onPerPage={onPerPage} />}
+            {!loading && rows.length > 0 && <Pagination page={current} lastPage={lastPage} total={rows.length} perPage={perPage} onPage={setPage} onPerPage={onPerPage} />}
         </>
     )
 }
@@ -1067,8 +1110,10 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
         }
     }
 
-    const statement = usePeriodData(tab === 'statement', periodKey, () => wire.loadStatement(report.period, report.date))
-    const evaluation = usePeriodData(tab === 'evaluation', periodKey, () => wire.loadEvaluation(report.period, report.date))
+    // Bảng kê + đánh giá tải chung một lần, ngầm ngay khi có số liệu tổng hợp (không đợi bấm tab).
+    const details = usePeriodData(pending === null, periodKey, () => wire.loadDetails(report.period, report.date))
+    const statement = { data: details.data?.statement ?? null, loading: details.loading, error: details.error }
+    const evaluation = { data: details.data?.evaluation ?? null, loading: details.loading, error: details.error }
 
     const drivers = useMemo(
         () => (needle === '' ? report.drivers : report.drivers.filter((driver) => normalize(`${driver.name} ${driver.code ?? ''}`).includes(needle))),
@@ -1095,7 +1140,11 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
     const selectedEvaluationTrips = useMemo(() => (evaluation.data?.trips ?? []).filter((trip) => trip.driverId === driverId), [evaluation.data, driverId])
 
     const toggleDriver = (id: number) => setDriverId((current) => (current === id ? null : id))
-    const openTrip = (tripId: number) => void wire.$parent.openTripTimeline(tripId)
+    // Mở popup ngay (skeleton trong popup) rồi mới gọi server lấy nội dung hành trình.
+    const openTrip = (tripId: number) => {
+        window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: 'driver-trip-timeline' } }))
+        void wire.$parent.openTripTimeline(tripId)
+    }
     const isLoading = pending !== null
 
     const tabButton = (key: Tab, label: string, icon: string) => (
@@ -1144,7 +1193,7 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                 {tabButton('evaluation', 'Đánh giá', ICONS.clock)}
             </div>
 
-            <div className={`space-y-3 transition-opacity ${isLoading ? 'pointer-events-none opacity-50' : ''}`} aria-busy={isLoading}>
+            <div className="space-y-3" aria-busy={isLoading || details.loading}>
                 {tab === 'evaluation' ? (
                     <>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -1154,9 +1203,14 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                             không tính, đếm ở cột <span className="font-semibold">Cần KT</span>.
                             {evaluation.error && <span className="ms-2 font-medium text-rose-600 dark:text-rose-400">{evaluation.error}</span>}
                         </p>
-                        <div className={`grid grid-cols-1 items-start gap-3 transition-opacity xl:grid-cols-5 ${evaluation.loading && evaluation.data ? 'opacity-50' : ''}`}>
-                            {evaluation.data === null ? (
-                                <div className={`${card} px-3 py-8 text-center text-gray-500 xl:col-span-5`}>{evaluation.error ?? 'Đang tính đánh giá…'}</div>
+                        <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-5">
+                            {evaluation.error && evaluation.data === null ? (
+                                <div className={`${card} px-3 py-8 text-center text-rose-600 xl:col-span-5`}>{evaluation.error}</div>
+                            ) : isLoading || evaluation.loading || evaluation.data === null ? (
+                                <>
+                                    <SkeletonCard title={`Đánh giá lái xe · ${report.periodLabel}`} columns={8} className="xl:col-span-3" />
+                                    <SkeletonCard title="Chi tiết chuyến" columns={5} rows={6} className="xl:col-span-2" />
+                                </>
                             ) : (
                                 <>
                                     <EvaluationTable drivers={evaluationDrivers} codes={driverCodes} periodLabel={report.periodLabel} selectedId={driverId} onSelect={toggleDriver} />
@@ -1167,6 +1221,13 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                     </>
                 ) : tab === 'summary' ? (
                     <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-5">
+                        {isLoading ? (
+                            <>
+                                <SkeletonCard title="Thống kê chuyến & km lái xe" columns={9} className="xl:col-span-3" />
+                                <SkeletonCard title="Chi tiết chuyến" columns={6} rows={6} className="xl:col-span-2" />
+                            </>
+                        ) : (
+                        <>
                         <DriverTable
                             drivers={drivers}
                             totals={report.totals}
@@ -1177,6 +1238,8 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                             onSelect={toggleDriver}
                         />
                         <DriverTrips driver={selectedDriver} trips={selectedTrips} periodLabel={report.periodLabel} onClose={() => setDriverId(null)} onOpenTrip={openTrip} />
+                        </>
+                        )}
                     </div>
                 ) : (
                     <>
@@ -1191,7 +1254,7 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                         )}
                         <Statement
                             rows={statementRows}
-                            loading={statement.loading}
+                            loading={isLoading || statement.loading}
                             error={statement.error}
                             periodLabel={report.periodLabel}
                             perPage={perPage}

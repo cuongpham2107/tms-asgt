@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +19,17 @@ class OsrmService
     private const OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/driving/';
 
     private const CACHE_TTL_MINUTES = 30;
+
+    /** Số request OSRM chạy song song tối đa khi làm nóng cache (tránh dội máy chủ OSRM công cộng). */
+    private const POOL_CONCURRENCY = 6;
+
+    /** @var array<string, string> */
+    private const ROUTE_QUERY = [
+        'overview' => 'full',
+        'geometries' => 'geojson',
+        'steps' => 'true',
+        'alternatives' => 'false',
+    ];
 
     /**
      * Lấy route giữa 2 điểm (có waypoints tùy chọn).
@@ -52,50 +66,103 @@ class OsrmService
 
         return Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function () use ($coordsString): array {
             try {
-                $response = Http::timeout(3)
-                    ->connectTimeout(2)
-                    ->get(self::OSRM_BASE_URL.$coordsString, [
-                        'overview' => 'full',
-                        'geometries' => 'geojson',
-                        'steps' => 'true',
-                        'alternatives' => 'false',
-                    ]);
-
-                if (! $response->successful()) {
-                    Log::warning('OSRM routing failed', [
-                        'coords' => $coordsString,
-                        'status' => $response->status(),
-                    ]);
-
-                    return self::error('Không thể tìm tuyến đường. Vui lòng thử lại.', 'OSRM returned status '.$response->status());
-                }
-
-                $data = $response->json();
-
-                if ($data['code'] !== 'Ok' || empty($data['routes'])) {
-                    return self::error('Không tìm thấy tuyến đường giữa 2 điểm này.', $data['code'] ?? 'No route');
-                }
-
-                $route = $data['routes'][0];
-
-                return [
-                    'success' => true,
-                    'data' => [
-                        'distance' => round($route['distance']),
-                        'duration' => round($route['duration']),
-                        'geometry' => $route['geometry'],
-                        'legs' => $route['legs'] ?? [],
-                    ],
-                ];
+                return $this->parseRouteResponse(self::routeRequest()->get(self::OSRM_BASE_URL.$coordsString, self::ROUTE_QUERY), $coordsString);
             } catch (\Throwable $e) {
-                Log::error('OSRM routing exception', [
-                    'coords' => $coordsString,
-                    'error' => $e->getMessage(),
-                ]);
-
-                return self::error('Lỗi kết nối đến dịch vụ định tuyến.', $e->getMessage());
+                return $this->routeException($e, $coordsString);
             }
         });
+    }
+
+    /**
+     * Gọi song song (tối đa POOL_CONCURRENCY) các tuyến 2 điểm chưa có trong cache rồi lưu cache,
+     * để các lần getRoute() sau đó lấy ngay thay vì chờ lần lượt từng request.
+     *
+     * @param  iterable<array{0: float, 1: float, 2: float, 3: float}>  $pairs  [lat1, lng1, lat2, lng2]
+     */
+    public function warmRoutes(iterable $pairs): void
+    {
+        $pending = collect($pairs)
+            ->mapWithKeys(function (array $pair): array {
+                $coordsString = $pair[1].','.$pair[0].';'.$pair[3].','.$pair[2];
+
+                return ['osrm_route_'.md5($coordsString) => $coordsString];
+            })
+            ->reject(fn (string $coordsString, string $cacheKey): bool => Cache::has($cacheKey));
+
+        if ($pending->isEmpty()) {
+            return;
+        }
+
+        $responses = Http::pool(
+            fn (Pool $pool): array => $pending
+                ->map(fn (string $coordsString, string $cacheKey) => $pool->as($cacheKey)
+                    ->timeout(3)
+                    ->connectTimeout(2)
+                    ->get(self::OSRM_BASE_URL.$coordsString, self::ROUTE_QUERY))
+                ->values()
+                ->all(),
+            concurrency: self::POOL_CONCURRENCY,
+        );
+
+        foreach ($pending as $cacheKey => $coordsString) {
+            $response = $responses[$cacheKey] ?? null;
+            $result = $response instanceof Response
+                ? $this->parseRouteResponse($response, $coordsString)
+                : $this->routeException($response instanceof \Throwable ? $response : new \RuntimeException('No response'), $coordsString);
+
+            Cache::put($cacheKey, $result, now()->addMinutes(self::CACHE_TTL_MINUTES));
+        }
+    }
+
+    private static function routeRequest(): PendingRequest
+    {
+        return Http::timeout(3)->connectTimeout(2);
+    }
+
+    /**
+     * @return array{success: bool, data?: array, message?: string, error?: string}
+     */
+    private function parseRouteResponse(Response $response, string $coordsString): array
+    {
+        if (! $response->successful()) {
+            Log::warning('OSRM routing failed', [
+                'coords' => $coordsString,
+                'status' => $response->status(),
+            ]);
+
+            return self::error('Không thể tìm tuyến đường. Vui lòng thử lại.', 'OSRM returned status '.$response->status());
+        }
+
+        $data = $response->json();
+
+        if (($data['code'] ?? null) !== 'Ok' || empty($data['routes'])) {
+            return self::error('Không tìm thấy tuyến đường giữa 2 điểm này.', $data['code'] ?? 'No route');
+        }
+
+        $route = $data['routes'][0];
+
+        return [
+            'success' => true,
+            'data' => [
+                'distance' => round($route['distance']),
+                'duration' => round($route['duration']),
+                'geometry' => $route['geometry'],
+                'legs' => $route['legs'] ?? [],
+            ],
+        ];
+    }
+
+    /**
+     * @return array{success: bool, message: string, error: string}
+     */
+    private function routeException(\Throwable $e, string $coordsString): array
+    {
+        Log::error('OSRM routing exception', [
+            'coords' => $coordsString,
+            'error' => $e->getMessage(),
+        ]);
+
+        return self::error('Lỗi kết nối đến dịch vụ định tuyến.', $e->getMessage());
     }
 
     /**

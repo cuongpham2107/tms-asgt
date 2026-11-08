@@ -325,7 +325,7 @@ test('report widget loads the read-only statement of the period on demand', func
         monthlyTrip($this, $this->driverA, sprintf('2026-10-%02d 10:00', $day), 10, 0);
     }
 
-    $rows = collect(monthlyKmWidget()->instance()->loadStatement('month', '2026-10-15'));
+    $rows = collect(monthlyKmWidget()->instance()->loadDetails('month', '2026-10-15')['statement']);
     $row = $rows->firstWhere('code', 'ORD-MON');
 
     // Cả kỳ trả về một lần, phân trang do React lo.
@@ -394,7 +394,7 @@ test('evaluation compares each driver with the route median and skips implausibl
 test('report widget evaluation lists drivers and their trips of the period', function () {
     monthlySwapTrip($this);
 
-    $evaluation = monthlyKmWidget()->instance()->loadEvaluation('month', '2026-10-15');
+    $evaluation = monthlyKmWidget()->instance()->loadDetails('month', '2026-10-15')['evaluation'];
 
     expect($evaluation['drivers'])->toHaveCount(1)
         ->and($evaluation['drivers'][0])->toMatchArray(['id' => $this->driverB->id, 'trips' => 1, 'flagged' => 0, 'completion' => 100, 'completionDiff' => null])

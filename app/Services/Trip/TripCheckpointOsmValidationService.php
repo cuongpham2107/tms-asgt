@@ -103,6 +103,8 @@ class TripCheckpointOsmValidationService
         $totalDriverKm = 0.0;
         $totalOsmKm = 0.0;
 
+        $this->warmRoadDistances($checkpoints);
+
         /** @var ?TripCheckpoint $prev */
         $prev = null;
 
@@ -387,6 +389,25 @@ class TripCheckpointOsmValidationService
             'message' => sprintf('Bất thường: Lệch +%.1f km (+%.0f%% so với OSM: %.1f km)', $diffKm, $diffPercent, $osmKm),
             'has_gps' => true,
         ];
+    }
+
+    /**
+     * Gọi OSRM song song cho mọi chặng có GPS trước khi duyệt từng chặng, để getRoadDistanceKm() lấy
+     * từ cache thay vì chờ lần lượt (chuyến nhiều mốc từng mất vài giây).
+     *
+     * @param  Collection<int, TripCheckpoint>  $checkpoints
+     */
+    private function warmRoadDistances(Collection $checkpoints): void
+    {
+        $hasGps = fn (TripCheckpoint $checkpoint): bool => abs((float) $checkpoint->gps_lat) > 0.0001 && abs((float) $checkpoint->gps_lng) > 0.0001;
+
+        $pairs = $checkpoints->values()->sliding(2)
+            ->filter(fn (Collection $pair): bool => $hasGps($pair->first()) && $hasGps($pair->last()))
+            ->map(fn (Collection $pair): array => [(float) $pair->first()->gps_lat, (float) $pair->first()->gps_lng, (float) $pair->last()->gps_lat, (float) $pair->last()->gps_lng])
+            ->filter(fn (array $pair): bool => $this->calculateHaversineKm(...$pair) >= 0.05)
+            ->values();
+
+        $this->osrmService->warmRoutes($pairs);
     }
 
     /**

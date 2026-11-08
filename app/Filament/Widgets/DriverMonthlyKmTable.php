@@ -10,13 +10,14 @@ use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
 use Filament\Widgets\Concerns\HasJsRenderer;
 use Filament\Widgets\Widget;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Vite;
 use Livewire\Attributes\Renderless;
 
 /**
  * Thân trang "Báo cáo tài xế" do React vẽ. Lần đầu widget gửi số liệu của kỳ trên URL; sau đó React tự
  * đổi kỳ qua loadReport (không vẽ lại page), tự lo tab, tìm kiếm, chọn lái xe, gập nhóm và phân trang.
- * Bảng kê chuyến nặng hơn nên chỉ tải khi mở tab (loadStatement).
+ * Bảng kê chuyến và đánh giá nặng hơn nên tải sau, ngầm, trong một lần (loadDetails).
  */
 class DriverMonthlyKmTable extends Widget
 {
@@ -118,15 +119,31 @@ class DriverMonthlyKmTable extends Widget
     }
 
     /**
-     * Đánh giá tài xế trong kỳ: thời gian hoàn thành chuyến và thời gian chờ (đóng + hạ), so với TB cùng tuyến.
+     * Bảng kê chuyến và đánh giá tài xế của kỳ trong một lần tải (cùng nguồn statementRows, chỉ tính một lần).
+     * React tải trước ngầm ngay sau khi có số liệu tổng hợp nên mở tab thường đã có sẵn dữ liệu.
      *
-     * @return array{drivers: list<array<string, mixed>>, trips: list<array<string, mixed>>}
+     * @return array{statement: list<array<string, mixed>>, evaluation: array{drivers: list<array<string, mixed>>, trips: list<array<string, mixed>>}}
      */
     #[Renderless]
-    public function loadEvaluation(string $period, string $date): array
+    public function loadDetails(string $period, string $date): array
     {
         $service = app(DriverMonthlyKmReportService::class);
-        $evaluation = $service->evaluate($service->statementRows(...DriverMonthlyKmReport::rangeFor(DriverMonthlyKmReport::normalizePeriod($period), DriverMonthlyKmReport::normalizeDate($date))));
+        $rows = $service->statementRows(...DriverMonthlyKmReport::rangeFor(DriverMonthlyKmReport::normalizePeriod($period), DriverMonthlyKmReport::normalizeDate($date)));
+
+        return [
+            'statement' => $this->statementPayload($rows),
+            'evaluation' => $this->evaluationPayload($service->evaluate($rows)),
+        ];
+    }
+
+    /**
+     * Đánh giá tài xế trong kỳ: thời gian hoàn thành chuyến và thời gian chờ (đóng + hạ), so với chuẩn tuyến.
+     *
+     * @param  array{trips: list<array<string, mixed>>, drivers: list<array<string, mixed>>}  $evaluation
+     * @return array{drivers: list<array<string, mixed>>, trips: list<array<string, mixed>>}
+     */
+    private function evaluationPayload(array $evaluation): array
+    {
         $round = fn (?float $minutes): ?int => $minutes === null ? null : (int) round($minutes);
 
         return [
@@ -169,16 +186,16 @@ class DriverMonthlyKmTable extends Widget
     /**
      * Bảng kê chuyến chỉ xem (không có cước/phí) của cả kỳ; React lọc theo lái xe và phân trang.
      *
+     * @param  Collection<int, array<string, mixed>>  $rows
      * @return list<array<string, mixed>>
      */
-    #[Renderless]
-    public function loadStatement(string $period, string $date): array
+    private function statementPayload(Collection $rows): array
     {
         $export = app(TripExcelExportService::class);
         $time = fn (mixed $value): ?string => $value ? Carbon::parse($value)->format('H:i d/m') : null;
         $duration = fn (?int $minutes): string => $minutes === null ? '—' : $export->formatDuration($minutes);
 
-        return app(DriverMonthlyKmReportService::class)->statementRows(...DriverMonthlyKmReport::rangeFor(DriverMonthlyKmReport::normalizePeriod($period), DriverMonthlyKmReport::normalizeDate($date)))
+        return $rows
             ->map(fn (array $row): array => [
                 'key' => $row['trip_id'].'-'.($row['order_id'] ?? 'trip'),
                 'tripId' => $row['trip_id'],
