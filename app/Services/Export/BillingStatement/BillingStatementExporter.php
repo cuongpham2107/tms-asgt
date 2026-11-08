@@ -77,6 +77,7 @@ class BillingStatementExporter
                 (string) ($rowsByOrder[$order->id]['plate_number'] ?? ''),
             ])
             ->values();
+        [$orders, $sttByOrder] = $this->groupReturnTrips($orders);
 
         $columns = $template['columns'];
         $mappedFeeCodes = collect($columns)
@@ -87,8 +88,8 @@ class BillingStatementExporter
 
         $unmappedFees = [];
         $perDrop = ($template['layout'] ?? 'single') === 'per_drop';
-        $dataRows = $orders->flatMap(function (Order $order, int $index) use ($rowsByOrder, $mappedFeeCodes, $hasRestColumn, $perDrop, &$unmappedFees): array {
-            $values = $this->rowValues($order, $rowsByOrder[$order->id], $index + 1, $mappedFeeCodes, $hasRestColumn);
+        $dataRows = $orders->flatMap(function (Order $order) use ($rowsByOrder, $sttByOrder, $mappedFeeCodes, $hasRestColumn, $perDrop, &$unmappedFees): array {
+            $values = $this->rowValues($order, $rowsByOrder[$order->id], $sttByOrder[$order->id], $mappedFeeCodes, $hasRestColumn);
             array_push($unmappedFees, ...$values['_unmapped']);
 
             return $perDrop ? $this->perDropRows($order, $values) : [$values];
@@ -105,6 +106,37 @@ class BillingStatementExporter
             'order_ids' => $orders->pluck('id')->all(),
             'unmapped_fees' => array_values(array_unique($unmappedFees)),
         ];
+    }
+
+    /**
+     * Đơn quay đầu (có đơn gốc trong cùng bảng kê) xếp ngay sau đơn gốc và dùng chung STT;
+     * đơn gốc không nằm trong bảng kê thì đơn quay đầu đứng riêng như đơn thường.
+     *
+     * @param  Collection<int, Order>  $orders  Đã sắp theo ngày, biển số
+     * @return array{0: Collection<int, Order>, 1: array<int, int>}
+     */
+    private function groupReturnTrips(Collection $orders): array
+    {
+        $byId = $orders->keyBy('id');
+        $position = $orders->pluck('id')->flip();
+        $rootIds = $orders->mapWithKeys(function (Order $order) use ($byId): array {
+            $root = $order;
+            while ($root->parent_order_id !== null && $byId->has($root->parent_order_id) && $root->parent_order_id !== $order->id) {
+                $root = $byId[$root->parent_order_id];
+            }
+
+            return [$order->id => $root->id];
+        });
+
+        $sorted = $orders->sortBy(fn (Order $order): array => [
+            $position[$rootIds[$order->id]],
+            $rootIds[$order->id] === $order->id ? 0 : 1,
+            $position[$order->id],
+        ])->values();
+
+        $sttByRoot = $sorted->pluck('id')->map(fn (int $id): int => $rootIds[$id])->unique()->values()->flip()->map(fn (int $index): int => $index + 1);
+
+        return [$sorted, $rootIds->map(fn (int $rootId): int => $sttByRoot[$rootId])->all()];
     }
 
     /**

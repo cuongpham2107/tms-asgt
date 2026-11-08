@@ -278,3 +278,45 @@ test('data rows grow tall enough for long wrapped addresses', function () {
 
     expect($sheet->getRowDimension(13)->getRowHeight())->toBeGreaterThanOrEqual(33.0);
 });
+
+test('return trip order follows its parent order and shares its stt', function () {
+    $makeOrder = function (string $code, string $date, array $attributes = []): Order {
+        $trip = Trip::create([
+            'trip_code' => "TRIP-{$code}",
+            'vehicle_id' => $this->order->trip->vehicle_id,
+            'driver_id' => $this->user->id,
+            'status' => TripStatus::Completed,
+            'started_at' => Carbon::parse("{$date} 08:00:00"),
+            'completed_at' => Carbon::parse("{$date} 10:00:00"),
+        ]);
+        $order = Order::create([
+            'order_code' => $code,
+            'type' => OrderType::External,
+            'area_id' => $this->order->area_id,
+            'customer_id' => $this->customer->id,
+            'trip_id' => $trip->id,
+            'pickup_location_id' => $this->order->pickup_location_id,
+            'cargo_type' => CargoType::Gcr,
+            'chargeable_weight' => 1.25,
+            'status' => OrderStatus::Sent,
+            'created_by' => $this->user->id,
+            ...$attributes,
+        ]);
+        OrderDeliveryPoint::create(['order_id' => $order->id, 'location_id' => $this->order->deliveryPoints->first()->location_id, 'sequence' => 1]);
+        $order->update(['status' => OrderStatus::Completed]);
+
+        return $order;
+    };
+    $makeOrder('ASG-901', '2026-10-22');
+    $makeOrder('ASG-900-RT', '2026-10-25', ['is_return_trip' => true, 'parent_order_id' => $this->order->id]);
+    $rows = ($this->page)()->instance()->getAllRows();
+
+    $sheet = app(BillingStatementExporter::class)->build($rows, $this->customer, 'ALSB')['spreadsheet']->getActiveSheet();
+
+    // Đơn quay đầu (25/10) đứng ngay dưới đơn gốc (20/10) với cùng STT 1, cước 50%; đơn 22/10 thành STT 2.
+    expect($sheet->getCell('A13')->getValue())->toBe(1)
+        ->and($sheet->getCell('A14')->getValue())->toBe(1)
+        ->and($sheet->getCell('S14')->getValue())->toBe(581_000.0)
+        ->and($sheet->getCell('A15')->getValue())->toBe(2)
+        ->and($sheet->getCell('S15')->getValue())->toBe(1_162_000.0);
+});
