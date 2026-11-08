@@ -101,6 +101,7 @@ test('external tab shows the freight charge of each order', function () {
     $component = ($this->page)()->assertSuccessful();
 
     $config = Livewire::test(TripStatisticsTable::class, [
+        'isReady' => true,
         'startDate' => '2026-10-01',
         'endDate' => '2026-10-31',
         'activeTab' => 'external',

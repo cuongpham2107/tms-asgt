@@ -337,6 +337,7 @@ test('report widget loads the read-only statement of the period on demand', func
 function monthlyKmWidget(): Testable
 {
     return Livewire::test(DriverMonthlyKmTable::class, [
+        'isReady' => true,
         'period' => 'month',
         'date' => '2026-10-15',
     ]);

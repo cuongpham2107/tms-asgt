@@ -643,6 +643,7 @@ test('trip statistics report separates data into 3 tabs and updates counts', fun
 
     // Nhãn tab do widget React vẽ, lấy từ cấu hình gửi xuống
     $tabs = Livewire::test(TripStatisticsTable::class, [
+        'isReady' => true,
         'startDate' => '2026-04-01',
         'endDate' => '2026-04-30',
         'activeTab' => 'empty',
@@ -768,6 +769,7 @@ test('pagination works with the react widget configuration', function () {
     ]);
 
     $pagination = Livewire::test(TripStatisticsTable::class, [
+        'isReady' => true,
         'startDate' => '2026-04-01',
         'endDate' => '2026-04-30',
         'activeTab' => 'empty',
@@ -805,6 +807,7 @@ test('react widget renders the host with escaped configuration', function () {
     ]);
 
     $component = Livewire::test(TripStatisticsTable::class, [
+        'isReady' => true,
         'activeTab' => 'empty',
         'startDate' => '2026-10-01',
         'endDate' => '2026-10-31',
@@ -820,8 +823,8 @@ test('react widget renders the host with escaped configuration', function () {
 });
 
 test('chargeable weight column is hidden on the HHHK tab only', function () {
-    $hhhk = Livewire::test(TripStatisticsTable::class, ['activeTab' => 'HHHK'])->instance()->getRendererConfiguration();
-    $external = Livewire::test(TripStatisticsTable::class, ['activeTab' => 'external'])->instance()->getRendererConfiguration();
+    $hhhk = Livewire::test(TripStatisticsTable::class, ['isReady' => true, 'activeTab' => 'HHHK'])->instance()->getRendererConfiguration();
+    $external = Livewire::test(TripStatisticsTable::class, ['isReady' => true, 'activeTab' => 'external'])->instance()->getRendererConfiguration();
 
     expect($hhhk['showChargeableWeight'])->toBeFalse()
         ->and($external['showChargeableWeight'])->toBeTrue();

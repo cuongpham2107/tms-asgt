@@ -11,7 +11,6 @@
 
     <div class="fi-js-widget-bare">
         @livewire(\App\Filament\Widgets\TripStatisticsTable::class, [
-            'defer' => true,
             'startDate' => $this->startDate,
             'endDate' => $this->endDate,
             'activeTab' => $this->activeTab,

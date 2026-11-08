@@ -77,6 +77,10 @@ class TripStatisticsTable extends Widget
      */
     public function getRendererConfiguration(): array
     {
+        if (! $this->isReady) {
+            return $this->getPendingRendererConfiguration();
+        }
+
         $paginator = $this->getPaginator();
         $tabCounts = $this->getTabCounts();
         $metrics = $this->getSummaryMetrics();
@@ -84,6 +88,7 @@ class TripStatisticsTable extends Widget
         $chargeCounts = $showCharges ? $this->getChargeStatusCounts() : null;
 
         return [
+            'loaded' => true,
             ...$this->getReactTableConfiguration($paginator),
             'filters' => [
                 'activeTab' => $this->activeTab,

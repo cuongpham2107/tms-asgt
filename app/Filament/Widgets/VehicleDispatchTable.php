@@ -75,6 +75,10 @@ class VehicleDispatchTable extends Widget
      */
     public function getRendererConfiguration(): array
     {
+        if (! $this->isReady) {
+            return $this->getPendingRendererConfiguration();
+        }
+
         $groups = collect($this->getGroupedVehicles())
             ->map(fn (array $group): array => [
                 'code' => $group['code'],
@@ -86,6 +90,7 @@ class VehicleDispatchTable extends Widget
             ->all();
 
         return [
+            'loaded' => true,
             'title' => 'KIỂM SOÁT TÌNH TRẠNG XE 🚛',
             'columns' => self::COLUMNS,
             'groups' => $groups,

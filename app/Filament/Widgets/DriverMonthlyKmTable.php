@@ -49,7 +49,14 @@ class DriverMonthlyKmTable extends Widget
      */
     public function getRendererConfiguration(): array
     {
-        return $this->report(DriverMonthlyKmReport::normalizePeriod($this->period), DriverMonthlyKmReport::normalizeDate($this->date));
+        if (! $this->isReady) {
+            return $this->getPendingRendererConfiguration();
+        }
+
+        return [
+            'loaded' => true,
+            ...$this->report(DriverMonthlyKmReport::normalizePeriod($this->period), DriverMonthlyKmReport::normalizeDate($this->date)),
+        ];
     }
 
     /**

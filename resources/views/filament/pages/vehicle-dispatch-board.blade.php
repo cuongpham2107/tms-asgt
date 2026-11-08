@@ -25,7 +25,6 @@
     {{-- Bảng Kiểm soát tình trạng xe do widget React vẽ; page giữ bộ lọc, modal và action --}}
     <div class="fi-js-widget-bare">
         @livewire(\App\Filament\Widgets\VehicleDispatchTable::class, [
-            'defer' => true,
             'searchQuery' => $this->searchQuery,
             'sortBy' => $this->sortBy,
             'sortDirection' => $this->sortDirection,

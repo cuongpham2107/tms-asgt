@@ -1,7 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
-import type { JsWidgetRenderer, JsWidgetUtilities } from '@filament/widgets/js-widget'
+import type { JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities } from '@filament/widgets/js-widget'
+import { type Deferred, requestDataOnce, TableSkeleton } from './table-skeleton'
 
 interface Driver {
     id: number
@@ -1268,13 +1269,31 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
     )
 }
 
-const mountDriverMonthlyKmTable: JsWidgetRenderer<Configuration, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
+const mountDriverMonthlyKmTable: JsWidgetRenderer<Deferred<Configuration>, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
     const root = createRoot(host)
+    const dataRequest = { requested: false }
+    let isReportMounted = false
 
-    // Kỳ đổi trong React (loadReport) nên chỉ lấy configuration lần đầu; key cố định để không mất state.
-    root.render(<DriverReport configuration={initialProps.configuration as Configuration} wire={utilities.$wire} />)
+    // Kỳ đổi trong React (loadReport) nên chỉ lấy configuration có dữ liệu lần đầu; sau đó bỏ qua update để không mất state.
+    const update = ({ configuration }: JsWidgetProps<Deferred<Configuration>>) => {
+        if (isReportMounted) {
+            return
+        }
 
-    return { update: () => {}, destroy: () => root.unmount() }
+        if (! configuration.loaded) {
+            requestDataOnce(utilities.$wire, dataRequest)
+            root.render(<TableSkeleton columns={configuration.skeletonColumns} />)
+
+            return
+        }
+
+        isReportMounted = true
+        root.render(<DriverReport configuration={configuration as Configuration} wire={utilities.$wire} />)
+    }
+
+    update(initialProps)
+
+    return { update, destroy: () => root.unmount() }
 }
 
 export default mountDriverMonthlyKmTable

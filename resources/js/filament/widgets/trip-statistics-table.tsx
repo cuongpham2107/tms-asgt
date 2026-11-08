@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { JsonValue, JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities, Snapshot } from '@filament/widgets/js-widget'
+import { type Deferred, requestDataOnce, TableSkeleton } from './table-skeleton'
 
 interface Charge {
     priceCode: string | null
@@ -1091,10 +1092,20 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
     )
 }
 
-const mountTripStatisticsTable: JsWidgetRenderer<Configuration, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
+const mountTripStatisticsTable: JsWidgetRenderer<Deferred<Configuration>, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
     const root = createRoot(host)
+    const dataRequest = { requested: false }
 
-    const update = (props: JsWidgetProps<Configuration>) => root.render(<TripStatistics configuration={props.configuration} wire={utilities.$wire} />)
+    const update = ({ configuration }: JsWidgetProps<Deferred<Configuration>>) => {
+        if (! configuration.loaded) {
+            requestDataOnce(utilities.$wire, dataRequest)
+            root.render(<TableSkeleton columns={configuration.skeletonColumns} />)
+
+            return
+        }
+
+        root.render(<TripStatistics configuration={configuration} wire={utilities.$wire} />)
+    }
 
     update(initialProps)
 
