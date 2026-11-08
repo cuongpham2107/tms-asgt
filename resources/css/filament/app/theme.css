@@ -708,33 +708,3 @@ html.dark .trk-order-item { background: #0f172a; }
 .fi-js-widget-bare .fi-wi-js > .fi-section > .fi-section-content-ctn > .fi-section-content {
     padding: 0 !important;
 }
-
-/* Bảng tải trễ (deferLoading): thay vòng xoay bằng các dòng skeleton */
-.fi-ta-ctn .fi-ta-table-loading-ctn {
-    display: block;
-    height: auto;
-    min-height: 20rem;
-    padding: 1.25rem 1.5rem;
-    background-image: repeating-linear-gradient(
-        to bottom,
-        var(--gray-200, rgb(229 231 235)) 0 0.875rem,
-        transparent 0.875rem 3rem
-    );
-    background-clip: content-box;
-    animation: var(--animate-pulse);
-}
-.dark .fi-ta-ctn .fi-ta-table-loading-ctn {
-    background-image: repeating-linear-gradient(
-        to bottom,
-        rgb(255 255 255 / 0.08) 0 0.875rem,
-        transparent 0.875rem 3rem
-    );
-}
-.fi-ta-table-loading-ctn > :not(.fi-sr-only) {
-    display: none;
-}
-@media (prefers-reduced-motion: reduce) {
-    .fi-ta-ctn .fi-ta-table-loading-ctn {
-        animation: none;
-    }
-}
