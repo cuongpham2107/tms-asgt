@@ -21,12 +21,12 @@
         class="space-y-3"
     >
         {{-- Toolbar: Toggle Filters Button + Date Range + Mine Only + Search --}}
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
+        <div class="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
                 <button
                     type="button"
                     x-on:click="isFiltersOpen = !isFiltersOpen"
-                    class="order-1 sm:order-none toolbar-toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-xs transition cursor-pointer"
+                    class="order-1 sm:order-none toolbar-toggle-btn inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-xs transition cursor-pointer shrink-0"
                 >
                     <x-filament::icon icon="heroicon-o-funnel" class="h-4 w-4 text-primary-500" />
                     <span>Bộ lọc</span>
@@ -37,7 +37,7 @@
                     />
                 </button>
 
-                <div class="order-2 sm:order-none w-full sm:w-[380px] lg:w-[420px]">
+                <div class="order-2 sm:order-none w-full sm:w-[280px] lg:w-[320px]">
                     {{ $this->dateRangeForm }}
                 </div>
 
@@ -46,7 +46,7 @@
                     :color="$showMineOnly ? 'primary' : 'gray'"
                     size="sm"
                     :icon="$showMineOnly ? 'heroicon-s-user' : 'heroicon-o-user'"
-                    class="order-1 sm:order-none toolbar-mine-btn"
+                    class="order-1 sm:order-none toolbar-mine-btn shrink-0"
                 >
                     Đơn của tôi
                 </x-filament::button>
@@ -57,13 +57,13 @@
                     color="gray"
                     size="sm"
                     icon="heroicon-o-arrow-down-tray"
-                    class="order-1 sm:order-none toolbar-mine-btn"
+                    class="order-1 sm:order-none toolbar-mine-btn shrink-0"
                 >
                     Xuất Excel
                 </x-filament::button>
             </div>
 
-            <div class="w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:max-w-md">
+            <div class="w-full sm:w-64 lg:w-72 xl:w-80">
                 {{ $this->searchForm }}
             </div>
         </div>
