@@ -87,9 +87,6 @@ abstract class BaseTable
             ->emptyStateIcon('heroicon-o-bookmark')
             ->emptyStateHeading('Chưa có dữ liệu')
             ->emptyStateDescription('Dữ liệu sẽ xuất hiện ở đây sau khi bạn thêm mới.')
-            // Trang hiện ngay, dữ liệu tải ngay sau (bảng lớn)
-            // ->deferLoading()
-            ->loadingSkeleton()
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(25);
     }

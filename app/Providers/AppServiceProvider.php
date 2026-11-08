@@ -88,8 +88,9 @@ class AppServiceProvider extends ServiceProvider
             // Ignore connection initialization exceptions during boot
         }
 
+        // Trang hiện ngay, bảng tải dữ liệu ngay sau đó (hiện skeleton trong lúc chờ)
         Table::configureUsing(function (Table $table): void {
-            $table->loadingSkeleton();
+            $table->deferLoading()->loadingSkeleton();
         });
     }
 }

@@ -60,6 +60,7 @@ test('page displays only non-driver accounts in the table', function () {
 
     Livewire::actingAs($this->admin)
         ->test(StaffAccounts::class)
+        ->loadTable()
         ->assertCanSeeTableRecords([$staff, $this->admin])
         ->assertCanNotSeeTableRecords([$driver]);
 });

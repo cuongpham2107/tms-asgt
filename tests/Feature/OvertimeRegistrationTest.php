@@ -341,6 +341,7 @@ test('overtime registrations table filters by default to today', function () {
     $this->actingAs($admin);
 
     Livewire::test(ListOvertimeRegistrations::class)
+        ->loadTable()
         ->assertCanSeeTableRecords([$todayRecord])
         ->assertCanNotSeeTableRecords([$futureRecord]);
 });
