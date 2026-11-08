@@ -1,9 +1,5 @@
 <x-filament-panels::page>
     <style>
-        html.dark .trip-stat-card {
-            background-color: rgb(15 23 42 / 0.85) !important;
-            border-color: rgb(30 41 59 / 0.9) !important;
-        }
         html.dark .collapsible-filter-bar {
             background-color: rgb(15 23 42 / 0.75) !important;
             border-color: rgb(30 41 59 / 0.8) !important;
@@ -17,37 +13,6 @@
             background-color: rgb(51 65 85 / 0.95) !important;
         }
     </style>
-    {{-- Custom Stats Bar --}}
-    @php
-        $stats = $this->getTripStats();
-    @endphp
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-4">
-        @foreach ($stats as $stat)
-            <div
-                @if (!empty($stat['filter']))
-                    wire:click="filterStatus('{{ $stat['filter'] }}')"
-                    role="button"
-                    class="trip-stat-card group relative flex items-center justify-between rounded-xl p-3 shadow-2xs transition-all duration-150 hover:shadow-xs hover:border-primary-400 cursor-pointer"
-                @else
-                    class="trip-stat-card relative flex items-center justify-between rounded-xl p-3 shadow-2xs"
-                @endif
-            >
-                <div class="min-w-0 flex-1">
-                    <p class="truncate text-xs font-medium text-gray-500 dark:text-gray-400">
-                        {{ $stat['label'] }}
-                    </p>
-                    <p class="mt-0.5 text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                        {{ number_format($stat['value']) }}
-                    </p>
-                </div>
-
-                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg {{ $stat['bg'] }} {{ $stat['color'] }}">
-                    <x-filament::icon :icon="$stat['icon']" class="h-5 w-5" />
-                </div>
-            </div>
-        @endforeach
-    </div>
-
     <div
         x-data="{
             isFiltersOpen: localStorage.getItem('list_trips_filters_open') !== 'false'
