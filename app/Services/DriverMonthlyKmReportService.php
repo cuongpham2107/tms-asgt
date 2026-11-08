@@ -24,6 +24,15 @@ use Illuminate\Support\Collection;
  */
 class DriverMonthlyKmReportService
 {
+    /** Chuyến hoàn thành nhanh hơn mức này coi như bấm bắt đầu/kết thúc liền nhau. */
+    public const MIN_COMPLETION_MINUTES = 5;
+
+    /** Hoàn thành hoặc chờ lâu hơn mức này (12 giờ) coi như quên bấm checkpoint. */
+    public const MAX_PLAUSIBLE_MINUTES = 720;
+
+    /** Tuyến cần ít nhất ngần này chuyến hợp lệ trong kỳ mới có chuẩn để so. */
+    public const ROUTE_MIN_TRIPS = 3;
+
     /**
      * Phần km của từng tài xế trên từng chuyến trong khoảng [$from, $to].
      *
@@ -160,11 +169,136 @@ class DriverMonthlyKmReportService
 
                 return [
                     ...$row,
+                    'driver_id' => $tripsById[$row['trip_id']]->driver_id,
                     'trip_started_at' => $checkpoints->firstWhere('checkpoint_type', CheckpointType::Started)?->effectiveOccurredAt(),
                     'trip_ended_at' => $checkpoints->where('checkpoint_type', CheckpointType::End)->last()?->effectiveOccurredAt(),
                 ];
             })
             ->values();
+    }
+
+    /**
+     * Đánh giá tài xế trên các dòng bảng kê: mỗi chuyến có thời gian hoàn thành (bắt đầu → kết thúc chuyến)
+     * và thời gian chờ (đóng A→B + hạ C→D của các đơn), so với chuẩn tuyến = trung vị của cả đội trên cùng
+     * tuyến trong kỳ. Chuyến có số liệu bất thường (thường do bấm checkpoint sai) bị gắn cờ, không tính vào
+     * chuẩn tuyến lẫn trung bình của tài xế. Tuyến có dưới ROUTE_MIN_TRIPS chuyến hợp lệ thì không có chuẩn (null).
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows  Kết quả statementRows()
+     * @return array{trips: list<array<string, mixed>>, drivers: list<array<string, mixed>>}
+     */
+    public function evaluate(Collection $rows): array
+    {
+        $trips = $rows->groupBy('trip_id')->map(function (Collection $tripRows): array {
+            $first = $tripRows->first();
+            $orderRows = $tripRows->whereNotNull('order_id');
+            $loading = $orderRows->pluck('time_loading')->filter(fn (?int $minutes): bool => $minutes !== null);
+            $unloading = $orderRows->pluck('time_unloading')->filter(fn (?int $minutes): bool => $minutes !== null);
+            $hasWait = $loading->isNotEmpty() || $unloading->isNotEmpty();
+            $completion = $first['trip_started_at'] && $first['trip_ended_at']
+                ? max(0, (int) $first['trip_started_at']->diffInMinutes($first['trip_ended_at']))
+                : null;
+            $wait = $hasWait ? (int) ($loading->sum() + $unloading->sum()) : null;
+
+            return [
+                'trip_id' => $first['trip_id'],
+                'driver_id' => $first['driver_id'],
+                'driver_name' => $first['driver_name'],
+                'started_at' => $first['trip_started_at'],
+                'codes' => $tripRows->pluck('code')->filter()->unique()->values()->all(),
+                'is_empty' => $orderRows->isEmpty(),
+                'route' => $tripRows->pluck('journey')->filter()->unique()->implode(' + ') ?: '—',
+                'completion' => $completion,
+                'loading' => $hasWait ? (int) $loading->sum() : null,
+                'unloading' => $hasWait ? (int) $unloading->sum() : null,
+                'wait' => $wait,
+                'flag' => self::anomaly($completion, $wait),
+            ];
+        });
+
+        $valid = $trips->whereNull('flag');
+        $routeStandards = $valid->groupBy('route')->map(fn (Collection $group): array => [
+            'completion' => self::median($group->pluck('completion')),
+            'wait' => self::median($group->pluck('wait')),
+            'samples' => $group->count(),
+        ]);
+
+        $trips = $trips->map(function (array $trip) use ($routeStandards): array {
+            $standard = $trip['flag'] === null ? ($routeStandards[$trip['route']] ?? null) : null;
+
+            return [
+                ...$trip,
+                'route_completion' => $standard['completion'] ?? null,
+                'route_wait' => $standard['wait'] ?? null,
+                'route_samples' => $routeStandards[$trip['route']]['samples'] ?? 0,
+            ];
+        })->sortBy('started_at')->values();
+
+        $drivers = $trips->groupBy('driver_id')->map(function (Collection $driverTrips): array {
+            $valid = $driverTrips->whereNull('flag');
+            $average = fn (string $key): ?int => ($values = $valid->pluck($key)->filter(fn (?int $value): bool => $value !== null))->isEmpty()
+                ? null
+                : (int) round($values->avg());
+
+            return [
+                'driver_id' => $driverTrips->first()['driver_id'],
+                'driver_name' => $driverTrips->first()['driver_name'],
+                'trip_count' => $valid->count(),
+                'flagged_count' => $driverTrips->count() - $valid->count(),
+                'avg_completion' => $average('completion'),
+                'avg_wait' => $average('wait'),
+                'avg_loading' => $average('loading'),
+                'avg_unloading' => $average('unloading'),
+                ...self::againstRoute($valid, 'completion', 'route_completion'),
+                ...self::againstRoute($valid, 'wait', 'route_wait'),
+            ];
+        })->values();
+
+        return ['trips' => $trips->all(), 'drivers' => $drivers->all()];
+    }
+
+    /**
+     * Lý do chuyến bị loại khỏi đánh giá, null nếu số liệu hợp lý.
+     */
+    public static function anomaly(?int $completion, ?int $wait): ?string
+    {
+        return match (true) {
+            $completion !== null && $completion < self::MIN_COMPLETION_MINUTES => 'Hoàn thành dưới '.self::MIN_COMPLETION_MINUTES.' phút — có thể bấm bắt đầu/kết thúc liền nhau',
+            $completion !== null && $completion > self::MAX_PLAUSIBLE_MINUTES => 'Hoàn thành quá '.(self::MAX_PLAUSIBLE_MINUTES / 60).' giờ — có thể quên bấm kết thúc chuyến',
+            $wait !== null && $wait > self::MAX_PLAUSIBLE_MINUTES => 'Chờ quá '.(self::MAX_PLAUSIBLE_MINUTES / 60).' giờ — có thể quên bấm checkpoint',
+            default => null,
+        };
+    }
+
+    /**
+     * Tài xế lệch bao nhiêu so với chuẩn tuyến trên các chuyến so được: số phút trung bình mỗi chuyến
+     * và % trên tổng chuẩn. Dương = chậm hơn / chờ lâu hơn.
+     *
+     * @param  Collection<int, array<string, mixed>>  $trips
+     * @return array<string, int|null>
+     */
+    private static function againstRoute(Collection $trips, string $actualKey, string $routeKey): array
+    {
+        $compared = $trips->filter(fn (array $trip): bool => $trip[$actualKey] !== null && $trip[$routeKey] !== null);
+        $expected = $compared->sum($routeKey);
+        $difference = $compared->sum($actualKey) - $expected;
+
+        return [
+            "{$actualKey}_compared" => $compared->count(),
+            "{$actualKey}_diff" => $compared->isEmpty() ? null : (int) round($difference / $compared->count()),
+            "{$actualKey}_diff_percent" => $expected > 0 ? (int) round($difference / $expected * 100) : null,
+        ];
+    }
+
+    /**
+     * Trung vị (bỏ giá trị null); null khi có dưới ROUTE_MIN_TRIPS giá trị.
+     *
+     * @param  Collection<int, ?int>  $values
+     */
+    private static function median(Collection $values): ?float
+    {
+        $values = $values->filter(fn (?int $value): bool => $value !== null);
+
+        return $values->count() < self::ROUTE_MIN_TRIPS ? null : (float) $values->median();
     }
 
     /**

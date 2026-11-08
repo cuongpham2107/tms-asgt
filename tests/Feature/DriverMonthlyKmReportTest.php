@@ -9,6 +9,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
 use App\Filament\Pages\DriverMonthlyKmReport;
+use App\Filament\Widgets\DriverMonthlyKmTable;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
@@ -22,6 +23,7 @@ use App\Services\DriverMonthlyKmReportService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 
@@ -275,19 +277,28 @@ test('page resolves today, week and month periods from the anchor date', functio
     'month' => ['month', '2026-10-01 00:00:00', '2026-10-31 23:59:59'],
 ]);
 
-test('page lists drivers and shows the trips of the selected driver', function () {
+test('page renders the react report widget for the selected period', function () {
     $this->actingAs($this->driverA);
-    $trip = monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 123, 100);
-    monthlyTrip($this, $this->driverB, '2026-10-03 08:00', 10, 0);
 
     Livewire::withQueryParams(['period' => 'month', 'date' => '2026-10-15'])
         ->test(DriverMonthlyKmReport::class)
         ->assertSuccessful()
-        ->assertSee('Tài xế A')
-        ->assertSee('Tài xế Nghỉ')
-        ->assertDontSee($trip->trip_code)
-        ->call('selectDriver', $this->driverA->id)
-        ->assertSee([$trip->trip_code, '123.0', '100.0', '81% có hàng', '1 chuyến (1 không hàng)', 'Không hàng']);
+        ->assertSeeLivewire(DriverMonthlyKmTable::class);
+});
+
+test('report widget lists drivers with their trips of the period', function () {
+    $trip = monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 123, 100);
+    monthlyTrip($this, $this->driverB, '2026-10-03 08:00', 10, 0);
+
+    $config = monthlyKmWidget()->instance()->getRendererConfiguration();
+    $driver = collect($config['drivers'])->firstWhere('id', $this->driverA->id);
+    $tripLine = collect($config['trips'])->firstWhere('id', $trip->id);
+
+    expect($config)->toMatchArray(['period' => 'month', 'date' => '2026-10-15', 'periodLabel' => 'Tháng 10/2026', 'isCurrent' => false, 'hasNext' => true])
+        ->and(collect($config['drivers'])->pluck('name'))->toContain('Tài xế A', 'Tài xế Nghỉ')
+        ->and($driver)->toMatchArray(['trips' => 1, 'emptyTrips' => 1, 'kmTotal' => 123.0, 'kmLoaded' => 100.0])
+        ->and($tripLine)->toMatchArray(['driverId' => $this->driverA->id, 'code' => $trip->trip_code, 'isEmpty' => true, 'day' => '2026-10-02', 'time' => '08:00'])
+        ->and($config['totals']['trips'])->toBe(2);
 });
 
 test('statement rows list completed trips with start and end times from checkpoints and no charge data', function () {
@@ -308,27 +319,84 @@ test('statement rows list completed trips with start and end times from checkpoi
         ->and($service->statementRows($this->month, $this->month->copy()->endOfMonth(), $this->driverB->id)->pluck('trip_id')->all())->toBe([$trip->id]);
 });
 
-test('page statement tab shows the read-only trip list of the period', function () {
-    $this->actingAs($this->driverA);
-    monthlySwapTrip($this);
+test('report widget loads the read-only statement of the period on demand', function () {
+    $trip = monthlySwapTrip($this);
+    foreach (range(1, 26) as $day) {
+        monthlyTrip($this, $this->driverA, sprintf('2026-10-%02d 10:00', $day), 10, 0);
+    }
 
-    Livewire::withQueryParams(['period' => 'month', 'date' => '2026-10-15', 'tab' => 'statement'])
-        ->test(DriverMonthlyKmReport::class)
-        ->assertSuccessful()
-        ->assertSee(['Bảng kê chuyến', 'ORD-MON', 'Bắt đầu chuyến', '08:00 15/10', '09:40 15/10'])
-        ->assertDontSee(['Cước', 'Tổng tiền']);
+    $rows = collect(monthlyKmWidget()->instance()->loadStatement('month', '2026-10-15'));
+    $row = $rows->firstWhere('code', 'ORD-MON');
+
+    // Cả kỳ trả về một lần, phân trang do React lo.
+    expect($rows)->toHaveCount(27)
+        ->and($row)->toMatchArray(['driverId' => $trip->driver_id, 'started' => '08:00 15/10', 'ended' => '09:40 15/10'])
+        ->and(array_keys($row))->not->toContain('charge', 'total', 'base_price');
 });
 
-test('page statement tab paginates the trip list', function () {
-    $this->actingAs($this->driverA);
-    foreach (range(1, 26) as $day) {
-        monthlyTrip($this, $this->driverA, sprintf('2026-10-%02d 08:00', $day), 10, 0);
-    }
-    $last = Trip::orderByDesc('started_at')->first();
+function monthlyKmWidget(): Testable
+{
+    return Livewire::test(DriverMonthlyKmTable::class, [
+        'period' => 'month',
+        'date' => '2026-10-15',
+    ]);
+}
 
-    Livewire::withQueryParams(['period' => 'month', 'date' => '2026-10-15', 'tab' => 'statement'])
-        ->test(DriverMonthlyKmReport::class)
-        ->assertDontSee($last->trip_code)
-        ->call('nextPage')
-        ->assertSee($last->trip_code);
+test('report widget loads another period without re-rendering and falls back on bad input', function () {
+    monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 123, 100);
+    $widget = monthlyKmWidget()->instance();
+
+    $day = $widget->loadReport('today', '2026-10-02');
+    $other = $widget->loadReport('today', '2026-10-03');
+    $invalid = $widget->loadReport('year', 'not-a-date');
+
+    expect($day)->toMatchArray(['periodLabel' => 'Ngày 02/10/2026'])
+        ->and($day['totals']['trips'])->toBe(1)
+        ->and($other['totals']['trips'])->toBe(0)
+        ->and($invalid)->toMatchArray(['period' => 'month', 'date' => now()->toDateString(), 'isCurrent' => true, 'hasNext' => false]);
+});
+
+test('evaluation compares each driver with the route median and skips implausible trips', function () {
+    $row = fn (int $tripId, int $driverId, ?int $orderId, string $journey, int $completion, ?int $loading, ?int $unloading): array => [
+        'trip_id' => $tripId,
+        'order_id' => $orderId,
+        'driver_id' => $driverId,
+        'driver_name' => "Tài xế {$driverId}",
+        'code' => $orderId ? "ORD-{$orderId}" : "CD-{$tripId}",
+        'journey' => $journey,
+        'time_loading' => $loading,
+        'time_unloading' => $unloading,
+        'trip_started_at' => Carbon::parse('2026-10-02 08:00')->addDays($tripId),
+        'trip_ended_at' => Carbon::parse('2026-10-02 08:00')->addDays($tripId)->addMinutes($completion),
+    ];
+
+    $evaluation = app(DriverMonthlyKmReportService::class)->evaluate(collect([
+        $row(1, 1, 11, 'ALSC -> ASGL', 60, 10, 20),
+        $row(2, 2, 21, 'ALSC -> ASGL', 120, 60, 30),
+        $row(3, 2, 31, 'ALSC -> ASGL', 90, 40, 20),
+        $row(4, 1, 41, 'ALSC -> ASGL', 2, 1, 1),
+        $row(5, 1, 51, 'ALSC -> ASGL', 800, 30, 30),
+        $row(6, 2, null, 'ASGL -> NBA', 45, null, null),
+    ]));
+    $drivers = collect($evaluation['drivers'])->keyBy('driver_id');
+    $trips = collect($evaluation['trips'])->keyBy('trip_id');
+
+    // Chuẩn tuyến ALSC -> ASGL = trung vị của 3 chuyến hợp lệ: hoàn thành 90', chờ 60'. Chuyến 2' và 800' bị loại.
+    expect($trips[1])->toMatchArray(['completion' => 60, 'wait' => 30, 'route_completion' => 90.0, 'route_wait' => 60.0, 'route_samples' => 3, 'flag' => null])
+        ->and($trips[4]['flag'])->toContain('dưới 5 phút')
+        ->and($trips[5]['flag'])->toContain('quên bấm kết thúc')
+        ->and($trips[5]['route_completion'])->toBeNull()
+        ->and($trips[6])->toMatchArray(['is_empty' => true, 'wait' => null, 'route_completion' => null])
+        ->and($drivers[1])->toMatchArray(['trip_count' => 1, 'flagged_count' => 2, 'avg_completion' => 60, 'completion_diff' => -30, 'completion_diff_percent' => -33, 'wait_diff' => -30, 'wait_diff_percent' => -50])
+        ->and($drivers[2])->toMatchArray(['trip_count' => 3, 'flagged_count' => 0, 'avg_completion' => 85, 'completion_compared' => 2, 'completion_diff' => 15, 'completion_diff_percent' => 17, 'wait_diff' => 15, 'wait_diff_percent' => 25]);
+});
+
+test('report widget evaluation lists drivers and their trips of the period', function () {
+    monthlySwapTrip($this);
+
+    $evaluation = monthlyKmWidget()->instance()->loadEvaluation('month', '2026-10-15');
+
+    expect($evaluation['drivers'])->toHaveCount(1)
+        ->and($evaluation['drivers'][0])->toMatchArray(['id' => $this->driverB->id, 'trips' => 1, 'flagged' => 0, 'completion' => 100, 'completionDiff' => null])
+        ->and($evaluation['trips'][0])->toMatchArray(['codes' => ['ORD-MON'], 'isEmpty' => false, 'time' => '08:00', 'flag' => null, 'routeCompletion' => null]);
 });
