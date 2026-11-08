@@ -400,3 +400,15 @@ test('report widget evaluation lists drivers and their trips of the period', fun
         ->and($evaluation['drivers'][0])->toMatchArray(['id' => $this->driverB->id, 'trips' => 1, 'flagged' => 0, 'completion' => 100, 'completionDiff' => null])
         ->and($evaluation['trips'][0])->toMatchArray(['codes' => ['ORD-MON'], 'isEmpty' => false, 'time' => '08:00', 'flag' => null, 'routeCompletion' => null]);
 });
+
+test('page opens the timeline popup of a clicked trip', function () {
+    $this->actingAs($this->driverA);
+    $trip = monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 123, 100);
+
+    Livewire::withQueryParams(['period' => 'month', 'date' => '2026-10-15'])
+        ->test(DriverMonthlyKmReport::class)
+        ->call('openTripTimeline', $trip->id)
+        ->assertSet('timelineTripId', $trip->id)
+        ->assertDispatched('open-modal', id: 'driver-trip-timeline')
+        ->assertSee(['Hành trình', $trip->trip_code]);
+});

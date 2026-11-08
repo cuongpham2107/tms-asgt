@@ -181,6 +181,7 @@ class DriverMonthlyKmTable extends Widget
         return app(DriverMonthlyKmReportService::class)->statementRows(...DriverMonthlyKmReport::rangeFor(DriverMonthlyKmReport::normalizePeriod($period), DriverMonthlyKmReport::normalizeDate($date)))
             ->map(fn (array $row): array => [
                 'key' => $row['trip_id'].'-'.($row['order_id'] ?? 'trip'),
+                'tripId' => $row['trip_id'],
                 'driverId' => $row['driver_id'],
                 'driver' => $row['driver_name'],
                 'date' => filled($row['date']) ? Carbon::parse($row['date'])->format('d/m/Y') : null,

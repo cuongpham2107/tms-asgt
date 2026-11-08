@@ -33,6 +33,7 @@ interface Trip {
 
 interface StatementRow {
     key: string
+    tripId: number
     driverId: number | null
     driver: string
     date: string | null
@@ -68,7 +69,13 @@ interface Configuration {
     totals: { trips: number; emptyTrips: number; kmTotal: number; kmLoaded: number; kmEmpty: number }
 }
 
+/** Hàm của page: mở popup hành trình chuyến (checkpoint, ảnh, vị trí). */
+interface PageApi {
+    openTripTimeline(tripId: number): Promise<unknown>
+}
+
 interface WidgetMethods {
+    readonly $parent: PageApi
     loadReport(period: Period, date: string): Promise<Configuration>
     loadStatement(period: Period, date: string): Promise<StatementRow[]>
     loadEvaluation(period: Period, date: string): Promise<Evaluation>
@@ -281,7 +288,7 @@ const DriverTable = ({ drivers, totals, totalDrivers, activeDrivers, periodLabel
     )
 }
 
-const DriverTrips = ({ driver, trips, periodLabel, onClose }: { driver: Driver | null; trips: Trip[]; periodLabel: string; onClose: () => void }) => {
+const DriverTrips = ({ driver, trips, periodLabel, onClose, onOpenTrip }: { driver: Driver | null; trips: readonly Trip[]; periodLabel: string; onClose: () => void; onOpenTrip: (tripId: number) => void }) => {
     const days = useMemo(() => {
         const byDay = new Map<string, Trip[]>()
         trips.forEach((trip) => byDay.set(trip.day ?? '', [...(byDay.get(trip.day ?? '') ?? []), trip]))
@@ -341,7 +348,7 @@ const DriverTrips = ({ driver, trips, periodLabel, onClose }: { driver: Driver |
                             const percent = loadedPercent(trip.kmLoaded, trip.kmTotal)
 
                             return (
-                                <tr key={`${trip.id}-${trip.driverId}`} className={`dispatch-row ${index === dayTrips.length - 1 ? 'dispatch-group-end' : ''} ${zebra(index)}`}>
+                                <tr key={`${trip.id}-${trip.driverId}`} onClick={() => onOpenTrip(trip.id)} title="Bấm để xem hành trình chuyến" className={`dispatch-row cursor-pointer ${index === dayTrips.length - 1 ? 'dispatch-group-end' : ''} ${zebra(index)}`}>
                                     {index === 0 ? (
                                         <td className={`${td} bg-gray-50/80 font-bold text-gray-900 dark:bg-white/5 dark:text-gray-100`}>{dayLabel(day || null)}</td>
                                     ) : (
@@ -500,13 +507,14 @@ const Pagination = ({ page, lastPage, total, perPage, onPage, onPerPage }: {
     )
 }
 
-const Statement = ({ rows, loading, error, periodLabel, perPage, onPerPage }: {
+const Statement = ({ rows, loading, error, periodLabel, perPage, onPerPage, onOpenTrip }: {
     rows: StatementRow[]
     loading: boolean
     error: string | null
     periodLabel: string
     perPage: number
     onPerPage: (perPage: number) => void
+    onOpenTrip: (tripId: number) => void
 }) => {
     const [page, setPage] = useState(1)
     const lastPage = Math.max(1, Math.ceil(rows.length / perPage))
@@ -544,7 +552,7 @@ const Statement = ({ rows, loading, error, periodLabel, perPage, onPerPage }: {
                             </tr>
                         )}
                         {visible.map((row, index) => (
-                            <tr key={row.key} className={`dispatch-row ${zebra(index)}`}>
+                            <tr key={row.key} onClick={() => onOpenTrip(row.tripId)} title="Bấm để xem hành trình chuyến" className={`dispatch-row cursor-pointer ${zebra(index)}`}>
                                 <td className={`${td} text-center text-gray-500`}>{offset + index + 1}</td>
                                 <td className={td}>{row.date ?? '—'}</td>
                                 <td className={`${td} font-semibold text-gray-900 dark:text-gray-100`}>{row.code}</td>
@@ -800,7 +808,13 @@ const TripMetric = ({ actual, standard, note }: { actual: number | null; standar
     </div>
 )
 
-const EvaluationTrips = ({ driver, trips, periodLabel, onClose }: { driver: EvaluationDriver | null; trips: EvaluationTrip[]; periodLabel: string; onClose: () => void }) => {
+const EvaluationTrips = ({ driver, trips, periodLabel, onClose, onOpenTrip }: {
+    driver: EvaluationDriver | null
+    trips: EvaluationTrip[]
+    periodLabel: string
+    onClose: () => void
+    onOpenTrip: (tripId: number) => void
+}) => {
     const days = useMemo(() => {
         const byDay = new Map<string, EvaluationTrip[]>()
         trips.forEach((trip) => byDay.set(trip.day ?? '', [...(byDay.get(trip.day ?? '') ?? []), trip]))
@@ -849,7 +863,12 @@ const EvaluationTrips = ({ driver, trips, periodLabel, onClose }: { driver: Eval
                 <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                     {days.map(([day, dayTrips]) =>
                         dayTrips.map((trip, index) => (
-                            <tr key={trip.id} className={`dispatch-row ${index === dayTrips.length - 1 ? 'dispatch-group-end' : ''} ${trip.flag ? 'bg-amber-50/60 dark:bg-amber-400/5' : zebra(index)}`}>
+                            <tr
+                                key={trip.id}
+                                onClick={() => onOpenTrip(trip.id)}
+                                title="Bấm để xem hành trình chuyến"
+                                className={`dispatch-row cursor-pointer ${index === dayTrips.length - 1 ? 'dispatch-group-end' : ''} ${trip.flag ? 'bg-amber-50/60 dark:bg-amber-400/5' : zebra(index)}`}
+                            >
                                 {index === 0 ? <td className={`${td} bg-gray-50/80 font-bold text-gray-900 dark:bg-white/5 dark:text-gray-100`}>{dayLabel(day || null)}</td> : <td className={td} />}
                                 <td className="border-r border-gray-100 px-2 py-1.5 dark:border-white/5">
                                     <div className="flex flex-wrap items-center gap-1">
@@ -1076,6 +1095,7 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
     const selectedEvaluationTrips = useMemo(() => (evaluation.data?.trips ?? []).filter((trip) => trip.driverId === driverId), [evaluation.data, driverId])
 
     const toggleDriver = (id: number) => setDriverId((current) => (current === id ? null : id))
+    const openTrip = (tripId: number) => void wire.$parent.openTripTimeline(tripId)
     const isLoading = pending !== null
 
     const tabButton = (key: Tab, label: string, icon: string) => (
@@ -1140,7 +1160,7 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                             ) : (
                                 <>
                                     <EvaluationTable drivers={evaluationDrivers} codes={driverCodes} periodLabel={report.periodLabel} selectedId={driverId} onSelect={toggleDriver} />
-                                    <EvaluationTrips driver={selectedEvaluationDriver} trips={selectedEvaluationTrips} periodLabel={report.periodLabel} onClose={() => setDriverId(null)} />
+                                    <EvaluationTrips driver={selectedEvaluationDriver} trips={selectedEvaluationTrips} periodLabel={report.periodLabel} onClose={() => setDriverId(null)} onOpenTrip={openTrip} />
                                 </>
                             )}
                         </div>
@@ -1156,7 +1176,7 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                             selectedId={driverId}
                             onSelect={toggleDriver}
                         />
-                        <DriverTrips driver={selectedDriver} trips={selectedTrips} periodLabel={report.periodLabel} onClose={() => setDriverId(null)} />
+                        <DriverTrips driver={selectedDriver} trips={selectedTrips} periodLabel={report.periodLabel} onClose={() => setDriverId(null)} onOpenTrip={openTrip} />
                     </div>
                 ) : (
                     <>
@@ -1176,6 +1196,7 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                             periodLabel={report.periodLabel}
                             perPage={perPage}
                             onPerPage={setPerPage}
+                            onOpenTrip={openTrip}
                         />
                     </>
                 )}

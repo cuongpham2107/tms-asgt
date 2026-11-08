@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\Trip;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Pages\Page;
@@ -39,10 +40,24 @@ class DriverMonthlyKmReport extends Page
     #[Url]
     public string $date = '';
 
+    /** Chuyến đang mở popup hành trình (bấm dòng chuyến trong bảng React). */
+    public ?int $timelineTripId = null;
+
     public function mount(): void
     {
         $this->period = self::normalizePeriod($this->period);
         $this->date = self::normalizeDate($this->date);
+    }
+
+    public function openTripTimeline(int $tripId): void
+    {
+        $this->timelineTripId = $tripId;
+        $this->dispatch('open-modal', id: 'driver-trip-timeline');
+    }
+
+    public function timelineTrip(): ?Trip
+    {
+        return $this->timelineTripId === null ? null : Trip::with(['vehicle', 'driver'])->find($this->timelineTripId);
     }
 
     /**
