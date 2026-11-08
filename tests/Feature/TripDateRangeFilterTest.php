@@ -146,3 +146,18 @@ test('list trips scopes completed and cancelled counts and table to current mont
         ->assertCanSeeTableRecords([$currentCompleted])
         ->assertCanNotSeeTableRecords([$pastCompleted]);
 });
+
+test('list trips defaults to the current month when no date is in the url', function () {
+    $this->travelTo(Carbon::parse('2026-10-15 10:00:00'));
+
+    $thisMonth = makeTrip('TRIP-THIS-MONTH', '2026-10-10 09:00:00', '2026-10-10 07:00:00');
+    $lastMonth = makeTrip('TRIP-LAST-MONTH', '2026-09-20 09:00:00', '2026-09-20 07:00:00');
+
+    Livewire::test(ListTrips::class)->loadTable()
+        ->assertSet('dateFrom', '2026-10-01')
+        ->assertSet('dateTo', '2026-10-31')
+        ->set('orderType', 'all')
+        ->set('activePlaceFilter', 'all')
+        ->assertCanSeeTableRecords([$thisMonth])
+        ->assertCanNotSeeTableRecords([$lastMonth]);
+});

@@ -183,3 +183,33 @@ test('list orders scopes completed and cancelled counts and table to current mon
         ->assertCanSeeTableRecords([$currentCompleted])
         ->assertCanNotSeeTableRecords([$pastCompleted]);
 });
+
+test('list orders defaults to the current month when no date is in the url', function () {
+    $this->travelTo(now()->setDate(2026, 10, 15));
+
+    $thisMonth = Order::create([
+        'order_code' => 'ORD-THIS-MONTH',
+        'type' => 'HHHK',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Draft,
+        'created_by' => $this->user->id,
+        'planned_loading_at' => '2026-10-10 08:00:00',
+    ]);
+
+    $lastMonth = Order::create([
+        'order_code' => 'ORD-LAST-MONTH',
+        'type' => 'HHHK',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'status' => OrderStatus::Draft,
+        'created_by' => $this->user->id,
+        'planned_loading_at' => '2026-09-20 08:00:00',
+    ]);
+
+    Livewire::test(ListOrders::class)->loadTable()
+        ->assertSet('startDate', '2026-10-01')
+        ->assertSet('endDate', '2026-10-31')
+        ->assertCanSeeTableRecords([$thisMonth])
+        ->assertCanNotSeeTableRecords([$lastMonth]);
+});

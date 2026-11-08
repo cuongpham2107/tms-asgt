@@ -143,6 +143,9 @@ class ListTrips extends ListRecords
                 $this->dateTo = null;
                 $this->tripSearch = $targetTrip->trip_code;
             }
+        } elseif (blank($this->dateFrom) && blank($this->dateTo)) {
+            $this->dateFrom = now()->startOfMonth()->toDateString();
+            $this->dateTo = now()->endOfMonth()->toDateString();
         }
 
         $this->dateRange = [

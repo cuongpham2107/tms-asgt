@@ -125,6 +125,11 @@ class ListOrders extends ListRecords
 
     public function mount(): void
     {
+        if (blank($this->startDate) && blank($this->endDate)) {
+            $this->startDate = now()->startOfMonth()->toDateString();
+            $this->endDate = now()->endOfMonth()->toDateString();
+        }
+
         $this->dateRange = [
             'start' => $this->startDate,
             'end' => $this->endDate,
