@@ -20,6 +20,9 @@ class VehicleDispatchTable extends Widget
     use HasJsRenderer;
     use HasVehicleDispatchRows;
 
+    /** Chiều cao khung chờ trong lúc widget tải sau trang (defer), tránh giật bố cục. */
+    protected ?string $placeholderHeight = '28rem';
+
     protected ?string $heading = 'Bảng kiểm soát tình trạng xe';
 
     protected int|string|array $columnSpan = 'full';

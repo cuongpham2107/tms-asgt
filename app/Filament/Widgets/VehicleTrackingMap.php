@@ -28,6 +28,9 @@ class VehicleTrackingMap extends Widget
 {
     use HasJsRenderer;
 
+    /** Chiều cao khung chờ trong lúc widget tải sau trang (defer), tránh giật bố cục. */
+    protected ?string $placeholderHeight = '28rem';
+
     protected ?string $heading = 'Bản đồ giám sát phương tiện thực tế';
 
     private const DEFAULT_CENTER = [21.0285, 105.8542]; // Hà Nội Center

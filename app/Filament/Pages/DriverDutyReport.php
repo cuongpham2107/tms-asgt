@@ -147,6 +147,12 @@ class DriverDutyReport extends Page implements HasTable
     protected function getSummaryData(): array
     {
         $drivers = User::role('driver')->where('is_active', true)->get();
+        $openShifts = DriverShift::query()
+            ->whereNull('end_time')
+            ->whereIn('driver_id', $drivers->modelKeys())
+            ->get()
+            ->unique('driver_id')
+            ->keyBy('driver_id');
 
         $stations = [];
         $grandTotal = 0;
@@ -169,9 +175,7 @@ class DriverDutyReport extends Page implements HasTable
             $workingDriverIds = [];
 
             foreach ($stationDrivers as $driver) {
-                $shift = DriverShift::where('driver_id', $driver->id)
-                    ->whereNull('end_time')
-                    ->first();
+                $shift = $openShifts->get($driver->id);
 
                 if ($shift) {
                     $workingDriverIds[] = $driver->id;

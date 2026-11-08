@@ -17,6 +17,9 @@ class TripStatisticsTable extends Widget
     use HasJsRenderer;
     use HasTripStatistics;
 
+    /** Chiều cao khung chờ trong lúc widget tải sau trang (defer), tránh giật bố cục. */
+    protected ?string $placeholderHeight = '28rem';
+
     protected ?string $heading = 'Bảng thống kê chuyến & cước';
 
     protected int|string|array $columnSpan = 'full';

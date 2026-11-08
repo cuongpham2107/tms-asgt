@@ -23,6 +23,9 @@ class DriverMonthlyKmTable extends Widget
 {
     use HasJsRenderer;
 
+    /** Chiều cao khung chờ trong lúc widget tải sau trang (defer), tránh giật bố cục. */
+    protected ?string $placeholderHeight = '28rem';
+
     protected int|string|array $columnSpan = 'full';
 
     public string $period = 'month';

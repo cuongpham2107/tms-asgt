@@ -3,6 +3,6 @@
     <div wire:loading class="fixed inset-x-0 top-0 z-50 h-0.5 animate-pulse bg-primary-500"></div>
 
     <div class="fi-js-widget-bare">
-        @livewire(\App\Filament\Widgets\VehicleTrackingMap::class)
+        @livewire(\App\Filament\Widgets\VehicleTrackingMap::class, ['defer' => true])
     </div>
 </x-filament-panels::page>

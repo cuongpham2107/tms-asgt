@@ -79,7 +79,7 @@ test('vehicle dispatch board page renders successfully with company vehicles', f
 
     expect(dispatchWidgetConfiguration()['title'])->toContain('KIỂM SOÁT TÌNH TRẠNG XE');
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->assertStatus(200)
         ->assertSee('20C-12345')
         ->assertDontSee('29H-99999')
@@ -112,7 +112,7 @@ test('vehicle dispatch board summary stats correctly count vehicles', function (
         'is_active' => true,
     ]);
 
-    $component = Livewire::test(VehicleDispatchBoard::class);
+    $component = Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class);
     $stats = $component->instance()->getSummaryStats();
 
     expect($stats['total'])->toBe(3)
@@ -165,7 +165,7 @@ test('vehicle dispatch board only shows company vehicles', function () {
         'is_active' => true,
     ]);
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->assertSee('20C-COMPANY')
         ->assertDontSee('29H-RENT');
 });
@@ -282,7 +282,7 @@ test('vehicle dispatch board allows clicking trip status when driver swap is act
     expect($row['statusAction']['name'] ?? null)->toBe('reassign_driver')
         ->and($row['statusLabel'])->toBe('Đảo lái');
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->mountTableAction('reassign_driver', $vehicle)
         ->assertHasNoTableActionErrors();
 });
@@ -322,7 +322,7 @@ test('vehicle dispatch board allows clicking trip status when trip is paused due
     expect($row['statusAction']['name'] ?? null)->toBe('resolve_km_report')
         ->and($row['statusLabel'])->toBe('Tạm dừng (Sửa Km)');
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->mountTableAction('resolve_km_report', $vehicle)
         ->assertHasNoTableActionErrors();
 });
@@ -352,7 +352,7 @@ test('vehicle dispatch board does not make status clickable for normal trips or 
     expect(VehicleDispatchBoard::canClickTripStatus($vehicleWithNormalTrip))->toBeFalse()
         ->and(VehicleDispatchBoard::canClickTripStatus($vehicleWithoutTrip))->toBeFalse();
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->assertStatus(200)
         ->assertDontSee('mountTableAction(\'reassign_driver\', \''.$vehicleWithNormalTrip->id.'\')', false)
         ->assertDontSee('mountTableAction(\'resolve_km_report\', \''.$vehicleWithNormalTrip->id.'\')', false)
@@ -384,7 +384,7 @@ test('vehicle dispatch board prioritizes resolve_km_report when a driver swap tr
     $row = dispatchWidgetRowFor($vehicle->plate_number);
     expect($row['statusAction']['name'] ?? null)->toBe('resolve_km_report');
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->mountTableAction('resolve_km_report', $vehicle)
         ->assertHasNoTableActionErrors();
 });
@@ -440,7 +440,7 @@ test('vehicle dispatch board shows list of all trips in the day when clicking ve
         ->and($todayTrips->last()->trip_code)->toBe('TRIP-TODAY-001')
         ->and(VehicleDispatchBoard::getTodayTripsCount($vehicle))->toBe(2);
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->call('openTripModal', $vehicle->id)
         ->assertDispatched('open-modal', id: 'vehicle-trip-modal')
         // Mã chuyến đã ẩn khỏi modal; số chuyến kiểm tra qua badge và tổng.
@@ -479,7 +479,7 @@ test('trip modal and gps modal show the customer code', function () {
         'status' => OrderStatus::Completed,
     ]);
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->call('openTripModal', $vehicle->id)
         ->assertSee('SAFO')
         ->call('openGpsModal', $vehicle->id)
@@ -501,7 +501,7 @@ test('vehicle dispatch board shows friendly empty state when vehicle has no trip
 
     expect($todayTrips)->toHaveCount(0);
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->call('openTripModal', $vehicle->id)
         ->assertDispatched('open-modal', id: 'vehicle-trip-modal')
         ->assertSee('Không có chuyến xe nào trong ngày hôm nay');
@@ -520,7 +520,7 @@ test('vehicle dispatch board reacts to echo TripUpdated event by refreshing tabl
         'trip_code' => 'TRIP-RT-DISPATCH',
     ]);
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->call('onTripUpdated', [
             'trip_id' => $trip->id,
             'action' => 'updated',
@@ -890,7 +890,7 @@ test('vehicle trip modal displays pending trips and prioritizes in-progress over
     // Số chuyến đếm trên bảng (cột Chuyến) vẫn chỉ đếm các chuyến từ bắt đầu đến kết thúc (loại trừ pending)
     expect(VehicleDispatchBoard::getTodayTripsCount($vehicle))->toBe(2);
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->call('openTripModal', $vehicle->id)
         ->assertDispatched('open-modal', id: 'vehicle-trip-modal')
         ->assertSee('1 đang chạy')
@@ -1132,7 +1132,7 @@ test('vehicle dispatch board calculates km over and highlights background based 
         ->and($dataDanger['cellClass'])->toContain('km-over-cell');
 
     // Kiểm tra trên Livewire View có render đúng màu vàng và đỏ
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->assertStatus(200)
         ->assertSee('29C-KM-WARN')
         ->assertSee('2.800')
@@ -1152,7 +1152,7 @@ test('vehicle dispatch board renders loading overlay and spam click protection f
         'is_active' => true,
     ]);
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->assertStatus(200)
         ->assertSee('wire:loading', false)
         ->assertSee('wire:target="openTripModal, openGpsModal"', false)
@@ -1446,7 +1446,7 @@ test('getGroupedVehicles sorts vehicles by status priority within each location 
 });
 
 test('VehicleDispatchBoard sortTable toggles sorting between status and plate_number', function () {
-    $component = Livewire::test(VehicleDispatchBoard::class);
+    $component = Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class);
 
     // Mặc định sortBy là status, sortDirection là desc
     expect($component->get('sortBy'))->toBe('status')
@@ -1664,7 +1664,7 @@ test('idle engine status shows minutes and turns red after 20 minutes', function
 test('dispatch board shows a refresh countdown driven by a single timer', function () {
     $this->actingAs(User::factory()->create());
 
-    Livewire::test(VehicleDispatchBoard::class)->assertOk();
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)->assertOk();
 
     expect(dispatchWidgetConfiguration()['refreshSeconds'])->toBe(VehicleDispatchBoard::REFRESH_SECONDS);
 });
@@ -1684,7 +1684,7 @@ test('dispatch board shows the new trip status right after a TripUpdated event',
 
     $trip->update(['status' => TripStatus::ArrivedPickup]);
 
-    Livewire::test(VehicleDispatchBoard::class)
+    Livewire::withoutLazyLoading()->test(VehicleDispatchBoard::class)
         ->call('onTripUpdated', ['trip_id' => $trip->id, 'action' => 'updated'])
         ->assertOk();
 

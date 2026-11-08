@@ -4,6 +4,7 @@
     {{-- Thân trang (chọn kỳ, tìm, tab, bảng) do widget React vẽ; page chỉ truyền kỳ ban đầu từ URL --}}
     <div class="fi-js-widget-bare">
         @livewire(\App\Filament\Widgets\DriverMonthlyKmTable::class, [
+            'defer' => true,
             'period' => $period,
             'date' => $date,
         ])
