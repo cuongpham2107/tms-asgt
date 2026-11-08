@@ -17,8 +17,8 @@ use Carbon\CarbonInterface;
  * Kiểm tra vị trí khi tài xế gửi mốc hành trình.
  *
  * Lớp A: GPS điện thoại phải ở gần xe (vị trí EUP).
- * Lớp B: với mốc lấy/giao hàng, xe phải vào gần location trong vài phút trước lúc gửi (theo lộ trình EUP;
- * không có lộ trình thì dùng vị trí EUP hiện tại, thiếu EUP thì dùng GPS điện thoại).
+ * Lớp B: với mốc lấy/giao hàng, xe (lộ trình EUP vài phút trước lúc gửi, không có thì vị trí EUP hiện tại)
+ * HOẶC GPS điện thoại phải ở gần location; chỉ ngoài phạm vi khi cả hai đều xa.
  * Thiếu dữ liệu thì trả Unverified — không bao giờ chặn vì thiếu dữ liệu. Mốc đảo lái không kiểm tra.
  */
 class CheckpointGeofenceService
@@ -60,16 +60,13 @@ class CheckpointGeofenceService
         if ($locationPosition === null) {
             [$locationStatus, $locationDistanceM] = [GeoCheckStatus::Skipped, null];
         } else {
-            $trackMatch = $this->compareTrackWithLocation($vehicle, $type, $locationPosition, $locationRadiusM);
-            if ($trackMatch !== null) {
-                [$locationStatus, $locationDistanceM] = $trackMatch;
-                $eupConfirmedAtLocation = ($locationStatus === GeoCheckStatus::Valid);
-            } elseif ($eup !== null) {
-                [$locationStatus, $locationDistanceM] = $this->compare($eup, $locationPosition, $locationRadiusM);
-                $eupConfirmedAtLocation = ($locationStatus === GeoCheckStatus::Valid);
-            } else {
-                [$locationStatus, $locationDistanceM] = $this->compare($phone, $locationPosition, $locationRadiusM);
-            }
+            $vehicleMatch = $this->compareTrackWithLocation($vehicle, $type, $locationPosition, $locationRadiusM)
+                ?? $this->compare($eup, $locationPosition, $locationRadiusM);
+            $eupConfirmedAtLocation = ($vehicleMatch[0] === GeoCheckStatus::Valid);
+
+            [$locationStatus, $locationDistanceM] = $eupConfirmedAtLocation
+                ? $vehicleMatch
+                : $this->eitherInRange($vehicleMatch, $this->compare($phone, $locationPosition, $locationRadiusM));
         }
 
         return new GeofenceResult(
@@ -173,6 +170,27 @@ class CheckpointGeofenceService
             $distanceM <= $limitM ? GeoCheckStatus::Valid : GeoCheckStatus::OutOfRange,
             $distanceM,
         ];
+    }
+
+    /**
+     * Lớp B đạt khi xe HOẶC điện thoại trong bán kính (hai nguồn dùng bản đồ khác nhau nên sai số khác nhau).
+     * Chỉ ngoài phạm vi khi không nguồn nào trong bán kính mà có ít nhất một nguồn đo được; không nguồn nào có dữ liệu thì Unverified.
+     *
+     * @param  array{0: GeoCheckStatus, 1: ?int}  $vehicle
+     * @param  array{0: GeoCheckStatus, 1: ?int}  $phone
+     * @return array{0: GeoCheckStatus, 1: ?int}
+     */
+    private function eitherInRange(array $vehicle, array $phone): array
+    {
+        if ($phone[0] === GeoCheckStatus::Valid) {
+            return $phone;
+        }
+
+        $distances = array_filter([$vehicle[1], $phone[1]], fn (?int $distanceM): bool => $distanceM !== null);
+
+        return $distances === []
+            ? [GeoCheckStatus::Unverified, null]
+            : [GeoCheckStatus::OutOfRange, min($distances)];
     }
 
     /**

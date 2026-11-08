@@ -157,12 +157,25 @@ test('pickup checkpoints compare the vehicle with the order pickup location', fu
         ->and($left->locationStatus)->toBe(GeoCheckStatus::Valid);
 });
 
-test('vehicle far from the location is out of range even when the phone is near', function () {
+test('vehicle far from the location is still valid when the phone is near', function () {
     $this->vehicle->update(['gps_lat' => 21.0 + GEO_FAR]);
 
     $result = ($this->check)(CheckpointType::ArrivedPickup, ['gps_lat' => 21.0, 'gps_lng' => 105.0]);
 
-    expect($result->locationStatus)->toBe(GeoCheckStatus::OutOfRange);
+    expect($result->locationStatus)->toBe(GeoCheckStatus::Valid)
+        ->and($result->locationDistanceM)->toBe(0)
+        ->and($result->eupConfirmedAtLocation)->toBeFalse();
+});
+
+test('location is out of range only when both the vehicle and the phone are far', function () {
+    $this->vehicle->update(['gps_lat' => 21.0 + GEO_FAR]);
+
+    $bothFar = ($this->check)(CheckpointType::ArrivedPickup, ['gps_lat' => 21.0 - GEO_FAR, 'gps_lng' => 105.0]);
+    $vehicleFarNoPhone = ($this->check)(CheckpointType::ArrivedPickup);
+
+    expect($bothFar->locationStatus)->toBe(GeoCheckStatus::OutOfRange)
+        ->and($bothFar->locationDistanceM)->toBeBetween(630, 700)
+        ->and($vehicleFarNoPhone->locationStatus)->toBe(GeoCheckStatus::OutOfRange);
 });
 
 test('without fresh EUP the phone position is compared with the location', function () {
@@ -256,13 +269,13 @@ test('leaving is valid when the vehicle was in the area in the last 30 minutes b
         ->and($tooOld->locationStatus)->toBe(GeoCheckStatus::OutOfRange);
 });
 
-test('arrival is out of range when the vehicle stayed far away during the window', function () {
+test('arrival is out of range when the vehicle stayed far away during the window and the phone is far', function () {
     $this->vehicle->update(['gps_lat' => 21.0 + GEO_FAR]);
     foreach ([4, 2, 0] as $minutesAgo) {
         logVehiclePoint($this->vehicle, 21.0 + GEO_FAR, $minutesAgo);
     }
 
-    $result = ($this->check)(CheckpointType::ArrivedPickup, ['gps_lat' => 21.0, 'gps_lng' => 105.0]);
+    $result = ($this->check)(CheckpointType::ArrivedPickup, ['gps_lat' => 21.0 + GEO_FAR, 'gps_lng' => 105.0]);
 
     expect($result->locationStatus)->toBe(GeoCheckStatus::OutOfRange);
 });

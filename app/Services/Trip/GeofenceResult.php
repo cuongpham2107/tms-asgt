@@ -60,7 +60,7 @@ final readonly class GeofenceResult
         if ($enforceLocation && $this->locationStatus === GeoCheckStatus::OutOfRange) {
             return [
                 'message' => sprintf(
-                    'Xe đang cách %s %s. Vui lòng gửi khi xe đã đến nơi. Nếu xe đã ở đúng điểm, vui lòng thử lại sau 1 phút hoặc liên hệ Điều hành.',
+                    'Cả xe và điện thoại đều đang cách %s %s. Vui lòng gửi khi xe đã đến nơi. Nếu xe đã ở đúng điểm, vui lòng thử lại sau 1 phút hoặc liên hệ Điều hành.',
                     $this->locationCode ?? 'điểm đến',
                     $this->formatDistance($this->locationDistanceM),
                 ),
