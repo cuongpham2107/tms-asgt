@@ -305,9 +305,6 @@ class TripsTable extends BaseTable
                     ->label('Phương tiện'),
             ])
             ->searchable(false)
-
-            // Trang hiện ngay, dữ liệu tải ngay sau (bảng lớn)
-            ->deferLoading()
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(25)
             ->recordActions([

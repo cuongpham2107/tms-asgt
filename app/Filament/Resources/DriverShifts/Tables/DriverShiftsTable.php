@@ -75,7 +75,6 @@ class DriverShiftsTable extends BaseTable
             ], layout: FiltersLayout::AboveContent)
             ->filtersFormColumns(1)
             ->deferFilters(false)
-            ->deferLoading()
             ->recordActions([
                 ActionGroup::make([
                     ViewAction::make()

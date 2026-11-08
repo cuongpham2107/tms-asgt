@@ -15,6 +15,7 @@ use App\Observers\TripObserver;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
+use Filament\Tables\Table;
 use Illuminate\Database\Events\ConnectionEstablished;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -86,5 +87,9 @@ class AppServiceProvider extends ServiceProvider
         } catch (\Throwable) {
             // Ignore connection initialization exceptions during boot
         }
+
+        Table::configureUsing(function (Table $table): void {
+            $table->loadingSkeleton();
+        });
     }
 }

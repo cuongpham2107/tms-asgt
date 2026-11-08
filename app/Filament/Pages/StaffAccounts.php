@@ -208,7 +208,7 @@ class StaffAccounts extends Page implements HasTable
             ], position: RecordActionsPosition::BeforeColumns)
             ->defaultSort('id', 'desc')
             // Trang hiện ngay, dữ liệu tải ngay sau (bảng lớn)
-            ->deferLoading()
+            ->loadingSkeleton()
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(25);
     }

@@ -97,7 +97,7 @@ class UsersTable
             ], layout: FiltersLayout::AboveContent)
             ->filtersFormColumns(1)
             ->deferFilters(false)
-            ->deferLoading()
+            ->loadingSkeleton()
             ->recordActions([
                 EditAction::make()
                     ->iconButton()
