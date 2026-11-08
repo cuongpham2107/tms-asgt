@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { JsonValue, JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities, Snapshot } from '@filament/widgets/js-widget'
-import { type Deferred, requestDataOnce, TableSkeleton } from './table-skeleton'
+import { requestDataOnce, SkeletonRows } from './table-skeleton'
 
 interface Row {
     id: number
@@ -45,6 +45,8 @@ interface Group {
 }
 
 interface Configuration {
+    /** false ở lần render đầu: chỉ có khung, chưa có xe. */
+    loaded: boolean
     title: string
     columns: string[]
     groups: Group[]
@@ -281,7 +283,9 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                        {configuration.groups.length === 0 && (
+                        {!configuration.loaded && <SkeletonRows columns={configuration.columns.length} cellClassName="border-r border-gray-100 px-2 py-2.5 align-middle dark:border-white/5" />}
+
+                        {configuration.loaded && configuration.groups.length === 0 && (
                             <tr>
                                 <td colSpan={18} className="py-8 text-center text-gray-500 italic">
                                     Không tìm thấy xe nào phù hợp.
@@ -424,16 +428,13 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
     )
 }
 
-const mountVehicleDispatchTable: JsWidgetRenderer<Deferred<Configuration>, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
+const mountVehicleDispatchTable: JsWidgetRenderer<Configuration, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
     const root = createRoot(host)
     const dataRequest = { requested: false }
 
-    const update = ({ configuration }: JsWidgetProps<Deferred<Configuration>>) => {
-        if (! configuration.loaded) {
+    const update = ({ configuration }: JsWidgetProps<Configuration>) => {
+        if (!configuration.loaded) {
             requestDataOnce(utilities.$wire, dataRequest)
-            root.render(<TableSkeleton columns={configuration.skeletonColumns} />)
-
-            return
         }
 
         root.render(<DispatchTable configuration={configuration} wire={utilities.$wire} />)

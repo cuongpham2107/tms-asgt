@@ -1089,3 +1089,17 @@ test('sheet 1 trip summary simplifies multi-point journey to first and last poin
 
     expect($sheet->getCell('E6')->getValue())->toBe('NEWWING -> ALSE');
 });
+
+test('statistics widget first render sends only the frame so React can show the skeleton', function () {
+    $config = Livewire::test(TripStatisticsTable::class, [
+        'activeTab' => 'external',
+        'startDate' => '2026-10-01',
+        'endDate' => '2026-10-31',
+    ])->instance()->getRendererConfiguration();
+
+    expect($config['loaded'])->toBeFalse()
+        ->and($config['rows'])->toBe([])
+        ->and($config['pagination']['total'])->toBe(0)
+        ->and(collect($config['tabs'])->pluck('key')->all())->toBe(['HHHK', 'external', 'empty'])
+        ->and($config['filters']['activeTab'])->toBe('external');
+});

@@ -2,10 +2,10 @@
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Traits\HasTableLoadingSkeleton;
 use App\Filament\Traits\HasTripStatistics;
 use Filament\Widgets\Concerns\HasJsRenderer;
 use Filament\Widgets\Widget;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Vite;
 use Livewire\Attributes\Reactive;
 
@@ -16,8 +16,10 @@ use Livewire\Attributes\Reactive;
 class TripStatisticsTable extends Widget
 {
     use HasJsRenderer;
-    use HasTableLoadingSkeleton;
     use HasTripStatistics;
+
+    /** Lần render đầu chỉ gửi khung để React vẽ skeleton; true thì kèm dữ liệu (React bật sau khi mount). */
+    public bool $isReady = false;
 
     protected ?string $heading = 'Bảng thống kê chuyến & cước';
 
@@ -59,14 +61,6 @@ class TripStatisticsTable extends Widget
     #[Reactive]
     public int $dataVersion = 0;
 
-    /**
-     * @return array<int, string>
-     */
-    protected function getSkeletonColumns(): array
-    {
-        return ['STT', 'Mã đơn hàng', 'BSX', 'Ngày', 'Hành trình', 'TG đóng hàng (A)', 'TG xe chạy (B)', 'TG đến (C)', 'TG hạ hàng (D)', 'Khách hàng', 'Họ tên lái xe', 'Km có hàng'];
-    }
-
     public function getRenderer(): string
     {
         return Vite::asset('resources/js/filament/widgets/trip-statistics-table.tsx');
@@ -77,18 +71,25 @@ class TripStatisticsTable extends Widget
      */
     public function getRendererConfiguration(): array
     {
-        if (! $this->isReady) {
-            return $this->getPendingRendererConfiguration();
-        }
-
-        $paginator = $this->getPaginator();
-        $tabCounts = $this->getTabCounts();
-        $metrics = $this->getSummaryMetrics();
+        // Chưa sẵn sàng: chỉ gửi khung (tab, bộ lọc, cột) với dữ liệu rỗng để React vẽ skeleton, không truy vấn nặng.
+        $isReady = $this->isReady;
+        $paginator = $isReady ? $this->getPaginator() : new LengthAwarePaginator([], 0, max(10, $this->perPage), 1);
+        $tabCounts = $isReady ? $this->getTabCounts() : ['HHHK' => 0, 'external' => 0, 'empty' => 0];
+        $metrics = $isReady ? $this->getSummaryMetrics() : [
+            'total_trips' => 0,
+            'total_records' => 0,
+            'total_km' => 0,
+            'total_km_loaded' => 0,
+            'total_km_empty' => 0,
+            'avg_duration' => null,
+            'count_waiting_22h' => 0,
+            'total_payment' => 0,
+        ];
         $showCharges = $this->activeTab === 'external';
-        $chargeCounts = $showCharges ? $this->getChargeStatusCounts() : null;
+        $chargeCounts = $showCharges ? ($isReady ? $this->getChargeStatusCounts() : ['locked' => 0, 'missing' => 0]) : null;
 
         return [
-            'loaded' => true,
+            'loaded' => $isReady,
             ...$this->getReactTableConfiguration($paginator),
             'filters' => [
                 'activeTab' => $this->activeTab,

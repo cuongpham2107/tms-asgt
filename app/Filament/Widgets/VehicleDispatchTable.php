@@ -4,7 +4,6 @@ namespace App\Filament\Widgets;
 
 use App\Enums\TripStatus;
 use App\Filament\Pages\VehicleDispatchBoard;
-use App\Filament\Traits\HasTableLoadingSkeleton;
 use App\Filament\Traits\HasVehicleDispatchRows;
 use App\Models\Vehicle;
 use Filament\Widgets\Concerns\HasJsRenderer;
@@ -19,8 +18,10 @@ use Livewire\Attributes\Reactive;
 class VehicleDispatchTable extends Widget
 {
     use HasJsRenderer;
-    use HasTableLoadingSkeleton;
     use HasVehicleDispatchRows;
+
+    /** Lần render đầu chỉ gửi khung để React vẽ skeleton; true thì kèm dữ liệu (React bật sau khi mount). */
+    public bool $isReady = false;
 
     /** @var array<int, string> */
     private const COLUMNS = [
@@ -57,14 +58,6 @@ class VehicleDispatchTable extends Widget
     #[Reactive]
     public int $dataVersion = 0;
 
-    /**
-     * @return array<int, string>
-     */
-    protected function getSkeletonColumns(): array
-    {
-        return self::COLUMNS;
-    }
-
     public function getRenderer(): string
     {
         return Vite::asset('resources/js/filament/widgets/vehicle-dispatch-table.tsx');
@@ -75,11 +68,8 @@ class VehicleDispatchTable extends Widget
      */
     public function getRendererConfiguration(): array
     {
-        if (! $this->isReady) {
-            return $this->getPendingRendererConfiguration();
-        }
-
-        $groups = collect($this->getGroupedVehicles())
+        // Chưa sẵn sàng: gửi khung (tiêu đề, cột, bộ lọc) không kèm xe để React vẽ skeleton.
+        $groups = collect($this->isReady ? $this->getGroupedVehicles() : [])
             ->map(fn (array $group): array => [
                 'code' => $group['code'],
                 'title' => $group['title'],
@@ -90,7 +80,7 @@ class VehicleDispatchTable extends Widget
             ->all();
 
         return [
-            'loaded' => true,
+            'loaded' => $this->isReady,
             'title' => 'KIỂM SOÁT TÌNH TRẠNG XE 🚛',
             'columns' => self::COLUMNS,
             'groups' => $groups,

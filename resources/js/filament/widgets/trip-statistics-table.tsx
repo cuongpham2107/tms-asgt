@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { JsonValue, JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities, Snapshot } from '@filament/widgets/js-widget'
-import { type Deferred, requestDataOnce, TableSkeleton } from './table-skeleton'
+import { requestDataOnce, SkeletonBar, SkeletonRows } from './table-skeleton'
 
 interface Charge {
     priceCode: string | null
@@ -63,6 +63,8 @@ interface Row {
 }
 
 interface Configuration {
+    /** false ở lần render đầu: chỉ có khung (tab, bộ lọc, cột), chưa có số liệu. */
+    loaded: boolean
     rows: Row[]
     showCharges: boolean
     showChargeableWeight: boolean
@@ -764,12 +766,19 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                                 onClick={() => run(() => page.setActiveTab(tab.key))}
                             >
                                 {tab.label}
-                                <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20 text-white' : tabCountTones[tab.tone]}`}>{count(tab.count)}</span>
+                                <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20 text-white' : tabCountTones[tab.tone]}`}>{configuration.loaded ? count(tab.count) : <SkeletonBar className="w-4" />}</span>
                             </button>
                         )
                     })}
                 </div>
 
+                {!configuration.loaded ? (
+                    <div className="ms-auto flex items-center gap-4" aria-hidden="true">
+                        <SkeletonBar className="w-24" />
+                        <SkeletonBar className="w-14" />
+                        <SkeletonBar className="w-28" />
+                    </div>
+                ) : (
                 <div className="ms-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
                     <span>
                         <b className="font-semibold text-gray-900 dark:text-white">{count(metrics.trips)}</b> chuyến · {count(metrics.records)} đơn
@@ -791,6 +800,7 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                         </span>
                     )}
                 </div>
+                )}
             </div>
 
             {/* Hàng 2: Chip lọc trạng thái cước (bên trái) + Bộ lọc tìm kiếm & quản lý cột (cuối dòng bên phải) */}
@@ -816,7 +826,7 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                                 >
                                     <span className={`h-3 w-3 rounded-sm ring-1 ${chipSwatches[filter.tone]}`} />
                                     {filter.label}
-                                    <span className="font-mono text-[11px] opacity-70">{count(filter.count)}</span>
+                                    <span className="font-mono text-[11px] opacity-70">{configuration.loaded ? count(filter.count) : <SkeletonBar className="w-4" />}</span>
                                 </button>
                             )
                         })}
@@ -1002,7 +1012,9 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                            {configuration.rows.length === 0 ? (
+                            {!configuration.loaded ? (
+                                <SkeletonRows columns={visibleColumns.length} />
+                            ) : configuration.rows.length === 0 ? (
                                 <tr>
                                     <td colSpan={visibleColumns.length} className="py-12 text-center text-gray-500 dark:text-gray-400">
                                         <div className="flex flex-col items-center justify-center gap-2">
@@ -1092,16 +1104,13 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
     )
 }
 
-const mountTripStatisticsTable: JsWidgetRenderer<Deferred<Configuration>, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
+const mountTripStatisticsTable: JsWidgetRenderer<Configuration, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
     const root = createRoot(host)
     const dataRequest = { requested: false }
 
-    const update = ({ configuration }: JsWidgetProps<Deferred<Configuration>>) => {
-        if (! configuration.loaded) {
+    const update = ({ configuration }: JsWidgetProps<Configuration>) => {
+        if (!configuration.loaded) {
             requestDataOnce(utilities.$wire, dataRequest)
-            root.render(<TableSkeleton columns={configuration.skeletonColumns} />)
-
-            return
         }
 
         root.render(<TripStatistics configuration={configuration} wire={utilities.$wire} />)

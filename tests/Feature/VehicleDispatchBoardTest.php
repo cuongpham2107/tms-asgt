@@ -1693,7 +1693,7 @@ test('dispatch board shows the new trip status right after a TripUpdated event',
     expect(dispatchWidgetRowFor('20C-LIVE')['statusLabel'])->toBe(TripStatus::ArrivedPickup->getLabel());
 });
 
-test('dispatch widget first renders only the skeleton columns, then loads data once ready', function () {
+test('dispatch widget first renders the table frame without vehicles, then loads data once ready', function () {
     Vehicle::factory()->create([
         'plate_number' => '20C-DEFER',
         'type' => VehicleOwnerType::Company,
@@ -1702,8 +1702,9 @@ test('dispatch widget first renders only the skeleton columns, then loads data o
 
     $widget = Livewire::test(VehicleDispatchTable::class);
 
-    expect($widget->instance()->getRendererConfiguration())->toMatchArray(['loaded' => false])
-        ->and($widget->instance()->getRendererConfiguration()['skeletonColumns'])->toContain('BSX');
+    $pending = $widget->instance()->getRendererConfiguration();
+    expect($pending)->toMatchArray(['loaded' => false, 'groups' => [], 'totalVehicles' => 0])
+        ->and($pending['columns'])->toContain('BSX');
     $widget->assertDontSee('20C-DEFER');
 
     $widget->set('isReady', true)->assertSee('20C-DEFER');

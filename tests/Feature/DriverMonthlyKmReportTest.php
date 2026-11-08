@@ -413,3 +413,15 @@ test('page opens the timeline popup of a clicked trip', function () {
         ->assertDispatched('open-modal', id: 'driver-trip-timeline')
         ->assertSee(['Hành trình', $trip->trip_code]);
 });
+
+test('report widget first render sends only the period so React loads the numbers itself', function () {
+    $config = Livewire::test(DriverMonthlyKmTable::class, ['period' => 'month', 'date' => '2026-10-15'])
+        ->instance()
+        ->getRendererConfiguration();
+
+    expect($config['loaded'])->toBeFalse()
+        ->and($config['period'])->toBe('month')
+        ->and($config['periodLabel'])->not->toBe('')
+        ->and($config['drivers'])->toBe([])
+        ->and($config['trips'])->toBe([]);
+});

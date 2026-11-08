@@ -5,7 +5,6 @@ namespace App\Filament\Widgets;
 use App\Enums\OnDutyLocation;
 use App\Enums\TripStatus;
 use App\Filament\Pages\DriverMonthlyKmReport;
-use App\Filament\Traits\HasTableLoadingSkeleton;
 use App\Services\DriverMonthlyKmReportService;
 use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
@@ -23,21 +22,15 @@ use Livewire\Attributes\Renderless;
 class DriverMonthlyKmTable extends Widget
 {
     use HasJsRenderer;
-    use HasTableLoadingSkeleton;
+
+    /** Lần render đầu chỉ gửi thông tin kỳ; React hiện skeleton rồi lấy số liệu qua loadReport(). True thì gửi kèm số liệu. */
+    public bool $isReady = false;
 
     protected int|string|array $columnSpan = 'full';
 
     public string $period = 'month';
 
     public string $date = '';
-
-    /**
-     * @return array<int, string>
-     */
-    protected function getSkeletonColumns(): array
-    {
-        return ['Điểm trực', 'Tên lái xe', 'Mã NV', 'Chuyến', 'Chuyến KH', 'Km CH', 'Km KH', 'Tổng km', '% có hàng'];
-    }
 
     public function getRenderer(): string
     {
@@ -49,13 +42,23 @@ class DriverMonthlyKmTable extends Widget
      */
     public function getRendererConfiguration(): array
     {
+        $period = DriverMonthlyKmReport::normalizePeriod($this->period);
+        $date = DriverMonthlyKmReport::normalizeDate($this->date);
+
+        // Chưa sẵn sàng: chỉ gửi thông tin kỳ; React hiện skeleton và gọi loadReport() để lấy số liệu.
         if (! $this->isReady) {
-            return $this->getPendingRendererConfiguration();
+            return [
+                'loaded' => false,
+                ...$this->periodMeta($period, $date),
+                'drivers' => [],
+                'trips' => [],
+                'totals' => ['trips' => 0, 'emptyTrips' => 0, 'kmTotal' => 0, 'kmLoaded' => 0, 'kmEmpty' => 0],
+            ];
         }
 
         return [
             'loaded' => true,
-            ...$this->report(DriverMonthlyKmReport::normalizePeriod($this->period), DriverMonthlyKmReport::normalizeDate($this->date)),
+            ...$this->report($period, $date),
         ];
     }
 
@@ -98,11 +101,7 @@ class DriverMonthlyKmTable extends Widget
             ->all();
 
         return [
-            'period' => $period,
-            'date' => $date,
-            'periodLabel' => DriverMonthlyKmReport::labelFor($period, $date),
-            'isCurrent' => now()->between($from, $to),
-            'hasNext' => ! $to->isFuture(),
+            ...$this->periodMeta($period, $date),
             'drivers' => $drivers,
             'trips' => $lines
                 ->map(fn (array $line): array => [
@@ -132,6 +131,22 @@ class DriverMonthlyKmTable extends Widget
                 'kmLoaded' => round($lines->sum('km_loaded'), 1),
                 'kmEmpty' => round($lines->sum('km_empty'), 1),
             ],
+        ];
+    }
+
+    /**
+     * @return array{period: string, date: string, periodLabel: string, isCurrent: bool, hasNext: bool}
+     */
+    private function periodMeta(string $period, string $date): array
+    {
+        [$from, $to] = DriverMonthlyKmReport::rangeFor($period, $date);
+
+        return [
+            'period' => $period,
+            'date' => $date,
+            'periodLabel' => DriverMonthlyKmReport::labelFor($period, $date),
+            'isCurrent' => now()->between($from, $to),
+            'hasNext' => ! $to->isFuture(),
         ];
     }
 

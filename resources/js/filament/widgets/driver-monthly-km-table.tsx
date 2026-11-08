@@ -1,8 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
-import type { JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities } from '@filament/widgets/js-widget'
-import { type Deferred, requestDataOnce, TableSkeleton } from './table-skeleton'
+import type { JsWidgetRenderer, JsWidgetUtilities } from '@filament/widgets/js-widget'
 
 interface Driver {
     id: number
@@ -60,6 +59,8 @@ interface StatementRow {
 type Period = 'today' | 'week' | 'month'
 
 interface Configuration {
+    /** false ở lần render đầu: chỉ có thông tin kỳ, số liệu lấy qua loadReport(). */
+    loaded?: boolean
     period: Period
     date: string
     periodLabel: string
@@ -525,24 +526,25 @@ const SkeletonRows = ({ columns, rows = 10 }: { columns: number; rows?: number }
 )
 
 /** Khung bảng đang tải: giữ đầu bảng navy như bảng thật để bố cục không nhảy khi dữ liệu về. */
-const SkeletonCard = ({ title, columns, rows = 12, className = '' }: { title: string; columns: number; rows?: number; className?: string }) => (
+/** Khung chờ cùng tiêu đề và tên cột với bảng thật, chỉ phần thân là vạch xám. */
+const SkeletonCard = ({ title, headers, rows = 20, className = '' }: { title: string; headers: readonly string[]; rows?: number; className?: string }) => (
     <div className={`${card} ${className}`} role="status" aria-label="Đang tải dữ liệu">
         <table className="dispatch-table w-full border-collapse font-sans text-xs">
             <thead>
                 <tr style={NAVY}>
-                    <th colSpan={columns} className="border-b border-white/10 px-4 py-2.5 text-center text-sm font-bold uppercase tracking-wider text-white sm:text-base">
+                    <th colSpan={headers.length} className="border-b border-white/10 px-4 py-2.5 text-center text-sm font-bold uppercase tracking-wider text-white sm:text-base">
                         {title}
                     </th>
                 </tr>
-                <tr style={NAVY}>
-                    {Array.from({ length: columns }, (_, column) => (
-                        <th key={column} className={th}>
-                            <div className="mx-auto h-2.5 w-3/5 rounded bg-white/20" />
+                <tr className="text-[11px] font-bold uppercase tracking-wide text-white" style={NAVY}>
+                    {headers.map((label, index) => (
+                        <th key={index} className={th}>
+                            {label}
                         </th>
                     ))}
                 </tr>
             </thead>
-            <SkeletonRows columns={columns} rows={rows} />
+            <SkeletonRows columns={headers.length} rows={rows} />
         </table>
     </div>
 )
@@ -1064,7 +1066,10 @@ const PeriodBar = ({ report, onChange }: { report: Configuration; onChange: (per
 const DriverReport = ({ configuration, wire }: { configuration: Configuration; wire: Wire }) => {
     const initial = useMemo(readUrlState, [])
     const [report, setReport] = useState<Configuration>(configuration)
-    const [pending, setPending] = useState<{ period: Period; date: string } | null>(null)
+    // Lần đầu chưa có số liệu: coi như đang đổi sang kỳ trên URL để hiện skeleton và gọi loadReport().
+    const [pending, setPending] = useState<{ period: Period; date: string } | null>(
+        configuration.loaded === false ? { period: configuration.period, date: configuration.date } : null,
+    )
     const [reportError, setReportError] = useState<string | null>(null)
     const [tab, setTab] = useState<Tab>(initial.tab)
     const [search, setSearch] = useState(initial.search)
@@ -1209,8 +1214,8 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                                 <div className={`${card} px-3 py-8 text-center text-rose-600 xl:col-span-5`}>{evaluation.error}</div>
                             ) : isLoading || evaluation.loading || evaluation.data === null ? (
                                 <>
-                                    <SkeletonCard title={`Đánh giá lái xe · ${report.periodLabel}`} columns={8} className="xl:col-span-3" />
-                                    <SkeletonCard title="Chi tiết chuyến" columns={5} rows={6} className="xl:col-span-2" />
+                                    <SkeletonCard title={`Đánh giá lái xe · ${report.periodLabel}`} headers={['Tên lái xe', 'Mã NV', 'Chuyến', 'Cần KT', 'TB / chuyến', 'Lệch chuẩn', 'TB / chuyến', 'Lệch chuẩn']} className="xl:col-span-3" />
+                                    <SkeletonCard title="Chi tiết chuyến" headers={['Ngày', 'Mã đơn', 'Tuyến', 'Hoàn thành', 'Chờ (đóng + hạ)']} rows={12} className="xl:col-span-2" />
                                 </>
                             ) : (
                                 <>
@@ -1224,8 +1229,8 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                     <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-5">
                         {isLoading ? (
                             <>
-                                <SkeletonCard title="Thống kê chuyến & km lái xe" columns={9} className="xl:col-span-3" />
-                                <SkeletonCard title="Chi tiết chuyến" columns={6} rows={6} className="xl:col-span-2" />
+                                <SkeletonCard title="Thống kê chuyến & km lái xe" headers={['Điểm trực', 'Tên lái xe', 'Mã NV', 'Chuyến', 'Chuyến KH', 'Km CH', 'Km KH', 'Tổng km', '% có hàng']} className="xl:col-span-3" />
+                                <SkeletonCard title="Chi tiết chuyến" headers={['Ngày', 'Mã đơn', 'BSX', 'Km CH', 'Km KH', 'Tổng']} rows={12} className="xl:col-span-2" />
                             </>
                         ) : (
                         <>
@@ -1269,31 +1274,13 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
     )
 }
 
-const mountDriverMonthlyKmTable: JsWidgetRenderer<Deferred<Configuration>, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
+const mountDriverMonthlyKmTable: JsWidgetRenderer<Configuration, WidgetMethods> = ({ host, props: initialProps, utilities }) => {
     const root = createRoot(host)
-    const dataRequest = { requested: false }
-    let isReportMounted = false
 
-    // Kỳ đổi trong React (loadReport) nên chỉ lấy configuration có dữ liệu lần đầu; sau đó bỏ qua update để không mất state.
-    const update = ({ configuration }: JsWidgetProps<Deferred<Configuration>>) => {
-        if (isReportMounted) {
-            return
-        }
+    // Kỳ đổi trong React (loadReport) nên chỉ lấy configuration lần đầu; key cố định để không mất state.
+    root.render(<DriverReport configuration={initialProps.configuration as Configuration} wire={utilities.$wire} />)
 
-        if (! configuration.loaded) {
-            requestDataOnce(utilities.$wire, dataRequest)
-            root.render(<TableSkeleton columns={configuration.skeletonColumns} />)
-
-            return
-        }
-
-        isReportMounted = true
-        root.render(<DriverReport configuration={configuration as Configuration} wire={utilities.$wire} />)
-    }
-
-    update(initialProps)
-
-    return { update, destroy: () => root.unmount() }
+    return { update: () => {}, destroy: () => root.unmount() }
 }
 
 export default mountDriverMonthlyKmTable
