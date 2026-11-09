@@ -24,9 +24,9 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['code', 'area_id']);
-            $table->index('code');
             $table->index('loc_type');
             $table->index('is_active');
+            $table->index('billing_zone_id');
         });
     }
 

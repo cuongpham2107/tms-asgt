@@ -24,8 +24,8 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index('code');
             $table->index('is_active');
+            $table->index('location_id');
         });
     }
 

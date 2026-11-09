@@ -40,6 +40,9 @@ return new class extends Migration
             $table->index(['trip_id', 'occurred_at']);
             $table->index('checkpoint_type');
             $table->index('driver_id');
+            $table->index('shift_id');
+            $table->index('order_id');
+            $table->index('delivery_point_id');
         });
     }
 

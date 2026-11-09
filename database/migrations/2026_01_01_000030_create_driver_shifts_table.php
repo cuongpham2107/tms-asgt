@@ -27,6 +27,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['driver_id', 'start_time']);
+            $table->index(['driver_id', 'end_time', 'start_time']);
             $table->index('is_overtime');
         });
     }

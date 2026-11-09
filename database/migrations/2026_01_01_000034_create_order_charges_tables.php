@@ -43,6 +43,8 @@ return new class extends Migration
             $table->index('order_id');
             $table->index('trip_id');
             $table->index('customer_id');
+            $table->index(['customer_id', 'created_at']);
+            $table->index('exported_at');
         });
 
         Schema::create('order_charge_fees', function (Blueprint $table) {
@@ -56,6 +58,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index('order_charge_id');
+            $table->index('fee_type_id');
         });
     }
 

@@ -43,11 +43,15 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
 
-            $table->index('order_code');
             $table->index('status');
             $table->index('priority');
+            $table->index('customer_id');
+            $table->index('created_by');
+            $table->index('created_at');
             $table->index(['type', 'area_id']);
-            $table->index('planned_loading_at');
+            $table->index(['area_id', 'status', 'created_at']);
+            $table->index(['customer_id', 'created_at']);
+            $table->index(['planned_loading_at', 'status']);
         });
     }
 

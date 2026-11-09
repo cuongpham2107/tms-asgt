@@ -25,6 +25,8 @@ return new class extends Migration
             $table->index('trip_id');
             $table->index('from_driver_id');
             $table->index('to_driver_id');
+            $table->index('checkpoint_id');
+            $table->index(['to_driver_id', 'to_shift_id']);
         });
     }
 

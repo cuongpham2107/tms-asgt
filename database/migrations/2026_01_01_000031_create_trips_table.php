@@ -34,12 +34,15 @@ return new class extends Migration
             $table->string('paused_reason')->nullable();
             $table->timestamps();
 
-            $table->index('trip_code');
             $table->index('status');
             $table->index('started_at');
             $table->index('completed_at');
+            $table->index('updated_at');
+            $table->index('shift_id');
             $table->index(['vehicle_id', 'status']);
             $table->index(['driver_id', 'status']);
+            $table->index(['driver_id', 'started_at']);
+            $table->index(['status', 'updated_at']);
         });
     }
 

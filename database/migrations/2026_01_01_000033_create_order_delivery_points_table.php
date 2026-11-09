@@ -25,6 +25,7 @@ return new class extends Migration
 
             $table->index(['order_id', 'sequence']);
             $table->index('status');
+            $table->index('location_id');
         });
     }
 
