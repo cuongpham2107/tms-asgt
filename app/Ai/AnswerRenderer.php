@@ -15,6 +15,8 @@ class AnswerRenderer
 
     public function render(string $markdown): string
     {
+        $markdown = str_replace('[[GỢI Ý]]', "\n\n**Gợi ý câu hỏi tiếp theo:**", $markdown);
+
         $charts = [];
         $markdown = preg_replace_callback('/```chart\s*\R(.*?)\R?```/su', function (array $match) use (&$charts): string {
             $charts[] = $match[1];

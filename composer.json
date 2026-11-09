@@ -16,6 +16,7 @@
         "dedoc/scramble": "^0.13.22",
         "eduardoribeirodev/filament-leaflet": "^5.0",
         "filament/filament": "^5.11",
+        "jason/filament-chat-assistant": "^2.1",
         "kreait/laravel-firebase": "^7.2",
         "laravel/ai": "^1.3",
         "laravel/framework": "^13.7",

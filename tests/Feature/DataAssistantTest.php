@@ -9,8 +9,8 @@ use App\Ai\Tools\SearchTrips;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
+use App\Filament\Plugins\FilamentChatAssistantPlugin;
 use App\Filament\Resources\Trips\TripResource;
-use App\Livewire\DataAssistantChat;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
@@ -23,8 +23,7 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\RateLimiter;
-use Laravel\Ai\Models\Conversation;
+use Jason\FilamentChatAssistant\Livewire\ChatAssistant;
 use Laravel\Ai\Tools\Request;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -138,76 +137,50 @@ it('trả chuyến kèm link mở dòng thời gian của chuyến', function ()
         ->toContain('[TRIP-AI-01]('.TripResource::getUrl('timeline', ['record' => $this->trip]).')');
 });
 
-it('ẩn popup và chặn gọi trợ lý khi không có quyền dùng', function () {
-    Livewire::test(DataAssistantChat::class)
-        ->assertDontSee('Trợ lý dữ liệu')
-        ->call('ask', 'Tổng cước tháng này?')
-        ->assertForbidden();
-
-    DataAssistant::assertNeverPrompted();
+it('ẩn popup chat khi không có quyền dùng', function () {
+    $this->get('/app')->assertOk()->assertDontSee('tk-assistant', false);
 });
 
-it('hỏi trợ lý, lưu hội thoại và hiển thị câu trả lời có link bấm được', function () {
-    ($this->grant)(DataAssistantChat::PERMISSION);
-    DataAssistant::fake(['Có 1 đơn chưa có cước: [ASG-CHUA-CUOC](/app/orders?search=ASG-CHUA-CUOC) <script>alert(1)</script>']);
+it('hiện danh sách câu hỏi gợi ý nhanh khi chưa có tin nhắn', function () {
+    ($this->grant)(FilamentChatAssistantPlugin::PERMISSION);
 
-    Livewire::test(DataAssistantChat::class)
-        ->assertSee('Trợ lý dữ liệu')
-        ->call('ask', 'Đơn nào chưa có cước?')
-        ->assertSet('error', null)
-        ->assertSeeHtml('<a href="/app/orders?search=ASG-CHUA-CUOC" class="da-link">ASG-CHUA-CUOC</a>')
-        ->assertDontSeeHtml('<script>alert(1)</script>')
-        ->assertSee('Đơn nào chưa có cước?');
-
-    DataAssistant::assertPrompted('Đơn nào chưa có cước?');
-    expect(Conversation::where('participant_id', $this->user->id)->count())->toBe(1);
+    Livewire::test(ChatAssistant::class)
+        ->set('open', true)
+        ->assertSee('Câu hỏi gợi ý nhanh:')
+        ->assertSee('Hôm qua có bao nhiêu chuyến, xe nào chạy nhiều nhất?')
+        ->assertSee('Hàng ngoài nào tháng này chưa có cước hoặc chưa xuất bảng kê?');
 });
 
-it('dừng khi vượt số câu hỏi trong ngày', function () {
-    ($this->grant)(DataAssistantChat::PERMISSION);
-    config(['ai.assistant.daily_limit' => 1]);
-    RateLimiter::clear('data-assistant:'.$this->user->id);
-    DataAssistant::fake(['Trả lời 1', 'Trả lời 2']);
+it('hiển thị chip gợi ý hỏi tiếp sau câu trả lời của trợ lý', function () {
+    ($this->grant)(FilamentChatAssistantPlugin::PERMISSION);
+    DataAssistant::fake(["Tháng này có 1 đơn chưa có cước.\n\n".DataAssistant::suggestionMarker()."\n- Cước tháng này của khách VFC?\n- Xe nào chạy nhiều nhất tháng này?"]);
 
-    Livewire::test(DataAssistantChat::class)
-        ->call('ask', 'Câu 1')
-        ->call('ask', 'Câu 2')
-        ->assertSet('error', 'Bạn đã hỏi đủ 1 câu hôm nay. Vui lòng quay lại vào ngày mai.');
-
-    DataAssistant::assertPrompted('Câu 1');
-    DataAssistant::assertNotPrompted('Câu 2');
-});
-
-it('không cho mở hội thoại của người khác', function () {
-    ($this->grant)(DataAssistantChat::PERMISSION);
-    $other = User::factory()->create();
-    $conversation = Conversation::create([
-        'id' => (string) str()->uuid(),
-        'participant_type' => $other->getMorphClass(),
-        'participant_id' => $other->id,
-        'title' => 'Hội thoại riêng',
-    ]);
-
-    Livewire::test(DataAssistantChat::class)
-        ->call('openConversation', $conversation->id)
-        ->assertSet('conversationId', null);
+    Livewire::test(ChatAssistant::class)
+        ->set('open', true)
+        ->set('question', 'Đơn nào chưa có cước?')
+        ->call('sendMessage')
+        ->call('requestReply')
+        ->assertSee('Tháng này có 1 đơn chưa có cước.')
+        ->assertSee('Gợi ý hỏi tiếp:')
+        ->assertSee('Cước tháng này của khách VFC?')
+        ->assertSee('Xe nào chạy nhiều nhất tháng này?');
 });
 
 it('hiện nút chat nổi trên trang admin cho người có quyền', function () {
-    ($this->grant)(DataAssistantChat::PERMISSION);
+    ($this->grant)(FilamentChatAssistantPlugin::PERMISSION);
 
-    $this->get('/app')->assertOk()->assertSee('da-fab', false)->assertSee('Hỏi dữ liệu');
+    $this->get('/app')->assertOk()->assertSee('tk-assistant', false)->assertSee('tk-assistant__toggle', false);
 });
 
 it('nút chat chỉ dựa vào quyền tùy chỉnh Use:DataAssistant, kể cả với super_admin', function () {
     Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
     $this->user->assignRole('super_admin');
 
-    $this->get('/app')->assertOk()->assertDontSee('da-fab', false);
+    $this->get('/app')->assertOk()->assertDontSee('tk-assistant', false);
 
-    ($this->grant)(DataAssistantChat::PERMISSION);
+    ($this->grant)(FilamentChatAssistantPlugin::PERMISSION);
 
-    $this->get('/app')->assertOk()->assertSee('da-fab', false);
+    $this->get('/app')->assertOk()->assertSee('tk-assistant', false);
 });
 
 it('migration tạo quyền Use:DataAssistant và gán sẵn cho super_admin', function () {
@@ -215,36 +188,31 @@ it('migration tạo quyền Use:DataAssistant và gán sẵn cho super_admin', f
 
     (require database_path('migrations/2026_11_06_081507_add_use_data_assistant_permission.php'))->up();
 
-    expect(Permission::where('name', DataAssistantChat::PERMISSION)->exists())->toBeTrue()
-        ->and($role->fresh()->hasPermissionTo(DataAssistantChat::PERMISSION))->toBeTrue();
+    expect(Permission::where('name', FilamentChatAssistantPlugin::PERMISSION)->exists())->toBeTrue()
+        ->and($role->fresh()->hasPermissionTo(FilamentChatAssistantPlugin::PERMISSION))->toBeTrue();
 });
 
-it('tách câu hỏi gợi ý cuối câu trả lời thành nút hỏi tiếp', function () {
-    ($this->grant)(DataAssistantChat::PERMISSION);
-    DataAssistant::fake(["Tháng này có 1 đơn chưa có cước.\n\n".DataAssistant::suggestionMarker()."\n- Cước tháng này của khách VFC?\n- Xe nào chạy nhiều nhất tháng này?"]);
+it('tách câu hỏi gợi ý và định dạng trong câu trả lời', function () {
+    $raw = "Tháng này có 1 đơn chưa có cước.\n\n".DataAssistant::suggestionMarker()."\n- Cước tháng này của khách VFC?\n- Xe nào chạy nhiều nhất tháng này?";
+    $html = app(AnswerRenderer::class)->render($raw);
 
-    Livewire::test(DataAssistantChat::class)
-        ->call('ask', 'Đơn nào chưa có cước?')
-        ->assertSee('Tháng này có 1 đơn chưa có cước.')
-        ->assertSee('Hỏi tiếp')
-        ->assertSeeHtml('class="da-chip"')
-        ->assertSee('Cước tháng này của khách VFC?')
-        ->assertDontSee(DataAssistant::suggestionMarker());
+    expect($html)
+        ->toContain('Tháng này có 1 đơn chưa có cước.')
+        ->toContain('Gợi ý câu hỏi tiếp theo:')
+        ->not->toContain(DataAssistant::suggestionMarker());
 });
 
 it('trình bày bảng: số căn phải, trạng thái thành nhãn màu, mã trong bảng thành chip bấm được', function () {
-    ($this->grant)(DataAssistantChat::PERMISSION);
-    DataAssistant::fake(["**Hôm qua: 2 chuyến · 200 km**\n\n| Xe | Trạng thái | Km |\n| --- | --- | --- |\n| [20C09163](/app/vehicles?search=20C09163) | Hoàn thành | 1.200 |\n| [29E08245](/app/vehicles?search=29E08245) | Đã huỷ | 80 |"]);
+    $html = app(AnswerRenderer::class)->render("**Hôm qua: 2 chuyến · 200 km**\n\n| Xe | Trạng thái | Km |\n| --- | --- | --- |\n| [20C09163](/app/vehicles?search=20C09163) | Hoàn thành | 1.200 |\n| [29E08245](/app/vehicles?search=29E08245) | Đã huỷ | 80 |");
 
-    Livewire::test(DataAssistantChat::class)
-        ->call('ask', 'Hôm qua có bao nhiêu chuyến?')
-        ->assertSee('Hôm qua: 2 chuyến · 200 km')
-        ->assertSeeHtml('<div class="da-table">')
-        ->assertSeeHtml('<a href="/app/vehicles?search=20C09163" class="da-chip-link">20C09163</a>')
-        ->assertSeeHtml('<span class="da-badge is-success">Hoàn thành</span>')
-        ->assertSeeHtml('<span class="da-badge is-danger">Đã huỷ</span>')
-        ->assertSeeHtml('<td class="is-num">1.200</td>')
-        ->assertSeeHtml('<th class="is-num">Km</th>');
+    expect($html)
+        ->toContain('Hôm qua: 2 chuyến · 200 km')
+        ->toContain('<div class="da-table">')
+        ->toContain('<a href="/app/vehicles?search=20C09163" class="da-chip-link">20C09163</a>')
+        ->toContain('<span class="da-badge is-success">Hoàn thành</span>')
+        ->toContain('<span class="da-badge is-danger">Đã huỷ</span>')
+        ->toContain('<td class="is-num">1.200</td>')
+        ->toContain('<th class="is-num">Km</th>');
 });
 
 it('thống kê linh hoạt: gom theo xe, theo ngày, doanh thu theo khách và đơn hàng ngoài chưa có cước', function () {

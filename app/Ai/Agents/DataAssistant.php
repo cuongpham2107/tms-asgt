@@ -8,12 +8,13 @@ use App\Ai\Tools\SearchCustomers;
 use App\Ai\Tools\SearchOrders;
 use App\Ai\Tools\SearchTrips;
 use App\Ai\Tools\SearchVehicles;
+use App\Models\User;
+use Jason\FilamentChatAssistant\Contracts\ChatAssistantAgent;
 use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Concerns\RemembersConversations;
-use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Promptable;
@@ -26,9 +27,40 @@ use Stringable;
 #[MaxTokens(2048)]
 #[Timeout(90)]
 #[CacheToolDefinitions]
-class DataAssistant implements Agent, Conversational, HasTools
+class DataAssistant implements ChatAssistantAgent, Conversational, HasTools
 {
     use Promptable, RemembersConversations;
+
+    /**
+     * Câu hỏi gợi ý ở màn hình chào, chia theo nhóm nghiệp vụ.
+     *
+     * @var list<array{topic: string, question: string}>
+     */
+    public const SAMPLE_QUESTIONS = [
+        ['topic' => 'Vận hành', 'question' => 'Hôm qua có bao nhiêu chuyến, xe nào chạy nhiều nhất?'],
+        ['topic' => 'Xu hướng', 'question' => 'Số chuyến theo ngày trong tháng này'],
+        ['topic' => 'Bảng kê', 'question' => 'Hàng ngoài nào tháng này chưa có cước hoặc chưa xuất bảng kê?'],
+        ['topic' => 'Doanh thu', 'question' => 'So sánh doanh thu cước 6 tháng gần đây'],
+        ['topic' => 'Khách hàng', 'question' => 'Top 10 khách hàng theo cước tháng này'],
+        ['topic' => 'Tài xế', 'question' => 'Lái xe nào bấm sai vị trí nhiều nhất tháng này?'],
+        ['topic' => 'Điểm giao', 'question' => 'Điểm nào giao lâu nhất (từ lúc đến tới lúc giao xong)?'],
+        ['topic' => 'Ca trực', 'question' => 'Tài xế nào nhiều ca trực không chạy chuyến tháng này?'],
+    ];
+
+    public function __construct(
+        public ?int $tenantId = null,
+        public ?User $user = null,
+    ) {}
+
+    public function name(): string
+    {
+        return 'Trợ lý Dữ liệu';
+    }
+
+    public function avatar(): ?string
+    {
+        return null;
+    }
 
     public function instructions(): Stringable|string
     {
