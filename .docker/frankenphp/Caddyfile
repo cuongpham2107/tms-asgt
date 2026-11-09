@@ -19,6 +19,11 @@
 		level {$CADDY_SERVER_LOG_LEVEL:INFO}
 	}
 
+	# Giới hạn dung lượng request body (đồng bộ với PHP upload_max_filesize 100M)
+	request_body {
+		max_size 100MB
+	}
+
 	route {
 		# Reverb WebSocket proxy
 		@reverb_ws {

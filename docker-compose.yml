@@ -16,6 +16,7 @@ services:
     volumes:
       - .:/var/www/html
       - ./.docker/frankenphp/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./.docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini:ro
       - ./.env.docker:/var/www/html/.env:ro
       - /var/www/html/vendor
       - /var/www/html/bootstrap/cache

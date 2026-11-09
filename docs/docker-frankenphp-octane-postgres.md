@@ -52,6 +52,11 @@ Cấu hình Caddy phục vụ cả HTTP, WebSocket và Static SPA:
 		level {$CADDY_SERVER_LOG_LEVEL:INFO}
 	}
 
+	# Giới hạn dung lượng request body (đồng bộ với PHP upload_max_filesize 100M)
+	request_body {
+		max_size 100MB
+	}
+
 	route {
 		# 1. Reverb WebSocket Proxy (QUAN TRỌNG: Phải match header Upgrade để tránh xung đột với Filament /app)
 		@reverb_ws {
@@ -137,6 +142,66 @@ VITE_REVERB_HOST=localhost
 VITE_REVERB_PORT=80
 VITE_REVERB_SCHEME=http
 ```
+
+### 2.5. Cấu Hình Tên Miền Thật & Tự Động Cấp SSL/TLS (Automatic HTTPS)
+
+FrankenPHP sử dụng engine **Caddy v2**, có cơ chế **Automatic HTTPS** tự động đăng ký và gia hạn chứng chỉ SSL miễn phí (Let's Encrypt / ZeroSSL) mà không cần cài Certbot hay cấu hình Nginx.
+
+#### A. Khi chạy trên môi trường Local:
+- Mặc định: `CADDY_SERVER_SERVER_NAME=:80` (chạy HTTP tại cổng 80).
+
+#### B. Khi đưa lên Production với Tên miền thật (ví dụ `tms.asgl.net.vn`):
+1. **Trỏ bản ghi DNS:** Trỏ bản ghi `A` của tên miền về IP máy chủ VPS.
+2. **Cập nhật `.env.docker` trên Production:**
+   ```env
+   # 1. Kích hoạt Caddy Automatic HTTPS cho tên miền
+   CADDY_SERVER_SERVER_NAME=tms.asgl.net.vn
+
+   # 2. Cập nhật URL ứng dụng chính
+   APP_URL=https://tms.asgl.net.vn
+
+   # 3. Cập nhật Reverb WebSocket chạy WSS qua cổng 443
+   REVERB_HOST=tms.asgl.net.vn
+   REVERB_PORT=443
+   REVERB_SCHEME=https
+
+   VITE_REVERB_HOST=tms.asgl.net.vn
+   VITE_REVERB_PORT=443
+   VITE_REVERB_SCHEME=https
+   ```
+3. **Cơ chế hoạt động tự động của Caddy:**
+   - Caddy tự động mở cổng 80 để tiếp nhận HTTP và tự động chuyển hướng (Redirect 308) toàn bộ sang `https://tms.asgl.net.vn` cổng 443.
+   - Caddy tự động xin cấp SSL và tự gia hạn trước khi hết hạn 30 ngày (chứng chỉ được lưu an toàn trong persistent volume `caddy_data:/data`).
+   - Tự động kích hoạt **HTTP/2** và **HTTP/3 (QUIC)** qua cổng UDP `443:443/udp` đã mở sẵn trong `docker-compose.yml`.
+
+---
+
+### 2.6. Giới Hạn Dung Lượng File Gửi Lên (Upload File Size Limit: 100MB)
+
+Trong hệ thống TMS, tài xế chụp ảnh mốc hành trình có độ phân giải cao và điều hành tải lên/xuất file Excel dữ liệu lớn. Hệ thống đã được cấu hình đồng bộ giới hạn **100MB** ở cả 2 tầng:
+
+1. **Tầng Web Server (Caddy / FrankenPHP):**
+   Được cấu hình trong `.docker/frankenphp/Caddyfile`:
+   ```caddy
+   request_body {
+       max_size 100MB
+   }
+   ```
+   Ngăn chặn request vượt quá dung lượng ngay từ cổng web server trước khi chuyển vào PHP (chống tấn công DDoS gửi payload khổng lồ).
+
+2. **Tầng PHP Runtime (`.docker/php/php.ini`):**
+   File `.docker/php/php.ini` được mount trực tiếp vào container (`/usr/local/etc/php/conf.d/custom.ini`):
+   ```ini
+   upload_max_filesize = 100M
+   post_max_size = 100M
+   memory_limit = 512M
+   max_execution_time = 300
+   ```
+   - `upload_max_filesize = 100M`: Dung lượng tối đa cho 1 file upload.
+   - `post_max_size = 100M`: Tổng dung lượng tối đa cho 1 form submit.
+   - `memory_limit = 512M`: Đảm bảo đủ RAM khi xử lý import/export file Excel hàng chục ngàn dòng.
+
+*Nếu muốn tăng/giảm giới hạn:* Chỉ cần sửa giá trị trong `.docker/php/php.ini` và `.docker/frankenphp/Caddyfile`, sau đó restart container `app` (`docker compose restart app`) mà **không cần rebuild lại Docker image**.
 
 ---
 
