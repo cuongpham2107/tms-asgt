@@ -84,10 +84,10 @@ class LocationForm
                     ->label('Bán kính kiểm tra GPS (mét)')
                     ->numeric()
                     ->minValue(100)
-                    ->maxValue(3000)
+                    ->maxValue(5000)
                     ->suffix('m')
-                    ->placeholder(fn (): string => 'Mặc định: '.config('checkpoint_geofence.radius_m', 1000).'m')
-                    ->helperText(fn (): string => 'Để trống sẽ dùng bán kính mặc định ('.config('checkpoint_geofence.radius_m', 1000).'m). Các kho/cảng rộng (NCTS, ASG, ACSV, ALSC...) có thể đặt 1200–1700m.'),
+                    ->placeholder(fn (): string => 'Mặc định: '.config('checkpoint_geofence.radius_m', 3000).'m')
+                    ->helperText(fn (): string => 'Để trống sẽ dùng bán kính mặc định ('.config('checkpoint_geofence.radius_m', 3000).'m). Các kho/cảng cực rộng có thể đặt 3500–5000m.'),
                 TextInput::make('old_address')
                     ->label('Địa chỉ cũ (trước sáp nhập)')
                     ->maxLength(255)

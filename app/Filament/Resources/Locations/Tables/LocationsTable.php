@@ -46,7 +46,7 @@ class LocationsTable extends BaseTable
                 TextColumn::make('geofence_radius_m')
                     ->label('Bán kính GPS')
                     ->alignCenter()
-                    ->formatStateUsing(fn ($state): string => $state ? "{$state} m" : config('checkpoint_geofence.radius_m', 1000).' m (mặc định)')
+                    ->formatStateUsing(fn ($state): string => $state ? "{$state} m" : config('checkpoint_geofence.radius_m', 3000).' m (mặc định)')
                     ->color(fn ($state): string => $state ? 'primary' : 'gray')
                     ->toggleable(),
                 IconColumn::make('is_active')

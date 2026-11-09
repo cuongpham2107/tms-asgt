@@ -149,7 +149,7 @@ class CheckpointGeofenceService
 
         return (is_numeric($custom) && (int) $custom > 0)
             ? (int) $custom
-            : (int) config('checkpoint_geofence.radius_m', 1000);
+            : (int) config('checkpoint_geofence.radius_m', 3000);
     }
 
     /**
@@ -163,7 +163,7 @@ class CheckpointGeofenceService
             return [GeoCheckStatus::Unverified, null];
         }
 
-        $limitM = $radiusM ?? (int) config('checkpoint_geofence.radius_m', 1000);
+        $limitM = $radiusM ?? (int) config('checkpoint_geofence.radius_m', 3000);
         $distanceM = (int) round($this->geo->calculateHaversineKm($from['lat'], $from['lng'], $to['lat'], $to['lng']) * 1000);
 
         return [
@@ -237,7 +237,7 @@ class CheckpointGeofenceService
             return null;
         }
 
-        $limitM = $radiusM ?? (int) config('checkpoint_geofence.radius_m', 1000);
+        $limitM = $radiusM ?? (int) config('checkpoint_geofence.radius_m', 3000);
         $closestM = $points
             ->map(fn ($log): int => (int) round($this->geo->calculateHaversineKm((float) $log->lat, (float) $log->lng, $location['lat'], $location['lng']) * 1000))
             ->min();
