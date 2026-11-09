@@ -1,0 +1,132 @@
+services:
+  # 1. Main Web Application (FrankenPHP + Laravel Octane Worker Mode)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PHP_VERSION: "8.5"
+    image: tms-asgt-app:latest
+    container_name: tms_app
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3 QUIC
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/bootstrap/cache
+      - app_storage:/var/www/html/storage
+      - caddy_data:/data     # Lưu SSL certs tự động của Caddy
+      - caddy_config:/config # Lưu cấu hình runtime của Caddy
+    env_file:
+      - .env.docker
+    environment:
+      OCTANE_SERVER: frankenphp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tms-net
+
+  # 2. Database: PostgreSQL 16
+  postgres:
+    image: postgres:16-alpine
+    container_name: tms_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-tms_asgt}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-tms_asgt}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tms-net
+
+  # 3. Laravel Queue Worker
+  queue:
+    image: tms-asgt-app:latest
+    container_name: tms_queue
+    restart: unless-stopped
+    command: php artisan queue:work --tries=3 --timeout=90
+    healthcheck:
+      disable: true
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/bootstrap/cache
+      - app_storage:/var/www/html/storage
+    env_file:
+      - .env.docker
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - tms-net
+
+  # 4. Laravel Scheduler (Cron: GPS sync, auto-end shift,...)
+  scheduler:
+    image: tms-asgt-app:latest
+    container_name: tms_scheduler
+    restart: unless-stopped
+    command: php artisan schedule:work
+    healthcheck:
+      disable: true
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/bootstrap/cache
+      - app_storage:/var/www/html/storage
+    env_file:
+      - .env.docker
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - tms-net
+
+  # 5. Laravel Reverb (Realtime WebSocket)
+  reverb:
+    image: tms-asgt-app:latest
+    container_name: tms_reverb
+    restart: unless-stopped
+    command: php artisan reverb:start --host=0.0.0.0 --port=8085
+    healthcheck:
+      disable: true
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/bootstrap/cache
+      - app_storage:/var/www/html/storage
+    env_file:
+      - .env.docker
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - tms-net
+
+networks:
+  tms-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  app_storage:
+  caddy_data:
+  caddy_config:
+

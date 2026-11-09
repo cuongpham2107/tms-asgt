@@ -8,10 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // In SQLite/MySQL, preserving data requires rebuilding table for enum change
-        // Step 1: Add vehicle_id column (simple alter)
+        // Step 1: Add vehicle_id column
         Schema::table('trip_checkpoints', function ($table) {
-            // Check if column exists first — only for SQLite safety
             if (! Schema::hasColumn('trip_checkpoints', 'vehicle_id')) {
                 $table->foreignId('vehicle_id')
                     ->nullable()
@@ -22,10 +20,15 @@ return new class extends Migration
             }
         });
 
-        // Step 2: Make trip_id nullable (SQLite requires full table approach for this)
-        // Step 3: Add 'end' to checkpoint_type CHECK constraint
-        // These require table rebuild approach for SQLite compatibility
         $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'pgsql') {
+            DB::statement('ALTER TABLE trip_checkpoints ALTER COLUMN trip_id DROP NOT NULL');
+            DB::statement('ALTER TABLE trip_checkpoints DROP CONSTRAINT IF EXISTS trip_checkpoints_checkpoint_type_check');
+            DB::statement("ALTER TABLE trip_checkpoints ADD CONSTRAINT trip_checkpoints_checkpoint_type_check CHECK (checkpoint_type IN ('started','arrived_pickup','left_pickup','arrived_delivery','completed','driver_swap','end'))");
+
+            return;
+        }
 
         if ($driver === 'sqlite') {
             DB::statement('PRAGMA foreign_keys = OFF');
@@ -62,7 +65,6 @@ return new class extends Migration
 
             DB::statement('PRAGMA foreign_keys = ON');
         } else {
-            // MySQL/PostgreSQL — use native enum change
             DB::statement("ALTER TABLE trip_checkpoints MODIFY COLUMN checkpoint_type ENUM('started','arrived_pickup','left_pickup','arrived_delivery','completed','driver_swap','end') NOT NULL COMMENT 'Loại mốc'");
             DB::statement('ALTER TABLE trip_checkpoints MODIFY COLUMN trip_id BIGINT UNSIGNED NULL');
         }
@@ -72,10 +74,24 @@ return new class extends Migration
     {
         $driver = Schema::getConnection()->getDriverName();
 
+        if ($driver === 'pgsql') {
+            DB::statement('ALTER TABLE trip_checkpoints DROP CONSTRAINT IF EXISTS trip_checkpoints_checkpoint_type_check');
+            DB::statement("ALTER TABLE trip_checkpoints ADD CONSTRAINT trip_checkpoints_checkpoint_type_check CHECK (checkpoint_type IN ('started','arrived_pickup','left_pickup','arrived_delivery','completed','driver_swap'))");
+            DB::statement('ALTER TABLE trip_checkpoints ALTER COLUMN trip_id SET NOT NULL');
+
+            Schema::table('trip_checkpoints', function ($table) {
+                if (Schema::hasColumn('trip_checkpoints', 'vehicle_id')) {
+                    $table->dropForeign(['vehicle_id']);
+                    $table->dropColumn('vehicle_id');
+                }
+            });
+
+            return;
+        }
+
         if ($driver === 'sqlite') {
             DB::statement('PRAGMA foreign_keys = OFF');
 
-            // Remove rows with checkpoint_type = 'end' since they won't fit the old enum
             DB::statement("
                 CREATE TABLE trip_checkpoints_old (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,12 +121,10 @@ return new class extends Migration
 
             DB::statement('PRAGMA foreign_keys = ON');
         } else {
-            // MySQL/PostgreSQL revert
             DB::statement("ALTER TABLE trip_checkpoints MODIFY COLUMN checkpoint_type ENUM('started','arrived_pickup','left_pickup','arrived_delivery','completed','driver_swap') NOT NULL COMMENT 'Loại mốc'");
             DB::statement('ALTER TABLE trip_checkpoints MODIFY COLUMN trip_id BIGINT UNSIGNED NOT NULL');
         }
 
-        // Drop vehicle_id column (works on both SQLite and MySQL after rebuild)
         Schema::table('trip_checkpoints', function ($table) {
             if (Schema::hasColumn('trip_checkpoints', 'vehicle_id')) {
                 $table->dropForeign(['vehicle_id']);

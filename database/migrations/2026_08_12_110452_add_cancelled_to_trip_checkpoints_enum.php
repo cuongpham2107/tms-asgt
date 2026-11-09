@@ -10,6 +10,13 @@ return new class extends Migration
     {
         $driver = Schema::getConnection()->getDriverName();
 
+        if ($driver === 'pgsql') {
+            DB::statement('ALTER TABLE trip_checkpoints DROP CONSTRAINT IF EXISTS trip_checkpoints_checkpoint_type_check');
+            DB::statement("ALTER TABLE trip_checkpoints ADD CONSTRAINT trip_checkpoints_checkpoint_type_check CHECK (checkpoint_type IN ('started','arrived_pickup','left_pickup','arrived_delivery','completed','driver_swap','end','cancelled'))");
+
+            return;
+        }
+
         if ($driver === 'sqlite') {
             DB::statement('PRAGMA foreign_keys = OFF');
 
@@ -52,6 +59,13 @@ return new class extends Migration
     public function down(): void
     {
         $driver = Schema::getConnection()->getDriverName();
+
+        if ($driver === 'pgsql') {
+            DB::statement('ALTER TABLE trip_checkpoints DROP CONSTRAINT IF EXISTS trip_checkpoints_checkpoint_type_check');
+            DB::statement("ALTER TABLE trip_checkpoints ADD CONSTRAINT trip_checkpoints_checkpoint_type_check CHECK (checkpoint_type IN ('started','arrived_pickup','left_pickup','arrived_delivery','completed','driver_swap','end'))");
+
+            return;
+        }
 
         if ($driver === 'sqlite') {
             DB::statement('PRAGMA foreign_keys = OFF');

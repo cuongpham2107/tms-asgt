@@ -37,3 +37,8 @@ database/database_backup_*
 *.xlsx
 /version-2/
 /storage/debugbar/
+
+**/caddy
+frankenphp
+frankenphp-worker.php
+.env.docker
