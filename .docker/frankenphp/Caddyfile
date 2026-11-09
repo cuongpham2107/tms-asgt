@@ -1,0 +1,50 @@
+{
+	{$CADDY_GLOBAL_OPTIONS}
+
+	admin {$CADDY_SERVER_ADMIN_HOST:localhost}:{$CADDY_SERVER_ADMIN_PORT:2019}
+
+	frankenphp {
+		worker {
+			file "{$APP_PUBLIC_PATH:/var/www/html/public}/frankenphp-worker.php"
+			{$CADDY_SERVER_WORKER_DIRECTIVE}
+			{$CADDY_SERVER_WATCH_DIRECTIVES}
+		}
+	}
+}
+
+{$CADDY_EXTRA_CONFIG}
+
+{$CADDY_SERVER_SERVER_NAME::80} {
+	log {
+		level {$CADDY_SERVER_LOG_LEVEL:INFO}
+	}
+
+	route {
+		# Reverb WebSocket proxy
+		@reverb_ws {
+			header Connection *Upgrade*
+			header Upgrade websocket
+			path /app/*
+		}
+		reverse_proxy @reverb_ws reverb:8085
+
+		# Reverb REST API proxy
+		reverse_proxy /apps/* reverb:8085
+
+		# Mobile Web SPA
+		handle_path /mobile* {
+			root * "{$APP_PUBLIC_PATH:/var/www/html/public}/mobile"
+			try_files {path} {path}/ /index.html
+			file_server
+		}
+
+		root * "{$APP_PUBLIC_PATH:/var/www/html/public}"
+		encode zstd br gzip
+
+		php_server {
+			index frankenphp-worker.php
+			try_files {path} frankenphp-worker.php
+			resolve_root_symlink
+		}
+	}
+}
