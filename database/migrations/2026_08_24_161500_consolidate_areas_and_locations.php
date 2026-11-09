@@ -93,15 +93,8 @@ return new class extends Migration
             });
         }
 
-        // 8. Update unique index on locations to unique('code')
-        try {
-            Schema::table('locations', function (Blueprint $table) {
-                $table->dropUnique(['code', 'area_id']);
-                $table->unique('code');
-            });
-        } catch (Throwable $e) {
-            // Ignore in SQLite if already adjusted
-        }
+        // 8. Update unique index on locations (locations can share code across areas/types)
+        // In SQLite and production, code is indexed with area_id, not strictly unique on code alone.
     }
 
     public function down(): void

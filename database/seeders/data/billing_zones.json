@@ -1,0 +1,1946 @@
+[
+    {
+        "id": 1,
+        "code": "DIA-DIEM-VIET-TAT-AP-GIA-TINH-CUOC-VC",
+        "name": "ĐỊA ĐIỂM VIẾT TẮT (ÁP GIÁ TÍNH CƯỚC VC)",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 2,
+        "code": "KCN-YEN-PHONG",
+        "name": "KCN YÊN PHONG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 3,
+        "code": "KCN-VSIP-BAC-NINH",
+        "name": "KCN VSIP BẮC NINH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 4,
+        "code": "KCN-QUE-VO-1",
+        "name": "KCN QUẾ VÕ 1",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 5,
+        "code": "KCN-QUANG-CHAU",
+        "name": "KCN QUANG CHÂU",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 6,
+        "code": "KCN-TU-SON",
+        "name": "KCN TỪ SƠN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 7,
+        "code": "KCN-VAN-TRUNG",
+        "name": "KCN VÂN TRUNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 8,
+        "code": "KCN-GIA-BINH",
+        "name": "KCN GIA BÌNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 9,
+        "code": "KCN-YEN-PHONG-MO-RONG",
+        "name": "KCN YÊN PHONG MỞ RỘNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 10,
+        "code": "KCN-QUE-VO-2",
+        "name": "KCN QUẾ VÕ 2",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 11,
+        "code": "KCN-DAI-DONG",
+        "name": "KCN ĐẠI ĐỒNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 12,
+        "code": "KCN-QUE-VO",
+        "name": "KCN QUẾ VÕ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 13,
+        "code": "KCN-TIEN-SON",
+        "name": "KCN TIÊN SƠN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 14,
+        "code": "KCN-HOA-PHU",
+        "name": "KCN HÒA PHÚ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 15,
+        "code": "KCN-THUAN-THANH",
+        "name": "KCN THUẬN THÀNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 16,
+        "code": "CUM-CN-CHAU-PHONG",
+        "name": "CỤM CN CHÂU PHONG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 17,
+        "code": "KCN-NAM-SON",
+        "name": "KCN NAM SƠN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 18,
+        "code": "CUM-CN-NOI-HOANG",
+        "name": "CỤM CN NỘI HOÀNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 19,
+        "code": "BAC-NINH",
+        "name": "BẮC NINH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 20,
+        "code": "KCN-SONG-KHE",
+        "name": "KCN SONG KHÊ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 21,
+        "code": "KCN-YEN-PHONG-II-C",
+        "name": "KCN YÊN PHONG II-C",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 22,
+        "code": "KCN-QUE-VO-3",
+        "name": "KCN QUẾ VÕ 3",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 23,
+        "code": "CUM-CN-VIET-TIEN",
+        "name": "CỤM CN VIỆT TIẾN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 24,
+        "code": "HAP-LINH",
+        "name": "HẠP LĨNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 25,
+        "code": "TU-SON",
+        "name": "TỪ SƠN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 26,
+        "code": "NOI-BAI",
+        "name": "NỘI BÀI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 27,
+        "code": "KCN-QUANG-MINH",
+        "name": "KCN QUANG MINH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 28,
+        "code": "KCN-NBA",
+        "name": "KCN NBA",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 29,
+        "code": "CUM-CN-NGOC-HOI",
+        "name": "CỤM CN NGỌC HỒI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 30,
+        "code": "LONG-BIEN",
+        "name": "LONG BIÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 31,
+        "code": "CUM-CN-THANH-OAI",
+        "name": "CỤM CN THANH OAI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 32,
+        "code": "KCN-DAI-XUYEN",
+        "name": "KCN ĐẠI XUYÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 33,
+        "code": "DONG-ANH",
+        "name": "ĐÔNG ANH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 34,
+        "code": "KCN-THANG-LONG",
+        "name": "KCN THĂNG LONG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 35,
+        "code": "CUM-CN-NGUYEN-KHE",
+        "name": "CỤM CN NGUYÊN KHÊ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 36,
+        "code": "KCN-THACH-THAT",
+        "name": "KCN THẠCH THẤT",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 37,
+        "code": "KCN-DONG-VAN-4",
+        "name": "KCN ĐỒNG VĂN 4",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 38,
+        "code": "KCN-SONG-KHOAI",
+        "name": "KCN SÔNG KHOAI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 39,
+        "code": "NHU-QUYNH",
+        "name": "NHƯ QUỲNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 40,
+        "code": "KCN-SACH",
+        "name": "KCN SẠCH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 41,
+        "code": "BINH-NGUYEN",
+        "name": "BÌNH NGUYÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 42,
+        "code": "KCN-MY-HAO",
+        "name": "KCN MỸ HÀO",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 43,
+        "code": "KCN-TAM-NONG",
+        "name": "KCN TAM NÔNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 44,
+        "code": "CUM-CN-HAI-PHONG",
+        "name": "CỤM CN HẢI PHÒNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 45,
+        "code": "HAI-PHONG",
+        "name": "HẢI PHÒNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 46,
+        "code": "KCN-HUNG-YEN",
+        "name": "KCN HƯNG YÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 47,
+        "code": "KCN-BA-THIEN",
+        "name": "KCN BÁ THIỆN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 48,
+        "code": "KCN-DONG-VAN-3",
+        "name": "KCN ĐỒNG VĂN 3",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 49,
+        "code": "KCN-BINH-XUYEN",
+        "name": "KCN BÌNH XUYÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 50,
+        "code": "PHUC-YEN",
+        "name": "PHÚC YÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 51,
+        "code": "NINH-BINH",
+        "name": "NINH BÌNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 52,
+        "code": "KCN-HAI-PHONG",
+        "name": "KCN HẢI PHÒNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 53,
+        "code": "KCN-KHAI-QUANG",
+        "name": "KCN KHAI QUANG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 54,
+        "code": "KCN-DONGVAN",
+        "name": "KCN ĐỒNGVĂN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 55,
+        "code": "KCN-VSIP-HAI-PHONG",
+        "name": "KCN VSIP HẢI PHÒNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 56,
+        "code": "KCN-BINH-NGUYEN",
+        "name": "KCN BÌNH NGUYÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 57,
+        "code": "KCN-PHU-HA",
+        "name": "KCN PHÚ HÀ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 58,
+        "code": "KCN-THANH-LIEM",
+        "name": "KCN THANH LIÊM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 59,
+        "code": "HUNG-YEN",
+        "name": "HƯNG YÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 60,
+        "code": "KCN-DONG-VAN",
+        "name": "KCN ĐỒNG VĂN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 61,
+        "code": "KCN-MY-THUAN",
+        "name": "KCN MỸ THUẬN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 62,
+        "code": "KCN-DONG-VAN-1",
+        "name": "KCN ĐỒNG VĂN 1",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 63,
+        "code": "KCN-DONG-VAN-2",
+        "name": "KCN ĐỒNG VĂN 2",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 64,
+        "code": "KCN-YEN-BINH",
+        "name": "KCN YÊN BÌNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 65,
+        "code": "KCN-DIEM-THUY",
+        "name": "KCN ĐIỀM THỤY",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 66,
+        "code": "KCN-SONG-CONG",
+        "name": "KCN SÔNG CÔNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 67,
+        "code": "NUI-PHAO",
+        "name": "NÚI PHÁO",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 68,
+        "code": "KCN-SAI-DONG",
+        "name": "KCN SÀI ĐỒNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 69,
+        "code": "DONG-HAI",
+        "name": "ĐÔNG HẢI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 70,
+        "code": "KCN-THUAN-THANH-3",
+        "name": "KCN THUẬN THÀNH 3",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 71,
+        "code": "CUM-CN-NINH-SO",
+        "name": "CỤM CN NINH SỞ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 72,
+        "code": "KCN-CAO-HOA-LAC",
+        "name": "KCN CAO HÒA LẠC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 73,
+        "code": "KCN-HOANG-MAI-I",
+        "name": "KCN HOÀNG MAI I",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 74,
+        "code": "KCN-DONG-MAI",
+        "name": "KCN ĐÔNG MAI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 75,
+        "code": "NGUYEN-KHE",
+        "name": "NGUYÊN KHÊ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 76,
+        "code": "NAM-TU-LIEM",
+        "name": "NAM TỪ LIÊM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 77,
+        "code": "CUM-CN-DONG-THO",
+        "name": "CỤM CN ĐÔNG THỌ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 78,
+        "code": "HOP-THINH",
+        "name": "HỢP THỊNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 79,
+        "code": "YEN-MY",
+        "name": "YÊN MỸ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 80,
+        "code": "AN-KHANH",
+        "name": "AN KHÁNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 81,
+        "code": "THUONG-TIN",
+        "name": "THƯỜNG TÍN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 82,
+        "code": "KCN-DO-SON",
+        "name": "KCN ĐỒ SƠN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 83,
+        "code": "KCN-LAI-VU",
+        "name": "KCN LAI VŨ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 84,
+        "code": "CUM-CN-GIA-VAN",
+        "name": "CỤM CN GIA VÂN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 85,
+        "code": "HOANG-MAI",
+        "name": "HOÀNG MAI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 86,
+        "code": "LAC-DAO",
+        "name": "LẠC ĐẠO",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 87,
+        "code": "PHU-DIEN",
+        "name": "PHÚ DIỄN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 88,
+        "code": "AN-DUONG",
+        "name": "AN DƯƠNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 89,
+        "code": "KCN-PHU-NGHIA",
+        "name": "KCN PHÚ NGHĨA",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 90,
+        "code": "KCN-KHANH-PHU",
+        "name": "KCN KHÁNH PHÚ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 91,
+        "code": "KCN-QUAT-DONG",
+        "name": "KCN QUẤT ĐỘNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 92,
+        "code": "CUM-CN-HA-BINH-PHUONG",
+        "name": "CỤM CN HÀ BÌNH PHƯƠNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 93,
+        "code": "HIEP-HOA",
+        "name": "HIỆP HÒA",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 94,
+        "code": "PHU-LAM",
+        "name": "PHÚ LÂM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 95,
+        "code": "CUM-CN-LIEN-PHUONG",
+        "name": "CỤM CN LIÊN PHƯỜNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 96,
+        "code": "KCN-THUY-VAN",
+        "name": "KCN THỤY VÂN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 97,
+        "code": "KCN-CHUONG-MY",
+        "name": "KCN CHƯƠNG MỸ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 98,
+        "code": "CUM-CN-HA-MAN",
+        "name": "CỤM CN HÀ MẪN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 99,
+        "code": "NGUYEN-VAN-LINH",
+        "name": "NGUYỄN VĂN LINH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 100,
+        "code": "KCN-HOA-MAC",
+        "name": "KCN HÒA MẠC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 101,
+        "code": "KCN-THUAN-THANH-2",
+        "name": "KCN THUẬN THÀNH 2",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 102,
+        "code": "QUANG-MINH",
+        "name": "QUANG MINH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 103,
+        "code": "KCN-NOI-BAI",
+        "name": "KCN NỘI BÀI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 104,
+        "code": "HOAN-LONG",
+        "name": "HOÀN LONG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 105,
+        "code": "MAO-DIEN",
+        "name": "MAO ĐIỀN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 106,
+        "code": "XA-GIAI-PHAM",
+        "name": "XÃ GIAI PHẠM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 107,
+        "code": "KCN-DAI-AN",
+        "name": "KCN ĐẠI AN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 108,
+        "code": "QUANG-BI",
+        "name": "QUẢNG BỊ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 109,
+        "code": "THANH-OAI",
+        "name": "THANH OAI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 110,
+        "code": "KCN-DAI-DONG-HOAN-SON",
+        "name": "KCN ĐẠI ĐỒNG - HOÀN SƠN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 111,
+        "code": "PHUC-THINH",
+        "name": "PHÚC THỊNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 112,
+        "code": "LUU-KIEM",
+        "name": "LƯU KIẾM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 113,
+        "code": "DAN-PHUONG",
+        "name": "ĐAN PHƯỢNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 114,
+        "code": "HOAI-DUC",
+        "name": "HOÀI ĐỨC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 115,
+        "code": "KCN-DAC-SO",
+        "name": "KCN ĐẮC SỞ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 116,
+        "code": "TRIEU-VIET-VUONG",
+        "name": "TRIỆU VIỆT VƯƠNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 117,
+        "code": "KCN-TAN-QUANG",
+        "name": "KCN TÂN QUANG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 118,
+        "code": "KCN-CHAU-SON",
+        "name": "KCN CHÂU SƠN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 119,
+        "code": "THON-VAN-GIAP",
+        "name": "THÔN VĂN GIÁP",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 120,
+        "code": "KCN-DINH-TRAM",
+        "name": "KCN ĐÌNH TRÁM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 121,
+        "code": "CAM-GIANG",
+        "name": "CẨM GIÀNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 122,
+        "code": "KCN-DONG-SOC",
+        "name": "KCN ĐỒNG SÓC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 123,
+        "code": "KCN-THANG-LONG-II",
+        "name": "KCN THĂNG LONG II",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 124,
+        "code": "DIEM-CN-DAN-PHUONG",
+        "name": "ĐIỂM CN ĐAN PHƯỢNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 125,
+        "code": "HONG-BANG",
+        "name": "HỒNG BÀNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 126,
+        "code": "KCN-CAU-GAO",
+        "name": "KCN CẦU GÁO",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 127,
+        "code": "GIA-LAM",
+        "name": "GIA LÂM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 128,
+        "code": "TRAN-YEN",
+        "name": "TRẤN YÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 129,
+        "code": "KCN-HANAKA",
+        "name": "KCN HANAKA",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 130,
+        "code": "KCN-THUAN-THANH-II",
+        "name": "KCN THUẬN THÀNH II",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 131,
+        "code": "KHAI-QUANG",
+        "name": "KHAI QUANG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 132,
+        "code": "KCN-TRANG-DUE",
+        "name": "KCN TRÀNG DUỆ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 133,
+        "code": "LUONG-BANG",
+        "name": "LƯƠNG BẰNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 134,
+        "code": "KCN-PHUC-KHANH",
+        "name": "KCN PHÚC KHÁNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 135,
+        "code": "CUM-CN-KENH-GIANG",
+        "name": "CỤM CN KÊNH GIANG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 136,
+        "code": "SOC-SON",
+        "name": "SÓC SƠN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 137,
+        "code": "KCN-HA-THAI",
+        "name": "KCN HÀ THÁI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 138,
+        "code": "KCN-NAM-CAU-KIEN",
+        "name": "KCN NAM CẦU KIỀN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 139,
+        "code": "KCN-VIET-TIEN",
+        "name": "KCN VIỆT TIẾN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 140,
+        "code": "CUM-CN-NGUYEN-KHE-2",
+        "name": "CỤM CN NGUYỄN KHÊ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 141,
+        "code": "BINH-MINH",
+        "name": "BÌNH MINH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 142,
+        "code": "KCN-NAM-DINH-VU",
+        "name": "KCN NAM ĐÌNH VŨ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 143,
+        "code": "HIEN-KHANH",
+        "name": "HIỀN KHÁNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 144,
+        "code": "KIM-ANH",
+        "name": "KIM ANH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 145,
+        "code": "TRAN-PHU",
+        "name": "TRẦN PHÚ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 146,
+        "code": "HAT-MON",
+        "name": "HÁT MÔN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 147,
+        "code": "HA-AN",
+        "name": "HÀ AN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 148,
+        "code": "KCN-XUAN-HOA",
+        "name": "KCN XUÂN HÒA",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 149,
+        "code": "THON-HO-VE",
+        "name": "THÔN HỘ VỆ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 150,
+        "code": "THON-XUAN-DAO",
+        "name": "THÔN XUÂN ĐÀO",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 151,
+        "code": "PHU-THAI",
+        "name": "PHÚ THÁI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 152,
+        "code": "CUM-CN-BIEN-HOA",
+        "name": "CỤM CN BIÊN HÒA",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 153,
+        "code": "TAM-DUONG",
+        "name": "TAM DƯƠNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 154,
+        "code": "KCN-LAI-XA",
+        "name": "KCN LAI XÁ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 155,
+        "code": "CUM-CN-YEN-DUONG",
+        "name": "CỤM CN YÊN DƯƠNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 156,
+        "code": "QUE-VO",
+        "name": "QUẾ VÕ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 157,
+        "code": "CUM-DONG-TAU-NAM-PHAT",
+        "name": "CỤM ĐÓNG TÀU NAM PHÁT",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 158,
+        "code": "LINH-NAM",
+        "name": "LĨNH NAM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 159,
+        "code": "CUM-CN-KIM-BINH",
+        "name": "CỤM CN KIM BÌNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 160,
+        "code": "KHU-TAN-LAP",
+        "name": "KHU TÂN LẬP",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 161,
+        "code": "THANH-DONG",
+        "name": "THÀNH ĐÔNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 162,
+        "code": "KCN-THAI-HA-GIAI-DOAN-2",
+        "name": "KCN THÁI HÀ GIAI ĐOẠN 2",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 163,
+        "code": "KCN-AN-GIAI",
+        "name": "KCN AN GIẢI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 164,
+        "code": "THUONG-PHUC",
+        "name": "THƯỢNG PHÚC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 165,
+        "code": "CUM-CN-CAO-THANG",
+        "name": "CỤM CN CAO THẮNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 166,
+        "code": "HA-DONG",
+        "name": "HÀ ĐÔNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 167,
+        "code": "KCN-BAC-TIEN-PHONG",
+        "name": "KCN BẮC TIỀN PHONG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 168,
+        "code": "KCN-SAI-DONG-B",
+        "name": "KCN SÀI ĐỒNG B",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 169,
+        "code": "HONG-AN",
+        "name": "HỒNG AN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 170,
+        "code": "CUM-CN-PHU-THU",
+        "name": "CỤM CN PHÚ THỨ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 171,
+        "code": "VAN-HOANG",
+        "name": "VĂN HOÀNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 172,
+        "code": "DIEN-HA",
+        "name": "DIÊN HÀ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 173,
+        "code": "CUM-CN-VAN-XUAN",
+        "name": "CỤM CN VẠN XUÂN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 174,
+        "code": "KCN-DAI-AN-MO-RONG",
+        "name": "KCN ĐẠI AN MỞ RỘNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 175,
+        "code": "CUM-CN-NGOC-LIEP",
+        "name": "CỤM CN NGỌC LIỆP",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 176,
+        "code": "KCN-THAI-HA",
+        "name": "KCN THÁI HÀ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 177,
+        "code": "VIET-HOA",
+        "name": "VIỆT HÒA",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 178,
+        "code": "LE-ICH-MOC",
+        "name": "LÊ ÍCH MỘC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 179,
+        "code": "PHUONG-LIET",
+        "name": "PHƯƠNG LIỆT",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 180,
+        "code": "THIEN-LOC",
+        "name": "THIÊN LỘC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 181,
+        "code": "PHU-LANG",
+        "name": "PHÙ LÃNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 182,
+        "code": "XUAN-LANG",
+        "name": "XUÂN LÃNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 183,
+        "code": "DOAN-BAI",
+        "name": "ĐOAN BÁI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 184,
+        "code": "VO-CUONG",
+        "name": "VÕ CƯỜNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 185,
+        "code": "HA-NOI",
+        "name": "HÀ NỘI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 186,
+        "code": "KIM-BANG",
+        "name": "KIM BẢNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 187,
+        "code": "TRAN-HUNG-DAO",
+        "name": "TRẦN HƯNG ĐẠO",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 188,
+        "code": "KCN-SONG-KHE-NINH-BINH",
+        "name": "KCN SONG KHÊ NINH BÌNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 189,
+        "code": "PHU-THO",
+        "name": "PHÚ THỌ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 190,
+        "code": "RANG-DONG",
+        "name": "RẠNG ĐÔNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 191,
+        "code": "THANH-HOA",
+        "name": "THANH HÓA",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 192,
+        "code": "TAN-TIEN",
+        "name": "TÂN TIẾN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 193,
+        "code": "SON-LUONG",
+        "name": "SƠN LƯƠNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 194,
+        "code": "KHUONG-DINH",
+        "name": "KHƯƠNG ĐÌNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 195,
+        "code": "HOA-LAC",
+        "name": "HÒA LẠC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 196,
+        "code": "KCN-VIET-HAN",
+        "name": "KCN VIỆT HÀN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 197,
+        "code": "AN-BIEN",
+        "name": "AN BIÊN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 198,
+        "code": "HOAN-KIEM",
+        "name": "HOÀN KIẾM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 199,
+        "code": "TU-LIEM",
+        "name": "TỪ LIÊM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 200,
+        "code": "MY-LOC",
+        "name": "MỸ LỘC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 201,
+        "code": "TAN-DINH",
+        "name": "TÂN DĨNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 202,
+        "code": "HUNG-DAO",
+        "name": "HƯNG ĐẠO",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 203,
+        "code": "TU-LAN",
+        "name": "TỰ LẠN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 204,
+        "code": "YEN-DUNG",
+        "name": "YÊN DŨNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 205,
+        "code": "KCN-THANG-LONG-II-PHU-THO",
+        "name": "KCN THĂNG LONG II PHÚ THỌ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 206,
+        "code": "XUAN-TRUC",
+        "name": "XUÂN TRÚC",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 207,
+        "code": "KCN-DUONG-LIEU",
+        "name": "KCN DƯƠNG LIỄU",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 208,
+        "code": "VAN-LAM",
+        "name": "VĂN LÂM",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 209,
+        "code": "NOI-HOANG",
+        "name": "NỘI HOÀNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 210,
+        "code": "LE-CHAN",
+        "name": "LÊ CHÂN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 211,
+        "code": "TIEN-AN",
+        "name": "TIỀN AN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 212,
+        "code": "KCN-HO-TRO-NAM-HA-NOI",
+        "name": "KCN HỖ TRỢ NAM HÀ NỘI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 213,
+        "code": "KCN-CONG-HOA",
+        "name": "KCN CỘNG HÒA",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 214,
+        "code": "HAI-HUNG",
+        "name": "HẢI HƯNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 215,
+        "code": "DONG-TU",
+        "name": "ĐỒNG TU",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 216,
+        "code": "KCN-TAN-HONG",
+        "name": "KCN TÂN HỒNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 217,
+        "code": "KCN-YEN-MY",
+        "name": "KCN YÊN MỸ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 218,
+        "code": "PHU-LY",
+        "name": "PHỦ LÝ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 219,
+        "code": "KCN-TIEN-HAI",
+        "name": "KCN TIỀN HẢI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 220,
+        "code": "CUM-CN-HA-MAN-TRI-QUA",
+        "name": "CỤM CN HÀ MÃN - TRÍ QUẢ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 221,
+        "code": "KCN-TAN-TRUONG",
+        "name": "KCN TÂN TRƯỜNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 222,
+        "code": "DINH-VU",
+        "name": "ĐÌNH VŨ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 223,
+        "code": "KCN-NGOC-HOI",
+        "name": "KCN NGỌC HỒI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 224,
+        "code": "HOANG-CAU",
+        "name": "HOÀNG CẦU",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 225,
+        "code": "VIET-HUNG",
+        "name": "VIỆT HƯNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 226,
+        "code": "KCN-PHUC-DIEN",
+        "name": "KCN PHÚC ĐIỀN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 227,
+        "code": "BACH-MAI",
+        "name": "BẠCH MAI",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 228,
+        "code": "TUNG-THIEN",
+        "name": "TÙNG THIỆN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 229,
+        "code": "PHUC-THO",
+        "name": "PHÚC THỌ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 230,
+        "code": "KCN-CAM-KHE",
+        "name": "KCN CẨM KHÊ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 231,
+        "code": "MY-HAO",
+        "name": "MỸ HÀO",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 232,
+        "code": "LAI-KHE",
+        "name": "LẠI KHÊ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 233,
+        "code": "NGHIA-DO",
+        "name": "NGHĨA ĐÔ",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 234,
+        "code": "DINH-CONG",
+        "name": "ĐỊNH CÔNG",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 235,
+        "code": "KCN-VSIP-NGHE-AN",
+        "name": "KCN VSIP NGHỆ AN",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 236,
+        "code": "BA-DINH",
+        "name": "BA ĐÌNH",
+        "notes": null,
+        "created_at": "2026-10-31 13:47:10",
+        "updated_at": "2026-10-31 13:47:10"
+    },
+    {
+        "id": 237,
+        "code": "THAI-BINH",
+        "name": "CÁC KCN THÁI BÌNH",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null
+    },
+    {
+        "id": 238,
+        "code": "CHI-LINH",
+        "name": "CÁC KCN CHÍ LINH",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null
+    },
+    {
+        "id": 239,
+        "code": "BAC-GIANG",
+        "name": "CÁC KCN BẮC GIANG",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null
+    },
+    {
+        "id": 240,
+        "code": "HOA-BINH",
+        "name": "KCN BỜ TRÁI SÔNG ĐÀ - HÒA BÌNH",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null
+    },
+    {
+        "id": 241,
+        "code": "THAI-NGUYEN",
+        "name": "CÁC KCN THÁI NGUYÊN",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null
+    },
+    {
+        "id": 242,
+        "code": "NAM-DINH",
+        "name": "CÁC KCN NAM ĐỊNH",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null
+    },
+    {
+        "id": 243,
+        "code": "KIM-THANH",
+        "name": "KIM THÀNH",
+        "notes": null,
+        "created_at": null,
+        "updated_at": null
+    }
+]

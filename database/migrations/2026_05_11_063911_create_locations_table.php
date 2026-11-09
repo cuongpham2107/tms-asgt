@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('locations', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 30)->unique()->comment('Viết tắt địa điểm, ví dụ: NBA, TN, BN');
+            $table->string('code', 100)->unique()->comment('Viết tắt địa điểm, ví dụ: NBA, TN, BN');
             $table->string('name')->comment('Tên đầy đủ');
             $table->text('address')->nullable()->comment('Địa chỉ cụ thể');
             $table->decimal('lat', 10, 7)->nullable()->comment('Vĩ độ (latitude)');
