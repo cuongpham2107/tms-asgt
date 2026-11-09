@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('customers', function (Blueprint $table) {
+            $table->id();
+            $table->string('code', 50)->unique();
+            $table->string('name');
+            $table->string('phone', 20)->nullable();
+            $table->text('address')->nullable();
+            $table->string('contact_person')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->string('email')->nullable();
+            $table->foreignId('location_id')->nullable()->constrained('locations')->nullOnDelete();
+            $table->string('tax_code', 50)->nullable();
+            $table->decimal('fuel_adjustment_percent', 5, 2)->default(0);
+            $table->decimal('cancel_trip_percent', 5, 2)->default(0);
+            $table->timestamps();
+            $table->softDeletes();
+
+            $table->index('code');
+            $table->index('is_active');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('customers');
+    }
+};
