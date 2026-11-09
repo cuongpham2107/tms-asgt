@@ -49,7 +49,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('order_charge_id')->constrained('order_charges')->cascadeOnDelete();
             $table->foreignId('fee_type_id')->constrained('fee_types');
-            $table->string('name');
             $table->decimal('amount', 14, 2);
             $table->decimal('quantity', 10, 2)->nullable();
             $table->text('note')->nullable();

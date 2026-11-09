@@ -24,7 +24,7 @@ class BillingZoneSeeder extends Seeder
 
         foreach (array_chunk($records, 100) as $chunk) {
             foreach ($chunk as $row) {
-                $cleanRow = Arr::only($row, ['id', 'code', 'name', 'notes']);
+                $cleanRow = Arr::only($row, ['id', 'code', 'name', 'notes', 'created_at', 'updated_at']);
                 DB::table('billing_zones')->updateOrInsert(
                     ['id' => $cleanRow['id']],
                     $cleanRow

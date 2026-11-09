@@ -13,6 +13,7 @@ return new class extends Migration
             $table->string('code', 100)->unique();
             $table->string('name');
             $table->text('notes')->nullable();
+            $table->timestamps();
 
             $table->index('code');
         });
