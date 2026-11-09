@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 
-#[Signature('db:backup {--keep=7 : Số lượng bản sao lưu gần nhất được giữ lại}')]
+#[Signature('db:backup {--keep=3 : Số lượng bản sao lưu gần nhất được giữ lại}')]
 #[Description('Tạo bản sao lưu nén gzip cho cơ sở dữ liệu PostgreSQL và tự động dọn dẹp các bản cũ')]
 class BackupDatabaseCommand extends Command
 {

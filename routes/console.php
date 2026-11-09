@@ -32,7 +32,7 @@ Schedule::command('model:prune', ['--model' => [VehicleGpsLog::class]])
     ->daily()
     ->name('prune-vehicle-gps-logs');
 
-Schedule::command('db:backup --keep=7')
+Schedule::command('db:backup --keep=3')
     ->dailyAt('01:00')
     ->name('daily-database-backup')
     ->withoutOverlapping();
