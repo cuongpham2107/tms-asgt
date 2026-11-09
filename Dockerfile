@@ -20,6 +20,9 @@ RUN npm run build
 # --- Stage 3: Production Application Container with FrankenPHP ---
 FROM dunglas/frankenphp:1-php${PHP_VERSION}-alpine
 
+# Install system utilities (PostgreSQL client for database backups)
+RUN apk add --no-cache postgresql16-client
+
 # Install essential PHP extensions for Laravel, PostgreSQL, Filament, and Queue/Reverb
 RUN install-php-extensions \
     pdo_pgsql \

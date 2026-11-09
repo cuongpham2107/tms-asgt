@@ -227,13 +227,25 @@ docker compose exec app frankenphp reload --config /etc/caddy/Caddyfile
 docker compose exec postgres psql -U postgres -d tms_asgt
 ```
 
-### Backup & Restore Database
-```bash
-# Backup
-docker compose exec postgres pg_dump -U postgres tms_asgt > backup.sql
+### Sao Lưu & Phục Hồi Cơ Sở Dữ Liệu (Backup & Restore)
 
-# Restore
-cat backup.sql | docker compose exec -T postgres psql -U postgres -d tms_asgt
+Hệ thống đã tích hợp sẵn cơ chế sao lưu tự động qua Laravel Scheduler trong container `tms_scheduler`:
+- **Lịch chạy tự động:** Hàng ngày lúc `01:00 AM` (`Schedule::command('db:backup --keep=7')`).
+- **Thư mục lưu trữ:** `storage/app/backups/tms_asgt_backup_YYYYMMDD_HHmmss.sql.gz` (trong persistent volume `app_storage`).
+- **Cơ chế Retention:** Mặc định tự động dọn dẹp các bản backup cũ, chỉ giữ lại 7 bản gần nhất.
+
+```bash
+# 1. Chạy sao lưu thủ công ngay lập tức (giữ 7 bản mới nhất)
+docker compose exec app php artisan db:backup
+
+# 2. Tuỳ chỉnh số lượng bản sao lưu giữ lại (ví dụ giữ 14 bản)
+docker compose exec app php artisan db:backup --keep=14
+
+# 3. Phục hồi dữ liệu từ file sao lưu nén (.sql.gz)
+gunzip -c storage/app/backups/tms_asgt_backup_20261109_150844.sql.gz | docker compose exec -T postgres psql -U postgres -d tms_asgt
+
+# 4. Sao lưu trực tiếp bằng psql / pg_dump ra ngoài máy host
+docker compose exec postgres pg_dump -U postgres tms_asgt | gzip > backup_manual.sql.gz
 ```
 
 ### Khởi động lại toàn bộ stack sạch sẽ
