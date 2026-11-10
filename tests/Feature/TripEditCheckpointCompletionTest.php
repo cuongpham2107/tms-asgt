@@ -16,6 +16,8 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use Filament\Forms\Components\Field;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -269,4 +271,142 @@ test('popup hành trình hiện điểm lấy hàng cho mốc lấy hàng', func
     $html = view('filament.resources.trips.components.trip-timeline-popup', ['trip' => $this->trip->fresh()])->render();
 
     expect($html)->toContain('SEMV-PICKUP');
+});
+
+test('chuyến chờ chạy chưa có mốc vẫn hiển thị phần các mốc hành trình và hiện km xe ở km bắt đầu', function () {
+    $pendingTrip = Trip::create([
+        'trip_code' => 'TRIP-PENDING-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Pending,
+        'start_km' => null,
+        'started_at' => null,
+    ]);
+
+    $form = Schema::make(Livewire::new(ListTrips::class));
+    TripForm::configure($form);
+    $form->record($pendingTrip);
+    $form->fill();
+
+    $components = $form->getFlatComponents();
+    $startKm = $components['start_km'];
+
+    // Km bắt đầu hiển thị hint và helper text với km hiện tại của xe (100.000 km)
+    expect($startKm->getHint())->toBe('Km xe: 100.000,0 km')
+        ->and($startKm->getState())->toBe(100000.0);
+
+    $belowContent = $startKm->getChildSchema(Field::BELOW_CONTENT_SCHEMA_KEY);
+    if ($belowContent) {
+        $textComponent = $belowContent->getComponents()[0] ?? null;
+        expect($textComponent?->getContent())->toContain('Km hiện tại của xe: 100.000,0 km');
+    }
+
+    // Section Các mốc hành trình không bị ẩn khi checkpoints rỗng
+    $sections = collect($form->getComponents())
+        ->filter(fn ($comp) => $comp instanceof Section);
+
+    $checkpointSection = $sections->first(fn ($s) => $s->getHeading() === 'Các mốc hành trình');
+    expect($checkpointSection)->not->toBeNull()
+        ->and($checkpointSection->isHidden())->toBeFalse();
+});
+
+test('điều hành nhập mốc bắt đầu cho chuyến chờ chạy chuyển trạng thái chuyến sang đã bắt đầu', function () {
+    $pendingTrip = Trip::create([
+        'trip_code' => 'TRIP-PENDING-02',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Pending,
+        'start_km' => null,
+        'started_at' => null,
+    ]);
+
+    $pendingOrder = Order::create([
+        'order_code' => 'ORD-PENDING-02',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->admin->id,
+        'trip_id' => $pendingTrip->id,
+        'status' => OrderStatus::Assigned,
+    ]);
+
+    $occurredAt = now()->subMinutes(30)->format('Y-m-d H:i');
+
+    editTripTableForCompletion()
+        ->mountTableAction('edit', $pendingTrip)
+        ->fillForm([
+            'driver_id' => $this->driver->id,
+            'checkpoints' => [
+                'record-1' => [
+                    'checkpoint_type' => CheckpointType::Started->value,
+                    'order_id' => $pendingOrder->id,
+                    'driver_id' => $this->driver->id,
+                    'km_reading' => 100005,
+                    'occurred_at' => $occurredAt,
+                ],
+            ],
+        ])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    $freshTrip = $pendingTrip->fresh();
+    expect($freshTrip->status)->toBe(TripStatus::Started)
+        ->and((float) $freshTrip->start_km)->toBe(100005.0)
+        ->and($freshTrip->started_at)->not->toBeNull()
+        ->and($pendingOrder->fresh()->status)->toBe(OrderStatus::Sent);
+});
+
+test('sửa mốc hành trình tự động cập nhật trạng thái chuyến theo mốc mới nhất', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-UPDATE-STATUS-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Started,
+        'start_km' => 100000,
+        'started_at' => now()->subHour(),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-UPDATE-STATUS-01',
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->admin->id,
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::Sent,
+    ]);
+
+    $startedCp = TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'order_id' => $order->id,
+        'driver_id' => $this->driver->id,
+        'km_reading' => 100000,
+        'occurred_at' => now()->subHour(),
+    ]);
+
+    // Admin thêm mốc Đến lấy hàng (ArrivedPickup)
+    editTripTableForCompletion()
+        ->mountTableAction('edit', $trip)
+        ->fillForm([
+            'driver_id' => $this->driver->id,
+            'checkpoints' => [
+                'record-1' => [
+                    'checkpoint_type' => CheckpointType::Started->value,
+                    'order_id' => $order->id,
+                    'driver_id' => $this->driver->id,
+                    'km_reading' => 100000,
+                    'occurred_at' => now()->subHour()->format('Y-m-d H:i'),
+                ],
+                'record-2' => [
+                    'checkpoint_type' => CheckpointType::ArrivedPickup->value,
+                    'order_id' => $order->id,
+                    'driver_id' => $this->driver->id,
+                    'km_reading' => 100015,
+                    'occurred_at' => now()->subMinutes(20)->format('Y-m-d H:i'),
+                ],
+            ],
+        ])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($trip->fresh()->status)->toBe(TripStatus::ArrivedPickup);
 });

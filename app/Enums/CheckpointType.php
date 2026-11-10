@@ -55,4 +55,18 @@ enum CheckpointType: string implements HasColor, HasLabel
             default => null,
         };
     }
+
+    public function toTripStatus(): ?TripStatus
+    {
+        return match ($this) {
+            self::Started => TripStatus::Started,
+            self::ArrivedPickup => TripStatus::ArrivedPickup,
+            self::LeftPickup => TripStatus::Delivering,
+            self::ArrivedDelivery => TripStatus::ArrivedDelivery,
+            self::Completed => TripStatus::Delivered,
+            self::End => TripStatus::Completed,
+            self::DriverSwap => TripStatus::DriverSwap,
+            self::Cancelled => TripStatus::Cancelled,
+        };
+    }
 }

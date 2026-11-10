@@ -424,11 +424,14 @@ class TripKmAdjustmentService
             || $trip->status === TripStatus::Completed
             || $hasEnd;
 
-        // Trạng thái chuyến do form sửa chuyến quyết định; ở đây chỉ đồng bộ km.
+        // Trạng thái chuyến do form sửa chuyến quyết định; nếu có mốc End thì chuyến hoàn thành.
         if ($shouldFinalizeEndKm && $last !== null) {
             $trip->end_km = $last->km_reading;
 
-            if ($trip->status === TripStatus::Completed && $trip->completed_at === null && $last->occurred_at !== null) {
+            if ($hasEnd) {
+                $trip->status = TripStatus::Completed;
+                $trip->completed_at = $trip->completed_at ?? $last->occurred_at;
+            } elseif ($trip->status === TripStatus::Completed && $trip->completed_at === null && $last->occurred_at !== null) {
                 $trip->completed_at = $last->occurred_at;
             }
         }
