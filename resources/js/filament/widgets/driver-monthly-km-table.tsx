@@ -669,6 +669,12 @@ interface EvaluationTrip {
     loading: number | null
     unloading: number | null
     routeWait: number | null
+    gpsLoading?: number | null
+    gpsUnloading?: number | null
+    gpsTimeA?: string | null
+    gpsTimeB?: string | null
+    gpsTimeC?: string | null
+    gpsTimeD?: string | null
     routeSamples: number
     flag: string | null
 }
@@ -720,11 +726,11 @@ const minutes = (value: number | null): string => {
 const percentOf = (actual: number | null, expected: number | null): number | null =>
     actual === null || expected === null || expected <= 0 ? null : Math.round(((actual - expected) / expected) * 100)
 
-/** Độ lệch so với chuẩn tuyến hiện bằng thời gian (+1h 20p); màu theo %, % nằm trong tooltip. */
+/** Độ lệch so với chuẩn GPS hiện bằng thời gian (+1h 20p); màu theo %, % nằm trong tooltip. */
 const Deviation = ({ diff, percent, note }: { diff: number | null; percent: number | null; note?: string }) => {
     if (diff === null || percent === null) {
         return (
-            <span className="text-gray-400" title={`Chưa có chuẩn để so: tuyến cần ít nhất 3 chuyến hợp lệ trong kỳ${note ? ` · ${note}` : ''}`}>
+            <span className="text-gray-400" title={`Chưa có dữ liệu dừng GPS tại điểm đóng/hạ để đối chiếu${note ? ` · ${note}` : ''}`}>
                 —
             </span>
         )
@@ -740,7 +746,7 @@ const Deviation = ({ diff, percent, note }: { diff: number | null; percent: numb
     const label = Math.abs(percent) < DIFF_WARN ? '≈ chuẩn' : `${diff > 0 ? '+' : '−'}${minutes(Math.abs(diff))}`
 
     return (
-        <span className={`font-mono text-[11px] ${tone}`} title={`${percent > 0 ? '+' : ''}${percent}% so với chuẩn tuyến${note ? ` · ${note}` : ''}`}>
+        <span className={`font-mono text-[11px] ${tone}`} title={`${percent > 0 ? '+' : ''}${percent}% so với chuẩn GPS thực tế${note ? ` · ${note}` : ''}`}>
             {label}
         </span>
     )
@@ -848,7 +854,7 @@ const EvaluationTable = ({ drivers, codes, periodLabel, selectedId, onSelect }: 
 }
 
 const TripMetric = ({ actual, standard, note }: { actual: number | null; standard: number | null; note: string }) => (
-    <div className="flex items-baseline justify-end gap-1.5" title={`${note} · chuẩn tuyến ${minutes(standard)}`}>
+    <div className="flex items-baseline justify-end gap-1.5" title={`${note} · chuẩn GPS thực tế ${minutes(standard)}`}>
         <span className="font-mono text-[11px] font-semibold">{minutes(actual)}</span>
         <Deviation diff={actual === null || standard === null ? null : Math.round(actual - standard)} percent={percentOf(actual, standard)} />
     </div>
@@ -936,10 +942,26 @@ const EvaluationTrips = ({ driver, trips, periodLabel, onClose, onOpenTrip }: {
                                 ) : (
                                     <>
                                         <td className={td}>
-                                            <TripMetric actual={trip.completion} standard={trip.routeCompletion} note="Bắt đầu → kết thúc chuyến" />
+                                            <TripMetric
+                                                actual={trip.completion}
+                                                standard={trip.routeCompletion}
+                                                note={
+                                                    trip.gpsTimeA && trip.gpsTimeD
+                                                        ? `Bắt đầu → kết thúc chuyến · GPS đến nhận ${trip.gpsTimeA} → rời hạ ${trip.gpsTimeD}`
+                                                        : 'Bắt đầu → kết thúc chuyến'
+                                                }
+                                            />
                                         </td>
                                         <td className="whitespace-nowrap px-2 py-1.5">
-                                            <TripMetric actual={trip.wait} standard={trip.routeWait} note={`Đóng ${minutes(trip.loading)} + hạ ${minutes(trip.unloading)}`} />
+                                            <TripMetric
+                                                actual={trip.wait}
+                                                standard={trip.routeWait}
+                                                note={`App: Đóng ${minutes(trip.loading)} + Hạ ${minutes(trip.unloading)}${
+                                                    trip.gpsLoading != null || trip.gpsUnloading != null
+                                                        ? ` · GPS: Đóng ${trip.gpsTimeA ?? '?'}→${trip.gpsTimeB ?? '?'} (${minutes(trip.gpsLoading ?? null)}) + Hạ ${trip.gpsTimeC ?? '?'}→${trip.gpsTimeD ?? '?'} (${minutes(trip.gpsUnloading ?? null)})`
+                                                        : ''
+                                                }`}
+                                            />
                                         </td>
                                     </>
                                 )}
@@ -1203,10 +1225,10 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                 {tab === 'evaluation' ? (
                     <>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                            <span className="font-semibold text-gray-700 dark:text-gray-200">Chuẩn tuyến</span> = thời gian ở giữa (trung vị) của cả đội trên cùng tuyến trong kỳ, cần ít nhất 3
-                            chuyến. Lệch <span className="font-semibold text-rose-700 dark:text-rose-400">+</span> là chậm / chờ lâu hơn chuẩn,{' '}
-                            <span className="font-semibold text-emerald-700 dark:text-emerald-400">−</span> là nhanh / chờ ít hơn. Chuyến dưới 5 phút hoặc quá 12 giờ (thường do bấm checkpoint sai)
-                            không tính, đếm ở cột <span className="font-semibold">Cần KT</span>.
+                            <span className="font-semibold text-gray-700 dark:text-gray-200">Chuẩn thực tế (GPS)</span> = khoảng thời gian từ đầu mút xe vừa dừng tại điểm nhận/hạ đến đầu mút xe bắt đầu
+                            di chuyển rời đi (gần mốc điểm nhận/hạ và thời điểm bấm nút nhất). Lệch <span className="font-semibold text-rose-700 dark:text-rose-400">+</span> là bấm dài hơn thực tế GPS,{' '}
+                            <span className="font-semibold text-emerald-700 dark:text-emerald-400">−</span> là bấm ngắn hơn thực tế GPS. Chuyến dưới 5 phút hoặc quá 12 giờ đếm ở cột{' '}
+                            <span className="font-semibold">Cần KT</span>.
                             {evaluation.error && <span className="ms-2 font-medium text-rose-600 dark:text-rose-400">{evaluation.error}</span>}
                         </p>
                         <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-5">
