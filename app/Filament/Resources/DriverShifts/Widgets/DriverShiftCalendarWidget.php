@@ -77,7 +77,9 @@ class DriverShiftCalendarWidget extends FullCalendarWidget
         return [
             Select::make('driver_id')
                 ->label('Lái xe')
-                ->relationship('driver', 'name')
+                ->relationship('driver', 'name', fn ($query) => $query->role('driver')->where('is_active', true))
+                ->searchable()
+                ->preload()
                 ->required(),
             Select::make('shift_type')
                 ->label('Loại ca')

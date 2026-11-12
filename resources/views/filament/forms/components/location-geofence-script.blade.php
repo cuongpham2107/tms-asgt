@@ -42,13 +42,14 @@
                 },
 
                 updateGeofenceCircle(overrideRadius, overrideLatLng) {
-                    if (typeof window.L === 'undefined') return;
                     const map = this.mapCore ? Alpine.raw(this.mapCore.map) : null;
                     if (!map) return;
 
                     let latLng = overrideLatLng;
                     if (!latLng && this.pickMarker) {
-                        latLng = Alpine.raw(this.pickMarker).getLatLng();
+                        try {
+                            latLng = Alpine.raw(this.pickMarker).getLatLng();
+                        } catch (e) {}
                     }
                     if (!latLng) {
                         const state = this.getState();
@@ -69,7 +70,9 @@
 
                     if (!latLng) {
                         if (this.geofenceCircle) {
-                            Alpine.raw(this.geofenceCircle).removeFrom(map);
+                            try {
+                                Alpine.raw(this.geofenceCircle).removeFrom(map);
+                            } catch (e) {}
                             this.geofenceCircle = null;
                         }
                         return;
@@ -79,29 +82,53 @@
                         ? [parseFloat(latLng[0]), parseFloat(latLng[1])]
                         : [parseFloat(latLng.lat), parseFloat(latLng.lng)];
 
+                    if (isNaN(safeLatLng[0]) || isNaN(safeLatLng[1])) return;
+
                     const radius = (overrideRadius !== undefined && overrideRadius !== null)
                         ? overrideRadius
                         : this.getGeofenceRadius();
 
                     if (!this.geofenceCircle) {
-                        const circle = L.circle(safeLatLng, {
-                            radius: radius,
-                            color: '#2563eb',
-                            weight: 2,
-                            opacity: 0.85,
-                            fillColor: '#3b82f6',
-                            fillOpacity: 0.15,
-                            dashArray: '6, 6',
-                            interactive: false,
-                        });
-                        circle.addTo(map);
-                        this.geofenceCircle = circle;
+                        let circle = null;
+                        if (this.mapCore && typeof this.mapCore.createCircle === 'function') {
+                            circle = this.mapCore.createCircle({
+                                center: safeLatLng,
+                                options: {
+                                    radius: radius,
+                                    color: '#2563eb',
+                                    weight: 2,
+                                    opacity: 0.85,
+                                    fillColor: '#3b82f6',
+                                    fillOpacity: 0.15,
+                                    dashArray: '6, 6',
+                                    interactive: false,
+                                },
+                            });
+                        } else if (typeof window.L !== 'undefined' && typeof window.L.circle === 'function') {
+                            circle = window.L.circle(safeLatLng, {
+                                radius: radius,
+                                color: '#2563eb',
+                                weight: 2,
+                                opacity: 0.85,
+                                fillColor: '#3b82f6',
+                                fillOpacity: 0.15,
+                                dashArray: '6, 6',
+                                interactive: false,
+                            });
+                        }
+
+                        if (circle) {
+                            Alpine.raw(circle).addTo(map);
+                            this.geofenceCircle = circle;
+                        }
                     } else {
                         const circle = Alpine.raw(this.geofenceCircle);
-                        circle.setLatLng(safeLatLng);
-                        circle.setRadius(radius);
-                        if (!map.hasLayer(circle)) {
-                            circle.addTo(map);
+                        if (circle && typeof circle.setLatLng === 'function') {
+                            circle.setLatLng(safeLatLng);
+                            circle.setRadius(radius);
+                            if (!map.hasLayer(circle)) {
+                                circle.addTo(map);
+                            }
                         }
                     }
                 },

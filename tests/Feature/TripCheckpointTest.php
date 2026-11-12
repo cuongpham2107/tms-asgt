@@ -1123,3 +1123,42 @@ test('missing phone GPS stays null on checkpoint instead of copying vehicle EUP 
         ->and($cp->vehicle_geo_status)->toBe(GeoCheckStatus::Unverified)
         ->and($cp->location_geo_status)->toBe(GeoCheckStatus::Valid);
 });
+
+test('trip checkpoints are ordered chronologically by occurred_at then logical type then id', function () {
+    $now = now()->setTime(21, 4, 0);
+
+    // Create arrived_pickup first in database (lower ID) with same occurred_at to stress test logical order
+    $arrived = TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'order_id' => $this->order1->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'occurred_at' => $now,
+        'km_reading' => 100,
+    ]);
+
+    $started = TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'order_id' => $this->order1->id,
+        'checkpoint_type' => CheckpointType::Started,
+        'occurred_at' => $now,
+        'km_reading' => 100,
+    ]);
+
+    $left = TripCheckpoint::create([
+        'trip_id' => $this->trip->id,
+        'order_id' => $this->order1->id,
+        'checkpoint_type' => CheckpointType::LeftPickup,
+        'occurred_at' => $now->copy()->addMinutes(15),
+        'km_reading' => 105,
+    ]);
+
+    $checkpoints = $this->trip->refresh()->checkpoints;
+
+    expect($checkpoints)->toHaveCount(3);
+    expect($checkpoints[0]->id)->toBe($started->id);
+    expect($checkpoints[0]->checkpoint_type)->toBe(CheckpointType::Started);
+    expect($checkpoints[1]->id)->toBe($arrived->id);
+    expect($checkpoints[1]->checkpoint_type)->toBe(CheckpointType::ArrivedPickup);
+    expect($checkpoints[2]->id)->toBe($left->id);
+    expect($checkpoints[2]->checkpoint_type)->toBe(CheckpointType::LeftPickup);
+});

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CheckpointType;
 use App\Enums\GeoCheckStatus;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -67,6 +68,28 @@ class TripCheckpoint extends Model
     public function effectiveOccurredAt(): ?Carbon
     {
         return $this->adjusted_at ?? $this->occurred_at;
+    }
+
+    /**
+     * Sắp xếp các mốc theo trình tự thời gian và logic vận hành:
+     * 1. Thời gian xảy ra mốc (`occurred_at` tăng dần)
+     * 2. Thứ tự logic theo loại mốc (Bắt đầu -> Đến lấy -> Rời lấy -> Đảo lái -> Đến giao -> Hoàn thành -> Kết thúc xe -> Huỷ)
+     * 3. ID tăng dần (mốc tạo trước đứng trước)
+     */
+    public function scopeChronological(Builder $query): Builder
+    {
+        return $query->orderBy('occurred_at', 'asc')
+            ->orderByRaw("CASE checkpoint_type 
+                WHEN 'started' THEN 1 
+                WHEN 'arrived_pickup' THEN 2 
+                WHEN 'left_pickup' THEN 3 
+                WHEN 'driver_swap' THEN 4 
+                WHEN 'arrived_delivery' THEN 5 
+                WHEN 'completed' THEN 6 
+                WHEN 'end' THEN 7 
+                WHEN 'cancelled' THEN 8 
+                ELSE 9 END ASC")
+            ->orderBy('id', 'asc');
     }
 
     public function trip(): BelongsTo

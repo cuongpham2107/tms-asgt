@@ -172,18 +172,19 @@ class Vehicle extends Model
 
     public function getDriverForShift(DriverWorkShift $shift): ?User
     {
-        if ($shift === DriverWorkShift::Even) {
-            return $this->evenDriver ?? $this->drivers->firstWhere('work_shift', DriverWorkShift::Even);
-        }
+        $driver = $shift === DriverWorkShift::Even
+            ? ($this->evenDriver ?? $this->drivers->firstWhere('work_shift', DriverWorkShift::Even))
+            : ($this->oddDriver ?? $this->drivers->firstWhere('work_shift', DriverWorkShift::Odd));
 
-        return $this->oddDriver ?? $this->drivers->firstWhere('work_shift', DriverWorkShift::Odd);
+        return ($driver && (bool) $driver->is_active) ? $driver : null;
     }
 
     public function getDriverForToday(): ?User
     {
         $shift = ShiftScheduleService::determineShift();
+        $driver = $this->getDriverForShift($shift) ?? $this->driver;
 
-        return $this->getDriverForShift($shift) ?? $this->driver;
+        return ($driver && (bool) $driver->is_active) ? $driver : null;
     }
 
     public function trips(): HasMany

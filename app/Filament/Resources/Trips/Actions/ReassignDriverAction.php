@@ -127,6 +127,7 @@ class ReassignDriverAction
     public static function getDriverOptions(?Trip $trip = null): array
     {
         return User::query()
+            ->role('driver')
             ->where('is_active', true)
             ->with([
                 'vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng'),
@@ -179,6 +180,7 @@ class ReassignDriverAction
     public static function getDriverListForPicker(?Trip $trip = null): array
     {
         return User::query()
+            ->role('driver')
             ->where('is_active', true)
             ->with([
                 'vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng'),

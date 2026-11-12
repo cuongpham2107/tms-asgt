@@ -58,8 +58,10 @@ class TripForm
                             ->columnSpan(['default' => 1, 'sm' => 3]),
                         Select::make('driver_id')
                             ->label('Lái xe')
-                            ->options(fn (): array => User::query()
-                                ->whereHas('roles', fn ($q) => $q->where('name', 'driver'))
+                            ->options(fn (?Trip $record): array => User::query()
+                                ->role('driver')
+                                ->where(fn ($q) => $q->where('is_active', true)->when($record?->driver_id, fn ($sub) => $sub->orWhere('id', $record->driver_id)))
+                                ->orderBy('name')
                                 ->pluck('name', 'id')
                                 ->toArray()
                             )
@@ -266,7 +268,7 @@ class TripForm
                     ->schema([
                         // Repeater cho xe thuê ngoài không có lái xe (4 cột: Loại, Đơn hàng, Giờ, Điểm)
                         Repeater::make('checkpoints_rent')
-                            ->relationship('checkpoints')
+                            ->relationship('checkpoints', modifyQueryUsing: fn ($query) => $query->chronological())
                             ->label('Danh sách mốc hành trình')
                             ->visible(fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent && blank($record?->driver_id))
                             ->table([
@@ -275,7 +277,6 @@ class TripForm
                                 TableColumn::make('Giờ')->width('220px'),
                                 TableColumn::make('Điểm')->width('110px'),
                             ])
-                            ->orderColumn('created_at')
                             ->compact()
                             ->schema([
                                 Select::make('checkpoint_type')
@@ -392,7 +393,7 @@ class TripForm
 
                         // Repeater cho xe công ty hoặc xe thuê ngoài có tài xế (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm)
                         Repeater::make('checkpoints')
-                            ->relationship('checkpoints')
+                            ->relationship('checkpoints', modifyQueryUsing: fn ($query) => $query->chronological())
                             ->label('Danh sách mốc hành trình')
                             ->visible(fn (?Model $record) => $record?->vehicle?->type !== VehicleOwnerType::Rent || filled($record?->driver_id))
                             ->table([
@@ -403,7 +404,6 @@ class TripForm
                                 TableColumn::make('Giờ')->width('160px'),
                                 TableColumn::make('Điểm')->width('110px'),
                             ])
-                            ->orderColumn('created_at')
                             ->compact()
                             ->schema([
                                 Select::make('checkpoint_type')
@@ -470,6 +470,7 @@ class TripForm
                                 Select::make('driver_id')
                                     ->label('Tài xế')
                                     ->options(fn () => User::query()
+                                        ->role('driver')
                                         ->where('is_active', true)
                                         ->orderBy('name')
                                         ->pluck('name', 'id')

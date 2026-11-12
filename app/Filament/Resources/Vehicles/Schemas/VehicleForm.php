@@ -156,7 +156,13 @@ class VehicleForm
                             ->label('Lái xe ca chẵn')
                             ->prefixIcon('heroicon-o-user')
                             ->native(false)
-                            ->relationship('evenDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Even)->orWhereNull('work_shift')))
+                            ->relationship(
+                                'evenDriver',
+                                'name',
+                                fn ($query, ?Vehicle $record) => $query->role('driver')
+                                    ->where(fn ($q) => $q->where('is_active', true)->when($record?->even_driver_id, fn ($sub) => $sub->orWhere('id', $record->even_driver_id)))
+                                    ->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Even)->orWhereNull('work_shift'))
+                            )
                             ->searchable()
                             ->preload()
                             ->placeholder('Chọn lái xe ca chẵn'),
@@ -165,7 +171,13 @@ class VehicleForm
                             ->label('Lái xe ca lẻ')
                             ->prefixIcon('heroicon-o-user')
                             ->native(false)
-                            ->relationship('oddDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Odd)->orWhereNull('work_shift')))
+                            ->relationship(
+                                'oddDriver',
+                                'name',
+                                fn ($query, ?Vehicle $record) => $query->role('driver')
+                                    ->where(fn ($q) => $q->where('is_active', true)->when($record?->odd_driver_id, fn ($sub) => $sub->orWhere('id', $record->odd_driver_id)))
+                                    ->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Odd)->orWhereNull('work_shift'))
+                            )
                             ->searchable()
                             ->preload()
                             ->placeholder('Chọn lái xe ca lẻ'),
@@ -174,7 +186,12 @@ class VehicleForm
                             ->label('Lái xe hiện tại (Tùy chọn)')
                             ->prefixIcon('heroicon-o-user-circle')
                             ->native(false)
-                            ->relationship('driver', 'name', fn ($query) => $query->role('driver'))
+                            ->relationship(
+                                'driver',
+                                'name',
+                                fn ($query, ?Vehicle $record) => $query->role('driver')
+                                    ->where(fn ($q) => $q->where('is_active', true)->when($record?->current_driver_id, fn ($sub) => $sub->orWhere('id', $record->current_driver_id)))
+                            )
                             ->searchable()
                             ->preload()
                             ->helperText('Tự động theo ca hôm nay nếu để trống'),

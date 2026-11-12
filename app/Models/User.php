@@ -11,6 +11,7 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -73,6 +74,15 @@ class User extends Authenticatable implements FilamentUser
     protected static function booted(): void
     {
         static::saved(function (User $user) {
+            if ($user->wasChanged('is_active') && ! $user->is_active) {
+                if ($user->vehicle_id) {
+                    $user->updateQuietly(['vehicle_id' => null]);
+                }
+                Vehicle::where('current_driver_id', $user->id)->update(['current_driver_id' => null]);
+                Vehicle::where('even_driver_id', $user->id)->update(['even_driver_id' => null]);
+                Vehicle::where('odd_driver_id', $user->id)->update(['odd_driver_id' => null]);
+            }
+
             if ($user->wasChanged('vehicle_id') || $user->wasChanged('work_shift')) {
                 $oldVehicleId = $user->getOriginal('vehicle_id');
 
@@ -324,5 +334,20 @@ class User extends Authenticatable implements FilamentUser
     public function overtimeRegistrations(): HasMany
     {
         return $this->hasMany(OvertimeRegistration::class, 'driver_id');
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeDrivers(Builder $query): Builder
+    {
+        return $query->role('driver');
+    }
+
+    public function scopeActiveDrivers(Builder $query): Builder
+    {
+        return $query->role('driver')->where('is_active', true);
     }
 }

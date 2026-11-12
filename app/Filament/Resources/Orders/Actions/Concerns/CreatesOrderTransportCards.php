@@ -49,12 +49,7 @@ abstract class CreatesOrderTransportCards
                 return;
             }
 
-            $todayShift = ShiftScheduleService::determineShift();
-            $driverForToday = $vehicle?->getDriverForShift($todayShift);
-
-            $selectedDriverId = $driverForToday?->id
-                ?? ($todayShift === DriverWorkShift::Even ? $vehicle?->even_driver_id : $vehicle?->odd_driver_id)
-                ?? $vehicle?->current_driver_id;
+            $selectedDriverId = $vehicle?->getDriverForToday()?->id;
 
             $set('driver_id', $selectedDriverId);
         } else {
@@ -107,6 +102,7 @@ abstract class CreatesOrderTransportCards
 
             $drivers = User::query()
                 ->role('driver')
+                ->where('is_active', true)
                 ->select([
                     'id',
                     'name',

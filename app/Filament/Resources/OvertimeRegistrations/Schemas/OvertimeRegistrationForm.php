@@ -27,7 +27,12 @@ class OvertimeRegistrationForm
                     ->schema([
                         Select::make('driver_id')
                             ->label('Tài xế')
-                            ->relationship('driver', 'name')
+                            ->relationship(
+                                'driver',
+                                'name',
+                                fn ($query, ?OvertimeRegistration $record) => $query->role('driver')
+                                    ->where(fn ($q) => $q->where('is_active', true)->when($record?->driver_id, fn ($sub) => $sub->orWhere('id', $record->driver_id)))
+                            )
                             ->searchable()
                             ->preload()
                             ->required()

@@ -119,7 +119,7 @@ class Trip extends Model
 
     public function checkpoints(): HasMany
     {
-        return $this->hasMany(TripCheckpoint::class)->orderBy('occurred_at');
+        return $this->hasMany(TripCheckpoint::class)->chronological();
     }
 
     public function photos(): HasManyThrough

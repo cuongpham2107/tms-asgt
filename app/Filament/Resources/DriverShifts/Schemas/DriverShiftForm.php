@@ -28,7 +28,14 @@ class DriverShiftForm
                     ->schema([
                         Select::make('driver_id')
                             ->label('Lái xe')
-                            ->relationship('driver', 'name')
+                            ->relationship(
+                                'driver',
+                                'name',
+                                fn ($query, ?DriverShift $record) => $query->role('driver')
+                                    ->where(fn ($q) => $q->where('is_active', true)->when($record?->driver_id, fn ($sub) => $sub->orWhere('id', $record->driver_id)))
+                            )
+                            ->searchable()
+                            ->preload()
                             ->prefixIcon(Heroicon::OutlinedUser)
                             ->required(),
                         Select::make('shift_type')

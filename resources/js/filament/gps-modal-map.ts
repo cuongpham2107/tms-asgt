@@ -1,5 +1,9 @@
 import * as L from 'leaflet'
 
+if (typeof window !== 'undefined') {
+    (window as any).L = L
+}
+
 // Cùng ô bản đồ Google với trang "Theo dõi thực tế" — OSM bị chặn trên một số mạng.
 const TILE_URL = 'https://mt1.google.com/vt/lyrs=m&hl=vi&x={x}&y={y}&z={z}'
 
