@@ -36,6 +36,7 @@ interface StatementRow {
     tripId: number
     driverId: number | null
     driver: string
+    operatingTime: string
     date: string | null
     code: string
     type: string
@@ -89,7 +90,7 @@ type Tab = 'summary' | 'statement' | 'evaluation'
 const NAVY: CSSProperties = { backgroundColor: 'rgb(30 58 95)' }
 const PER_PAGE_OPTIONS = [25, 50, 100]
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
-const STATEMENT_HEADERS = ['STT', 'Ngày', 'Mã đơn / chuyến', 'Loại', 'BSX', 'Lái xe', 'Bắt đầu chuyến', 'Kết thúc chuyến', 'Hành trình', 'A: Đến đóng', 'B: Xe chạy', 'C: Đến trả', 'D: Hạ xong', 'TG đóng', 'TG chạy', 'TG hạ', 'Tổng TG', 'Khách hàng', 'Kho', 'Xe', 'Km CH', 'Km KH', 'PCS', 'GW', 'Loại hàng', 'Ghi chú']
+const STATEMENT_HEADERS = ['STT', 'Ngày', 'Mã đơn / chuyến', 'Loại', 'BSX', 'Lái xe', 'Tổng TG khai thác', 'Bắt đầu chuyến', 'Kết thúc chuyến', 'Hành trình', 'A: Đến đóng', 'B: Xe chạy', 'C: Đến trả', 'D: Hạ xong', 'TG đóng', 'TG chạy', 'TG hạ', 'Tổng TG', 'Khách hàng', 'Kho', 'Xe', 'Km CH', 'Km KH', 'PCS', 'GW', 'Loại hàng', 'Ghi chú']
 
 const km = (value: number): string => value.toFixed(1)
 const optional = (value: number, decimals = 1): string => (value > 0 ? value.toFixed(decimals) : '')
@@ -604,6 +605,9 @@ const Statement = ({ rows, loading, error, periodLabel, perPage, onPerPage, onOp
                                 <td className={td}>{row.type}</td>
                                 <td className={`${td} text-center font-semibold`}>{row.plate ?? '—'}</td>
                                 <td className={td}>{row.driver}</td>
+                                <td className={`${td} text-center font-mono text-[11px] font-semibold text-primary-700 dark:text-primary-400`} title="Tổng thời gian khai thác = Thời gian hạ hàng - Bắt đầu chuyến">
+                                    {row.operatingTime ?? '—'}
+                                </td>
                                 <td className={`${td} text-center font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400`}>{row.started ?? '—'}</td>
                                 <td className={`${td} text-center font-mono text-[11px] font-semibold text-rose-700 dark:text-rose-400`}>{row.ended ?? '—'}</td>
                                 <td className={td}>{row.journey}</td>

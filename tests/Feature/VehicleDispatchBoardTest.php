@@ -329,7 +329,7 @@ test('vehicle dispatch board allows clicking trip status when trip is paused due
         ->assertHasNoTableActionErrors();
 });
 
-test('vehicle dispatch board does not make status clickable for normal trips or vehicles without trip', function () {
+test('vehicle dispatch board allows editing trip via status for normal trips and keeps vehicles without trip non-clickable', function () {
     $vehicleWithNormalTrip = Vehicle::factory()->create([
         'plate_number' => '20C-NORMAL',
         'type' => VehicleOwnerType::Company,
@@ -351,15 +351,20 @@ test('vehicle dispatch board does not make status clickable for normal trips or 
     $vehicleWithNormalTrip->load('trips');
     $vehicleWithoutTrip->load('trips');
 
-    expect(VehicleDispatchBoard::canClickTripStatus($vehicleWithNormalTrip))->toBeFalse()
+    expect(VehicleDispatchBoard::canClickTripStatus($vehicleWithNormalTrip))->toBeTrue()
         ->and(VehicleDispatchBoard::canClickTripStatus($vehicleWithoutTrip))->toBeFalse();
+
+    $row = dispatchWidgetRowFor($vehicleWithNormalTrip->plate_number);
+    expect($row['statusAction']['name'] ?? null)->toBe('edit_trip');
+
+    $noTripRow = dispatchWidgetRowFor($vehicleWithoutTrip->plate_number);
+    expect($noTripRow['statusAction'] ?? null)->toBeNull();
 
     Livewire::test(VehicleDispatchBoard::class)
         ->assertStatus(200)
-        ->assertDontSee('mountTableAction(\'reassign_driver\', \''.$vehicleWithNormalTrip->id.'\')', false)
-        ->assertDontSee('mountTableAction(\'resolve_km_report\', \''.$vehicleWithNormalTrip->id.'\')', false)
-        ->assertDontSee('mountTableAction(\'reassign_driver\', \''.$vehicleWithoutTrip->id.'\')', false)
-        ->assertDontSee('mountTableAction(\'resolve_km_report\', \''.$vehicleWithoutTrip->id.'\')', false);
+        ->call('openStatusAction', 'edit_trip', $vehicleWithNormalTrip->id)
+        ->assertActionMounted('edit_trip')
+        ->assertHasNoActionErrors();
 });
 
 test('vehicle dispatch board prioritizes resolve_km_report when a driver swap trip is paused', function () {
@@ -1157,7 +1162,7 @@ test('vehicle dispatch board renders loading overlay and spam click protection f
     Livewire::test(VehicleDispatchBoard::class)
         ->assertStatus(200)
         ->assertSee('wire:loading', false)
-        ->assertSee('wire:target="openTripModal, openGpsModal"', false)
+        ->assertSee('wire:target="openTripModal, openGpsModal, openDriverSwapModal, submitDriverSwap, openStatusAction"', false)
         ->assertSee('Đang tải dữ liệu...')
         ->assertSee('Vui lòng đợi trong giây lát')
         ->call('openGpsModal', $vehicle->id)

@@ -15,15 +15,16 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
-use Illuminate\Session\Middleware\StartSession;
 // use Openplain\FilamentShadcnTheme\Color;
 
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use RmsRamos\Activitylog\ActivitylogPlugin;
 use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
@@ -126,6 +127,10 @@ class AppPanelProvider extends PanelProvider
                 StickyTableHeaderPlugin::make(),
                 FilamentChatAssistantPlugin::make(),
             ])
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => view('filament.forms.components.location-geofence-script')->render(),
+            )
             ->authMiddleware([
                 Authenticate::class,
             ]);

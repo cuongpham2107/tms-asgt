@@ -2,7 +2,7 @@
     {{-- Loading overlay khi mở modal xe/GPS/đảo lái (chặn click liên tục) --}}
     <div
         wire:loading
-        wire:target="openTripModal, openGpsModal, openDriverSwapModal, submitDriverSwap"
+        wire:target="openTripModal, openGpsModal, openDriverSwapModal, submitDriverSwap, openStatusAction"
         class="fixed inset-0 z-50 bg-gray-950/40 dark:bg-black/60 backdrop-blur-[2px] transition-opacity select-none cursor-wait"
         style="display: none;"
     >

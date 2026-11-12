@@ -86,6 +86,8 @@ class LocationForm
                     ->minValue(100)
                     ->maxValue(5000)
                     ->suffix('m')
+                    ->live(onBlur: true)
+                    ->extraInputAttributes(['data-geofence-radius-input' => 'true'])
                     ->placeholder(fn (): string => 'Mặc định: '.config('checkpoint_geofence.radius_m', 3000).'m')
                     ->helperText(fn (): string => 'Để trống sẽ dùng bán kính mặc định ('.config('checkpoint_geofence.radius_m', 3000).'m). Các kho/cảng cực rộng có thể đặt 3500–5000m.'),
                 TextInput::make('old_address')
@@ -112,6 +114,7 @@ class LocationForm
 
                 MapPicker::make('coordinates')
                     ->label('Chọn vị trí trên bản đồ')
+                    ->view('filament.forms.components.location-map-picker')
                     ->height(350)
                     ->center(21.0285, 105.8542)
                     ->zoom(13)
@@ -149,37 +152,6 @@ class LocationForm
                         } catch (\Throwable) {
                         }
                     })
-                    ->extraAttributes([
-                        'x-init' => '
-                            $nextTick(() => {
-                                const mapEl = (typeof this !== "undefined" && this.$el) ? this.$el.querySelector(".leaflet-container") : document.querySelector(".leaflet-container");
-                                if (mapEl) {
-                                    const el = mapEl.closest("[x-data]");
-                                    const data = el ? Alpine.$data(el) : null;
-                                    if (data) {
-                                        const originalUpdatePickMarker = data.updatePickMarker.bind(data);
-                                        data.updatePickMarker = function() {
-                                            originalUpdatePickMarker();
-                                            if (data.pickMarker) {
-                                                data.pickMarker.off("dragend");
-                                                data.pickMarker.on("dragend", (e) => {
-                                                    const newPos = e.target.getLatLng();
-                                                    data.setState(newPos.lat, newPos.lng);
-                                                });
-                                            }
-                                        };
-                                        if (data.pickMarker) {
-                                            data.pickMarker.off("dragend");
-                                            data.pickMarker.on("dragend", (e) => {
-                                                const newPos = e.target.getLatLng();
-                                                data.setState(newPos.lat, newPos.lng);
-                                            });
-                                        }
-                                    }
-                                }
-                            });
-                        ',
-                    ])
                     ->afterStateUpdatedJs('
                         const coords = $state;
                         if (coords?.lat) {
@@ -188,6 +160,7 @@ class LocationForm
                                 const el = mapEl.closest("[x-data]");
                                 const data = el ? Alpine.$data(el) : null;
                                 data?.mapCore?.map?.setView([coords.lat, coords.lng], 15);
+                                data?.updateGeofenceCircle?.(undefined, [coords.lat, coords.lng]);
                             }
                         }
                     '),

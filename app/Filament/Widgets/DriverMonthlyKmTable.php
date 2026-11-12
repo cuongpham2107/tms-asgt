@@ -234,30 +234,43 @@ class DriverMonthlyKmTable extends Widget
         $duration = fn (?int $minutes): string => $minutes === null ? '—' : $export->formatDuration($minutes);
 
         return $rows
-            ->map(fn (array $row): array => [
-                'key' => $row['trip_id'].'-'.($row['order_id'] ?? 'trip'),
-                'tripId' => $row['trip_id'],
-                'driverId' => $row['driver_id'],
-                'driver' => $row['driver_name'],
-                'date' => filled($row['date']) ? Carbon::parse($row['date'])->format('d/m/Y') : null,
-                'code' => $row['code'],
-                'type' => $row['service_type'],
-                'plate' => $row['plate_number'],
-                'started' => $time($row['trip_started_at']),
-                'ended' => $time($row['trip_ended_at']),
-                'journey' => $row['journey'],
-                'times' => [$time($row['time_a']), $time($row['time_b']), $time($row['time_c']), $time($row['time_d'])],
-                'durations' => [$duration($row['time_loading']), $duration($row['time_travel']), $duration($row['time_unloading']), $duration($row['time_total_trip'])],
-                'customer' => $row['customer'],
-                'warehouse' => $row['warehouse'],
-                'vehicle' => trim("{$row['vehicle_owner']} · {$row['vehicle_type']}", ' ·'),
-                'kmLoaded' => (float) $row['km_loaded'],
-                'kmEmpty' => (float) $row['km_empty'],
-                'pcs' => (float) $row['pcs'],
-                'gw' => (float) $row['gw'],
-                'cargoType' => $row['cargo_type'],
-                'note' => $row['note'],
-            ])
+            ->map(function (array $row) use ($time, $duration): array {
+                $start = filled($row['trip_started_at'] ?? null)
+                    ? Carbon::parse($row['trip_started_at'])
+                    : (filled($row['time_a'] ?? null) ? Carbon::parse($row['time_a']) : null);
+                $delivery = filled($row['time_d'] ?? null)
+                    ? Carbon::parse($row['time_d'])
+                    : (filled($row['trip_ended_at'] ?? null) ? Carbon::parse($row['trip_ended_at']) : null);
+                $operatingMinutes = ($start && $delivery && $delivery->gte($start))
+                    ? (int) $start->diffInMinutes($delivery)
+                    : null;
+
+                return [
+                    'key' => $row['trip_id'].'-'.($row['order_id'] ?? 'trip'),
+                    'tripId' => $row['trip_id'],
+                    'driverId' => $row['driver_id'],
+                    'driver' => $row['driver_name'],
+                    'operatingTime' => $duration($operatingMinutes),
+                    'date' => filled($row['date']) ? Carbon::parse($row['date'])->format('d/m/Y') : null,
+                    'code' => $row['code'],
+                    'type' => $row['service_type'],
+                    'plate' => $row['plate_number'],
+                    'started' => $time($row['trip_started_at']),
+                    'ended' => $time($row['trip_ended_at']),
+                    'journey' => $row['journey'],
+                    'times' => [$time($row['time_a']), $time($row['time_b']), $time($row['time_c']), $time($row['time_d'])],
+                    'durations' => [$duration($row['time_loading']), $duration($row['time_travel']), $duration($row['time_unloading']), $duration($row['time_total_trip'])],
+                    'customer' => $row['customer'],
+                    'warehouse' => $row['warehouse'],
+                    'vehicle' => trim("{$row['vehicle_owner']} · {$row['vehicle_type']}", ' ·'),
+                    'kmLoaded' => (float) $row['km_loaded'],
+                    'kmEmpty' => (float) $row['km_empty'],
+                    'pcs' => (float) $row['pcs'],
+                    'gw' => (float) $row['gw'],
+                    'cargoType' => $row['cargo_type'],
+                    'note' => $row['note'],
+                ];
+            })
             ->values()
             ->all();
     }

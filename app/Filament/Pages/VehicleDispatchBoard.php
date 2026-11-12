@@ -12,6 +12,7 @@ use App\Enums\OrderType;
 use App\Enums\ShiftType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
+use App\Filament\Resources\Trips\Actions\EditTripAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ResolveKmReportAction;
 use App\Filament\Traits\HasVehicleDispatchRows;
@@ -23,6 +24,8 @@ use App\Models\Vehicle;
 use App\Services\ShiftScheduleService;
 use BackedEnum;
 use Carbon\CarbonInterface;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -153,8 +156,37 @@ class VehicleDispatchBoard extends Page implements HasTable
             return;
         }
 
+        if ($name === 'edit_trip') {
+            $vehicle = Vehicle::find($vehicleId);
+            $trip = $vehicle?->active_trip;
+            if (! $trip) {
+                Notification::make()
+                    ->warning()
+                    ->title('Không tìm thấy chuyến')
+                    ->body('Xe hiện không có chuyến đang chạy.')
+                    ->send();
+
+                return;
+            }
+
+            $this->mountAction('edit_trip', ['trip' => $trip->id]);
+
+            return;
+        }
+
         $this->mountTableAction($name, (string) $vehicleId);
         $this->dispatch('open-modal', id: "fi-{$this->getId()}-action-0");
+    }
+
+    public function edit_tripAction(): Action
+    {
+        return $this->editTripAction();
+    }
+
+    public function editTripAction(): Action
+    {
+        return EditTripAction::make('edit_trip')
+            ->record(fn (array $arguments = []): ?Trip => isset($arguments['trip']) ? Trip::find($arguments['trip']) : null);
     }
 
     public function getSelectedVehicleForSwap(): ?Vehicle
@@ -618,13 +650,7 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function canClickTripStatus(Vehicle $record): bool
     {
-        $activeTrip = $record->active_trip;
-
-        if ($activeTrip === null) {
-            return false;
-        }
-
-        return $activeTrip->status === TripStatus::DriverSwap || $activeTrip->isPaused();
+        return $record->active_trip !== null;
     }
 
     public static function getOrderType(Vehicle $record): ?OrderType

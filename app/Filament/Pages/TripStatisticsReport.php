@@ -10,6 +10,7 @@ use App\Enums\OrderType;
 use App\Enums\SurchargeType;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\FreightRates\Schemas\FreightRateForm;
+use App\Filament\Resources\Orders\Schemas\OrderForm;
 use App\Filament\Traits\HasTripStatistics;
 use App\Models\Customer;
 use App\Models\FeeType;
@@ -1174,6 +1175,68 @@ class TripStatisticsReport extends Page
             });
     }
 
+    /**
+     * Sửa nhanh thông tin đơn hàng ngay trong modal cước.
+     */
+    private function editOrderAction(?Order $order): Action
+    {
+        return Action::make('editOrder')
+            ->icon(Heroicon::OutlinedPencilSquare)
+            ->tooltip('Sửa thông tin đơn hàng')
+            ->hidden($order === null)
+            ->record($order)
+            // Cùng quyền với menu Đơn hàng (Shield: Update:Order), không có quyền thì ẩn nút.
+            ->authorize('update')
+            ->modalHeading(fn (): string => 'Sửa đơn hàng '.($order?->order_code ?? ''))
+            ->modalWidth(Width::SixExtraLarge)
+            ->modalSubmitActionLabel('Lưu đơn hàng')
+            ->fillForm(function () use ($order): array {
+                if ($order === null) {
+                    return [];
+                }
+
+                $data = $order->attributesToArray();
+                $data['vehicle_id'] = $order->trip?->vehicle_id;
+                $data['driver_id'] = $order->trip?->driver_id;
+
+                return $data;
+            })
+            ->schema(fn (Schema $schema): array => OrderForm::configure($schema)->getComponents())
+            ->action(function (array $data, Set $set) use ($order): void {
+                if ($order === null) {
+                    return;
+                }
+
+                unset($data['vehicle_id'], $data['driver_id']);
+
+                $order->update(Arr::except($data, ['deliveryPoints']));
+
+                $this->clearBaseRowsCache();
+                $this->bumpDataVersion();
+
+                // Cập nhật lại các trường hiển thị và tính toán trên form cước
+                if (array_key_exists('total_packages', $data)) {
+                    $set('total_packages', $data['total_packages']);
+                }
+                if (array_key_exists('total_weight', $data)) {
+                    $set('total_weight', $data['total_weight']);
+                }
+                if (array_key_exists('chargeable_weight', $data) && filled($data['chargeable_weight'])) {
+                    $set('chargeable_weight', $data['chargeable_weight']);
+                }
+                if (array_key_exists('cargo_type', $data)) {
+                    $cargoTypeValue = $data['cargo_type'] instanceof CargoType ? $data['cargo_type']->value : $data['cargo_type'];
+                    $set('cargo_type', $cargoTypeValue);
+                }
+
+                Notification::make()
+                    ->title('Đã lưu đơn hàng')
+                    ->body('Thông tin đơn hàng '.($order->order_code ?? '').' đã được cập nhật.')
+                    ->success()
+                    ->send();
+            });
+    }
+
     private function addFreightRateAction(?OrderCharge $charge, ?Closure $refreshPrice = null, string $name = 'addFreightRate'): Action
     {
         $order = $charge?->order?->loadMissing(['pickupLocation', 'deliveryPoints.location']);
@@ -1752,7 +1815,8 @@ class TripStatisticsReport extends Page
                         ->badge()
                         ->color('info')
                         ->fontFamily(FontFamily::Mono)
-                        ->weight(FontWeight::Bold),
+                        ->weight(FontWeight::Bold)
+                        ->suffixAction($this->editOrderAction($order)),
                     $entry('summary_customer_code', 'Khách hàng', Heroicon::OutlinedBuildingOffice, $order?->customer?->code ?? $row['customer'] ?? '—')
                         ->badge()
                         ->color('gray')

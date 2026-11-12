@@ -109,6 +109,8 @@ class VehicleDispatchTable extends Widget
                 $statusAction = ['name' => 'resolve_km_report', 'tooltip' => 'Bấm để xử lý báo sai Km'];
             } elseif ($activeTrip->status === TripStatus::DriverSwap) {
                 $statusAction = ['name' => 'reassign_driver', 'tooltip' => 'Bấm để gán lại tài xế (Đảo lái)'];
+            } else {
+                $statusAction = ['name' => 'edit_trip', 'tooltip' => 'Bấm để sửa chuyến — '.$activeTrip->trip_code];
             }
         }
 
