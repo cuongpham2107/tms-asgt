@@ -2,6 +2,8 @@
 
 namespace App\Services\Export\BillingStatement;
 
+use App\Enums\FreightRateType;
+
 /**
  * Mẫu bảng kê theo từng khách hàng — chép đúng thứ tự và tên cột của file Excel mẫu
  * (thư mục "MẪU BẢNG KÊ THEO KHÁCH"). ALSE đang xuất 1 đơn 1 dòng (prod mỗi đơn 1 điểm trả, chưa ghép 2 chặng).
@@ -18,7 +20,7 @@ namespace App\Services\Export\BillingStatement;
 class BillingStatementTemplates
 {
     /**
-     * @return array<string, array{customer_code: string, label: string, title: string, customer_label: string, columns: list<array{0: string, 1: string, 2: ?string}>, layout: string}>
+     * @return array<string, array{customer_code: string, label: string, title: string, customer_label: string, columns: list<array{0: string, 1: string, 2: ?string}>, layout: string, rate_types: ?list<string>}>
      */
     public static function all(): array
     {
@@ -243,7 +245,7 @@ class BillingStatementTemplates
                 ['fee:extra_drop', 'Chi phí rớt điểm', null],
                 ...self::totals('Tổng', 'Trị giá (VND)'),
                 ['note', 'Ghi chú', null],
-            ]),
+            ], rateTypes: [FreightRateType::ClcSdv->value]),
 
             'SAFO_XUAT' => self::make('ASGS (SAFO)', 'SAFO – có rớt điểm (xuất)', 'BẢNG KÊ ĐỐI CHIẾU VẬN CHUYỂN HÀNG SAFO - XUẤT', [
                 ['stt', 'STT', null],
@@ -358,9 +360,10 @@ class BillingStatementTemplates
 
     /**
      * @param  list<array{0: string, 1: string, 2: ?string}>  $columns
-     * @return array{customer_code: string, label: string, title: string, customer_label: string, columns: list<array{0: string, 1: string, 2: ?string}>, layout: string}
+     * @param  ?list<string>  $rateTypes
+     * @return array{customer_code: string, label: string, title: string, customer_label: string, columns: list<array{0: string, 1: string, 2: ?string}>, layout: string, rate_types: ?list<string>}
      */
-    private static function make(string $customerCode, string $label, string $title, array $columns, string $customerLabel = 'Tên khách hàng', string $layout = 'single'): array
+    private static function make(string $customerCode, string $label, string $title, array $columns, string $customerLabel = 'Tên khách hàng', string $layout = 'single', ?array $rateTypes = null): array
     {
         return [
             'customer_code' => $customerCode,
@@ -370,6 +373,8 @@ class BillingStatementTemplates
             'columns' => $columns,
             // single: 1 đơn 1 dòng; per_drop: mỗi điểm trả 1 dòng (cùng STT).
             'layout' => $layout,
+            // Chỉ lấy đơn có loại hình tính cước thuộc danh sách này; null = mọi loại hình.
+            'rate_types' => $rateTypes,
         ];
     }
 
