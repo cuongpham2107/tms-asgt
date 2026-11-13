@@ -1,16 +1,23 @@
 <?php
 
+use App\Enums\LocationType;
 use App\Enums\OrderType;
+use App\Filament\Resources\Customers\Pages\CreateCustomer;
 use App\Filament\Resources\Locations\Pages\CreateLocation;
+use App\Filament\Resources\Locations\Pages\EditLocation;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
+use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Models\Area;
+use App\Models\BillingZone;
 use App\Models\Location;
 use App\Models\User;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
+use Filament\Actions\Testing\TestAction;
 use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
@@ -147,4 +154,123 @@ test('creating location with area creates single unique record', function () {
 
     $location->update(['name' => 'Kho Nội Bài 01 Updated']);
     expect($location->refresh()->name)->toBe('Kho Nội Bài 01 Updated');
+});
+
+test('creating location via createOption modal inside order action works without Order areas relationship error', function () {
+    Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
+    $viewOrder = Permission::firstOrCreate(['name' => 'ViewAny:Order', 'guard_name' => 'web']);
+    $createOrder = Permission::firstOrCreate(['name' => 'Create:Order', 'guard_name' => 'web']);
+    $user = User::factory()->create();
+    $user->givePermissionTo([$viewOrder, $createOrder]);
+    $this->actingAs($user);
+
+    $nba = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'NBA',
+        'name' => 'Hàng đến NBA',
+        'is_active' => true,
+        'sort_order' => 1,
+    ]);
+    $asg = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'ASG',
+        'name' => 'Hàng GOM',
+        'is_active' => true,
+        'sort_order' => 2,
+    ]);
+    $zone = BillingZone::create([
+        'code' => 'NOI-BAI',
+        'name' => 'Nội Bài',
+    ]);
+
+    Livewire::test(ListOrders::class)
+        ->callAction(
+            [
+                TestAction::make('create_order_hhhk_action'),
+                TestAction::make('createOption')->schemaComponent('pickup_location_id'),
+            ],
+            data: [
+                'areas' => [$nba->id, $asg->id],
+                'code' => 'alsc-test',
+                'billing_zone_id' => $zone->id,
+                'name' => 'Kho ALSC Test',
+                'loc_type' => LocationType::Pickup->value,
+                'is_active' => true,
+            ],
+        )
+        ->assertHasNoFormErrors();
+
+    $location = Location::query()->where('code', 'ALSC-TEST')->first();
+
+    expect($location)->not->toBeNull()
+        ->and($location->billing_zone_id)->toBe($zone->id)
+        ->and($location->areas()->pluck('areas.id')->sort()->values()->all())->toBe([$nba->id, $asg->id]);
+});
+
+test('creating location via createOption modal inside customer form works and syncs areas', function () {
+    $viewCustomer = Permission::firstOrCreate(['name' => 'ViewAny:Customer', 'guard_name' => 'web']);
+    $createCustomer = Permission::firstOrCreate(['name' => 'Create:Customer', 'guard_name' => 'web']);
+    $user = User::factory()->create();
+    $user->givePermissionTo([$viewCustomer, $createCustomer]);
+    $this->actingAs($user);
+
+    $area = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'HAN',
+        'name' => 'Hà Nội',
+        'is_active' => true,
+    ]);
+
+    Livewire::test(CreateCustomer::class)
+        ->callAction(
+            TestAction::make('createOption')->schemaComponent('location_id'),
+            data: [
+                'areas' => [$area->id],
+                'code' => 'cust-loc-01',
+                'name' => 'Kho Khách Hàng 01',
+                'loc_type' => LocationType::Warehouse->value,
+                'is_active' => true,
+            ],
+        )
+        ->assertHasNoFormErrors();
+
+    $location = Location::query()->where('code', 'CUST-LOC-01')->first();
+
+    expect($location)->not->toBeNull()
+        ->and($location->areas()->pluck('areas.id')->all())->toBe([$area->id]);
+});
+
+test('edit location preserves existing location record and areas relationship', function () {
+    $viewAny = Permission::firstOrCreate(['name' => 'ViewAny:Location', 'guard_name' => 'web']);
+    $update = Permission::firstOrCreate(['name' => 'Update:Location', 'guard_name' => 'web']);
+    $user = User::factory()->create();
+    $user->givePermissionTo([$viewAny, $update]);
+    $this->actingAs($user);
+
+    $area1 = Area::create(['type' => OrderType::Hhhk, 'code' => 'A1', 'name' => 'Area 1', 'is_active' => true]);
+    $area2 = Area::create(['type' => OrderType::Hhhk, 'code' => 'A2', 'name' => 'Area 2', 'is_active' => true]);
+
+    $location = Location::create([
+        'area_id' => $area1->id,
+        'code' => 'EDIT-LOC',
+        'name' => 'Edit Location',
+        'loc_type' => LocationType::Warehouse->value,
+        'is_active' => true,
+    ]);
+    $location->areas()->sync([$area1->id]);
+
+    Livewire::test(EditLocation::class, ['record' => $location->getRouteKey()])
+        ->assertSchemaStateSet([
+            'code' => 'EDIT-LOC',
+            'areas' => [$area1->id],
+        ])
+        ->fillForm([
+            'areas' => [$area1->id, $area2->id],
+            'name' => 'Edit Location Updated',
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($location->refresh()->name)->toBe('Edit Location Updated')
+        ->and($location->areas()->pluck('areas.id')->sort()->values()->all())->toBe([$area1->id, $area2->id]);
 });

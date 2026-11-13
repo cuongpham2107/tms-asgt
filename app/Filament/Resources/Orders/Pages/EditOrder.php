@@ -26,6 +26,10 @@ class EditOrder extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        if ($this->record->charge?->isLocked()) {
+            unset($data['type']);
+        }
+
         foreach ($data['tripCheckpoints'] ?? [] as $index => $checkpoint) {
             if (empty($checkpoint['delivery_point_id'])) {
                 continue;

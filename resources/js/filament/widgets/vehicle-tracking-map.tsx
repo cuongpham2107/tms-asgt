@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import * as L from 'leaflet'
+import * as LModule from 'leaflet'
+import type * as LeafletTypes from 'leaflet'
 import 'leaflet.markercluster'
+import { resolveSafeLeaflet } from '../leaflet-safe'
 import type { JsonValue, JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities, Snapshot } from '@filament/widgets/js-widget'
+
+const L = resolveSafeLeaflet(LModule, true)
 
 interface PopupOrder {
     code: string | null
@@ -118,10 +122,10 @@ const vehiclePopup = (vehicle: Snapshot<VehicleRow>): string => `
 
 function MapCanvas({ configuration, selectedIds, onSelect }: { configuration: Snapshot<Configuration>; selectedIds: number[]; onSelect: (id: number) => void }) {
     const containerRef = useRef<HTMLDivElement | null>(null)
-    const mapRef = useRef<L.Map | null>(null)
-    const clusterRef = useRef<L.MarkerClusterGroup | null>(null)
-    const markersRef = useRef<Map<number, L.Marker>>(new Map())
-    const routeLayersRef = useRef<L.Layer[]>([])
+    const mapRef = useRef<LeafletTypes.Map | null>(null)
+    const clusterRef = useRef<LeafletTypes.MarkerClusterGroup | null>(null)
+    const markersRef = useRef<Map<number, LeafletTypes.Marker>>(new Map())
+    const routeLayersRef = useRef<LeafletTypes.Layer[]>([])
     const fitKeyRef = useRef<string | null>(null)
     const onSelectRef = useRef(onSelect)
     const vehiclesRef = useRef<readonly Snapshot<VehicleRow>[]>([])
@@ -143,7 +147,7 @@ function MapCanvas({ configuration, selectedIds, onSelect }: { configuration: Sn
         const map = L.map(containerRef.current, { zoomControl: true })
         map.setView(L.latLng(configuration.center[0], configuration.center[1]), configuration.zoom)
 
-        const tileLayers: Record<string, L.TileLayer> = {}
+        const tileLayers: Record<string, LeafletTypes.TileLayer> = {}
         configuration.tiles.forEach(([label, url, attribution], index) => {
             const layer = L.tileLayer(url, { attribution, maxZoom: 19 })
             tileLayers[label] = layer
@@ -168,7 +172,7 @@ function MapCanvas({ configuration, selectedIds, onSelect }: { configuration: Sn
                       removeOutsideVisibleBounds: true,
                       zoomToBoundsOnClick: true,
                   })
-                : (L.layerGroup() as unknown as L.MarkerClusterGroup)
+                : (L.layerGroup() as unknown as LeafletTypes.MarkerClusterGroup)
         map.addLayer(cluster)
 
         mapRef.current = map
@@ -275,7 +279,7 @@ function MapCanvas({ configuration, selectedIds, onSelect }: { configuration: Sn
         // Lộ trình cũ của xe vừa bỏ chọn ẩn ngay, không chờ server trả về.
         configuration.routes.filter((route) => selectedIds.includes(route.vehicleId)).forEach((route) => {
             // Viền trắng dưới mỗi đường để tách khỏi đường xá của nền bản đồ; kế hoạch vẽ sau để nằm trên.
-            const drawLine = (points: readonly (readonly [number, number])[], options: L.PolylineOptions, tooltip: string) => {
+            const drawLine = (points: readonly (readonly [number, number])[], options: LeafletTypes.PolylineOptions, tooltip: string) => {
                 if (points.length < 2) {
                     return
                 }

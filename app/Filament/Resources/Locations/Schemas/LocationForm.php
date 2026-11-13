@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Locations\Schemas;
 use App\Enums\LocationType;
 use App\Enums\MapTile;
 use App\Models\Area;
+use App\Models\Location;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Services\GeoSearchService;
@@ -17,12 +18,19 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 class LocationForm
 {
     public static function configure(Schema $schema, mixed $defaultAreaId = null): Schema
     {
+        // Embedded createOptionForm modals on non-Location forms (e.g. Order, Customer)
+        // pass the parent schema's model unless Location is bound explicitly.
+        if ($schema->getModel() !== Location::class) {
+            $schema->model(Location::class);
+        }
+
         return $schema
             ->components([
                 Select::make('areas')
@@ -169,5 +177,72 @@ class LocationForm
                     ->default(true)
                     ->required(),
             ]);
+    }
+
+    /**
+     * Persist a Location created from a Select::createOptionForm() modal and sync its relationships.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function createFromOptionForm(
+        array $data,
+        Schema $schema,
+        mixed $defaultAreaId = null,
+        ?string $defaultLocType = null,
+    ): int {
+        $legacyAreas = $data['areas'] ?? [];
+        unset($data['areas']);
+
+        $areaId = $data['area_id'] ?? value($defaultAreaId);
+        if (is_string($areaId) && ! is_numeric($areaId)) {
+            $areaId = Area::query()->where('code', $areaId)->value('id');
+        }
+        $resolvedAreaId = is_numeric($areaId) ? (int) $areaId : null;
+
+        $normalizedLegacyAreas = array_values(array_filter(array_map(function ($item): ?int {
+            if (is_numeric($item)) {
+                return (int) $item;
+            }
+
+            if (is_string($item) && $item !== '') {
+                $id = Area::query()->where('code', $item)->value('id');
+
+                return $id ? (int) $id : null;
+            }
+
+            return null;
+        }, is_array($legacyAreas) ? $legacyAreas : [])));
+
+        $location = Location::create(array_merge($data, [
+            'area_id' => $resolvedAreaId ?? ($normalizedLegacyAreas[0] ?? null),
+            'loc_type' => $data['loc_type'] ?? $defaultLocType ?? LocationType::Warehouse->value,
+            'is_active' => $data['is_active'] ?? true,
+        ]));
+
+        $schema->model($location)->saveRelationships();
+
+        $syncedAreaIds = $location->areas()->pluck('areas.id')->map(fn ($id): int => (int) $id)->all();
+
+        if ($syncedAreaIds === []) {
+            $fallbackAreas = $normalizedLegacyAreas !== []
+                ? $normalizedLegacyAreas
+                : ($resolvedAreaId ? [$resolvedAreaId] : []);
+
+            if ($fallbackAreas !== []) {
+                $location->areas()->sync($fallbackAreas);
+                $syncedAreaIds = $fallbackAreas;
+            }
+        }
+
+        if (! $location->area_id && $syncedAreaIds !== []) {
+            $location->update(['area_id' => $syncedAreaIds[0]]);
+        }
+
+        Cache::forget('location-options-all');
+        foreach ($syncedAreaIds as $syncedAreaId) {
+            Cache::forget('location-options-'.$syncedAreaId);
+        }
+
+        return $location->getKey();
     }
 }

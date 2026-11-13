@@ -1,8 +1,7 @@
-import * as L from 'leaflet'
+import * as LModule from 'leaflet'
+import { resolveSafeLeaflet } from './leaflet-safe'
 
-if (typeof window !== 'undefined') {
-    (window as any).L = L
-}
+const L = resolveSafeLeaflet(LModule)
 
 // Cùng ô bản đồ Google với trang "Theo dõi thực tế" — OSM bị chặn trên một số mạng.
 const TILE_URL = 'https://mt1.google.com/vt/lyrs=m&hl=vi&x={x}&y={y}&z={z}'

@@ -574,7 +574,7 @@ class TripStatisticsReport extends Page
             ->modalWidth(function (array $arguments): Width|string {
                 $order = Order::find($arguments['orderId'] ?? null);
 
-                return $order?->isExternal() ? 'max-w-[96vw]' : Width::FiveExtraLarge;
+                return $order?->isExternal() ? 'max-w-[96vw]' : Width::ThreeExtraLarge;
             })
             ->extraModalWindowAttributes(function (array $arguments): array {
                 $order = Order::find($arguments['orderId'] ?? null);
@@ -1202,17 +1202,64 @@ class TripStatisticsReport extends Page
                 return $data;
             })
             ->schema(fn (Schema $schema): array => OrderForm::configure($schema)->getComponents())
-            ->action(function (array $data, Set $set) use ($order): void {
+            ->action(function (array $data, Schema $schema, Set $set) use ($order): void {
                 if ($order === null) {
                     return;
+                }
+
+                $order->loadMissing('charge');
+                $wasExternal = $order->isExternal();
+
+                if ($order->charge?->isLocked()) {
+                    $incomingType = $data['type'] ?? null;
+                    $incomingTypeValue = $incomingType instanceof OrderType ? $incomingType->value : $incomingType;
+
+                    if (filled($incomingTypeValue) && $incomingTypeValue !== $order->type?->value) {
+                        Notification::make()
+                            ->title('Không thể đổi loại đơn')
+                            ->body('Đơn hàng đã khoá cước (đã xuất bảng kê), không được phép thay đổi loại đơn.')
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    unset($data['type']);
                 }
 
                 unset($data['vehicle_id'], $data['driver_id']);
 
                 $order->update(Arr::except($data, ['deliveryPoints']));
+                $schema->model($order)->saveRelationships();
+                $order->refresh()->loadMissing('charge');
+
+                $isNowExternal = $order->isExternal();
+                $typeChanged = $wasExternal !== $isNowExternal;
+
+                if ($typeChanged) {
+                    if ($isNowExternal) {
+                        $this->resolveCharge($order->id);
+                    } elseif ($order->charge !== null && ! $order->charge->isLocked()) {
+                        $order->charge->fees()->delete();
+                        $order->charge->delete();
+                    }
+                }
 
                 $this->clearBaseRowsCache();
                 $this->bumpDataVersion();
+
+                Notification::make()
+                    ->title('Đã lưu đơn hàng')
+                    ->body('Thông tin đơn hàng '.($order->order_code ?? '').' đã được cập nhật.')
+                    ->success()
+                    ->send();
+
+                if ($typeChanged) {
+                    $this->unmountAction(cancelParentActions: true);
+                    $this->mountAction('editCharge', ['orderId' => $order->id]);
+
+                    return;
+                }
 
                 // Cập nhật lại các trường hiển thị và tính toán trên form cước
                 if (array_key_exists('total_packages', $data)) {
@@ -1228,12 +1275,6 @@ class TripStatisticsReport extends Page
                     $cargoTypeValue = $data['cargo_type'] instanceof CargoType ? $data['cargo_type']->value : $data['cargo_type'];
                     $set('cargo_type', $cargoTypeValue);
                 }
-
-                Notification::make()
-                    ->title('Đã lưu đơn hàng')
-                    ->body('Thông tin đơn hàng '.($order->order_code ?? '').' đã được cập nhật.')
-                    ->success()
-                    ->send();
             });
     }
 
