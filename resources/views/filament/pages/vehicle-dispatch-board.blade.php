@@ -99,19 +99,36 @@
 
             {{-- Grid 2-1: Trái là danh sách ca trực lái xe, Phải là bảng Tổng hợp ca trực lái xe --}}
             <div class="grid grid-cols-3 gap-4 items-start">
-                <div class="col-span-2 overflow-auto rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10 bg-white dark:bg-gray-900 shadow-xs">
+                <div class="dispatch-table-container col-span-2 overflow-auto rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10 bg-white dark:bg-gray-900 shadow-xs max-h-[calc(100vh-11rem)]">
                     <table class="dispatch-table w-full text-xs border-collapse font-sans">
-                        <thead>
+                        <thead class="sticky top-0 z-20 shadow-sm">
                             <tr class="text-white text-[11px] font-bold tracking-wide uppercase dark:bg-slate-950" style="background-color: rgb(30 58 95)">
                                 <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">STT</th>
                                 <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Điểm trực</th>
                                 <th class="border-r border-b border-white/10 py-2 px-3 text-left whitespace-nowrap">Lịch lái xe</th>
                                 <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Xe chạy</th>
                                 <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Ca</th>
-                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Số chuyến</th>
-                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Số Km CH</th>
-                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Số Km KH</th>
-                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Tổng KM</th>
+                                @foreach ([
+                                    'trip_count' => 'Số chuyến',
+                                    'km_loaded' => 'Số Km CH',
+                                    'km_empty' => 'Số Km KH',
+                                    'total_km' => 'Tổng KM',
+                                ] as $sortCol => $sortLabel)
+                                    <th
+                                        wire:click="sortDutyTable('{{ $sortCol }}')"
+                                        title="Bấm để sắp xếp theo {{ $sortLabel }}"
+                                        class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap cursor-pointer hover:bg-white/10 select-none transition"
+                                    >
+                                        <span class="inline-flex items-center justify-center gap-1">
+                                            <span>{{ $sortLabel }}</span>
+                                            @if ($dutySortBy === $sortCol)
+                                                <span class="text-amber-300 text-[10px]">{{ $dutySortDirection === 'asc' ? '▲' : '▼' }}</span>
+                                            @else
+                                                <span class="text-white/40 text-[10px]">⇅</span>
+                                            @endif
+                                        </span>
+                                    </th>
+                                @endforeach
                                 <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Bắt đầu ca</th>
                                 <th class="border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Kết thúc ca</th>
                             </tr>

@@ -76,6 +76,12 @@ class VehicleDispatchBoard extends Page implements HasTable
     public string $dutyStationFilter = 'all';
 
     #[Url]
+    public ?string $dutySortBy = null; // trip_count, km_loaded, km_empty, total_km
+
+    #[Url]
+    public string $dutySortDirection = 'desc'; // asc, desc
+
+    #[Url]
     public string $activeOwnerType = 'company'; // company only
 
     #[Url]
@@ -1623,6 +1629,20 @@ class VehicleDispatchBoard extends Page implements HasTable
         $this->dutyStationFilter = $value;
     }
 
+    public function sortDutyTable(string $column): void
+    {
+        if (! in_array($column, ['trip_count', 'km_loaded', 'km_empty', 'total_km'], true)) {
+            return;
+        }
+
+        if ($this->dutySortBy === $column) {
+            $this->dutySortDirection = $this->dutySortDirection === 'desc' ? 'asc' : 'desc';
+        } else {
+            $this->dutySortBy = $column;
+            $this->dutySortDirection = 'desc';
+        }
+    }
+
     /**
      * @return array{stations: list<array<string, mixed>>, grand: array<string, int>}
      */
@@ -1723,7 +1743,7 @@ class VehicleDispatchBoard extends Page implements HasTable
             ->orderBy('name')
             ->get();
 
-        return $drivers->map(function (User $driver) use ($shiftStart, $shiftEnd, $runningValues) {
+        $rows = $drivers->map(function (User $driver) use ($shiftStart, $shiftEnd, $runningValues) {
             $shift = DriverShift::where('driver_id', $driver->id)
                 ->whereNull('end_time')
                 ->orderByDesc('start_time')
@@ -1785,5 +1805,23 @@ class VehicleDispatchBoard extends Page implements HasTable
 
             return $driver;
         });
+
+        if (in_array($this->dutySortBy, ['trip_count', 'km_loaded', 'km_empty', 'total_km'], true)) {
+            $col = $this->dutySortBy;
+            $desc = $this->dutySortDirection === 'desc';
+
+            return $rows->sort(function (User $a, User $b) use ($col, $desc): int {
+                $valA = (float) ($a->{$col} ?? 0);
+                $valB = (float) ($b->{$col} ?? 0);
+
+                if ($valA !== $valB) {
+                    return $desc ? ($valB <=> $valA) : ($valA <=> $valB);
+                }
+
+                return strcmp((string) $a->name, (string) $b->name);
+            })->values();
+        }
+
+        return $rows;
     }
 }
