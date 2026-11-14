@@ -557,6 +557,35 @@ class VehicleDispatchBoard extends Page implements HasTable
         return "<div{$titleAttr} class='cursor-default'><span class='font-bold text-primary-600 dark:text-primary-400'>{$plate}</span>".($tonnage ? " <span class='text-xs text-gray-500 dark:text-gray-400 font-medium'>{$tonnage}</span>" : '').$extra.$note.'</div>';
     }
 
+    public static function getLatestCompletedTripInShift(Vehicle $record): ?Trip
+    {
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+
+        if ($record->relationLoaded('trips')) {
+            return $record->trips
+                ->where('status', TripStatus::Completed)
+                ->filter(function (Trip $t) use ($shiftStart, $shiftEnd): bool {
+                    $completedTime = $t->completed_at ?? $t->updated_at;
+
+                    return ($completedTime && $completedTime->between($shiftStart, $shiftEnd))
+                        || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd));
+                })
+                ->sortByDesc(fn (Trip $t) => $t->completed_at ?? $t->updated_at ?? $t->started_at)
+                ->first();
+        }
+
+        return $record->trips()
+            ->with('driver.driverShifts')
+            ->where('status', TripStatus::Completed->value)
+            ->where(function (Builder $q) use ($shiftStart, $shiftEnd) {
+                $q->whereBetween('completed_at', [$shiftStart, $shiftEnd])
+                    ->orWhereBetween('started_at', [$shiftStart, $shiftEnd]);
+            })
+            ->orderByRaw('COALESCE(completed_at, started_at, updated_at) DESC')
+            ->orderByDesc('id')
+            ->first();
+    }
+
     public static function getTripStatusLabel(Vehicle $record): string
     {
         $activeTrip = $record->active_trip;
@@ -569,7 +598,11 @@ class VehicleDispatchBoard extends Page implements HasTable
                 return 'Bảo dưỡng';
             }
 
-            return 'Sẵn sàng';
+            if (self::getLatestCompletedTripInShift($record) !== null) {
+                return 'Sẵn sàng';
+            }
+
+            return 'Chờ chạy';
         }
 
         if ($activeTrip->isPaused()) {
@@ -590,6 +623,10 @@ class VehicleDispatchBoard extends Page implements HasTable
     public static function getTripStatusSortPriority(Vehicle $record): int
     {
         $label = self::getTripStatusLabel($record);
+
+        if ($record->active_trip === null && $label === 'Chờ chạy') {
+            return 2;
+        }
 
         return match ($label) {
             'Tạm dừng (Sửa Km)' => 0,
@@ -619,6 +656,10 @@ class VehicleDispatchBoard extends Page implements HasTable
                 return 'danger';
             }
 
+            if (self::getLatestCompletedTripInShift($record) !== null) {
+                return 'success';
+            }
+
             return 'gray';
         }
 
@@ -639,6 +680,9 @@ class VehicleDispatchBoard extends Page implements HasTable
             }
             if ($record->status === VehicleStatus::Bdsc) {
                 return 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-200 font-semibold';
+            }
+            if (self::getLatestCompletedTripInShift($record) !== null) {
+                return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-200 font-semibold';
             }
 
             return 'bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 font-normal';
@@ -851,16 +895,7 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         // 2. Xe KHÔNG có chuyến hoạt động: tính từ lúc xe hạ xong chuyến gần nhất trong ca 08:00 -> 08:00
-        [$shiftStart, $shiftEnd] = self::getShiftWindow();
-        $completedTrips = $record->trips
-            ->where('status', TripStatus::Completed)
-            ->filter(function (Trip $t) use ($shiftStart, $shiftEnd): bool {
-                $completedTime = $t->completed_at ?? $t->updated_at;
-
-                return ($completedTime && $completedTime->between($shiftStart, $shiftEnd))
-                    || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd));
-            });
-        $lastCompletedTrip = $completedTrips->sortByDesc(fn ($t) => $t->completed_at ?? $t->updated_at)->first();
+        $lastCompletedTrip = self::getLatestCompletedTripInShift($record);
 
         if ($lastCompletedTrip && ($lastCompletedTrip->completed_at ?? $lastCompletedTrip->updated_at)) {
             $completedTime = $lastCompletedTrip->completed_at ?? $lastCompletedTrip->updated_at;
@@ -1280,21 +1315,31 @@ class VehicleDispatchBoard extends Page implements HasTable
         ];
     }
 
-    public static function getDriverName(Vehicle $record): string
+    /**
+     * Lấy tài xế đang chạy xe trong khung ca 08:00 -> 08:00:
+     * ưu tiên chuyến đang chạy/chờ chạy (active_trip), sau đó đến chuyến đã hoàn thành trong ca.
+     * Nếu xe không có chuyến nào trong ca hôm nay thì trả về null.
+     */
+    public static function getShiftDriver(Vehicle $record): ?User
     {
+        if ($record->status === VehicleStatus::Off || $record->status === VehicleStatus::Bdsc) {
+            return null;
+        }
+
         $activeTrip = $record->active_trip;
 
         if ($activeTrip?->driver) {
-            return $activeTrip->driver->name;
+            return $activeTrip->driver;
         }
 
-        $todayDriver = $record->getDriverForToday();
+        $completedTrip = self::getLatestCompletedTripInShift($record);
 
-        if ($todayDriver) {
-            return $todayDriver->name;
-        }
+        return $completedTrip?->driver;
+    }
 
-        return $record->driver?->name ?? '—';
+    public static function getDriverName(Vehicle $record): string
+    {
+        return self::getShiftDriver($record)?->name ?? '—';
     }
 
     public static function getDriverStation(Vehicle $record): string
@@ -1489,14 +1534,13 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function getShiftLabel(Vehicle $record): string
     {
-        $activeTrip = $record->active_trip;
-        $driver = $activeTrip?->driver ?? $record->getDriverForToday() ?? $record->driver;
+        $driver = self::getShiftDriver($record);
 
         if ($driver === null) {
             return '—';
         }
 
-        // Chỉ hiển thị ca làm hiện tại khi lái xe đăng nhập trên app (ca đang hoạt động, chưa kết thúc)
+        // Chỉ hiển thị ca làm hiện tại của tài xế đang chạy xe này
         $activeShift = $driver->relationLoaded('driverShifts')
             ? $driver->driverShifts
                 ->filter(fn (DriverShift $s) => $s->start_time && $s->start_time->lte(now()) && $s->end_time === null)

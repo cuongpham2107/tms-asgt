@@ -57,6 +57,7 @@ function dispatchWidgetRowFor(string $plate, array $props = []): ?array
 }
 
 beforeEach(function () {
+    Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
     $admin = User::factory()->create();
     $this->actingAs($admin);
 });
@@ -209,7 +210,8 @@ test('vehicle helpers format BSX, status and driver information correctly', func
     expect(VehicleDispatchBoard::formatShortAddress('ALS Bắc Ninh, KCN Yên Phong, đường YP6, Yên Phong, Bắc Ninh, Việt Nam'))
         ->toBe('Yên Phong, Bắc Ninh');
 
-    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Nguyễn Văn Test')
+    // Khi chưa có chuyến trong ca hôm nay -> Tên lái xe là '—'
+    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('—')
         ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('BN')
         ->and(VehicleDispatchBoard::getMovementStatus($vehicle))->toBe('Đang chạy')
         ->and(VehicleDispatchBoard::getSpeed($vehicle))->toBe('56 km/h');
@@ -222,9 +224,10 @@ test('vehicle helpers format BSX, status and driver information correctly', func
     ]);
 
     // Reload vehicle relations
-    $vehicle->load('trips');
+    $vehicle->load('trips.driver');
 
-    expect(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đang giao')
+    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Nguyễn Văn Test')
+        ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đang giao')
         ->and(VehicleDispatchBoard::getStatusBadgeColor($vehicle))->toBe('warning');
 
     // Test EUP movement statuses:
@@ -839,7 +842,7 @@ test('vehicle dispatch board prioritizes paused trip over pending trip so km rep
 });
 
 test('vehicle dispatch board distinguishes idle vehicle and pending trip with different colors', function () {
-    // 1. Xe chờ: không có chuyến nào
+    // 1. Xe không có chuyến nào trong ngày (08:00 -> 08:00): trạng thái 'Chờ chạy' (nền xám), tên lái xe '—'
     $idleVehicle = Vehicle::factory()->create([
         'plate_number' => '29C-IDLE-VEHICLE',
         'type' => VehicleOwnerType::Company,
@@ -847,9 +850,33 @@ test('vehicle dispatch board distinguishes idle vehicle and pending trip with di
         'is_active' => true,
     ]);
 
-    expect(VehicleDispatchBoard::getTripStatusLabel($idleVehicle))->toBe('Sẵn sàng')
+    expect(VehicleDispatchBoard::getTripStatusLabel($idleVehicle))->toBe('Chờ chạy')
+        ->and(VehicleDispatchBoard::getDriverName($idleVehicle))->toBe('—')
         ->and(VehicleDispatchBoard::getXeChoData($idleVehicle)['text'])->toBe('—')
         ->and(VehicleDispatchBoard::getTripStatusBadgeClass($idleVehicle))->toContain('bg-slate-100', 'text-slate-500', 'font-normal');
+
+    // 1b. Xe đã có chuyến hoàn thành trong khung 08:00 -> 08:00 mà chưa có chuyến mới: trạng thái 'Sẵn sàng'
+    $readyDriver = User::factory()->create(['name' => 'Lái Xe Sẵn Sàng']);
+    $readyVehicle = Vehicle::factory()->create([
+        'plate_number' => '29C-READY-VEHICLE',
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+    $completedToday = Trip::factory()->create([
+        'trip_code' => 'TRIP-DONE-TODAY',
+        'vehicle_id' => $readyVehicle->id,
+        'driver_id' => $readyDriver->id,
+        'status' => TripStatus::Completed,
+        'end_km' => 12000,
+        'started_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(30),
+        'completed_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addHour(),
+    ]);
+    $readyVehicle->load('trips.driver');
+
+    expect(VehicleDispatchBoard::getTripStatusLabel($readyVehicle))->toBe('Sẵn sàng')
+        ->and(VehicleDispatchBoard::getDriverName($readyVehicle))->toBe('Lái Xe Sẵn Sàng')
+        ->and(VehicleDispatchBoard::getTripStatusBadgeClass($readyVehicle))->toContain('bg-emerald-100', 'text-emerald-800', 'font-semibold');
 
     // 2. Xe có chuyến Chờ chạy (Pending)
     $pendingVehicle = Vehicle::factory()->create([
@@ -1012,21 +1039,7 @@ test('vehicle dispatch board only shows shift label when driver has an open acti
         'is_active' => true,
     ]);
 
-    // 1. Khi lái xe chưa đăng nhập mở ca trên app -> Phải trả về '—', KHÔNG tự tiện hiện 'Ca chẵn'
-    expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('—');
-
-    // 2. Khi lái xe có ca cũ nhưng ĐÃ KẾT THÚC (end_time !== null) -> Vẫn là '—'
-    $endedShift = DriverShift::create([
-        'driver_id' => $driver->id,
-        'shift_type' => ShiftType::MorningHalf,
-        'start_time' => now()->subHours(8),
-        'end_time' => now()->subHours(2),
-    ]);
-
-    $vehicle->load('driver.driverShifts');
-    expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('—');
-
-    // 3. Khi lái xe đăng nhập app và mở ca làm việc hiện tại (end_time === null)
+    // 1. Khi xe chưa có chuyến nào trong ca hôm nay -> Tên lái xe và Ca đều là '—' kể cả khi tài xế mở ca
     $activeShift = DriverShift::create([
         'driver_id' => $driver->id,
         'shift_type' => ShiftType::MorningHalf,
@@ -1034,17 +1047,30 @@ test('vehicle dispatch board only shows shift label when driver has an open acti
         'end_time' => null,
     ]);
 
-    $vehicle->load('driver.driverShifts');
-    expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('X/2');
+    $vehicle->load('driver.driverShifts', 'trips');
+    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('—')
+        ->and(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('—');
+
+    // 2. Khi tài xế thực tế chạy chuyến trên xe này trong ca hôm nay -> Hiển thị tên tài xế và ca
+    Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Started,
+        'started_at' => now()->subMinutes(30),
+    ]);
+
+    $vehicle->load('trips.driver.driverShifts');
+    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Lái Xe Ca App')
+        ->and(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('X/2');
 
     // Cập nhật sang ca đêm
     $activeShift->update(['shift_type' => ShiftType::NightHalf]);
-    $vehicle->load('driver.driverShifts');
+    $vehicle->load('trips.driver.driverShifts');
     expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('Y/2');
 
     // Cập nhật sang ca cả ngày
     $activeShift->update(['shift_type' => ShiftType::Full]);
-    $vehicle->load('driver.driverShifts');
+    $vehicle->load('trips.driver.driverShifts');
     expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('X');
 });
 
