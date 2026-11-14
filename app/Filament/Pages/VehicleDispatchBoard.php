@@ -377,11 +377,11 @@ class VehicleDispatchBoard extends Page implements HasTable
                         'orders.deliveryPoints.location',
                         'orders.customer',
                     ])
-                    ->orderByRaw("CASE 
-                        WHEN status IN ({$runningSql}) THEN 1 
-                        WHEN status = '".TripStatus::Pending->value."' THEN 2 
-                        WHEN status = '".TripStatus::Completed->value."' THEN 3 
-                        ELSE 4 
+                    ->orderByRaw("CASE
+                        WHEN status IN ({$runningSql}) THEN 1
+                        WHEN status = '".TripStatus::Pending->value."' THEN 2
+                        WHEN status = '".TripStatus::Completed->value."' THEN 3
+                        ELSE 4
                     END ASC")
                     ->orderByRaw('COALESCE(started_at, created_at) ASC')
                     ->orderBy('id', 'asc');
@@ -424,11 +424,11 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'orders.deliveryPoints.location',
                 'orders.customer',
             ])
-            ->orderByRaw("CASE 
-                WHEN status IN ({$runningSql}) THEN 1 
-                WHEN status = '".TripStatus::Pending->value."' THEN 2 
-                WHEN status = '".TripStatus::Completed->value."' THEN 3 
-                ELSE 4 
+            ->orderByRaw("CASE
+                WHEN status IN ({$runningSql}) THEN 1
+                WHEN status = '".TripStatus::Pending->value."' THEN 2
+                WHEN status = '".TripStatus::Completed->value."' THEN 3
+                ELSE 4
             END ASC")
             ->orderByRaw('COALESCE(started_at, created_at) ASC')
             ->orderBy('id', 'asc')
@@ -1344,8 +1344,60 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function getDriverStation(Vehicle $record): string
     {
-        // Lấy Điểm trực (station) từ bảng users của tài xế
-        $driver = $record->active_trip?->driver
+        // Chỉ lấy Điểm trực (station) khi xe có tài xế thực tế đang chạy trong ca hiện tại.
+        // Nếu xe không có tài xế chạy trong ca thì trả về OTHER (hiển thị '—').
+        $driver = self::getShiftDriver($record);
+
+        if ($driver === null) {
+            return 'OTHER';
+        }
+
+        $station = $driver->station instanceof OnDutyLocation
+            ? $driver->station->value
+            : ($driver->station ? (string) $driver->station : null);
+
+        // Nếu tài xế đang chạy chưa được cấu hình station trong bảng users,
+        // fallback sang tài xế gán trên xe hoặc tiền tố biển số xe để không bị hiển thị '—'.
+        if (! $station) {
+            $fallbackDriver = $record->getDriverForToday()
+                ?? $record->driver
+                ?? $record->evenDriver
+                ?? $record->oddDriver;
+
+            $station = $fallbackDriver?->station instanceof OnDutyLocation
+                ? $fallbackDriver->station->value
+                : ($fallbackDriver?->station ? (string) $fallbackDriver->station : null);
+        }
+
+        if (! $station && ! empty($record->driver_station) && $record->driver_station !== 'OTHER') {
+            $station = (string) $record->driver_station;
+        }
+
+        if (! $station) {
+            $prefix = substr($record->plate_number ?? '', 0, 2);
+            $station = match ($prefix) {
+                '20' => 'TN',
+                '99' => 'BN',
+                '29', '30' => 'NB',
+                default => null,
+            };
+        }
+
+        if ($station) {
+            return match (strtoupper($station)) {
+                'NBA' => 'NB',
+                'BN' => 'BN',
+                'TN' => 'TN',
+                default => $station,
+            };
+        }
+
+        return 'OTHER';
+    }
+
+    public static function getAssignedDriverStation(Vehicle $record): string
+    {
+        $driver = self::getShiftDriver($record)
             ?? $record->getDriverForToday()
             ?? $record->driver
             ?? $record->evenDriver
@@ -1397,7 +1449,7 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         // Fallback 1: Điểm trực của tài xế (users.station)
-        $driverStation = self::getDriverStation($vehicle);
+        $driverStation = self::getAssignedDriverStation($vehicle);
         if ($driverStation !== 'OTHER' && $driverStation !== '—' && ! empty($driverStation)) {
             return $driverStation;
         }

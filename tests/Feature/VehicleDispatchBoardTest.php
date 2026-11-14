@@ -210,9 +210,9 @@ test('vehicle helpers format BSX, status and driver information correctly', func
     expect(VehicleDispatchBoard::formatShortAddress('ALS Bắc Ninh, KCN Yên Phong, đường YP6, Yên Phong, Bắc Ninh, Việt Nam'))
         ->toBe('Yên Phong, Bắc Ninh');
 
-    // Khi chưa có chuyến trong ca hôm nay -> Tên lái xe là '—'
+    // Khi chưa có chuyến trong ca hôm nay -> Tên lái xe là '—' và Điểm trực là 'OTHER' (hiển thị '—')
     expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('—')
-        ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('BN')
+        ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('OTHER')
         ->and(VehicleDispatchBoard::getMovementStatus($vehicle))->toBe('Đang chạy')
         ->and(VehicleDispatchBoard::getSpeed($vehicle))->toBe('56 km/h');
 
@@ -227,6 +227,7 @@ test('vehicle helpers format BSX, status and driver information correctly', func
     $vehicle->load('trips.driver');
 
     expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Nguyễn Văn Test')
+        ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('BN')
         ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đang giao')
         ->and(VehicleDispatchBoard::getStatusBadgeColor($vehicle))->toBe('warning');
 
@@ -590,7 +591,7 @@ test('vehicle active_trip and dispatch board prioritizes in-progress trip over n
 });
 
 test('vehicle station resolves from driver station in users table', function () {
-    // 1. Xe có tài xế trực tại NBA (Nội Bài)
+    // 1. Xe có tài xế trực tại NBA (Nội Bài) đang chạy chuyến trong ca
     $driverNB = User::factory()->create([
         'name' => 'Tài xế Nội Bài',
         'station' => OnDutyLocation::Nba,
@@ -600,9 +601,19 @@ test('vehicle station resolves from driver station in users table', function () 
         'type' => VehicleOwnerType::Company,
         'current_driver_id' => $driverNB->id,
     ]);
+    // Khi chưa có chuyến trong ca -> không có tài xế chạy -> OTHER ('—')
+    expect(VehicleDispatchBoard::getDriverStation($vNB))->toBe('OTHER');
+
+    Trip::factory()->create([
+        'vehicle_id' => $vNB->id,
+        'driver_id' => $driverNB->id,
+        'status' => TripStatus::Started,
+        'started_at' => now()->subMinutes(15),
+    ]);
+    $vNB->load('trips.driver');
     expect(VehicleDispatchBoard::getDriverStation($vNB))->toBe('NB');
 
-    // 2. Xe có tài xế trực tại BN (Bắc Ninh)
+    // 2. Xe có tài xế trực tại BN (Bắc Ninh) đã hoàn thành chuyến trong ca (Sẵn sàng)
     $driverBN = User::factory()->create([
         'name' => 'Tài xế Bắc Ninh',
         'station' => OnDutyLocation::Bn,
@@ -612,21 +623,39 @@ test('vehicle station resolves from driver station in users table', function () 
         'type' => VehicleOwnerType::Company,
         'current_driver_id' => $driverBN->id,
     ]);
+    Trip::factory()->create([
+        'vehicle_id' => $vBN->id,
+        'driver_id' => $driverBN->id,
+        'status' => TripStatus::Completed,
+        'end_km' => 15000,
+        'started_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(10),
+        'completed_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(40),
+    ]);
+    $vBN->load('trips.driver');
     expect(VehicleDispatchBoard::getDriverStation($vBN))->toBe('BN');
 
-    // 3. Xe có tài xế trực tại TN (Thái Nguyên)
-    $driverTN = User::factory()->create([
-        'name' => 'Tài xế Thái Nguyên',
-        'station' => OnDutyLocation::Tn,
+    // 3. Xe có tài xế đang chạy nhưng hồ sơ tài xế chưa điền station -> fallback theo biển số xe (20 -> TN)
+    $driverNoStation = User::factory()->create([
+        'name' => 'Trần Đức Sơn',
+        'station' => null,
     ]);
     $vTN = Vehicle::factory()->create([
-        'plate_number' => '99H-DRIVER-TN',
+        'plate_number' => '20H-01836',
         'type' => VehicleOwnerType::Company,
-        'current_driver_id' => $driverTN->id,
+        'current_driver_id' => $driverNoStation->id,
     ]);
+    Trip::factory()->create([
+        'vehicle_id' => $vTN->id,
+        'driver_id' => $driverNoStation->id,
+        'status' => TripStatus::Completed,
+        'end_km' => 15000,
+        'started_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(10),
+        'completed_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(40),
+    ]);
+    $vTN->load('trips.driver');
     expect(VehicleDispatchBoard::getDriverStation($vTN))->toBe('TN');
 
-    // 4. Xe chưa có tài xế trực -> Trả về OTHER
+    // 4. Xe chưa có tài xế chạy trong ca -> Trả về OTHER
     $vEmpty = Vehicle::factory()->create([
         'plate_number' => '29C-EMPTY-DRIVER',
         'type' => VehicleOwnerType::Company,
