@@ -56,19 +56,17 @@
                     <span>□ Hình vuông</span>
                 </button>
 
-                <template x-if="geofenceType === 'rectangle' || geofenceType === 'square'">
-                    <button
-                        type="button"
-                        @click="toggleDrawMode()"
-                        :class="isDrawingBox
-                            ? 'bg-amber-500 text-white ring-2 ring-amber-300 animate-pulse'
-                            : 'bg-amber-50 text-amber-800 hover:bg-amber-100 ring-1 ring-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:ring-amber-700'"
-                        class="inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-semibold transition cursor-pointer ml-1"
-                        title="Bấm rồi giữ chuột kéo trên bản đồ để vẽ vùng mới"
-                    >
-                        <span x-text="isDrawingBox ? '🎯 Đang chờ kéo chuột trên bản đồ... (Bấm để huỷ)' : '✏️ Kéo chuột vẽ lại khung'"></span>
-                    </button>
-                </template>
+                <button
+                    type="button"
+                    @click="toggleDrawMode()"
+                    :class="isDrawingBox
+                        ? 'bg-amber-500 text-white ring-2 ring-amber-300 animate-pulse'
+                        : 'bg-amber-50 text-amber-800 hover:bg-amber-100 ring-1 ring-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:ring-amber-700'"
+                    class="inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-semibold transition cursor-pointer ml-1"
+                    title="Bấm rồi giữ chuột kéo trên bản đồ để vẽ vùng mới"
+                >
+                    <span x-text="isDrawingBox ? '🎯 Đang chờ kéo chuột trên bản đồ... (Bấm để huỷ)' : (geofenceType === 'circle' ? '✏️ Kéo chuột vẽ bán kính' : '✏️ Kéo chuột vẽ lại khung')"></span>
+                </button>
             </div>
 
             <div class="flex items-center gap-2 text-[11px] font-medium text-gray-600 dark:text-gray-300">
@@ -86,10 +84,8 @@
             <div id="{{ $config['mapId'] }}" class="h-full w-full"></div>
         </div>
 
-        <template x-if="geofenceType === 'rectangle' || geofenceType === 'square'">
-            <p class="text-[11px] text-emerald-700 dark:text-emerald-400">
-                💡 <strong>Mẹo:</strong> Bạn có thể kéo trực tiếp <strong>4 chốt trắng ở 4 góc</strong> để điều chỉnh khung, kéo <strong>ghim tâm</strong> để di chuyển cả khung, hoặc bấm <strong>"Kéo chuột vẽ lại khung"</strong> (hoặc giữ phím <kbd class="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border">Shift</kbd> + kéo chuột) để quét vùng mới trên bản đồ.
-            </p>
-        </template>
+        <p class="text-[11px] text-gray-600 dark:text-gray-400">
+            💡 <strong>Mẹo:</strong> Kéo trực tiếp <strong>4 chốt trắng</strong> trên viền (hình tròn / hình vuông / hình chữ nhật) để tăng giảm kích thước — ô <strong>Bán kính kiểm tra GPS (mét)</strong> sẽ tự động nhảy số theo. Hoặc giữ phím <kbd class="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border">Shift</kbd> + kéo chuột để vẽ nhanh.
+        </p>
     </div>
 </x-dynamic-component>

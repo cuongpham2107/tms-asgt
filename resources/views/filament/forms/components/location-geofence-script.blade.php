@@ -10,6 +10,8 @@
                 defaultRadius: defaultRadius || 3000,
                 geofenceType: 'circle',
                 geofenceCircle: null,
+                circleHandles: [],
+                currentRadius: defaultRadius || 3000,
                 geofenceRect: null,
                 cornerHandles: [],
                 rectBounds: null, // { south, west, north, east }
@@ -45,21 +47,46 @@
                     } catch (e) {}
                 },
 
-                getGeofenceRadius() {
+                clampRadius(val) {
+                    const num = Math.round(parseFloat(val) || this.defaultRadius);
+                    return Math.min(5000, Math.max(100, num));
+                },
+
+                getRadiusInputElement() {
                     const root = this.$el.closest('.fi-modal, form') || document;
-                    const input = root.querySelector('input[data-geofence-radius-input], input[name$="geofence_radius_m"], [wire\\:model*="geofence_radius_m"]');
+                    return root.querySelector('input[data-geofence-radius-input], input[name$="geofence_radius_m"], [wire\\:model*="geofence_radius_m"]');
+                },
+
+                syncRadiusToInput(radiusValue, syncToWire = false) {
+                    const clamped = this.clampRadius(radiusValue);
+                    this.currentRadius = clamped;
+
+                    const input = this.getRadiusInputElement();
+                    if (input && String(input.value) !== String(clamped)) {
+                        input.value = String(clamped);
+                    }
+
+                    if (syncToWire) {
+                        this.setWireValue('geofence_radius_m', clamped);
+                    }
+
+                    return clamped;
+                },
+
+                getGeofenceRadius() {
+                    const input = this.getRadiusInputElement();
                     if (input && input.value !== '') {
                         const val = parseFloat(input.value);
-                        if (!isNaN(val) && val > 0) return val;
+                        if (!isNaN(val) && val > 0) return this.clampRadius(val);
                     }
 
                     const wireVal = this.getWireValue('geofence_radius_m');
                     if (wireVal !== undefined && wireVal !== null && wireVal !== '') {
                         const val = parseFloat(wireVal);
-                        if (!isNaN(val) && val > 0) return val;
+                        if (!isNaN(val) && val > 0) return this.clampRadius(val);
                     }
 
-                    return this.defaultRadius;
+                    return this.currentRadius || this.defaultRadius;
                 },
 
                 getCurrentCenterLatLng() {
@@ -121,7 +148,7 @@
                 },
 
                 createDefaultBoundsAroundCenter(centerLat, centerLng, isSquare = false) {
-                    const baseR = Math.min(2000, Math.max(200, this.getGeofenceRadius() || 500));
+                    const baseR = Math.min(2000, Math.max(100, this.getGeofenceRadius() || 500));
                     const halfHeightM = baseR;
                     const halfWidthM = isSquare ? baseR : Math.round(baseR * 1.35);
 
@@ -181,9 +208,20 @@
                     });
                 },
 
-                updateDimensionSummary() {
+                syncEquivalentRadiusFromBounds(syncToWire = false) {
+                    if (!this.rectBounds) return;
+                    const b = this.rectBounds;
+                    const midLat = (b.south + b.north) / 2;
+                    const midLng = (b.west + b.east) / 2;
+                    const widthM = this.haversineMeters(midLat, b.west, midLat, b.east);
+                    const heightM = this.haversineMeters(b.south, midLng, b.north, midLng);
+                    const equivRadius = Math.round(Math.max(widthM, heightM) / 2);
+                    this.syncRadiusToInput(equivRadius, syncToWire);
+                },
+
+                updateDimensionSummary(overrideRadius) {
                     if (this.geofenceType === 'circle') {
-                        const r = this.getGeofenceRadius();
+                        const r = overrideRadius !== undefined ? overrideRadius : this.getGeofenceRadius();
                         this.dimensionSummary = `Bán kính: ${r.toLocaleString('vi-VN')} m`;
                         return;
                     }
@@ -266,6 +304,14 @@
                         } catch (e) {}
                         this.geofenceCircle = null;
                     }
+                    if (this.circleHandles && this.circleHandles.length) {
+                        this.circleHandles.forEach((h) => {
+                            try {
+                                Alpine.raw(h).removeFrom(map);
+                            } catch (e) {}
+                        });
+                        this.circleHandles = [];
+                    }
                 },
 
                 clearRectangleLayers(map) {
@@ -282,6 +328,87 @@
                             } catch (e) {}
                         });
                         this.cornerHandles = [];
+                    }
+                },
+
+                getCircleCardinalPoints(centerLat, centerLng, radius) {
+                    const dLat = this.metersToLatDelta(radius);
+                    const dLng = this.metersToLngDelta(radius, centerLat);
+                    return [
+                        { key: 'n', lat: centerLat + dLat, lng: centerLng, cursor: 'ns-resize' },
+                        { key: 'e', lat: centerLat, lng: centerLng + dLng, cursor: 'ew-resize' },
+                        { key: 's', lat: centerLat - dLat, lng: centerLng, cursor: 'ns-resize' },
+                        { key: 'w', lat: centerLat, lng: centerLng - dLng, cursor: 'ew-resize' },
+                    ];
+                },
+
+                renderCircleHandles(map, centerLat, centerLng, radius, skipHandleIndex = -1) {
+                    if (typeof window.L === 'undefined') return;
+
+                    const points = this.getCircleCardinalPoints(centerLat, centerLng, radius);
+
+                    if (this.circleHandles.length !== 4) {
+                        this.circleHandles.forEach((h) => {
+                            try {
+                                Alpine.raw(h).removeFrom(map);
+                            } catch (e) {}
+                        });
+                        this.circleHandles = [];
+
+                        points.forEach((pt, idx) => {
+                            const icon = window.L.divIcon({
+                                className: 'geofence-circle-handle',
+                                html: `<div title="Kéo để thay đổi bán kính" style="width:12px;height:12px;background:#ffffff;border:2.5px solid #2563eb;border-radius:9999px;box-shadow:0 1px 3px rgba(0,0,0,0.35);cursor:${pt.cursor};"></div>`,
+                                iconSize: [12, 12],
+                                iconAnchor: [6, 6],
+                            });
+
+                            const handle = window.L.marker([pt.lat, pt.lng], {
+                                icon: icon,
+                                draggable: true,
+                                zIndexOffset: 1000,
+                            });
+
+                            handle.on('drag', (ev) => {
+                                const pos = ev.target.getLatLng();
+                                const center = this.getCurrentCenterLatLng();
+                                const rawDist = this.haversineMeters(center[0], center[1], pos.lat, pos.lng);
+                                const clampedRadius = this.syncRadiusToInput(rawDist, false);
+
+                                if (this.geofenceCircle) {
+                                    Alpine.raw(this.geofenceCircle).setRadius(clampedRadius);
+                                }
+                                this.renderCircleHandles(map, center[0], center[1], clampedRadius, idx);
+                                this.updateDimensionSummary(clampedRadius);
+                            });
+
+                            handle.on('dragend', (ev) => {
+                                const pos = ev.target.getLatLng();
+                                const center = this.getCurrentCenterLatLng();
+                                const rawDist = this.haversineMeters(center[0], center[1], pos.lat, pos.lng);
+                                const clampedRadius = this.syncRadiusToInput(rawDist, true);
+
+                                if (this.geofenceCircle) {
+                                    Alpine.raw(this.geofenceCircle).setRadius(clampedRadius);
+                                }
+                                this.renderCircleHandles(map, center[0], center[1], clampedRadius, -1);
+                                this.updateDimensionSummary(clampedRadius);
+                            });
+
+                            Alpine.raw(handle).addTo(map);
+                            this.circleHandles.push(handle);
+                        });
+                    } else {
+                        points.forEach((pt, idx) => {
+                            if (idx === skipHandleIndex) return;
+                            const h = Alpine.raw(this.circleHandles[idx]);
+                            if (h) {
+                                h.setLatLng([pt.lat, pt.lng]);
+                                if (!map.hasLayer(h)) {
+                                    h.addTo(map);
+                                }
+                            }
+                        });
                     }
                 },
 
@@ -315,10 +442,10 @@
                     }
 
                     const corners = [
-                        { key: 'nw', lat: b.north, lng: b.west, oppLat: b.south, oppLng: b.east },
-                        { key: 'ne', lat: b.north, lng: b.east, oppLat: b.south, oppLng: b.west },
-                        { key: 'se', lat: b.south, lng: b.east, oppLat: b.north, oppLng: b.west },
-                        { key: 'sw', lat: b.south, lng: b.west, oppLat: b.north, oppLng: b.east },
+                        { key: 'nw', lat: b.north, lng: b.west },
+                        { key: 'ne', lat: b.north, lng: b.east },
+                        { key: 'se', lat: b.south, lng: b.east },
+                        { key: 'sw', lat: b.south, lng: b.west },
                     ];
 
                     if (this.cornerHandles.length !== 4) {
@@ -332,7 +459,7 @@
                         corners.forEach((c, idx) => {
                             const icon = window.L.divIcon({
                                 className: 'geofence-corner-handle',
-                                html: '<div style="width:12px;height:12px;background:#ffffff;border:2.5px solid #059669;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,0.35);cursor:nwse-resize;"></div>',
+                                html: '<div title="Kéo góc để thay đổi kích thước khung" style="width:12px;height:12px;background:#ffffff;border:2.5px solid #059669;border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,0.35);cursor:nwse-resize;"></div>',
                                 iconSize: [12, 12],
                                 iconAnchor: [6, 6],
                             });
@@ -369,6 +496,7 @@
                                 if (nextBounds) {
                                     this.rectBounds = nextBounds;
                                     this.renderRectangleAndHandles(map);
+                                    this.syncEquivalentRadiusFromBounds(false);
                                     this.updateDimensionSummary();
                                 }
                             });
@@ -376,6 +504,7 @@
                             handle.on('dragend', () => {
                                 if (this.rectBounds) {
                                     this.setWireValue('geofence_bounds', this.rectBounds);
+                                    this.syncEquivalentRadiusFromBounds(true);
                                     this.updateDimensionSummary();
                                 }
                             });
@@ -452,8 +581,10 @@
                     if (isNaN(safeLatLng[0]) || isNaN(safeLatLng[1])) return;
 
                     const radius = (overrideRadius !== undefined && overrideRadius !== null)
-                        ? overrideRadius
+                        ? this.clampRadius(overrideRadius)
                         : this.getGeofenceRadius();
+
+                    this.currentRadius = radius;
 
                     if (!this.geofenceCircle) {
                         let circle = null;
@@ -499,7 +630,8 @@
                         }
                     }
 
-                    this.updateDimensionSummary();
+                    this.renderCircleHandles(map, safeLatLng[0], safeLatLng[1], radius);
+                    this.updateDimensionSummary(radius);
                 },
 
                 shiftRectangleToNewCenter(newLat, newLng) {
@@ -554,16 +686,37 @@
 
                     map.on('mousedown', (e) => {
                         const shiftPressed = e.originalEvent && e.originalEvent.shiftKey;
-                        if (!this.isDrawingBox && !(shiftPressed && (this.geofenceType === 'rectangle' || this.geofenceType === 'square'))) {
+                        if (!this.isDrawingBox && !shiftPressed) {
                             return;
                         }
 
                         map.dragging.disable();
                         this.drawStartLatLng = [e.latlng.lat, e.latlng.lng];
+
+                        if (this.geofenceType === 'circle') {
+                            if (this.pickMarker) {
+                                try {
+                                    Alpine.raw(this.pickMarker).setLatLng(this.drawStartLatLng);
+                                } catch (err) {}
+                            }
+                        }
                     });
 
                     map.on('mousemove', (e) => {
                         if (!this.drawStartLatLng) return;
+
+                        if (this.geofenceType === 'circle') {
+                            const rawDist = this.haversineMeters(
+                                this.drawStartLatLng[0],
+                                this.drawStartLatLng[1],
+                                e.latlng.lat,
+                                e.latlng.lng
+                            );
+                            const clampedRadius = this.syncRadiusToInput(rawDist, false);
+                            this.updateGeofenceCircle(clampedRadius, this.drawStartLatLng);
+                            return;
+                        }
+
                         const nextBounds = this.computeCornerBounds(
                             this.drawStartLatLng[0],
                             this.drawStartLatLng[1],
@@ -574,16 +727,30 @@
                         if (nextBounds) {
                             this.rectBounds = nextBounds;
                             this.renderRectangleAndHandles(map);
+                            this.syncEquivalentRadiusFromBounds(false);
                             this.updateDimensionSummary();
                         }
                     });
 
-                    map.on('mouseup', () => {
+                    map.on('mouseup', (e) => {
                         if (!this.drawStartLatLng) return;
+                        const startPt = this.drawStartLatLng;
                         this.drawStartLatLng = null;
                         this.isDrawingBox = false;
                         map.getContainer().style.cursor = '';
                         map.dragging.enable();
+
+                        if (this.geofenceType === 'circle') {
+                            const rawDist = e && e.latlng
+                                ? this.haversineMeters(startPt[0], startPt[1], e.latlng.lat, e.latlng.lng)
+                                : this.currentRadius;
+                            const clampedRadius = this.syncRadiusToInput(rawDist, true);
+                            if (typeof this.setState === 'function') {
+                                this.setState(Number(startPt[0].toFixed(7)), Number(startPt[1].toFixed(7)));
+                            }
+                            this.updateGeofenceCircle(clampedRadius, startPt);
+                            return;
+                        }
 
                         if (this.rectBounds) {
                             const cLat = Number(((this.rectBounds.south + this.rectBounds.north) / 2).toFixed(7));
@@ -592,12 +759,13 @@
                             if (this.pickMarker) {
                                 try {
                                     Alpine.raw(this.pickMarker).setLatLng([cLat, cLng]);
-                                } catch (e) {}
+                                } catch (err) {}
                             }
                             if (typeof this.setState === 'function') {
                                 this.setState(cLat, cLng);
                             }
                             this.setWireValue('geofence_bounds', this.rectBounds);
+                            this.syncEquivalentRadiusFromBounds(true);
                             this.renderRectangleAndHandles(map);
                             this.updateDimensionSummary();
                         }
@@ -631,7 +799,8 @@
                     if (this.$wire && radiusStatePath) {
                         this.$wire.watch(radiusStatePath, (val) => {
                             const parsed = parseFloat(val);
-                            const r = (!isNaN(parsed) && parsed > 0) ? parsed : this.defaultRadius;
+                            const r = (!isNaN(parsed) && parsed > 0) ? this.clampRadius(parsed) : this.defaultRadius;
+                            this.currentRadius = r;
                             this.updateGeofenceCircle(r);
                         });
                     }
@@ -656,7 +825,8 @@
                                 (e.target.getAttribute('wire:model') && e.target.getAttribute('wire:model').includes('geofence_radius_m'));
                             if (isRadius) {
                                 const val = parseFloat(e.target.value);
-                                const r = (!isNaN(val) && val > 0) ? val : this.defaultRadius;
+                                const r = (!isNaN(val) && val > 0) ? this.clampRadius(val) : this.defaultRadius;
+                                this.currentRadius = r;
                                 this.updateGeofenceCircle(r);
                             }
                         };
