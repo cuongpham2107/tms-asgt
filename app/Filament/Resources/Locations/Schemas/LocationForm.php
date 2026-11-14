@@ -99,10 +99,10 @@ class LocationForm
                     ->default('circle')
                     ->native(false)
                     ->afterStateUpdatedJs('
-                        const mapEl = document.querySelector(".leaflet-container");
-                        if (mapEl) {
-                            const el = mapEl.closest("[x-data]");
-                            const data = el ? Alpine.$data(el) : null;
+                        const root = (typeof $el !== "undefined" && $el) ? ($el.closest(".fi-modal, form") || document) : document;
+                        const mapRoot = root.querySelector("[data-geofence-map-root]");
+                        if (mapRoot) {
+                            const data = Alpine.$data(mapRoot);
                             data?.setGeofenceType?.($state, false);
                         }
                     ')
