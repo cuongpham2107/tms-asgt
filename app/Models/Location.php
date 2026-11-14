@@ -8,10 +8,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 class Location extends Model
 {
+    protected static bool $geofenceColumnsChecked = false;
+
     protected $fillable = [
         'code',
         'name',
@@ -234,9 +238,34 @@ class Location extends Model
         return (int) round(2 * $earthRadiusM * asin(min(1.0, sqrt($a))));
     }
 
+    public static function ensureGeofenceColumnsExist(): void
+    {
+        if (static::$geofenceColumnsChecked) {
+            return;
+        }
+
+        static::$geofenceColumnsChecked = true;
+
+        try {
+            if (! Schema::hasColumn('locations', 'geofence_type') || ! Schema::hasColumn('locations', 'geofence_bounds')) {
+                Schema::table('locations', function (Blueprint $table): void {
+                    if (! Schema::hasColumn('locations', 'geofence_type')) {
+                        $table->string('geofence_type', 20)->default('circle')->after('geofence_radius_m');
+                    }
+                    if (! Schema::hasColumn('locations', 'geofence_bounds')) {
+                        $table->json('geofence_bounds')->nullable()->after('geofence_type');
+                    }
+                });
+            }
+        } catch (\Throwable) {
+        }
+    }
+
     protected static function booted(): void
     {
         static::saving(function (Location $location) {
+            static::ensureGeofenceColumnsExist();
+
             if (! empty($location->code)) {
                 $location->code = mb_strtoupper(trim((string) $location->code));
             }
