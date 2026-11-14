@@ -6,7 +6,6 @@ use App\Enums\CheckpointType;
 use App\Enums\OnDutyLocation;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
-use App\Models\DriverShift;
 use App\Models\DriverSwap;
 use App\Models\Location;
 use App\Models\Order;
@@ -21,9 +20,9 @@ use Illuminate\Support\Collection;
 /**
  * Tổng hợp km có hàng / không hàng theo tài xế trong một khoảng thời gian (ngày / tuần / tháng).
  *
- * Tính các chuyến đã kết thúc giống màn thống kê của app lái xe: hoàn thành, đã bàn giao đảo lái và
- * đã huỷ (xe vẫn chạy km); gán vào kỳ theo giờ bắt đầu chuyến. Chuyến đảo lái được chia
- * km theo đoạn từng tài xế lái; mỗi đoạn chỉ được tính khi ca của đoạn đó đã kết thúc (đã chốt).
+ * Đồng nhất 100% với màn thống kê trên App Lái xe: tính các chuyến đã kết thúc (hoàn thành, đã bàn giao đảo lái,
+ * đã huỷ có chạy km) theo thời gian hoàn thành chuyến trong khung 08:00 đầu kỳ -> 08:00 cuối kỳ.
+ * Chuyến đảo lái được chia km theo đoạn từng tài xế lái.
  */
 class DriverMonthlyKmReportService
 {
@@ -43,7 +42,59 @@ class DriverMonthlyKmReportService
     private const LOCATION_MATCH_RADIUS_M = 500;
 
     /**
-     * Phần km của từng tài xế trên từng chuyến trong khoảng [$from, $to].
+     * Lọc chuyến theo thời điểm hoàn thành (`completed_at`), dự phòng `cancelled_at` / `started_at` / `created_at`
+     * khi chuyến chưa có `completed_at` (ví dụ chuyến đảo lái hoặc huỷ). Dùng chung cho cả Web và API App Lái xe.
+     */
+    public static function applyCompletionWindow(Builder $query, ?Carbon $from, ?Carbon $to): Builder
+    {
+        $completedCol = $query->qualifyColumn('completed_at');
+        $cancelledCol = $query->qualifyColumn('cancelled_at');
+        $startedCol = $query->qualifyColumn('started_at');
+        $createdCol = $query->qualifyColumn('created_at');
+
+        if ($from !== null) {
+            $query->where(fn (Builder $q): Builder => $q
+                ->where($completedCol, '>=', $from)
+                ->orWhere(fn (Builder $o): Builder => $o
+                    ->whereNull($completedCol)
+                    ->where(fn (Builder $sub): Builder => $sub
+                        ->where($cancelledCol, '>=', $from)
+                        ->orWhere(fn (Builder $s2): Builder => $s2
+                            ->whereNull($cancelledCol)
+                            ->where(fn (Builder $s3): Builder => $s3
+                                ->where($startedCol, '>=', $from)
+                                ->orWhere(fn (Builder $s4): Builder => $s4->whereNull($startedCol)->where($createdCol, '>=', $from))
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        if ($to !== null) {
+            $query->where(fn (Builder $q): Builder => $q
+                ->where($completedCol, '<=', $to)
+                ->orWhere(fn (Builder $o): Builder => $o
+                    ->whereNull($completedCol)
+                    ->where(fn (Builder $sub): Builder => $sub
+                        ->where($cancelledCol, '<=', $to)
+                        ->orWhere(fn (Builder $s2): Builder => $s2
+                            ->whereNull($cancelledCol)
+                            ->where(fn (Builder $s3): Builder => $s3
+                                ->where($startedCol, '<=', $to)
+                                ->orWhere(fn (Builder $s4): Builder => $s4->whereNull($startedCol)->where($createdCol, '<=', $to))
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        return $query;
+    }
+
+    /**
+     * Phần km của từng tài xế trên từng chuyến hoàn thành trong khoảng [$from, $to].
      *
      * @return Collection<int, array{trip_id: int, trip_code: string, plate: ?string, started_at: ?Carbon, driver_id: int, status: TripStatus, order_codes: list<string>, is_empty: bool, km_total: float, km_loaded: float, km_empty: float}>
      */
@@ -55,10 +106,8 @@ class DriverMonthlyKmReportService
                 'orders' => fn ($query) => $query->where('status', '!=', OrderStatus::Draft)->select(['id', 'trip_id', 'order_code']),
             ])
             ->whereIn('status', [TripStatus::Completed, TripStatus::DriverSwap, TripStatus::Cancelled])
-            ->where(fn (Builder $q): Builder => $q
-                ->whereBetween('started_at', [$from, $to])
-                ->orWhere(fn (Builder $o): Builder => $o->whereNull('started_at')->whereBetween('completed_at', [$from, $to])))
-            ->orderBy('started_at')
+            ->tap(fn (Builder $q): Builder => self::applyCompletionWindow($q, $from, $to))
+            ->orderByRaw('COALESCE(completed_at, cancelled_at, started_at, created_at) asc')
             ->get();
 
         $swapTripIds = DriverSwap::whereIn('trip_id', $trips->pluck('id'))->distinct()->pluck('trip_id')->flip();
@@ -67,13 +116,8 @@ class DriverMonthlyKmReportService
             ? $this->swapPieces($trip)
             : [$this->wholeTripPiece($trip)]);
 
-        $endedShiftIds = DriverShift::whereIn('id', $pieces->pluck('shift_id')->filter()->unique())
-            ->whereNotNull('end_time')
-            ->pluck('id')
-            ->flip();
-
         return $pieces
-            ->filter(fn (array $piece): bool => $piece['driver_id'] !== null && $endedShiftIds->has($piece['shift_id']))
+            ->filter(fn (array $piece): bool => $piece['driver_id'] !== null)
             ->groupBy(fn (array $piece): string => $piece['trip']->id.'-'.$piece['driver_id'])
             ->map(function (Collection $group): array {
                 $trip = $group->first()['trip'];
@@ -164,10 +208,8 @@ class DriverMonthlyKmReportService
             ])
             ->where('status', TripStatus::Completed)
             ->when($driverId !== null, fn (Builder $q): Builder => $q->where('driver_id', $driverId))
-            ->where(fn (Builder $q): Builder => $q
-                ->whereBetween('started_at', [$from, $to])
-                ->orWhere(fn (Builder $o): Builder => $o->whereNull('started_at')->whereBetween('created_at', [$from, $to])))
-            ->orderBy('started_at')
+            ->tap(fn (Builder $q): Builder => self::applyCompletionWindow($q, $from, $to))
+            ->orderByRaw('COALESCE(completed_at, started_at, created_at) asc')
             ->get();
 
         $tripsById = $trips->keyBy('id');

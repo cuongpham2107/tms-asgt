@@ -988,7 +988,14 @@ const PRIMARY_BTN = 'fi-color fi-color-primary fi-bg-color-400 hover:fi-bg-color
 
 const pad = (value: number): string => String(value).padStart(2, '0')
 const isoDate = (date: Date): string => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-const today = (): string => isoDate(new Date())
+const today = (): string => {
+    const now = new Date()
+    if (now.getHours() < 8) {
+        now.setDate(now.getDate() - 1)
+    }
+
+    return isoDate(now)
+}
 
 /** Dời mốc ngày theo kỳ: ngày ±1, tuần ±7 ngày, tháng về ngày 1 rồi ±1 tháng (như addMonthsNoOverflow). */
 const shiftDate = (period: Period, date: string, step: number): string => {
@@ -1200,7 +1207,7 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
 
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                    <span className="font-semibold text-gray-900 dark:text-white">{report.periodLabel}</span> · chỉ tính chuyến đã hoàn thành thuộc ca đã kết thúc.
+                    <span className="font-semibold text-gray-900 dark:text-white">{report.periodLabel}</span> · tính theo thời gian hoàn thành chuyến (từ 08:00 đầu kỳ đến 08:00 cuối kỳ).
                     {reportError && <span className="ms-2 font-medium text-rose-600 dark:text-rose-400">{reportError}</span>}
                 </p>
                 <PeriodBar report={report} onChange={changePeriod} />

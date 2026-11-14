@@ -12,7 +12,9 @@ use App\Filament\Resources\Trips\Actions\ExportTripsExcelAction;
 use App\Filament\Resources\Trips\TripResource;
 use App\Models\Area;
 use App\Models\Trip;
+use App\Services\DriverMonthlyKmReportService;
 use App\Services\Export\TripExcelExportService;
+use App\Services\ShiftScheduleService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
@@ -144,8 +146,9 @@ class ListTrips extends ListRecords
                 $this->tripSearch = $targetTrip->trip_code;
             }
         } elseif (blank($this->dateFrom) && blank($this->dateTo)) {
-            $this->dateFrom = now()->startOfMonth()->toDateString();
-            $this->dateTo = now()->endOfMonth()->toDateString();
+            $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+            $this->dateFrom = $shiftNow->copy()->startOfMonth()->toDateString();
+            $this->dateTo = $shiftNow->copy()->endOfMonth()->toDateString();
         }
 
         $this->dateRange = [
@@ -247,7 +250,8 @@ class ListTrips extends ListRecords
             $activeTotal = $total - $rawCompleted - $rawCancelled;
 
             if (blank($this->dateFrom) && blank($this->dateTo)) {
-                $monthQuery = $this->applyDateRangeFilter(clone $baseQuery, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString());
+                $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+                $monthQuery = $this->applyDateRangeFilter(clone $baseQuery, $shiftNow->copy()->startOfMonth()->toDateString(), $shiftNow->copy()->endOfMonth()->toDateString());
                 $completed = (int) (clone $monthQuery)
                     ->whereIn('trips.status', [TripStatus::Completed->value, TripStatus::Delivered->value])
                     ->count();
@@ -460,7 +464,11 @@ class ListTrips extends ListRecords
         return $this->applyDateRangeFilter($query, $this->dateFrom, $this->dateTo)
             ->when(
                 $except !== 'status' && in_array($this->activeStatusFilter, ['completed', 'cancelled']) && blank($this->dateFrom) && blank($this->dateTo),
-                fn (Builder $query): Builder => $this->applyDateRangeFilter($query, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()),
+                function (Builder $query): Builder {
+                    $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+
+                    return $this->applyDateRangeFilter($query, $shiftNow->copy()->startOfMonth()->toDateString(), $shiftNow->copy()->endOfMonth()->toDateString());
+                },
             )
             ->when($except !== 'status' && $this->activeStatusFilter !== 'all', fn (Builder $query): Builder => $this->applyStatusFilterByKey($query, $this->activeStatusFilter))
             ->when($except !== 'status' && $this->activeStatusFilter === 'all', fn (Builder $query): Builder => $query->whereNotIn('trips.status', [TripStatus::Completed->value, TripStatus::Delivered->value, TripStatus::Cancelled->value]))
@@ -728,7 +736,8 @@ class ListTrips extends ListRecords
                 function (Builder $query) use ($actionRecordId): Builder {
                     if (in_array($this->activeStatusFilter, ['completed', 'cancelled'])) {
                         return $query->where(function (Builder $dateQuery) use ($actionRecordId): void {
-                            $this->applyDateRangeFilter($dateQuery, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString());
+                            $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+                            $this->applyDateRangeFilter($dateQuery, $shiftNow->copy()->startOfMonth()->toDateString(), $shiftNow->copy()->endOfMonth()->toDateString());
 
                             if ($actionRecordId) {
                                 $dateQuery->orWhere('trips.id', $actionRecordId);
@@ -770,24 +779,14 @@ class ListTrips extends ListRecords
      */
     private function applyDateRangeFilter(Builder $query, ?string $dateFrom, ?string $dateTo): Builder
     {
-        $from = filled($dateFrom) ? Carbon::parse($dateFrom)->startOfDay() : null;
-        $to = filled($dateTo) ? Carbon::parse($dateTo)->endOfDay() : null;
+        $from = filled($dateFrom) ? Carbon::parse($dateFrom)->setTime(8, 0, 0) : null;
+        $to = filled($dateTo) ? Carbon::parse($dateTo)->addDay()->setTime(8, 0, 0) : null;
 
         if (! $from && ! $to) {
             return $query;
         }
 
-        return $query->where(function (Builder $dateQuery) use ($from, $to): void {
-            $dateQuery
-                ->where(function (Builder $started) use ($from, $to): void {
-                    $started->whereNotNull('trips.started_at');
-                    $this->applyDateBound($started, 'trips.started_at', $from, $to);
-                })
-                ->orWhere(function (Builder $draft) use ($from, $to): void {
-                    $draft->whereNull('trips.started_at');
-                    $this->applyDateBound($draft, 'trips.created_at', $from, $to);
-                });
-        });
+        return DriverMonthlyKmReportService::applyCompletionWindow($query, $from, $to);
     }
 
     private function applyDateBound(Builder $query, string $column, ?Carbon $from, ?Carbon $to): void

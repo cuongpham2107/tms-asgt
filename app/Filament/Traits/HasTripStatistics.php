@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderCharge;
 use App\Models\Trip;
+use App\Services\DriverMonthlyKmReportService;
 use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
@@ -94,8 +95,8 @@ trait HasTripStatistics
      */
     public function getFilteredTrips(): Collection
     {
-        $dateFrom = $this->startDate ? Carbon::parse($this->startDate)->startOfDay() : null;
-        $dateTo = $this->endDate ? Carbon::parse($this->endDate)->endOfDay() : null;
+        $dateFrom = $this->startDate ? Carbon::parse($this->startDate)->setTime(8, 0, 0) : null;
+        $dateTo = $this->endDate ? Carbon::parse($this->endDate)->addDay()->setTime(8, 0, 0) : null;
         $search = trim((string) $this->search);
 
         $tripsQuery = Trip::query()
@@ -112,34 +113,7 @@ trait HasTripStatistics
                 'startLocation',
                 'endLocation',
             ])
-            ->when($dateFrom || $dateTo, function (Builder $q) use ($dateFrom, $dateTo): Builder {
-                if ($dateFrom && $dateTo) {
-                    return $q->where(function (Builder $sub) use ($dateFrom, $dateTo): void {
-                        $sub->whereBetween('trips.started_at', [$dateFrom, $dateTo])
-                            ->orWhere(function (Builder $o) use ($dateFrom, $dateTo): void {
-                                $o->whereNull('trips.started_at')
-                                    ->whereBetween('trips.created_at', [$dateFrom, $dateTo]);
-                            });
-                    });
-                }
-                if ($dateFrom) {
-                    return $q->where(function (Builder $sub) use ($dateFrom): void {
-                        $sub->where('trips.started_at', '>=', $dateFrom)
-                            ->orWhere(function (Builder $o) use ($dateFrom): void {
-                                $o->whereNull('trips.started_at')
-                                    ->where('trips.created_at', '>=', $dateFrom);
-                            });
-                    });
-                }
-
-                return $q->where(function (Builder $sub) use ($dateTo): void {
-                    $sub->where('trips.started_at', '<=', $dateTo)
-                        ->orWhere(function (Builder $o) use ($dateTo): void {
-                            $o->whereNull('trips.started_at')
-                                ->where('trips.created_at', '<=', $dateTo);
-                        });
-                });
-            })
+            ->when($dateFrom || $dateTo, fn (Builder $q): Builder => DriverMonthlyKmReportService::applyCompletionWindow($q, $dateFrom, $dateTo))
             ->when(filled($search), function (Builder $q) use ($search): Builder {
                 return $q->where(function (Builder $sub) use ($search): void {
                     $sub->where('trips.trip_code', 'like', "%{$search}%")
@@ -158,8 +132,7 @@ trait HasTripStatistics
             ->when(filled($this->customerId), function (Builder $q): Builder {
                 return $q->whereHas('orders', fn ($o) => $o->where('customer_id', $this->customerId));
             })
-            ->orderByDesc('trips.started_at')
-            ->orderByDesc('trips.created_at');
+            ->orderByRaw('COALESCE(trips.completed_at, trips.started_at, trips.created_at) desc');
 
         $trips = $tripsQuery->get();
 

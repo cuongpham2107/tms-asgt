@@ -22,17 +22,219 @@
 
     @include('filament.pages.partials.dispatch-table-styles')
 
-    {{-- Bảng Kiểm soát tình trạng xe do widget React vẽ; page giữ bộ lọc, modal và action --}}
-    <div class="fi-js-widget-bare">
-        @livewire(\App\Filament\Widgets\VehicleDispatchTable::class, [
-            'searchQuery' => $this->searchQuery,
-            'sortBy' => $this->sortBy,
-            'sortDirection' => $this->sortDirection,
-            'activeStation' => $this->activeStation,
-            'activeMovementStatus' => $this->activeMovementStatus,
-            'dataVersion' => $this->dataVersion,
-        ])
+    {{-- Thanh chuyển đổi giữa Kiểm soát tình trạng xe và Tổng hợp ca trực lái xe --}}
+    <div class="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1 ring-1 ring-gray-950/5 dark:bg-gray-800 dark:ring-white/10 w-fit">
+        <button
+            type="button"
+            wire:click="switchTab('vehicles')"
+            @class([
+                'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer',
+                'bg-primary-600 text-white shadow-xs' => $activeTab !== 'duty',
+                'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white' => $activeTab === 'duty',
+            ])
+        >
+            <x-filament::icon icon="heroicon-m-truck" class="h-4 w-4" />
+            <span>Kiểm soát tình trạng xe</span>
+        </button>
+
+        <button
+            type="button"
+            wire:click="switchTab('duty')"
+            @class([
+                'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer',
+                'bg-primary-600 text-white shadow-xs' => $activeTab === 'duty',
+                'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white' => $activeTab !== 'duty',
+            ])
+        >
+            <x-filament::icon icon="heroicon-m-clipboard-document-list" class="h-4 w-4" />
+            <span>Tổng hợp ca trực lái xe</span>
+        </button>
     </div>
+
+    @if ($activeTab === 'duty')
+        @php
+            $dutyDrivers = $this->getDutyDriverRows();
+            $dutySummary = $this->getDutySummaryData();
+        @endphp
+
+        <div class="space-y-4">
+            {{-- Bộ lọc Điểm trực --}}
+            <div class="flex flex-wrap items-center gap-2">
+                <button
+                    type="button"
+                    wire:click="filterDutyStation('all')"
+                    @class([
+                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 whitespace-nowrap cursor-pointer',
+                        'bg-[#008fd5] border-transparent text-white shadow-sm' => $dutyStationFilter === 'all',
+                        'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700' => $dutyStationFilter !== 'all',
+                    ])
+                >
+                    <span>Tất cả</span>
+                </button>
+                @foreach (\App\Enums\OnDutyLocation::cases() as $station)
+                    @php
+                        $color = match($station->value) {
+                            'TN' => 'bg-sky-500',
+                            'BN' => 'bg-amber-500',
+                            'NBA' => 'bg-emerald-500',
+                            default => 'bg-[#008fd5]',
+                        };
+                    @endphp
+                    <button
+                        type="button"
+                        wire:click="filterDutyStation('{{ $station->value }}')"
+                        @class([
+                            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 whitespace-nowrap cursor-pointer',
+                            $color . ' border-transparent text-white shadow-sm' => $dutyStationFilter === $station->value,
+                            'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700' => $dutyStationFilter !== $station->value,
+                        ])
+                    >
+                        @if ($dutyStationFilter === $station->value)
+                            <span class="h-1.5 w-1.5 rounded-full bg-white shrink-0"></span>
+                        @endif
+                        <span>{{ $station->getLabel() }}</span>
+                    </button>
+                @endforeach
+            </div>
+
+            {{-- Grid 2-1: Trái là danh sách ca trực lái xe, Phải là bảng Tổng hợp ca trực lái xe --}}
+            <div class="grid grid-cols-3 gap-4 items-start">
+                <div class="col-span-2 overflow-auto rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10 bg-white dark:bg-gray-900 shadow-xs">
+                    <table class="dispatch-table w-full text-xs border-collapse font-sans">
+                        <thead>
+                            <tr class="text-white text-[11px] font-bold tracking-wide uppercase dark:bg-slate-950" style="background-color: rgb(30 58 95)">
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">STT</th>
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Điểm trực</th>
+                                <th class="border-r border-b border-white/10 py-2 px-3 text-left whitespace-nowrap">Lịch lái xe</th>
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Xe chạy</th>
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Ca</th>
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Số chuyến</th>
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Số Km CH</th>
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Số Km KH</th>
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Tổng KM</th>
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Bắt đầu ca</th>
+                                <th class="border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Kết thúc ca</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                            @forelse ($dutyDrivers as $idx => $driver)
+                                @php
+                                    $badgeTone = match ($driver->station_display) {
+                                        'TN (Thái Nguyên)' => 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300',
+                                        'BN (Bắc Ninh)' => 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+                                        'NBA (Nội Bài)' => 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+                                        default => 'bg-gray-100 text-gray-700 dark:bg-white/5 dark:text-gray-300',
+                                    };
+                                @endphp
+                                <tr class="dispatch-row {{ $idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/40 dark:bg-white/[0.015]' }}">
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center text-gray-500">{{ $idx + 1 }}</td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center">
+                                        <span class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ring-black/5 dark:ring-white/10 {{ $badgeTone }}">
+                                            {{ $driver->station_display }}
+                                        </span>
+                                    </td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-3 font-semibold text-gray-900 dark:text-white">{{ $driver->name }}</td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-medium text-primary-600 dark:text-primary-400">{{ $driver->plate }}</td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-bold text-gray-800 dark:text-gray-200">{{ $driver->shift_label }}</td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-semibold">{{ $driver->trip_count }}</td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-mono">{{ number_format($driver->km_loaded, 1) }}</td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-mono">{{ number_format($driver->km_empty, 1) }}</td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-mono font-bold text-gray-900 dark:text-white">{{ number_format($driver->total_km, 1) }}</td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center {{ $driver->is_stale_shift ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-600 dark:text-gray-300' }}">
+                                        {{ $driver->start_time ? $driver->start_time->format('H:i d/m/Y') : '—' }}
+                                    </td>
+                                    <td class="px-2 text-center">
+                                        @if ($driver->end_time)
+                                            <span class="text-gray-600 dark:text-gray-300">{{ $driver->end_time->format('H:i d/m/Y') }}</span>
+                                        @elseif ($driver->is_stale_shift)
+                                            <span
+                                                title="Ca bắt đầu lúc {{ $driver->start_time?->format('H:i d/m/Y') }} (ngoài khung 08:00 hôm nay → 08:00 hôm sau) chưa được thoát"
+                                                class="inline-flex items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/20 dark:text-amber-300"
+                                            >
+                                                Chưa thoát ca cũ
+                                            </span>
+                                        @elseif ($driver->has_active_shift)
+                                            <span class="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                                                Đang chạy
+                                            </span>
+                                        @else
+                                            <span class="text-gray-400">—</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="11" class="py-8 text-center text-gray-500 italic">
+                                        Không có lái xe nào đang trong ca trực.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                {{-- Bảng Tổng hợp ca trực lái xe --}}
+                <div class="col-span-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900 shadow-xs overflow-hidden">
+                    <div class="border-b border-gray-200 dark:border-white/10 px-4 py-3 text-white font-bold text-xs uppercase tracking-wider" style="background-color: rgb(30 58 95)">
+                        Tổng hợp ca trực lái xe
+                    </div>
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-800/70">
+                                <th class="border border-gray-200 dark:border-white/10 px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Điểm trực</th>
+                                <th class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center font-semibold text-gray-700 dark:text-gray-200" colspan="4">Đi làm</th>
+                                <th class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center font-semibold text-gray-700 dark:text-gray-200">Nghỉ</th>
+                                <th class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center font-semibold text-gray-700 dark:text-gray-200">TTL</th>
+                            </tr>
+                            <tr class="bg-gray-50 dark:bg-gray-800/70 text-[11px] text-gray-500 dark:text-gray-400">
+                                <th class="border border-gray-200 dark:border-white/10"></th>
+                                <th class="border border-gray-200 dark:border-white/10 px-2 py-1 text-center">TTL</th>
+                                <th class="border border-gray-200 dark:border-white/10 px-2 py-1 text-center">X/2</th>
+                                <th class="border border-gray-200 dark:border-white/10 px-2 py-1 text-center">Y/2</th>
+                                <th class="border border-gray-200 dark:border-white/10 px-2 py-1 text-center">X</th>
+                                <th class="border border-gray-200 dark:border-white/10 px-2 py-1 text-center"></th>
+                                <th class="border border-gray-200 dark:border-white/10 px-2 py-1 text-center"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($dutySummary['stations'] as $s)
+                                <tr class="hover:bg-gray-50 dark:hover:bg-white/5">
+                                    <td class="border border-gray-200 dark:border-white/10 px-3 py-2 font-medium text-gray-900 dark:text-white">{{ $s['label'] }}</td>
+                                    <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center font-bold text-gray-900 dark:text-white">{{ $s['working_ttl'] }}</td>
+                                    <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center">{{ $s['morning_half'] }}</td>
+                                    <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center">{{ $s['night_half'] }}</td>
+                                    <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center">{{ $s['full'] }}</td>
+                                    <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center font-semibold text-rose-600 dark:text-rose-400">{{ $s['off'] }}</td>
+                                    <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center font-bold text-gray-900 dark:text-white">{{ $s['total'] }}</td>
+                                </tr>
+                            @endforeach
+                            <tr class="bg-gray-100 dark:bg-gray-800 font-bold">
+                                <td class="border border-gray-200 dark:border-white/10 px-3 py-2 text-gray-900 dark:text-white">Tổng lái xe</td>
+                                <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center text-gray-900 dark:text-white">{{ $dutySummary['grand']['working_ttl'] }}</td>
+                                <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center">{{ $dutySummary['grand']['morning_half'] }}</td>
+                                <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center">{{ $dutySummary['grand']['night_half'] }}</td>
+                                <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center">{{ $dutySummary['grand']['full'] }}</td>
+                                <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center text-rose-600 dark:text-rose-400">{{ $dutySummary['grand']['off'] }}</td>
+                                <td class="border border-gray-200 dark:border-white/10 px-2 py-2 text-center text-gray-900 dark:text-white">{{ $dutySummary['grand']['total'] }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    @else
+        {{-- Bảng Kiểm soát tình trạng xe do widget React vẽ; page giữ bộ lọc, modal và action --}}
+        <div class="fi-js-widget-bare">
+            @livewire(\App\Filament\Widgets\VehicleDispatchTable::class, [
+                'searchQuery' => $this->searchQuery,
+                'sortBy' => $this->sortBy,
+                'sortDirection' => $this->sortDirection,
+                'activeStation' => $this->activeStation,
+                'activeMovementStatus' => $this->activeMovementStatus,
+                'dataVersion' => $this->dataVersion,
+            ])
+        </div>
+    @endif
 
     {{-- Modals khi click vào BSX hoặc Vị trí GPS --}}
     @php

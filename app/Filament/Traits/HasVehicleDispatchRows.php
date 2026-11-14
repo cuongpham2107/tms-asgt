@@ -2,11 +2,12 @@
 
 namespace App\Filament\Traits;
 
+use App\Enums\DriverWorkShift;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Models\Vehicle;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\ShiftScheduleService;
 
 /**
  * Dữ liệu bảng "Kiểm soát tình trạng xe": dùng chung cho page (bảng Filament/action) và widget React.
@@ -17,11 +18,17 @@ trait HasVehicleDispatchRows
     public function getGroupedVehicles(): array
     {
         [$shiftStart, $shiftEnd] = VehicleDispatchBoard::getShiftWindow();
+        $isEvenShift = ShiftScheduleService::determineShift() === DriverWorkShift::Even;
+        $runningValues = array_map(fn (TripStatus $s) => $s->value, VehicleDispatchBoard::runningTripStatuses());
 
         $vehicles = Vehicle::query()
             ->select('vehicles.*')
-            ->selectSub(function ($q) {
-                $q->selectRaw("COALESCE(u1.station, u2.station, u3.station, 'OTHER')")
+            ->selectSub(function ($q) use ($isEvenShift) {
+                $shiftCoalesce = $isEvenShift
+                    ? "COALESCE(u2.station, u3.station, u1.station, 'OTHER')"
+                    : "COALESCE(u3.station, u2.station, u1.station, 'OTHER')";
+
+                $q->selectRaw($shiftCoalesce)
                     ->from('vehicles as v_sub')
                     ->leftJoin('users as u1', 'u1.id', '=', 'v_sub.current_driver_id')
                     ->leftJoin('users as u2', 'u2.id', '=', 'v_sub.even_driver_id')
@@ -29,18 +36,30 @@ trait HasVehicleDispatchRows
                     ->whereColumn('v_sub.id', 'vehicles.id')
                     ->limit(1);
             }, 'driver_station')
+            ->selectSub(function ($q) {
+                $q->selectRaw('MAX(COALESCE(completed_at, started_at, updated_at))')
+                    ->from('trips as t_last')
+                    ->whereColumn('t_last.vehicle_id', 'vehicles.id')
+                    ->where('t_last.status', TripStatus::Completed->value);
+            }, 'last_completed_trip_at')
             ->where('vehicles.is_active', true)
             ->whereIn('vehicles.type', [VehicleOwnerType::Company->value, 'company'])
             ->with([
                 'driver.driverShifts',
                 'evenDriver.driverShifts',
                 'oddDriver.driverShifts',
-                'trips' => function ($q) use ($shiftStart, $shiftEnd) {
-                    $q->where(function ($sub) use ($shiftStart, $shiftEnd) {
+                'trips' => function ($q) use ($shiftStart, $shiftEnd, $runningValues) {
+                    $q->where(function ($sub) use ($shiftStart, $shiftEnd, $runningValues) {
                         $sub->whereBetween('started_at', [$shiftStart, $shiftEnd])
                             ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd])
-                            ->orWhereIn('status', array_map(fn ($s) => $s->value, TripStatus::activeStatuses()))
-                            ->orWhere('completed_at', '>=', now()->subHours(48))
+                            ->orWhere(function ($pendingQ) use ($shiftStart, $shiftEnd) {
+                                $pendingQ->where('status', TripStatus::Pending->value)
+                                    ->where(function ($dateQ) use ($shiftStart, $shiftEnd) {
+                                        $dateQ->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                                            ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                                    });
+                            })
+                            ->orWhereIn('status', $runningValues)
                             ->orWhere('is_paused', true)
                             ->orWhereHas('kmReports', fn ($kr) => $kr->where('status', 'pending'));
                     })->with([

@@ -3,7 +3,9 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\OrderStatus;
+use App\Filament\Pages\DriverMonthlyKmReport;
 use App\Models\Order;
+use App\Services\ShiftScheduleService;
 use Filament\Widgets\ChartWidget;
 
 class OrderStatusChartWidget extends ChartWidget
@@ -31,20 +33,12 @@ class OrderStatusChartWidget extends ChartWidget
         $activeFilter = $this->filter ?: 'month';
 
         $query = Order::query();
-        $now = now();
+        $shiftDate = ShiftScheduleService::getShiftWindow()[0]->toDateString();
 
-        $query = match ($activeFilter) {
-            'today' => $query->whereDate('planned_loading_at', $now->toDateString()),
-            'week' => $query->whereBetween('planned_loading_at', [
-                $now->startOfWeek()->toDateTimeString(),
-                $now->endOfWeek()->toDateTimeString(),
-            ]),
-            'month' => $query->whereMonth('planned_loading_at', $now->month)
-                ->whereYear('planned_loading_at', $now->year),
-            'all' => $query,
-            default => $query->whereMonth('planned_loading_at', $now->month)
-                ->whereYear('planned_loading_at', $now->year),
-        };
+        if ($activeFilter !== 'all') {
+            [$from, $to] = DriverMonthlyKmReport::rangeFor($activeFilter, $shiftDate);
+            $query->whereBetween('planned_loading_at', [$from, $to]);
+        }
 
         $data = $query->selectRaw('status, count(*) as count')
             ->groupBy('status')

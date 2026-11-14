@@ -88,30 +88,35 @@ export function getStatsPeriodDates(period?: string): { from?: string; to?: stri
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmtDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
+    // Áp dụng quy tắc ca 08:00 sáng -> 08:00 sáng hôm sau: trước 08:00 tính vào ngày ca hôm trước
     const now = new Date();
-    const today = fmtDate(now);
+    const shiftNow = new Date(now.getTime() - 8 * 60 * 60 * 1000);
+    const today = fmtDate(shiftNow);
 
     if (!period || period === "today") {
         return { from: today, to: today };
     }
 
     if (period === "week") {
-        const d = new Date(now);
+        const d = new Date(shiftNow);
         const day = d.getDay();
         d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
-        return { from: fmtDate(d), to: today };
+        const endOfWeek = new Date(d);
+        endOfWeek.setDate(d.getDate() + 6);
+        return { from: fmtDate(d), to: fmtDate(endOfWeek) };
     }
 
     if (period === "month") {
+        const lastDay = new Date(shiftNow.getFullYear(), shiftNow.getMonth() + 1, 0);
         return {
-            from: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`,
-            to: today,
+            from: `${shiftNow.getFullYear()}-${pad(shiftNow.getMonth() + 1)}-01`,
+            to: fmtDate(lastDay),
         };
     }
 
     if (period === "last_month") {
-        const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+        const firstDay = new Date(shiftNow.getFullYear(), shiftNow.getMonth() - 1, 1);
+        const lastDay = new Date(shiftNow.getFullYear(), shiftNow.getMonth(), 0);
         return {
             from: fmtDate(firstDay),
             to: fmtDate(lastDay),

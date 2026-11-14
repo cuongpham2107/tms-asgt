@@ -43,22 +43,28 @@ export default function StatsScreen() {
   const periodRangeLabel = useMemo(() => {
     const { from, to } = periodRange;
     if (!from || !to) return "";
-    if (from === to) return formatShortDate(from);
-    return `${formatShortDate(from)} – ${formatShortDate(to)}`;
+    const [ty, tm, td] = to.split("-").map(Number);
+    const nextDay = new Date(ty, tm - 1, td + 1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const endDateIso = `${nextDay.getFullYear()}-${pad(nextDay.getMonth() + 1)}-${pad(nextDay.getDate())}`;
+    return `08:00 ${formatShortDate(from)} – 08:00 ${formatShortDate(endDateIso)}`;
   }, [periodRange]);
 
   const filteredHistory = useMemo(() => {
     if (!history.length) return history;
     const { from, to } = periodRange;
     if (!from || !to) return history;
-    const pad = (n: number) => String(n).padStart(2, "0");
+    const [fy, fm, fd] = from.split("-").map(Number);
+    const [ty, tm, td] = to.split("-").map(Number);
+    const startMs = new Date(fy, fm - 1, fd, 8, 0, 0, 0).getTime();
+    const endMs = new Date(ty, tm - 1, td + 1, 8, 0, 0, 0).getTime();
+
     return history.filter((t: any) => {
-      const raw = t.started_at || t.completed_at || t.created_at;
+      const raw = t.completed_at || t.cancelled_at || t.started_at || t.created_at;
       if (!raw) return true;
       const d = new Date(raw);
       if (isNaN(d.getTime())) return true;
-      const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      return date >= from && date <= to;
+      return d.getTime() >= startMs && d.getTime() <= endMs;
     });
   }, [history, periodRange]);
 

@@ -12,6 +12,7 @@ use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
+use App\Filament\Pages\DriverDutyReport;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Filament\Widgets\VehicleDispatchTable;
 use App\Models\Area;
@@ -31,6 +32,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
@@ -718,6 +720,7 @@ test('vehicle dispatch board respects 8am to 8am next day shift window', functio
         'status' => TripStatus::Completed,
         'started_at' => Carbon::create(2026, 10, 21, 5, 0, 0),
         'completed_at' => Carbon::create(2026, 10, 21, 7, 30, 0),
+        'end_km' => 1000,
     ]);
 
     // Chuyến B: Bắt đầu lúc 09:00 ngày 21/10 (sau 8h sáng) -> Thuộc ca ngày 21/10
@@ -728,6 +731,7 @@ test('vehicle dispatch board respects 8am to 8am next day shift window', functio
         'status' => TripStatus::Completed,
         'started_at' => Carbon::create(2026, 10, 21, 9, 0, 0),
         'completed_at' => Carbon::create(2026, 10, 21, 11, 0, 0),
+        'end_km' => 1050,
     ]);
 
     // Chuyến C: Chạy lúc 02:00 rạng sáng ngày 22/10 -> Vẫn thuộc ca ngày 21/10 (vì trước 8h ngày 22)
@@ -738,6 +742,7 @@ test('vehicle dispatch board respects 8am to 8am next day shift window', functio
         'status' => TripStatus::Completed,
         'started_at' => Carbon::create(2026, 10, 22, 2, 0, 0),
         'completed_at' => Carbon::create(2026, 10, 22, 4, 30, 0),
+        'end_km' => 1100,
     ]);
 
     // Khi test lúc 14:00 ngày 21/10 (ca ngày 21/10 từ 08:00 ngày 21 -> 08:00 ngày 22)
@@ -764,6 +769,20 @@ test('vehicle dispatch board respects 8am to 8am next day shift window', functio
         ->toHaveCount(2);
 
     expect(VehicleDispatchBoard::getTodayTripsCount($vehicle))->toBe(2);
+
+    // Tại 06:00 sáng ngày 22/10 (vẫn trong ca 21/10): Xe chờ tính từ lúc hoàn thành chuyến C (04:30) -> 90 phút (1h 30p)
+    $vehicle->load('trips');
+    $xeChoAt6h = VehicleDispatchBoard::getXeChoData($vehicle);
+    expect($xeChoAt6h['text'])->toBe('1h 30p')
+        ->and($xeChoAt6h['minutes'])->toBe(90);
+
+    // Sang 09:00 sáng ngày 22/10 (bước sang ca mới 08:00 22/10 -> 08:00 23/10):
+    // Chuyến C (hoàn thành 04:30 sáng) thuộc ca cũ (21/10) nên hiển thị "1 ngày" không chạy và số chuyến = 0
+    Carbon::setTestNow(Carbon::create(2026, 10, 22, 9, 0, 0));
+    $vehicle->load('trips');
+    $xeChoAt9h = VehicleDispatchBoard::getXeChoData($vehicle);
+    expect($xeChoAt9h['text'])->toBe('1 ngày')
+        ->and(VehicleDispatchBoard::getTodayTripsCount($vehicle))->toBe(0);
 
     Carbon::setTestNow();
 });
@@ -828,7 +847,8 @@ test('vehicle dispatch board distinguishes idle vehicle and pending trip with di
         'is_active' => true,
     ]);
 
-    expect(VehicleDispatchBoard::getTripStatusLabel($idleVehicle))->toBe('Xe chờ')
+    expect(VehicleDispatchBoard::getTripStatusLabel($idleVehicle))->toBe('Sẵn sàng')
+        ->and(VehicleDispatchBoard::getXeChoData($idleVehicle)['text'])->toBe('—')
         ->and(VehicleDispatchBoard::getTripStatusBadgeClass($idleVehicle))->toContain('bg-slate-100', 'text-slate-500', 'font-normal');
 
     // 2. Xe có chuyến Chờ chạy (Pending)
@@ -1714,4 +1734,79 @@ test('dispatch widget first renders the table frame without vehicles, then loads
 
     $widget->set('isReady', true)->assertSee('20C-DEFER');
     expect($widget->instance()->getRendererConfiguration()['loaded'])->toBeTrue();
+});
+
+test('dispatch board renames menu to Kiem soat and embeds Tong hop ca truc lai xe tab', function () {
+    Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
+
+    $driverBN = User::factory()->create([
+        'name' => 'Tài xế Ca Trực BN',
+        'station' => OnDutyLocation::Bn,
+        'is_active' => true,
+    ]);
+    $driverBN->assignRole('driver');
+
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '99C-DUTY-01',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driverBN->id,
+        'is_active' => true,
+    ]);
+
+    // Giả lập ca trực từ hôm qua không tự động thoát (start_time hôm qua, end_time = null, có km cũ của hôm qua)
+    $unclosedShift = DriverShift::create([
+        'driver_id' => $driverBN->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now()->subDays(2),
+        'end_time' => null,
+        'total_km' => 999.0,
+        'total_km_loaded' => 888.0,
+        'total_km_empty' => 111.0,
+    ]);
+
+    // Chuyến cũ của hôm qua -> KHÔNG được tính vào Tổng hợp ca trực lái xe hôm nay
+    Trip::factory()->create([
+        'trip_code' => 'TRIP-DUTY-YESTERDAY',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driverBN->id,
+        'shift_id' => $unclosedShift->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subDays(2)->setTime(10, 0),
+        'completed_at' => now()->subDays(2)->setTime(12, 0),
+        'total_km' => 500.0,
+        'total_km_loaded' => 400.0,
+        'total_km_empty' => 100.0,
+    ]);
+
+    // Chuyến chạy trong khung 08:00 sáng hôm nay -> 08:00 sáng hôm sau -> ĐƯỢC tính
+    Trip::factory()->create([
+        'trip_code' => 'TRIP-DUTY-TODAY',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driverBN->id,
+        'shift_id' => $unclosedShift->id,
+        'status' => TripStatus::Completed,
+        'started_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addHour(),
+        'completed_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addHours(2),
+        'total_km' => 120.5,
+        'total_km_loaded' => 100.0,
+        'total_km_empty' => 20.5,
+    ]);
+
+    expect(VehicleDispatchBoard::getNavigationLabel())->toBe('Kiểm soát')
+        ->and(DriverDutyReport::shouldRegisterNavigation())->toBeFalse();
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertSee('Kiểm soát tình trạng xe')
+        ->assertSee('Tổng hợp ca trực lái xe')
+        ->call('switchTab', 'duty')
+        ->assertSet('activeTab', 'duty')
+        ->assertSee('Tài xế Ca Trực BN')
+        ->assertSee('99C-DUTY-01')
+        ->assertSee('120.5')
+        ->assertSee('Chưa thoát ca cũ')
+        ->assertDontSee('999.0')
+        ->assertDontSee('500.0')
+        ->call('filterDutyStation', 'TN')
+        ->assertSet('dutyStationFilter', 'TN')
+        ->assertDontSee('Tài xế Ca Trực BN');
 });

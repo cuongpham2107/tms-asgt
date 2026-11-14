@@ -8,6 +8,7 @@ use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
 use App\Models\Trip;
+use App\Services\DriverMonthlyKmReportService;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
 use App\Services\Trip\CheckpointGeofenceService;
@@ -183,10 +184,17 @@ class TripController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
+        $fromTime = $request->filled('from_date')
+            ? Carbon::parse($request->string('from_date')->toString())->setTime(8, 0, 0)
+            : null;
+        $toTime = $request->filled('to_date')
+            ? Carbon::parse($request->string('to_date')->toString())->addDay()->setTime(8, 0, 0)
+            : null;
+
         $trips = Trip::query()
             ->where(function ($q) use ($user) {
                 $q->where('driver_id', $user->id)
-                    ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id));
+                    ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id)->orWhere('to_driver_id', $user->id));
             })
             ->with([
                 'vehicle',
@@ -204,11 +212,10 @@ class TripController extends Controller
                 'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
             ->whereIn('status', $validStatuses)
-            ->when($request->filled('from_date'), fn ($q) => $q->whereDate('started_at', '>=', $request->from_date))
-            ->when($request->filled('to_date'), fn ($q) => $q->whereDate('started_at', '<=', $request->to_date))
+            ->tap(fn ($q) => DriverMonthlyKmReportService::applyCompletionWindow($q, $fromTime, $toTime))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             ->when($request->filled('vehicle_id'), fn ($q) => $q->where('vehicle_id', $request->vehicle_id))
-            ->orderBy('started_at', 'desc')
+            ->orderByRaw('COALESCE(completed_at, cancelled_at, started_at, created_at) desc')
             ->orderBy('id', 'desc')
             ->paginate($request->integer('per_page', 15));
 
@@ -393,22 +400,10 @@ class TripController extends Controller
         $user = $request->user();
         $from = $request->query('from_date');
         $to = $request->query('to_date');
+        $fromTime = filled($from) ? Carbon::parse((string) $from)->setTime(8, 0, 0) : null;
+        $toTime = filled($to) ? Carbon::parse((string) $to)->addDay()->setTime(8, 0, 0) : null;
 
-        $trips = Trip::query()
-            ->where(function ($q) use ($user) {
-                $q->where('driver_id', $user->id)
-                    ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id)->orWhere('to_driver_id', $user->id));
-            })
-            ->when($from, fn ($q) => $q->where(fn ($sq) => $sq->whereDate('started_at', '>=', $from)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->whereDate('created_at', '>=', $from))))
-            ->when($to, fn ($q) => $q->where(fn ($sq) => $sq->whereDate('started_at', '<=', $to)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->whereDate('created_at', '<=', $to))))
-            ->get();
-
-        $assigned = 0;
-        $inProgress = 0;
-        $completed = 0;
-        $totalKm = 0.0;
-        $totalLoaded = 0.0;
-
+        $finishedStatuses = [TripStatus::Completed, TripStatus::DriverSwap, TripStatus::Cancelled];
         $inProgressStatuses = [
             TripStatus::Started,
             TripStatus::ArrivedPickup,
@@ -417,6 +412,31 @@ class TripController extends Controller
             TripStatus::Delivered,
             TripStatus::ReturnTrip,
         ];
+
+        $trips = Trip::query()
+            ->where(function ($q) use ($user) {
+                $q->where('driver_id', $user->id)
+                    ->orWhereHas('driverSwaps', fn ($q) => $q->where('from_driver_id', $user->id)->orWhere('to_driver_id', $user->id));
+            })
+            ->when($fromTime || $toTime, function ($q) use ($fromTime, $toTime, $finishedStatuses) {
+                $q->where(function ($sub) use ($fromTime, $toTime, $finishedStatuses) {
+                    $sub->where(function ($fin) use ($fromTime, $toTime, $finishedStatuses) {
+                        $fin->whereIn('status', $finishedStatuses);
+                        DriverMonthlyKmReportService::applyCompletionWindow($fin, $fromTime, $toTime);
+                    })->orWhere(function ($act) use ($fromTime, $toTime, $finishedStatuses) {
+                        $act->whereNotIn('status', $finishedStatuses)
+                            ->when($fromTime, fn ($aq) => $aq->where(fn ($sq) => $sq->where('started_at', '>=', $fromTime)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->where('created_at', '>=', $fromTime))))
+                            ->when($toTime, fn ($aq) => $aq->where(fn ($sq) => $sq->where('started_at', '<=', $toTime)->orWhere(fn ($ssq) => $ssq->whereNull('started_at')->where('created_at', '<=', $toTime))));
+                    });
+                });
+            })
+            ->get();
+
+        $assigned = 0;
+        $inProgress = 0;
+        $completed = 0;
+        $totalKm = 0.0;
+        $totalLoaded = 0.0;
 
         foreach ($trips as $trip) {
             if ((int) $trip->driver_id === (int) $user->id) {
@@ -431,9 +451,11 @@ class TripController extends Controller
                 $completed++;
             }
 
-            $driverKm = TripKmSplitService::driverKm($trip, (int) $user->id);
-            $totalKm += $driverKm['total_km'];
-            $totalLoaded += $driverKm['total_km_loaded'];
+            if (in_array($trip->status, $finishedStatuses, true)) {
+                $driverKm = TripKmSplitService::driverKm($trip, (int) $user->id);
+                $totalKm += $driverKm['total_km'];
+                $totalLoaded += $driverKm['total_km_loaded'];
+            }
         }
 
         $totalEmpty = max(0.0, $totalKm - $totalLoaded);

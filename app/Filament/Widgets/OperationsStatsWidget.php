@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\ShiftScheduleService;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -28,7 +29,7 @@ class OperationsStatsWidget extends BaseWidget
 
     protected function getStats(): array
     {
-        $today = now()->toDateString();
+        [$shiftStart, $shiftEnd] = ShiftScheduleService::getShiftWindow();
 
         // 1. Xe công ty
         $companyOn = Vehicle::where('is_active', true)
@@ -40,24 +41,27 @@ class OperationsStatsWidget extends BaseWidget
             ->count();
         $availPercent = $companyTotal > 0 ? round(($companyOn / $companyTotal) * 100) : 100;
 
-        // 2. Xe thuê làm việc
+        // 2. Xe thuê làm việc (trong khung ca 08:00 -> 08:00)
         $rentWorkingToday = Vehicle::where('is_active', true)
             ->where('type', VehicleOwnerType::Rent)
-            ->where(function ($query) use ($today) {
-                $query->whereHas('trips', function ($q) use ($today) {
-                    $q->whereDate('started_at', $today)
-                        ->orWhereDate('created_at', $today)
-                        ->orWhereHas('orders', fn ($oq) => $oq->whereDate('planned_loading_at', $today));
+            ->where(function ($query) use ($shiftStart, $shiftEnd) {
+                $query->whereHas('trips', function ($q) use ($shiftStart, $shiftEnd) {
+                    $q->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                        ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd])
+                        ->orWhereBetween('created_at', [$shiftStart, $shiftEnd])
+                        ->orWhereHas('orders', fn ($oq) => $oq->whereBetween('planned_loading_at', [$shiftStart, $shiftEnd]));
                 })
-                    ->orWhereHas('driver.driverShifts', fn ($q) => $q->whereNull('end_time'))
-                    ->orWhereHas('trips.shift', fn ($q) => $q->whereNull('end_time'));
+                    ->orWhereHas('driver.driverShifts', fn ($q) => $q->whereNull('end_time')->whereBetween('start_time', [$shiftStart, $shiftEnd]))
+                    ->orWhereHas('trips.shift', fn ($q) => $q->whereNull('end_time')->whereBetween('start_time', [$shiftStart, $shiftEnd]));
             })
             ->count();
 
-        // 3. Chuyến xe hôm nay
-        $tripsToday = Trip::whereDate('started_at', $today)
-            ->orWhereDate('created_at', $today)
-            ->count();
+        // 3. Chuyến xe hôm nay (trong khung ca 08:00 -> 08:00)
+        $tripsToday = Trip::where(function ($q) use ($shiftStart, $shiftEnd) {
+            $q->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd])
+                ->orWhere(fn ($sq) => $sq->whereNull('started_at')->whereBetween('created_at', [$shiftStart, $shiftEnd]));
+        })->count();
         $tripsRunning = Trip::whereIn('status', [
             'started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'driver_swap',
         ])->count();
@@ -67,11 +71,12 @@ class OperationsStatsWidget extends BaseWidget
             'started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'in_transit', 'sent',
         ])->count();
 
-        // 5. Đơn hàng hoàn thành hôm nay
+        // 5. Đơn hàng hoàn thành hôm nay (trong khung ca 08:00 -> 08:00)
         $completedToday = Order::where('status', 'completed')
-            ->where(function ($q) use ($today) {
-                $q->whereDate('planned_loading_at', $today)
-                    ->orWhereDate('updated_at', $today);
+            ->where(function ($q) use ($shiftStart, $shiftEnd) {
+                $q->whereHas('trip', fn ($tq) => $tq->whereBetween('completed_at', [$shiftStart, $shiftEnd]))
+                    ->orWhereBetween('planned_loading_at', [$shiftStart, $shiftEnd])
+                    ->orWhereBetween('updated_at', [$shiftStart, $shiftEnd]);
             })
             ->count();
 

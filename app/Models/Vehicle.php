@@ -280,6 +280,8 @@ class Vehicle extends Model
 
     public function getActiveTripAttribute(): ?Trip
     {
+        [$shiftStart, $shiftEnd] = ShiftScheduleService::getShiftWindow();
+
         if ($this->relationLoaded('trips')) {
             $trips = $this->trips;
 
@@ -295,7 +297,7 @@ class Vehicle extends Model
 
             // 1. Ưu tiên chuyến đang chạy thực tế (từ đã bắt đầu đến hoàn thành nhưng chưa kết thúc/end)
             $inProgressTrip = $trips
-                ->filter(function (Trip $t): bool {
+                ->filter(function (Trip $t) use ($shiftStart, $shiftEnd): bool {
                     if ($t->status === TripStatus::Cancelled || $t->status === TripStatus::Pending) {
                         return false;
                     }
@@ -317,9 +319,9 @@ class Vehicle extends Model
                     }
 
                     if ($t->status === TripStatus::Completed) {
-                        return ($t->completed_at && $t->completed_at->isToday())
-                            || ($t->started_at && $t->started_at->isToday())
-                            || ($t->created_at && $t->created_at->isToday());
+                        return ($t->completed_at && $t->completed_at->between($shiftStart, $shiftEnd))
+                            || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd))
+                            || ($t->created_at && $t->created_at->between($shiftStart, $shiftEnd));
                     }
 
                     return false;
@@ -331,9 +333,11 @@ class Vehicle extends Model
                 return $inProgressTrip;
             }
 
-            // 2. Nếu không có chuyến đang chạy, lấy chuyến tiếp theo đang chờ chạy (Pending)
+            // 2. Nếu không có chuyến đang chạy, lấy chuyến tiếp theo đang chờ chạy (Pending) trong ca 08:00 -> 08:00
             return $trips
-                ->filter(fn (Trip $t) => $t->status === TripStatus::Pending)
+                ->filter(fn (Trip $t): bool => $t->status === TripStatus::Pending
+                    && (($t->started_at && $t->started_at->between($shiftStart, $shiftEnd))
+                        || ($t->created_at && $t->created_at->between($shiftStart, $shiftEnd))))
                 ->sortBy('id')
                 ->first();
         }
@@ -357,7 +361,7 @@ class Vehicle extends Model
         $inProgressTrip = $this->trips()
             ->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value])
             ->whereDoesntHave('checkpoints', fn (Builder $q) => $q->where('checkpoint_type', CheckpointType::End->value))
-            ->where(function (Builder $q) {
+            ->where(function (Builder $q) use ($shiftStart, $shiftEnd) {
                 $q->whereIn('status', [
                     TripStatus::Started->value,
                     TripStatus::ArrivedPickup->value,
@@ -366,13 +370,13 @@ class Vehicle extends Model
                     TripStatus::Delivered->value,
                     TripStatus::DriverSwap->value,
                     TripStatus::ReturnTrip->value,
-                ])->orWhere(function (Builder $sub) {
+                ])->orWhere(function (Builder $sub) use ($shiftStart, $shiftEnd) {
                     $sub->where('status', TripStatus::Completed->value)
                         ->whereNull('end_km')
-                        ->where(function (Builder $dateQ) {
-                            $dateQ->whereDate('completed_at', today())
-                                ->orWhereDate('started_at', today())
-                                ->orWhereDate('created_at', today());
+                        ->where(function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                            $dateQ->whereBetween('completed_at', [$shiftStart, $shiftEnd])
+                                ->orWhereBetween('started_at', [$shiftStart, $shiftEnd])
+                                ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
                         });
                 });
             })
@@ -383,9 +387,13 @@ class Vehicle extends Model
             return $inProgressTrip;
         }
 
-        // 2. Chuyến chờ chạy kế tiếp
+        // 2. Chuyến chờ chạy kế tiếp trong ca 08:00 -> 08:00
         return $this->trips()
             ->where('status', TripStatus::Pending->value)
+            ->where(function (Builder $q) use ($shiftStart, $shiftEnd) {
+                $q->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                    ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+            })
             ->oldest('id')
             ->first();
     }

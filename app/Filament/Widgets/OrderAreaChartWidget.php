@@ -2,7 +2,9 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Pages\DriverMonthlyKmReport;
 use App\Models\Order;
+use App\Services\ShiftScheduleService;
 use Filament\Widgets\ChartWidget;
 
 class OrderAreaChartWidget extends ChartWidget
@@ -35,20 +37,12 @@ class OrderAreaChartWidget extends ChartWidget
         $activeFilter = $this->filter ?: 'month';
 
         $query = Order::query();
-        $now = now();
+        $shiftDate = ShiftScheduleService::getShiftWindow()[0]->toDateString();
 
-        $query = match ($activeFilter) {
-            'today' => $query->whereDate('planned_loading_at', $now->toDateString()),
-            'week' => $query->whereBetween('planned_loading_at', [
-                $now->startOfWeek()->toDateTimeString(),
-                $now->endOfWeek()->toDateTimeString(),
-            ]),
-            'month' => $query->whereMonth('planned_loading_at', $now->month)
-                ->whereYear('planned_loading_at', $now->year),
-            'all' => $query,
-            default => $query->whereMonth('planned_loading_at', $now->month)
-                ->whereYear('planned_loading_at', $now->year),
-        };
+        if ($activeFilter !== 'all') {
+            [$from, $to] = DriverMonthlyKmReport::rangeFor($activeFilter, $shiftDate);
+            $query->whereBetween('orders.planned_loading_at', [$from, $to]);
+        }
 
         $data = $query->join('areas', 'orders.area_id', '=', 'areas.id')
             ->selectRaw('areas.name as area_name, areas.code as area_code, count(orders.id) as count')
