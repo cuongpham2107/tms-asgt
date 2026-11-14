@@ -54,19 +54,20 @@ class CheckpointGeofenceService
 
         $location = $this->targetLocation($type, $payload);
         $locationPosition = $location !== null ? $this->position($location->lat, $location->lng) : null;
+        $hasRectangle = $location?->hasRectangleGeofence() ?? false;
         $locationRadiusM = $this->effectiveLocationRadiusM($location);
         $eupConfirmedAtLocation = false;
 
-        if ($locationPosition === null) {
+        if ($locationPosition === null && ! $hasRectangle) {
             [$locationStatus, $locationDistanceM] = [GeoCheckStatus::Skipped, null];
         } else {
-            $vehicleMatch = $this->compareTrackWithLocation($vehicle, $type, $locationPosition, $locationRadiusM)
-                ?? $this->compare($eup, $locationPosition, $locationRadiusM);
+            $vehicleMatch = $this->compareTrackWithLocation($vehicle, $type, $locationPosition, $locationRadiusM, $location)
+                ?? $this->compareLocationPoint($eup, $locationPosition, $locationRadiusM, $location);
             $eupConfirmedAtLocation = ($vehicleMatch[0] === GeoCheckStatus::Valid);
 
             [$locationStatus, $locationDistanceM] = $eupConfirmedAtLocation
                 ? $vehicleMatch
-                : $this->eitherInRange($vehicleMatch, $this->compare($phone, $locationPosition, $locationRadiusM));
+                : $this->eitherInRange($vehicleMatch, $this->compareLocationPoint($phone, $locationPosition, $locationRadiusM, $location));
         }
 
         return new GeofenceResult(
@@ -153,6 +154,30 @@ class CheckpointGeofenceService
     }
 
     /**
+     * @param  array{lat: float, lng: float}|null  $point
+     * @param  array{lat: float, lng: float}|null  $locationPosition
+     * @return array{0: GeoCheckStatus, 1: ?int}
+     */
+    private function compareLocationPoint(?array $point, ?array $locationPosition, ?int $radiusM = null, ?Location $location = null): array
+    {
+        if ($point === null) {
+            return [GeoCheckStatus::Unverified, null];
+        }
+
+        if ($location?->hasRectangleGeofence()) {
+            $distM = $location->distanceToBoundsMeters($point['lat'], $point['lng']);
+            if ($distM !== null) {
+                return [
+                    $distM === 0 ? GeoCheckStatus::Valid : GeoCheckStatus::OutOfRange,
+                    $distM,
+                ];
+            }
+        }
+
+        return $this->compare($point, $locationPosition, $radiusM);
+    }
+
+    /**
      * @param  array{lat: float, lng: float}|null  $from
      * @param  array{lat: float, lng: float}|null  $to
      * @return array{0: GeoCheckStatus, 1: ?int}
@@ -218,10 +243,10 @@ class CheckpointGeofenceService
      * Lớp B theo lộ trình: khoảng cách gần nhất của xe tới location trong khoảng thời gian trước lúc gửi.
      * Null nếu không có điểm lộ trình nào trong khoảng (khi đó dùng vị trí hiện tại).
      *
-     * @param  array{lat: float, lng: float}  $location
+     * @param  array{lat: float, lng: float}|null  $location
      * @return array{0: GeoCheckStatus, 1: int}|null
      */
-    private function compareTrackWithLocation(?Vehicle $vehicle, CheckpointType $type, array $location, ?int $radiusM = null): ?array
+    private function compareTrackWithLocation(?Vehicle $vehicle, CheckpointType $type, ?array $location, ?int $radiusM = null, ?Location $locationModel = null): ?array
     {
         if ($vehicle === null) {
             return null;
@@ -234,6 +259,21 @@ class CheckpointGeofenceService
         $points = $vehicle->trackBetween(now()->subSeconds($windowSeconds), now());
 
         if ($points->isEmpty()) {
+            return null;
+        }
+
+        if ($locationModel?->hasRectangleGeofence()) {
+            $closestM = $points
+                ->map(fn ($log): int => (int) ($locationModel->distanceToBoundsMeters((float) $log->lat, (float) $log->lng) ?? PHP_INT_MAX))
+                ->min();
+
+            return [
+                $closestM === 0 ? GeoCheckStatus::Valid : GeoCheckStatus::OutOfRange,
+                $closestM,
+            ];
+        }
+
+        if ($location === null) {
             return null;
         }
 

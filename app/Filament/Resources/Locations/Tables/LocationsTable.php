@@ -44,10 +44,24 @@ class LocationsTable extends BaseTable
                     ->formatStateUsing(fn ($state) => (is_object($state) && method_exists($state, 'getLabel')) ? $state->getLabel() : $state)
                     ->searchable(),
                 TextColumn::make('geofence_radius_m')
-                    ->label('Bán kính GPS')
+                    ->label('Vùng kiểm tra GPS')
                     ->alignCenter()
-                    ->formatStateUsing(fn ($state): string => $state ? "{$state} m" : config('checkpoint_geofence.radius_m', 3000).' m (mặc định)')
-                    ->color(fn ($state): string => $state ? 'primary' : 'gray')
+                    ->state(function (Location $record): string {
+                        if ($record->hasRectangleGeofence()) {
+                            $dims = $record->getBoundsDimensionsMeters();
+                            $shape = $record->geofence_type === 'square' ? 'Hình vuông' : 'Hình chữ nhật';
+
+                            return $dims
+                                ? "{$shape} ({$dims['width_m']}m × {$dims['height_m']}m)"
+                                : $shape;
+                        }
+
+                        return $record->geofence_radius_m
+                            ? "{$record->geofence_radius_m} m"
+                            : config('checkpoint_geofence.radius_m', 3000).' m (mặc định)';
+                    })
+                    ->badge()
+                    ->color(fn (Location $record): string => $record->hasRectangleGeofence() ? 'success' : ($record->geofence_radius_m ? 'primary' : 'gray'))
                     ->toggleable(),
                 IconColumn::make('is_active')
                     ->label('Hoạt động')

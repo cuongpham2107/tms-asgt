@@ -274,3 +274,37 @@ test('edit location preserves existing location record and areas relationship', 
     expect($location->refresh()->name)->toBe('Edit Location Updated')
         ->and($location->areas()->pluck('areas.id')->sort()->values()->all())->toBe([$area1->id, $area2->id]);
 });
+
+test('location rectangle and square geofence bounds validate inside and outside points accurately', function () {
+    $location = Location::create([
+        'code' => 'RECT-LOC-01',
+        'name' => 'Kho Hình Chữ Nhật',
+        'loc_type' => LocationType::Warehouse->value,
+        'lat' => 21.0285000,
+        'lng' => 105.8542000,
+        'geofence_type' => 'rectangle',
+        'geofence_radius_m' => 500,
+        'geofence_bounds' => [
+            'north' => 21.0320000,
+            'south' => 21.0250000,
+            'east' => 105.8580000,
+            'west' => 105.8500000,
+        ],
+        'is_active' => true,
+    ]);
+
+    expect($location->hasRectangleGeofence())->toBeTrue();
+
+    // Point inside rectangle -> distance 0m
+    expect($location->isPointInsideBounds(21.0290, 105.8550))->toBeTrue()
+        ->and($location->distanceToBoundsMeters(21.0290, 105.8550))->toBe(0);
+
+    // Point outside rectangle (north of 21.0320) -> positive distance in meters
+    expect($location->isPointInsideBounds(21.0400, 105.8550))->toBeFalse()
+        ->and($location->distanceToBoundsMeters(21.0400, 105.8550))->toBeGreaterThan(800);
+
+    $dims = $location->getBoundsDimensionsMeters();
+    expect($dims)->not->toBeNull()
+        ->and($dims['width_m'])->toBeGreaterThan(700)
+        ->and($dims['height_m'])->toBeGreaterThan(700);
+});

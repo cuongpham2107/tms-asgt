@@ -10,6 +10,7 @@ use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Services\GeoSearchService;
 use EduardoRibeiroDev\FilamentLeaflet\ValueObjects\Coordinate;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -88,6 +89,25 @@ class LocationForm
                     ->default(LocationType::Warehouse->value)
                     ->native(false)
                     ->required(),
+                Select::make('geofence_type')
+                    ->label('Hình dạng vùng kiểm tra GPS')
+                    ->options([
+                        'circle' => 'Hình tròn (Theo bán kính)',
+                        'rectangle' => 'Hình chữ nhật (Kéo chuột vẽ trên bản đồ)',
+                        'square' => 'Hình vuông (Kéo chuột vẽ trên bản đồ)',
+                    ])
+                    ->default('circle')
+                    ->native(false)
+                    ->live()
+                    ->afterStateUpdatedJs('
+                        const mapEl = document.querySelector(".leaflet-container");
+                        if (mapEl) {
+                            const el = mapEl.closest("[x-data]");
+                            const data = el ? Alpine.$data(el) : null;
+                            data?.setGeofenceType?.($state, false);
+                        }
+                    ')
+                    ->helperText('Chọn Hình chữ nhật / Hình vuông để kéo chuột vẽ trực tiếp hoặc kéo 4 góc trên bản đồ bên dưới.'),
                 TextInput::make('geofence_radius_m')
                     ->label('Bán kính kiểm tra GPS (mét)')
                     ->numeric()
@@ -97,7 +117,8 @@ class LocationForm
                     ->live(onBlur: true)
                     ->extraInputAttributes(['data-geofence-radius-input' => 'true'])
                     ->placeholder(fn (): string => 'Mặc định: '.config('checkpoint_geofence.radius_m', 3000).'m')
-                    ->helperText(fn (): string => 'Để trống sẽ dùng bán kính mặc định ('.config('checkpoint_geofence.radius_m', 3000).'m). Các kho/cảng cực rộng có thể đặt 3500–5000m.'),
+                    ->helperText(fn (): string => 'Áp dụng khi chọn Hình tròn (hoặc làm kích thước khởi tạo ban đầu cho Hình vuông/chữ nhật).'),
+                Hidden::make('geofence_bounds'),
                 TextInput::make('old_address')
                     ->label('Địa chỉ cũ (trước sáp nhập)')
                     ->maxLength(255)
