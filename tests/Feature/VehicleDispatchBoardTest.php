@@ -876,7 +876,8 @@ test('vehicle dispatch board distinguishes idle vehicle and pending trip with di
 
     expect(VehicleDispatchBoard::getTripStatusLabel($readyVehicle))->toBe('Sẵn sàng')
         ->and(VehicleDispatchBoard::getDriverName($readyVehicle))->toBe('Lái Xe Sẵn Sàng')
-        ->and(VehicleDispatchBoard::getTripStatusBadgeClass($readyVehicle))->toContain('bg-emerald-100', 'text-emerald-800', 'font-semibold');
+        ->and(VehicleDispatchBoard::getTripStatusBadgeClass($readyVehicle))->toContain('text-emerald-600', 'font-bold')
+        ->and(VehicleDispatchBoard::getTripStatusSortPriority($readyVehicle))->toBeGreaterThan(VehicleDispatchBoard::getTripStatusSortPriority($idleVehicle));
 
     // 2. Xe có chuyến Chờ chạy (Pending)
     $pendingVehicle = Vehicle::factory()->create([

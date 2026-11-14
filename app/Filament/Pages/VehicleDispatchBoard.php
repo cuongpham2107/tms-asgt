@@ -631,18 +631,18 @@ class VehicleDispatchBoard extends Page implements HasTable
         return match ($label) {
             'Tạm dừng (Sửa Km)' => 0,
             'Đảo lái' => 1,
-            'Sẵn sàng' => 2,
-            'Chờ chạy' => 3,
-            'Đã bắt đầu' => 4,
-            'Đến lấy hàng' => 5,
-            'Đang giao' => 6,
-            'Đến giao hàng' => 7,
-            'Đã giao' => 8,
-            'Chuyến không hàng' => 9,
-            'Hoàn thành' => 10,
-            'Bảo dưỡng' => 11,
-            'Nghỉ' => 12,
-            'Đã huỷ' => 13,
+            'Sẵn sàng' => 3,
+            'Chờ chạy' => 4,
+            'Đã bắt đầu' => 5,
+            'Đến lấy hàng' => 6,
+            'Đang giao' => 7,
+            'Đến giao hàng' => 8,
+            'Đã giao' => 9,
+            'Chuyến không hàng' => 10,
+            'Hoàn thành' => 11,
+            'Bảo dưỡng' => 12,
+            'Nghỉ' => 13,
+            'Đã huỷ' => 14,
             default => 99,
         };
     }
@@ -682,7 +682,7 @@ class VehicleDispatchBoard extends Page implements HasTable
                 return 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-200 font-semibold';
             }
             if (self::getLatestCompletedTripInShift($record) !== null) {
-                return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-200 font-semibold';
+                return 'text-emerald-600 dark:text-emerald-400 font-bold';
             }
 
             return 'bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 font-normal';
