@@ -93,12 +93,11 @@ class LocationForm
                     ->label('Hình dạng vùng kiểm tra GPS')
                     ->options([
                         'circle' => 'Hình tròn (Theo bán kính)',
-                        'rectangle' => 'Hình chữ nhật (Kéo chuột vẽ trên bản đồ)',
-                        'square' => 'Hình vuông (Kéo chuột vẽ trên bản đồ)',
+                        'rectangle' => 'Hình chữ nhật (Theo chiều rộng × chiều dài)',
+                        'square' => 'Hình vuông (Theo độ dài cạnh)',
                     ])
                     ->default('circle')
                     ->native(false)
-                    ->live()
                     ->afterStateUpdatedJs('
                         const mapEl = document.querySelector(".leaflet-container");
                         if (mapEl) {
@@ -107,17 +106,50 @@ class LocationForm
                             data?.setGeofenceType?.($state, false);
                         }
                     ')
-                    ->helperText('Chọn Hình chữ nhật / Hình vuông để kéo chuột vẽ trực tiếp hoặc kéo 4 góc trên bản đồ bên dưới.'),
+                    ->helperText('Chọn hình dạng để hiển thị ô nhập kích thước tương ứng và vẽ trên bản đồ.'),
                 TextInput::make('geofence_radius_m')
                     ->label('Bán kính kiểm tra GPS (mét)')
                     ->numeric()
                     ->minValue(100)
                     ->maxValue(5000)
                     ->suffix('m')
-                    ->live(onBlur: true)
+                    ->visibleJs("(\$get('geofence_type') ?? 'circle') === 'circle'")
                     ->extraInputAttributes(['data-geofence-radius-input' => 'true'])
                     ->placeholder(fn (): string => 'Mặc định: '.config('checkpoint_geofence.radius_m', 3000).'m')
-                    ->helperText(fn (): string => 'Áp dụng khi chọn Hình tròn (hoặc làm kích thước khởi tạo ban đầu cho Hình vuông/chữ nhật).'),
+                    ->helperText('Nhập bán kính hoặc nắm kéo trực tiếp 4 chốt tròn trên viền bản đồ.'),
+                TextInput::make('geofence_square_side_m')
+                    ->label('Độ dài cạnh hình vuông (mét)')
+                    ->numeric()
+                    ->minValue(100)
+                    ->maxValue(20000)
+                    ->suffix('m')
+                    ->dehydrated(false)
+                    ->visibleJs("\$get('geofence_type') === 'square'")
+                    ->extraInputAttributes(['data-geofence-square-input' => 'true'])
+                    ->placeholder('VD: 1000')
+                    ->helperText('Nhập độ dài cạnh hoặc nắm kéo 4 góc hình vuông trên bản đồ.'),
+                TextInput::make('geofence_width_m')
+                    ->label('Chiều rộng Đông – Tây (mét)')
+                    ->numeric()
+                    ->minValue(100)
+                    ->maxValue(20000)
+                    ->suffix('m')
+                    ->dehydrated(false)
+                    ->visibleJs("\$get('geofence_type') === 'rectangle'")
+                    ->extraInputAttributes(['data-geofence-width-input' => 'true'])
+                    ->placeholder('VD: 1500')
+                    ->helperText('Tự động thay đổi khi kéo 4 góc hoặc nhập số để chỉnh khung.'),
+                TextInput::make('geofence_height_m')
+                    ->label('Chiều dài Bắc – Nam (mét)')
+                    ->numeric()
+                    ->minValue(100)
+                    ->maxValue(20000)
+                    ->suffix('m')
+                    ->dehydrated(false)
+                    ->visibleJs("\$get('geofence_type') === 'rectangle'")
+                    ->extraInputAttributes(['data-geofence-height-input' => 'true'])
+                    ->placeholder('VD: 800')
+                    ->helperText('Tự động thay đổi khi kéo 4 góc hoặc nhập số để chỉnh khung.'),
                 Hidden::make('geofence_bounds'),
                 TextInput::make('old_address')
                     ->label('Địa chỉ cũ (trước sáp nhập)')

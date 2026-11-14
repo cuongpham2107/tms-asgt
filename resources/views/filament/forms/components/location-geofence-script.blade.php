@@ -12,6 +12,9 @@
                 geofenceCircle: null,
                 circleHandles: [],
                 currentRadius: defaultRadius || 3000,
+                squareSideM: 1000,
+                rectWidthM: 1350,
+                rectHeightM: 1000,
                 geofenceRect: null,
                 cornerHandles: [],
                 rectBounds: null, // { south, west, north, east }
@@ -52,9 +55,29 @@
                     return Math.min(5000, Math.max(100, num));
                 },
 
+                clampBoxDimension(val) {
+                    const num = Math.round(parseFloat(val) || 1000);
+                    return Math.min(20000, Math.max(100, num));
+                },
+
+                getFormRoot() {
+                    return this.$el.closest('.fi-modal, form') || document;
+                },
+
                 getRadiusInputElement() {
-                    const root = this.$el.closest('.fi-modal, form') || document;
-                    return root.querySelector('input[data-geofence-radius-input], input[name$="geofence_radius_m"], [wire\\:model*="geofence_radius_m"]');
+                    return this.getFormRoot().querySelector('input[data-geofence-radius-input], input[name$="geofence_radius_m"], [wire\\:model*="geofence_radius_m"]');
+                },
+
+                getSquareInputElement() {
+                    return this.getFormRoot().querySelector('input[data-geofence-square-input], input[name$="geofence_square_side_m"], [wire\\:model*="geofence_square_side_m"]');
+                },
+
+                getWidthInputElement() {
+                    return this.getFormRoot().querySelector('input[data-geofence-width-input], input[name$="geofence_width_m"], [wire\\:model*="geofence_width_m"]');
+                },
+
+                getHeightInputElement() {
+                    return this.getFormRoot().querySelector('input[data-geofence-height-input], input[name$="geofence_height_m"], [wire\\:model*="geofence_height_m"]');
                 },
 
                 syncRadiusToInput(radiusValue, syncToWire = false) {
@@ -71,6 +94,113 @@
                     }
 
                     return clamped;
+                },
+
+                syncBoxDimensionsToInputs(syncToWire = false) {
+                    if (!this.rectBounds) return;
+                    const b = this.rectBounds;
+                    const midLat = (b.south + b.north) / 2;
+                    const midLng = (b.west + b.east) / 2;
+                    const widthM = this.clampBoxDimension(this.haversineMeters(midLat, b.west, midLat, b.east));
+                    const heightM = this.clampBoxDimension(this.haversineMeters(b.south, midLng, b.north, midLng));
+
+                    this.rectWidthM = widthM;
+                    this.rectHeightM = heightM;
+                    this.squareSideM = Math.round((widthM + heightM) / 2);
+
+                    const squareInput = this.getSquareInputElement();
+                    if (squareInput && document.activeElement !== squareInput) {
+                        squareInput.value = String(this.squareSideM);
+                    }
+
+                    const widthInput = this.getWidthInputElement();
+                    if (widthInput && document.activeElement !== widthInput) {
+                        widthInput.value = String(this.rectWidthM);
+                    }
+
+                    const heightInput = this.getHeightInputElement();
+                    if (heightInput && document.activeElement !== heightInput) {
+                        heightInput.value = String(this.rectHeightM);
+                    }
+
+                    if (syncToWire) {
+                        this.setWireValue('geofence_square_side_m', this.squareSideM);
+                        this.setWireValue('geofence_width_m', this.rectWidthM);
+                        this.setWireValue('geofence_height_m', this.rectHeightM);
+                    }
+                },
+
+                applySquareSideMeters(sideMeters, syncToWire = true) {
+                    const clampedSide = this.clampBoxDimension(sideMeters);
+                    this.squareSideM = clampedSide;
+                    this.rectWidthM = clampedSide;
+                    this.rectHeightM = clampedSide;
+
+                    const center = this.rectBounds
+                        ? [(this.rectBounds.south + this.rectBounds.north) / 2, (this.rectBounds.west + this.rectBounds.east) / 2]
+                        : this.getCurrentCenterLatLng();
+
+                    const halfM = clampedSide / 2;
+                    const dLat = this.metersToLatDelta(halfM);
+                    const dLng = this.metersToLngDelta(halfM, center[0]);
+
+                    this.rectBounds = this.normalizeBounds({
+                        south: center[0] - dLat,
+                        north: center[0] + dLat,
+                        west: center[1] - dLng,
+                        east: center[1] + dLng,
+                    });
+
+                    const squareInput = this.getSquareInputElement();
+                    if (squareInput && document.activeElement !== squareInput) {
+                        squareInput.value = String(clampedSide);
+                    }
+
+                    if (syncToWire && this.rectBounds) {
+                        this.setWireValue('geofence_bounds', this.rectBounds);
+                        this.setWireValue('geofence_square_side_m', clampedSide);
+                    }
+
+                    this.updateGeofenceCircle();
+                },
+
+                applyRectangleDimensionsMeters(widthMeters, heightMeters, syncToWire = true) {
+                    const clampedW = this.clampBoxDimension(widthMeters);
+                    const clampedH = this.clampBoxDimension(heightMeters);
+                    this.rectWidthM = clampedW;
+                    this.rectHeightM = clampedH;
+
+                    const center = this.rectBounds
+                        ? [(this.rectBounds.south + this.rectBounds.north) / 2, (this.rectBounds.west + this.rectBounds.east) / 2]
+                        : this.getCurrentCenterLatLng();
+
+                    const dLat = this.metersToLatDelta(clampedH / 2);
+                    const dLng = this.metersToLngDelta(clampedW / 2, center[0]);
+
+                    this.rectBounds = this.normalizeBounds({
+                        south: center[0] - dLat,
+                        north: center[0] + dLat,
+                        west: center[1] - dLng,
+                        east: center[1] + dLng,
+                    });
+
+                    const widthInput = this.getWidthInputElement();
+                    if (widthInput && document.activeElement !== widthInput) {
+                        widthInput.value = String(clampedW);
+                    }
+
+                    const heightInput = this.getHeightInputElement();
+                    if (heightInput && document.activeElement !== heightInput) {
+                        heightInput.value = String(clampedH);
+                    }
+
+                    if (syncToWire && this.rectBounds) {
+                        this.setWireValue('geofence_bounds', this.rectBounds);
+                        this.setWireValue('geofence_width_m', clampedW);
+                        this.setWireValue('geofence_height_m', clampedH);
+                    }
+
+                    this.updateGeofenceCircle();
                 },
 
                 getGeofenceRadius() {
@@ -208,20 +338,10 @@
                     });
                 },
 
-                syncEquivalentRadiusFromBounds(syncToWire = false) {
-                    if (!this.rectBounds) return;
-                    const b = this.rectBounds;
-                    const midLat = (b.south + b.north) / 2;
-                    const midLng = (b.west + b.east) / 2;
-                    const widthM = this.haversineMeters(midLat, b.west, midLat, b.east);
-                    const heightM = this.haversineMeters(b.south, midLng, b.north, midLng);
-                    const equivRadius = Math.round(Math.max(widthM, heightM) / 2);
-                    this.syncRadiusToInput(equivRadius, syncToWire);
-                },
-
                 updateDimensionSummary(overrideRadius) {
                     if (this.geofenceType === 'circle') {
                         const r = overrideRadius !== undefined ? overrideRadius : this.getGeofenceRadius();
+                        this.currentRadius = r;
                         this.dimensionSummary = `Bán kính: ${r.toLocaleString('vi-VN')} m`;
                         return;
                     }
@@ -275,9 +395,13 @@
                             });
                         }
 
+                        this.syncBoxDimensionsToInputs(syncToWire);
+
                         if (syncToWire && this.rectBounds) {
                             this.setWireValue('geofence_bounds', this.rectBounds);
                         }
+                    } else {
+                        this.syncRadiusToInput(this.getGeofenceRadius(), syncToWire);
                     }
 
                     this.updateGeofenceCircle();
@@ -496,7 +620,7 @@
                                 if (nextBounds) {
                                     this.rectBounds = nextBounds;
                                     this.renderRectangleAndHandles(map);
-                                    this.syncEquivalentRadiusFromBounds(false);
+                                    this.syncBoxDimensionsToInputs(false);
                                     this.updateDimensionSummary();
                                 }
                             });
@@ -504,7 +628,7 @@
                             handle.on('dragend', () => {
                                 if (this.rectBounds) {
                                     this.setWireValue('geofence_bounds', this.rectBounds);
-                                    this.syncEquivalentRadiusFromBounds(true);
+                                    this.syncBoxDimensionsToInputs(true);
                                     this.updateDimensionSummary();
                                 }
                             });
@@ -561,6 +685,7 @@
                             this.rectBounds = this.createDefaultBoundsAroundCenter(center[0], center[1], this.geofenceType === 'square');
                             this.setWireValue('geofence_bounds', this.rectBounds);
                         }
+                        this.syncBoxDimensionsToInputs(false);
                         this.renderRectangleAndHandles(map);
                         this.updateDimensionSummary();
                         return;
@@ -727,7 +852,7 @@
                         if (nextBounds) {
                             this.rectBounds = nextBounds;
                             this.renderRectangleAndHandles(map);
-                            this.syncEquivalentRadiusFromBounds(false);
+                            this.syncBoxDimensionsToInputs(false);
                             this.updateDimensionSummary();
                         }
                     });
@@ -765,7 +890,7 @@
                                 this.setState(cLat, cLng);
                             }
                             this.setWireValue('geofence_bounds', this.rectBounds);
-                            this.syncEquivalentRadiusFromBounds(true);
+                            this.syncBoxDimensionsToInputs(true);
                             this.renderRectangleAndHandles(map);
                             this.updateDimensionSummary();
                         }
@@ -789,6 +914,7 @@
                     const initialBounds = this.normalizeBounds(this.getWireValue('geofence_bounds'));
                     if (initialBounds) {
                         this.rectBounds = initialBounds;
+                        this.syncBoxDimensionsToInputs(true);
                     }
 
                     this.bindMarkerEvents();
@@ -814,20 +940,45 @@
                         });
                     }
 
-                    const root = this.$el.closest('.fi-modal, form') || document;
+                    const root = this.getFormRoot();
                     if (!root.__geofenceInputBound) {
                         root.__geofenceInputBound = true;
                         const onInput = (e) => {
                             if (!e.target) return;
-                            const isRadius = e.target.hasAttribute('data-geofence-radius-input') ||
-                                e.target.name === 'geofence_radius_m' ||
-                                (e.target.name && e.target.name.endsWith('geofence_radius_m')) ||
-                                (e.target.getAttribute('wire:model') && e.target.getAttribute('wire:model').includes('geofence_radius_m'));
+                            const t = e.target;
+
+                            const isRadius = t.hasAttribute('data-geofence-radius-input') ||
+                                t.name === 'geofence_radius_m' ||
+                                (t.name && t.name.endsWith('geofence_radius_m')) ||
+                                (t.getAttribute('wire:model') && t.getAttribute('wire:model').includes('geofence_radius_m'));
                             if (isRadius) {
-                                const val = parseFloat(e.target.value);
+                                const val = parseFloat(t.value);
                                 const r = (!isNaN(val) && val > 0) ? this.clampRadius(val) : this.defaultRadius;
                                 this.currentRadius = r;
                                 this.updateGeofenceCircle(r);
+                                return;
+                            }
+
+                            const isSquare = t.hasAttribute('data-geofence-square-input') ||
+                                (t.name && t.name.endsWith('geofence_square_side_m'));
+                            if (isSquare) {
+                                const val = parseFloat(t.value);
+                                if (!isNaN(val) && val >= 100) {
+                                    this.applySquareSideMeters(val, true);
+                                }
+                                return;
+                            }
+
+                            const isWidth = t.hasAttribute('data-geofence-width-input') ||
+                                (t.name && t.name.endsWith('geofence_width_m'));
+                            const isHeight = t.hasAttribute('data-geofence-height-input') ||
+                                (t.name && t.name.endsWith('geofence_height_m'));
+                            if (isWidth || isHeight) {
+                                const w = isWidth ? parseFloat(t.value) : this.rectWidthM;
+                                const h = isHeight ? parseFloat(t.value) : this.rectHeightM;
+                                if (!isNaN(w) && w >= 100 && !isNaN(h) && h >= 100) {
+                                    this.applyRectangleDimensionsMeters(w, h, true);
+                                }
                             }
                         };
                         root.addEventListener('input', onInput);

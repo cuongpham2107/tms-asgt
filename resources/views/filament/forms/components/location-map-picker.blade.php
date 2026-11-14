@@ -18,7 +18,7 @@
         )"
         class="space-y-2"
     >
-        {{-- Thanh công cụ chọn & vẽ vùng kiểm tra GPS trực tiếp trên bản đồ --}}
+        {{-- Thanh công cụ chọn & chỉnh kích thước vùng kiểm tra GPS trực tiếp trên bản đồ --}}
         <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50/90 px-3 py-2 text-xs dark:border-white/10 dark:bg-gray-800/80">
             <div class="flex flex-wrap items-center gap-1.5">
                 <span class="font-semibold text-gray-700 dark:text-gray-200 mr-1">Vùng cắm mốc:</span>
@@ -69,11 +69,65 @@
                 </button>
             </div>
 
-            <div class="flex items-center gap-2 text-[11px] font-medium text-gray-600 dark:text-gray-300">
-                <span
-                    class="inline-flex items-center rounded-md bg-white px-2 py-0.5 font-mono font-semibold text-gray-800 ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:ring-white/10"
-                    x-text="dimensionSummary"
-                ></span>
+            {{-- Ô nhập/hiển thị kích thước động theo đúng hình đang chọn --}}
+            <div class="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-200">
+                <template x-if="geofenceType === 'circle'">
+                    <div class="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-1 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-white/10">
+                        <span class="text-gray-500 dark:text-gray-400">Bán kính:</span>
+                        <input
+                            type="number"
+                            min="100"
+                            max="5000"
+                            step="10"
+                            :value="currentRadius"
+                            @input="const r = syncRadiusToInput($event.target.value, true); updateGeofenceCircle(r)"
+                            class="w-20 rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-right font-mono text-xs font-bold text-primary-700 focus:border-primary-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-primary-400"
+                        />
+                        <span class="font-semibold text-gray-500">m</span>
+                    </div>
+                </template>
+
+                <template x-if="geofenceType === 'square'">
+                    <div class="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-1 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-white/10">
+                        <span class="text-gray-500 dark:text-gray-400">Cạnh hình vuông:</span>
+                        <input
+                            type="number"
+                            min="100"
+                            max="20000"
+                            step="10"
+                            :value="squareSideM"
+                            @input="applySquareSideMeters($event.target.value, true)"
+                            class="w-20 rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-right font-mono text-xs font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-emerald-400"
+                        />
+                        <span class="font-semibold text-gray-500">m</span>
+                    </div>
+                </template>
+
+                <template x-if="geofenceType === 'rectangle'">
+                    <div class="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-1 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-white/10">
+                        <span class="text-gray-500 dark:text-gray-400">Rộng:</span>
+                        <input
+                            type="number"
+                            min="100"
+                            max="20000"
+                            step="10"
+                            :value="rectWidthM"
+                            @input="applyRectangleDimensionsMeters($event.target.value, rectHeightM, true)"
+                            class="w-20 rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-right font-mono text-xs font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-emerald-400"
+                        />
+                        <span class="text-gray-400">m × Dài:</span>
+                        <input
+                            type="number"
+                            min="100"
+                            max="20000"
+                            step="10"
+                            :value="rectHeightM"
+                            @input="applyRectangleDimensionsMeters(rectWidthM, $event.target.value, true)"
+                            class="w-20 rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-right font-mono text-xs font-bold text-emerald-700 focus:border-emerald-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-emerald-400"
+                        />
+                        <span class="font-semibold text-gray-500">m</span>
+                    </div>
+                </template>
             </div>
         </div>
 
@@ -85,7 +139,7 @@
         </div>
 
         <p class="text-[11px] text-gray-600 dark:text-gray-400">
-            💡 <strong>Mẹo:</strong> Kéo trực tiếp <strong>4 chốt trắng</strong> trên viền (hình tròn / hình vuông / hình chữ nhật) để tăng giảm kích thước — ô <strong>Bán kính kiểm tra GPS (mét)</strong> sẽ tự động nhảy số theo. Hoặc giữ phím <kbd class="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border">Shift</kbd> + kéo chuột để vẽ nhanh.
+            💡 <strong>Mẹo:</strong> Kéo trực tiếp <strong>4 chốt trắng</strong> trên viền để tăng giảm kích thước — các ô kích thước (<strong>Bán kính</strong> / <strong>Cạnh</strong> / <strong>Rộng × Dài</strong>) sẽ tự động nhảy số theo và ngược lại.
         </p>
     </div>
 </x-dynamic-component>
