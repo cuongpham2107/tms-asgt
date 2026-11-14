@@ -1345,11 +1345,11 @@ class VehicleDispatchBoard extends Page implements HasTable
     public static function getDriverStation(Vehicle $record): string
     {
         // Chỉ lấy Điểm trực (station) khi xe có tài xế thực tế đang chạy trong ca hiện tại.
-        // Nếu xe không có tài xế chạy trong ca thì trả về OTHER (hiển thị '—').
+        // Nếu xe không có tài xế chạy trong ca thì trả về '—'.
         $driver = self::getShiftDriver($record);
 
         if ($driver === null) {
-            return 'OTHER';
+            return '—';
         }
 
         $station = $driver->station instanceof OnDutyLocation
@@ -1357,7 +1357,7 @@ class VehicleDispatchBoard extends Page implements HasTable
             : ($driver->station ? (string) $driver->station : null);
 
         // Nếu tài xế đang chạy chưa được cấu hình station trong bảng users,
-        // fallback sang tài xế gán trên xe hoặc tiền tố biển số xe để không bị hiển thị '—'.
+        // fallback sang tài xế gán trên xe.
         if (! $station) {
             $fallbackDriver = $record->getDriverForToday()
                 ?? $record->driver
@@ -1373,16 +1373,6 @@ class VehicleDispatchBoard extends Page implements HasTable
             $station = (string) $record->driver_station;
         }
 
-        if (! $station) {
-            $prefix = substr($record->plate_number ?? '', 0, 2);
-            $station = match ($prefix) {
-                '20' => 'TN',
-                '99' => 'BN',
-                '29', '30' => 'NB',
-                default => null,
-            };
-        }
-
         if ($station) {
             return match (strtoupper($station)) {
                 'NBA' => 'NB',
@@ -1392,7 +1382,7 @@ class VehicleDispatchBoard extends Page implements HasTable
             };
         }
 
-        return 'OTHER';
+        return '—';
     }
 
     public static function getAssignedDriverStation(Vehicle $record): string
