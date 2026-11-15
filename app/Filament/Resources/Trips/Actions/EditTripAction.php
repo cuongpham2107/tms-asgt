@@ -46,10 +46,13 @@ class EditTripAction
             })
             ->mutateRecordDataUsing(function (array $data, ?Model $record = null): array {
                 $trip = static::resolveTrip($record);
-                $trip?->loadMissing(['startLocation', 'endLocation', 'vehicle']);
+                $trip?->loadMissing(['startLocation', 'endLocation', 'vehicle', 'driver']);
 
-                if ($trip && $trip->driver_id === null && blank($data['external_driver_name'] ?? null) && $trip->vehicle?->isRent() && filled($trip->vehicle->external_driver_name)) {
-                    $data['external_driver_name'] = trim((string) $trip->vehicle->external_driver_name);
+                if ($trip && blank($data['external_driver_name'] ?? null) && $trip->vehicle?->isRent()) {
+                    $resolvedName = $trip->resolveDriverName();
+                    if (filled($resolvedName)) {
+                        $data['external_driver_name'] = $resolvedName;
+                    }
                 }
 
                 return $data;
@@ -108,10 +111,17 @@ class EditTripAction
                     $data['status'] = TripStatus::Started;
                 }
 
+                $isRentVehicle = $trip->vehicle?->isRent() ?? false;
                 $oldDriverId = $trip->driver_id;
-                $newDriverId = $data['driver_id'] ?? null;
+                $newDriverId = $isRentVehicle ? null : ($data['driver_id'] ?? null);
 
-                $effectiveDriverId = $newDriverId ?: $trip->driver_id;
+                // Xe thuê ngoài luôn dùng tên lái xe tự nhập, xoá driver_id cũ (nếu có) để TripObserver không ghi đè external_driver_name.
+                if ($isRentVehicle) {
+                    $data['driver_id'] = null;
+                    $data['shift_id'] = null;
+                }
+
+                $effectiveDriverId = $isRentVehicle ? null : ($newDriverId ?: $trip->driver_id);
                 if ($effectiveDriverId && (empty($trip->shift_id) || ($newDriverId && (int) $oldDriverId !== (int) $newDriverId))) {
                     $shiftId = DriverShift::where('driver_id', $effectiveDriverId)
                         ->when($trip->vehicle_id, fn ($q) => $q->where('vehicle_id', $trip->vehicle_id))
