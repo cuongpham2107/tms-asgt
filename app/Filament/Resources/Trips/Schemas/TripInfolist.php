@@ -40,8 +40,9 @@ class TripInfolist
                                             ->color(fn (Trip $record): string => $record->getStatusColor())
                                             ->state(fn (Trip $record): string => $record->getStatusLabel()),
 
-                                        TextEntry::make('driver.name')
+                                        TextEntry::make('driver_name')
                                             ->label('Lái xe')
+                                            ->state(fn (Trip $record): ?string => $record->resolveDriverName())
                                             ->icon(Heroicon::OutlinedUser)
                                             ->weight('bold')
                                             ->placeholder('—'),

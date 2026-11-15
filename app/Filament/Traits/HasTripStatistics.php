@@ -117,7 +117,8 @@ trait HasTripStatistics
             ->when(filled($search), function (Builder $q) use ($search): Builder {
                 return $q->where(function (Builder $sub) use ($search): void {
                     $sub->where('trips.trip_code', 'like', "%{$search}%")
-                        ->orWhereHas('vehicle', fn ($v) => $v->where('plate_number', 'like', "%{$search}%"))
+                        ->orWhere('trips.external_driver_name', 'like', "%{$search}%")
+                        ->orWhereHas('vehicle', fn ($v) => $v->where('plate_number', 'like', "%{$search}%")->orWhere('external_driver_name', 'like', "%{$search}%"))
                         ->orWhereHas('driver', fn ($d) => $d->where('name', 'like', "%{$search}%"))
                         ->orWhereHas('orders', function (Builder $o) use ($search): void {
                             $o->where('order_code', 'like', "%{$search}%")

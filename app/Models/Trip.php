@@ -52,6 +52,7 @@ class Trip extends Model
         'trip_code',
         'vehicle_id',
         'driver_id',
+        'external_driver_name',
         'shift_id',
         'status',
         'started_at',
@@ -370,5 +371,28 @@ class Trip extends Model
         return ($points->count() - 1) % $step === 0
             ? $sampled->values()->all()
             : $sampled->push($points->last())->values()->all();
+    }
+
+    /**
+     * Tên tài xế hiển thị cho chuyến: ưu tiên tài xế gán trên chuyến,
+     * tiếp theo là snapshot tên lái xe ngoài lưu trên chuyến, sau cùng mới dự phòng từ xe thuê.
+     */
+    public function resolveDriverName(): ?string
+    {
+        if (filled($this->driver?->name)) {
+            return trim((string) $this->driver->name);
+        }
+
+        if (filled($this->external_driver_name)) {
+            return trim((string) $this->external_driver_name);
+        }
+
+        $vehicle = $this->vehicle;
+
+        if ($vehicle?->isRent() && filled($vehicle->external_driver_name)) {
+            return trim((string) $vehicle->external_driver_name);
+        }
+
+        return null;
     }
 }

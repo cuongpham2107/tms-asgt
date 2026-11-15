@@ -412,7 +412,7 @@ class OrdersTable extends BaseTable
             );
         }
         $vehiclePlate = e($trip?->vehicle?->plate_number ?? 'Chưa phân phương tiện');
-        $driverName = e($trip?->driver?->name ?? 'Chưa phân lái xe');
+        $driverName = e($trip?->resolveDriverName() ?? 'Chưa phân lái xe');
 
         return new HtmlString(<<<HTML
             <div class="flex flex-col items-center gap-1.5 leading-tight text-center">

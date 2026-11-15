@@ -63,12 +63,14 @@ class ViewTripTimeline extends Page
 
         $checkpoints = $trip->checkpoints;
 
+        $driverName = $trip->resolveDriverName();
+
         return [
             'order' => [
                 'order_code' => $orderCodes ?: '—',
                 'status_label' => $statusLabel,
                 'vehicle_plate' => $trip->vehicle?->plate_number ?? '—',
-                'driver_name' => $trip->driver?->name ?? '—',
+                'driver_name' => $driverName ?? '—',
             ],
             'checkpoints' => $checkpoints
                 ->map(fn (TripCheckpoint $cp): array => [
@@ -82,7 +84,7 @@ class ViewTripTimeline extends Page
                         ?? $cp->pointLocation()?->address
                         ?? $cp->pointLocation()?->name
                         ?? '—',
-                    'driver_name' => $trip->driver?->name,
+                    'driver_name' => $driverName,
                     'km_reading' => $cp->km_reading !== null
                         ? number_format((float) $cp->km_reading, 1, ',', '.').' km'
                         : null,

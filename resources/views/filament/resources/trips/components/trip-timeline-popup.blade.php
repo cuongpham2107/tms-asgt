@@ -219,7 +219,7 @@
         </div>
         <div>
             <span class="text-xs text-gray-500 dark:text-gray-400">Lái xe</span>
-            <span class="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">{{ $trip->driver?->name ?? '—' }}</span>
+            <span class="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">{{ $trip->resolveDriverName() ?? '—' }}</span>
         </div>
     </div>
 

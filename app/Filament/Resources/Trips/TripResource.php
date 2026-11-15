@@ -44,7 +44,7 @@ class TripResource extends BaseResource
     {
         return [
             'Xe' => $record->vehicle?->plate_number ?? '—',
-            'Lái xe' => $record->driver?->name ?? '—',
+            'Lái xe' => $record->resolveDriverName() ?? '—',
         ];
     }
 

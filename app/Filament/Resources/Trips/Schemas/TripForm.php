@@ -70,6 +70,14 @@ class TripForm
                             ->native(false)
                             ->nullable()
                             ->placeholder('Chọn lái xe')
+                            ->hidden(fn (?Model $record): bool => $record?->vehicle?->type === VehicleOwnerType::Rent)
+                            ->columnSpan(['default' => 1, 'sm' => 3]),
+                        TextInput::make('external_driver_name')
+                            ->label('Lái xe thuê ngoài')
+                            ->placeholder('Nhập tên lái xe ngoài')
+                            ->maxLength(255)
+                            ->prefixIcon(Heroicon::OutlinedUser)
+                            ->visible(fn (?Model $record): bool => $record?->vehicle?->type === VehicleOwnerType::Rent)
                             ->columnSpan(['default' => 1, 'sm' => 3]),
                     ]),
                 Section::make('Km & Thời gian')

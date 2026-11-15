@@ -604,7 +604,7 @@ const Statement = ({ rows, loading, error, periodLabel, perPage, onPerPage, onOp
                                 <td className={`${td} font-semibold text-gray-900 dark:text-gray-100`}>{row.code}</td>
                                 <td className={td}>{row.type}</td>
                                 <td className={`${td} text-center font-semibold`}>{row.plate ?? '—'}</td>
-                                <td className={td}>{row.driver}</td>
+                                <td className={td}>{row.driver || '—'}</td>
                                 <td className={`${td} text-center font-mono text-[11px] font-semibold text-primary-700 dark:text-primary-400`} title="Tổng thời gian khai thác = Thời gian hạ hàng - Bắt đầu chuyến">
                                     {row.operatingTime ?? '—'}
                                 </td>
