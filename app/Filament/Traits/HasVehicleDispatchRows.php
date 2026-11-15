@@ -20,6 +20,8 @@ trait HasVehicleDispatchRows
         [$shiftStart, $shiftEnd] = VehicleDispatchBoard::getShiftWindow();
         $isEvenShift = ShiftScheduleService::determineShift() === DriverWorkShift::Even;
         $runningValues = array_map(fn (TripStatus $s) => $s->value, VehicleDispatchBoard::runningTripStatuses());
+        $isRent = (($this->activeOwnerType ?? 'company') === 'rent')
+            || (($this->activeTab ?? 'vehicles') === 'rent');
 
         $vehicles = Vehicle::query()
             ->select('vehicles.*')
@@ -43,20 +45,27 @@ trait HasVehicleDispatchRows
                     ->where('t_last.status', TripStatus::Completed->value);
             }, 'last_completed_trip_at')
             ->where('vehicles.is_active', true)
-            ->whereIn('vehicles.type', [VehicleOwnerType::Company->value, 'company'])
+            ->whereIn(
+                'vehicles.type',
+                $isRent
+                    ? [VehicleOwnerType::Rent->value, 'rent']
+                    : [VehicleOwnerType::Company->value, 'company']
+            )
             ->with([
                 'driver.driverShifts',
                 'evenDriver.driverShifts',
                 'oddDriver.driverShifts',
-                'trips' => function ($q) use ($shiftStart, $shiftEnd, $runningValues) {
-                    $q->where(function ($sub) use ($shiftStart, $shiftEnd, $runningValues) {
+                'trips' => function ($q) use ($shiftStart, $shiftEnd, $runningValues, $isRent) {
+                    $q->where(function ($sub) use ($shiftStart, $shiftEnd, $runningValues, $isRent) {
                         $sub->whereBetween('started_at', [$shiftStart, $shiftEnd])
                             ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd])
-                            ->orWhere(function ($pendingQ) use ($shiftStart, $shiftEnd) {
+                            ->orWhere(function ($pendingQ) use ($shiftStart, $shiftEnd, $isRent) {
                                 $pendingQ->where('status', TripStatus::Pending->value)
-                                    ->where(function ($dateQ) use ($shiftStart, $shiftEnd) {
-                                        $dateQ->whereBetween('started_at', [$shiftStart, $shiftEnd])
-                                            ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                                    ->when(! $isRent, function ($dateQ) use ($shiftStart, $shiftEnd) {
+                                        $dateQ->where(function ($dq) use ($shiftStart, $shiftEnd) {
+                                            $dq->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                                                ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                                        });
                                     });
                             })
                             ->orWhereIn('status', $runningValues)
@@ -74,6 +83,11 @@ trait HasVehicleDispatchRows
                 },
             ])
             ->get();
+
+        // Đối với sheet Xe thuê: chỉ lấy các xe thuê đang có chuyến chờ chạy hoặc đang chạy (active_trip !== null)
+        if ($isRent) {
+            $vehicles = $vehicles->filter(fn (Vehicle $vehicle): bool => $vehicle->active_trip !== null)->values();
+        }
 
         if (filled($this->searchQuery)) {
             $term = mb_strtolower(trim($this->searchQuery));
@@ -111,14 +125,33 @@ trait HasVehicleDispatchRows
 
         foreach ($grouped as $code => &$group) {
             $group['vehicles'] = $group['vehicles']
-                ->sort(function (Vehicle $a, Vehicle $b) {
+                ->sort(function (Vehicle $a, Vehicle $b) use ($isRent) {
                     if ($this->sortBy === 'plate_number') {
                         $cmp = strnatcasecmp($a->plate_number, $b->plate_number);
 
                         return $this->sortDirection === 'desc' ? -$cmp : $cmp;
                     }
 
-                    // Mặc định hoặc khi sắp xếp theo status: gom theo nhóm trạng thái trước, cùng trạng thái thì theo BSX
+                    if ($this->sortBy === 'order_type') {
+                        $orderPrioA = VehicleDispatchBoard::getOrderTypeSortPriority($a);
+                        $orderPrioB = VehicleDispatchBoard::getOrderTypeSortPriority($b);
+
+                        if ($orderPrioA !== $orderPrioB) {
+                            return $this->sortDirection === 'desc'
+                                ? ($orderPrioB <=> $orderPrioA)
+                                : ($orderPrioA <=> $orderPrioB);
+                        }
+                    } elseif ($isRent) {
+                        // Mặc định trên sheet Xe thuê: ưu tiên sắp xếp theo Loại đơn từ HHHK đến Hàng ngoài
+                        $orderPrioA = VehicleDispatchBoard::getOrderTypeSortPriority($a);
+                        $orderPrioB = VehicleDispatchBoard::getOrderTypeSortPriority($b);
+
+                        if ($orderPrioA !== $orderPrioB) {
+                            return $orderPrioA <=> $orderPrioB;
+                        }
+                    }
+
+                    // Tiếp theo: gom theo nhóm trạng thái, cùng trạng thái thì theo BSX
                     $prioA = VehicleDispatchBoard::getTripStatusSortPriority($a);
                     $prioB = VehicleDispatchBoard::getTripStatusSortPriority($b);
 

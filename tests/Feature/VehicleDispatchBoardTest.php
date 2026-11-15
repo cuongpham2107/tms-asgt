@@ -1866,3 +1866,101 @@ test('dispatch board renames menu to Kiem soat and embeds Tong hop ca truc lai x
         ->assertSet('dutyStationFilter', 'TN')
         ->assertDontSee('Tài xế Ca Trực BN');
 });
+
+test('rented vehicles dispatch sheet shows only rented vehicles with active or pending trips, omits GPS/KM/Duty columns, and sorts HHHK before External', function () {
+    $driver = User::factory()->create(['name' => 'Tài xế Xe Thuê']);
+    $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true, 'sort_order' => 1]);
+    $customer = Customer::create(['code' => 'CUST-RENT', 'name' => 'Khách Xe Thuê']);
+
+    // 1. Xe thuê rảnh (không có chuyến chờ chạy) -> KHÔNG hiện trên sheet Xe thuê
+    Vehicle::factory()->create([
+        'plate_number' => '29H-RENT-IDLE',
+        'owner' => 'ACE',
+        'type' => VehicleOwnerType::Rent,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    // 2. Xe thuê chạy đơn Hàng ngoài (External)
+    $rentExternal = Vehicle::factory()->create([
+        'plate_number' => '29H-RENT-EXT',
+        'owner' => 'ACE',
+        'type' => VehicleOwnerType::Rent,
+        'status' => VehicleStatus::Running,
+        'is_active' => true,
+    ]);
+    $tripExt = Trip::factory()->create([
+        'trip_code' => 'TRIP-RENT-EXT',
+        'vehicle_id' => $rentExternal->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Pending,
+        'created_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-RENT-EXT-01',
+        'trip_id' => $tripExt->id,
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'type' => OrderType::External,
+        'status' => OrderStatus::Sent,
+        'created_by' => $driver->id,
+    ]);
+
+    // 3. Xe thuê chạy đơn HHHK (gán tên lái xe ngoài trực tiếp trên xe)
+    $rentHhhk = Vehicle::factory()->create([
+        'plate_number' => '29H-RENT-HHHK',
+        'owner' => 'ACE',
+        'type' => VehicleOwnerType::Rent,
+        'external_driver_name' => 'Nguyễn Văn Thuê Ngoài',
+        'status' => VehicleStatus::Running,
+        'is_active' => true,
+    ]);
+    $tripHhhk = Trip::factory()->create([
+        'trip_code' => 'TRIP-RENT-HHHK',
+        'vehicle_id' => $rentHhhk->id,
+        'driver_id' => null,
+        'status' => TripStatus::Pending,
+        'created_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-RENT-HHHK-01',
+        'trip_id' => $tripHhhk->id,
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'type' => OrderType::Hhhk,
+        'status' => OrderStatus::Sent,
+        'created_by' => $driver->id,
+    ]);
+
+    $config = dispatchWidgetConfiguration(['activeOwnerType' => 'rent']);
+
+    expect($config['ownerType'])->toBe('rent')
+        ->and($config['columns'])->toHaveCount(12)
+        ->and($config['columns'])->not->toContain('Vị trí thực tế trên GPS')
+        ->and($config['columns'])->not->toContain('Tốc độ')
+        ->and($config['columns'])->not->toContain('Status')
+        ->and($config['columns'])->not->toContain('KM over')
+        ->and($config['columns'])->not->toContain('Trực')
+        ->and($config['columns'])->not->toContain('Ca');
+
+    $nbRows = collect($config['groups'])->firstWhere('code', 'NB')['rows'] ?? [];
+    $plates = array_map(fn (array $r): string => strip_tags($r['bsx']), $nbRows);
+
+    // Không chứa xe thuê rảnh; xe HHHK xếp trước xe Hàng ngoài
+    expect(implode(' | ', $plates))->not->toContain('29H-RENT-IDLE')
+        ->and($nbRows)->toHaveCount(2)
+        ->and($nbRows[0]['bsx'])->toContain('29H-RENT-HHHK')
+        ->and($nbRows[0]['orderType'])->toBe('HHHK')
+        ->and($nbRows[0]['driverName'])->toBe('Nguyễn Văn Thuê Ngoài')
+        ->and($nbRows[0]['statusAction']['name'] ?? null)->toBe('edit_trip')
+        ->and($nbRows[1]['bsx'])->toContain('29H-RENT-EXT')
+        ->and($nbRows[1]['orderType'])->toBe('Hàng ngoài')
+        ->and($nbRows[1]['driverName'])->toBe('Tài xế Xe Thuê')
+        ->and($nbRows[1]['statusAction']['name'] ?? null)->toBe('edit_trip');
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertSee('Xe thuê')
+        ->call('switchTab', 'rent')
+        ->assertSet('activeTab', 'rent')
+        ->assertSet('activeOwnerType', 'rent');
+});

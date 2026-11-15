@@ -94,6 +94,7 @@ class Vehicle extends Model
         'current_driver_id',
         'even_driver_id',
         'odd_driver_id',
+        'external_driver_name',
         'is_active',
         'status',
         'off_reason',
@@ -334,9 +335,11 @@ class Vehicle extends Model
             }
 
             // 2. Nếu không có chuyến đang chạy, lấy chuyến tiếp theo đang chờ chạy (Pending) trong ca 08:00 -> 08:00
+            // (Riêng xe thuê ngoài lấy toàn bộ chuyến Pending chưa chạy để không bị sót qua ca)
             return $trips
                 ->filter(fn (Trip $t): bool => $t->status === TripStatus::Pending
-                    && (($t->started_at && $t->started_at->between($shiftStart, $shiftEnd))
+                    && ($this->isRent()
+                        || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd))
                         || ($t->created_at && $t->created_at->between($shiftStart, $shiftEnd))))
                 ->sortBy('id')
                 ->first();
@@ -387,12 +390,14 @@ class Vehicle extends Model
             return $inProgressTrip;
         }
 
-        // 2. Chuyến chờ chạy kế tiếp trong ca 08:00 -> 08:00
+        // 2. Chuyến chờ chạy kế tiếp trong ca 08:00 -> 08:00 (xe thuê ngoài lấy toàn bộ chuyến Pending)
         return $this->trips()
             ->where('status', TripStatus::Pending->value)
-            ->where(function (Builder $q) use ($shiftStart, $shiftEnd) {
-                $q->whereBetween('started_at', [$shiftStart, $shiftEnd])
-                    ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+            ->when(! $this->isRent(), function (Builder $q) use ($shiftStart, $shiftEnd) {
+                $q->where(function (Builder $sub) use ($shiftStart, $shiftEnd) {
+                    $sub->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                        ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                });
             })
             ->oldest('id')
             ->first();

@@ -351,18 +351,23 @@ class VehicleDispatchBoard extends Page implements HasTable
         $runningValues = array_map(fn (TripStatus $s) => $s->value, self::runningTripStatuses());
         $runningSql = "'".implode("','", $runningValues)."'";
 
+        $targetVehicle = Vehicle::select(['id', 'type'])->find($this->selectedVehicleIdForTrip);
+        $isRentVehicle = $targetVehicle?->isRent() ?? false;
+
         return Vehicle::with([
             'driver',
             'evenDriver',
             'oddDriver',
-            'trips' => function ($q) use ($shiftStart, $shiftEnd, $runningValues, $runningSql) {
-                $q->where(function (Builder $sub) use ($shiftStart, $shiftEnd, $runningValues) {
+            'trips' => function ($q) use ($shiftStart, $shiftEnd, $runningValues, $runningSql, $isRentVehicle) {
+                $q->where(function (Builder $sub) use ($shiftStart, $shiftEnd, $runningValues, $isRentVehicle) {
                     $sub->whereIn('status', $runningValues)
-                        ->orWhere(function (Builder $pendingSub) use ($shiftStart, $shiftEnd) {
+                        ->orWhere(function (Builder $pendingSub) use ($shiftStart, $shiftEnd, $isRentVehicle) {
                             $pendingSub->where('status', TripStatus::Pending->value)
-                                ->where(function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
-                                    $dateQ->whereBetween('started_at', [$shiftStart, $shiftEnd])
-                                        ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                                ->when(! $isRentVehicle, function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                                    $dateQ->where(function (Builder $dq) use ($shiftStart, $shiftEnd) {
+                                        $dq->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                                            ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                                    });
                                 });
                         })
                         ->orWhere(function (Builder $completedSub) use ($shiftStart, $shiftEnd) {
@@ -400,16 +405,19 @@ class VehicleDispatchBoard extends Page implements HasTable
         [$shiftStart, $shiftEnd] = self::getShiftWindow();
         $runningValues = array_map(fn (TripStatus $s) => $s->value, self::runningTripStatuses());
         $runningSql = "'".implode("','", $runningValues)."'";
+        $isRentVehicle = $vehicle->isRent();
 
         return Trip::query()
             ->where('vehicle_id', $vehicle->id)
-            ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues) {
+            ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues, $isRentVehicle) {
                 $q->whereIn('status', $runningValues)
-                    ->orWhere(function (Builder $pendingSub) use ($shiftStart, $shiftEnd) {
+                    ->orWhere(function (Builder $pendingSub) use ($shiftStart, $shiftEnd, $isRentVehicle) {
                         $pendingSub->where('status', TripStatus::Pending->value)
-                            ->where(function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
-                                $dateQ->whereBetween('started_at', [$shiftStart, $shiftEnd])
-                                    ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                            ->when(! $isRentVehicle, function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                                $dateQ->where(function (Builder $dq) use ($shiftStart, $shiftEnd) {
+                                    $dq->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                                        ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                                });
                             });
                     })
                     ->orWhere(function (Builder $sub) use ($shiftStart, $shiftEnd) {
@@ -725,6 +733,18 @@ class VehicleDispatchBoard extends Page implements HasTable
     public static function getOrderType(Vehicle $record): ?OrderType
     {
         return $record->active_trip?->orders->first()?->type;
+    }
+
+    /**
+     * Thứ tự ưu tiên sắp xếp theo Loại đơn: HHHK (1) -> Hàng ngoài (2) -> Chưa có đơn (3).
+     */
+    public static function getOrderTypeSortPriority(Vehicle $record): int
+    {
+        return match (self::getOrderType($record)) {
+            OrderType::Hhhk => 1,
+            OrderType::External => 2,
+            default => 3,
+        };
     }
 
     public static function getPickupPoint(Vehicle $record): string
@@ -1214,13 +1234,18 @@ class VehicleDispatchBoard extends Page implements HasTable
     public static function getWaitingOrdersCount(Vehicle $record): int
     {
         [$shiftStart, $shiftEnd] = self::getShiftWindow();
+        $isRent = $record->isRent();
 
         if ($record->relationLoaded('trips')) {
             return $record->trips
-                ->filter(function (Trip $trip) use ($shiftStart, $shiftEnd): bool {
+                ->filter(function (Trip $trip) use ($shiftStart, $shiftEnd, $isRent): bool {
                     $status = $trip->status instanceof TripStatus ? $trip->status->value : (string) $trip->status;
                     if ($status !== TripStatus::Pending->value) {
                         return false;
+                    }
+
+                    if ($isRent) {
+                        return true;
                     }
 
                     return ($trip->started_at && $trip->started_at->between($shiftStart, $shiftEnd))
@@ -1243,12 +1268,14 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         return Order::query()
-            ->whereHas('trip', function (Builder $q) use ($record, $shiftStart, $shiftEnd) {
+            ->whereHas('trip', function (Builder $q) use ($record, $shiftStart, $shiftEnd, $isRent) {
                 $q->where('vehicle_id', $record->id)
                     ->where('status', TripStatus::Pending->value)
-                    ->where(function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
-                        $dateQ->whereBetween('started_at', [$shiftStart, $shiftEnd])
-                            ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                    ->when(! $isRent, function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                        $dateQ->where(function (Builder $dq) use ($shiftStart, $shiftEnd) {
+                            $dq->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                                ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                        });
                     });
             })
             ->whereNotIn('status', [OrderStatus::Cancelled->value, OrderStatus::Completed->value])
@@ -1345,6 +1372,10 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function getDriverName(Vehicle $record): string
     {
+        if ($record->isRent() && filled($record->external_driver_name)) {
+            return trim((string) $record->external_driver_name);
+        }
+
         return self::getShiftDriver($record)?->name ?? '—';
     }
 
@@ -1614,14 +1645,22 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public function getTitle(): string
     {
-        return $this->activeTab === 'duty'
-            ? 'Tổng hợp ca trực lái xe'
-            : 'Kiểm soát tình trạng xe';
+        return match ($this->activeTab) {
+            'duty' => 'Tổng hợp ca trực lái xe',
+            'rent' => 'Kiểm soát xe thuê',
+            default => 'Kiểm soát tình trạng xe',
+        };
     }
 
     public function switchTab(string $tab): void
     {
-        $this->activeTab = in_array($tab, ['vehicles', 'duty'], true) ? $tab : 'vehicles';
+        $this->activeTab = in_array($tab, ['vehicles', 'rent', 'duty'], true) ? $tab : 'vehicles';
+
+        if ($this->activeTab === 'rent') {
+            $this->activeOwnerType = 'rent';
+        } elseif ($this->activeTab === 'vehicles') {
+            $this->activeOwnerType = 'company';
+        }
     }
 
     public function filterDutyStation(string $value): void

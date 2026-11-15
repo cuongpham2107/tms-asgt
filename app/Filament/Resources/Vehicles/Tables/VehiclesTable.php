@@ -65,7 +65,10 @@ class VehiclesTable extends BaseTable
                     ->wrap(),
                 TextColumn::make('driver.name')
                     ->label('Tài xế')
-                    ->searchable(),
+                    ->state(fn (Vehicle $record): string => $record->isRent() && filled($record->external_driver_name)
+                        ? (string) $record->external_driver_name
+                        : ($record->driver?->name ?? '—'))
+                    ->searchable(['external_driver_name']),
                 TextColumn::make('status')
                     ->label('Trạng thái')
                     ->badge()

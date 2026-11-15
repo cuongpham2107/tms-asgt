@@ -47,6 +47,7 @@ interface Group {
 interface Configuration {
     /** false ở lần render đầu: chỉ có khung, chưa có xe. */
     loaded: boolean
+    ownerType?: 'company' | 'rent'
     title: string
     columns: string[]
     groups: Group[]
@@ -196,6 +197,9 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
         }
     }
 
+    const isRent = configuration.ownerType === 'rent'
+    const colCount = configuration.columns.length || (isRent ? 12 : 18)
+
     const sortIndicator = (column: string) =>
         configuration.sort.by === column ? <span className="text-[9px] font-bold text-amber-300">{configuration.sort.direction === 'asc' ? '▲' : '▼'}</span> : null
 
@@ -250,13 +254,13 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                 <table className="dispatch-table w-full text-xs border-collapse font-sans">
                     <thead className="sticky top-0 z-20 shadow-sm">
                         <tr className="dark:bg-slate-950" style={{ backgroundColor: 'rgb(30 58 95)' }}>
-                            <th colSpan={18} className="text-white py-2.5 px-4 text-center font-bold tracking-wider text-sm sm:text-base border-b border-white/10 uppercase dark:bg-slate-950" style={{ backgroundColor: 'rgb(30 58 95)' }}>
+                            <th colSpan={colCount} className="text-white py-2.5 px-4 text-center font-bold tracking-wider text-sm sm:text-base border-b border-white/10 uppercase dark:bg-slate-950" style={{ backgroundColor: 'rgb(30 58 95)' }}>
                                 {configuration.title}
                             </th>
                         </tr>
                         <tr className="text-white text-[11px] font-bold tracking-wide uppercase dark:bg-slate-950" style={{ backgroundColor: 'rgb(30 58 95)' }}>
-                            {configuration.columns.map((label, index) => {
-                                const sortable = index === 2 ? 'plate_number' : index === 5 ? 'status' : null
+                            {configuration.columns.map((label) => {
+                                const sortable = label === 'BSX' ? 'plate_number' : label === 'Loại đơn' ? 'order_type' : label === 'Trạng thái' ? 'status' : null
 
                                 if (!sortable) {
                                     return (
@@ -283,12 +287,12 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                        {!configuration.loaded && <SkeletonRows columns={configuration.columns.length} cellClassName="border-r border-gray-100 px-2 py-2.5 align-middle dark:border-white/5" />}
+                        {!configuration.loaded && <SkeletonRows columns={colCount} cellClassName="border-r border-gray-100 px-2 py-2.5 align-middle dark:border-white/5" />}
 
                         {configuration.loaded && configuration.groups.length === 0 && (
                             <tr>
-                                <td colSpan={18} className="py-8 text-center text-gray-500 italic">
-                                    Không tìm thấy xe nào phù hợp.
+                                <td colSpan={colCount} className="py-8 text-center text-gray-500 italic">
+                                    {isRent ? 'Không có xe thuê ngoài nào đang chờ chạy.' : 'Không tìm thấy xe nào phù hợp.'}
                                 </td>
                             </tr>
                         )}
@@ -374,19 +378,23 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                                             <span className={xeChoTones[row.xeChoTone]}>{row.xeCho}</span>
                                         </td>
 
-                                        <td className={`${cellClass} px-2 text-gray-700 dark:text-gray-300`}>
-                                            <span className="cursor-pointer font-medium text-primary-600 hover:text-primary-500 hover:underline dark:text-primary-400" title="Bấm để xem trên bản đồ" onClick={() => void page.openGpsModal(row.id)}>
-                                                {row.gps}
-                                            </span>
-                                        </td>
+                                        {!isRent && (
+                                            <>
+                                                <td className={`${cellClass} px-2 text-gray-700 dark:text-gray-300`}>
+                                                    <span className="cursor-pointer font-medium text-primary-600 hover:text-primary-500 hover:underline dark:text-primary-400" title="Bấm để xem trên bản đồ" onClick={() => void page.openGpsModal(row.id)}>
+                                                        {row.gps}
+                                                    </span>
+                                                </td>
 
-                                        <td className={`${cellClass} px-1 text-center font-bold text-gray-900 dark:text-white`}>
-                                            <span className={`inline-block min-w-[46px] rounded px-1 py-0.5 ${row.speedClass}`}>{row.speed}</span>
-                                        </td>
+                                                <td className={`${cellClass} px-1 text-center font-bold text-gray-900 dark:text-white`}>
+                                                    <span className={`inline-block min-w-[46px] rounded px-1 py-0.5 ${row.speedClass}`}>{row.speed}</span>
+                                                </td>
 
-                                        <td className={`status-cell ${cellClass} px-2 text-center text-[11px] select-none ${row.movementClass}`} title={row.movementTooltip ?? undefined}>
-                                            {row.movement}
-                                        </td>
+                                                <td className={`status-cell ${cellClass} px-2 text-center text-[11px] select-none ${row.movementClass}`} title={row.movementTooltip ?? undefined}>
+                                                    {row.movement}
+                                                </td>
+                                            </>
+                                        )}
 
                                         <td className={`${cellClass} px-1 text-center font-bold text-gray-800 dark:text-gray-200`}>
                                             <span className="cursor-pointer font-bold text-primary-600 hover:text-primary-500 hover:underline dark:text-primary-400" title="Bấm để xem danh sách chuyến trong ngày" onClick={() => void page.openTripModal(row.id)}>
@@ -400,23 +408,29 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                                             </span>
                                         </td>
 
-                                        <td
-                                            className={`${cellClass} px-1.5 text-center font-mono text-[11px] ${row.kmOverClass}`}
-                                            title={row.kmOverTooltip}
-                                            style={row.kmOverClass.includes('km-over-cell') ? undefined : row.kmOverFill > 0 ? { background: `linear-gradient(to right, rgb(59 130 246 / 0.22) ${row.kmOverFill}%, transparent ${row.kmOverFill}%)` } : undefined}
-                                        >
-                                            <span>{row.kmOver}</span>
-                                        </td>
+                                        {!isRent && (
+                                            <td
+                                                className={`${cellClass} px-1.5 text-center font-mono text-[11px] ${row.kmOverClass}`}
+                                                title={row.kmOverTooltip}
+                                                style={row.kmOverClass.includes('km-over-cell') ? undefined : row.kmOverFill > 0 ? { background: `linear-gradient(to right, rgb(59 130 246 / 0.22) ${row.kmOverFill}%, transparent ${row.kmOverFill}%)` } : undefined}
+                                            >
+                                                <span>{row.kmOver}</span>
+                                            </td>
+                                        )}
 
-                                        <td className={`${cellClass} px-2 font-medium text-gray-800 dark:text-gray-200`}>{row.driverName}</td>
+                                        <td className={`${isRent ? 'py-1.5 align-middle whitespace-nowrap' : cellClass} px-2 font-medium text-gray-800 dark:text-gray-200`}>{row.driverName}</td>
 
-                                        <td className={`${cellClass} px-1 text-center font-bold text-[11px]`}>
-                                            {row.station && row.station !== '—' && row.station !== 'OTHER' ? badge(row.station, stationTones[row.station] ?? 'gray') : <span className="text-gray-400">—</span>}
-                                        </td>
+                                        {!isRent && (
+                                            <>
+                                                <td className={`${cellClass} px-1 text-center font-bold text-[11px]`}>
+                                                    {row.station && row.station !== '—' && row.station !== 'OTHER' ? badge(row.station, stationTones[row.station] ?? 'gray') : <span className="text-gray-400">—</span>}
+                                                </td>
 
-                                        <td className={`px-1 py-1.5 text-center font-medium text-[11px] text-gray-700 dark:text-gray-300`}>
-                                            <span className="font-bold">{row.shift}</span>
-                                        </td>
+                                                <td className={`px-1 py-1.5 text-center font-medium text-[11px] text-gray-700 dark:text-gray-300`}>
+                                                    <span className="font-bold">{row.shift}</span>
+                                                </td>
+                                            </>
+                                        )}
                                     </tr>
                                 )
                             })

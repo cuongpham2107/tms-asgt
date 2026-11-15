@@ -12,6 +12,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -31,6 +32,7 @@ class VehicleForm
                             ->label('Phân loại')
                             ->default('company')
                             ->required()
+                            ->live()
                             ->options([
                                 'company' => 'Xe công ty',
                                 'rent' => 'Xe thuê ngoài',
@@ -165,6 +167,8 @@ class VehicleForm
                             )
                             ->searchable()
                             ->preload()
+                            ->visible(fn (Get $get): bool => ($get('type') instanceof \BackedEnum ? $get('type')->value : ($get('type') ?? 'company')) !== 'rent')
+                            ->visibleJs("(\$get('type') ?? 'company') !== 'rent'")
                             ->placeholder('Chọn lái xe ca chẵn'),
 
                         Select::make('odd_driver_id')
@@ -180,6 +184,8 @@ class VehicleForm
                             )
                             ->searchable()
                             ->preload()
+                            ->visible(fn (Get $get): bool => ($get('type') instanceof \BackedEnum ? $get('type')->value : ($get('type') ?? 'company')) !== 'rent')
+                            ->visibleJs("(\$get('type') ?? 'company') !== 'rent'")
                             ->placeholder('Chọn lái xe ca lẻ'),
 
                         Select::make('current_driver_id')
@@ -194,7 +200,17 @@ class VehicleForm
                             )
                             ->searchable()
                             ->preload()
+                            ->visible(fn (Get $get): bool => ($get('type') instanceof \BackedEnum ? $get('type')->value : ($get('type') ?? 'company')) !== 'rent')
+                            ->visibleJs("(\$get('type') ?? 'company') !== 'rent'")
                             ->helperText('Tự động theo ca hôm nay nếu để trống'),
+
+                        TextInput::make('external_driver_name')
+                            ->label('Tên lái xe ngoài')
+                            ->prefixIcon('heroicon-o-user')
+                            ->placeholder('Nhập tên lái xe thuê ngoài...')
+                            ->maxLength(255)
+                            ->visible(fn (Get $get): bool => ($get('type') instanceof \BackedEnum ? $get('type')->value : ($get('type') ?? 'company')) === 'rent')
+                            ->visibleJs("\$get('type') === 'rent'"),
 
                         TextInput::make('owner')
                             ->label('Chủ xe')

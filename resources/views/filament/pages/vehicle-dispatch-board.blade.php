@@ -22,19 +22,32 @@
 
     @include('filament.pages.partials.dispatch-table-styles')
 
-    {{-- Thanh chuyển đổi giữa Kiểm soát tình trạng xe và Tổng hợp ca trực lái xe --}}
+    {{-- Thanh chuyển đổi giữa Kiểm soát xe nhà, Kiểm soát xe thuê và Tổng hợp ca trực lái xe --}}
     <div class="inline-flex items-center gap-1 rounded-xl bg-gray-100 p-1 ring-1 ring-gray-950/5 dark:bg-gray-800 dark:ring-white/10 w-fit">
         <button
             type="button"
             wire:click="switchTab('vehicles')"
             @class([
                 'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer',
-                'bg-primary-600 text-white shadow-xs' => $activeTab !== 'duty',
-                'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white' => $activeTab === 'duty',
+                'bg-primary-600 text-white shadow-xs' => $activeTab === 'vehicles' || ! in_array($activeTab, ['rent', 'duty'], true),
+                'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white' => in_array($activeTab, ['rent', 'duty'], true),
             ])
         >
             <x-filament::icon icon="heroicon-m-truck" class="h-4 w-4" />
             <span>Kiểm soát tình trạng xe</span>
+        </button>
+
+        <button
+            type="button"
+            wire:click="switchTab('rent')"
+            @class([
+                'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer',
+                'bg-primary-600 text-white shadow-xs' => $activeTab === 'rent',
+                'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white' => $activeTab !== 'rent',
+            ])
+        >
+            <x-filament::icon icon="heroicon-m-building-storefront" class="h-4 w-4" />
+            <span>Xe thuê</span>
         </button>
 
         <button
@@ -246,6 +259,7 @@
                 'searchQuery' => $this->searchQuery,
                 'sortBy' => $this->sortBy,
                 'sortDirection' => $this->sortDirection,
+                'activeOwnerType' => $this->activeTab === 'rent' ? 'rent' : $this->activeOwnerType,
                 'activeStation' => $this->activeStation,
                 'activeMovementStatus' => $this->activeMovementStatus,
                 'dataVersion' => $this->dataVersion,
