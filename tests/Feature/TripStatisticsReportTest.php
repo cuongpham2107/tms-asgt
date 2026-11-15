@@ -1103,3 +1103,51 @@ test('statistics widget first render sends only the frame so React can show the 
         ->and(collect($config['tabs'])->pluck('key')->all())->toBe(['HHHK', 'external', 'empty'])
         ->and($config['filters']['activeTab'])->toBe('external');
 });
+
+test('trip statistics report and excel export display external_driver_name for rented vehicles', function () {
+    $rentedVehicle = Vehicle::create([
+        'plate_number' => '15H-08970',
+        'owner' => 'ASGS',
+        'type' => VehicleOwnerType::Rent,
+        'vehicle_type' => VehicleType::Normal,
+        'external_driver_name' => 'Nguyễn Văn Thuê Ngoài',
+        'is_active' => true,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-RENT-STAT-1',
+        'vehicle_id' => $rentedVehicle->id,
+        'driver_id' => null,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 09:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 10:00:00'),
+    ]);
+
+    Order::create([
+        'order_code' => 'ASG-RENT-3873',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    $component = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'HHHK',
+        'search' => 'Thuê Ngoài',
+    ]);
+
+    $tableConfig = $component->instance()->getReactTableConfiguration();
+
+    expect($tableConfig['rows'])->toHaveCount(1)
+        ->and($tableConfig['rows'][0]['driverName'])->toBe('Nguyễn Văn Thuê Ngoài');
+
+    $spreadsheet = app(TripExcelExportService::class)
+        ->buildSpreadsheetFromRows($component->instance()->getAllRows(), $component->instance()->getFilteredTrips());
+
+    expect($spreadsheet->getSheet(0)->getCell('U5')->getValue())->toBe('Nguyễn Văn Thuê Ngoài');
+});

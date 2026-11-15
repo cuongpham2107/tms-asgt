@@ -371,4 +371,23 @@ class Trip extends Model
             ? $sampled->values()->all()
             : $sampled->push($points->last())->values()->all();
     }
+
+    /**
+     * Tên tài xế hiển thị cho chuyến: ưu tiên tài xế gán trên chuyến,
+     * dự phòng tên lái xe ngoài trên phương tiện thuê khi chuyến không có driver_id.
+     */
+    public function resolveDriverName(): ?string
+    {
+        if (filled($this->driver?->name)) {
+            return trim((string) $this->driver->name);
+        }
+
+        $vehicle = $this->vehicle;
+
+        if ($vehicle?->isRent() && filled($vehicle->external_driver_name)) {
+            return trim((string) $vehicle->external_driver_name);
+        }
+
+        return null;
+    }
 }

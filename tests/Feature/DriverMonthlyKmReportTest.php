@@ -586,3 +586,46 @@ test('synchronizes monthly km between web report and driver app stats using 08:0
             'total_km_empty' => 30,
         ]);
 });
+
+test('statement displays external_driver_name for rented vehicles without polluting driver evaluation', function () {
+    $rentedVehicle = Vehicle::create([
+        'plate_number' => '15H-08970',
+        'owner' => 'ASGS',
+        'type' => VehicleOwnerType::Rent,
+        'vehicle_type' => VehicleType::Normal,
+        'external_driver_name' => 'Lái Xe Thuê Ngoài',
+        'is_active' => true,
+    ]);
+
+    $area = Area::create(['type' => OrderType::Hhhk, 'code' => 'NBA', 'name' => 'Nội Bài']);
+    $customer = Customer::create(['code' => 'ASGL', 'name' => 'ASGL', 'is_active' => true]);
+
+    $trip = Trip::create([
+        'trip_code' => 'CD-RENT-01',
+        'vehicle_id' => $rentedVehicle->id,
+        'driver_id' => null,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-10-15 10:13'),
+        'completed_at' => Carbon::parse('2026-10-15 11:13'),
+    ]);
+
+    Order::create([
+        'order_code' => 'ASG-3873',
+        'type' => OrderType::Hhhk,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'trip_id' => $trip->id,
+        'created_by' => $this->driverA->id,
+        'status' => OrderStatus::Completed,
+    ]);
+
+    $details = monthlyKmWidget()->instance()->loadDetails('month', '2026-10-15');
+
+    expect($details['statement'])->toHaveCount(1)
+        ->and($details['statement'][0])->toMatchArray([
+            'code' => 'ASG-3873',
+            'plate' => '15H-08970',
+            'driver' => 'Lái Xe Thuê Ngoài',
+        ])
+        ->and($details['evaluation']['drivers'])->toBe([]);
+});

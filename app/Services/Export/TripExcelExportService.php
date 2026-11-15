@@ -354,7 +354,7 @@ class TripExcelExportService
 
         foreach ($trips as $trip) {
             $vehicle = $trip->vehicle;
-            $driver = $trip->driver;
+            $driverName = $trip->resolveDriverName() ?? '';
             $orders = $trip->orders;
 
             // Nếu chuyến rỗng không có đơn hàng (Empty Run)
@@ -389,7 +389,7 @@ class TripExcelExportService
                     vehicleType: $vehicle?->vehicle_type?->value ?? '',
                     note: $trip->note ?? '',
                     isReturnTrip: true,
-                    driverName: $driver?->name ?? '',
+                    driverName: $driverName,
                     kmLoaded: 0,
                     kmEmpty: (float) ($trip->total_km_empty ?? $trip->total_km ?? 0),
                     pcs: 0,
@@ -453,7 +453,7 @@ class TripExcelExportService
                     vehicleType: $vehicle?->vehicle_type?->value ?? '',
                     note: $order->notes ?? $trip->note ?? '',
                     isReturnTrip: (bool) $order->is_return_trip,
-                    driverName: $driver?->name ?? '',
+                    driverName: $driverName,
                     kmLoaded: (float) ($order->loaded_km ?? $trip->total_km_loaded ?? 0),
                     kmEmpty: (float) ($trip->total_km_empty ?? 0),
                     pcs: (int) ($order->total_packages ?? 0),

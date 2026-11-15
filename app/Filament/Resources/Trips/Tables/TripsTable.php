@@ -172,7 +172,7 @@ class TripsTable extends BaseTable
                                                 @endif
                                             </div>
                                             <div class="text-xs text-gray-600 dark:text-gray-300 mt-1">
-                                                Lái xe: <strong class="text-gray-900 dark:text-white">{{ $trip->driver?->name ?? 'Chưa gán' }}</strong>
+                                                Lái xe: <strong class="text-gray-900 dark:text-white">{{ $trip->resolveDriverName() ?? 'Chưa gán' }}</strong>
                                                 @if ($trip->driver?->phone)
                                                     <span class="text-gray-500">({{ $trip->driver->phone }})</span>
                                                 @endif
@@ -485,8 +485,8 @@ class TripsTable extends BaseTable
                     $names[] = $swap->toDriver->name;
                 }
             }
-        } elseif ($record->driver) {
-            $names[] = $record->driver->name;
+        } elseif ($driverName = $record->resolveDriverName()) {
+            $names[] = $driverName;
         }
 
         return ! empty($names) ? implode(' → ', $names) : '—';
@@ -710,7 +710,7 @@ class TripsTable extends BaseTable
                 ->toArray();
 
             // Marker xe tải
-            $driverName = $record->driver?->name ?? 'Chưa phân lái xe';
+            $driverName = $record->resolveDriverName() ?? 'Chưa phân lái xe';
             $driverPhone = $record->driver?->phone ? ' ('.$record->driver->phone.')' : '';
             $speedText = $vehicle->gps_speed !== null ? number_format((float) $vehicle->gps_speed, 1).' km/h' : '0 km/h';
             $updateTime = $vehicle->last_gps_update?->format('H:i:s d/m/Y') ?? '—';

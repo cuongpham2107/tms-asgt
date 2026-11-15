@@ -321,7 +321,7 @@ class DriverMonthlyKmReportService
             ];
         })->sortBy('started_at')->values();
 
-        $drivers = $trips->groupBy('driver_id')->map(function (Collection $driverTrips): array {
+        $drivers = $trips->whereNotNull('driver_id')->groupBy('driver_id')->map(function (Collection $driverTrips): array {
             $valid = $driverTrips->whereNull('flag');
             $average = fn (string $key): ?int => ($values = $valid->pluck($key)->filter(fn (?int $value): bool => $value !== null))->isEmpty()
                 ? null
