@@ -175,7 +175,15 @@ test('unlocked external order can be switched back to hhhk and deletes its unloc
     $order->update(['status' => OrderStatus::Completed]);
 
     $charge = OrderCharge::where('order_id', $order->id)->firstOrFail();
-    $dropFee = FeeType::where('code', 'extra_drop')->firstOrFail();
+    $dropFee = FeeType::firstOrCreate(
+        ['code' => 'extra_drop'],
+        [
+            'name' => 'Rớt điểm',
+            'sort' => 1,
+            'is_active' => true,
+            'calc_method' => 'manual',
+        ],
+    );
     OrderChargeFee::create([
         'order_charge_id' => $charge->id,
         'fee_type_id' => $dropFee->id,
