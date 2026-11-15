@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\CargoType;
+use App\Enums\FreightRateType;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -201,12 +202,28 @@ test('export action is disabled until one customer with a template is filtered',
 test('every template builds for its customer', function (string $templateKey) {
     $template = BillingStatementTemplates::all()[$templateKey];
     $this->customer->update(['code' => $template['customer_code']]);
+    $this->charge->update(['rate_type' => $template['rate_types'][0] ?? '']);
     $rows = ($this->page)()->instance()->getAllRows();
 
     $result = app(BillingStatementExporter::class)->build($rows, $this->customer->fresh(), $templateKey);
 
     expect($result['order_ids'])->toBe([$this->order->id]);
 })->with(fn (): array => array_keys(BillingStatementTemplates::all()));
+
+test('clc sdv template skips orders of other rate types and prefixes the company name to addresses', function () {
+    $this->customer->update(['code' => 'CLC']);
+    $this->order->pickupLocation->update(['name' => 'CÔNG TY CỔ PHẦN TIẾP VẬN THẾ KỶ (CLC)', 'address' => 'KCN Yên Phong, Yên Trung, Bắc Ninh']);
+    $rows = ($this->page)()->instance()->getAllRows();
+    $build = fn (): array => app(BillingStatementExporter::class)->build($rows, $this->customer->fresh(), 'CLC_KY_02');
+
+    expect($build()['order_ids'])->toBe([]);
+
+    $this->charge->update(['rate_type' => FreightRateType::ClcSdv->value]);
+    $sheet = $build()['spreadsheet']->getActiveSheet();
+
+    expect(findCell($sheet, 'CÔNG TY CỔ PHẦN TIẾP VẬN THẾ KỶ (CLC) - KCN Yên Phong, Yên Trung, Bắc Ninh'))->not->toBeNull()
+        ->and(findCell($sheet, 'SEV, KCN Yên Phong, Bắc Ninh'))->not->toBeNull();
+});
 
 test('per drop layout writes one row per delivery point with the money on the first row', function () {
     $this->customer->update(['code' => 'ASGS (SAFO)']);

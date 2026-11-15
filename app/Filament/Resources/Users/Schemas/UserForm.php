@@ -100,7 +100,11 @@ class UserForm
                             ->placeholder('Chọn ca trực (Chẵn / Lẻ)'),
                         Select::make('vehicle_id')
                             ->label('Xe phụ trách')
-                            ->relationship('vehicle', 'plate_number')
+                            ->relationship(
+                                'vehicle',
+                                'plate_number',
+                                fn ($query, ?User $record) => $query->where(fn ($q) => $q->where('is_active', true)->when($record?->vehicle_id, fn ($sub) => $sub->orWhere('id', $record->vehicle_id)))
+                            )
                             ->searchable()
                             ->preload()
                             ->native(false)

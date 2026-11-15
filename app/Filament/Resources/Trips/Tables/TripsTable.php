@@ -2,9 +2,7 @@
 
 namespace App\Filament\Resources\Trips\Tables;
 
-use App\Enums\CheckpointType;
 use App\Enums\MapTile;
-use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
@@ -13,29 +11,21 @@ use App\Filament\BaseTable;
 use App\Filament\Resources\Trips\Actions\CancelTripAction;
 use App\Filament\Resources\Trips\Actions\CopyTrackingLinkAction;
 use App\Filament\Resources\Trips\Actions\CopyTransportInfoAction;
+use App\Filament\Resources\Trips\Actions\EditTripAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ReassignTransportAction;
 use App\Filament\Resources\Trips\Actions\ResolveKmReportAction;
 use App\Filament\Resources\Trips\Actions\ViewTripPhotosAction;
-use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Tables\Columns\UniqueMapColumn;
-use App\Models\DriverShift;
 use App\Models\Trip;
-use App\Models\TripCheckpoint;
-use App\Models\User;
-use App\Services\Notification\DriverNotificationService;
 use App\Services\OsrmService;
-use App\Services\Trip\Handlers\CompletedHandler;
 use App\Services\Trip\TripCheckpointOsmValidationService;
-use App\Services\TripKmAdjustmentService;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\EditAction;
-use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
@@ -43,8 +33,6 @@ use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
 
@@ -333,122 +321,7 @@ class TripsTable extends BaseTable
 
                     CopyTrackingLinkAction::make(),
 
-                    EditAction::make()
-                        ->stickyModalFooter()
-                        ->modal()
-                        ->modalWidth(Width::SevenExtraLarge)
-                        ->modalHeading(fn (Trip $record): string => 'Sửa chuyến — '.$record->trip_code)
-                        ->mutateRecordDataUsing(function (array $data, Trip $record): array {
-                            $record->loadMissing(['startLocation', 'endLocation']);
-
-                            return $data;
-                        })
-                        ->schema(fn (Schema $schema): Schema => TripForm::configure($schema))
-                        ->before(function (Trip $record) use (&$kmSnapshotBeforeEdit): void {
-                            $kmSnapshotBeforeEdit = app(TripKmAdjustmentService::class)->kmSnapshot($record);
-                        })
-                        ->using(function (Model $record, array $data): Model {
-                            $record->loadMissing(['vehicle', 'orders']);
-
-                            // Field trạng thái đã bị khoá. Chuyến chỉ kết thúc khi admin đặt completed_at
-                            // hoặc mốc cuối cùng là "Kết thúc xe". Mốc "Hoàn thành" là theo từng đơn.
-                            $lastCheckpoint = $record->checkpoints()
-                                ->reorder()
-                                ->orderByDesc('occurred_at')
-                                ->orderByDesc('id')
-                                ->first();
-
-                            if ($lastCheckpoint?->checkpoint_type === CheckpointType::End) {
-                                if (blank($data['completed_at'] ?? null)) {
-                                    $data['completed_at'] = $lastCheckpoint->occurred_at;
-                                }
-
-                                if ($lastCheckpoint->km_reading !== null) {
-                                    $data['end_km'] = $lastCheckpoint->km_reading;
-                                }
-                            }
-
-                            $isEnding = filled($data['completed_at'] ?? null);
-
-                            if ($isEnding) {
-                                $data['status'] = TripStatus::Completed;
-                            } elseif (self::applyCompletedCheckpoints($record)) {
-                                $data['status'] = TripStatus::Delivered;
-                            }
-
-                            $oldDriverId = $record->driver_id;
-                            $newDriverId = $data['driver_id'] ?? null;
-
-                            $effectiveDriverId = $newDriverId ?: $record->driver_id;
-                            if ($effectiveDriverId && (empty($record->shift_id) || ($newDriverId && (int) $oldDriverId !== (int) $newDriverId))) {
-                                $shiftId = DriverShift::where('driver_id', $effectiveDriverId)
-                                    ->when($record->vehicle_id, fn ($q) => $q->where('vehicle_id', $record->vehicle_id))
-                                    ->whereNull('end_time')
-                                    ->latest('start_time')
-                                    ->value('id')
-                                    ?? DriverShift::where('driver_id', $effectiveDriverId)
-                                        ->whereNull('end_time')
-                                        ->latest('start_time')
-                                        ->value('id')
-                                    ?? DriverShift::where('driver_id', $effectiveDriverId)
-                                        ->when($record->vehicle_id, fn ($q) => $q->where('vehicle_id', $record->vehicle_id))
-                                        ->latest('start_time')
-                                        ->value('id')
-                                    ?? DriverShift::where('driver_id', $effectiveDriverId)
-                                        ->latest('start_time')
-                                        ->value('id');
-
-                                if ($shiftId) {
-                                    $data['shift_id'] = $shiftId;
-                                }
-                            }
-
-                            $record->update($data);
-
-                            // Chuyến hoàn thành -> toàn bộ đơn chưa huỷ cũng hoàn thành.
-                            if ($isEnding) {
-                                $record->orders()
-                                    ->whereNotIn('status', [OrderStatus::Cancelled->value, OrderStatus::Completed->value])
-                                    ->get()
-                                    ->each(fn ($order) => $order->update(['status' => OrderStatus::Completed]));
-                            }
-
-                            if ($newDriverId && (int) $oldDriverId !== (int) $newDriverId) {
-                                $oldDriver = $oldDriverId ? User::find($oldDriverId) : null;
-                                $newDriver = User::find($newDriverId);
-
-                                if ($newDriver !== null) {
-                                    try {
-                                        app(DriverNotificationService::class)->sendTripReassigned($record, $newDriver, $oldDriver);
-                                    } catch (\Throwable) {
-                                    }
-                                }
-
-                                if ($oldDriver !== null) {
-                                    try {
-                                        app(DriverNotificationService::class)->sendTripUnassigned($record, $oldDriver);
-                                    } catch (\Throwable) {
-                                    }
-                                }
-                            }
-
-                            return $record;
-                        })
-                        ->after(function (Trip $record) use (&$kmSnapshotBeforeEdit): void {
-                            $service = app(TripKmAdjustmentService::class);
-
-                            if ($kmSnapshotBeforeEdit === $service->kmSnapshot($record)) {
-                                return;
-                            }
-
-                            $service->recalculateAfterEdit($record);
-                            $service->closePendingReportsAfterEdit($record, Auth::id());
-
-                            try {
-                                app(DriverNotificationService::class)->sendTripKmUpdated($record);
-                            } catch (\Throwable) {
-                            }
-                        }),
+                    EditTripAction::make(),
 
                     ResolveKmReportAction::make(),
 
@@ -483,27 +356,9 @@ class TripsTable extends BaseTable
      *
      * @return bool true khi mọi đơn chưa huỷ của chuyến đã hoàn thành
      */
-    private static function applyCompletedCheckpoints(Trip $record): bool
+    public static function applyCompletedCheckpoints(Trip $record): bool
     {
-        if (in_array($record->status, [TripStatus::Completed, TripStatus::Cancelled, TripStatus::DriverSwap], true)) {
-            return false;
-        }
-
-        $handler = app(CompletedHandler::class);
-
-        $record->checkpoints()
-            ->where('checkpoint_type', CheckpointType::Completed->value)
-            ->get()
-            ->each(fn (TripCheckpoint $checkpoint) => $handler->handle(
-                $record,
-                ['occurred_at' => $checkpoint->occurred_at->toDateTimeString()],
-                collect([$checkpoint]),
-            ));
-
-        $activeOrders = $record->orders()->where('status', '!=', OrderStatus::Cancelled->value);
-
-        return $activeOrders->exists()
-            && (clone $activeOrders)->where('status', '!=', OrderStatus::Completed->value)->doesntExist();
+        return EditTripAction::applyCompletedCheckpoints($record);
     }
 
     private static function renderBsx(Trip $record): string

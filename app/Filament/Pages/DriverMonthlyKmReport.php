@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\Trip;
+use App\Services\ShiftScheduleService;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Pages\Page;
@@ -82,10 +83,15 @@ class DriverMonthlyKmReport extends Page
     {
         return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) && Carbon::canBeCreatedFromFormat($date, 'Y-m-d')
             ? $date
-            : now()->toDateString();
+            : ShiftScheduleService::getShiftWindow()[0]->toDateString();
     }
 
     /**
+     * Khoảng thời gian kỳ báo cáo tính theo mốc giao ca 08:00 sáng:
+     * - today: 08:00 ngày $date -> 08:00 ngày hôm sau
+     * - week:  08:00 thứ Hai đầu tuần -> 08:00 thứ Hai tuần kế tiếp
+     * - month: 08:00 ngày 01 tháng này -> 08:00 ngày 01 tháng kế tiếp
+     *
      * @return array{0: Carbon, 1: Carbon}
      */
     public static function rangeFor(string $period, string $date): array
@@ -93,9 +99,18 @@ class DriverMonthlyKmReport extends Page
         $anchor = Carbon::createFromFormat('Y-m-d', $date)->startOfDay();
 
         return match ($period) {
-            'today' => [$anchor->copy()->startOfDay(), $anchor->copy()->endOfDay()],
-            'week' => [$anchor->copy()->startOfWeek(), $anchor->copy()->endOfWeek()],
-            default => [$anchor->copy()->startOfMonth(), $anchor->copy()->endOfMonth()],
+            'today' => [
+                $anchor->copy()->setTime(8, 0, 0),
+                $anchor->copy()->addDay()->setTime(8, 0, 0),
+            ],
+            'week' => [
+                $anchor->copy()->startOfWeek()->setTime(8, 0, 0),
+                $anchor->copy()->endOfWeek()->addDay()->setTime(8, 0, 0),
+            ],
+            default => [
+                $anchor->copy()->startOfMonth()->setTime(8, 0, 0),
+                $anchor->copy()->startOfMonth()->addMonthNoOverflow()->setTime(8, 0, 0),
+            ],
         };
     }
 
@@ -105,7 +120,7 @@ class DriverMonthlyKmReport extends Page
 
         return match ($period) {
             'today' => 'Ngày '.$from->format('d/m/Y'),
-            'week' => 'Tuần '.$from->format('d/m').' – '.$to->format('d/m/Y'),
+            'week' => 'Tuần '.$from->format('d/m').' – '.$to->copy()->subDay()->format('d/m/Y'),
             default => 'Tháng '.$from->format('m/Y'),
         };
     }

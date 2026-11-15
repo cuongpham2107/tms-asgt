@@ -55,7 +55,7 @@ final readonly class GeofenceResult
      */
     public function rejection(bool $enforceVehicle, bool $enforceLocation): ?array
     {
-        $defaultRadius = (int) config('checkpoint_geofence.radius_m', 1000);
+        $defaultRadius = (int) config('checkpoint_geofence.radius_m', 3000);
 
         if ($enforceLocation && $this->locationStatus === GeoCheckStatus::OutOfRange) {
             return [

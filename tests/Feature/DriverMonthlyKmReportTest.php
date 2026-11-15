@@ -14,15 +14,18 @@ use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
 use App\Models\DriverSwap;
+use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Models\VehicleGpsLog;
 use App\Services\DriverMonthlyKmReportService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Laravel\Sanctum\Sanctum;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
@@ -157,16 +160,20 @@ test('sums completed trips of the month per driver', function () {
         ->and($rows[$this->driverB->id])->toMatchArray(['trip_count' => 1, 'km_total' => 80.0, 'km_loaded' => 80.0, 'km_empty' => 0.0]);
 });
 
-test('counts finished trips like the driver app and skips unfinished or out of range ones', function () {
+test('counts finished trips like the driver app by completion time in 08:00 to 08:00 window and skips unfinished or out of range ones', function () {
+    [$from, $to] = DriverMonthlyKmReport::rangeFor('month', '2026-10-01');
+
     monthlyTrip($this, $this->driverA, '2026-10-05 08:00', 40, 20);
     monthlyTrip($this, $this->driverA, '2026-10-06 08:00', 30, 10, TripStatus::Cancelled);
     monthlyTrip($this, $this->driverA, '2026-10-06 12:00', 25, 5, TripStatus::DriverSwap);
     monthlyTrip($this, $this->driverA, '2026-10-07 08:00', 99, 99, TripStatus::Delivering);
-    monthlyTrip($this, $this->driverA, '2026-09-30 23:00', 99, 99);
-    monthlyTrip($this, $this->driverA, '2026-11-01 00:00', 99, 99);
+    // Hoàn thành lúc 07:00 ngày 01/10 (trước 08:00) -> thuộc tháng 9, không tính vào tháng 10
+    monthlyTrip($this, $this->driverA, '2026-10-01 06:00', 99, 99);
+    // Hoàn thành lúc 09:30 ngày 01/11 (sau 08:00) -> thuộc tháng 11, không tính vào tháng 10
+    monthlyTrip($this, $this->driverA, '2026-11-01 08:30', 99, 99);
 
     $service = app(DriverMonthlyKmReportService::class);
-    $lines = $service->tripLines($this->month, $this->month->copy()->endOfMonth());
+    $lines = $service->tripLines($from, $to);
     $row = $service->summarize($lines)->firstWhere('driver_id', $this->driverA->id);
 
     // Hoàn thành + huỷ (xe đã chạy) + đảo lái đều được cộng km, như màn thống kê của app lái xe
@@ -209,22 +216,22 @@ test('splits a swapped trip between drivers and counts it for each of them', fun
         ->and($rows[$this->driverB->id])->toMatchArray(['trip_count' => 1, 'km_total' => 40.0, 'km_loaded' => 20.0, 'km_empty' => 20.0]);
 });
 
-test('skips trips whose shift has not ended yet', function () {
+test('includes completed trips even when the driver shift has not ended yet so web matches driver app', function () {
     monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 100, 60);
     monthlyTrip($this, $this->driverA, '2026-10-03 08:00', 77, 7, shift: monthlyShift($this->driverA, ended: false));
 
     $row = app(DriverMonthlyKmReportService::class)->driverRows($this->month, $this->month->copy()->endOfMonth())->firstWhere('driver_id', $this->driverA->id);
 
-    expect($row)->toMatchArray(['trip_count' => 1, 'km_total' => 100.0, 'km_loaded' => 60.0]);
+    expect($row)->toMatchArray(['trip_count' => 2, 'km_total' => 177.0, 'km_loaded' => 67.0]);
 });
 
-test('counts only the swap segments whose shift has ended', function () {
+test('counts all swap segments of a completed trip even when a shift has not ended yet', function () {
     monthlySwapTrip($this, driverBShiftEnded: false);
 
     $rows = app(DriverMonthlyKmReportService::class)->driverRows($this->month, $this->month->copy()->endOfMonth())->keyBy('driver_id');
 
     expect($rows[$this->driverA->id])->toMatchArray(['trip_count' => 1, 'km_total' => 60.0, 'km_loaded' => 50.0])
-        ->and($rows[$this->driverB->id])->toMatchArray(['trip_count' => 0, 'km_total' => 0.0]);
+        ->and($rows[$this->driverB->id])->toMatchArray(['trip_count' => 1, 'km_total' => 40.0, 'km_loaded' => 20.0]);
 });
 
 test('lists active drivers without trips with zero km', function () {
@@ -272,9 +279,9 @@ test('page resolves today, week and month periods from the anchor date', functio
     expect($range[0]->toDateTimeString())->toBe($from)
         ->and($range[1]->toDateTimeString())->toBe($to);
 })->with([
-    'today' => ['today', '2026-10-22 00:00:00', '2026-10-22 23:59:59'],
-    'week' => ['week', '2026-10-19 00:00:00', '2026-10-25 23:59:59'],
-    'month' => ['month', '2026-10-01 00:00:00', '2026-10-31 23:59:59'],
+    'today' => ['today', '2026-10-22 08:00:00', '2026-10-23 08:00:00'],
+    'week' => ['week', '2026-10-19 08:00:00', '2026-10-26 08:00:00'],
+    'month' => ['month', '2026-10-01 08:00:00', '2026-11-01 08:00:00'],
 ]);
 
 test('page renders the react report widget for the selected period', function () {
@@ -330,7 +337,12 @@ test('report widget loads the read-only statement of the period on demand', func
 
     // Cả kỳ trả về một lần, phân trang do React lo.
     expect($rows)->toHaveCount(27)
-        ->and($row)->toMatchArray(['driverId' => $trip->driver_id, 'started' => '08:00 15/10', 'ended' => '09:40 15/10'])
+        ->and($row)->toMatchArray([
+            'driverId' => $trip->driver_id,
+            'operatingTime' => '1h 20p',
+            'started' => '08:00 15/10',
+            'ended' => '09:40 15/10',
+        ])
         ->and(array_keys($row))->not->toContain('charge', 'total', 'base_price');
 });
 
@@ -424,4 +436,153 @@ test('report widget first render sends only the period so React loads the number
         ->and($config['periodLabel'])->not->toBe('')
         ->and($config['drivers'])->toBe([])
         ->and($config['trips'])->toBe([]);
+});
+
+test('evaluation compares driver checkpoint durations against actual GPS stop intervals at pickup and delivery', function () {
+    $area = Area::create(['type' => OrderType::Hhhk, 'code' => 'GPS', 'name' => 'GPS']);
+    $customer = Customer::create(['code' => 'GPS', 'name' => 'GPS', 'is_active' => true]);
+    $pickup = Location::create(['code' => 'NCTS', 'name' => 'NCTS', 'lat' => 21.2241, 'lng' => 105.7918, 'is_active' => true]);
+    $delivery = Location::create(['code' => 'CLC', 'name' => 'CLC', 'lat' => 21.1860, 'lng' => 106.0760, 'is_active' => true]);
+
+    $shift = monthlyShift($this->driverA);
+    $trip = Trip::create([
+        'trip_code' => 'CD-GPS-01',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $shift->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-10-10 08:00'),
+        'completed_at' => Carbon::parse('2026-10-10 10:30'),
+        'start_km' => 1000,
+        'end_km' => 1050,
+        'total_km' => 50,
+        'total_km_loaded' => 40,
+        'total_km_empty' => 10,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-GPS-01',
+        'type' => OrderType::Hhhk,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'trip_id' => $trip->id,
+        'pickup_location_id' => $pickup->id,
+        'status' => OrderStatus::Completed,
+        'created_by' => $this->driverA->id,
+    ]);
+
+    $dp = $order->deliveryPoints()->create([
+        'location_id' => $delivery->id,
+        'sequence' => 1,
+    ]);
+
+    $cp = fn (CheckpointType $type, float $km, string $at, bool $withOrder = true, ?int $dpId = null) => TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $withOrder ? $order->id : null,
+        'delivery_point_id' => $dpId,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => $shift->id,
+        'checkpoint_type' => $type,
+        'km_reading' => $km,
+        'occurred_at' => Carbon::parse($at),
+    ]);
+
+    // Tài xế bấm trên app: đóng hàng 10p (08:20 -> 08:30), hạ hàng 15p (09:30 -> 09:45), hoàn thành 150p (08:00 -> 10:30)
+    $cp(CheckpointType::Started, 1000, '2026-10-10 08:00', false);
+    $cp(CheckpointType::ArrivedPickup, 1005, '2026-10-10 08:20');
+    $cp(CheckpointType::LeftPickup, 1005, '2026-10-10 08:30');
+    $cp(CheckpointType::ArrivedDelivery, 1045, '2026-10-10 09:30', true, $dp->id);
+    $cp(CheckpointType::Completed, 1045, '2026-10-10 09:45', true, $dp->id);
+    $cp(CheckpointType::End, 1050, '2026-10-10 10:30', false);
+
+    $gps = fn (string $at, float $lat, float $lng, float $speed) => VehicleGpsLog::create([
+        'vehicle_id' => $this->vehicle->id,
+        'lat' => $lat,
+        'lng' => $lng,
+        'speed' => $speed,
+        'recorded_at' => Carbon::parse($at),
+    ]);
+
+    // GPS thực tế: dừng ở điểm đóng 30p (08:10 -> 08:40), dừng ở điểm hạ 45p (09:15 -> 10:00)
+    $gps('2026-10-10 08:10', 21.2241, 105.7918, 0);
+    $gps('2026-10-10 08:40', 21.2245, 105.7922, 25);
+    $gps('2026-10-10 09:15', 21.1860, 106.0760, 0);
+    $gps('2026-10-10 10:00', 21.1865, 106.0765, 30);
+
+    $service = app(DriverMonthlyKmReportService::class);
+    $rows = $service->statementRows($this->month, $this->month->copy()->endOfMonth());
+    $evaluation = $service->evaluate($rows);
+
+    $evalTrip = $evaluation['trips'][0];
+    $evalDriver = $evaluation['drivers'][0];
+
+    expect($evalTrip)->toMatchArray([
+        'loading' => 10,
+        'unloading' => 15,
+        'wait' => 25,
+        'gps_loading' => 30,
+        'gps_unloading' => 45,
+        'gps_wait' => 75,
+        'route_wait' => 75,
+    ])
+        ->and($evalDriver)->toMatchArray([
+            'avg_wait' => 25,
+            'wait_diff' => -50,
+            'wait_compared' => 1,
+        ]);
+});
+
+test('synchronizes monthly km between web report and driver app stats using 08:00 day 01 to 08:00 next month day 01 completion window', function () {
+    // Chuyến 1: Bắt đầu 01/10 06:00, hoàn thành 01/10 07:30 (trước 08:00 ngày 01/10 -> thuộc tháng 9)
+    Trip::create([
+        'trip_code' => 'CD-SEP-LATE',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => monthlyShift($this->driverA, ended: false)->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-10-01 06:00'),
+        'completed_at' => Carbon::parse('2026-10-01 07:30'),
+        'start_km' => 1000,
+        'end_km' => 1050,
+        'total_km' => 50,
+        'total_km_loaded' => 40,
+        'total_km_empty' => 10,
+    ]);
+
+    // Chuyến 2: Bắt đầu 31/10 23:00, hoàn thành 01/11 02:30 (trước 08:00 ngày 01/11 -> thuộc tháng 10)
+    Trip::create([
+        'trip_code' => 'CD-OCT-NIGHT',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driverA->id,
+        'shift_id' => monthlyShift($this->driverA, ended: false)->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-10-31 23:00'),
+        'completed_at' => Carbon::parse('2026-11-01 02:30'),
+        'start_km' => 1050,
+        'end_km' => 1170,
+        'total_km' => 120,
+        'total_km_loaded' => 90,
+        'total_km_empty' => 30,
+    ]);
+
+    [$from, $to] = DriverMonthlyKmReport::rangeFor('month', '2026-10-01');
+    $webRow = app(DriverMonthlyKmReportService::class)->driverRows($from, $to)->firstWhere('driver_id', $this->driverA->id);
+
+    Sanctum::actingAs($this->driverA);
+    $apiStats = $this->getJson('/api/driver/trips/stats?from_date=2026-10-01&to_date=2026-10-31')
+        ->assertSuccessful()
+        ->json('data');
+
+    expect($webRow)->toMatchArray([
+        'trip_count' => 1,
+        'km_total' => 120.0,
+        'km_loaded' => 90.0,
+        'km_empty' => 30.0,
+    ])
+        ->and($apiStats)->toMatchArray([
+            'completed' => 1,
+            'total_km' => 120,
+            'total_km_loaded' => 90,
+            'total_km_empty' => 30,
+        ]);
 });

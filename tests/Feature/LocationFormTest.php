@@ -1,12 +1,23 @@
 <?php
 
+use App\Enums\LocationType;
 use App\Enums\OrderType;
+use App\Filament\Resources\Customers\Pages\CreateCustomer;
+use App\Filament\Resources\Locations\Pages\CreateLocation;
+use App\Filament\Resources\Locations\Pages\EditLocation;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
+use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Models\Area;
+use App\Models\BillingZone;
 use App\Models\Location;
+use App\Models\User;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
+use Filament\Actions\Testing\TestAction;
 use Filament\Schemas\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
@@ -46,7 +57,7 @@ test('location form is configured correctly with map picker', function () {
     expect($coordinatesComponent->getLabel())->toBe('Chọn vị trí trên bản đồ');
 });
 
-test('location form area_id options use area code as key and include formatted label', function () {
+test('location form areas field pre-selects default area when defaultAreaId is provided', function () {
     $area = Area::create([
         'type' => OrderType::Hhhk,
         'code' => 'NBO',
@@ -58,43 +69,69 @@ test('location form area_id options use area code as key and include formatted l
     $configuredSchema = LocationForm::configure($schema);
     $components = $configuredSchema->getComponents();
 
-    $areaComponent = collect($components)
-        ->first(fn ($component) => $component->getName() === 'area_id');
+    $areasComponent = collect($components)
+        ->first(fn ($component) => $component->getName() === 'areas');
 
-    expect($areaComponent)->not->toBeNull();
-    $options = $areaComponent->getOptions();
-    expect($options)->toHaveKey('NBO');
-    expect($options['NBO'])->toBe('NBO - Nội bộ TN');
-});
-
-test('location form area_id pre-selects default area code when defaultAreaId is provided', function () {
-    $area = Area::create([
-        'type' => OrderType::Hhhk,
-        'code' => 'NBO',
-        'name' => 'Nội bộ TN',
-        'is_active' => true,
-    ]);
+    expect($areasComponent)->not->toBeNull();
+    expect($areasComponent->isMultiple())->toBeTrue();
 
     // Test with integer ID
     $schema1 = Schema::make();
     $components1 = LocationForm::configure($schema1, $area->id)->getComponents();
-    $areaComponent1 = collect($components1)->first(fn ($c) => $c->getName() === 'area_id');
-    $default1 = $areaComponent1->getDefaultState();
-    expect($default1)->toBe('NBO');
+    $areasComponent1 = collect($components1)->first(fn ($c) => $c->getName() === 'areas');
+    $default1 = $areasComponent1->getDefaultState();
+    expect($default1)->toBe([$area->id]);
 
     // Test with string code
     $schema2 = Schema::make();
     $components2 = LocationForm::configure($schema2, 'NBO')->getComponents();
-    $areaComponent2 = collect($components2)->first(fn ($c) => $c->getName() === 'area_id');
-    $default2 = $areaComponent2->getDefaultState();
-    expect($default2)->toBe('NBO');
+    $areasComponent2 = collect($components2)->first(fn ($c) => $c->getName() === 'areas');
+    $default2 = $areasComponent2->getDefaultState();
+    expect($default2)->toBe([$area->id]);
 
     // Test with Closure
     $schema3 = Schema::make();
     $components3 = LocationForm::configure($schema3, fn () => $area->id)->getComponents();
-    $areaComponent3 = collect($components3)->first(fn ($c) => $c->getName() === 'area_id');
-    $default3 = $areaComponent3->getDefaultState();
-    expect($default3)->toBe('NBO');
+    $areasComponent3 = collect($components3)->first(fn ($c) => $c->getName() === 'areas');
+    $default3 = $areasComponent3->getDefaultState();
+    expect($default3)->toBe([$area->id]);
+});
+
+test('location form geofence_radius_m and map picker are configured with circle visualization', function () {
+    $schema = Schema::make();
+    $configuredSchema = LocationForm::configure($schema);
+    $components = $configuredSchema->getComponents();
+
+    // 1. geofence_radius_m component
+    $radiusComponent = collect($components)
+        ->first(fn ($component) => $component->getName() === 'geofence_radius_m');
+
+    expect($radiusComponent)->not->toBeNull();
+    expect($radiusComponent->getSuffixLabel())->toBe('m');
+    expect($radiusComponent->getMinValue())->toBe(100);
+    expect($radiusComponent->getMaxValue())->toBe(5000);
+    expect($radiusComponent->getExtraInputAttributes())->toHaveKey('data-geofence-radius-input');
+
+    // 2. coordinates component
+    $coordinatesComponent = collect($components)
+        ->first(fn ($component) => $component->getName() === 'coordinates');
+
+    expect($coordinatesComponent)->not->toBeNull();
+    expect($coordinatesComponent->getView())->toBe('filament.forms.components.location-map-picker');
+});
+
+test('location map picker blade view renders with geofence alpine component', function () {
+    $perm1 = Permission::firstOrCreate(['name' => 'ViewAny:Location', 'guard_name' => 'web']);
+    $perm2 = Permission::firstOrCreate(['name' => 'Create:Location', 'guard_name' => 'web']);
+    $user = User::factory()->create();
+    $user->givePermissionTo([$perm1, $perm2]);
+    $this->actingAs($user);
+
+    Livewire::test(CreateLocation::class)
+        ->assertSuccessful()
+        ->assertSee('locationGeofenceMap')
+        ->assertSee('geofence_radius_m')
+        ->assertSee('data-geofence-radius-input');
 });
 
 test('creating location with area creates single unique record', function () {
@@ -117,4 +154,157 @@ test('creating location with area creates single unique record', function () {
 
     $location->update(['name' => 'Kho Nội Bài 01 Updated']);
     expect($location->refresh()->name)->toBe('Kho Nội Bài 01 Updated');
+});
+
+test('creating location via createOption modal inside order action works without Order areas relationship error', function () {
+    Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
+    $viewOrder = Permission::firstOrCreate(['name' => 'ViewAny:Order', 'guard_name' => 'web']);
+    $createOrder = Permission::firstOrCreate(['name' => 'Create:Order', 'guard_name' => 'web']);
+    $user = User::factory()->create();
+    $user->givePermissionTo([$viewOrder, $createOrder]);
+    $this->actingAs($user);
+
+    $nba = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'NBA',
+        'name' => 'Hàng đến NBA',
+        'is_active' => true,
+        'sort_order' => 1,
+    ]);
+    $asg = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'ASG',
+        'name' => 'Hàng GOM',
+        'is_active' => true,
+        'sort_order' => 2,
+    ]);
+    $zone = BillingZone::create([
+        'code' => 'NOI-BAI',
+        'name' => 'Nội Bài',
+    ]);
+
+    Livewire::test(ListOrders::class)
+        ->callAction(
+            [
+                TestAction::make('create_order_hhhk_action'),
+                TestAction::make('createOption')->schemaComponent('pickup_location_id'),
+            ],
+            data: [
+                'areas' => [$nba->id, $asg->id],
+                'code' => 'alsc-test',
+                'billing_zone_id' => $zone->id,
+                'name' => 'Kho ALSC Test',
+                'loc_type' => LocationType::Pickup->value,
+                'is_active' => true,
+            ],
+        )
+        ->assertHasNoFormErrors();
+
+    $location = Location::query()->where('code', 'ALSC-TEST')->first();
+
+    expect($location)->not->toBeNull()
+        ->and($location->billing_zone_id)->toBe($zone->id)
+        ->and($location->areas()->pluck('areas.id')->sort()->values()->all())->toBe([$nba->id, $asg->id]);
+});
+
+test('creating location via createOption modal inside customer form works and syncs areas', function () {
+    $viewCustomer = Permission::firstOrCreate(['name' => 'ViewAny:Customer', 'guard_name' => 'web']);
+    $createCustomer = Permission::firstOrCreate(['name' => 'Create:Customer', 'guard_name' => 'web']);
+    $user = User::factory()->create();
+    $user->givePermissionTo([$viewCustomer, $createCustomer]);
+    $this->actingAs($user);
+
+    $area = Area::create([
+        'type' => OrderType::Hhhk,
+        'code' => 'HAN',
+        'name' => 'Hà Nội',
+        'is_active' => true,
+    ]);
+
+    Livewire::test(CreateCustomer::class)
+        ->callAction(
+            TestAction::make('createOption')->schemaComponent('location_id'),
+            data: [
+                'areas' => [$area->id],
+                'code' => 'cust-loc-01',
+                'name' => 'Kho Khách Hàng 01',
+                'loc_type' => LocationType::Warehouse->value,
+                'is_active' => true,
+            ],
+        )
+        ->assertHasNoFormErrors();
+
+    $location = Location::query()->where('code', 'CUST-LOC-01')->first();
+
+    expect($location)->not->toBeNull()
+        ->and($location->areas()->pluck('areas.id')->all())->toBe([$area->id]);
+});
+
+test('edit location preserves existing location record and areas relationship', function () {
+    $viewAny = Permission::firstOrCreate(['name' => 'ViewAny:Location', 'guard_name' => 'web']);
+    $update = Permission::firstOrCreate(['name' => 'Update:Location', 'guard_name' => 'web']);
+    $user = User::factory()->create();
+    $user->givePermissionTo([$viewAny, $update]);
+    $this->actingAs($user);
+
+    $area1 = Area::create(['type' => OrderType::Hhhk, 'code' => 'A1', 'name' => 'Area 1', 'is_active' => true]);
+    $area2 = Area::create(['type' => OrderType::Hhhk, 'code' => 'A2', 'name' => 'Area 2', 'is_active' => true]);
+
+    $location = Location::create([
+        'area_id' => $area1->id,
+        'code' => 'EDIT-LOC',
+        'name' => 'Edit Location',
+        'loc_type' => LocationType::Warehouse->value,
+        'is_active' => true,
+    ]);
+    $location->areas()->sync([$area1->id]);
+
+    Livewire::test(EditLocation::class, ['record' => $location->getRouteKey()])
+        ->assertSchemaStateSet([
+            'code' => 'EDIT-LOC',
+            'areas' => [$area1->id],
+        ])
+        ->fillForm([
+            'areas' => [$area1->id, $area2->id],
+            'name' => 'Edit Location Updated',
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($location->refresh()->name)->toBe('Edit Location Updated')
+        ->and($location->areas()->pluck('areas.id')->sort()->values()->all())->toBe([$area1->id, $area2->id]);
+});
+
+test('location rectangle and square geofence bounds validate inside and outside points accurately', function () {
+    $location = Location::create([
+        'code' => 'RECT-LOC-01',
+        'name' => 'Kho Hình Chữ Nhật',
+        'loc_type' => LocationType::Warehouse->value,
+        'lat' => 21.0285000,
+        'lng' => 105.8542000,
+        'geofence_type' => 'rectangle',
+        'geofence_radius_m' => 500,
+        'geofence_bounds' => [
+            'north' => 21.0320000,
+            'south' => 21.0250000,
+            'east' => 105.8580000,
+            'west' => 105.8500000,
+        ],
+        'is_active' => true,
+    ]);
+
+    expect($location->hasRectangleGeofence())->toBeTrue();
+
+    // Point inside rectangle -> distance 0m
+    expect($location->isPointInsideBounds(21.0290, 105.8550))->toBeTrue()
+        ->and($location->distanceToBoundsMeters(21.0290, 105.8550))->toBe(0);
+
+    // Point outside rectangle (north of 21.0320) -> positive distance in meters
+    expect($location->isPointInsideBounds(21.0400, 105.8550))->toBeFalse()
+        ->and($location->distanceToBoundsMeters(21.0400, 105.8550))->toBeGreaterThan(800);
+
+    $dims = $location->getBoundsDimensionsMeters();
+    expect($dims)->not->toBeNull()
+        ->and($dims['width_m'])->toBeGreaterThan(700)
+        ->and($dims['height_m'])->toBeGreaterThan(700);
 });

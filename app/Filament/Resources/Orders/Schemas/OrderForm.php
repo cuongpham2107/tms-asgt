@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Orders\Schemas;
 use App\Enums\CargoType;
 use App\Enums\FreightRateType;
 use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\Priority;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
@@ -13,6 +14,7 @@ use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
 use App\Models\Customer;
+use App\Models\Order;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -44,6 +46,26 @@ class OrderForm extends CreatesOrderTransportCards
                             ->icon('heroicon-o-information-circle')
                             ->columns(['default' => 1, 'sm' => 2, 'md' => 4])
                             ->schema([
+                                ToggleButtons::make('type')
+                                    ->label('Loại đơn hàng')
+                                    ->required()
+                                    ->options(OrderType::class)
+                                    ->default(OrderType::Hhhk->value)
+                                    ->disabled(fn (?Model $record): bool => $record instanceof Order && (bool) $record->charge?->isLocked())
+                                    ->dehydrated(fn (?Model $record): bool => ! ($record instanceof Order && (bool) $record->charge?->isLocked()))
+                                    ->helperText(fn (?Model $record): ?string => ($record instanceof Order && (bool) $record->charge?->isLocked())
+                                        ? 'Đơn hàng đã khoá cước (đã xuất bảng kê), không thể đổi loại đơn.'
+                                        : null)
+                                    ->live()
+                                    ->afterStateUpdated(function ($state, Get $get, Set $set): void {
+                                        $typeValue = $state instanceof OrderType ? $state->value : $state;
+                                        if ($typeValue === OrderType::External->value && blank($get('cargo_type'))) {
+                                            $set('cargo_type', CargoType::Gcr->value);
+                                        }
+                                    })
+                                    ->inline()
+                                    ->columnSpanFull(),
+
                                 ToggleButtons::make('area_id')
                                     ->label('Khu vực')
                                     ->required()
@@ -212,24 +234,24 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->inline(false)
                                     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 
-                                TextInput::make('pickup_contact')
-                                    ->label('Người liên hệ nhận')
-                                    ->placeholder('Người nhận hàng')
-                                    ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
+                                // TextInput::make('pickup_contact')
+                                //     ->label('Người liên hệ nhận')
+                                //     ->placeholder('Người nhận hàng')
+                                //     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
+                                //     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
 
-                                TextInput::make('pickup_phone')
-                                    ->label('SĐT liên hệ nhận')
-                                    ->placeholder('Số điện thoại')
-                                    ->tel()
-                                    ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
+                                // TextInput::make('pickup_phone')
+                                //     ->label('SĐT liên hệ nhận')
+                                //     ->placeholder('Số điện thoại')
+                                //     ->tel()
+                                //     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
+                                //     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 2]),
 
-                                TextInput::make('pickup_address')
-                                    ->label('Địa chỉ chi tiết nhận hàng (nếu có)')
-                                    ->placeholder('Số nhà, tên đường...')
-                                    ->visible(fn (Get $get): bool => self::isExternalOrder($get))
-                                    ->columnSpanFull(),
+                                // TextInput::make('pickup_address')
+                                //     ->label('Địa chỉ chi tiết nhận hàng (nếu có)')
+                                //     ->placeholder('Số nhà, tên đường...')
+                                //     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
+                                //     ->columnSpanFull(),
 
                                 Repeater::make('deliveryPoints')
                                     ->label(fn (Get $get): string => self::isExternalOrder($get) ? 'Địa chỉ giao hàng' : 'Điểm đến')
@@ -399,6 +421,8 @@ class OrderForm extends CreatesOrderTransportCards
 
     private static function getSelectedOrderTypeCode(Get $get): ?string
     {
-        return $get('type') ?? $get('../../type');
+        $type = $get('type') ?? $get('../../type');
+
+        return $type instanceof OrderType ? $type->value : $type;
     }
 }

@@ -10,6 +10,7 @@ use App\Enums\OrderType;
 use App\Enums\SurchargeType;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\FreightRates\Schemas\FreightRateForm;
+use App\Filament\Resources\Orders\Schemas\OrderForm;
 use App\Filament\Traits\HasTripStatistics;
 use App\Models\Customer;
 use App\Models\FeeType;
@@ -24,6 +25,7 @@ use App\Services\Export\BillingStatement\BillingStatementExporter;
 use App\Services\Export\BillingStatement\BillingStatementTemplates;
 use App\Services\Export\TripExcelExportService;
 use App\Services\Import\OrderPackagesImporter;
+use App\Services\ShiftScheduleService;
 use BackedEnum;
 use Carbon\Carbon;
 use Closure;
@@ -118,12 +120,14 @@ class TripStatisticsReport extends Page
 
     public function mount(): void
     {
+        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+
         if (blank($this->startDate)) {
-            $this->startDate = now()->startOfMonth()->format('Y-m-d');
+            $this->startDate = $shiftNow->copy()->startOfMonth()->format('Y-m-d');
         }
 
         if (blank($this->endDate)) {
-            $this->endDate = now()->format('Y-m-d');
+            $this->endDate = $shiftNow->format('Y-m-d');
         }
 
         $this->syncDatePreset();
@@ -220,27 +224,28 @@ class TripStatisticsReport extends Page
     public function setDatePreset(string $preset): void
     {
         $this->datePreset = $preset;
+        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
 
         match ($preset) {
             'today' => [
-                $this->startDate = now()->format('Y-m-d'),
-                $this->endDate = now()->format('Y-m-d'),
+                $this->startDate = $shiftNow->format('Y-m-d'),
+                $this->endDate = $shiftNow->format('Y-m-d'),
             ],
             'yesterday' => [
-                $this->startDate = now()->subDay()->format('Y-m-d'),
-                $this->endDate = now()->subDay()->format('Y-m-d'),
+                $this->startDate = $shiftNow->copy()->subDay()->format('Y-m-d'),
+                $this->endDate = $shiftNow->copy()->subDay()->format('Y-m-d'),
             ],
             'last7days' => [
-                $this->startDate = now()->subDays(6)->format('Y-m-d'),
-                $this->endDate = now()->format('Y-m-d'),
+                $this->startDate = $shiftNow->copy()->subDays(6)->format('Y-m-d'),
+                $this->endDate = $shiftNow->format('Y-m-d'),
             ],
             'thisMonth' => [
-                $this->startDate = now()->startOfMonth()->format('Y-m-d'),
-                $this->endDate = now()->format('Y-m-d'),
+                $this->startDate = $shiftNow->copy()->startOfMonth()->format('Y-m-d'),
+                $this->endDate = $shiftNow->format('Y-m-d'),
             ],
             'lastMonth' => [
-                $this->startDate = now()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d'),
-                $this->endDate = now()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
+                $this->startDate = $shiftNow->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d'),
+                $this->endDate = $shiftNow->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
             ],
             default => null,
         };
@@ -255,30 +260,32 @@ class TripStatisticsReport extends Page
             return;
         }
 
-        $today = now()->format('Y-m-d');
-        $yesterday = now()->subDay()->format('Y-m-d');
+        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+        $today = $shiftNow->format('Y-m-d');
+        $yesterday = $shiftNow->copy()->subDay()->format('Y-m-d');
 
         $this->datePreset = match (true) {
-            $this->startDate === now()->startOfMonth()->format('Y-m-d') && $this->endDate === $today => 'thisMonth',
+            $this->startDate === $shiftNow->copy()->startOfMonth()->format('Y-m-d') && $this->endDate === $today => 'thisMonth',
             $this->startDate === $today && $this->endDate === $today => 'today',
             $this->startDate === $yesterday && $this->endDate === $yesterday => 'yesterday',
-            $this->startDate === now()->subDays(6)->format('Y-m-d') && $this->endDate === $today => 'last7days',
-            $this->startDate === now()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === now()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d') => 'lastMonth',
+            $this->startDate === $shiftNow->copy()->subDays(6)->format('Y-m-d') && $this->endDate === $today => 'last7days',
+            $this->startDate === $shiftNow->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === $shiftNow->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d') => 'lastMonth',
             default => null,
         };
     }
 
     private function matchesPresetDates(string $preset): bool
     {
-        $today = now()->format('Y-m-d');
-        $yesterday = now()->subDay()->format('Y-m-d');
+        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+        $today = $shiftNow->format('Y-m-d');
+        $yesterday = $shiftNow->copy()->subDay()->format('Y-m-d');
 
         return match ($preset) {
             'today' => $this->startDate === $today && $this->endDate === $today,
             'yesterday' => $this->startDate === $yesterday && $this->endDate === $yesterday,
-            'last7days' => $this->startDate === now()->subDays(6)->format('Y-m-d') && $this->endDate === $today,
-            'thisMonth' => $this->startDate === now()->startOfMonth()->format('Y-m-d') && $this->endDate === $today,
-            'lastMonth' => $this->startDate === now()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === now()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
+            'last7days' => $this->startDate === $shiftNow->copy()->subDays(6)->format('Y-m-d') && $this->endDate === $today,
+            'thisMonth' => $this->startDate === $shiftNow->copy()->startOfMonth()->format('Y-m-d') && $this->endDate === $today,
+            'lastMonth' => $this->startDate === $shiftNow->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === $shiftNow->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
             default => false,
         };
     }
@@ -450,8 +457,9 @@ class TripStatisticsReport extends Page
 
     public function resetFilters(): void
     {
-        $this->startDate = now()->startOfMonth()->format('Y-m-d');
-        $this->endDate = now()->format('Y-m-d');
+        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+        $this->startDate = $shiftNow->copy()->startOfMonth()->format('Y-m-d');
+        $this->endDate = $shiftNow->format('Y-m-d');
         $this->datePreset = 'thisMonth';
         $this->customerId = null;
         $this->vehicleOwner = 'all';
@@ -573,7 +581,7 @@ class TripStatisticsReport extends Page
             ->modalWidth(function (array $arguments): Width|string {
                 $order = Order::find($arguments['orderId'] ?? null);
 
-                return $order?->isExternal() ? 'max-w-[96vw]' : Width::FiveExtraLarge;
+                return $order?->isExternal() ? 'max-w-[96vw]' : Width::ThreeExtraLarge;
             })
             ->extraModalWindowAttributes(function (array $arguments): array {
                 $order = Order::find($arguments['orderId'] ?? null);
@@ -1174,6 +1182,109 @@ class TripStatisticsReport extends Page
             });
     }
 
+    /**
+     * Sửa nhanh thông tin đơn hàng ngay trong modal cước.
+     */
+    private function editOrderAction(?Order $order): Action
+    {
+        return Action::make('editOrder')
+            ->icon(Heroicon::OutlinedPencilSquare)
+            ->tooltip('Sửa thông tin đơn hàng')
+            ->hidden($order === null)
+            ->record($order)
+            // Cùng quyền với menu Đơn hàng (Shield: Update:Order), không có quyền thì ẩn nút.
+            ->authorize('update')
+            ->modalHeading(fn (): string => 'Sửa đơn hàng '.($order?->order_code ?? ''))
+            ->modalWidth(Width::SixExtraLarge)
+            ->modalSubmitActionLabel('Lưu đơn hàng')
+            ->fillForm(function () use ($order): array {
+                if ($order === null) {
+                    return [];
+                }
+
+                $data = $order->attributesToArray();
+                $data['vehicle_id'] = $order->trip?->vehicle_id;
+                $data['driver_id'] = $order->trip?->driver_id;
+
+                return $data;
+            })
+            ->schema(fn (Schema $schema): array => OrderForm::configure($schema)->getComponents())
+            ->action(function (array $data, Schema $schema, Set $set) use ($order): void {
+                if ($order === null) {
+                    return;
+                }
+
+                $order->loadMissing('charge');
+                $wasExternal = $order->isExternal();
+
+                if ($order->charge?->isLocked()) {
+                    $incomingType = $data['type'] ?? null;
+                    $incomingTypeValue = $incomingType instanceof OrderType ? $incomingType->value : $incomingType;
+
+                    if (filled($incomingTypeValue) && $incomingTypeValue !== $order->type?->value) {
+                        Notification::make()
+                            ->title('Không thể đổi loại đơn')
+                            ->body('Đơn hàng đã khoá cước (đã xuất bảng kê), không được phép thay đổi loại đơn.')
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    unset($data['type']);
+                }
+
+                unset($data['vehicle_id'], $data['driver_id']);
+
+                $order->update(Arr::except($data, ['deliveryPoints']));
+                $schema->model($order)->saveRelationships();
+                $order->refresh()->loadMissing('charge');
+
+                $isNowExternal = $order->isExternal();
+                $typeChanged = $wasExternal !== $isNowExternal;
+
+                if ($typeChanged) {
+                    if ($isNowExternal) {
+                        $this->resolveCharge($order->id);
+                    } elseif ($order->charge !== null && ! $order->charge->isLocked()) {
+                        $order->charge->fees()->delete();
+                        $order->charge->delete();
+                    }
+                }
+
+                $this->clearBaseRowsCache();
+                $this->bumpDataVersion();
+
+                Notification::make()
+                    ->title('Đã lưu đơn hàng')
+                    ->body('Thông tin đơn hàng '.($order->order_code ?? '').' đã được cập nhật.')
+                    ->success()
+                    ->send();
+
+                if ($typeChanged) {
+                    $this->unmountAction(cancelParentActions: true);
+                    $this->mountAction('editCharge', ['orderId' => $order->id]);
+
+                    return;
+                }
+
+                // Cập nhật lại các trường hiển thị và tính toán trên form cước
+                if (array_key_exists('total_packages', $data)) {
+                    $set('total_packages', $data['total_packages']);
+                }
+                if (array_key_exists('total_weight', $data)) {
+                    $set('total_weight', $data['total_weight']);
+                }
+                if (array_key_exists('chargeable_weight', $data) && filled($data['chargeable_weight'])) {
+                    $set('chargeable_weight', $data['chargeable_weight']);
+                }
+                if (array_key_exists('cargo_type', $data)) {
+                    $cargoTypeValue = $data['cargo_type'] instanceof CargoType ? $data['cargo_type']->value : $data['cargo_type'];
+                    $set('cargo_type', $cargoTypeValue);
+                }
+            });
+    }
+
     private function addFreightRateAction(?OrderCharge $charge, ?Closure $refreshPrice = null, string $name = 'addFreightRate'): Action
     {
         $order = $charge?->order?->loadMissing(['pickupLocation', 'deliveryPoints.location']);
@@ -1752,7 +1863,8 @@ class TripStatisticsReport extends Page
                         ->badge()
                         ->color('info')
                         ->fontFamily(FontFamily::Mono)
-                        ->weight(FontWeight::Bold),
+                        ->weight(FontWeight::Bold)
+                        ->suffixAction($this->editOrderAction($order)),
                     $entry('summary_customer_code', 'Khách hàng', Heroicon::OutlinedBuildingOffice, $order?->customer?->code ?? $row['customer'] ?? '—')
                         ->badge()
                         ->color('gray')

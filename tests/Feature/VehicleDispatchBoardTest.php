@@ -12,6 +12,7 @@ use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
+use App\Filament\Pages\DriverDutyReport;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Filament\Widgets\VehicleDispatchTable;
 use App\Models\Area;
@@ -29,8 +30,10 @@ use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
@@ -55,6 +58,7 @@ function dispatchWidgetRowFor(string $plate, array $props = []): ?array
 }
 
 beforeEach(function () {
+    Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
     $admin = User::factory()->create();
     $this->actingAs($admin);
 });
@@ -207,8 +211,9 @@ test('vehicle helpers format BSX, status and driver information correctly', func
     expect(VehicleDispatchBoard::formatShortAddress('ALS Bắc Ninh, KCN Yên Phong, đường YP6, Yên Phong, Bắc Ninh, Việt Nam'))
         ->toBe('Yên Phong, Bắc Ninh');
 
-    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Nguyễn Văn Test')
-        ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('BN')
+    // Khi chưa có chuyến trong ca hôm nay -> Tên lái xe là '—' và Điểm trực là '—'
+    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('—')
+        ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('—')
         ->and(VehicleDispatchBoard::getMovementStatus($vehicle))->toBe('Đang chạy')
         ->and(VehicleDispatchBoard::getSpeed($vehicle))->toBe('56 km/h');
 
@@ -220,9 +225,11 @@ test('vehicle helpers format BSX, status and driver information correctly', func
     ]);
 
     // Reload vehicle relations
-    $vehicle->load('trips');
+    $vehicle->load('trips.driver');
 
-    expect(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đang giao')
+    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Nguyễn Văn Test')
+        ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('BN')
+        ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đang giao')
         ->and(VehicleDispatchBoard::getStatusBadgeColor($vehicle))->toBe('warning');
 
     // Test EUP movement statuses:
@@ -329,7 +336,7 @@ test('vehicle dispatch board allows clicking trip status when trip is paused due
         ->assertHasNoTableActionErrors();
 });
 
-test('vehicle dispatch board does not make status clickable for normal trips or vehicles without trip', function () {
+test('vehicle dispatch board allows editing trip via status for normal trips and keeps vehicles without trip non-clickable', function () {
     $vehicleWithNormalTrip = Vehicle::factory()->create([
         'plate_number' => '20C-NORMAL',
         'type' => VehicleOwnerType::Company,
@@ -351,15 +358,20 @@ test('vehicle dispatch board does not make status clickable for normal trips or 
     $vehicleWithNormalTrip->load('trips');
     $vehicleWithoutTrip->load('trips');
 
-    expect(VehicleDispatchBoard::canClickTripStatus($vehicleWithNormalTrip))->toBeFalse()
+    expect(VehicleDispatchBoard::canClickTripStatus($vehicleWithNormalTrip))->toBeTrue()
         ->and(VehicleDispatchBoard::canClickTripStatus($vehicleWithoutTrip))->toBeFalse();
+
+    $row = dispatchWidgetRowFor($vehicleWithNormalTrip->plate_number);
+    expect($row['statusAction']['name'] ?? null)->toBe('edit_trip');
+
+    $noTripRow = dispatchWidgetRowFor($vehicleWithoutTrip->plate_number);
+    expect($noTripRow['statusAction'] ?? null)->toBeNull();
 
     Livewire::test(VehicleDispatchBoard::class)
         ->assertStatus(200)
-        ->assertDontSee('mountTableAction(\'reassign_driver\', \''.$vehicleWithNormalTrip->id.'\')', false)
-        ->assertDontSee('mountTableAction(\'resolve_km_report\', \''.$vehicleWithNormalTrip->id.'\')', false)
-        ->assertDontSee('mountTableAction(\'reassign_driver\', \''.$vehicleWithoutTrip->id.'\')', false)
-        ->assertDontSee('mountTableAction(\'resolve_km_report\', \''.$vehicleWithoutTrip->id.'\')', false);
+        ->call('openStatusAction', 'edit_trip', $vehicleWithNormalTrip->id)
+        ->assertActionMounted('edit_trip')
+        ->assertHasNoActionErrors();
 });
 
 test('vehicle dispatch board prioritizes resolve_km_report when a driver swap trip is paused', function () {
@@ -580,7 +592,7 @@ test('vehicle active_trip and dispatch board prioritizes in-progress trip over n
 });
 
 test('vehicle station resolves from driver station in users table', function () {
-    // 1. Xe có tài xế trực tại NBA (Nội Bài)
+    // 1. Xe có tài xế trực tại NBA (Nội Bài) đang chạy chuyến trong ca
     $driverNB = User::factory()->create([
         'name' => 'Tài xế Nội Bài',
         'station' => OnDutyLocation::Nba,
@@ -590,9 +602,19 @@ test('vehicle station resolves from driver station in users table', function () 
         'type' => VehicleOwnerType::Company,
         'current_driver_id' => $driverNB->id,
     ]);
+    // Khi chưa có chuyến trong ca -> không có tài xế chạy -> '—'
+    expect(VehicleDispatchBoard::getDriverStation($vNB))->toBe('—');
+
+    Trip::factory()->create([
+        'vehicle_id' => $vNB->id,
+        'driver_id' => $driverNB->id,
+        'status' => TripStatus::Started,
+        'started_at' => now()->subMinutes(15),
+    ]);
+    $vNB->load('trips.driver');
     expect(VehicleDispatchBoard::getDriverStation($vNB))->toBe('NB');
 
-    // 2. Xe có tài xế trực tại BN (Bắc Ninh)
+    // 2. Xe có tài xế trực tại BN (Bắc Ninh) đã hoàn thành chuyến trong ca (Sẵn sàng)
     $driverBN = User::factory()->create([
         'name' => 'Tài xế Bắc Ninh',
         'station' => OnDutyLocation::Bn,
@@ -602,21 +624,39 @@ test('vehicle station resolves from driver station in users table', function () 
         'type' => VehicleOwnerType::Company,
         'current_driver_id' => $driverBN->id,
     ]);
+    Trip::factory()->create([
+        'vehicle_id' => $vBN->id,
+        'driver_id' => $driverBN->id,
+        'status' => TripStatus::Completed,
+        'end_km' => 15000,
+        'started_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(10),
+        'completed_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(40),
+    ]);
+    $vBN->load('trips.driver');
     expect(VehicleDispatchBoard::getDriverStation($vBN))->toBe('BN');
 
-    // 3. Xe có tài xế trực tại TN (Thái Nguyên)
-    $driverTN = User::factory()->create([
-        'name' => 'Tài xế Thái Nguyên',
-        'station' => OnDutyLocation::Tn,
+    // 3. Xe có tài xế đang chạy nhưng cả tài xế và xe đều chưa cấu hình station -> trả về '—'
+    $driverNoStation = User::factory()->create([
+        'name' => 'Trần Đức Sơn',
+        'station' => null,
     ]);
     $vTN = Vehicle::factory()->create([
-        'plate_number' => '99H-DRIVER-TN',
+        'plate_number' => '20H-01836',
         'type' => VehicleOwnerType::Company,
-        'current_driver_id' => $driverTN->id,
+        'current_driver_id' => $driverNoStation->id,
     ]);
-    expect(VehicleDispatchBoard::getDriverStation($vTN))->toBe('TN');
+    Trip::factory()->create([
+        'vehicle_id' => $vTN->id,
+        'driver_id' => $driverNoStation->id,
+        'status' => TripStatus::Completed,
+        'end_km' => 15000,
+        'started_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(10),
+        'completed_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(40),
+    ]);
+    $vTN->load('trips.driver');
+    expect(VehicleDispatchBoard::getDriverStation($vTN))->toBe('—');
 
-    // 4. Xe chưa có tài xế trực -> Trả về OTHER
+    // 4. Xe chưa có tài xế chạy trong ca -> Trả về '—'
     $vEmpty = Vehicle::factory()->create([
         'plate_number' => '29C-EMPTY-DRIVER',
         'type' => VehicleOwnerType::Company,
@@ -624,7 +664,7 @@ test('vehicle station resolves from driver station in users table', function () 
         'even_driver_id' => null,
         'odd_driver_id' => null,
     ]);
-    expect(VehicleDispatchBoard::getDriverStation($vEmpty))->toBe('OTHER');
+    expect(VehicleDispatchBoard::getDriverStation($vEmpty))->toBe('—');
 });
 
 test('trip count only counts trips from start to end and excludes pending trips', function () {
@@ -713,6 +753,7 @@ test('vehicle dispatch board respects 8am to 8am next day shift window', functio
         'status' => TripStatus::Completed,
         'started_at' => Carbon::create(2026, 10, 21, 5, 0, 0),
         'completed_at' => Carbon::create(2026, 10, 21, 7, 30, 0),
+        'end_km' => 1000,
     ]);
 
     // Chuyến B: Bắt đầu lúc 09:00 ngày 21/10 (sau 8h sáng) -> Thuộc ca ngày 21/10
@@ -723,6 +764,7 @@ test('vehicle dispatch board respects 8am to 8am next day shift window', functio
         'status' => TripStatus::Completed,
         'started_at' => Carbon::create(2026, 10, 21, 9, 0, 0),
         'completed_at' => Carbon::create(2026, 10, 21, 11, 0, 0),
+        'end_km' => 1050,
     ]);
 
     // Chuyến C: Chạy lúc 02:00 rạng sáng ngày 22/10 -> Vẫn thuộc ca ngày 21/10 (vì trước 8h ngày 22)
@@ -733,6 +775,7 @@ test('vehicle dispatch board respects 8am to 8am next day shift window', functio
         'status' => TripStatus::Completed,
         'started_at' => Carbon::create(2026, 10, 22, 2, 0, 0),
         'completed_at' => Carbon::create(2026, 10, 22, 4, 30, 0),
+        'end_km' => 1100,
     ]);
 
     // Khi test lúc 14:00 ngày 21/10 (ca ngày 21/10 từ 08:00 ngày 21 -> 08:00 ngày 22)
@@ -759,6 +802,20 @@ test('vehicle dispatch board respects 8am to 8am next day shift window', functio
         ->toHaveCount(2);
 
     expect(VehicleDispatchBoard::getTodayTripsCount($vehicle))->toBe(2);
+
+    // Tại 06:00 sáng ngày 22/10 (vẫn trong ca 21/10): Xe chờ tính từ lúc hoàn thành chuyến C (04:30) -> 90 phút (1h 30p)
+    $vehicle->load('trips');
+    $xeChoAt6h = VehicleDispatchBoard::getXeChoData($vehicle);
+    expect($xeChoAt6h['text'])->toBe('1h 30p')
+        ->and($xeChoAt6h['minutes'])->toBe(90);
+
+    // Sang 09:00 sáng ngày 22/10 (bước sang ca mới 08:00 22/10 -> 08:00 23/10):
+    // Chuyến C (hoàn thành 04:30 sáng) thuộc ca cũ (21/10) nên hiển thị "1 ngày" không chạy và số chuyến = 0
+    Carbon::setTestNow(Carbon::create(2026, 10, 22, 9, 0, 0));
+    $vehicle->load('trips');
+    $xeChoAt9h = VehicleDispatchBoard::getXeChoData($vehicle);
+    expect($xeChoAt9h['text'])->toBe('1 ngày')
+        ->and(VehicleDispatchBoard::getTodayTripsCount($vehicle))->toBe(0);
 
     Carbon::setTestNow();
 });
@@ -815,7 +872,7 @@ test('vehicle dispatch board prioritizes paused trip over pending trip so km rep
 });
 
 test('vehicle dispatch board distinguishes idle vehicle and pending trip with different colors', function () {
-    // 1. Xe chờ: không có chuyến nào
+    // 1. Xe không có chuyến nào trong ngày (08:00 -> 08:00): trạng thái 'Chờ chạy' (nền xám), tên lái xe '—'
     $idleVehicle = Vehicle::factory()->create([
         'plate_number' => '29C-IDLE-VEHICLE',
         'type' => VehicleOwnerType::Company,
@@ -823,8 +880,34 @@ test('vehicle dispatch board distinguishes idle vehicle and pending trip with di
         'is_active' => true,
     ]);
 
-    expect(VehicleDispatchBoard::getTripStatusLabel($idleVehicle))->toBe('Xe chờ')
+    expect(VehicleDispatchBoard::getTripStatusLabel($idleVehicle))->toBe('Chờ chạy')
+        ->and(VehicleDispatchBoard::getDriverName($idleVehicle))->toBe('—')
+        ->and(VehicleDispatchBoard::getXeChoData($idleVehicle)['text'])->toBe('—')
         ->and(VehicleDispatchBoard::getTripStatusBadgeClass($idleVehicle))->toContain('bg-slate-100', 'text-slate-500', 'font-normal');
+
+    // 1b. Xe đã có chuyến hoàn thành trong khung 08:00 -> 08:00 mà chưa có chuyến mới: trạng thái 'Sẵn sàng'
+    $readyDriver = User::factory()->create(['name' => 'Lái Xe Sẵn Sàng']);
+    $readyVehicle = Vehicle::factory()->create([
+        'plate_number' => '29C-READY-VEHICLE',
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+    $completedToday = Trip::factory()->create([
+        'trip_code' => 'TRIP-DONE-TODAY',
+        'vehicle_id' => $readyVehicle->id,
+        'driver_id' => $readyDriver->id,
+        'status' => TripStatus::Completed,
+        'end_km' => 12000,
+        'started_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addMinutes(30),
+        'completed_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addHour(),
+    ]);
+    $readyVehicle->load('trips.driver');
+
+    expect(VehicleDispatchBoard::getTripStatusLabel($readyVehicle))->toBe('Sẵn sàng')
+        ->and(VehicleDispatchBoard::getDriverName($readyVehicle))->toBe('Lái Xe Sẵn Sàng')
+        ->and(VehicleDispatchBoard::getTripStatusBadgeClass($readyVehicle))->toContain('text-emerald-600', 'font-bold')
+        ->and(VehicleDispatchBoard::getTripStatusSortPriority($readyVehicle))->toBeGreaterThan(VehicleDispatchBoard::getTripStatusSortPriority($idleVehicle));
 
     // 2. Xe có chuyến Chờ chạy (Pending)
     $pendingVehicle = Vehicle::factory()->create([
@@ -987,21 +1070,7 @@ test('vehicle dispatch board only shows shift label when driver has an open acti
         'is_active' => true,
     ]);
 
-    // 1. Khi lái xe chưa đăng nhập mở ca trên app -> Phải trả về '—', KHÔNG tự tiện hiện 'Ca chẵn'
-    expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('—');
-
-    // 2. Khi lái xe có ca cũ nhưng ĐÃ KẾT THÚC (end_time !== null) -> Vẫn là '—'
-    $endedShift = DriverShift::create([
-        'driver_id' => $driver->id,
-        'shift_type' => ShiftType::MorningHalf,
-        'start_time' => now()->subHours(8),
-        'end_time' => now()->subHours(2),
-    ]);
-
-    $vehicle->load('driver.driverShifts');
-    expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('—');
-
-    // 3. Khi lái xe đăng nhập app và mở ca làm việc hiện tại (end_time === null)
+    // 1. Khi xe chưa có chuyến nào trong ca hôm nay -> Tên lái xe và Ca đều là '—' kể cả khi tài xế mở ca
     $activeShift = DriverShift::create([
         'driver_id' => $driver->id,
         'shift_type' => ShiftType::MorningHalf,
@@ -1009,17 +1078,30 @@ test('vehicle dispatch board only shows shift label when driver has an open acti
         'end_time' => null,
     ]);
 
-    $vehicle->load('driver.driverShifts');
-    expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('X/2');
+    $vehicle->load('driver.driverShifts', 'trips');
+    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('—')
+        ->and(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('—');
+
+    // 2. Khi tài xế thực tế chạy chuyến trên xe này trong ca hôm nay -> Hiển thị tên tài xế và ca
+    Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Started,
+        'started_at' => now()->subMinutes(30),
+    ]);
+
+    $vehicle->load('trips.driver.driverShifts');
+    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Lái Xe Ca App')
+        ->and(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('X/2');
 
     // Cập nhật sang ca đêm
     $activeShift->update(['shift_type' => ShiftType::NightHalf]);
-    $vehicle->load('driver.driverShifts');
+    $vehicle->load('trips.driver.driverShifts');
     expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('Y/2');
 
     // Cập nhật sang ca cả ngày
     $activeShift->update(['shift_type' => ShiftType::Full]);
-    $vehicle->load('driver.driverShifts');
+    $vehicle->load('trips.driver.driverShifts');
     expect(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('X');
 });
 
@@ -1157,7 +1239,7 @@ test('vehicle dispatch board renders loading overlay and spam click protection f
     Livewire::test(VehicleDispatchBoard::class)
         ->assertStatus(200)
         ->assertSee('wire:loading', false)
-        ->assertSee('wire:target="openTripModal, openGpsModal"', false)
+        ->assertSee('wire:target="openTripModal, openGpsModal, openDriverSwapModal, submitDriverSwap, openStatusAction"', false)
         ->assertSee('Đang tải dữ liệu...')
         ->assertSee('Vui lòng đợi trong giây lát')
         ->call('openGpsModal', $vehicle->id)
@@ -1709,4 +1791,255 @@ test('dispatch widget first renders the table frame without vehicles, then loads
 
     $widget->set('isReady', true)->assertSee('20C-DEFER');
     expect($widget->instance()->getRendererConfiguration()['loaded'])->toBeTrue();
+});
+
+test('dispatch board renames menu to Kiem soat and embeds Tong hop ca truc lai xe tab', function () {
+    Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
+
+    $driverBN = User::factory()->create([
+        'name' => 'Tài xế Ca Trực BN',
+        'station' => OnDutyLocation::Bn,
+        'is_active' => true,
+    ]);
+    $driverBN->assignRole('driver');
+
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '99C-DUTY-01',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driverBN->id,
+        'is_active' => true,
+    ]);
+
+    // Giả lập ca trực từ hôm qua không tự động thoát (start_time hôm qua, end_time = null, có km cũ của hôm qua)
+    $unclosedShift = DriverShift::create([
+        'driver_id' => $driverBN->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now()->subDays(2),
+        'end_time' => null,
+        'total_km' => 999.0,
+        'total_km_loaded' => 888.0,
+        'total_km_empty' => 111.0,
+    ]);
+
+    // Chuyến cũ của hôm qua -> KHÔNG được tính vào Tổng hợp ca trực lái xe hôm nay
+    Trip::factory()->create([
+        'trip_code' => 'TRIP-DUTY-YESTERDAY',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driverBN->id,
+        'shift_id' => $unclosedShift->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subDays(2)->setTime(10, 0),
+        'completed_at' => now()->subDays(2)->setTime(12, 0),
+        'total_km' => 500.0,
+        'total_km_loaded' => 400.0,
+        'total_km_empty' => 100.0,
+    ]);
+
+    // Chuyến chạy trong khung 08:00 sáng hôm nay -> 08:00 sáng hôm sau -> ĐƯỢC tính
+    Trip::factory()->create([
+        'trip_code' => 'TRIP-DUTY-TODAY',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driverBN->id,
+        'shift_id' => $unclosedShift->id,
+        'status' => TripStatus::Completed,
+        'started_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addHour(),
+        'completed_at' => VehicleDispatchBoard::getShiftWindow()[0]->copy()->addHours(2),
+        'total_km' => 120.5,
+        'total_km_loaded' => 100.0,
+        'total_km_empty' => 20.5,
+    ]);
+
+    expect(VehicleDispatchBoard::getNavigationLabel())->toBe('Kiểm soát')
+        ->and(DriverDutyReport::shouldRegisterNavigation())->toBeFalse();
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertSee('Kiểm soát tình trạng xe')
+        ->assertSee('Tổng hợp ca trực lái xe')
+        ->call('switchTab', 'duty')
+        ->assertSet('activeTab', 'duty')
+        ->assertSee('Tài xế Ca Trực BN')
+        ->assertSee('99C-DUTY-01')
+        ->assertSee('120.5')
+        ->assertSee('Chưa thoát ca cũ')
+        ->assertDontSee('999.0')
+        ->assertDontSee('500.0')
+        ->call('filterDutyStation', 'TN')
+        ->assertSet('dutyStationFilter', 'TN')
+        ->assertDontSee('Tài xế Ca Trực BN');
+});
+
+test('rented vehicles dispatch sheet shows only rented vehicles with active or pending trips, omits GPS/KM/Duty columns, and sorts HHHK before External', function () {
+    $driver = User::factory()->create(['name' => 'Tài xế Xe Thuê']);
+    $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true, 'sort_order' => 1]);
+    $customer = Customer::create(['code' => 'CUST-RENT', 'name' => 'Khách Xe Thuê']);
+
+    // 1. Xe thuê rảnh (không có chuyến chờ chạy) -> KHÔNG hiện trên sheet Xe thuê
+    Vehicle::factory()->create([
+        'plate_number' => '29H-RENT-IDLE',
+        'owner' => 'ACE',
+        'type' => VehicleOwnerType::Rent,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    // 2. Xe thuê chạy đơn Hàng ngoài (External)
+    $rentExternal = Vehicle::factory()->create([
+        'plate_number' => '29H-RENT-EXT',
+        'owner' => 'ACE',
+        'type' => VehicleOwnerType::Rent,
+        'status' => VehicleStatus::Running,
+        'is_active' => true,
+    ]);
+    $tripExt = Trip::factory()->create([
+        'trip_code' => 'TRIP-RENT-EXT',
+        'vehicle_id' => $rentExternal->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Pending,
+        'created_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-RENT-EXT-01',
+        'trip_id' => $tripExt->id,
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'type' => OrderType::External,
+        'status' => OrderStatus::Sent,
+        'created_by' => $driver->id,
+    ]);
+
+    // 3. Xe thuê chạy đơn HHHK (gán tên lái xe ngoài trực tiếp trên xe)
+    $rentHhhk = Vehicle::factory()->create([
+        'plate_number' => '29H-RENT-HHHK',
+        'owner' => 'ACE',
+        'type' => VehicleOwnerType::Rent,
+        'external_driver_name' => 'Nguyễn Văn Thuê Ngoài',
+        'status' => VehicleStatus::Running,
+        'is_active' => true,
+    ]);
+    $tripHhhk = Trip::factory()->create([
+        'trip_code' => 'TRIP-RENT-HHHK',
+        'vehicle_id' => $rentHhhk->id,
+        'driver_id' => null,
+        'status' => TripStatus::Pending,
+        'created_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-RENT-HHHK-01',
+        'trip_id' => $tripHhhk->id,
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'type' => OrderType::Hhhk,
+        'status' => OrderStatus::Sent,
+        'created_by' => $driver->id,
+    ]);
+
+    $config = dispatchWidgetConfiguration(['activeOwnerType' => 'rent']);
+
+    expect($config['ownerType'])->toBe('rent')
+        ->and($config['columns'])->toHaveCount(12)
+        ->and($config['columns'])->not->toContain('Vị trí thực tế trên GPS')
+        ->and($config['columns'])->not->toContain('Tốc độ')
+        ->and($config['columns'])->not->toContain('Status')
+        ->and($config['columns'])->not->toContain('KM over')
+        ->and($config['columns'])->not->toContain('Trực')
+        ->and($config['columns'])->not->toContain('Ca');
+
+    $nbRows = collect($config['groups'])->firstWhere('code', 'NB')['rows'] ?? [];
+    $plates = array_map(fn (array $r): string => strip_tags($r['bsx']), $nbRows);
+
+    // Không chứa xe thuê rảnh; xe HHHK xếp trước xe Hàng ngoài
+    expect(implode(' | ', $plates))->not->toContain('29H-RENT-IDLE')
+        ->and($nbRows)->toHaveCount(2)
+        ->and($nbRows[0]['bsx'])->toContain('29H-RENT-HHHK')
+        ->and($nbRows[0]['orderType'])->toBe('HHHK')
+        ->and($nbRows[0]['driverName'])->toBe('Nguyễn Văn Thuê Ngoài')
+        ->and($nbRows[0]['statusAction']['name'] ?? null)->toBe('edit_trip')
+        ->and($nbRows[1]['bsx'])->toContain('29H-RENT-EXT')
+        ->and($nbRows[1]['orderType'])->toBe('Hàng ngoài')
+        ->and($nbRows[1]['driverName'])->toBe('Tài xế Xe Thuê')
+        ->and($nbRows[1]['statusAction']['name'] ?? null)->toBe('edit_trip');
+
+    Livewire::test(VehicleDispatchBoard::class)
+        ->assertSee('Xe thuê')
+        ->call('switchTab', 'rent')
+        ->assertSet('activeTab', 'rent')
+        ->assertSet('activeOwnerType', 'rent');
+});
+
+test('getDutyDriverRows batches queries without N+1 per driver', function () {
+    Role::findOrCreate('driver');
+
+    foreach (range(1, 5) as $idx) {
+        $driver = User::factory()->create([
+            'name' => "Tài xế Batch {$idx}",
+            'station' => OnDutyLocation::Nba,
+            'is_active' => true,
+        ]);
+        $driver->assignRole('driver');
+
+        DriverShift::create([
+            'driver_id' => $driver->id,
+            'shift_type' => ShiftType::Full,
+            'start_time' => now()->subHours(2),
+            'end_time' => null,
+            'start_km' => 1000,
+        ]);
+
+        $vehicle = Vehicle::factory()->create([
+            'plate_number' => "29H-BATCH-{$idx}",
+            'current_driver_id' => $driver->id,
+            'is_active' => true,
+        ]);
+
+        Trip::factory()->create([
+            'trip_code' => "TRIP-BATCH-{$idx}",
+            'vehicle_id' => $vehicle->id,
+            'driver_id' => $driver->id,
+            'status' => TripStatus::Completed,
+            'started_at' => now()->subHour(),
+            'completed_at' => now()->subMinutes(10),
+            'total_km_loaded' => 15,
+            'total_km_empty' => 5,
+            'total_km' => 20,
+        ]);
+    }
+
+    $page = new VehicleDispatchBoard;
+    $queryCount = 0;
+
+    DB::listen(function () use (&$queryCount): void {
+        $queryCount++;
+    });
+
+    $rows = $page->getDutyDriverRows();
+
+    expect($rows)->toHaveCount(5)
+        ->and($queryCount)->toBeLessThanOrEqual(8)
+        ->and($rows->first()->trip_count)->toBe(1)
+        ->and($rows->first()->total_km)->toBe(20.0);
+});
+
+test('vehicle freezeActiveTrip resets when trips relation is reloaded', function () {
+    $vehicle = Vehicle::factory()->create(['is_active' => true]);
+    $firstTrip = Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now()->subMinutes(30),
+    ]);
+
+    $vehicle->load('trips.checkpoints', 'trips.latestPendingKmReport');
+    $vehicle->freezeActiveTrip();
+
+    expect($vehicle->active_trip?->id)->toBe($firstTrip->id);
+
+    $firstTrip->complete(endKm: 12000);
+    $secondTrip = Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Pending,
+        'created_at' => now(),
+    ]);
+
+    $vehicle->load('trips.checkpoints', 'trips.latestPendingKmReport');
+
+    expect($vehicle->active_trip?->id)->toBe($secondTrip->id);
 });

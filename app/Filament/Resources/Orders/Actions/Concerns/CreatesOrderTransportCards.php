@@ -49,12 +49,7 @@ abstract class CreatesOrderTransportCards
                 return;
             }
 
-            $todayShift = ShiftScheduleService::determineShift();
-            $driverForToday = $vehicle?->getDriverForShift($todayShift);
-
-            $selectedDriverId = $driverForToday?->id
-                ?? ($todayShift === DriverWorkShift::Even ? $vehicle?->even_driver_id : $vehicle?->odd_driver_id)
-                ?? $vehicle?->current_driver_id;
+            $selectedDriverId = $vehicle?->getDriverForToday()?->id;
 
             $set('driver_id', $selectedDriverId);
         } else {
@@ -107,6 +102,7 @@ abstract class CreatesOrderTransportCards
 
             $drivers = User::query()
                 ->role('driver')
+                ->where('is_active', true)
                 ->select([
                     'id',
                     'name',
@@ -999,31 +995,12 @@ abstract class CreatesOrderTransportCards
                                 return $type === 'HHHK' ? 'full' : 2;
                             })
                             ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('../../area_id') ?? $get('area_id'))->getComponents())
-                            ->createOptionUsing(function (array $data, Get $get): int {
-                                $areaId = $data['area_id'] ?? $get('../../area_id') ?? $get('area_id');
-                                $areas = $data['areas'] ?? [];
-                                if (empty($areas) && $areaId) {
-                                    $areas = [(int) $areaId];
-                                }
-                                unset($data['areas']);
-
-                                if (is_string($areaId) && ! is_numeric($areaId)) {
-                                    $area = Area::query()->where('code', $areaId)->first();
-                                    $areaId = $area?->id;
-                                }
-
-                                $location = Location::create(array_merge($data, [
-                                    'area_id' => $areaId ? (int) $areaId : ($areas[0] ?? null),
-                                    'loc_type' => $data['loc_type'] ?? LocationType::Delivery->value,
-                                    'is_active' => true,
-                                ]));
-
-                                if (! empty($areas)) {
-                                    $location->areas()->sync($areas);
-                                }
-
-                                return $location->getKey();
-                            }),
+                            ->createOptionUsing(fn (array $data, Schema $schema, Get $get): int => LocationForm::createFromOptionForm(
+                                $data,
+                                $schema,
+                                $get('../../area_id') ?? $get('area_id'),
+                                LocationType::Delivery->value,
+                            )),
                         // TextInput::make('contact_person')
                         //     ->label('Người nhận')
                         //     ->placeholder('Họ tên')

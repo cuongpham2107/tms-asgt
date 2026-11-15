@@ -5,10 +5,12 @@ namespace App\Filament\Resources\Locations\Schemas;
 use App\Enums\LocationType;
 use App\Enums\MapTile;
 use App\Models\Area;
+use App\Models\Location;
 use EduardoRibeiroDev\FilamentLeaflet\Fields\MapPicker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Services\GeoSearchService;
 use EduardoRibeiroDev\FilamentLeaflet\ValueObjects\Coordinate;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -17,12 +19,19 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 class LocationForm
 {
     public static function configure(Schema $schema, mixed $defaultAreaId = null): Schema
     {
+        // Embedded createOptionForm modals on non-Location forms (e.g. Order, Customer)
+        // pass the parent schema's model unless Location is bound explicitly.
+        if ($schema->getModel() !== Location::class) {
+            $schema->model(Location::class);
+        }
+
         return $schema
             ->components([
                 Select::make('areas')
@@ -80,14 +89,68 @@ class LocationForm
                     ->default(LocationType::Warehouse->value)
                     ->native(false)
                     ->required(),
+                Select::make('geofence_type')
+                    ->label('Hình dạng vùng kiểm tra GPS')
+                    ->options([
+                        'circle' => 'Hình tròn (Theo bán kính)',
+                        'rectangle' => 'Hình chữ nhật (Theo chiều rộng × chiều dài)',
+                        'square' => 'Hình vuông (Theo độ dài cạnh)',
+                    ])
+                    ->default('circle')
+                    ->native(false)
+                    ->afterStateUpdatedJs('
+                        const root = (typeof $el !== "undefined" && $el) ? ($el.closest(".fi-modal, form") || document) : document;
+                        const mapRoot = root.querySelector("[data-geofence-map-root]");
+                        if (mapRoot) {
+                            const data = Alpine.$data(mapRoot);
+                            data?.setGeofenceType?.($state, false);
+                        }
+                    ')
+                    ->helperText('Chọn hình dạng để hiển thị ô nhập kích thước tương ứng và vẽ trên bản đồ.'),
                 TextInput::make('geofence_radius_m')
                     ->label('Bán kính kiểm tra GPS (mét)')
                     ->numeric()
                     ->minValue(100)
-                    ->maxValue(3000)
+                    ->maxValue(5000)
                     ->suffix('m')
-                    ->placeholder(fn (): string => 'Mặc định: '.config('checkpoint_geofence.radius_m', 1000).'m')
-                    ->helperText(fn (): string => 'Để trống sẽ dùng bán kính mặc định ('.config('checkpoint_geofence.radius_m', 1000).'m). Các kho/cảng rộng (NCTS, ASG, ACSV, ALSC...) có thể đặt 1200–1700m.'),
+                    ->visibleJs("(\$get('geofence_type') ?? 'circle') === 'circle'")
+                    ->extraInputAttributes(['data-geofence-radius-input' => 'true'])
+                    ->placeholder(fn (): string => 'Mặc định: '.config('checkpoint_geofence.radius_m', 3000).'m')
+                    ->helperText('Nhập bán kính hoặc nắm kéo trực tiếp 4 chốt tròn trên viền bản đồ.'),
+                TextInput::make('geofence_square_side_m')
+                    ->label('Độ dài cạnh hình vuông (mét)')
+                    ->numeric()
+                    ->minValue(100)
+                    ->maxValue(20000)
+                    ->suffix('m')
+                    ->dehydrated(false)
+                    ->visibleJs("\$get('geofence_type') === 'square'")
+                    ->extraInputAttributes(['data-geofence-square-input' => 'true'])
+                    ->placeholder('VD: 1000')
+                    ->helperText('Nhập độ dài cạnh hoặc nắm kéo 4 góc hình vuông trên bản đồ.'),
+                TextInput::make('geofence_width_m')
+                    ->label('Chiều rộng Đông – Tây (mét)')
+                    ->numeric()
+                    ->minValue(100)
+                    ->maxValue(20000)
+                    ->suffix('m')
+                    ->dehydrated(false)
+                    ->visibleJs("\$get('geofence_type') === 'rectangle'")
+                    ->extraInputAttributes(['data-geofence-width-input' => 'true'])
+                    ->placeholder('VD: 1500')
+                    ->helperText('Tự động thay đổi khi kéo 4 góc hoặc nhập số để chỉnh khung.'),
+                TextInput::make('geofence_height_m')
+                    ->label('Chiều dài Bắc – Nam (mét)')
+                    ->numeric()
+                    ->minValue(100)
+                    ->maxValue(20000)
+                    ->suffix('m')
+                    ->dehydrated(false)
+                    ->visibleJs("\$get('geofence_type') === 'rectangle'")
+                    ->extraInputAttributes(['data-geofence-height-input' => 'true'])
+                    ->placeholder('VD: 800')
+                    ->helperText('Tự động thay đổi khi kéo 4 góc hoặc nhập số để chỉnh khung.'),
+                Hidden::make('geofence_bounds'),
                 TextInput::make('old_address')
                     ->label('Địa chỉ cũ (trước sáp nhập)')
                     ->maxLength(255)
@@ -112,6 +175,7 @@ class LocationForm
 
                 MapPicker::make('coordinates')
                     ->label('Chọn vị trí trên bản đồ')
+                    ->view('filament.forms.components.location-map-picker')
                     ->height(350)
                     ->center(21.0285, 105.8542)
                     ->zoom(13)
@@ -149,37 +213,6 @@ class LocationForm
                         } catch (\Throwable) {
                         }
                     })
-                    ->extraAttributes([
-                        'x-init' => '
-                            $nextTick(() => {
-                                const mapEl = (typeof this !== "undefined" && this.$el) ? this.$el.querySelector(".leaflet-container") : document.querySelector(".leaflet-container");
-                                if (mapEl) {
-                                    const el = mapEl.closest("[x-data]");
-                                    const data = el ? Alpine.$data(el) : null;
-                                    if (data) {
-                                        const originalUpdatePickMarker = data.updatePickMarker.bind(data);
-                                        data.updatePickMarker = function() {
-                                            originalUpdatePickMarker();
-                                            if (data.pickMarker) {
-                                                data.pickMarker.off("dragend");
-                                                data.pickMarker.on("dragend", (e) => {
-                                                    const newPos = e.target.getLatLng();
-                                                    data.setState(newPos.lat, newPos.lng);
-                                                });
-                                            }
-                                        };
-                                        if (data.pickMarker) {
-                                            data.pickMarker.off("dragend");
-                                            data.pickMarker.on("dragend", (e) => {
-                                                const newPos = e.target.getLatLng();
-                                                data.setState(newPos.lat, newPos.lng);
-                                            });
-                                        }
-                                    }
-                                }
-                            });
-                        ',
-                    ])
                     ->afterStateUpdatedJs('
                         const coords = $state;
                         if (coords?.lat) {
@@ -188,6 +221,7 @@ class LocationForm
                                 const el = mapEl.closest("[x-data]");
                                 const data = el ? Alpine.$data(el) : null;
                                 data?.mapCore?.map?.setView([coords.lat, coords.lng], 15);
+                                data?.updateGeofenceCircle?.(undefined, [coords.lat, coords.lng]);
                             }
                         }
                     '),
@@ -196,5 +230,72 @@ class LocationForm
                     ->default(true)
                     ->required(),
             ]);
+    }
+
+    /**
+     * Persist a Location created from a Select::createOptionForm() modal and sync its relationships.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function createFromOptionForm(
+        array $data,
+        Schema $schema,
+        mixed $defaultAreaId = null,
+        ?string $defaultLocType = null,
+    ): int {
+        $legacyAreas = $data['areas'] ?? [];
+        unset($data['areas']);
+
+        $areaId = $data['area_id'] ?? value($defaultAreaId);
+        if (is_string($areaId) && ! is_numeric($areaId)) {
+            $areaId = Area::query()->where('code', $areaId)->value('id');
+        }
+        $resolvedAreaId = is_numeric($areaId) ? (int) $areaId : null;
+
+        $normalizedLegacyAreas = array_values(array_filter(array_map(function ($item): ?int {
+            if (is_numeric($item)) {
+                return (int) $item;
+            }
+
+            if (is_string($item) && $item !== '') {
+                $id = Area::query()->where('code', $item)->value('id');
+
+                return $id ? (int) $id : null;
+            }
+
+            return null;
+        }, is_array($legacyAreas) ? $legacyAreas : [])));
+
+        $location = Location::create(array_merge($data, [
+            'area_id' => $resolvedAreaId ?? ($normalizedLegacyAreas[0] ?? null),
+            'loc_type' => $data['loc_type'] ?? $defaultLocType ?? LocationType::Warehouse->value,
+            'is_active' => $data['is_active'] ?? true,
+        ]));
+
+        $schema->model($location)->saveRelationships();
+
+        $syncedAreaIds = $location->areas()->pluck('areas.id')->map(fn ($id): int => (int) $id)->all();
+
+        if ($syncedAreaIds === []) {
+            $fallbackAreas = $normalizedLegacyAreas !== []
+                ? $normalizedLegacyAreas
+                : ($resolvedAreaId ? [$resolvedAreaId] : []);
+
+            if ($fallbackAreas !== []) {
+                $location->areas()->sync($fallbackAreas);
+                $syncedAreaIds = $fallbackAreas;
+            }
+        }
+
+        if (! $location->area_id && $syncedAreaIds !== []) {
+            $location->update(['area_id' => $syncedAreaIds[0]]);
+        }
+
+        Cache::forget('location-options-all');
+        foreach ($syncedAreaIds as $syncedAreaId) {
+            Cache::forget('location-options-'.$syncedAreaId);
+        }
+
+        return $location->getKey();
     }
 }

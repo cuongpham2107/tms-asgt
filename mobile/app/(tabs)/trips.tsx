@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/lib/auth";
-import { api } from "../../src/lib/api";
+import { api, getStatsPeriodDates } from "../../src/lib/api";
 import { clearNotificationBadge, useRefreshOnNotification } from "../../src/lib/notifications";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -101,10 +101,10 @@ const tabs = [
 ];
 
 const periods = [
-    { key: "all", label: "Tất cả" },
     { key: "today", label: "Hôm nay" },
     { key: "week", label: "Tuần này" },
     { key: "month", label: "Tháng này" },
+    { key: "last_month", label: "Tháng trước" },
 ];
 
 const fmt = (v: any) => (v != null ? parseInt(v).toLocaleString("vi-VN") : "-");
@@ -125,28 +125,12 @@ export default function TripsScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [activeTab, setActiveTab] = useState("all");
-    const [activePeriod, setActivePeriod] = useState("all");
+    const [activePeriod, setActivePeriod] = useState("today");
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const userId = shift?.driver?.id;
-
-    const getPeriodDates = (period: string) => {
-        const now = new Date();
-        const to = now.toISOString().slice(0, 10);
-        if (period === "today") return { from: to, to };
-        if (period === "week") {
-            const d = new Date(now);
-            d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1));
-            return { from: d.toISOString().slice(0, 10), to };
-        }
-        if (period === "month") {
-            const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-            return { from, to };
-        }
-        return {};
-    };
 
     const mergeTrips = (active: any[], history: any[]) => {
         const map = new Map<string, any>();
@@ -158,7 +142,7 @@ export default function TripsScreen() {
     const load = async (period = activePeriod) => {
         if (!token) return;
         try {
-            const { from, to } = getPeriodDates(period);
+            const { from, to } = getStatsPeriodDates(period);
             setPage(1);
             const [activeRes, historyRes] = await Promise.all([
                 api.trips.active(token).catch(() => ({ data: [] })),
@@ -211,7 +195,7 @@ export default function TripsScreen() {
         if (loading || loadingMore || !hasMore || !token) return;
         setLoadingMore(true);
         const nextPage = page + 1;
-        const { from, to } = getPeriodDates(activePeriod);
+        const { from, to } = getStatsPeriodDates(activePeriod);
         const historyRes = await api.trips
             .history(
                 {
@@ -257,16 +241,17 @@ export default function TripsScreen() {
             }
         }
         // Period filter
-        if (activePeriod !== "all") {
-            const { from, to } = getPeriodDates(activePeriod);
-            if (from && to) {
-                result = result.filter((t) => {
-                    const d = t.started_at || t.created_at;
-                    if (!d) return true;
-                    const date = new Date(d).toISOString().slice(0, 10);
-                    return date >= from && date <= to;
-                });
-            }
+        const { from, to } = getStatsPeriodDates(activePeriod);
+        if (from && to) {
+            const pad = (n: number) => String(n).padStart(2, "0");
+            result = result.filter((t) => {
+                const raw = t.started_at || t.completed_at || t.created_at;
+                if (!raw) return true;
+                const d = new Date(raw);
+                if (isNaN(d.getTime())) return true;
+                const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                return date >= from && date <= to;
+            });
         }
         if (search.trim()) {
             const q = search.toLowerCase();
@@ -307,16 +292,17 @@ export default function TripsScreen() {
 
     const counts = useMemo(() => {
         let periodTrips = trips;
-        if (activePeriod !== "all") {
-            const { from, to } = getPeriodDates(activePeriod);
-            if (from && to) {
-                periodTrips = periodTrips.filter((t) => {
-                    const d = t.started_at || t.created_at;
-                    if (!d) return true;
-                    const date = new Date(d).toISOString().slice(0, 10);
-                    return date >= from && date <= to;
-                });
-            }
+        const { from, to } = getStatsPeriodDates(activePeriod);
+        if (from && to) {
+            const pad = (n: number) => String(n).padStart(2, "0");
+            periodTrips = periodTrips.filter((t) => {
+                const raw = t.started_at || t.completed_at || t.created_at;
+                if (!raw) return true;
+                const d = new Date(raw);
+                if (isNaN(d.getTime())) return true;
+                const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                return date >= from && date <= to;
+            });
         }
         const c: Record<string, number> = { all: periodTrips.length };
         periodTrips.forEach((t) => {

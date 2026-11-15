@@ -12,6 +12,7 @@ use App\Enums\OrderType;
 use App\Enums\ShiftType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
+use App\Filament\Resources\Trips\Actions\EditTripAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ResolveKmReportAction;
 use App\Filament\Traits\HasVehicleDispatchRows;
@@ -19,10 +20,13 @@ use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
+use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\ShiftScheduleService;
 use BackedEnum;
 use Carbon\CarbonInterface;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -49,21 +53,33 @@ class VehicleDispatchBoard extends Page implements HasTable
     public const IDLE_ENGINE_ALERT_MINUTES = 20;
 
     /**
-     * Chu kỳ tự làm mới bảng (giây). Một bộ đếm Alpine vừa hiển thị đếm ngược vừa gọi làm mới.
+     * Chu kỳ tự làm mới bảng (giây) dự phòng khi không nhận được sự kiện Reverb.
      */
-    public const REFRESH_SECONDS = 20;
+    public const REFRESH_SECONDS = 30;
 
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-table-cells';
 
-    protected static ?string $navigationLabel = 'Kiểm soát xe';
+    protected static ?string $navigationLabel = 'Kiểm soát';
 
     protected static ?string $title = 'Kiểm soát tình trạng xe';
 
     protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.pages.vehicle-dispatch-board';
+
+    #[Url]
+    public string $activeTab = 'vehicles'; // vehicles, duty
+
+    #[Url]
+    public string $dutyStationFilter = 'all';
+
+    #[Url]
+    public ?string $dutySortBy = null; // trip_count, km_loaded, km_empty, total_km
+
+    #[Url]
+    public string $dutySortDirection = 'desc'; // asc, desc
 
     #[Url]
     public string $activeOwnerType = 'company'; // company only
@@ -153,8 +169,37 @@ class VehicleDispatchBoard extends Page implements HasTable
             return;
         }
 
+        if ($name === 'edit_trip') {
+            $vehicle = Vehicle::find($vehicleId);
+            $trip = $vehicle?->active_trip;
+            if (! $trip) {
+                Notification::make()
+                    ->warning()
+                    ->title('Không tìm thấy chuyến')
+                    ->body('Xe hiện không có chuyến đang chạy.')
+                    ->send();
+
+                return;
+            }
+
+            $this->mountAction('edit_trip', ['trip' => $trip->id]);
+
+            return;
+        }
+
         $this->mountTableAction($name, (string) $vehicleId);
         $this->dispatch('open-modal', id: "fi-{$this->getId()}-action-0");
+    }
+
+    public function edit_tripAction(): Action
+    {
+        return $this->editTripAction();
+    }
+
+    public function editTripAction(): Action
+    {
+        return EditTripAction::make('edit_trip')
+            ->record(fn (array $arguments = []): ?Trip => isset($arguments['trip']) ? Trip::find($arguments['trip']) : null);
     }
 
     public function getSelectedVehicleForSwap(): ?Vehicle
@@ -306,14 +351,25 @@ class VehicleDispatchBoard extends Page implements HasTable
         $runningValues = array_map(fn (TripStatus $s) => $s->value, self::runningTripStatuses());
         $runningSql = "'".implode("','", $runningValues)."'";
 
+        $targetVehicle = Vehicle::select(['id', 'type'])->find($this->selectedVehicleIdForTrip);
+        $isRentVehicle = $targetVehicle?->isRent() ?? false;
+
         return Vehicle::with([
             'driver',
             'evenDriver',
             'oddDriver',
-            'trips' => function ($q) use ($shiftStart, $shiftEnd, $runningValues, $runningSql) {
-                $q->where(function (Builder $sub) use ($shiftStart, $shiftEnd, $runningValues) {
+            'trips' => function ($q) use ($shiftStart, $shiftEnd, $runningValues, $runningSql, $isRentVehicle) {
+                $q->where(function (Builder $sub) use ($shiftStart, $shiftEnd, $runningValues, $isRentVehicle) {
                     $sub->whereIn('status', $runningValues)
-                        ->orWhere('status', TripStatus::Pending->value)
+                        ->orWhere(function (Builder $pendingSub) use ($shiftStart, $shiftEnd, $isRentVehicle) {
+                            $pendingSub->where('status', TripStatus::Pending->value)
+                                ->when(! $isRentVehicle, function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                                    $dateQ->where(function (Builder $dq) use ($shiftStart, $shiftEnd) {
+                                        $dq->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                                            ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                                    });
+                                });
+                        })
                         ->orWhere(function (Builder $completedSub) use ($shiftStart, $shiftEnd) {
                             $completedSub->where('status', TripStatus::Completed->value)
                                 ->where(function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
@@ -332,11 +388,11 @@ class VehicleDispatchBoard extends Page implements HasTable
                         'orders.deliveryPoints.location',
                         'orders.customer',
                     ])
-                    ->orderByRaw("CASE 
-                        WHEN status IN ({$runningSql}) THEN 1 
-                        WHEN status = '".TripStatus::Pending->value."' THEN 2 
-                        WHEN status = '".TripStatus::Completed->value."' THEN 3 
-                        ELSE 4 
+                    ->orderByRaw("CASE
+                        WHEN status IN ({$runningSql}) THEN 1
+                        WHEN status = '".TripStatus::Pending->value."' THEN 2
+                        WHEN status = '".TripStatus::Completed->value."' THEN 3
+                        ELSE 4
                     END ASC")
                     ->orderByRaw('COALESCE(started_at, created_at) ASC')
                     ->orderBy('id', 'asc');
@@ -349,12 +405,21 @@ class VehicleDispatchBoard extends Page implements HasTable
         [$shiftStart, $shiftEnd] = self::getShiftWindow();
         $runningValues = array_map(fn (TripStatus $s) => $s->value, self::runningTripStatuses());
         $runningSql = "'".implode("','", $runningValues)."'";
+        $isRentVehicle = $vehicle->isRent();
 
         return Trip::query()
             ->where('vehicle_id', $vehicle->id)
-            ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues) {
+            ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues, $isRentVehicle) {
                 $q->whereIn('status', $runningValues)
-                    ->orWhere('status', TripStatus::Pending->value)
+                    ->orWhere(function (Builder $pendingSub) use ($shiftStart, $shiftEnd, $isRentVehicle) {
+                        $pendingSub->where('status', TripStatus::Pending->value)
+                            ->when(! $isRentVehicle, function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                                $dateQ->where(function (Builder $dq) use ($shiftStart, $shiftEnd) {
+                                    $dq->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                                        ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                                });
+                            });
+                    })
                     ->orWhere(function (Builder $sub) use ($shiftStart, $shiftEnd) {
                         $sub->where('status', TripStatus::Completed->value)
                             ->where(function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
@@ -373,11 +438,11 @@ class VehicleDispatchBoard extends Page implements HasTable
                 'orders.deliveryPoints.location',
                 'orders.customer',
             ])
-            ->orderByRaw("CASE 
-                WHEN status IN ({$runningSql}) THEN 1 
-                WHEN status = '".TripStatus::Pending->value."' THEN 2 
-                WHEN status = '".TripStatus::Completed->value."' THEN 3 
-                ELSE 4 
+            ->orderByRaw("CASE
+                WHEN status IN ({$runningSql}) THEN 1
+                WHEN status = '".TripStatus::Pending->value."' THEN 2
+                WHEN status = '".TripStatus::Completed->value."' THEN 3
+                ELSE 4
             END ASC")
             ->orderByRaw('COALESCE(started_at, created_at) ASC')
             ->orderBy('id', 'asc')
@@ -506,6 +571,39 @@ class VehicleDispatchBoard extends Page implements HasTable
         return "<div{$titleAttr} class='cursor-default'><span class='font-bold text-primary-600 dark:text-primary-400'>{$plate}</span>".($tonnage ? " <span class='text-xs text-gray-500 dark:text-gray-400 font-medium'>{$tonnage}</span>" : '').$extra.$note.'</div>';
     }
 
+    public static function getLatestCompletedTripInShift(Vehicle $record): ?Trip
+    {
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+
+        if ($record->relationLoaded('trips')) {
+            if ($record->trips->isEmpty()) {
+                return null;
+            }
+
+            return $record->trips
+                ->where('status', TripStatus::Completed)
+                ->filter(function (Trip $t) use ($shiftStart, $shiftEnd): bool {
+                    $completedTime = $t->completed_at ?? $t->updated_at;
+
+                    return ($completedTime && $completedTime->between($shiftStart, $shiftEnd))
+                        || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd));
+                })
+                ->sortByDesc(fn (Trip $t) => $t->completed_at ?? $t->updated_at ?? $t->started_at)
+                ->first();
+        }
+
+        return $record->trips()
+            ->with(['driver.driverShifts' => fn ($q) => $q->whereNull('end_time')])
+            ->where('status', TripStatus::Completed->value)
+            ->where(function (Builder $q) use ($shiftStart, $shiftEnd) {
+                $q->whereBetween('completed_at', [$shiftStart, $shiftEnd])
+                    ->orWhereBetween('started_at', [$shiftStart, $shiftEnd]);
+            })
+            ->orderByRaw('COALESCE(completed_at, started_at, updated_at) DESC')
+            ->orderByDesc('id')
+            ->first();
+    }
+
     public static function getTripStatusLabel(Vehicle $record): string
     {
         $activeTrip = $record->active_trip;
@@ -518,7 +616,11 @@ class VehicleDispatchBoard extends Page implements HasTable
                 return 'Bảo dưỡng';
             }
 
-            return 'Xe chờ';
+            if (self::getLatestCompletedTripInShift($record) !== null) {
+                return 'Sẵn sàng';
+            }
+
+            return 'Chờ chạy';
         }
 
         if ($activeTrip->isPaused()) {
@@ -540,21 +642,25 @@ class VehicleDispatchBoard extends Page implements HasTable
     {
         $label = self::getTripStatusLabel($record);
 
+        if ($record->active_trip === null && $label === 'Chờ chạy') {
+            return 2;
+        }
+
         return match ($label) {
             'Tạm dừng (Sửa Km)' => 0,
             'Đảo lái' => 1,
-            'Xe chờ' => 2,
-            'Chờ chạy' => 3,
-            'Đã bắt đầu' => 4,
-            'Đến lấy hàng' => 5,
-            'Đang giao' => 6,
-            'Đến giao hàng' => 7,
-            'Đã giao' => 8,
-            'Chuyến không hàng' => 9,
-            'Hoàn thành' => 10,
-            'Bảo dưỡng' => 11,
-            'Nghỉ' => 12,
-            'Đã huỷ' => 13,
+            'Sẵn sàng' => 3,
+            'Chờ chạy' => 4,
+            'Đã bắt đầu' => 5,
+            'Đến lấy hàng' => 6,
+            'Đang giao' => 7,
+            'Đến giao hàng' => 8,
+            'Đã giao' => 9,
+            'Chuyến không hàng' => 10,
+            'Hoàn thành' => 11,
+            'Bảo dưỡng' => 12,
+            'Nghỉ' => 13,
+            'Đã huỷ' => 14,
             default => 99,
         };
     }
@@ -566,6 +672,10 @@ class VehicleDispatchBoard extends Page implements HasTable
         if ($activeTrip === null) {
             if ($record->status === VehicleStatus::Off || $record->status === VehicleStatus::Bdsc) {
                 return 'danger';
+            }
+
+            if (self::getLatestCompletedTripInShift($record) !== null) {
+                return 'success';
             }
 
             return 'gray';
@@ -588,6 +698,9 @@ class VehicleDispatchBoard extends Page implements HasTable
             }
             if ($record->status === VehicleStatus::Bdsc) {
                 return 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-200 font-semibold';
+            }
+            if (self::getLatestCompletedTripInShift($record) !== null) {
+                return 'text-emerald-600 dark:text-emerald-400 font-bold';
             }
 
             return 'bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 font-normal';
@@ -618,18 +731,24 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function canClickTripStatus(Vehicle $record): bool
     {
-        $activeTrip = $record->active_trip;
-
-        if ($activeTrip === null) {
-            return false;
-        }
-
-        return $activeTrip->status === TripStatus::DriverSwap || $activeTrip->isPaused();
+        return $record->active_trip !== null;
     }
 
     public static function getOrderType(Vehicle $record): ?OrderType
     {
         return $record->active_trip?->orders->first()?->type;
+    }
+
+    /**
+     * Thứ tự ưu tiên sắp xếp theo Loại đơn: HHHK (1) -> Hàng ngoài (2) -> Chưa có đơn (3).
+     */
+    public static function getOrderTypeSortPriority(Vehicle $record): int
+    {
+        return match (self::getOrderType($record)) {
+            OrderType::Hhhk => 1,
+            OrderType::External => 2,
+            default => 3,
+        };
     }
 
     public static function getPickupPoint(Vehicle $record): string
@@ -805,30 +924,48 @@ class VehicleDispatchBoard extends Page implements HasTable
             ];
         }
 
-        // 2. Xe KHÔNG có chuyến hoạt động: tính từ lúc xe hạ xong chuyến gần nhất
-        $completedTrips = $record->trips->where('status', TripStatus::Completed);
-        $lastCompletedTrip = $completedTrips->sortByDesc(fn ($t) => $t->completed_at ?? $t->updated_at)->first();
+        // 2. Xe KHÔNG có chuyến hoạt động: tính từ lúc xe hạ xong chuyến gần nhất trong ca 08:00 -> 08:00
+        $lastCompletedTrip = self::getLatestCompletedTripInShift($record);
 
         if ($lastCompletedTrip && ($lastCompletedTrip->completed_at ?? $lastCompletedTrip->updated_at)) {
             $completedTime = $lastCompletedTrip->completed_at ?? $lastCompletedTrip->updated_at;
             $diff = $completedTime->isFuture() ? 0 : (int) $completedTime->diffInMinutes(now());
 
-            // Trong vòng 48h từ lúc hạ xong
-            if ($diff <= 2880) {
-                return [
-                    'text' => self::formatDurationMinutes($diff),
-                    'tooltip' => "Hạ xong lúc {$completedTime->format('H:i d/m')} (Chuyến {$lastCompletedTrip->trip_code}) — Chưa gán chuyến mới ({$diff} phút)",
-                    'minutes' => $diff,
-                    'isAlert' => $diff >= 180, // Hạ xong quá 3 tiếng chưa gán chuyến mới
-                    'isWarning' => $diff >= 90 && $diff < 180, // Hạ xong từ 1.5 - 3 tiếng
-                ];
-            }
+            return [
+                'text' => self::formatDurationMinutes($diff),
+                'tooltip' => "Hạ xong lúc {$completedTime->format('H:i d/m')} (Chuyến {$lastCompletedTrip->trip_code}) — Chưa gán chuyến mới ({$diff} phút)",
+                'minutes' => $diff,
+                'isAlert' => $diff >= 180, // Hạ xong quá 3 tiếng chưa gán chuyến mới
+                'isWarning' => $diff >= 90 && $diff < 180, // Hạ xong từ 1.5 - 3 tiếng
+            ];
         }
 
-        // 3. Xe sẵn sàng (chưa có chuyến mới hoặc rảnh từ lâu)
+        // 3. Xe chưa có chuyến trong ca hôm nay: hiển thị số ngày không chạy tính từ chuyến hoàn thành gần nhất trong lịch sử
+        $rawLastCompletedAt = array_key_exists('last_completed_trip_at', $record->getAttributes())
+            ? $record->getAttribute('last_completed_trip_at')
+            : $record->trips()
+                ->where('status', TripStatus::Completed)
+                ->selectRaw('MAX(COALESCE(completed_at, started_at, updated_at)) as last_at')
+                ->value('last_at');
+
+        if ($rawLastCompletedAt !== null) {
+            $lastCompletedTime = Carbon::parse($rawLastCompletedAt);
+            $lastShiftDate = ShiftScheduleService::getShiftDate($lastCompletedTime);
+            $currentShiftDate = ShiftScheduleService::getShiftDate(now());
+            $days = max(1, (int) $lastShiftDate->diffInDays($currentShiftDate));
+
+            return [
+                'text' => "{$days} ngày",
+                'tooltip' => "Chuyến gần nhất hoàn thành lúc {$lastCompletedTime->format('H:i d/m/Y')} — Không chạy {$days} ngày",
+                'minutes' => $lastCompletedTime->isFuture() ? 0 : (int) $lastCompletedTime->diffInMinutes(now()),
+                'isAlert' => false,
+                'isWarning' => false,
+            ];
+        }
+
         return [
-            'text' => 'Sẵn sàng',
-            'tooltip' => 'Xe sẵn sàng (chưa có chuyến mới)',
+            'text' => '—',
+            'tooltip' => 'Xe sẵn sàng (chưa có lịch sử chuyến)',
             'minutes' => 0,
             'isAlert' => false,
             'isWarning' => false,
@@ -1096,16 +1233,27 @@ class VehicleDispatchBoard extends Page implements HasTable
     }
 
     /**
-     * Đếm số lượng đơn hàng đang chờ chưa chạy của xe (thuộc các chuyến Chờ chạy - Pending).
+     * Đếm số lượng đơn hàng đang chờ chưa chạy của xe (thuộc các chuyến Chờ chạy - Pending trong ca 08:00 -> 08:00).
      */
     public static function getWaitingOrdersCount(Vehicle $record): int
     {
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+        $isRent = $record->isRent();
+
         if ($record->relationLoaded('trips')) {
             return $record->trips
-                ->filter(function (Trip $trip): bool {
+                ->filter(function (Trip $trip) use ($shiftStart, $shiftEnd, $isRent): bool {
                     $status = $trip->status instanceof TripStatus ? $trip->status->value : (string) $trip->status;
+                    if ($status !== TripStatus::Pending->value) {
+                        return false;
+                    }
 
-                    return $status === TripStatus::Pending->value;
+                    if ($isRent) {
+                        return true;
+                    }
+
+                    return ($trip->started_at && $trip->started_at->between($shiftStart, $shiftEnd))
+                        || ($trip->created_at && $trip->created_at->between($shiftStart, $shiftEnd));
                 })
                 ->flatMap(function (Trip $trip) {
                     if ($trip->relationLoaded('orders')) {
@@ -1124,9 +1272,15 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         return Order::query()
-            ->whereHas('trip', function (Builder $q) use ($record) {
+            ->whereHas('trip', function (Builder $q) use ($record, $shiftStart, $shiftEnd, $isRent) {
                 $q->where('vehicle_id', $record->id)
-                    ->where('status', TripStatus::Pending->value);
+                    ->where('status', TripStatus::Pending->value)
+                    ->when(! $isRent, function (Builder $dateQ) use ($shiftStart, $shiftEnd) {
+                        $dateQ->where(function (Builder $dq) use ($shiftStart, $shiftEnd) {
+                            $dq->whereBetween('started_at', [$shiftStart, $shiftEnd])
+                                ->orWhereBetween('created_at', [$shiftStart, $shiftEnd]);
+                        });
+                    });
             })
             ->whereNotIn('status', [OrderStatus::Cancelled->value, OrderStatus::Completed->value])
             ->count();
@@ -1198,27 +1352,83 @@ class VehicleDispatchBoard extends Page implements HasTable
         ];
     }
 
-    public static function getDriverName(Vehicle $record): string
+    /**
+     * Lấy tài xế đang chạy xe trong khung ca 08:00 -> 08:00:
+     * ưu tiên chuyến đang chạy/chờ chạy (active_trip), sau đó đến chuyến đã hoàn thành trong ca.
+     * Nếu xe không có chuyến nào trong ca hôm nay thì trả về null.
+     */
+    public static function getShiftDriver(Vehicle $record): ?User
     {
+        if ($record->status === VehicleStatus::Off || $record->status === VehicleStatus::Bdsc) {
+            return null;
+        }
+
         $activeTrip = $record->active_trip;
 
         if ($activeTrip?->driver) {
-            return $activeTrip->driver->name;
+            return $activeTrip->driver;
         }
 
-        $todayDriver = $record->getDriverForToday();
+        $completedTrip = self::getLatestCompletedTripInShift($record);
 
-        if ($todayDriver) {
-            return $todayDriver->name;
+        return $completedTrip?->driver;
+    }
+
+    public static function getDriverName(Vehicle $record): string
+    {
+        if ($record->isRent() && filled($record->external_driver_name)) {
+            return trim((string) $record->external_driver_name);
         }
 
-        return $record->driver?->name ?? '—';
+        return self::getShiftDriver($record)?->name ?? '—';
     }
 
     public static function getDriverStation(Vehicle $record): string
     {
-        // Lấy Điểm trực (station) từ bảng users của tài xế
-        $driver = $record->active_trip?->driver
+        // Chỉ lấy Điểm trực (station) khi xe có tài xế thực tế đang chạy trong ca hiện tại.
+        // Nếu xe không có tài xế chạy trong ca thì trả về '—'.
+        $driver = self::getShiftDriver($record);
+
+        if ($driver === null) {
+            return '—';
+        }
+
+        $station = $driver->station instanceof OnDutyLocation
+            ? $driver->station->value
+            : ($driver->station ? (string) $driver->station : null);
+
+        // Nếu tài xế đang chạy chưa được cấu hình station trong bảng users,
+        // fallback sang tài xế gán trên xe.
+        if (! $station) {
+            $fallbackDriver = $record->getDriverForToday()
+                ?? $record->driver
+                ?? $record->evenDriver
+                ?? $record->oddDriver;
+
+            $station = $fallbackDriver?->station instanceof OnDutyLocation
+                ? $fallbackDriver->station->value
+                : ($fallbackDriver?->station ? (string) $fallbackDriver->station : null);
+        }
+
+        if (! $station && ! empty($record->driver_station) && $record->driver_station !== 'OTHER') {
+            $station = (string) $record->driver_station;
+        }
+
+        if ($station) {
+            return match (strtoupper($station)) {
+                'NBA' => 'NB',
+                'BN' => 'BN',
+                'TN' => 'TN',
+                default => $station,
+            };
+        }
+
+        return '—';
+    }
+
+    public static function getAssignedDriverStation(Vehicle $record): string
+    {
+        $driver = self::getShiftDriver($record)
             ?? $record->getDriverForToday()
             ?? $record->driver
             ?? $record->evenDriver
@@ -1270,7 +1480,7 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         // Fallback 1: Điểm trực của tài xế (users.station)
-        $driverStation = self::getDriverStation($vehicle);
+        $driverStation = self::getAssignedDriverStation($vehicle);
         if ($driverStation !== 'OTHER' && $driverStation !== '—' && ! empty($driverStation)) {
             return $driverStation;
         }
@@ -1407,14 +1617,13 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public static function getShiftLabel(Vehicle $record): string
     {
-        $activeTrip = $record->active_trip;
-        $driver = $activeTrip?->driver ?? $record->getDriverForToday() ?? $record->driver;
+        $driver = self::getShiftDriver($record);
 
         if ($driver === null) {
             return '—';
         }
 
-        // Chỉ hiển thị ca làm hiện tại khi lái xe đăng nhập trên app (ca đang hoạt động, chưa kết thúc)
+        // Chỉ hiển thị ca làm hiện tại của tài xế đang chạy xe này
         $activeShift = $driver->relationLoaded('driverShifts')
             ? $driver->driverShifts
                 ->filter(fn (DriverShift $s) => $s->start_time && $s->start_time->lte(now()) && $s->end_time === null)
@@ -1436,5 +1645,247 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         return '—';
+    }
+
+    public function getTitle(): string
+    {
+        return match ($this->activeTab) {
+            'duty' => 'Tổng hợp ca trực lái xe',
+            'rent' => 'Kiểm soát xe thuê',
+            default => 'Kiểm soát tình trạng xe',
+        };
+    }
+
+    public function switchTab(string $tab): void
+    {
+        $this->activeTab = in_array($tab, ['vehicles', 'rent', 'duty'], true) ? $tab : 'vehicles';
+
+        if ($this->activeTab === 'rent') {
+            $this->activeOwnerType = 'rent';
+        } elseif ($this->activeTab === 'vehicles') {
+            $this->activeOwnerType = 'company';
+        }
+    }
+
+    public function filterDutyStation(string $value): void
+    {
+        $this->dutyStationFilter = $value;
+    }
+
+    public function sortDutyTable(string $column): void
+    {
+        if (! in_array($column, ['trip_count', 'km_loaded', 'km_empty', 'total_km'], true)) {
+            return;
+        }
+
+        if ($this->dutySortBy === $column) {
+            $this->dutySortDirection = $this->dutySortDirection === 'desc' ? 'asc' : 'desc';
+        } else {
+            $this->dutySortBy = $column;
+            $this->dutySortDirection = 'desc';
+        }
+    }
+
+    /**
+     * @return array{stations: list<array<string, mixed>>, grand: array<string, int>}
+     */
+    public function getDutySummaryData(): array
+    {
+        $drivers = User::role('driver')->where('is_active', true)->get();
+        $openShifts = DriverShift::query()
+            ->whereNull('end_time')
+            ->whereIn('driver_id', $drivers->modelKeys())
+            ->get()
+            ->unique('driver_id')
+            ->keyBy('driver_id');
+
+        $stations = [];
+        $grandTotal = 0;
+        $grandWorkingTtl = 0;
+        $grandFull = 0;
+        $grandMorningHalf = 0;
+        $grandNightHalf = 0;
+        $grandOff = 0;
+
+        foreach (OnDutyLocation::cases() as $station) {
+            $stationDrivers = $drivers->filter(fn ($d) => $d->station === $station);
+            $total = $stationDrivers->count();
+            if ($total === 0) {
+                continue;
+            }
+
+            $full = 0;
+            $morningHalf = 0;
+            $nightHalf = 0;
+            $workingDriverIds = [];
+
+            foreach ($stationDrivers as $driver) {
+                $shift = $openShifts->get($driver->id);
+
+                if ($shift) {
+                    $workingDriverIds[] = $driver->id;
+
+                    match ($shift->shift_type) {
+                        ShiftType::Full => $full++,
+                        ShiftType::MorningHalf => $morningHalf++,
+                        ShiftType::NightHalf => $nightHalf++,
+                    };
+                }
+            }
+
+            $workingTtl = $full + $morningHalf + $nightHalf;
+            $workingDrivers = count(array_unique($workingDriverIds));
+            $off = $total - $workingDrivers;
+
+            $grandTotal += $total;
+            $grandWorkingTtl += $workingTtl;
+            $grandFull += $full;
+            $grandMorningHalf += $morningHalf;
+            $grandNightHalf += $nightHalf;
+            $grandOff += $off;
+
+            $stations[] = [
+                'label' => $station->getLabel(),
+                'color' => $station->getColor(),
+                'total' => $total,
+                'working_ttl' => $workingTtl,
+                'full' => $full,
+                'morning_half' => $morningHalf,
+                'night_half' => $nightHalf,
+                'off' => $off,
+            ];
+        }
+
+        return [
+            'stations' => $stations,
+            'grand' => [
+                'total' => $grandTotal,
+                'working_ttl' => $grandWorkingTtl,
+                'full' => $grandFull,
+                'morning_half' => $grandMorningHalf,
+                'night_half' => $grandNightHalf,
+                'off' => $grandOff,
+            ],
+        ];
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    public function getDutyDriverRows(): Collection
+    {
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+        $runningValues = array_map(fn (TripStatus $s) => $s->value, self::runningTripStatuses());
+
+        $drivers = User::query()
+            ->role('driver')
+            ->whereHas('driverShifts', fn ($q) => $q->whereNull('end_time'))
+            ->where('is_active', true)
+            ->when($this->dutyStationFilter !== 'all', fn ($q) => $q->where('station', $this->dutyStationFilter))
+            ->orderBy('station')
+            ->orderBy('name')
+            ->get();
+
+        if ($drivers->isEmpty()) {
+            return collect();
+        }
+
+        $driverIds = $drivers->modelKeys();
+
+        // Batch load toàn bộ ca đang mở, chuyến trong ca và xe đang gán để tránh N+1 theo từng tài xế.
+        $shiftsByDriver = DriverShift::query()
+            ->whereIn('driver_id', $driverIds)
+            ->whereNull('end_time')
+            ->orderByDesc('start_time')
+            ->get()
+            ->unique('driver_id')
+            ->keyBy('driver_id');
+
+        $tripsByDriver = Trip::query()
+            ->whereIn('driver_id', $driverIds)
+            ->whereNotIn('status', [TripStatus::Pending->value, TripStatus::Cancelled->value])
+            ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues) {
+                $q->whereIn('status', $runningValues)
+                    ->orWhereBetween('started_at', [$shiftStart, $shiftEnd])
+                    ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd]);
+            })
+            ->with('vehicle')
+            ->orderByDesc('started_at')
+            ->get()
+            ->groupBy('driver_id');
+
+        $vehiclesByDriver = Vehicle::query()
+            ->whereIn('current_driver_id', $driverIds)
+            ->orderBy('id')
+            ->get()
+            ->unique('current_driver_id')
+            ->keyBy('current_driver_id');
+
+        $rows = $drivers->map(function (User $driver) use ($shiftStart, $shiftEnd, $shiftsByDriver, $tripsByDriver, $vehiclesByDriver) {
+            /** @var DriverShift|null $shift */
+            $shift = $shiftsByDriver->get($driver->id);
+            $windowTrips = $tripsByDriver->get($driver->id, collect());
+
+            $isShiftInCurrentWindow = $shift?->start_time !== null && $shift->start_time->between($shiftStart, $shiftEnd);
+
+            $tripCount = $windowTrips->count();
+            $kmLoaded = $windowTrips->isNotEmpty()
+                ? (float) $windowTrips->sum('total_km_loaded')
+                : ($isShiftInCurrentWindow ? (float) ($shift?->total_km_loaded ?? 0) : 0.0);
+            $kmEmpty = $windowTrips->isNotEmpty()
+                ? (float) $windowTrips->sum('total_km_empty')
+                : ($isShiftInCurrentWindow ? (float) ($shift?->total_km_empty ?? 0) : 0.0);
+            $totalKm = $windowTrips->isNotEmpty()
+                ? (float) $windowTrips->sum('total_km')
+                : ($isShiftInCurrentWindow ? (float) ($shift?->total_km ?? 0) : 0.0);
+
+            $vehicle = $vehiclesByDriver->get($driver->id)
+                ?? $windowTrips->first()?->vehicle;
+
+            $hasSwap = $windowTrips->contains(fn (Trip $t): bool => $t->end_km !== null
+                && ($t->status === TripStatus::DriverSwap || $t->status === TripStatus::DriverSwap->value));
+
+            $plate = $vehicle?->plate_number ?: '—';
+            if ($hasSwap && $plate !== '—') {
+                $plate .= ' (đảo lái)';
+            }
+
+            $driver->station_display = $driver->station?->getLabel() ?? '—';
+            $driver->plate = $plate;
+            $driver->shift_label = match ($shift?->shift_type) {
+                ShiftType::Full => 'X',
+                ShiftType::MorningHalf => 'X/2',
+                ShiftType::NightHalf => 'Y/2',
+                default => '—',
+            };
+            $driver->has_active_shift = $shift !== null;
+            $driver->is_stale_shift = $shift !== null && ! $isShiftInCurrentWindow;
+            $driver->trip_count = $tripCount;
+            $driver->km_loaded = $kmLoaded;
+            $driver->km_empty = $kmEmpty;
+            $driver->total_km = $totalKm;
+            $driver->start_time = $shift?->start_time;
+            $driver->end_time = $shift?->end_time;
+
+            return $driver;
+        });
+
+        if (in_array($this->dutySortBy, ['trip_count', 'km_loaded', 'km_empty', 'total_km'], true)) {
+            $col = $this->dutySortBy;
+            $desc = $this->dutySortDirection === 'desc';
+
+            return $rows->sort(function (User $a, User $b) use ($col, $desc): int {
+                $valA = (float) ($a->{$col} ?? 0);
+                $valB = (float) ($b->{$col} ?? 0);
+
+                if ($valA !== $valB) {
+                    return $desc ? ($valB <=> $valA) : ($valA <=> $valB);
+                }
+
+                return strcmp((string) $a->name, (string) $b->name);
+            })->values();
+        }
+
+        return $rows;
     }
 }

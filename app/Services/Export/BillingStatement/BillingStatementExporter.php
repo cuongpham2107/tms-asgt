@@ -72,6 +72,8 @@ class BillingStatementExporter
             ->whereIn('id', $rowsByOrder->keys())
             ->where('customer_id', $customer->id)
             ->get()
+            ->when($template['rate_types'] ?? null, fn (Collection $orders, array $rateTypes): Collection => $orders
+                ->filter(fn (Order $order): bool => in_array((string) $order->charge?->rate_type, $rateTypes, true)))
             ->sortBy(fn (Order $order): array => [
                 (string) ($rowsByOrder[$order->id]['date'] ?? ''),
                 (string) ($rowsByOrder[$order->id]['plate_number'] ?? ''),
@@ -94,6 +96,14 @@ class BillingStatementExporter
 
             return $perDrop ? $this->perDropRows($order, $values) : [$values];
         })->values();
+
+        // Mẫu không có cột tên riêng thì ghép tên công ty vào ô địa chỉ.
+        $keys = array_column($columns, 0);
+        $dataRows = $dataRows->map(fn (array $values): array => [
+            ...$values,
+            ...(in_array('pickup_name', $keys, true) || ! array_key_exists('pickup_full', $values) ? [] : ['pickup' => $values['pickup_full']]),
+            ...(in_array('drop_name', $keys, true) || ! array_key_exists('drop_full', $values) ? [] : ['drop' => $values['drop_full']]),
+        ]);
 
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
@@ -179,6 +189,8 @@ class BillingStatementExporter
             'plate' => $row['plate_number'] ?? $order->trip?->vehicle?->plate_number,
             'pickup' => $this->address($order->pickupLocation, $order->pickup_address),
             'pickup_name' => $order->pickupLocation?->name,
+            'pickup_full' => $this->addressWithName($order->pickupLocation, $order->pickup_address),
+            'drop_full' => $this->numbered($deliveryPoints->map(fn (OrderDeliveryPoint $point): string => $this->addressWithName($point->location, $point->address))),
             'drop' => $this->numbered($deliveryPoints->map(fn (OrderDeliveryPoint $point): string => $this->address($point->location, $point->address))),
             'drop_name' => $this->numbered($dropLocations->map(fn (?Location $location): ?string => $location?->name)),
             'drop_old_address' => $dropLocations->map(fn (?Location $location): ?string => $location?->old_address)->filter()->implode(' / '),
@@ -247,6 +259,7 @@ class BillingStatementExporter
                 'date' => $values['date'],
                 'drop' => $this->address($point->location, $point->address),
                 'drop_name' => $point->location?->name,
+                'drop_full' => $this->addressWithName($point->location, $point->address),
                 'drop_old_address' => $point->location?->old_address,
                 'drop_zone' => $point->location?->billingZone?->name,
                 'time_arrived' => $arrived,
@@ -559,6 +572,17 @@ class BillingStatementExporter
     private function address(?Location $location, ?string $fallback): string
     {
         return (string) ($location?->address ?: $fallback ?: $location?->name);
+    }
+
+    /**
+     * "Tên công ty - địa chỉ"; bỏ tên nếu địa chỉ đã chứa tên.
+     */
+    private function addressWithName(?Location $location, ?string $fallback): string
+    {
+        $address = $this->address($location, $fallback);
+        $name = trim((string) $location?->name);
+
+        return $name === '' || str_contains(mb_strtolower($address), mb_strtolower($name)) ? $address : "{$name} - {$address}";
     }
 
     private function percent(float $value): string

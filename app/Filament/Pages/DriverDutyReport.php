@@ -4,8 +4,10 @@ namespace App\Filament\Pages;
 
 use App\Enums\OnDutyLocation;
 use App\Enums\ShiftType;
+use App\Enums\TripStatus;
 use App\Filament\Forms\Components\PillFilter;
 use App\Models\DriverShift;
+use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use BackedEnum;
@@ -26,6 +28,8 @@ class DriverDutyReport extends Page implements HasTable
     use InteractsWithTable;
 
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
@@ -110,9 +114,15 @@ class DriverDutyReport extends Page implements HasTable
                 TextColumn::make('end_time')
                     ->label('Kết thúc ca')
                     ->alignCenter()
+                    ->badge(fn ($record): bool => ! $record->end_time && $record->has_active_shift)
+                    ->color(fn ($record): string => $record->is_stale_shift ? 'warning' : 'success')
                     ->formatStateUsing(function ($state, $record) {
                         if ($state) {
                             return $state->format('H:i d/m/Y');
+                        }
+
+                        if ($record->is_stale_shift) {
+                            return 'Chưa thoát ca cũ';
                         }
 
                         return $record->has_active_shift ? 'Đang chạy' : '—';
@@ -231,70 +241,41 @@ class DriverDutyReport extends Page implements HasTable
             ->whereHas('driverShifts', fn ($q) => $q->whereNull('end_time'))
             ->where('is_active', true)
             ->when($this->activeStationFilter !== 'all', fn ($q) => $q->where('station', $this->activeStationFilter))
-            ->select('users.*')
-            ->selectSub(function ($q) {
-                $q->selectRaw('COALESCE(s.total_km_loaded, 0)')
-                    ->from('driver_shifts', 's')
-                    ->whereColumn('s.driver_id', 'users.id')
-                    ->whereNull('s.end_time')
-                    ->orderByDesc('s.start_time')
-                    ->limit(1);
-            }, 'km_loaded')
-            ->selectSub(function ($q) {
-                $q->selectRaw('COALESCE(s.total_km_empty, 0)')
-                    ->from('driver_shifts', 's')
-                    ->whereColumn('s.driver_id', 'users.id')
-                    ->whereNull('s.end_time')
-                    ->orderByDesc('s.start_time')
-                    ->limit(1);
-            }, 'km_empty')
-            ->selectSub(function ($q) {
-                $q->selectRaw('COALESCE(s.total_km, 0)')
-                    ->from('driver_shifts', 's')
-                    ->whereColumn('s.driver_id', 'users.id')
-                    ->whereNull('s.end_time')
-                    ->orderByDesc('s.start_time')
-                    ->limit(1);
-            }, 'total_km')
-            ->selectSub(function ($q) {
-                $q->selectRaw('COUNT(t.id)')
-                    ->from('trips', 't')
-                    ->join('driver_shifts as s2', 's2.id', '=', 't.shift_id')
-                    ->whereColumn('s2.driver_id', 'users.id')
-                    ->whereNull('s2.end_time');
-            }, 'trip_count')
-            ->withCasts([
-                'km_loaded' => 'decimal:1',
-                'km_empty' => 'decimal:1',
-                'total_km' => 'decimal:1',
-                'trip_count' => 'integer',
-            ]);
+            ->select('users.*');
     }
 
     protected function paginateTableQuery(Builder $query): Paginator
     {
+        [$shiftStart, $shiftEnd] = VehicleDispatchBoard::getShiftWindow();
+        $runningValues = array_map(fn ($s) => $s->value, VehicleDispatchBoard::runningTripStatuses());
+
         $drivers = $query->get();
 
-        $rows = $drivers->map(function (User $driver) {
+        $rows = $drivers->map(function (User $driver) use ($shiftStart, $shiftEnd, $runningValues) {
             $shift = DriverShift::where('driver_id', $driver->id)
                 ->whereNull('end_time')
                 ->orderByDesc('start_time')
                 ->first();
 
-            // Lấy xe: ưu tiên current_driver_id, fallback qua trip
-            $vehicle = Vehicle::where('current_driver_id', $driver->id)->first();
-            if ($vehicle === null && $shift) {
-                $vehicle = $shift->trips()
-                    ->latest('started_at')
-                    ->first()?->vehicle;
-            }
+            $windowTrips = Trip::query()
+                ->where('driver_id', $driver->id)
+                ->whereNotIn('status', ['pending', 'cancelled'])
+                ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues) {
+                    $q->whereIn('status', $runningValues)
+                        ->orWhereBetween('started_at', [$shiftStart, $shiftEnd])
+                        ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd]);
+                })
+                ->with('vehicle')
+                ->orderByDesc('started_at')
+                ->get();
 
-            $swapTrip = $shift?->trips()
-                ->whereNotNull('end_km')
-                ->where('status', 'driver_swap')
-                ->first();
+            $isShiftInCurrentWindow = $shift?->start_time !== null && $shift->start_time->between($shiftStart, $shiftEnd);
 
-            $hasSwap = $swapTrip !== null;
+            $vehicle = Vehicle::where('current_driver_id', $driver->id)->first()
+                ?? $windowTrips->first()?->vehicle;
+
+            $hasSwap = $windowTrips->contains(fn ($t): bool => $t->end_km !== null
+                && ($t->status === TripStatus::DriverSwap || $t->status === 'driver_swap'));
             $plate = $vehicle?->plate_number;
 
             $driver->station_display = $driver->station?->getLabel() ?? '—';
@@ -302,10 +283,17 @@ class DriverDutyReport extends Page implements HasTable
             $driver->swap_note = $hasSwap ? 'đảo lái' : null;
             $driver->shift_type = $shift?->shift_type;
             $driver->has_active_shift = $shift !== null;
-            $driver->trip_count = (int) ($driver->trip_count ?? 0);
-            $driver->km_loaded = (float) ($driver->km_loaded ?? 0);
-            $driver->km_empty = (float) ($driver->km_empty ?? 0);
-            $driver->total_km = (float) ($driver->total_km ?? 0);
+            $driver->is_stale_shift = $shift !== null && ! $isShiftInCurrentWindow;
+            $driver->trip_count = $windowTrips->count();
+            $driver->km_loaded = $windowTrips->isNotEmpty()
+                ? (float) $windowTrips->sum('total_km_loaded')
+                : ($isShiftInCurrentWindow ? (float) ($shift?->total_km_loaded ?? 0) : 0.0);
+            $driver->km_empty = $windowTrips->isNotEmpty()
+                ? (float) $windowTrips->sum('total_km_empty')
+                : ($isShiftInCurrentWindow ? (float) ($shift?->total_km_empty ?? 0) : 0.0);
+            $driver->total_km = $windowTrips->isNotEmpty()
+                ? (float) $windowTrips->sum('total_km')
+                : ($isShiftInCurrentWindow ? (float) ($shift?->total_km ?? 0) : 0.0);
             $driver->start_time = $shift?->start_time;
             $driver->end_time = $shift?->end_time;
 

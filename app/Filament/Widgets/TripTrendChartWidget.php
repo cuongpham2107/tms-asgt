@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Models\Order;
 use App\Models\Trip;
+use App\Services\ShiftScheduleService;
 use Filament\Widgets\ChartWidget;
 
 class TripTrendChartWidget extends ChartWidget
@@ -34,9 +35,11 @@ class TripTrendChartWidget extends ChartWidget
     {
         $activeFilter = $this->filter ?: '7days';
 
+        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+
         $days = match ($activeFilter) {
             '30days' => 30,
-            'month' => (int) now()->day,
+            'month' => (int) $shiftNow->day,
             default => 7,
         };
 
@@ -45,22 +48,24 @@ class TripTrendChartWidget extends ChartWidget
         $orderCompletedCounts = [];
 
         for ($i = $days - 1; $i >= 0; $i--) {
-            $date = now()->subDays($i);
-            $dateStr = $date->toDateString();
+            $date = $shiftNow->copy()->subDays($i);
+            $dayStart = $date->copy()->setTime(8, 0, 0);
+            $dayEnd = $date->copy()->addDay()->setTime(8, 0, 0);
             $label = $days > 14 ? $date->format('d/m') : $date->format('D d/m');
 
             $labels[] = $label;
 
             $trips = Trip::query()
-                ->where(function ($q) use ($dateStr) {
-                    $q->whereDate('started_at', $dateStr)
-                        ->orWhereDate('created_at', $dateStr);
+                ->where(function ($q) use ($dayStart, $dayEnd) {
+                    $q->whereBetween('started_at', [$dayStart, $dayEnd])
+                        ->orWhereBetween('completed_at', [$dayStart, $dayEnd])
+                        ->orWhere(fn ($sq) => $sq->whereNull('started_at')->whereBetween('created_at', [$dayStart, $dayEnd]));
                 })
                 ->count();
 
             $completedOrders = Order::query()
                 ->where('status', 'completed')
-                ->whereDate('planned_loading_at', $dateStr)
+                ->whereBetween('planned_loading_at', [$dayStart, $dayEnd])
                 ->count();
 
             $tripCounts[] = $trips;

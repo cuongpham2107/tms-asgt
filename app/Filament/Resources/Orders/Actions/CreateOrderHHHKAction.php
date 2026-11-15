@@ -8,7 +8,6 @@ use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
-use App\Models\Location;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -64,31 +63,12 @@ class CreateOrderHHHKAction extends CreatesOrderTransportCards
                         ->native(false)
                         ->required()
                         ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
-                        ->createOptionUsing(function (array $data, Get $get): int {
-                            $areaId = $data['area_id'] ?? $get('area_id');
-                            $areas = $data['areas'] ?? [];
-                            if (empty($areas) && $areaId) {
-                                $areas = [(int) $areaId];
-                            }
-                            unset($data['areas']);
-
-                            if (is_string($areaId) && ! is_numeric($areaId)) {
-                                $area = Area::query()->where('code', $areaId)->first();
-                                $areaId = $area?->id;
-                            }
-
-                            $location = Location::create(array_merge($data, [
-                                'area_id' => $areaId ? (int) $areaId : ($areas[0] ?? null),
-                                'loc_type' => $data['loc_type'] ?? LocationType::Pickup->value,
-                                'is_active' => true,
-                            ]));
-
-                            if (! empty($areas)) {
-                                $location->areas()->sync($areas);
-                            }
-
-                            return $location->getKey();
-                        })
+                        ->createOptionUsing(fn (array $data, Schema $schema, Get $get): int => LocationForm::createFromOptionForm(
+                            $data,
+                            $schema,
+                            $get('area_id'),
+                            LocationType::Pickup->value,
+                        ))
                         ->columnSpan(['default' => 1, 'sm' => 2, 'md' => 2]),
                     DateTimePicker::make('planned_loading_at')
                         ->label('Thời gian dự kiến đóng hàng')

@@ -30,6 +30,17 @@ class VehicleDispatchTable extends Widget
         'Tên lái xe', 'Trực', 'Ca',
     ];
 
+    /**
+     * Cột hiển thị cho sheet Xe thuê ngoài: bỏ các cột GPS (Vị trí thực tế trên GPS, Tốc độ, Status),
+     * KM over, Trực, Ca; giữ nguyên 12 cột còn lại.
+     *
+     * @var array<int, string>
+     */
+    private const RENT_COLUMNS = [
+        'Địa điểm', 'HT', 'BSX', 'Phân loại', 'Loại đơn', 'Trạng thái', 'Điểm đi', 'Điểm đến',
+        'Xe chờ', 'Chuyến', 'Đơn chờ', 'Tên lái xe',
+    ];
+
     protected ?string $heading = 'Bảng kiểm soát tình trạng xe';
 
     protected int|string|array $columnSpan = 'full';
@@ -47,6 +58,9 @@ class VehicleDispatchTable extends Widget
 
     #[Reactive]
     public string $sortDirection = 'desc';
+
+    #[Reactive]
+    public string $activeOwnerType = 'company';
 
     #[Reactive]
     public string $activeStation = 'all';
@@ -68,6 +82,8 @@ class VehicleDispatchTable extends Widget
      */
     public function getRendererConfiguration(): array
     {
+        $isRent = $this->activeOwnerType === 'rent';
+
         // Chưa sẵn sàng: gửi khung (tiêu đề, cột, bộ lọc) không kèm xe để React vẽ skeleton.
         $groups = collect($this->isReady ? $this->getGroupedVehicles() : [])
             ->map(fn (array $group): array => [
@@ -81,8 +97,9 @@ class VehicleDispatchTable extends Widget
 
         return [
             'loaded' => $this->isReady,
-            'title' => 'KIỂM SOÁT TÌNH TRẠNG XE 🚛',
-            'columns' => self::COLUMNS,
+            'ownerType' => $isRent ? 'rent' : 'company',
+            'title' => $isRent ? 'KIỂM SOÁT XE THUÊ NGOÀI 🚛' : 'KIỂM SOÁT TÌNH TRẠNG XE 🚛',
+            'columns' => $isRent ? self::RENT_COLUMNS : self::COLUMNS,
             'groups' => $groups,
             'filters' => ['search' => (string) $this->searchQuery],
             'sort' => ['by' => $this->sortBy, 'direction' => $this->sortDirection],
@@ -109,6 +126,8 @@ class VehicleDispatchTable extends Widget
                 $statusAction = ['name' => 'resolve_km_report', 'tooltip' => 'Bấm để xử lý báo sai Km'];
             } elseif ($activeTrip->status === TripStatus::DriverSwap) {
                 $statusAction = ['name' => 'reassign_driver', 'tooltip' => 'Bấm để gán lại tài xế (Đảo lái)'];
+            } else {
+                $statusAction = ['name' => 'edit_trip', 'tooltip' => 'Bấm để sửa chuyến — '.$activeTrip->trip_code];
             }
         }
 

@@ -1,8 +1,5 @@
 {{-- Style highlight khi rê chuột vào từng dòng --}}
 <style>
-    .dispatch-row {
-        transition: background-color 0.15s ease, border-color 0.15s ease;
-    }
     .dispatch-row:hover td:not(.status-cell):not(.km-over-cell):not(.alert-cell) {
         background-color: rgb(239 246 255 / 0.85);
     }

@@ -10,6 +10,7 @@ use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use Carbon\Carbon;
 use Closure;
@@ -45,6 +46,7 @@ class TripForm
                             ->prefixIcon(Heroicon::OutlinedSignal)
                             ->options(TripStatus::class)
                             ->disabled()
+                            ->dehydrated()
                             ->columnSpan(['default' => 1, 'sm' => 3]),
                         Select::make('vehicle_id')
                             ->label('Phương tiện')
@@ -56,8 +58,10 @@ class TripForm
                             ->columnSpan(['default' => 1, 'sm' => 3]),
                         Select::make('driver_id')
                             ->label('Lái xe')
-                            ->options(fn (): array => User::query()
-                                ->whereHas('roles', fn ($q) => $q->where('name', 'driver'))
+                            ->options(fn (?Trip $record): array => User::query()
+                                ->role('driver')
+                                ->where(fn ($q) => $q->where('is_active', true)->when($record?->driver_id, fn ($sub) => $sub->orWhere('id', $record->driver_id)))
+                                ->orderBy('name')
                                 ->pluck('name', 'id')
                                 ->toArray()
                             )
@@ -105,6 +109,21 @@ class TripForm
                         TextInput::make('start_km')
                             ->label('Km bắt đầu')
                             ->disabled()
+                            ->dehydrated()
+                            ->hint(function (?Model $record): ?string {
+                                if (! $record instanceof Trip) {
+                                    return null;
+                                }
+
+                                $record->loadMissing('vehicle');
+                                $mileage = $record->vehicle?->current_mileage;
+
+                                return $mileage !== null
+                                    ? 'Km xe: '.number_format((float) $mileage, 1, ',', '.').' km'
+                                    : null;
+                            })
+                            ->hintIcon(Heroicon::OutlinedTruck)
+                            ->hintColor('primary')
                             ->helperText(function (?Model $record): string {
                                 if (! $record instanceof Trip) {
                                     return 'Lấy từ Km xe (kết thúc chuyến trước)';
@@ -115,9 +134,16 @@ class TripForm
                                     ->where('km_reading', '>', 0)
                                     ->exists();
 
-                                return $hasCheckpointKm
+                                $baseNote = $hasCheckpointKm
                                     ? 'Đồng bộ từ mốc bắt đầu chuyến'
                                     : 'Lấy từ Km xe (kết thúc chuyến trước)';
+
+                                $record->loadMissing('vehicle');
+                                $vehicleKm = $record->vehicle?->current_mileage;
+
+                                return $vehicleKm !== null
+                                    ? $baseNote.' · Km hiện tại của xe: '.number_format((float) $vehicleKm, 1, ',', '.').' km'
+                                    : $baseNote;
                             })
                             ->prefixIcon(Heroicon::OutlinedAdjustmentsVertical)
                             ->mask(RawJs::make('$money($input)'))
@@ -136,6 +162,10 @@ class TripForm
 
                                 if ($minKm !== null) {
                                     $component->state((float) $minKm);
+                                } elseif ($record->start_km !== null) {
+                                    $component->state((float) $record->start_km);
+                                } elseif ($record->vehicle?->current_mileage !== null) {
+                                    $component->state((float) $record->vehicle->current_mileage);
                                 }
                             }),
                         TextInput::make('end_km')
@@ -147,8 +177,16 @@ class TripForm
                                     return 'Tự cập nhật khi hoàn thành chuyến';
                                 }
 
-                                if ($record->status === TripStatus::Completed || $record->end_km !== null) {
+                                $hasEndCheckpoint = $record->checkpoints()
+                                    ->where('checkpoint_type', CheckpointType::End->value)
+                                    ->exists();
+
+                                if ($hasEndCheckpoint) {
                                     return 'Đồng bộ từ mốc kết thúc chuyến';
+                                }
+
+                                if ($record->status === TripStatus::Completed || $record->end_km !== null) {
+                                    return 'Chưa có mốc kết thúc xe (đồng bộ theo Km mốc cuối)';
                                 }
 
                                 return 'Chưa kết thúc (tự cập nhật khi hoàn thành chuyến)';
@@ -189,18 +227,39 @@ class TripForm
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
                             ->native(true)
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->helperText(function (?Model $record): string {
+                                if (! $record instanceof Trip) {
+                                    return 'Tự cập nhật từ mốc bắt đầu chuyến';
+                                }
+
+                                $hasStartedCheckpoint = $record->checkpoints()
+                                    ->where('checkpoint_type', CheckpointType::Started->value)
+                                    ->whereNotNull('occurred_at')
+                                    ->exists();
+
+                                if ($hasStartedCheckpoint || $record->started_at !== null) {
+                                    return 'Đồng bộ từ mốc bắt đầu chuyến';
+                                }
+
+                                return 'Chưa bắt đầu (tự cập nhật từ mốc bắt đầu chuyến)';
+                            })
                             ->columnSpan(['default' => 1, 'sm' => fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent ? 4 : 3])
                             ->afterStateHydrated(function (DateTimePicker $component, ?Trip $record): void {
-                                if ($record === null || $component->getState() !== null) {
+                                if ($record === null) {
                                     return;
                                 }
 
-                                $minTime = $record->checkpoints()
+                                $startedTime = $record->checkpoints()
                                     ->whereNotNull('occurred_at')
-                                    ->min('occurred_at');
+                                    ->where('checkpoint_type', CheckpointType::Started->value)
+                                    ->orderBy('occurred_at')
+                                    ->orderBy('id')
+                                    ->value('occurred_at');
 
-                                if ($minTime !== null) {
-                                    $component->state($minTime);
+                                if ($startedTime !== null) {
+                                    $component->state($startedTime);
                                 }
                             }),
                         DateTimePicker::make('completed_at')
@@ -209,14 +268,30 @@ class TripForm
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
                             ->native(true)
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(function ($state, $set, ?Model $record) {
-                                if (filled($state) && $record?->vehicle?->type === VehicleOwnerType::Rent) {
-                                    $set('status', TripStatus::Completed);
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->helperText(function (?Model $record): string {
+                                if (! $record instanceof Trip) {
+                                    return 'Tự cập nhật từ mốc kết thúc chuyến';
                                 }
+
+                                $hasEndCheckpoint = $record->checkpoints()
+                                    ->where('checkpoint_type', CheckpointType::End->value)
+                                    ->whereNotNull('occurred_at')
+                                    ->exists();
+
+                                if ($hasEndCheckpoint) {
+                                    return 'Đồng bộ từ mốc kết thúc chuyến';
+                                }
+
+                                if ($record->status === TripStatus::Completed && $record->completed_at !== null) {
+                                    return 'Chưa có mốc kết thúc xe';
+                                }
+
+                                return 'Chưa kết thúc (tự cập nhật từ mốc kết thúc chuyến)';
                             })
                             ->afterStateHydrated(function (DateTimePicker $component, ?Trip $record): void {
-                                if ($record === null || $component->getState() !== null) {
+                                if ($record === null) {
                                     return;
                                 }
 
@@ -224,6 +299,7 @@ class TripForm
                                     ->whereNotNull('occurred_at')
                                     ->where('checkpoint_type', CheckpointType::End->value)
                                     ->latest('occurred_at')
+                                    ->orderByDesc('id')
                                     ->value('occurred_at');
 
                                 if ($endTime !== null) {
@@ -234,11 +310,11 @@ class TripForm
                     ]),
                 Section::make('Các mốc hành trình')
                     ->columnSpanFull()
-                    ->hidden(fn (?Model $record) => $record?->is_empty_run || $record?->checkpoints->isEmpty())
+                    ->hidden(fn (?Model $record) => (bool) $record?->is_empty_run)
                     ->schema([
                         // Repeater cho xe thuê ngoài không có lái xe (4 cột: Loại, Đơn hàng, Giờ, Điểm)
                         Repeater::make('checkpoints_rent')
-                            ->relationship('checkpoints')
+                            ->relationship('checkpoints', modifyQueryUsing: fn ($query) => $query->chronological())
                             ->label('Danh sách mốc hành trình')
                             ->visible(fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent && blank($record?->driver_id))
                             ->table([
@@ -247,7 +323,6 @@ class TripForm
                                 TableColumn::make('Giờ')->width('220px'),
                                 TableColumn::make('Điểm')->width('110px'),
                             ])
-                            ->orderColumn('created_at')
                             ->compact()
                             ->schema([
                                 Select::make('checkpoint_type')
@@ -266,17 +341,25 @@ class TripForm
                                                 $set('../../completed_at', $occurredAt);
                                             }
                                         } elseif ($type === CheckpointType::Started) {
+                                            $set('../../status', TripStatus::Started);
+
                                             $occurredAt = $get('occurred_at');
                                             if (filled($occurredAt)) {
                                                 $set('../../started_at', $occurredAt);
+                                            }
+                                        } elseif ($type !== null) {
+                                            $tripStatus = $type->toTripStatus();
+                                            if ($tripStatus !== null) {
+                                                $set('../../status', $tripStatus);
                                             }
                                         }
                                     })
                                     ->default(fn ($get) => self::getNextCheckpointType($get, 'checkpoints_rent')),
                                 Select::make('order_id')
                                     ->label('Đơn hàng')
-                                    ->options(function ($get): array {
-                                        $tripId = $get('../../id');
+                                    ->options(function ($get, ?Model $record): array {
+                                        $tripId = $get('../../id')
+                                            ?? ($record instanceof TripCheckpoint ? $record->trip_id : ($record instanceof Trip ? $record->id : null));
                                         if (! $tripId) {
                                             return [];
                                         }
@@ -287,11 +370,11 @@ class TripForm
                                     })
                                     ->searchable()
                                     ->native(false)
-                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                    ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
                                         $get,
                                         'checkpoints_rent',
                                         'order_id',
-                                        fn () => Order::where('trip_id', $get('../../id'))->value('id'),
+                                        fn () => Order::where('trip_id', $get('../../id') ?? ($record instanceof TripCheckpoint ? $record->trip_id : ($record instanceof Trip ? $record->id : null)))->value('id'),
                                     )),
                                 DateTimePicker::make('occurred_at')
                                     ->label('Thời gian')
@@ -310,11 +393,11 @@ class TripForm
                                         }
                                     })
                                     ->native(true)
-                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                    ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
                                         $get,
                                         'checkpoints_rent',
                                         'occurred_at',
-                                        fn () => $get('../../started_at') ?? now()->format('Y-m-d H:i'),
+                                        fn () => $get('../../started_at') ?? $record?->started_at?->format('Y-m-d H:i') ?? now()->format('Y-m-d H:i'),
                                     )),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')
@@ -350,13 +433,14 @@ class TripForm
                             ->addable()
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
+                            ->rules([fn (): Closure => self::checkpointTimeOrderRule()])
                             ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->columnSpanFull(),
 
                         // Repeater cho xe công ty hoặc xe thuê ngoài có tài xế (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm)
                         Repeater::make('checkpoints')
-                            ->relationship('checkpoints')
+                            ->relationship('checkpoints', modifyQueryUsing: fn ($query) => $query->chronological())
                             ->label('Danh sách mốc hành trình')
                             ->visible(fn (?Model $record) => $record?->vehicle?->type !== VehicleOwnerType::Rent || filled($record?->driver_id))
                             ->table([
@@ -367,7 +451,6 @@ class TripForm
                                 TableColumn::make('Giờ')->width('160px'),
                                 TableColumn::make('Điểm')->width('110px'),
                             ])
-                            ->orderColumn('created_at')
                             ->compact()
                             ->schema([
                                 Select::make('checkpoint_type')
@@ -391,6 +474,8 @@ class TripForm
                                                 $set('../../completed_at', $occurredAt);
                                             }
                                         } elseif ($type === CheckpointType::Started) {
+                                            $set('../../status', TripStatus::Started);
+
                                             $km = $get('km_reading');
                                             if (filled($km)) {
                                                 $set('../../start_km', $km);
@@ -400,13 +485,19 @@ class TripForm
                                             if (filled($occurredAt)) {
                                                 $set('../../started_at', $occurredAt);
                                             }
+                                        } elseif ($type !== null) {
+                                            $tripStatus = $type->toTripStatus();
+                                            if ($tripStatus !== null) {
+                                                $set('../../status', $tripStatus);
+                                            }
                                         }
                                     })
                                     ->default(fn ($get) => self::getNextCheckpointType($get, 'checkpoints')),
                                 Select::make('order_id')
                                     ->label('Đơn hàng')
-                                    ->options(function ($get): array {
-                                        $tripId = $get('../../id');
+                                    ->options(function ($get, ?Model $record): array {
+                                        $tripId = $get('../../id')
+                                            ?? ($record instanceof TripCheckpoint ? $record->trip_id : ($record instanceof Trip ? $record->id : null));
                                         if (! $tripId) {
                                             return [];
                                         }
@@ -417,15 +508,16 @@ class TripForm
                                     })
                                     ->searchable()
                                     ->native(false)
-                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                    ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
                                         $get,
                                         'checkpoints',
                                         'order_id',
-                                        fn () => Order::where('trip_id', $get('../../id'))->value('id'),
+                                        fn () => Order::where('trip_id', $get('../../id') ?? ($record instanceof TripCheckpoint ? $record->trip_id : ($record instanceof Trip ? $record->id : null)))->value('id'),
                                     )),
                                 Select::make('driver_id')
                                     ->label('Tài xế')
                                     ->options(fn () => User::query()
+                                        ->role('driver')
                                         ->where('is_active', true)
                                         ->orderBy('name')
                                         ->pluck('name', 'id')
@@ -433,11 +525,11 @@ class TripForm
                                     ->searchable()
                                     ->native(false)
                                     ->nullable()
-                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                    ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
                                         $get,
                                         'checkpoints',
                                         'driver_id',
-                                        fn () => $get('../../driver_id'),
+                                        fn () => $get('../../driver_id') ?? $record?->driver_id,
                                     )),
                                 TextInput::make('km_reading')
                                     ->label('Km')
@@ -457,11 +549,11 @@ class TripForm
                                             $set('../../start_km', $state);
                                         }
                                     })
-                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                    ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
                                         $get,
                                         'checkpoints',
                                         'km_reading',
-                                        fn () => $get('../../start_km'),
+                                        fn () => $get('../../start_km') ?? ($record?->vehicle?->current_mileage !== null ? (float) $record->vehicle->current_mileage : null),
                                     )),
                                 DateTimePicker::make('occurred_at')
                                     ->label('Thời gian')
@@ -480,11 +572,11 @@ class TripForm
                                         }
                                     })
                                     ->native(true)
-                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
+                                    ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
                                         $get,
                                         'checkpoints',
                                         'occurred_at',
-                                        fn () => $get('../../started_at') ?? now()->format('Y-m-d H:i'),
+                                        fn () => $get('../../started_at') ?? $record?->started_at?->format('Y-m-d H:i') ?? now()->format('Y-m-d H:i'),
                                     )),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')
@@ -520,7 +612,10 @@ class TripForm
                             ->addable()
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
-                            ->rules([fn (): Closure => self::checkpointKmIncreasingRule()])
+                            ->rules([
+                                fn (): Closure => self::checkpointKmIncreasingRule(),
+                                fn (): Closure => self::checkpointTimeOrderRule(),
+                            ])
                             ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->columnSpanFull(),
@@ -560,6 +655,50 @@ class TripForm
                 if ($highest === null || $row['km'] >= $highest['km']) {
                     $highest = $row;
                 }
+            }
+        };
+    }
+
+    /**
+     * Thời gian mốc kết thúc xe (end) không được trước mốc bắt đầu chuyến (started).
+     */
+    public static function checkpointTimeOrderRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            $rows = collect(is_array($value) ? $value : [])
+                ->filter(fn ($row): bool => is_array($row) && filled($row['occurred_at'] ?? null) && filled($row['checkpoint_type'] ?? null))
+                ->map(function (array $row): array {
+                    $raw = $row['checkpoint_type'];
+                    $type = $raw instanceof CheckpointType
+                        ? $raw
+                        : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
+
+                    return [
+                        'type' => $type,
+                        'at' => Carbon::parse($row['occurred_at']),
+                    ];
+                });
+
+            $startedAt = $rows
+                ->where('type', CheckpointType::Started)
+                ->sortBy(fn (array $row): int => $row['at']->getTimestamp())
+                ->first()['at'] ?? null;
+
+            if ($startedAt === null) {
+                return;
+            }
+
+            $endAt = $rows
+                ->where('type', CheckpointType::End)
+                ->sortByDesc(fn (array $row): int => $row['at']->getTimestamp())
+                ->first()['at'] ?? null;
+
+            if ($endAt !== null && $endAt->lt($startedAt)) {
+                $fail(sprintf(
+                    'Thời gian mốc kết thúc xe (%s) không được sớm hơn mốc bắt đầu chuyến (%s).',
+                    $endAt->format('H:i d/m/Y'),
+                    $startedAt->format('H:i d/m/Y'),
+                ));
             }
         };
     }

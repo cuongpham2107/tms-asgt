@@ -12,7 +12,7 @@ return [
     |
     */
 
-    'radius_m' => (int) env('CHECKPOINT_GEOFENCE_RADIUS_M', 1000),
+    'radius_m' => (int) env('CHECKPOINT_GEOFENCE_RADIUS_M', 3000),
 
     'vehicle_radius_m' => (int) env('CHECKPOINT_GEOFENCE_VEHICLE_RADIUS_M', 3000),
 

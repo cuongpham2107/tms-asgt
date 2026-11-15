@@ -12,6 +12,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -31,6 +32,7 @@ class VehicleForm
                             ->label('Phân loại')
                             ->default('company')
                             ->required()
+                            ->live()
                             ->options([
                                 'company' => 'Xe công ty',
                                 'rent' => 'Xe thuê ngoài',
@@ -156,28 +158,59 @@ class VehicleForm
                             ->label('Lái xe ca chẵn')
                             ->prefixIcon('heroicon-o-user')
                             ->native(false)
-                            ->relationship('evenDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Even)->orWhereNull('work_shift')))
+                            ->relationship(
+                                'evenDriver',
+                                'name',
+                                fn ($query, ?Vehicle $record) => $query->role('driver')
+                                    ->where(fn ($q) => $q->where('is_active', true)->when($record?->even_driver_id, fn ($sub) => $sub->orWhere('id', $record->even_driver_id)))
+                                    ->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Even)->orWhereNull('work_shift'))
+                            )
                             ->searchable()
                             ->preload()
+                            ->visible(fn (Get $get): bool => ($get('type') instanceof \BackedEnum ? $get('type')->value : ($get('type') ?? 'company')) !== 'rent')
+                            ->visibleJs("(\$get('type') ?? 'company') !== 'rent'")
                             ->placeholder('Chọn lái xe ca chẵn'),
 
                         Select::make('odd_driver_id')
                             ->label('Lái xe ca lẻ')
                             ->prefixIcon('heroicon-o-user')
                             ->native(false)
-                            ->relationship('oddDriver', 'name', fn ($query) => $query->role('driver')->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Odd)->orWhereNull('work_shift')))
+                            ->relationship(
+                                'oddDriver',
+                                'name',
+                                fn ($query, ?Vehicle $record) => $query->role('driver')
+                                    ->where(fn ($q) => $q->where('is_active', true)->when($record?->odd_driver_id, fn ($sub) => $sub->orWhere('id', $record->odd_driver_id)))
+                                    ->where(fn ($q) => $q->where('work_shift', DriverWorkShift::Odd)->orWhereNull('work_shift'))
+                            )
                             ->searchable()
                             ->preload()
+                            ->visible(fn (Get $get): bool => ($get('type') instanceof \BackedEnum ? $get('type')->value : ($get('type') ?? 'company')) !== 'rent')
+                            ->visibleJs("(\$get('type') ?? 'company') !== 'rent'")
                             ->placeholder('Chọn lái xe ca lẻ'),
 
                         Select::make('current_driver_id')
                             ->label('Lái xe hiện tại (Tùy chọn)')
                             ->prefixIcon('heroicon-o-user-circle')
                             ->native(false)
-                            ->relationship('driver', 'name', fn ($query) => $query->role('driver'))
+                            ->relationship(
+                                'driver',
+                                'name',
+                                fn ($query, ?Vehicle $record) => $query->role('driver')
+                                    ->where(fn ($q) => $q->where('is_active', true)->when($record?->current_driver_id, fn ($sub) => $sub->orWhere('id', $record->current_driver_id)))
+                            )
                             ->searchable()
                             ->preload()
+                            ->visible(fn (Get $get): bool => ($get('type') instanceof \BackedEnum ? $get('type')->value : ($get('type') ?? 'company')) !== 'rent')
+                            ->visibleJs("(\$get('type') ?? 'company') !== 'rent'")
                             ->helperText('Tự động theo ca hôm nay nếu để trống'),
+
+                        TextInput::make('external_driver_name')
+                            ->label('Tên lái xe ngoài')
+                            ->prefixIcon('heroicon-o-user')
+                            ->placeholder('Nhập tên lái xe thuê ngoài...')
+                            ->maxLength(255)
+                            ->visible(fn (Get $get): bool => ($get('type') instanceof \BackedEnum ? $get('type')->value : ($get('type') ?? 'company')) === 'rent')
+                            ->visibleJs("\$get('type') === 'rent'"),
 
                         TextInput::make('owner')
                             ->label('Chủ xe')

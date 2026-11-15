@@ -36,6 +36,7 @@ interface StatementRow {
     tripId: number
     driverId: number | null
     driver: string
+    operatingTime: string
     date: string | null
     code: string
     type: string
@@ -89,7 +90,7 @@ type Tab = 'summary' | 'statement' | 'evaluation'
 const NAVY: CSSProperties = { backgroundColor: 'rgb(30 58 95)' }
 const PER_PAGE_OPTIONS = [25, 50, 100]
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
-const STATEMENT_HEADERS = ['STT', 'Ngày', 'Mã đơn / chuyến', 'Loại', 'BSX', 'Lái xe', 'Bắt đầu chuyến', 'Kết thúc chuyến', 'Hành trình', 'A: Đến đóng', 'B: Xe chạy', 'C: Đến trả', 'D: Hạ xong', 'TG đóng', 'TG chạy', 'TG hạ', 'Tổng TG', 'Khách hàng', 'Kho', 'Xe', 'Km CH', 'Km KH', 'PCS', 'GW', 'Loại hàng', 'Ghi chú']
+const STATEMENT_HEADERS = ['STT', 'Ngày', 'Mã đơn / chuyến', 'Loại', 'BSX', 'Lái xe', 'Tổng TG khai thác', 'Bắt đầu chuyến', 'Kết thúc chuyến', 'Hành trình', 'A: Đến đóng', 'B: Xe chạy', 'C: Đến trả', 'D: Hạ xong', 'TG đóng', 'TG chạy', 'TG hạ', 'Tổng TG', 'Khách hàng', 'Kho', 'Xe', 'Km CH', 'Km KH', 'PCS', 'GW', 'Loại hàng', 'Ghi chú']
 
 const km = (value: number): string => value.toFixed(1)
 const optional = (value: number, decimals = 1): string => (value > 0 ? value.toFixed(decimals) : '')
@@ -604,6 +605,9 @@ const Statement = ({ rows, loading, error, periodLabel, perPage, onPerPage, onOp
                                 <td className={td}>{row.type}</td>
                                 <td className={`${td} text-center font-semibold`}>{row.plate ?? '—'}</td>
                                 <td className={td}>{row.driver}</td>
+                                <td className={`${td} text-center font-mono text-[11px] font-semibold text-primary-700 dark:text-primary-400`} title="Tổng thời gian khai thác = Thời gian hạ hàng - Bắt đầu chuyến">
+                                    {row.operatingTime ?? '—'}
+                                </td>
                                 <td className={`${td} text-center font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400`}>{row.started ?? '—'}</td>
                                 <td className={`${td} text-center font-mono text-[11px] font-semibold text-rose-700 dark:text-rose-400`}>{row.ended ?? '—'}</td>
                                 <td className={td}>{row.journey}</td>
@@ -669,6 +673,12 @@ interface EvaluationTrip {
     loading: number | null
     unloading: number | null
     routeWait: number | null
+    gpsLoading?: number | null
+    gpsUnloading?: number | null
+    gpsTimeA?: string | null
+    gpsTimeB?: string | null
+    gpsTimeC?: string | null
+    gpsTimeD?: string | null
     routeSamples: number
     flag: string | null
 }
@@ -720,11 +730,11 @@ const minutes = (value: number | null): string => {
 const percentOf = (actual: number | null, expected: number | null): number | null =>
     actual === null || expected === null || expected <= 0 ? null : Math.round(((actual - expected) / expected) * 100)
 
-/** Độ lệch so với chuẩn tuyến hiện bằng thời gian (+1h 20p); màu theo %, % nằm trong tooltip. */
+/** Độ lệch so với chuẩn GPS hiện bằng thời gian (+1h 20p); màu theo %, % nằm trong tooltip. */
 const Deviation = ({ diff, percent, note }: { diff: number | null; percent: number | null; note?: string }) => {
     if (diff === null || percent === null) {
         return (
-            <span className="text-gray-400" title={`Chưa có chuẩn để so: tuyến cần ít nhất 3 chuyến hợp lệ trong kỳ${note ? ` · ${note}` : ''}`}>
+            <span className="text-gray-400" title={`Chưa có dữ liệu dừng GPS tại điểm đóng/hạ để đối chiếu${note ? ` · ${note}` : ''}`}>
                 —
             </span>
         )
@@ -740,7 +750,7 @@ const Deviation = ({ diff, percent, note }: { diff: number | null; percent: numb
     const label = Math.abs(percent) < DIFF_WARN ? '≈ chuẩn' : `${diff > 0 ? '+' : '−'}${minutes(Math.abs(diff))}`
 
     return (
-        <span className={`font-mono text-[11px] ${tone}`} title={`${percent > 0 ? '+' : ''}${percent}% so với chuẩn tuyến${note ? ` · ${note}` : ''}`}>
+        <span className={`font-mono text-[11px] ${tone}`} title={`${percent > 0 ? '+' : ''}${percent}% so với chuẩn GPS thực tế${note ? ` · ${note}` : ''}`}>
             {label}
         </span>
     )
@@ -848,7 +858,7 @@ const EvaluationTable = ({ drivers, codes, periodLabel, selectedId, onSelect }: 
 }
 
 const TripMetric = ({ actual, standard, note }: { actual: number | null; standard: number | null; note: string }) => (
-    <div className="flex items-baseline justify-end gap-1.5" title={`${note} · chuẩn tuyến ${minutes(standard)}`}>
+    <div className="flex items-baseline justify-end gap-1.5" title={`${note} · chuẩn GPS thực tế ${minutes(standard)}`}>
         <span className="font-mono text-[11px] font-semibold">{minutes(actual)}</span>
         <Deviation diff={actual === null || standard === null ? null : Math.round(actual - standard)} percent={percentOf(actual, standard)} />
     </div>
@@ -936,10 +946,26 @@ const EvaluationTrips = ({ driver, trips, periodLabel, onClose, onOpenTrip }: {
                                 ) : (
                                     <>
                                         <td className={td}>
-                                            <TripMetric actual={trip.completion} standard={trip.routeCompletion} note="Bắt đầu → kết thúc chuyến" />
+                                            <TripMetric
+                                                actual={trip.completion}
+                                                standard={trip.routeCompletion}
+                                                note={
+                                                    trip.gpsTimeA && trip.gpsTimeD
+                                                        ? `Bắt đầu → kết thúc chuyến · GPS đến nhận ${trip.gpsTimeA} → rời hạ ${trip.gpsTimeD}`
+                                                        : 'Bắt đầu → kết thúc chuyến'
+                                                }
+                                            />
                                         </td>
                                         <td className="whitespace-nowrap px-2 py-1.5">
-                                            <TripMetric actual={trip.wait} standard={trip.routeWait} note={`Đóng ${minutes(trip.loading)} + hạ ${minutes(trip.unloading)}`} />
+                                            <TripMetric
+                                                actual={trip.wait}
+                                                standard={trip.routeWait}
+                                                note={`App: Đóng ${minutes(trip.loading)} + Hạ ${minutes(trip.unloading)}${
+                                                    trip.gpsLoading != null || trip.gpsUnloading != null
+                                                        ? ` · GPS: Đóng ${trip.gpsTimeA ?? '?'}→${trip.gpsTimeB ?? '?'} (${minutes(trip.gpsLoading ?? null)}) + Hạ ${trip.gpsTimeC ?? '?'}→${trip.gpsTimeD ?? '?'} (${minutes(trip.gpsUnloading ?? null)})`
+                                                        : ''
+                                                }`}
+                                            />
                                         </td>
                                     </>
                                 )}
@@ -962,7 +988,14 @@ const PRIMARY_BTN = 'fi-color fi-color-primary fi-bg-color-400 hover:fi-bg-color
 
 const pad = (value: number): string => String(value).padStart(2, '0')
 const isoDate = (date: Date): string => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-const today = (): string => isoDate(new Date())
+const today = (): string => {
+    const now = new Date()
+    if (now.getHours() < 8) {
+        now.setDate(now.getDate() - 1)
+    }
+
+    return isoDate(now)
+}
 
 /** Dời mốc ngày theo kỳ: ngày ±1, tuần ±7 ngày, tháng về ngày 1 rồi ±1 tháng (như addMonthsNoOverflow). */
 const shiftDate = (period: Period, date: string, step: number): string => {
@@ -1174,7 +1207,7 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
 
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                    <span className="font-semibold text-gray-900 dark:text-white">{report.periodLabel}</span> · chỉ tính chuyến đã hoàn thành thuộc ca đã kết thúc.
+                    <span className="font-semibold text-gray-900 dark:text-white">{report.periodLabel}</span> · tính theo thời gian hoàn thành chuyến (từ 08:00 đầu kỳ đến 08:00 cuối kỳ).
                     {reportError && <span className="ms-2 font-medium text-rose-600 dark:text-rose-400">{reportError}</span>}
                 </p>
                 <PeriodBar report={report} onChange={changePeriod} />
@@ -1203,10 +1236,10 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                 {tab === 'evaluation' ? (
                     <>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                            <span className="font-semibold text-gray-700 dark:text-gray-200">Chuẩn tuyến</span> = thời gian ở giữa (trung vị) của cả đội trên cùng tuyến trong kỳ, cần ít nhất 3
-                            chuyến. Lệch <span className="font-semibold text-rose-700 dark:text-rose-400">+</span> là chậm / chờ lâu hơn chuẩn,{' '}
-                            <span className="font-semibold text-emerald-700 dark:text-emerald-400">−</span> là nhanh / chờ ít hơn. Chuyến dưới 5 phút hoặc quá 12 giờ (thường do bấm checkpoint sai)
-                            không tính, đếm ở cột <span className="font-semibold">Cần KT</span>.
+                            <span className="font-semibold text-gray-700 dark:text-gray-200">Chuẩn thực tế (GPS)</span> = khoảng thời gian từ đầu mút xe vừa dừng tại điểm nhận/hạ đến đầu mút xe bắt đầu
+                            di chuyển rời đi (gần mốc điểm nhận/hạ và thời điểm bấm nút nhất). Lệch <span className="font-semibold text-rose-700 dark:text-rose-400">+</span> là bấm dài hơn thực tế GPS,{' '}
+                            <span className="font-semibold text-emerald-700 dark:text-emerald-400">−</span> là bấm ngắn hơn thực tế GPS. Chuyến dưới 5 phút hoặc quá 12 giờ đếm ở cột{' '}
+                            <span className="font-semibold">Cần KT</span>.
                             {evaluation.error && <span className="ms-2 font-medium text-rose-600 dark:text-rose-400">{evaluation.error}</span>}
                         </p>
                         <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-5">

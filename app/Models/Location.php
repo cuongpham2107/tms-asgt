@@ -8,10 +8,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 class Location extends Model
 {
+    protected static bool $geofenceColumnsChecked = false;
+
     protected $fillable = [
         'code',
         'name',
@@ -20,6 +24,8 @@ class Location extends Model
         'lat',
         'lng',
         'geofence_radius_m',
+        'geofence_type',
+        'geofence_bounds',
         'coordinates',
         'loc_type',
         'is_active',
@@ -36,6 +42,7 @@ class Location extends Model
             'lat' => 'decimal:7',
             'lng' => 'decimal:7',
             'geofence_radius_m' => 'integer',
+            'geofence_bounds' => 'array',
             'loc_type' => LocationType::class,
         ];
     }
@@ -111,9 +118,154 @@ class Location extends Model
         return $this->belongsTo(BillingZone::class);
     }
 
+    /**
+     * @return array{south: float, west: float, north: float, east: float}|null
+     */
+    public function getNormalizedBounds(): ?array
+    {
+        $bounds = $this->geofence_bounds;
+        if (is_string($bounds)) {
+            $decoded = json_decode($bounds, true);
+            $bounds = is_array($decoded) ? $decoded : null;
+        }
+
+        if (! is_array($bounds)) {
+            return null;
+        }
+
+        if (
+            ! isset($bounds['south'], $bounds['west'], $bounds['north'], $bounds['east'])
+            || ! is_numeric($bounds['south'])
+            || ! is_numeric($bounds['west'])
+            || ! is_numeric($bounds['north'])
+            || ! is_numeric($bounds['east'])
+        ) {
+            return null;
+        }
+
+        $s = (float) $bounds['south'];
+        $n = (float) $bounds['north'];
+        $w = (float) $bounds['west'];
+        $e = (float) $bounds['east'];
+
+        $south = min($s, $n);
+        $north = max($s, $n);
+        $west = min($w, $e);
+        $east = max($w, $e);
+
+        if ($north - $south < 0.0001 || $east - $west < 0.0001) {
+            return null;
+        }
+
+        return [
+            'south' => $south,
+            'west' => $west,
+            'north' => $north,
+            'east' => $east,
+        ];
+    }
+
+    public function hasRectangleGeofence(): bool
+    {
+        return in_array($this->geofence_type, ['rectangle', 'square'], true)
+            && $this->getNormalizedBounds() !== null;
+    }
+
+    public function isPointInsideBounds(float $lat, float $lng): bool
+    {
+        $bounds = $this->getNormalizedBounds();
+        if ($bounds === null) {
+            return false;
+        }
+
+        return $lat >= $bounds['south']
+            && $lat <= $bounds['north']
+            && $lng >= $bounds['west']
+            && $lng <= $bounds['east'];
+    }
+
+    /**
+     * Khoảng cách ngắn nhất (mét) từ điểm (lat, lng) tới vùng chữ nhật.
+     * Nếu điểm nằm bên trong hình chữ nhật thì trả về 0.
+     */
+    public function distanceToBoundsMeters(float $lat, float $lng): ?int
+    {
+        $bounds = $this->getNormalizedBounds();
+        if ($bounds === null) {
+            return null;
+        }
+
+        if ($this->isPointInsideBounds($lat, $lng)) {
+            return 0;
+        }
+
+        $clampedLat = max($bounds['south'], min($bounds['north'], $lat));
+        $clampedLng = max($bounds['west'], min($bounds['east'], $lng));
+
+        return self::haversineMeters($lat, $lng, $clampedLat, $clampedLng);
+    }
+
+    /**
+     * @return array{width_m: int, height_m: int}|null
+     */
+    public function getBoundsDimensionsMeters(): ?array
+    {
+        $bounds = $this->getNormalizedBounds();
+        if ($bounds === null) {
+            return null;
+        }
+
+        $midLat = ($bounds['south'] + $bounds['north']) / 2;
+        $midLng = ($bounds['west'] + $bounds['east']) / 2;
+
+        $widthM = self::haversineMeters($midLat, $bounds['west'], $midLat, $bounds['east']);
+        $heightM = self::haversineMeters($bounds['south'], $midLng, $bounds['north'], $midLng);
+
+        return [
+            'width_m' => $widthM,
+            'height_m' => $heightM,
+        ];
+    }
+
+    public static function haversineMeters(float $lat1, float $lng1, float $lat2, float $lng2): int
+    {
+        $earthRadiusM = 6371000.0;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+
+        return (int) round(2 * $earthRadiusM * asin(min(1.0, sqrt($a))));
+    }
+
+    public static function ensureGeofenceColumnsExist(): void
+    {
+        if (static::$geofenceColumnsChecked) {
+            return;
+        }
+
+        static::$geofenceColumnsChecked = true;
+
+        try {
+            if (! Schema::hasColumn('locations', 'geofence_type') || ! Schema::hasColumn('locations', 'geofence_bounds')) {
+                Schema::table('locations', function (Blueprint $table): void {
+                    if (! Schema::hasColumn('locations', 'geofence_type')) {
+                        $table->string('geofence_type', 20)->default('circle')->after('geofence_radius_m');
+                    }
+                    if (! Schema::hasColumn('locations', 'geofence_bounds')) {
+                        $table->json('geofence_bounds')->nullable()->after('geofence_type');
+                    }
+                });
+            }
+        } catch (\Throwable) {
+        }
+    }
+
     protected static function booted(): void
     {
         static::saving(function (Location $location) {
+            static::ensureGeofenceColumnsExist();
+
             if (! empty($location->code)) {
                 $location->code = mb_strtoupper(trim((string) $location->code));
             }

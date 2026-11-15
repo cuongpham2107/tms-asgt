@@ -13,6 +13,7 @@ use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Area;
 use App\Models\Order;
 use App\Services\Export\TripExcelExportService;
+use App\Services\ShiftScheduleService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
@@ -126,8 +127,9 @@ class ListOrders extends ListRecords
     public function mount(): void
     {
         if (blank($this->startDate) && blank($this->endDate)) {
-            $this->startDate = now()->startOfMonth()->toDateString();
-            $this->endDate = now()->endOfMonth()->toDateString();
+            $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+            $this->startDate = $shiftNow->copy()->startOfMonth()->toDateString();
+            $this->endDate = $shiftNow->copy()->endOfMonth()->toDateString();
         }
 
         $this->dateRange = [
@@ -211,20 +213,7 @@ class ListOrders extends ListRecords
                 filled($customerId),
                 fn (Builder $query): Builder => $query->where('orders.customer_id', $customerId),
             )
-            ->when(filled($dateFrom) || filled($dateTo), function (Builder $query) use ($dateFrom, $dateTo): Builder {
-                if (filled($dateFrom) && filled($dateTo)) {
-                    return $query->whereBetween('orders.planned_loading_at', [
-                        Carbon::parse($dateFrom)->startOfDay(),
-                        Carbon::parse($dateTo)->endOfDay(),
-                    ]);
-                }
-
-                if (filled($dateFrom)) {
-                    return $query->where('orders.planned_loading_at', '>=', Carbon::parse($dateFrom)->startOfDay());
-                }
-
-                return $query->where('orders.planned_loading_at', '<=', Carbon::parse($dateTo)->endOfDay());
-            })
+            ->when(filled($dateFrom) || filled($dateTo), fn (Builder $query): Builder => $this->applyDateRangeFilter($query, $dateFrom, $dateTo))
             ->when(filled($search), function (Builder $query) use ($search): Builder {
                 return $query->where(function (Builder $query) use ($search): void {
                     $query
@@ -391,7 +380,11 @@ class ListOrders extends ListRecords
                 fn (Builder $q): Builder => $this->applyDateRangeFilter($q, $this->startDate, $this->endDate),
                 fn (Builder $q): Builder => $q->when(
                     ! in_array('status', $excludeFilters) && in_array($this->activeStatusFilter, ['completed', 'cancelled']),
-                    fn (Builder $sq): Builder => $this->applyDateRangeFilter($sq, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()),
+                    function (Builder $sq): Builder {
+                        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+
+                        return $this->applyDateRangeFilter($sq, $shiftNow->copy()->startOfMonth()->toDateString(), $shiftNow->copy()->endOfMonth()->toDateString());
+                    },
                 ),
             );
     }
@@ -448,7 +441,8 @@ class ListOrders extends ListRecords
             $cancelled = (int) ($counts[OrderStatus::Cancelled->value] ?? 0);
 
             if (blank($this->startDate) && blank($this->endDate)) {
-                $monthQuery = $this->applyDateRangeFilter(clone $baseQuery, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString());
+                $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+                $monthQuery = $this->applyDateRangeFilter(clone $baseQuery, $shiftNow->copy()->startOfMonth()->toDateString(), $shiftNow->copy()->endOfMonth()->toDateString());
                 $completed = (int) (clone $monthQuery)->where('orders.status', OrderStatus::Completed->value)->count();
                 $cancelled = (int) (clone $monthQuery)->where('orders.status', OrderStatus::Cancelled->value)->count();
             }
@@ -568,7 +562,9 @@ class ListOrders extends ListRecords
                 fn (Builder $query): Builder => $this->applyDateRangeFilter($query, $this->startDate, $this->endDate),
                 function (Builder $query): Builder {
                     if (in_array($this->activeStatusFilter, ['completed', 'cancelled'])) {
-                        return $this->applyDateRangeFilter($query, now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString());
+                        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+
+                        return $this->applyDateRangeFilter($query, $shiftNow->copy()->startOfMonth()->toDateString(), $shiftNow->copy()->endOfMonth()->toDateString());
                     }
 
                     return $query;
@@ -580,8 +576,8 @@ class ListOrders extends ListRecords
 
     private function applyDateRangeFilter(Builder $query, ?string $startDate, ?string $endDate): Builder
     {
-        $from = filled($startDate) ? Carbon::parse($startDate)->startOfDay() : null;
-        $to = filled($endDate) ? Carbon::parse($endDate)->endOfDay() : null;
+        $from = filled($startDate) ? Carbon::parse($startDate)->setTime(8, 0, 0) : null;
+        $to = filled($endDate) ? Carbon::parse($endDate)->addDay()->setTime(8, 0, 0) : null;
 
         if (! $from && ! $to) {
             return $query;
