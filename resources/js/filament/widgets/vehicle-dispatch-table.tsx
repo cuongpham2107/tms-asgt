@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { JsonValue, JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities, Snapshot } from '@filament/widgets/js-widget'
 import { requestDataOnce, SkeletonRows } from './table-skeleton'
@@ -71,6 +71,7 @@ interface PageApi {
 
 interface WidgetMethods {
     readonly $parent: PageApi
+    $refresh(): Promise<unknown>
 }
 
 type Wire = JsWidgetUtilities<WidgetMethods>['$wire']
@@ -91,7 +92,7 @@ const badge = (label: string, tone: string | null | undefined) => (
 )
 
 const xeChoTones: Record<string, string> = {
-    danger: 'animate-pulse font-bold text-rose-600 dark:text-rose-400',
+    danger: 'font-bold text-rose-600 dark:text-rose-400',
     warning: 'font-semibold text-amber-600 dark:text-amber-400',
     success: 'font-semibold text-emerald-600 dark:text-emerald-400',
     muted: 'text-gray-400',
@@ -107,41 +108,47 @@ const stationTones: Record<string, string> = {
     OTHER: 'gray',
 }
 
-function DispatchTable({ configuration, wire }: { configuration: Snapshot<Configuration>; wire: Wire }) {
-    const page = wire.$parent
-    const [search, setSearch] = useState(configuration.filters.search)
-    const [secondsLeft, setSecondsLeft] = useState(configuration.refreshSeconds)
-    const [refreshing, setRefreshing] = useState(false)
-    const [loadingActionRowId, setLoadingActionRowId] = useState<number | null>(null)
-    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-    const previousSearch = useRef(configuration.filters.search)
+const cellClass = 'border-r border-gray-100 dark:border-white/5 py-1.5 align-middle whitespace-nowrap'
 
-    const refresh = async () => {
-        if (refreshing) {
+/** Tách nút đếm ngược ra component riêng để tick mỗi giây không render lại toàn bộ 1.350+ ô của bảng. */
+function RefreshCountdownButton({ refreshSeconds, onRefresh }: { refreshSeconds: number; onRefresh: () => Promise<unknown> }) {
+    const [secondsLeft, setSecondsLeft] = useState(refreshSeconds)
+    const [refreshing, setRefreshing] = useState(false)
+    const refreshingRef = useRef(false)
+    const onRefreshRef = useRef(onRefresh)
+    onRefreshRef.current = onRefresh
+
+    const triggerRefresh = useCallback(async () => {
+        if (refreshingRef.current) {
             return
         }
 
+        refreshingRef.current = true
         setRefreshing(true)
         try {
-            await page.$refresh()
+            await onRefreshRef.current()
         } finally {
+            refreshingRef.current = false
             setRefreshing(false)
-            setSecondsLeft(configuration.refreshSeconds)
+            setSecondsLeft(refreshSeconds)
         }
-    }
+    }, [refreshSeconds])
 
-    // Đếm ngược làm mới; tab ẩn thì tạm dừng.
+    useEffect(() => {
+        setSecondsLeft(refreshSeconds)
+    }, [refreshSeconds])
+
     useEffect(() => {
         const timer = setInterval(() => {
-            if (document.hidden) {
+            if (document.hidden || refreshingRef.current) {
                 return
             }
 
             setSecondsLeft((current) => {
                 if (current <= 1) {
-                    void refresh()
+                    void triggerRefresh()
 
-                    return configuration.refreshSeconds
+                    return refreshSeconds
                 }
 
                 return current - 1
@@ -149,7 +156,197 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
         }, 1000)
 
         return () => clearInterval(timer)
-    }, [refreshing, configuration.refreshSeconds])
+    }, [refreshSeconds, triggerRefresh])
+
+    return (
+        <button
+            type="button"
+            title="Bấm để làm mới ngay"
+            disabled={refreshing}
+            onClick={() => void triggerRefresh()}
+            className="ms-auto inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-950/10 transition hover:bg-gray-50 hover:text-primary-600 disabled:cursor-wait dark:bg-gray-900 dark:text-gray-300 dark:ring-white/10 dark:hover:bg-white/5"
+        >
+            <svg viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 shrink-0 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true">
+                <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" />
+            </svg>
+            <span>{refreshing ? 'Đang làm mới…' : `Làm mới sau ${secondsLeft}s`}</span>
+        </button>
+    )
+}
+
+interface DispatchRowProps {
+    row: Snapshot<Row>
+    isFirstInGroup: boolean
+    isLastInGroup: boolean
+    isEvenRow: boolean
+    isCollapsed: boolean
+    groupCode: string
+    groupTitle: string
+    groupCount: number
+    isRent: boolean
+    isActionLoading: boolean
+    onToggleGroup: (code: string) => void
+    onOpenTimeline: (tripId: number) => void
+    onOpenTrip: (vehicleId: number) => void
+    onOpenGps: (vehicleId: number) => void
+    onCallStatusAction: (row: Snapshot<Row>) => void
+}
+
+const DispatchRow = memo(function DispatchRow({
+    row,
+    isFirstInGroup,
+    isLastInGroup,
+    isEvenRow,
+    isCollapsed,
+    groupCode,
+    groupTitle,
+    groupCount,
+    isRent,
+    isActionLoading,
+    onToggleGroup,
+    onOpenTimeline,
+    onOpenTrip,
+    onOpenGps,
+    onCallStatusAction,
+}: DispatchRowProps) {
+    return (
+        <tr
+            className={`dispatch-row group/row cursor-default ${isLastInGroup ? 'dispatch-group-end' : ''} ${isEvenRow ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/40 dark:bg-white/[0.015]'}`}
+        >
+            {isFirstInGroup ? (
+                <td className={`${cellClass} bg-gray-50/80 dark:bg-white/5 px-2 text-left font-bold text-gray-900 dark:text-gray-100 select-none`}>
+                    <button type="button" className="inline-flex items-center gap-1.5 font-bold transition hover:opacity-80" title={`Bấm để đóng/mở nhóm ${groupTitle}`} onClick={() => onToggleGroup(groupCode)}>
+                        <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded font-mono text-[10px] font-bold leading-none text-white" style={{ backgroundColor: 'rgb(30 58 95)' }}>
+                            {isCollapsed ? '+' : '−'}
+                        </span>
+                        <span className="text-xs">{groupTitle}</span>
+                        {isCollapsed && <span className="text-[10px] font-semibold text-primary-600 dark:text-primary-400">({groupCount} xe)</span>}
+                    </button>
+                </td>
+            ) : (
+                <td className={`${cellClass} px-2`} />
+            )}
+
+            <td className={`${cellClass} px-1 text-center`}>
+                {row.tripId ? (
+                    <button type="button" className="rounded-md p-1 text-primary-600 transition hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-500/10" title="Xem hành trình chuyến hiện tại" onClick={() => onOpenTimeline(row.tripId as number)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="mx-auto h-4 w-4" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                        </svg>
+                    </button>
+                ) : (
+                    <span className="text-gray-400">—</span>
+                )}
+            </td>
+
+            <td className={`${cellClass} px-2 font-medium text-gray-900 dark:text-gray-100`}>
+                <span className="cursor-pointer font-semibold text-primary-600 hover:text-primary-500 hover:underline dark:text-primary-400" onClick={() => onOpenTrip(row.id)}>
+                    <span dangerouslySetInnerHTML={{ __html: row.bsx }} />
+                </span>
+            </td>
+
+            <td className={`${cellClass} px-2 text-center`}>{badge(row.ownerCategory, row.ownerCategory.startsWith('Thuê+') ? 'warning' : 'info')}</td>
+
+            <td className={`${cellClass} px-1 text-center`}>{row.orderType ? badge(row.orderType, row.orderTypeColor) : <span className="text-gray-400">—</span>}</td>
+
+            <td
+                className={`status-cell ${cellClass} px-2 text-center text-[11px] select-none ${row.statusClass} ${row.statusAction ? (isActionLoading ? 'cursor-wait opacity-75' : 'cursor-pointer hover:opacity-85') : ''}`}
+                title={isActionLoading ? 'Đang tải thao tác...' : row.statusAction?.tooltip}
+                onClick={() => onCallStatusAction(row)}
+            >
+                {isActionLoading ? (
+                    <span className="inline-flex items-center justify-center gap-1 font-semibold">
+                        <svg className="h-3 w-3 animate-spin text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span>Đang tải...</span>
+                    </span>
+                ) : (
+                    row.statusLabel
+                )}
+            </td>
+
+            <td className={`${cellClass} px-1.5 text-center font-medium text-gray-800 dark:text-gray-200`}>
+                <span className="font-bold" title={row.pickupTitle ?? undefined}>
+                    {row.pickup}
+                </span>
+            </td>
+            <td className={`${cellClass} px-2 font-medium text-gray-800 dark:text-gray-200`} title={row.destinationTitle ?? undefined}>
+                {row.destination}
+            </td>
+
+            <td className={`${cellClass} px-1.5 text-center font-medium`} title={row.xeChoTooltip}>
+                <span className={xeChoTones[row.xeChoTone]}>{row.xeCho}</span>
+            </td>
+
+            {!isRent && (
+                <>
+                    <td className={`${cellClass} px-2 text-gray-700 dark:text-gray-300`}>
+                        <span className="cursor-pointer font-medium text-primary-600 hover:text-primary-500 hover:underline dark:text-primary-400" title="Bấm để xem trên bản đồ" onClick={() => onOpenGps(row.id)}>
+                            {row.gps}
+                        </span>
+                    </td>
+
+                    <td className={`${cellClass} px-1 text-center font-bold text-gray-900 dark:text-white`}>
+                        <span className={`inline-block min-w-[46px] rounded px-1 py-0.5 ${row.speedClass}`}>{row.speed}</span>
+                    </td>
+
+                    <td className={`status-cell ${cellClass} px-2 text-center text-[11px] select-none ${row.movementClass}`} title={row.movementTooltip ?? undefined}>
+                        {row.movement}
+                    </td>
+                </>
+            )}
+
+            <td className={`${cellClass} px-1 text-center font-bold text-gray-800 dark:text-gray-200`}>
+                <span className="cursor-pointer font-bold text-primary-600 hover:text-primary-500 hover:underline dark:text-primary-400" title="Bấm để xem danh sách chuyến trong ngày" onClick={() => onOpenTrip(row.id)}>
+                    {row.tripCount}
+                </span>
+            </td>
+
+            <td className={`${cellClass} px-1 text-center font-bold`}>
+                <span title="Bấm để xem danh sách chuyến và đơn chờ" className={`cursor-pointer hover:underline ${row.waitingOrders > 0 ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400'}`} onClick={() => onOpenTrip(row.id)}>
+                    {row.waitingOrders}
+                </span>
+            </td>
+
+            {!isRent && (
+                <td
+                    className={`${cellClass} px-1.5 text-center font-mono text-[11px] ${row.kmOverClass}`}
+                    title={row.kmOverTooltip}
+                    style={row.kmOverClass.includes('km-over-cell') ? undefined : row.kmOverFill > 0 ? { background: `linear-gradient(to right, rgb(59 130 246 / 0.22) ${row.kmOverFill}%, transparent ${row.kmOverFill}%)` } : undefined}
+                >
+                    <span>{row.kmOver}</span>
+                </td>
+            )}
+
+            <td className={`${isRent ? 'py-1.5 align-middle whitespace-nowrap' : cellClass} px-2 font-medium text-gray-800 dark:text-gray-200`}>{row.driverName}</td>
+
+            {!isRent && (
+                <>
+                    <td className={`${cellClass} px-1 text-center font-bold text-[11px]`}>
+                        {row.station && row.station !== '—' && row.station !== 'OTHER' ? badge(row.station, stationTones[row.station] ?? 'gray') : <span className="text-gray-400">—</span>}
+                    </td>
+
+                    <td className={`px-1 py-1.5 text-center font-medium text-[11px] text-gray-700 dark:text-gray-300`}>
+                        <span className="font-bold">{row.shift}</span>
+                    </td>
+                </>
+            )}
+        </tr>
+    )
+})
+
+function DispatchTable({ configuration, wire }: { configuration: Snapshot<Configuration>; wire: Wire }) {
+    const page = wire.$parent
+    const [search, setSearch] = useState(configuration.filters.search)
+    const [loadingActionRowId, setLoadingActionRowId] = useState<number | null>(null)
+    const loadingActionRowIdRef = useRef<number | null>(null)
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+    const previousSearch = useRef(configuration.filters.search)
+
+    const refresh = useCallback(() => wire.$refresh(), [wire])
 
     useEffect(() => {
         setSearch(configuration.filters.search)
@@ -165,15 +362,28 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
         const timer = setTimeout(() => void page.$set('searchQuery', search === '' ? null : search, true), 400)
 
         return () => clearTimeout(timer)
-    }, [search])
+    }, [search, configuration.filters.search, page])
 
-    const toggleGroup = (code: string) => setCollapsed((current) => ({ ...current, [code]: !current[code] }))
+    const toggleGroup = useCallback((code: string) => setCollapsed((current) => ({ ...current, [code]: !current[code] })), [])
 
-    const callStatusAction = async (row: Row) => {
-        if (!row.statusAction || loadingActionRowId !== null) {
+    const openTimelineModal = useCallback((tripId: number) => {
+        void page.openTimelineModal(tripId)
+    }, [page])
+
+    const openTripModal = useCallback((vehicleId: number) => {
+        void page.openTripModal(vehicleId)
+    }, [page])
+
+    const openGpsModal = useCallback((vehicleId: number) => {
+        void page.openGpsModal(vehicleId)
+    }, [page])
+
+    const callStatusAction = useCallback(async (row: Snapshot<Row>) => {
+        if (!row.statusAction || loadingActionRowIdRef.current !== null) {
             return
         }
 
+        loadingActionRowIdRef.current = row.id
         setLoadingActionRowId(row.id)
         try {
             if (row.statusAction.name === 'reassign_driver') {
@@ -193,9 +403,10 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                 window.location.reload()
             }
         } finally {
+            loadingActionRowIdRef.current = null
             setLoadingActionRowId(null)
         }
-    }
+    }, [page])
 
     const isRent = configuration.ownerType === 'rent'
     const colCount = configuration.columns.length || (isRent ? 12 : 18)
@@ -204,7 +415,6 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
         configuration.sort.by === column ? <span className="text-[9px] font-bold text-amber-300">{configuration.sort.direction === 'asc' ? '▲' : '▼'}</span> : null
 
     const headerClass = 'border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap'
-    const cellClass = 'border-r border-gray-100 dark:border-white/5 py-1.5 align-middle whitespace-nowrap'
 
     return (
         <div className="w-full space-y-3">
@@ -236,18 +446,7 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                     </button>
                 )}
 
-                <button
-                    type="button"
-                    title="Bấm để làm mới ngay"
-                    disabled={refreshing}
-                    onClick={() => void refresh()}
-                    className="ms-auto inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-950/10 transition hover:bg-gray-50 hover:text-primary-600 disabled:cursor-wait dark:bg-gray-900 dark:text-gray-300 dark:ring-white/10 dark:hover:bg-white/5"
-                >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 shrink-0 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true">
-                        <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" />
-                    </svg>
-                    <span>{refreshing ? 'Đang làm mới…' : `Làm mới sau ${secondsLeft}s`}</span>
-                </button>
+                <RefreshCountdownButton refreshSeconds={configuration.refreshSeconds} onRefresh={refresh} />
             </div>
 
             <div className="dispatch-table-container overflow-auto rounded-xl ring-1 ring-gray-950/5 dark:ring-white/10 bg-white dark:bg-gray-900 shadow-xs max-h-[calc(100vh-9rem)]">
@@ -306,132 +505,24 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                                 }
 
                                 return (
-                                    <tr
+                                    <DispatchRow
                                         key={`${group.code}-${row.id}`}
-                                        className={`dispatch-row group/row cursor-default ${index === group.rows.length - 1 ? 'dispatch-group-end' : ''} ${index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/40 dark:bg-white/[0.015]'}`}
-                                    >
-                                        {index === 0 ? (
-                                            <td className={`${cellClass} bg-gray-50/80 dark:bg-white/5 px-2 text-left font-bold text-gray-900 dark:text-gray-100 select-none`}>
-                                                <button type="button" className="inline-flex items-center gap-1.5 font-bold transition hover:opacity-80" title={`Bấm để đóng/mở nhóm ${group.title}`} onClick={() => toggleGroup(group.code)}>
-                                                    <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded font-mono text-[10px] font-bold leading-none text-white" style={{ backgroundColor: 'rgb(30 58 95)' }}>
-                                                        {isCollapsed ? '+' : '−'}
-                                                    </span>
-                                                    <span className="text-xs">{group.title}</span>
-                                                    {isCollapsed && <span className="text-[10px] font-semibold text-primary-600 dark:text-primary-400">({group.count} xe)</span>}
-                                                </button>
-                                            </td>
-                                        ) : (
-                                            <td className={`${cellClass} px-2`} />
-                                        )}
-
-                                        <td className={`${cellClass} px-1 text-center`}>
-                                            {row.tripId ? (
-                                                <button type="button" className="rounded-md p-1 text-primary-600 transition hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-500/10" title="Xem hành trình chuyến hiện tại" onClick={() => void page.openTimelineModal(row.tripId as number)}>
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="mx-auto h-4 w-4" aria-hidden="true">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                                                    </svg>
-                                                </button>
-                                            ) : (
-                                                <span className="text-gray-400">—</span>
-                                            )}
-                                        </td>
-
-                                        <td className={`${cellClass} px-2 font-medium text-gray-900 dark:text-gray-100`}>
-                                            <span className="cursor-pointer font-semibold text-primary-600 hover:text-primary-500 hover:underline dark:text-primary-400" onClick={() => void page.openTripModal(row.id)}>
-                                                <span dangerouslySetInnerHTML={{ __html: row.bsx }} />
-                                            </span>
-                                        </td>
-
-                                        <td className={`${cellClass} px-2 text-center`}>{badge(row.ownerCategory, row.ownerCategory.startsWith('Thuê+') ? 'warning' : 'info')}</td>
-
-                                        <td className={`${cellClass} px-1 text-center`}>{row.orderType ? badge(row.orderType, row.orderTypeColor) : <span className="text-gray-400">—</span>}</td>
-
-                                        <td
-                                            className={`status-cell ${cellClass} px-2 text-center text-[11px] select-none ${row.statusClass} ${row.statusAction ? (loadingActionRowId === row.id ? 'cursor-wait opacity-75' : 'cursor-pointer hover:opacity-85') : ''}`}
-                                            title={loadingActionRowId === row.id ? 'Đang tải thao tác...' : row.statusAction?.tooltip}
-                                            onClick={() => void callStatusAction(row)}
-                                        >
-                                            {loadingActionRowId === row.id ? (
-                                                <span className="inline-flex items-center justify-center gap-1 font-semibold">
-                                                    <svg className="h-3 w-3 animate-spin text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                                    </svg>
-                                                    <span>Đang tải...</span>
-                                                </span>
-                                            ) : (
-                                                row.statusLabel
-                                            )}
-                                        </td>
-
-                                        <td className={`${cellClass} px-1.5 text-center font-medium text-gray-800 dark:text-gray-200`}>
-                                            <span className="font-bold" title={row.pickupTitle ?? undefined}>
-                                                {row.pickup}
-                                            </span>
-                                        </td>
-                                        <td className={`${cellClass} px-2 font-medium text-gray-800 dark:text-gray-200`} title={row.destinationTitle ?? undefined}>
-                                            {row.destination}
-                                        </td>
-
-                                        <td className={`${cellClass} px-1.5 text-center font-medium`} title={row.xeChoTooltip}>
-                                            <span className={xeChoTones[row.xeChoTone]}>{row.xeCho}</span>
-                                        </td>
-
-                                        {!isRent && (
-                                            <>
-                                                <td className={`${cellClass} px-2 text-gray-700 dark:text-gray-300`}>
-                                                    <span className="cursor-pointer font-medium text-primary-600 hover:text-primary-500 hover:underline dark:text-primary-400" title="Bấm để xem trên bản đồ" onClick={() => void page.openGpsModal(row.id)}>
-                                                        {row.gps}
-                                                    </span>
-                                                </td>
-
-                                                <td className={`${cellClass} px-1 text-center font-bold text-gray-900 dark:text-white`}>
-                                                    <span className={`inline-block min-w-[46px] rounded px-1 py-0.5 ${row.speedClass}`}>{row.speed}</span>
-                                                </td>
-
-                                                <td className={`status-cell ${cellClass} px-2 text-center text-[11px] select-none ${row.movementClass}`} title={row.movementTooltip ?? undefined}>
-                                                    {row.movement}
-                                                </td>
-                                            </>
-                                        )}
-
-                                        <td className={`${cellClass} px-1 text-center font-bold text-gray-800 dark:text-gray-200`}>
-                                            <span className="cursor-pointer font-bold text-primary-600 hover:text-primary-500 hover:underline dark:text-primary-400" title="Bấm để xem danh sách chuyến trong ngày" onClick={() => void page.openTripModal(row.id)}>
-                                                {row.tripCount}
-                                            </span>
-                                        </td>
-
-                                        <td className={`${cellClass} px-1 text-center font-bold`}>
-                                            <span title="Bấm để xem danh sách chuyến và đơn chờ" className={`cursor-pointer hover:underline ${row.waitingOrders > 0 ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400'}`} onClick={() => void page.openTripModal(row.id)}>
-                                                {row.waitingOrders}
-                                            </span>
-                                        </td>
-
-                                        {!isRent && (
-                                            <td
-                                                className={`${cellClass} px-1.5 text-center font-mono text-[11px] ${row.kmOverClass}`}
-                                                title={row.kmOverTooltip}
-                                                style={row.kmOverClass.includes('km-over-cell') ? undefined : row.kmOverFill > 0 ? { background: `linear-gradient(to right, rgb(59 130 246 / 0.22) ${row.kmOverFill}%, transparent ${row.kmOverFill}%)` } : undefined}
-                                            >
-                                                <span>{row.kmOver}</span>
-                                            </td>
-                                        )}
-
-                                        <td className={`${isRent ? 'py-1.5 align-middle whitespace-nowrap' : cellClass} px-2 font-medium text-gray-800 dark:text-gray-200`}>{row.driverName}</td>
-
-                                        {!isRent && (
-                                            <>
-                                                <td className={`${cellClass} px-1 text-center font-bold text-[11px]`}>
-                                                    {row.station && row.station !== '—' && row.station !== 'OTHER' ? badge(row.station, stationTones[row.station] ?? 'gray') : <span className="text-gray-400">—</span>}
-                                                </td>
-
-                                                <td className={`px-1 py-1.5 text-center font-medium text-[11px] text-gray-700 dark:text-gray-300`}>
-                                                    <span className="font-bold">{row.shift}</span>
-                                                </td>
-                                            </>
-                                        )}
-                                    </tr>
+                                        row={row}
+                                        isFirstInGroup={index === 0}
+                                        isLastInGroup={index === group.rows.length - 1}
+                                        isEvenRow={index % 2 === 0}
+                                        isCollapsed={isCollapsed}
+                                        groupCode={group.code}
+                                        groupTitle={group.title}
+                                        groupCount={group.count}
+                                        isRent={isRent}
+                                        isActionLoading={loadingActionRowId === row.id}
+                                        onToggleGroup={toggleGroup}
+                                        onOpenTimeline={openTimelineModal}
+                                        onOpenTrip={openTripModal}
+                                        onOpenGps={openGpsModal}
+                                        onCallStatusAction={callStatusAction}
+                                    />
                                 )
                             })
                         })}

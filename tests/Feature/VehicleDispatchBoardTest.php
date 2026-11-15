@@ -30,6 +30,7 @@ use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
@@ -1963,4 +1964,82 @@ test('rented vehicles dispatch sheet shows only rented vehicles with active or p
         ->call('switchTab', 'rent')
         ->assertSet('activeTab', 'rent')
         ->assertSet('activeOwnerType', 'rent');
+});
+
+test('getDutyDriverRows batches queries without N+1 per driver', function () {
+    Role::findOrCreate('driver');
+
+    foreach (range(1, 5) as $idx) {
+        $driver = User::factory()->create([
+            'name' => "Tài xế Batch {$idx}",
+            'station' => OnDutyLocation::Nba,
+            'is_active' => true,
+        ]);
+        $driver->assignRole('driver');
+
+        DriverShift::create([
+            'driver_id' => $driver->id,
+            'shift_type' => ShiftType::Full,
+            'start_time' => now()->subHours(2),
+            'end_time' => null,
+            'start_km' => 1000,
+        ]);
+
+        $vehicle = Vehicle::factory()->create([
+            'plate_number' => "29H-BATCH-{$idx}",
+            'current_driver_id' => $driver->id,
+            'is_active' => true,
+        ]);
+
+        Trip::factory()->create([
+            'trip_code' => "TRIP-BATCH-{$idx}",
+            'vehicle_id' => $vehicle->id,
+            'driver_id' => $driver->id,
+            'status' => TripStatus::Completed,
+            'started_at' => now()->subHour(),
+            'completed_at' => now()->subMinutes(10),
+            'total_km_loaded' => 15,
+            'total_km_empty' => 5,
+            'total_km' => 20,
+        ]);
+    }
+
+    $page = new VehicleDispatchBoard;
+    $queryCount = 0;
+
+    DB::listen(function () use (&$queryCount): void {
+        $queryCount++;
+    });
+
+    $rows = $page->getDutyDriverRows();
+
+    expect($rows)->toHaveCount(5)
+        ->and($queryCount)->toBeLessThanOrEqual(8)
+        ->and($rows->first()->trip_count)->toBe(1)
+        ->and($rows->first()->total_km)->toBe(20.0);
+});
+
+test('vehicle freezeActiveTrip resets when trips relation is reloaded', function () {
+    $vehicle = Vehicle::factory()->create(['is_active' => true]);
+    $firstTrip = Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now()->subMinutes(30),
+    ]);
+
+    $vehicle->load('trips.checkpoints', 'trips.latestPendingKmReport');
+    $vehicle->freezeActiveTrip();
+
+    expect($vehicle->active_trip?->id)->toBe($firstTrip->id);
+
+    $firstTrip->complete(endKm: 12000);
+    $secondTrip = Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Pending,
+        'created_at' => now(),
+    ]);
+
+    $vehicle->load('trips.checkpoints', 'trips.latestPendingKmReport');
+
+    expect($vehicle->active_trip?->id)->toBe($secondTrip->id);
 });

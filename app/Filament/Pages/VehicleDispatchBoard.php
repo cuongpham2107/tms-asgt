@@ -53,9 +53,9 @@ class VehicleDispatchBoard extends Page implements HasTable
     public const IDLE_ENGINE_ALERT_MINUTES = 20;
 
     /**
-     * Chu kỳ tự làm mới bảng (giây). Một bộ đếm Alpine vừa hiển thị đếm ngược vừa gọi làm mới.
+     * Chu kỳ tự làm mới bảng (giây) dự phòng khi không nhận được sự kiện Reverb.
      */
-    public const REFRESH_SECONDS = 20;
+    public const REFRESH_SECONDS = 30;
 
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
@@ -576,6 +576,10 @@ class VehicleDispatchBoard extends Page implements HasTable
         [$shiftStart, $shiftEnd] = self::getShiftWindow();
 
         if ($record->relationLoaded('trips')) {
+            if ($record->trips->isEmpty()) {
+                return null;
+            }
+
             return $record->trips
                 ->where('status', TripStatus::Completed)
                 ->filter(function (Trip $t) use ($shiftStart, $shiftEnd): bool {
@@ -589,7 +593,7 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         return $record->trips()
-            ->with('driver.driverShifts')
+            ->with(['driver.driverShifts' => fn ($q) => $q->whereNull('end_time')])
             ->where('status', TripStatus::Completed->value)
             ->where(function (Builder $q) use ($shiftStart, $shiftEnd) {
                 $q->whereBetween('completed_at', [$shiftStart, $shiftEnd])
@@ -1782,24 +1786,45 @@ class VehicleDispatchBoard extends Page implements HasTable
             ->orderBy('name')
             ->get();
 
-        $rows = $drivers->map(function (User $driver) use ($shiftStart, $shiftEnd, $runningValues) {
-            $shift = DriverShift::where('driver_id', $driver->id)
-                ->whereNull('end_time')
-                ->orderByDesc('start_time')
-                ->first();
+        if ($drivers->isEmpty()) {
+            return collect();
+        }
 
-            // Chỉ lấy các chuyến của tài xế trong khung ca 08:00 hôm nay -> 08:00 hôm sau
-            $windowTrips = Trip::query()
-                ->where('driver_id', $driver->id)
-                ->whereNotIn('status', [TripStatus::Pending->value, TripStatus::Cancelled->value])
-                ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues) {
-                    $q->whereIn('status', $runningValues)
-                        ->orWhereBetween('started_at', [$shiftStart, $shiftEnd])
-                        ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd]);
-                })
-                ->with('vehicle')
-                ->orderByDesc('started_at')
-                ->get();
+        $driverIds = $drivers->modelKeys();
+
+        // Batch load toàn bộ ca đang mở, chuyến trong ca và xe đang gán để tránh N+1 theo từng tài xế.
+        $shiftsByDriver = DriverShift::query()
+            ->whereIn('driver_id', $driverIds)
+            ->whereNull('end_time')
+            ->orderByDesc('start_time')
+            ->get()
+            ->unique('driver_id')
+            ->keyBy('driver_id');
+
+        $tripsByDriver = Trip::query()
+            ->whereIn('driver_id', $driverIds)
+            ->whereNotIn('status', [TripStatus::Pending->value, TripStatus::Cancelled->value])
+            ->where(function (Builder $q) use ($shiftStart, $shiftEnd, $runningValues) {
+                $q->whereIn('status', $runningValues)
+                    ->orWhereBetween('started_at', [$shiftStart, $shiftEnd])
+                    ->orWhereBetween('completed_at', [$shiftStart, $shiftEnd]);
+            })
+            ->with('vehicle')
+            ->orderByDesc('started_at')
+            ->get()
+            ->groupBy('driver_id');
+
+        $vehiclesByDriver = Vehicle::query()
+            ->whereIn('current_driver_id', $driverIds)
+            ->orderBy('id')
+            ->get()
+            ->unique('current_driver_id')
+            ->keyBy('current_driver_id');
+
+        $rows = $drivers->map(function (User $driver) use ($shiftStart, $shiftEnd, $shiftsByDriver, $tripsByDriver, $vehiclesByDriver) {
+            /** @var DriverShift|null $shift */
+            $shift = $shiftsByDriver->get($driver->id);
+            $windowTrips = $tripsByDriver->get($driver->id, collect());
 
             $isShiftInCurrentWindow = $shift?->start_time !== null && $shift->start_time->between($shiftStart, $shiftEnd);
 
@@ -1814,7 +1839,7 @@ class VehicleDispatchBoard extends Page implements HasTable
                 ? (float) $windowTrips->sum('total_km')
                 : ($isShiftInCurrentWindow ? (float) ($shift?->total_km ?? 0) : 0.0);
 
-            $vehicle = Vehicle::where('current_driver_id', $driver->id)->first()
+            $vehicle = $vehiclesByDriver->get($driver->id)
                 ?? $windowTrips->first()?->vehicle;
 
             $hasSwap = $windowTrips->contains(fn (Trip $t): bool => $t->end_km !== null

@@ -25,6 +25,10 @@ class Vehicle extends Model
 {
     use HasFactory;
 
+    private ?Trip $frozenActiveTrip = null;
+
+    private bool $hasFrozenActiveTrip = false;
+
     protected $attributes = [
         'current_mileage' => 10000,
     ];
@@ -279,71 +283,107 @@ class Vehicle extends Model
             || $this->type === 'company';
     }
 
+    /**
+     * Đóng băng kết quả active_trip trên instance hiện tại để tránh tính lại nhiều lần trong một chu kỳ render.
+     */
+    public function freezeActiveTrip(): void
+    {
+        $this->frozenActiveTrip = $this->getActiveTripAttribute();
+        $this->hasFrozenActiveTrip = true;
+    }
+
+    public function setRelation($relation, $value): static
+    {
+        if ($relation === 'trips') {
+            $this->hasFrozenActiveTrip = false;
+            $this->frozenActiveTrip = null;
+        }
+
+        return parent::setRelation($relation, $value);
+    }
+
     public function getActiveTripAttribute(): ?Trip
     {
-        [$shiftStart, $shiftEnd] = ShiftScheduleService::getShiftWindow();
+        if ($this->hasFrozenActiveTrip) {
+            return $this->frozenActiveTrip;
+        }
 
         if ($this->relationLoaded('trips')) {
             $trips = $this->trips;
 
-            // 0. ƯU TIÊN CAO NHẤT: Bất kỳ chuyến nào của xe đang bị Tạm dừng (Báo sai Km chưa xử lý)
-            $pausedTrip = $trips
-                ->filter(fn (Trip $t) => $t->status !== TripStatus::Cancelled && $t->isPaused())
-                ->sortByDesc('id')
-                ->first();
-
-            if ($pausedTrip !== null) {
-                return $pausedTrip;
+            if ($trips->isEmpty()) {
+                return null;
             }
 
-            // 1. Ưu tiên chuyến đang chạy thực tế (từ đã bắt đầu đến hoàn thành nhưng chưa kết thúc/end)
-            $inProgressTrip = $trips
-                ->filter(function (Trip $t) use ($shiftStart, $shiftEnd): bool {
-                    if ($t->status === TripStatus::Cancelled || $t->status === TripStatus::Pending) {
-                        return false;
+            [$shiftStart, $shiftEnd] = ShiftScheduleService::getShiftWindow();
+            $isRent = null;
+            $bestPaused = null;
+            $bestInProgress = null;
+            $bestPending = null;
+
+            foreach ($trips as $t) {
+                if ($t->status === TripStatus::Cancelled) {
+                    continue;
+                }
+
+                // 0. ƯU TIÊN CAO NHẤT: Bất kỳ chuyến nào của xe đang bị Tạm dừng (Báo sai Km chưa xử lý)
+                if ($t->isPaused()) {
+                    if ($bestPaused === null || $t->id > $bestPaused->id) {
+                        $bestPaused = $t;
                     }
 
-                    if ($t->hasEnded()) {
-                        return false;
-                    }
+                    continue;
+                }
 
-                    if (in_array($t->status, [
-                        TripStatus::Started,
-                        TripStatus::ArrivedPickup,
-                        TripStatus::Delivering,
-                        TripStatus::ArrivedDelivery,
-                        TripStatus::Delivered,
-                        TripStatus::DriverSwap,
-                        TripStatus::ReturnTrip,
-                    ], true)) {
-                        return true;
-                    }
+                // Khi đã có chuyến Tạm dừng, chỉ cần tìm thêm chuyến Tạm dừng id lớn hơn.
+                if ($bestPaused !== null) {
+                    continue;
+                }
 
-                    if ($t->status === TripStatus::Completed) {
-                        return ($t->completed_at && $t->completed_at->between($shiftStart, $shiftEnd))
-                            || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd))
-                            || ($t->created_at && $t->created_at->between($shiftStart, $shiftEnd));
-                    }
-
-                    return false;
-                })
-                ->sortByDesc('id')
-                ->first();
-
-            if ($inProgressTrip !== null) {
-                return $inProgressTrip;
-            }
-
-            // 2. Nếu không có chuyến đang chạy, lấy chuyến tiếp theo đang chờ chạy (Pending) trong ca 08:00 -> 08:00
-            // (Riêng xe thuê ngoài lấy toàn bộ chuyến Pending chưa chạy để không bị sót qua ca)
-            return $trips
-                ->filter(fn (Trip $t): bool => $t->status === TripStatus::Pending
-                    && ($this->isRent()
+                // 2. Chuyến tiếp theo đang chờ chạy (Pending) trong ca 08:00 -> 08:00 (xe thuê ngoài lấy toàn bộ)
+                if ($t->status === TripStatus::Pending) {
+                    $isRent ??= $this->isRent();
+                    $inShift = $isRent
                         || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd))
-                        || ($t->created_at && $t->created_at->between($shiftStart, $shiftEnd))))
-                ->sortBy('id')
-                ->first();
+                        || ($t->created_at && $t->created_at->between($shiftStart, $shiftEnd));
+
+                    if ($inShift && ($bestPending === null || $t->id < $bestPending->id)) {
+                        $bestPending = $t;
+                    }
+
+                    continue;
+                }
+
+                if ($t->hasEnded()) {
+                    continue;
+                }
+
+                // 1. Chuyến đang chạy thực tế (từ đã bắt đầu đến hoàn thành nhưng chưa kết thúc/end)
+                $matchesInProgress = in_array($t->status, [
+                    TripStatus::Started,
+                    TripStatus::ArrivedPickup,
+                    TripStatus::Delivering,
+                    TripStatus::ArrivedDelivery,
+                    TripStatus::Delivered,
+                    TripStatus::DriverSwap,
+                    TripStatus::ReturnTrip,
+                ], true) || (
+                    $t->status === TripStatus::Completed && (
+                        ($t->completed_at && $t->completed_at->between($shiftStart, $shiftEnd))
+                        || ($t->started_at && $t->started_at->between($shiftStart, $shiftEnd))
+                        || ($t->created_at && $t->created_at->between($shiftStart, $shiftEnd))
+                    )
+                );
+
+                if ($matchesInProgress && ($bestInProgress === null || $t->id > $bestInProgress->id)) {
+                    $bestInProgress = $t;
+                }
+            }
+
+            return $bestPaused ?? $bestInProgress ?? $bestPending;
         }
+
+        [$shiftStart, $shiftEnd] = ShiftScheduleService::getShiftWindow();
 
         // Khi relation chưa được eager-load:
         // 0. Ưu tiên chuyến đang bị Tạm dừng (Báo sai Km)
