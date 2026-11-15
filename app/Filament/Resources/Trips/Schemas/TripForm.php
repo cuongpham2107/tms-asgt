@@ -177,8 +177,16 @@ class TripForm
                                     return 'Tự cập nhật khi hoàn thành chuyến';
                                 }
 
-                                if ($record->status === TripStatus::Completed || $record->end_km !== null) {
+                                $hasEndCheckpoint = $record->checkpoints()
+                                    ->where('checkpoint_type', CheckpointType::End->value)
+                                    ->exists();
+
+                                if ($hasEndCheckpoint) {
                                     return 'Đồng bộ từ mốc kết thúc chuyến';
+                                }
+
+                                if ($record->status === TripStatus::Completed || $record->end_km !== null) {
+                                    return 'Chưa có mốc kết thúc xe (đồng bộ theo Km mốc cuối)';
                                 }
 
                                 return 'Chưa kết thúc (tự cập nhật khi hoàn thành chuyến)';
@@ -219,18 +227,39 @@ class TripForm
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
                             ->native(true)
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->helperText(function (?Model $record): string {
+                                if (! $record instanceof Trip) {
+                                    return 'Tự cập nhật từ mốc bắt đầu chuyến';
+                                }
+
+                                $hasStartedCheckpoint = $record->checkpoints()
+                                    ->where('checkpoint_type', CheckpointType::Started->value)
+                                    ->whereNotNull('occurred_at')
+                                    ->exists();
+
+                                if ($hasStartedCheckpoint || $record->started_at !== null) {
+                                    return 'Đồng bộ từ mốc bắt đầu chuyến';
+                                }
+
+                                return 'Chưa bắt đầu (tự cập nhật từ mốc bắt đầu chuyến)';
+                            })
                             ->columnSpan(['default' => 1, 'sm' => fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent ? 4 : 3])
                             ->afterStateHydrated(function (DateTimePicker $component, ?Trip $record): void {
-                                if ($record === null || $component->getState() !== null) {
+                                if ($record === null) {
                                     return;
                                 }
 
-                                $minTime = $record->checkpoints()
+                                $startedTime = $record->checkpoints()
                                     ->whereNotNull('occurred_at')
-                                    ->min('occurred_at');
+                                    ->where('checkpoint_type', CheckpointType::Started->value)
+                                    ->orderBy('occurred_at')
+                                    ->orderBy('id')
+                                    ->value('occurred_at');
 
-                                if ($minTime !== null) {
-                                    $component->state($minTime);
+                                if ($startedTime !== null) {
+                                    $component->state($startedTime);
                                 }
                             }),
                         DateTimePicker::make('completed_at')
@@ -239,14 +268,30 @@ class TripForm
                             ->displayFormat('H:i d/m/Y')
                             ->seconds(false)
                             ->native(true)
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(function ($state, $set, ?Model $record) {
-                                if (filled($state) && $record?->vehicle?->type === VehicleOwnerType::Rent) {
-                                    $set('status', TripStatus::Completed);
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->helperText(function (?Model $record): string {
+                                if (! $record instanceof Trip) {
+                                    return 'Tự cập nhật từ mốc kết thúc chuyến';
                                 }
+
+                                $hasEndCheckpoint = $record->checkpoints()
+                                    ->where('checkpoint_type', CheckpointType::End->value)
+                                    ->whereNotNull('occurred_at')
+                                    ->exists();
+
+                                if ($hasEndCheckpoint) {
+                                    return 'Đồng bộ từ mốc kết thúc chuyến';
+                                }
+
+                                if ($record->status === TripStatus::Completed && $record->completed_at !== null) {
+                                    return 'Chưa có mốc kết thúc xe';
+                                }
+
+                                return 'Chưa kết thúc (tự cập nhật từ mốc kết thúc chuyến)';
                             })
                             ->afterStateHydrated(function (DateTimePicker $component, ?Trip $record): void {
-                                if ($record === null || $component->getState() !== null) {
+                                if ($record === null) {
                                     return;
                                 }
 
@@ -254,6 +299,7 @@ class TripForm
                                     ->whereNotNull('occurred_at')
                                     ->where('checkpoint_type', CheckpointType::End->value)
                                     ->latest('occurred_at')
+                                    ->orderByDesc('id')
                                     ->value('occurred_at');
 
                                 if ($endTime !== null) {
@@ -387,6 +433,7 @@ class TripForm
                             ->addable()
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
+                            ->rules([fn (): Closure => self::checkpointTimeOrderRule()])
                             ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->columnSpanFull(),
@@ -565,7 +612,10 @@ class TripForm
                             ->addable()
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
-                            ->rules([fn (): Closure => self::checkpointKmIncreasingRule()])
+                            ->rules([
+                                fn (): Closure => self::checkpointKmIncreasingRule(),
+                                fn (): Closure => self::checkpointTimeOrderRule(),
+                            ])
                             ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->columnSpanFull(),
@@ -605,6 +655,50 @@ class TripForm
                 if ($highest === null || $row['km'] >= $highest['km']) {
                     $highest = $row;
                 }
+            }
+        };
+    }
+
+    /**
+     * Thời gian mốc kết thúc xe (end) không được trước mốc bắt đầu chuyến (started).
+     */
+    public static function checkpointTimeOrderRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            $rows = collect(is_array($value) ? $value : [])
+                ->filter(fn ($row): bool => is_array($row) && filled($row['occurred_at'] ?? null) && filled($row['checkpoint_type'] ?? null))
+                ->map(function (array $row): array {
+                    $raw = $row['checkpoint_type'];
+                    $type = $raw instanceof CheckpointType
+                        ? $raw
+                        : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
+
+                    return [
+                        'type' => $type,
+                        'at' => Carbon::parse($row['occurred_at']),
+                    ];
+                });
+
+            $startedAt = $rows
+                ->where('type', CheckpointType::Started)
+                ->sortBy(fn (array $row): int => $row['at']->getTimestamp())
+                ->first()['at'] ?? null;
+
+            if ($startedAt === null) {
+                return;
+            }
+
+            $endAt = $rows
+                ->where('type', CheckpointType::End)
+                ->sortByDesc(fn (array $row): int => $row['at']->getTimestamp())
+                ->first()['at'] ?? null;
+
+            if ($endAt !== null && $endAt->lt($startedAt)) {
+                $fail(sprintf(
+                    'Thời gian mốc kết thúc xe (%s) không được sớm hơn mốc bắt đầu chuyến (%s).',
+                    $endAt->format('H:i d/m/Y'),
+                    $startedAt->format('H:i d/m/Y'),
+                ));
             }
         };
     }

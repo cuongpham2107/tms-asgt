@@ -418,19 +418,40 @@ class TripKmAdjustmentService
 
         $trip->start_km = $first->km_reading;
 
-        $hasEnd = (clone $kmCheckpoints)->where('checkpoint_type', CheckpointType::End->value)->exists();
+        $startedCheckpoint = TripCheckpoint::where('trip_id', $trip->id)
+            ->where('checkpoint_type', CheckpointType::Started->value)
+            ->whereNotNull('occurred_at')
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->first();
+
+        if ($startedCheckpoint !== null) {
+            $trip->started_at = $startedCheckpoint->occurred_at;
+        }
+
+        $endCheckpoint = TripCheckpoint::where('trip_id', $trip->id)
+            ->where('checkpoint_type', CheckpointType::End->value)
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $hasEnd = $endCheckpoint !== null;
 
         $shouldFinalizeEndKm = $trip->end_km !== null
             || $trip->status === TripStatus::Completed
             || $hasEnd;
 
-        // Trạng thái chuyến do form sửa chuyến quyết định; nếu có mốc End thì chuyến hoàn thành.
+        // Trạng thái chuyến do form sửa chuyến quyết định; nếu có mốc End thì chuyến hoàn thành và đồng bộ completed_at.
         if ($shouldFinalizeEndKm && $last !== null) {
-            $trip->end_km = $last->km_reading;
+            $trip->end_km = ($hasEnd && $endCheckpoint->km_reading !== null && (float) $endCheckpoint->km_reading > 0)
+                ? $endCheckpoint->km_reading
+                : $last->km_reading;
 
             if ($hasEnd) {
                 $trip->status = TripStatus::Completed;
-                $trip->completed_at = $trip->completed_at ?? $last->occurred_at;
+                if ($endCheckpoint->occurred_at !== null) {
+                    $trip->completed_at = $endCheckpoint->occurred_at;
+                }
             } elseif ($trip->status === TripStatus::Completed && $trip->completed_at === null && $last->occurred_at !== null) {
                 $trip->completed_at = $last->occurred_at;
             }

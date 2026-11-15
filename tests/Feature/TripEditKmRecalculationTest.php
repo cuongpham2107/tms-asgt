@@ -196,16 +196,105 @@ test('checkpoints at the same minute may carry different km', function () {
         ->assertHasNoTableActionErrors();
 });
 
-test('editing completed_at completes the trip and recalculates end km from the latest checkpoint', function () {
+test('started_at and completed_at inputs are read-only and do not complete a trip from form input without an end checkpoint', function () {
     $this->oldTrip->updateQuietly(['end_km' => null, 'total_km' => null]);
+    $originalStartedAt = $this->oldTrip->started_at;
 
     editTripTable()->mountTableAction('edit', $this->oldTrip)
-        ->fillForm(['completed_at' => now()->subMinutes(30)])
+        ->assertFormFieldIsDisabled('started_at')
+        ->assertFormFieldIsDisabled('completed_at')
+        ->fillForm([
+            'started_at' => now()->subDays(5),
+            'completed_at' => now()->subMinutes(30),
+        ])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    $trip = $this->oldTrip->fresh();
+    expect($trip->status)->toBe(TripStatus::Delivering)
+        ->and($trip->completed_at)->toBeNull()
+        ->and($trip->end_km)->toBeNull()
+        ->and($trip->started_at->format('Y-m-d H:i'))->toBe($originalStartedAt->format('Y-m-d H:i'));
+});
+
+test('editing started or end checkpoint timestamps automatically syncs started_at and completed_at', function () {
+    $newStartAt = now()->subDays(3)->subMinutes(15)->startOfMinute();
+    $endAt = now()->subDays(3)->addHours(3)->startOfMinute();
+
+    editTripTable()->mountTableAction('edit', $this->oldTrip)
+        ->fillForm([
+            'checkpoints.record-'.$this->oldTrip->checkpoints()->where('checkpoint_type', CheckpointType::Started->value)->value('id').'.occurred_at' => $newStartAt->format('Y-m-d H:i'),
+            'checkpoints.new-end' => [
+                'checkpoint_type' => CheckpointType::End->value,
+                'driver_id' => $this->driver->id,
+                'km_reading' => 100180,
+                'occurred_at' => $endAt->format('Y-m-d H:i'),
+            ],
+        ])
         ->callMountedTableAction()
         ->assertHasNoTableActionErrors();
 
     $trip = $this->oldTrip->fresh();
     expect($trip->status)->toBe(TripStatus::Completed)
-        ->and((float) $trip->end_km)->toBe(100120.0)
-        ->and((float) $trip->total_km)->toBe(120.0);
+        ->and($trip->started_at->format('Y-m-d H:i'))->toBe($newStartAt->format('Y-m-d H:i'))
+        ->and($trip->completed_at->format('Y-m-d H:i'))->toBe($endAt->format('Y-m-d H:i'))
+        ->and((float) $trip->end_km)->toBe(100180.0)
+        ->and((float) $trip->total_km)->toBe(180.0);
+});
+
+test('adding an end checkpoint earlier than the started checkpoint is rejected', function () {
+    $invalidEndAt = now()->subDays(3)->subHour()->startOfMinute();
+
+    editTripTable()->mountTableAction('edit', $this->oldTrip)
+        ->fillForm([
+            'checkpoints.new-end' => [
+                'checkpoint_type' => CheckpointType::End->value,
+                'driver_id' => $this->driver->id,
+                'km_reading' => 100180,
+                'occurred_at' => $invalidEndAt->format('Y-m-d H:i'),
+            ],
+        ])
+        ->callMountedTableAction()
+        ->assertHasTableActionErrors(['checkpoints']);
+
+    expect($this->oldTrip->fresh()->status)->toBe(TripStatus::Delivering)
+        ->and($this->oldTrip->fresh()->completed_at)->toBeNull();
+});
+
+test('removing an end checkpoint clears completed_at and reverts trip status', function () {
+    $endCheckpoint = TripCheckpoint::create([
+        'trip_id' => $this->oldTrip->id,
+        'driver_id' => $this->driver->id,
+        'checkpoint_type' => CheckpointType::End->value,
+        'km_reading' => 100180,
+        'occurred_at' => now()->subDays(3)->addHours(3)->startOfMinute(),
+    ]);
+    $this->oldTrip->update([
+        'status' => TripStatus::Completed,
+        'completed_at' => $endCheckpoint->occurred_at,
+        'end_km' => 100180,
+    ]);
+
+    $remaining = $this->oldTrip->checkpoints()
+        ->where('id', '!=', $endCheckpoint->id)
+        ->get()
+        ->mapWithKeys(fn (TripCheckpoint $cp): array => [
+            'record-'.$cp->id => [
+                'checkpoint_type' => $cp->checkpoint_type->value,
+                'driver_id' => $cp->driver_id,
+                'km_reading' => $cp->km_reading,
+                'occurred_at' => $cp->occurred_at->format('Y-m-d H:i'),
+            ],
+        ])
+        ->all();
+
+    editTripTable()->mountTableAction('edit', $this->oldTrip)
+        ->set('mountedActions.0.data.checkpoints', $remaining)
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    $trip = $this->oldTrip->fresh();
+    expect($trip->status)->toBe(TripStatus::ArrivedDelivery)
+        ->and($trip->completed_at)->toBeNull()
+        ->and($trip->end_km)->toBeNull();
 });
