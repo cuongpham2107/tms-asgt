@@ -10,6 +10,7 @@ use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripKmReport;
 use App\Models\User;
+use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
@@ -18,6 +19,11 @@ use Throwable;
 
 class TripObserver
 {
+    public function creating(Trip $trip): void
+    {
+        $this->syncExternalDriverSnapshot($trip, isCreating: true);
+    }
+
     /**
      * Handle the Trip "created" event.
      */
@@ -32,6 +38,11 @@ class TripObserver
         if ($trip->status === TripStatus::DriverSwap) {
             $this->notifyUsersDriverSwap($trip);
         }
+    }
+
+    public function updating(Trip $trip): void
+    {
+        $this->syncExternalDriverSnapshot($trip, isCreating: false);
     }
 
     /**
@@ -394,5 +405,50 @@ class TripObserver
         } else {
             DB::afterCommit($broadcast);
         }
+    }
+
+    /**
+     * Snapshot tên lái xe thuê ngoài lên bảng trips khi tạo hoặc gán lại xe/tài xế,
+     * đảm bảo dữ liệu lịch sử và bảng kê không bị thay đổi nếu xe thuê đổi tên lái xe sau này.
+     */
+    protected function syncExternalDriverSnapshot(Trip $trip, bool $isCreating): void
+    {
+        if (filled($trip->driver_id)) {
+            $trip->external_driver_name = null;
+
+            return;
+        }
+
+        if (! $isCreating && $trip->isDirty('external_driver_name')) {
+            $trip->external_driver_name = filled($trip->external_driver_name)
+                ? trim((string) $trip->external_driver_name)
+                : null;
+
+            return;
+        }
+
+        if ($isCreating && filled($trip->external_driver_name)) {
+            $trip->external_driver_name = trim((string) $trip->external_driver_name);
+
+            return;
+        }
+
+        if (! $isCreating && ! $trip->isDirty('vehicle_id') && ! $trip->isDirty('driver_id')) {
+            return;
+        }
+
+        if ($trip->vehicle_id === null) {
+            $trip->external_driver_name = null;
+
+            return;
+        }
+
+        $vehicle = $trip->relationLoaded('vehicle') && (int) $trip->vehicle?->id === (int) $trip->vehicle_id
+            ? $trip->vehicle
+            : Vehicle::query()->find($trip->vehicle_id);
+
+        $trip->external_driver_name = ($vehicle?->isRent() && filled($vehicle->external_driver_name))
+            ? trim((string) $vehicle->external_driver_name)
+            : null;
     }
 }

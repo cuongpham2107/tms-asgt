@@ -46,7 +46,11 @@ class EditTripAction
             })
             ->mutateRecordDataUsing(function (array $data, ?Model $record = null): array {
                 $trip = static::resolveTrip($record);
-                $trip?->loadMissing(['startLocation', 'endLocation']);
+                $trip?->loadMissing(['startLocation', 'endLocation', 'vehicle']);
+
+                if ($trip && $trip->driver_id === null && blank($data['external_driver_name'] ?? null) && $trip->vehicle?->isRent() && filled($trip->vehicle->external_driver_name)) {
+                    $data['external_driver_name'] = trim((string) $trip->vehicle->external_driver_name);
+                }
 
                 return $data;
             })

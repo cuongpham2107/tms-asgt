@@ -52,6 +52,7 @@ class Trip extends Model
         'trip_code',
         'vehicle_id',
         'driver_id',
+        'external_driver_name',
         'shift_id',
         'status',
         'started_at',
@@ -374,12 +375,16 @@ class Trip extends Model
 
     /**
      * Tên tài xế hiển thị cho chuyến: ưu tiên tài xế gán trên chuyến,
-     * dự phòng tên lái xe ngoài trên phương tiện thuê khi chuyến không có driver_id.
+     * tiếp theo là snapshot tên lái xe ngoài lưu trên chuyến, sau cùng mới dự phòng từ xe thuê.
      */
     public function resolveDriverName(): ?string
     {
         if (filled($this->driver?->name)) {
             return trim((string) $this->driver->name);
+        }
+
+        if (filled($this->external_driver_name)) {
+            return trim((string) $this->external_driver_name);
         }
 
         $vehicle = $this->vehicle;
