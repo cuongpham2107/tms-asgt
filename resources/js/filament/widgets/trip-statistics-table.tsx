@@ -65,6 +65,7 @@ interface Row {
 interface Configuration {
     /** false ở lần render đầu: chỉ có khung (tab, bộ lọc, cột), chưa có số liệu. */
     loaded: boolean
+    canEditCharges?: boolean
     rows: Row[]
     showCharges: boolean
     showChargeableWeight: boolean
@@ -124,6 +125,7 @@ interface Column {
     minWidth?: number
     sticky?: boolean
     extra?: string
+    cellClassName?: (row: Row) => string
     titleClassName?: string
     render: (row: Row, page: PageApi) => ReactNode
 }
@@ -189,7 +191,19 @@ const ICONS = {
     viewColumns: 'M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z',
 }
 
-function MetricCell({ row, field, value, page }: { row: Row; field: 'total_packages' | 'total_weight'; value: number | null; page: PageApi }) {
+function MetricCell({
+    row,
+    field,
+    value,
+    page,
+    canEdit,
+}: {
+    row: Row
+    field: 'total_packages' | 'total_weight'
+    value: number | null
+    page: PageApi
+    canEdit: boolean
+}) {
     const [editing, setEditing] = useState(false)
     const [draft, setDraft] = useState('')
     const [saving, setSaving] = useState(false)
@@ -198,7 +212,7 @@ function MetricCell({ row, field, value, page }: { row: Row; field: 'total_packa
     const initial = value === null ? '' : String(value)
     const orderId = row.orderId
 
-    if (!orderId) {
+    if (!orderId || !canEdit) {
         return <span className="px-1">{display}</span>
     }
 
@@ -266,7 +280,7 @@ function MetricCell({ row, field, value, page }: { row: Row; field: 'total_packa
     )
 }
 
-function Actions({ row, page }: { row: Row; page: PageApi }) {
+function Actions({ row, page, canEdit }: { row: Row; page: PageApi; canEdit: boolean }) {
     if (!row.orderId) {
         return null
     }
@@ -279,7 +293,7 @@ function Actions({ row, page }: { row: Row; page: PageApi }) {
             <button
                 type="button"
                 className="rounded-md p-1 text-primary-600 transition hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-500/10"
-                title={locked ? 'Xem cước (đang khoá)' : 'Sửa cước'}
+                title={!canEdit ? 'Xem chi tiết cước' : locked ? 'Xem cước (đang khoá)' : 'Sửa cước'}
                 onClick={() => void page.mountAction('editCharge', { orderId })}
             >
                 <Icon path={ICONS.edit} />
@@ -288,7 +302,7 @@ function Actions({ row, page }: { row: Row; page: PageApi }) {
     )
 }
 
-function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Column[] {
+function buildColumns(showChargeableWeight: boolean, showCharges: boolean, canEditCharges: boolean): Column[] {
     const columns: Column[] = [
         { key: 'stt', groupId: 0, label: 'STT', align: 'center', width: 50, sticky: true, extra: 'px-2.5 text-gray-400 font-mono', render: (row) => row.stt },
         {
@@ -370,7 +384,18 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                     : badge(row.vehicleOwner, row.vehicleOwner === 'Xe công ty' ? 'info' : row.vehicleOwner === 'Xe thuê' ? 'warning' : 'gray'),
         },
         { key: 'vehicleType', groupId: 3, label: 'Loại xe', align: 'center', minWidth: 90, extra: 'px-3 text-gray-600 dark:text-gray-400', render: (row) => row.vehicleType ?? '' },
-        { key: 'note', groupId: 3, label: 'Ghi chú', minWidth: 100, extra: 'px-3 text-gray-500 max-w-[140px] truncate', render: (row) => <span title={row.note ?? ''}>{row.note || '—'}</span> },
+        {
+            key: 'note',
+            groupId: 3,
+            label: 'Ghi chú',
+            minWidth: 100,
+            extra: 'px-3 max-w-[140px] truncate',
+            cellClassName: (row) =>
+                row.note && row.note.trim() !== ''
+                    ? 'bg-red-100 text-red-800 font-medium group-hover:bg-red-200/80 dark:bg-red-950/75 dark:text-red-200 dark:group-hover:bg-red-900/70'
+                    : 'text-gray-500',
+            render: (row) => <span title={row.note ?? ''}>{row.note || '—'}</span>,
+        },
         {
             key: 'isReturnTrip',
             groupId: 3,
@@ -391,8 +416,8 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
             extra: 'px-3 font-mono text-gray-500',
             render: (row) => (row.kmEmpty !== null ? row.kmEmpty.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : '0'),
         },
-        { key: 'pcs', groupId: 4, label: 'PCS', align: 'right', minWidth: 110, extra: 'px-1.5 font-mono text-xs', render: (row, page) => <MetricCell row={row} field="total_packages" value={row.pcs} page={page} /> },
-        { key: 'gw', groupId: 4, label: 'GW (kg)', align: 'right', minWidth: 125, extra: 'px-1.5 font-mono text-xs', render: (row, page) => <MetricCell row={row} field="total_weight" value={row.gw} page={page} /> },
+        { key: 'pcs', groupId: 4, label: 'PCS', align: 'right', minWidth: 110, extra: 'px-1.5 font-mono text-xs', render: (row, page) => <MetricCell row={row} field="total_packages" value={row.pcs} page={page} canEdit={canEditCharges} /> },
+        { key: 'gw', groupId: 4, label: 'GW (kg)', align: 'right', minWidth: 125, extra: 'px-1.5 font-mono text-xs', render: (row, page) => <MetricCell row={row} field="total_weight" value={row.gw} page={page} canEdit={canEditCharges} /> },
         { key: 'cargoType', groupId: 4, label: 'Loại hàng', align: 'center', minWidth: 75, extra: 'px-3', render: (row) => <span className="font-mono text-[11px] text-gray-600 dark:text-gray-400">{row.cargoType || '—'}</span> },
     ]
 
@@ -479,7 +504,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean): Colu
                 titleClassName: 'font-bold text-sky-300',
                 render: (row) => (row.charge && row.charge.total > 0 ? money(row.charge.total) : '0'),
             },
-            { key: 'actions', groupId: 5, label: 'Thao tác', align: 'center', minWidth: 60, extra: 'px-2', render: (row, page) => <Actions row={row} page={page} /> },
+            { key: 'actions', groupId: 5, label: 'Thao tác', align: 'center', minWidth: 60, extra: 'px-2', render: (row, page) => <Actions row={row} page={page} canEdit={canEditCharges} /> },
         )
     }
 
@@ -645,6 +670,7 @@ function RowView({
                             sticky?.isLast ? 'shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)] border-gray-200 dark:border-white/10' : '',
                             alignmentClass(column.align),
                             column.extra ?? 'px-3',
+                            column.cellClassName?.(row) ?? '',
                         ]
                             .filter(Boolean)
                             .join(' ')}
@@ -700,9 +726,11 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
         return () => clearTimeout(timer)
     }, [search])
 
+    const canEditCharges = configuration.canEditCharges === true
+
     const allColumns = useMemo(
-        () => buildColumns(configuration.showChargeableWeight, configuration.showCharges),
-        [configuration.showChargeableWeight, configuration.showCharges]
+        () => buildColumns(configuration.showChargeableWeight, configuration.showCharges, canEditCharges),
+        [configuration.showChargeableWeight, configuration.showCharges, canEditCharges]
     )
 
     const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => loadHiddenColumns())

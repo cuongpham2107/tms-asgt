@@ -905,6 +905,128 @@
                     this.updateGeofenceCircle();
                 },
 
+                parseLatLngInput(raw) {
+                    if (!raw || typeof raw !== 'string') return null;
+                    const cleaned = raw.trim().replace(/^[@(\[\s]+|[)\]\s]+$/g, '');
+                    const match = cleaned.match(/^([+-]?\d{1,2}(?:\.\d+)?)\s*[,;\s]+\s*([+-]?\d{1,3}(?:\.\d+)?)$/);
+                    if (!match) return null;
+                    // Yêu cầu ít nhất 1 giá trị có phần thập phân để không nhầm số nhà ("12 34") với toạ độ.
+                    if (!match[1].includes('.') && !match[2].includes('.')) {
+                        return null;
+                    }
+                    const lat = parseFloat(match[1]);
+                    const lng = parseFloat(match[2]);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+                    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+                    return [Number(lat.toFixed(7)), Number(lng.toFixed(7))];
+                },
+
+                applyCoordinateFromSearch(lat, lng) {
+                    const fixedLat = Number(parseFloat(lat).toFixed(7));
+                    const fixedLng = Number(parseFloat(lng).toFixed(7));
+                    if (!Number.isFinite(fixedLat) || !Number.isFinite(fixedLng)) return;
+
+                    if (typeof this.setState === 'function') {
+                        this.setState(fixedLat, fixedLng);
+                    }
+                    if (this.geofenceType === 'rectangle' || this.geofenceType === 'square') {
+                        this.shiftRectangleToNewCenter(fixedLat, fixedLng);
+                        if (this.rectBounds) {
+                            this.setWireValue('geofence_bounds', this.rectBounds);
+                        }
+                    }
+                    this.updateGeofenceCircle(undefined, [fixedLat, fixedLng]);
+
+                    const map = this.mapCore ? Alpine.raw(this.mapCore.map) : null;
+                    if (map) {
+                        map.setView([fixedLat, fixedLng], Math.max(map.getZoom() || 13, 16));
+                    }
+                },
+
+                bindGeoSearchCoordinates() {
+                    const map = this.mapCore ? Alpine.raw(this.mapCore.map) : null;
+                    if (!map) return;
+
+                    if (!map.__geoSearchShowBound) {
+                        map.__geoSearchShowBound = true;
+                        map.on('geosearch/showlocation', (e) => {
+                            if (e && e.marker) {
+                                try {
+                                    map.removeLayer(e.marker);
+                                } catch (err) {}
+                            }
+                            const lat = e?.location?.y;
+                            const lng = e?.location?.x;
+                            if (typeof lat === 'number' && typeof lng === 'number') {
+                                this.applyCoordinateFromSearch(lat, lng);
+                            }
+                        });
+                    }
+
+                    const container = map.getContainer();
+                    const searchRoot = container ? container.querySelector('.leaflet-control-geosearch') : null;
+                    if (!searchRoot || searchRoot.__coordSearchBound) return;
+
+                    const input = searchRoot.querySelector('input');
+                    const form = searchRoot.querySelector('form');
+                    if (!input) return;
+
+                    searchRoot.__coordSearchBound = true;
+                    input.placeholder = 'Nhập địa chỉ hoặc tọa độ (lat, lng)...';
+
+                    const closeResultsDropdown = () => {
+                        searchRoot.classList.remove('leaflet-geosearch-pending');
+                        const results = searchRoot.querySelector('.results');
+                        if (results) {
+                            results.classList.remove('active');
+                            results.innerHTML = '';
+                        }
+                    };
+
+                    const handleLatLngApply = () => {
+                        const coords = this.parseLatLngInput(input.value);
+                        if (!coords) return false;
+                        closeResultsDropdown();
+                        this.applyCoordinateFromSearch(coords[0], coords[1]);
+                        return true;
+                    };
+
+                    const suppressIfCoords = (e) => {
+                        if (this.parseLatLngInput(input.value)) {
+                            e.stopImmediatePropagation();
+                        }
+                    };
+
+                    if (form) {
+                        form.addEventListener('submit', (e) => {
+                            if (this.parseLatLngInput(input.value)) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                e.stopImmediatePropagation();
+                                handleLatLngApply();
+                            }
+                        }, true);
+                    }
+
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && this.parseLatLngInput(input.value)) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            handleLatLngApply();
+                        }
+                    }, true);
+
+                    // Chặn autoComplete keyup gọi Nominatim khi chuỗi nhập là cặp toạ độ lat, lng.
+                    input.addEventListener('keyup', suppressIfCoords, true);
+
+                    input.addEventListener('paste', () => {
+                        setTimeout(() => {
+                            handleLatLngApply();
+                        }, 0);
+                    });
+                },
+
                 setupGeofence() {
                     const initialType = this.getWireValue('geofence_type');
                     if (['circle', 'rectangle', 'square'].includes(initialType)) {
@@ -919,6 +1041,7 @@
 
                     this.bindMarkerEvents();
                     this.bindMapBoxDrawEvents();
+                    this.bindGeoSearchCoordinates();
                     this.updateGeofenceCircle();
 
                     const radiusStatePath = this.resolveFieldPath('geofence_radius_m');
@@ -990,6 +1113,7 @@
                             if (this.mapCore && this.mapCore.map) {
                                 Alpine.raw(this.mapCore.map).invalidateSize();
                                 this.bindMapBoxDrawEvents();
+                                this.bindGeoSearchCoordinates();
                                 this.updateGeofenceCircle();
                             }
                         }, delay);

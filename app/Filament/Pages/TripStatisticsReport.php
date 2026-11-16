@@ -27,6 +27,7 @@ use App\Services\Export\TripExcelExportService;
 use App\Services\Import\OrderPackagesImporter;
 use App\Services\ShiftScheduleService;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Closure;
 use Filament\Actions\Action;
@@ -68,6 +69,7 @@ use UnitEnum;
 
 class TripStatisticsReport extends Page
 {
+    use HasPageShield;
     use HasTripStatistics;
 
     protected static string|UnitEnum|null $navigationGroup = 'Cước vận chuyển';
@@ -351,6 +353,11 @@ class TripStatisticsReport extends Page
         ];
     }
 
+    private function canEditCharges(): bool
+    {
+        return auth()->user()?->can('Update:TripCharge') ?? false;
+    }
+
     /**
      * Xuất bảng kê đối chiếu theo mẫu Excel của khách — lấy đúng các dòng đang hiển thị (đã lọc 1 khách).
      */
@@ -407,6 +414,7 @@ class TripStatisticsReport extends Page
                 Toggle::make('lock_after_export')
                     ->label('Khoá dòng cước sau khi xuất')
                     ->helperText('Bật nếu đây là bảng kê chính thức chốt công nợ để khoá chỉnh sửa')
+                    ->visible(fn (): bool => $this->canEditCharges())
                     ->default(false),
             ])
             ->action(function (array $data) use ($customer): ?StreamedResponse {
@@ -425,8 +433,8 @@ class TripStatisticsReport extends Page
                     return null;
                 }
 
-                // Chỉ khoá dòng đã có giá nếu người dùng chọn khoá sau khi xuất.
-                if ($data['lock_after_export'] ?? false) {
+                // Chỉ khoá dòng đã có giá nếu người dùng có quyền chỉnh sửa cước và chọn khoá sau khi xuất.
+                if ($this->canEditCharges() && ($data['lock_after_export'] ?? false)) {
                     OrderCharge::query()
                         ->whereIn('order_id', $result['order_ids'])
                         ->whereNotNull('base_price')
@@ -477,6 +485,15 @@ class TripStatisticsReport extends Page
 
     public function updateOrderMetric(int $orderId, string $field, mixed $value): void
     {
+        if (! $this->canEditCharges()) {
+            Notification::make()
+                ->title('Bạn không có quyền chỉnh sửa số liệu bảng kê')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
         if (! in_array($field, ['total_packages', 'total_weight'], true)) {
             return;
         }
@@ -522,6 +539,7 @@ class TripStatisticsReport extends Page
             ->label('Import cân kiện')
             ->icon('heroicon-m-arrow-up-tray')
             ->color('info')
+            ->authorize(fn (): bool => $this->canEditCharges())
             ->visible(fn (): bool => $this->activeTab === 'HHHK')
             ->modalHeading('Import PCS / GW cho đơn HHHK')
             ->modalDescription('File theo mẫu sheet "1.1 Mẫu Upload dữ liệu cân kiện": cột B Mã đơn hàng, cột F PCS, cột G GW. Ô PCS / GW để trống thì giữ nguyên số cũ.')
@@ -602,14 +620,14 @@ class TripStatisticsReport extends Page
                 ->icon('heroicon-m-check')
                 ->color('primary')
                 ->extraAttributes(['wire:key' => 'btn-save-charge-'.($this->findCharge($arguments)?->isLocked() ? 'locked' : 'unlocked')])
-                ->visible(fn (): bool => ! (bool) $this->findCharge($arguments)?->isLocked())
+                ->visible(fn (): bool => $this->canEditCharges() && ! (bool) $this->findCharge($arguments)?->isLocked())
             )
             ->extraModalFooterActions(fn (Action $action, array $arguments): array => [
                 Action::make('recalculateInsideModal')
                     ->label('Tính lại giá')
                     ->icon('heroicon-m-arrow-path')
                     ->color('info')
-                    ->visible(fn (): bool => (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && ! (bool) $this->findCharge($arguments)?->isLocked())
+                    ->visible(fn (): bool => $this->canEditCharges() && (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && ! (bool) $this->findCharge($arguments)?->isLocked())
                     ->action(function () use ($action, $arguments): void {
                         $orderId = (int) ($arguments['orderId'] ?? 0);
                         $formData = $action->getRawData();
@@ -626,7 +644,7 @@ class TripStatisticsReport extends Page
                     ->label('Mở khoá để sửa')
                     ->icon('heroicon-m-lock-open')
                     ->color('warning')
-                    ->visible(fn (): bool => (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && (bool) $this->findCharge($arguments)?->isLocked())
+                    ->visible(fn (): bool => $this->canEditCharges() && (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && (bool) $this->findCharge($arguments)?->isLocked())
                     ->requiresConfirmation()
                     ->modalHeading('Mở khoá dòng cước')
                     ->modalDescription('Mở khoá dòng cước đã xuất bảng kê để tiếp tục chỉnh sửa?')
@@ -641,7 +659,7 @@ class TripStatisticsReport extends Page
                     ->label('Khoá cước')
                     ->icon('heroicon-m-lock-closed')
                     ->color('gray')
-                    ->visible(fn (): bool => (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && ! (bool) $this->findCharge($arguments)?->isLocked())
+                    ->visible(fn (): bool => $this->canEditCharges() && (bool) Order::find($arguments['orderId'] ?? null)?->isExternal() && ! (bool) $this->findCharge($arguments)?->isLocked())
                     ->requiresConfirmation()
                     ->modalHeading('Khoá dòng cước')
                     ->modalDescription('Đánh dấu dòng cước này là đã xuất bảng kê (khoá chỉnh sửa)?')
@@ -712,6 +730,12 @@ class TripStatisticsReport extends Page
             })
             ->schema(fn (array $arguments): array => $this->chargeFormSchema($this->findCharge($arguments), (int) ($arguments['orderId'] ?? 0)))
             ->action(function (array $data, array $arguments): void {
+                if (! $this->canEditCharges()) {
+                    Notification::make()->title('Bạn không có quyền chỉnh sửa cước')->danger()->send();
+
+                    return;
+                }
+
                 $orderId = (int) ($arguments['orderId'] ?? 0);
                 $order = Order::with('deliveryPoints')->find($orderId);
 
@@ -807,6 +831,12 @@ class TripStatisticsReport extends Page
 
     public function recalculateCharge(int $orderId, ?array $formData = null): void
     {
+        if (! $this->canEditCharges()) {
+            Notification::make()->title('Bạn không có quyền tính lại cước')->danger()->send();
+
+            return;
+        }
+
         $order = Order::with('customer')->find($orderId);
 
         if ($order === null || $order->type !== OrderType::External) {
@@ -900,6 +930,12 @@ class TripStatisticsReport extends Page
 
     public function unlockCharge(int $orderId): void
     {
+        if (! $this->canEditCharges()) {
+            Notification::make()->title('Bạn không có quyền mở khoá dòng cước')->danger()->send();
+
+            return;
+        }
+
         OrderCharge::where('order_id', $orderId)->update(['exported_at' => null, 'exported_by' => null]);
 
         $this->clearBaseRowsCache();
@@ -910,6 +946,12 @@ class TripStatisticsReport extends Page
 
     public function lockCharge(int $orderId): void
     {
+        if (! $this->canEditCharges()) {
+            Notification::make()->title('Bạn không có quyền khoá dòng cước')->danger()->send();
+
+            return;
+        }
+
         OrderCharge::where('order_id', $orderId)->update([
             'exported_at' => now(),
             'exported_by' => Auth::id(),
@@ -1318,7 +1360,7 @@ class TripStatisticsReport extends Page
         return Action::make($name)
             ->icon(fn (Get $get): Heroicon => blank($get('freight_rate_id')) && $findExistingRate() === null ? Heroicon::OutlinedPlusCircle : Heroicon::OutlinedPencilSquare)
             ->tooltip(fn (Get $get): string => blank($get('freight_rate_id')) && $findExistingRate() === null ? 'Thêm đơn giá vào bảng giá' : 'Thêm / bổ sung bậc tải vào bảng giá')
-            ->visible(fn (): bool => $charge !== null && ! $charge->isLocked())
+            ->visible(fn (): bool => $this->canEditCharges() && $charge !== null && ! $charge->isLocked() && (auth()->user()?->can('Create:FreightRate') || auth()->user()?->can('Update:FreightRate')))
             ->model(FreightRate::class)
             ->modalHeading(fn (Get $get): string => blank($get('freight_rate_id')) && $findExistingRate() === null ? 'Thêm đơn giá vận chuyển' : 'Cập nhật đơn giá vận chuyển (bổ sung bậc tải)')
             ->modalDescription(collect([$pickup, $delivery])->filter(fn (?Location $location): bool => $location !== null && $location->billing_zone_id === null)
@@ -1519,7 +1561,7 @@ class TripStatisticsReport extends Page
             Grid::make(['default' => 1, 'lg' => 12])->schema([
                 Grid::make(1)
                     ->columnSpan(['lg' => 7])
-                    ->disabled(fn (): bool => (bool) $charge?->isLocked())
+                    ->disabled(fn (): bool => ! $this->canEditCharges() || (bool) $charge?->isLocked())
                     ->schema([
                         Section::make('Cách tính cước')
                             ->description('Đổi các ô này thì đơn giá được tra lại theo bảng giá.')
@@ -1834,6 +1876,9 @@ class TripStatisticsReport extends Page
         };
 
         $cargoType = $order?->cargo_type ?? CargoType::tryFrom((string) $charge?->cargo_type);
+        $orderNote = filled($order?->notes)
+            ? trim((string) $order->notes)
+            : (filled($row['note'] ?? null) ? trim((string) $row['note']) : null);
         $duration = fn (?int $minutes): string => $minutes === null ? '—' : $this->formatDuration($minutes);
         $money = fn (?float $value): string => $value === null ? '—' : number_format($value, 0, ',', '.').' đ';
         $entry = fn (string $name, string $label, Heroicon $icon, Closure|string $state, string $iconColor = 'gray'): TextEntry => TextEntry::make($name)
@@ -1883,6 +1928,15 @@ class TripStatisticsReport extends Page
                     $entry('summary_cargo_type', 'Loại hàng', Heroicon::OutlinedCube, $cargoType?->getLabel() ?? '—')
                         ->badge()
                         ->color($cargoType?->getColor() ?? 'gray'),
+                    $entry(
+                        'summary_order_note',
+                        'Ghi chú đơn hàng',
+                        Heroicon::OutlinedDocumentText,
+                        $orderNote ?? '—',
+                        $orderNote !== null ? 'danger' : 'gray',
+                    )
+                        ->color($orderNote !== null ? 'danger' : 'gray')
+                        ->weight($orderNote !== null ? FontWeight::Bold : FontWeight::Medium),
                 ]),
         ];
 
@@ -2119,7 +2173,7 @@ class TripStatisticsReport extends Page
             ->icon(Heroicon::OutlinedClock)
             ->iconColor('info')
             ->compact()
-            ->disabled(fn (): bool => (bool) $charge?->isLocked())
+            ->disabled(fn (): bool => ! $this->canEditCharges() || (bool) $charge?->isLocked())
             ->schema([
                 DateTimePicker::make('summary_requested_at')
                     ->label('Yêu cầu')
