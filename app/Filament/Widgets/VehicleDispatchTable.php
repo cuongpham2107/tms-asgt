@@ -6,6 +6,7 @@ use App\Enums\TripStatus;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Filament\Traits\HasVehicleDispatchRows;
 use App\Models\Vehicle;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\Concerns\HasJsRenderer;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Vite;
@@ -19,6 +20,7 @@ class VehicleDispatchTable extends Widget
 {
     use HasJsRenderer;
     use HasVehicleDispatchRows;
+    use HasWidgetShield;
 
     /** Lần render đầu chỉ gửi khung để React vẽ skeleton; true thì kèm dữ liệu (React bật sau khi mount). */
     public bool $isReady = false;

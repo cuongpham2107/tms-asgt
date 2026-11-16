@@ -64,11 +64,15 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
+        if (! $this->is_active) {
+            return false;
+        }
+
         if ($this->hasRole('super_admin')) {
             return true;
         }
 
-        return (bool) $this->is_active && ! $this->hasRole('driver');
+        return ! $this->hasRole('driver');
     }
 
     protected static function booted(): void

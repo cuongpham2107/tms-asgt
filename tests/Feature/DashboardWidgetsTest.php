@@ -1,15 +1,26 @@
 <?php
 
+use App\Enums\OrderStatus;
+use App\Enums\OrderType;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
+use App\Filament\Widgets\BillingOverviewStatsWidget;
+use App\Filament\Widgets\DispatchActionRequiredWidget;
+use App\Filament\Widgets\FleetComplianceAlertWidget;
 use App\Filament\Widgets\OperationsStatsWidget;
 use App\Filament\Widgets\OrderAreaChartWidget;
 use App\Filament\Widgets\OrderStatusChartWidget;
 use App\Filament\Widgets\OrderTypeChartWidget;
+use App\Filament\Widgets\TopCustomerBillingWidget;
 use App\Filament\Widgets\TripTrendChartWidget;
+use App\Models\Area;
+use App\Models\Customer;
 use App\Models\DriverShift;
+use App\Models\Order;
+use App\Models\OrderCharge;
 use App\Models\User;
 use App\Models\Vehicle;
+use Database\Seeders\RolePermissionMatrixSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
@@ -17,9 +28,9 @@ use Spatie\Permission\Models\Role;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
     Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
-    $admin = User::factory()->create();
+    RolePermissionMatrixSeeder::syncRolesAndPermissions();
+    $admin = User::factory()->create(['is_active' => true]);
     $admin->assignRole('super_admin');
     $this->actingAs($admin);
 });
@@ -111,4 +122,57 @@ test('order status chart widget renders successfully and handles filters', funct
         ->set('filter', 'month')
         ->assertStatus(200)
         ->assertHasNoErrors();
+});
+
+test('new role-focused dashboard widgets render real data cleanly including empty states', function () {
+    $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true]);
+    $customer = Customer::create(['code' => 'CUST-D1', 'name' => 'Khách Dashboard', 'is_active' => true]);
+
+    Order::create([
+        'order_code' => 'ORD-DRAFT-D1',
+        'type' => OrderType::Hhhk,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'status' => OrderStatus::Draft,
+        'planned_loading_at' => now(),
+    ]);
+
+    $extOrder = Order::create([
+        'order_code' => 'ORD-EXT-D1',
+        'type' => OrderType::External,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'status' => OrderStatus::Completed,
+        'planned_loading_at' => now(),
+    ]);
+
+    OrderCharge::create([
+        'order_id' => $extOrder->id,
+        'customer_id' => $customer->id,
+        'base_price' => 1_500_000,
+        'total' => 1_500_000,
+    ]);
+
+    $expiringDriver = User::factory()->create([
+        'is_active' => true,
+        'license_expiry_date' => now()->addDays(10),
+    ]);
+    $expiringDriver->assignRole('driver');
+
+    Livewire::test(DispatchActionRequiredWidget::class)
+        ->assertStatus(200)
+        ->assertSee('Đơn Nháp chờ gán xe')
+        ->assertSee('1');
+
+    Livewire::test(BillingOverviewStatsWidget::class)
+        ->assertStatus(200)
+        ->assertSee('1.500.000 đ');
+
+    Livewire::test(FleetComplianceAlertWidget::class)
+        ->assertStatus(200)
+        ->assertSee('Bằng lái / Chứng chỉ tài xế');
+
+    Livewire::test(TopCustomerBillingWidget::class)
+        ->assertStatus(200)
+        ->assertCanSeeTableRecords([$customer]);
 });

@@ -1,6 +1,8 @@
 <?php
 
 declare(strict_types=1);
+use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\Trips\TripResource;
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
 use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
@@ -176,6 +178,12 @@ return [
                 'update',
                 'delete',
             ],
+            OrderResource::class => [
+                'cancel',
+            ],
+            TripResource::class => [
+                'cancel',
+            ],
         ],
         'exclude' => [
             //
@@ -234,6 +242,8 @@ return [
 
     'custom_permissions' => [
         'Use:DataAssistant' => 'Dùng trợ lý dữ liệu (chat AI)',
+        'Update:TripCharge' => 'Chỉnh sửa cước & bảng kê (tính lại, khoá/mở khoá, import cân kiện)',
+        'Manage:StaffAccounts' => 'Tạo và sửa tài khoản nhân viên',
     ],
 
     /*

@@ -35,6 +35,8 @@ class ResolveKmReportAction
             ->label('Xử lý báo sai Km')
             ->icon('heroicon-o-exclamation-triangle')
             ->color('warning')
+            ->authorize(fn (?Model $record = null, $livewire = null): bool => ($trip = static::resolveRecord($record, $livewire)) !== null
+                && (auth()->user()?->can('update', $trip) ?? false))
             ->visible(fn (?Model $record, $livewire = null): bool => static::resolveRecord($record, $livewire)?->latestPendingKmReport !== null)
             ->beforeFormFilled(function (Action $action, ?Model $record = null, $livewire = null) {
                 $trip = static::resolveRecord($record, $livewire, $action);

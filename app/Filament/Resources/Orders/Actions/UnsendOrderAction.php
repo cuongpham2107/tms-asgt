@@ -17,6 +17,7 @@ class UnsendOrderAction
             ->label('Thu hồi lệnh')
             ->icon('heroicon-o-arrow-uturn-left')
             ->color('warning')
+            ->authorize(fn (Order $record): bool => auth()->user()?->can('update', $record) ?? false)
             ->hidden(fn (Order $record): bool => ! $record->status->canRecall())
             ->requiresConfirmation()
             ->modalHeading('Xác nhận thu hồi lệnh')

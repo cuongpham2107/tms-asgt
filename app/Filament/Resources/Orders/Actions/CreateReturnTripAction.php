@@ -16,6 +16,7 @@ class CreateReturnTripAction
             ->label('Tạo quay đầu')
             ->icon('heroicon-o-arrow-path')
             ->color('purple')
+            ->authorize(fn (): bool => auth()->user()?->can('create', Order::class) ?? false)
             ->hidden(fn (Order $record): bool => ! $record->status->canCreateReturn())
             ->requiresConfirmation()
             ->modalHeading('Xác nhận tạo chuyến quay đầu')

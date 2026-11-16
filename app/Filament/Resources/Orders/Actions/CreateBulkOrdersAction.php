@@ -39,6 +39,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
             ->label('Tạo nhiều đơn hàng')
             ->size('lg')
             ->icon('heroicon-o-squares-plus')
+            ->authorize(fn (): bool => auth()->user()?->can('create', Order::class) ?? false)
             ->extraAttributes([
                 'class' => 'header-action-bulk font-bold',
             ])

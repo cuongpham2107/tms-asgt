@@ -123,7 +123,7 @@ class AppPanelProvider extends PanelProvider
                     ->translateSubject(fn ($label) => __('models.'.$label))
                     ->navigationSort(6)
                     ->navigationIcon('heroicon-o-book-open')
-                    ->authorize(fn () => auth()->user()?->can('view_any_activitylog')),
+                    ->authorize(fn (): bool => (bool) (auth()->user()?->hasRole('super_admin') || auth()->user()?->can('view_any_activitylog') || auth()->user()?->can('ViewAny:Activity'))),
                 StickyTableHeaderPlugin::make(),
                 FilamentChatAssistantPlugin::make(),
             ])

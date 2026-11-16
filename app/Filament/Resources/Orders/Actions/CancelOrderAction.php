@@ -20,6 +20,7 @@ class CancelOrderAction
             ->label('Huỷ đơn')
             ->icon('heroicon-o-x-circle')
             ->color('danger')
+            ->authorize(fn (Order $record): bool => (auth()->user()?->can('cancel', $record) ?? false) && (auth()->user()?->can('update', $record) ?? false))
             ->hidden(fn (Order $record): bool => $record->status !== OrderStatus::Draft)
             ->requiresConfirmation()
             ->modalHeading('Xác nhận huỷ chuyến')

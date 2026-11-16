@@ -18,6 +18,7 @@ class BulkSendOrderAction
             ->label('Gửi lệnh hàng loạt')
             ->icon('heroicon-o-paper-airplane')
             ->color('warning')
+            ->authorize(fn (): bool => auth()->user()?->can('Update:Order') ?? false)
             ->requiresConfirmation()
             ->modalHeading('Xác nhận gửi lệnh hàng loạt')
             ->modalDescription('Bạn chắc chắn muốn gửi lệnh cho các đơn hàng đã chọn?')

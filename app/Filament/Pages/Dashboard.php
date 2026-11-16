@@ -2,10 +2,14 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Widgets\BillingOverviewStatsWidget;
+use App\Filament\Widgets\DispatchActionRequiredWidget;
+use App\Filament\Widgets\FleetComplianceAlertWidget;
 use App\Filament\Widgets\OperationsStatsWidget;
 use App\Filament\Widgets\OrderAreaChartWidget;
 use App\Filament\Widgets\OrderStatusChartWidget;
 use App\Filament\Widgets\OrderTypeChartWidget;
+use App\Filament\Widgets\TopCustomerBillingWidget;
 use App\Filament\Widgets\TripTrendChartWidget;
 use Filament\Pages\Dashboard as BaseDashboard;
 use UnitEnum;
@@ -30,10 +34,14 @@ class Dashboard extends BaseDashboard
     {
         return [
             OperationsStatsWidget::class,
+            BillingOverviewStatsWidget::class,
+            DispatchActionRequiredWidget::class,
+            FleetComplianceAlertWidget::class,
             TripTrendChartWidget::class,
             OrderStatusChartWidget::class,
             OrderAreaChartWidget::class,
             OrderTypeChartWidget::class,
+            TopCustomerBillingWidget::class,
         ];
     }
 }

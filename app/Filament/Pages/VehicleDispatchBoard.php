@@ -24,6 +24,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\ShiftScheduleService;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\CarbonInterface;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -40,6 +41,7 @@ use UnitEnum;
 
 class VehicleDispatchBoard extends Page implements HasTable
 {
+    use HasPageShield;
     use HasVehicleDispatchRows;
     use InteractsWithTable;
 
@@ -154,6 +156,16 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public function openDriverSwapModal(int $vehicleId): void
     {
+        if (! (auth()->user()?->can('Update:Trip') ?? false)) {
+            Notification::make()
+                ->danger()
+                ->title('Không có quyền thao tác')
+                ->body('Bạn không có quyền đảo lái chuyến xe.')
+                ->send();
+
+            return;
+        }
+
         $this->selectedVehicleIdForSwap = $vehicleId;
         $this->swapNewDriverId = null;
         $this->swapReason = DriverSwapReason::CargoNotUnloaded->value;
@@ -170,6 +182,16 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         if ($name === 'edit_trip') {
+            if (! (auth()->user()?->can('Update:Trip') ?? false)) {
+                Notification::make()
+                    ->danger()
+                    ->title('Không có quyền thao tác')
+                    ->body('Bạn không có quyền chỉnh sửa chuyến xe.')
+                    ->send();
+
+                return;
+            }
+
             $vehicle = Vehicle::find($vehicleId);
             $trip = $vehicle?->active_trip;
             if (! $trip) {
@@ -183,6 +205,16 @@ class VehicleDispatchBoard extends Page implements HasTable
             }
 
             $this->mountAction('edit_trip', ['trip' => $trip->id]);
+
+            return;
+        }
+
+        if (in_array($name, ['resolve_km_report'], true) && ! (auth()->user()?->can('Update:Trip') ?? false)) {
+            Notification::make()
+                ->danger()
+                ->title('Không có quyền thao tác')
+                ->body('Bạn không có quyền xử lý báo sai Km.')
+                ->send();
 
             return;
         }
@@ -241,6 +273,17 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     public function submitDriverSwap(): void
     {
+        if (! (auth()->user()?->can('Update:Trip') ?? false)) {
+            $this->dispatch('close-modal', id: 'vehicle-swap-driver-modal');
+            Notification::make()
+                ->danger()
+                ->title('Không có quyền thao tác')
+                ->body('Bạn không có quyền đảo lái chuyến xe.')
+                ->send();
+
+            return;
+        }
+
         $trip = $this->getSelectedTripForSwap();
         if (! $trip) {
             $this->dispatch('close-modal', id: 'vehicle-swap-driver-modal');

@@ -329,7 +329,7 @@ class TripsTable extends BaseTable
                     CancelTripAction::make(),
                     DeleteAction::make(),
                     ActivityLogTimelineTableAction::make('Activities')
-                        ->hidden(fn () => ! auth()->user()->hasRole('super_admin'))
+                        ->hidden(fn () => ! (auth()->user()?->hasRole('super_admin') || auth()->user()?->can('ViewAny:Activity')))
                         ->label('Lịch sử')
                         ->icon('heroicon-m-clock')
                         ->color('info')

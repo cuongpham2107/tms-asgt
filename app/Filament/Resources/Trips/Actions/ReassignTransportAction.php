@@ -30,6 +30,7 @@ class ReassignTransportAction extends CreatesOrderTransportCards
             ->size('xs')
             ->icon('heroicon-o-truck')
             ->color('primary')
+            ->authorize(fn (Trip $record): bool => auth()->user()?->can('update', $record) ?? false)
             ->visible(fn (Trip $record): bool => $record->status === TripStatus::Pending)
             ->modal()
             ->modalHeading('Gán lại phương tiện và lái xe')

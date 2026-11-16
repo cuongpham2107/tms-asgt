@@ -11,6 +11,7 @@ use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -25,6 +26,7 @@ use UnitEnum;
 
 class DriverDutyReport extends Page implements HasTable
 {
+    use HasPageShield;
     use InteractsWithTable;
 
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';

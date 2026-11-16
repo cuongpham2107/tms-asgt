@@ -29,11 +29,19 @@ class RolePolicy
 
     public function update(AuthUser $authUser, Role $role): bool
     {
+        if ($role->name === 'super_admin' && ! $authUser->hasRole('super_admin')) {
+            return false;
+        }
+
         return $authUser->can('Update:Role');
     }
 
     public function delete(AuthUser $authUser, Role $role): bool
     {
+        if ($role->name === 'super_admin' && ! $authUser->hasRole('super_admin')) {
+            return false;
+        }
+
         return $authUser->can('Delete:Role');
     }
 

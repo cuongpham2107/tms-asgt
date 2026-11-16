@@ -5,11 +5,14 @@ namespace App\Filament\Widgets;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Models\Vehicle;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class GoogleMapStatsOverview extends BaseWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Thống kê giám sát phương tiện';
 
     protected int|array|null $columns = 5;

@@ -153,6 +153,7 @@ class OrdersTable extends BaseTable
                     ->toggleable(),
                 ToggleColumn::make('is_return_trip')
                     ->label('Chuyến quay đầu')
+                    ->disabled(fn (Order $record): bool => ! (auth()->user()?->can('update', $record) ?? false))
                     ->toggleable(),
                 TextColumn::make('created_at')
                     ->label('Ngày tạo')
@@ -285,7 +286,7 @@ class OrdersTable extends BaseTable
                         ->successNotificationTitle('Đã sao chép đơn hàng'),
                     CopyTransportInfoAction::make(),
                     ActivityLogTimelineTableAction::make('Activities')
-                        ->hidden(fn () => ! auth()->user()->hasRole('super_admin'))
+                        ->hidden(fn () => ! (auth()->user()?->hasRole('super_admin') || auth()->user()?->can('ViewAny:Activity')))
                         ->label('Lịch sử')
                         ->icon('heroicon-m-clock')
                         ->color('info')

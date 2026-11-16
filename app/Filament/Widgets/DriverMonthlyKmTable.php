@@ -7,6 +7,7 @@ use App\Enums\TripStatus;
 use App\Filament\Pages\DriverMonthlyKmReport;
 use App\Services\DriverMonthlyKmReportService;
 use App\Services\Export\TripExcelExportService;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Carbon\Carbon;
 use Filament\Widgets\Concerns\HasJsRenderer;
 use Filament\Widgets\Widget;
@@ -22,6 +23,7 @@ use Livewire\Attributes\Renderless;
 class DriverMonthlyKmTable extends Widget
 {
     use HasJsRenderer;
+    use HasWidgetShield;
 
     /** Lần render đầu chỉ gửi thông tin kỳ; React hiện skeleton rồi lấy số liệu qua loadReport(). True thì gửi kèm số liệu. */
     public bool $isReady = false;

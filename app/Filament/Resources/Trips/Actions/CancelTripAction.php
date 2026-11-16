@@ -25,6 +25,7 @@ class CancelTripAction
             ->label('Huỷ chuyến')
             ->icon('heroicon-o-x-circle')
             ->color('danger')
+            ->authorize(fn (Trip $record): bool => (auth()->user()?->can('cancel', $record) ?? false) && (auth()->user()?->can('update', $record) ?? false))
             ->hidden(fn (Trip $record): bool => $record->status === TripStatus::Completed || $record->status === TripStatus::Cancelled)
             ->modalHeading('Huỷ chuyến')
             ->modalDescription('Chuyến sẽ bị huỷ, tất cả đơn hàng đang chạy sẽ chuyển sang trạng thái Huỷ. KM sẽ được tính theo số km hiện tại.')

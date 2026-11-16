@@ -33,6 +33,8 @@ class ReassignDriverAction
             ->button()
             ->size('xs')
             ->color('warning')
+            ->authorize(fn (?Model $record = null): bool => ($trip = static::resolveTrip($record)) !== null
+                && (auth()->user()?->can('update', $trip) ?? false))
             ->visible(fn (?Model $record): bool => static::resolveTrip($record)?->status === TripStatus::DriverSwap)
             ->modalHeading(fn (?Model $record): string => 'Gán lại tài xế mới'.(static::resolveTrip($record)?->trip_code ? ' — '.static::resolveTrip($record)->trip_code : ''))
             ->modalDescription('Chuyến đi đang yêu cầu đảo tài xế. Chọn tài xế mới để tiếp tục xử lý.')

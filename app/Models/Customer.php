@@ -40,6 +40,11 @@ class Customer extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function orderCharges(): HasMany
+    {
+        return $this->hasMany(OrderCharge::class);
+    }
+
     public function location(): BelongsTo
     {
         return $this->belongsTo(Location::class);

@@ -71,4 +71,9 @@ class TripPolicy
     {
         return $authUser->can('Reorder:Trip');
     }
+
+    public function cancel(AuthUser $authUser, Trip $trip): bool
+    {
+        return $authUser->can('Cancel:Trip');
+    }
 }

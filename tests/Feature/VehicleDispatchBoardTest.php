@@ -31,6 +31,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
@@ -58,6 +59,7 @@ function dispatchWidgetRowFor(string $plate, array $props = []): ?array
 }
 
 beforeEach(function () {
+    Gate::before(fn () => true);
     Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
     $admin = User::factory()->create();
     $this->actingAs($admin);

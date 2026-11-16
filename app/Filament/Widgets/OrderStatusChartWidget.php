@@ -6,10 +6,13 @@ use App\Enums\OrderStatus;
 use App\Filament\Pages\DriverMonthlyKmReport;
 use App\Models\Order;
 use App\Services\ShiftScheduleService;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\ChartWidget;
 
 class OrderStatusChartWidget extends ChartWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Cơ cấu Trạng thái Đơn hàng';
 
     protected ?string $description = 'Tỷ lệ phân bổ trạng thái các đơn hàng trong hệ thống';

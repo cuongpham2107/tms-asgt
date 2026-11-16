@@ -36,6 +36,7 @@ class AssignTransportAction extends CreatesOrderTransportCards
             ->color('primary')
             ->button()
             ->size('xs')
+            ->authorize(fn (Order $record): bool => auth()->user()?->can('update', $record) ?? false)
             ->hidden(fn (Order $record): bool => ! $record->status->canAssign())
             ->modal()
             ->modalHeading('Gán lái, xe')

@@ -29,6 +29,7 @@ class DriverSwapAction
             ->label('Đảo lái')
             ->icon('heroicon-o-arrow-path')
             ->color('primary')
+            ->authorize(fn (Trip $record): bool => auth()->user()?->can('update', $record) ?? false)
             ->hidden(fn (Trip $record): bool => ! $record->status->canSwapDriver())
             ->modalHeading('Đảo lái xe')
             ->modalDescription('Chuyển giao chuyến đi cho tài xế mới')

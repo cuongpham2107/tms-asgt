@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             PricingAndFeeSeeder::class,
             VehicleMasterSeeder::class,
             ShieldAndUserSeeder::class,
+            RolePermissionMatrixSeeder::class,
             VehicleDriverPairingSeeder::class,
         ]);
 

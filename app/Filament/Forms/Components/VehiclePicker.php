@@ -60,6 +60,7 @@ class VehiclePicker extends CardPicker
                 'class' => 'shrink-0 whitespace-nowrap w-max',
             ])
             ->model(Vehicle::class)
+            ->authorize(fn (): bool => auth()->user()?->can('create', Vehicle::class) ?? false)
             ->modal()
             ->modalHeading('Thêm phương tiện mới')
             ->modalWidth(Width::MaxContent)

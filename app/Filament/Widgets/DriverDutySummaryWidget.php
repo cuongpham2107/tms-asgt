@@ -6,11 +6,14 @@ use App\Enums\OnDutyLocation;
 use App\Enums\ShiftType;
 use App\Models\DriverShift;
 use App\Models\User;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class DriverDutySummaryWidget extends BaseWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Tổng hợp ca trực lái xe';
 
     protected int|array|null $columns = 4;

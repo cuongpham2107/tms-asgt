@@ -8,6 +8,7 @@ use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
+use App\Models\Order;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -181,6 +182,7 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
             ->label('Tạo đơn hàng ngoài')
             ->size('lg')
             ->icon('heroicon-o-truck')
+            ->authorize(fn (): bool => auth()->user()?->can('create', Order::class) ?? false)
             ->extraAttributes([
                 'class' => 'header-action-hn font-bold',
             ])

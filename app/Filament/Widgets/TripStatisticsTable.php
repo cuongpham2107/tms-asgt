@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Traits\HasTripStatistics;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\Concerns\HasJsRenderer;
 use Filament\Widgets\Widget;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -17,6 +18,7 @@ class TripStatisticsTable extends Widget
 {
     use HasJsRenderer;
     use HasTripStatistics;
+    use HasWidgetShield;
 
     /** Lần render đầu chỉ gửi khung để React vẽ skeleton; true thì kèm dữ liệu (React bật sau khi mount). */
     public bool $isReady = false;
@@ -90,6 +92,7 @@ class TripStatisticsTable extends Widget
 
         return [
             'loaded' => $isReady,
+            'canEditCharges' => auth()->user()?->can('Update:TripCharge') ?? false,
             ...$this->getReactTableConfiguration($paginator),
             'filters' => [
                 'activeTab' => $this->activeTab,

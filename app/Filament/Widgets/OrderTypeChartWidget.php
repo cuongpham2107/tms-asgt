@@ -5,10 +5,13 @@ namespace App\Filament\Widgets;
 use App\Filament\Pages\DriverMonthlyKmReport;
 use App\Models\Order;
 use App\Services\ShiftScheduleService;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\ChartWidget;
 
 class OrderTypeChartWidget extends ChartWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Cơ cấu Loại Hàng hoá';
 
     protected ?string $description = 'Tỷ lệ giữa Hàng không (HHHK) và Hàng ngoài';

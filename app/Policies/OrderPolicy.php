@@ -72,4 +72,9 @@ class OrderPolicy
     {
         return $authUser->can('Reorder:Order');
     }
+
+    public function cancel(AuthUser $authUser, Order $order): bool
+    {
+        return $authUser->can('Cancel:Order');
+    }
 }

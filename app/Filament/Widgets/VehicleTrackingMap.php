@@ -13,6 +13,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
 use App\Services\OsrmService;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\Concerns\HasJsRenderer;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Collection;
@@ -27,6 +28,7 @@ use Livewire\Attributes\On;
 class VehicleTrackingMap extends Widget
 {
     use HasJsRenderer;
+    use HasWidgetShield;
 
     /** Chiều cao khung chờ trong lúc widget tải sau trang (defer), tránh giật bố cục. */
     protected ?string $placeholderHeight = '28rem';

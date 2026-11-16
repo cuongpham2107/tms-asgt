@@ -83,6 +83,7 @@ class OvertimeRegistrationsTable extends BaseTable
                     ->icon(Heroicon::OutlinedCheck)
                     ->color('primary')
                     ->button()
+                    ->authorize(fn (OvertimeRegistration $record): bool => auth()->user()?->can('update', $record) ?? false)
                     ->requiresConfirmation()
                     ->modalHeading('Xác nhận ca tăng cường')
                     ->modalDescription(
@@ -121,6 +122,7 @@ class OvertimeRegistrationsTable extends BaseTable
                     ->icon(Heroicon::OutlinedXMark)
                     ->color('danger')
                     ->button()
+                    ->authorize(fn (OvertimeRegistration $record): bool => auth()->user()?->can('update', $record) ?? false)
                     ->requiresConfirmation()
                     ->modalHeading('Từ chối đăng ký tăng cường')
                     ->modalDescription(

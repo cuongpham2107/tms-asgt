@@ -28,6 +28,10 @@ uses(RefreshDatabase::class);
  */
 beforeEach(function () {
     $this->user = User::factory()->create();
+    Permission::firstOrCreate(['name' => 'View:TripStatisticsReport', 'guard_name' => 'web']);
+    Permission::firstOrCreate(['name' => 'View:TripStatisticsTable', 'guard_name' => 'web']);
+    Permission::firstOrCreate(['name' => 'Update:TripCharge', 'guard_name' => 'web']);
+    $this->user->givePermissionTo(['View:TripStatisticsReport', 'View:TripStatisticsTable', 'Update:TripCharge']);
     $this->actingAs($this->user);
 
     $this->customer = Customer::create(['code' => 'ALSB', 'name' => 'ALS Bắc Ninh', 'is_active' => true]);

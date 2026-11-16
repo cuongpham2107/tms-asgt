@@ -5,10 +5,13 @@ namespace App\Filament\Widgets;
 use App\Filament\Pages\DriverMonthlyKmReport;
 use App\Models\Order;
 use App\Services\ShiftScheduleService;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\ChartWidget;
 
 class OrderAreaChartWidget extends ChartWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Sản lượng Vận tải theo Tuyến / Khu vực';
 
     protected ?string $description = 'Số lượng đơn hàng được phân bổ tới từng trung tâm logistics và khu vực';

@@ -44,7 +44,7 @@ class StaffAccounts extends Page implements HasTable
     {
         $user = auth()->user();
 
-        if (! $user) {
+        if (! $user || ! $user->is_active || $user->hasRole('driver')) {
             return false;
         }
 
@@ -52,7 +52,23 @@ class StaffAccounts extends Page implements HasTable
             return true;
         }
 
-        return (bool) $user->is_active && ! $user->hasRole('driver');
+        return $user->can('View:StaffAccounts');
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canAccess() && parent::shouldRegisterNavigation();
+    }
+
+    private static function canManageStaffAccounts(): bool
+    {
+        $user = auth()->user();
+
+        if (! $user || ! $user->is_active || $user->hasRole('driver')) {
+            return false;
+        }
+
+        return $user->hasRole('super_admin') || $user->can('Manage:StaffAccounts');
     }
 
     public function table(Table $table): Table
@@ -113,6 +129,7 @@ class StaffAccounts extends Page implements HasTable
                 CreateAction::make()
                     ->label('Thêm tài khoản')
                     ->icon('heroicon-o-plus-circle')
+                    ->authorize(fn (): bool => static::canManageStaffAccounts())
                     ->modalHeading('Thêm tài khoản nhân viên')
                     ->modalWidth(Width::Large)
                     ->model(User::class)
@@ -148,12 +165,16 @@ class StaffAccounts extends Page implements HasTable
                             ->relationship(
                                 name: 'roles',
                                 titleAttribute: 'name',
-                                modifyQueryUsing: fn (Builder $query) => $query->where('name', '!=', 'driver')
+                                modifyQueryUsing: fn (Builder $query) => $query
+                                    ->where('name', '!=', 'driver')
+                                    ->when(! auth()->user()?->hasRole('super_admin'), fn (Builder $q) => $q->where('name', '!=', 'super_admin'))
                             )
                             ->multiple()
                             ->preload()
                             ->searchable()
-                            ->default(fn () => Role::where('name', 'super_admin')->pluck('id')->all()),
+                            ->default(fn () => auth()->user()?->hasRole('super_admin')
+                                ? Role::where('name', 'super_admin')->pluck('id')->all()
+                                : []),
                         Toggle::make('is_active')
                             ->label('Đang hoạt động')
                             ->default(true),
@@ -163,6 +184,8 @@ class StaffAccounts extends Page implements HasTable
                 EditAction::make()
                     ->label('Sửa')
                     ->iconButton()
+                    ->authorize(fn (User $record): bool => static::canManageStaffAccounts()
+                        && (auth()->user()?->hasRole('super_admin') || ! $record->hasRole('super_admin')))
                     ->modalHeading('Chỉnh sửa tài khoản nhân viên')
                     ->modalWidth(Width::Large)
                     ->schema([
@@ -197,7 +220,9 @@ class StaffAccounts extends Page implements HasTable
                             ->relationship(
                                 name: 'roles',
                                 titleAttribute: 'name',
-                                modifyQueryUsing: fn (Builder $query) => $query->where('name', '!=', 'driver')
+                                modifyQueryUsing: fn (Builder $query) => $query
+                                    ->where('name', '!=', 'driver')
+                                    ->when(! auth()->user()?->hasRole('super_admin'), fn (Builder $q) => $q->where('name', '!=', 'super_admin'))
                             )
                             ->multiple()
                             ->preload()

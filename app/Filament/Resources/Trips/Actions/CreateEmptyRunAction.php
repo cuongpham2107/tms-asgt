@@ -27,6 +27,7 @@ class CreateEmptyRunAction
             ->label('Tạo chuyến không hàng')
             ->icon('heroicon-o-truck')
             ->color('primary')
+            ->authorize(fn (): bool => auth()->user()?->can('create', Trip::class) ?? false)
             ->modalHeading('Tạo chuyến không hàng')
             ->modalDescription('Tạo chuyến đi rỗng (chuyến không hàng) cho tài xế.')
             ->schema([

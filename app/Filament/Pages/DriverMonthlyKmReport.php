@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\Trip;
 use App\Services\ShiftScheduleService;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Pages\Page;
 use Livewire\Attributes\Url;
@@ -16,6 +17,8 @@ use UnitEnum;
  */
 class DriverMonthlyKmReport extends Page
 {
+    use HasPageShield;
+
     protected static string|UnitEnum|null $navigationGroup = 'Vận hành';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-truck';

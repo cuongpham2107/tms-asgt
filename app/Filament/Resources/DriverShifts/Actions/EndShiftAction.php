@@ -22,6 +22,7 @@ class EndShiftAction
             ->label('Kết thúc ca')
             ->icon('heroicon-o-stop')
             ->color('danger')
+            ->authorize(fn (DriverShift $record): bool => auth()->user()?->can('update', $record) ?? false)
             ->visible(fn (DriverShift $record): bool => $record->end_time === null)
             ->requiresConfirmation()
             ->modalHeading('Kết thúc ca trực')
