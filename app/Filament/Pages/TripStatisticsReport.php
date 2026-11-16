@@ -58,6 +58,7 @@ use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
@@ -794,7 +795,7 @@ class TripStatisticsReport extends Page
 
                 $this->saveChargeFees($charge, $data['fees'] ?? []);
 
-                $charge->manually_updated_at = now();
+                $charge->fill(['manually_updated_at' => now()]);
                 $charge->recalculateTotals()->save();
 
                 $this->saveTimestamps($orderId, $data);
@@ -827,43 +828,45 @@ class TripStatisticsReport extends Page
         }
 
         if ($formData !== null && ! empty($formData)) {
+            $updates = [];
+
             if (array_key_exists('cargo_type', $formData)) {
-                $charge->cargo_type = filled($formData['cargo_type']) ? CargoType::tryFrom((string) $formData['cargo_type']) : $charge->cargo_type;
+                $updates['cargo_type'] = filled($formData['cargo_type']) ? CargoType::tryFrom((string) $formData['cargo_type']) : $charge->cargo_type;
             }
             if (array_key_exists('chargeable_tonnage', $formData)) {
-                $charge->chargeable_tonnage = filled($formData['chargeable_tonnage']) && is_numeric($formData['chargeable_tonnage'])
+                $updates['chargeable_tonnage'] = filled($formData['chargeable_tonnage']) && is_numeric($formData['chargeable_tonnage'])
                     ? (float) $formData['chargeable_tonnage']
                     : null;
             }
             if (array_key_exists('rate_type', $formData)) {
-                $charge->rate_type = (string) ($formData['rate_type'] ?? '');
+                $updates['rate_type'] = (string) ($formData['rate_type'] ?? '');
             }
             if (array_key_exists('surcharge_type', $formData)) {
-                $charge->surcharge_type = (string) ($formData['surcharge_type'] ?? '');
+                $updates['surcharge_type'] = (string) ($formData['surcharge_type'] ?? '');
             }
             if (array_key_exists('is_return_trip', $formData)) {
-                $charge->is_return_trip = (bool) ($formData['is_return_trip'] ?? false);
+                $updates['is_return_trip'] = (bool) ($formData['is_return_trip'] ?? false);
             }
             if (array_key_exists('return_trip_percent', $formData)) {
-                $charge->return_trip_percent = (float) ($formData['return_trip_percent'] ?? 0);
+                $updates['return_trip_percent'] = (float) ($formData['return_trip_percent'] ?? 0);
             }
             if (array_key_exists('is_cancelled_trip', $formData)) {
-                $charge->is_cancelled_trip = (bool) ($formData['is_cancelled_trip'] ?? false);
+                $updates['is_cancelled_trip'] = (bool) ($formData['is_cancelled_trip'] ?? false);
             }
             if (array_key_exists('cancel_trip_percent', $formData)) {
-                $charge->cancel_trip_percent = (float) ($formData['cancel_trip_percent'] ?? 0);
+                $updates['cancel_trip_percent'] = (float) ($formData['cancel_trip_percent'] ?? 0);
             }
             if (array_key_exists('fuel_adjustment_percent', $formData)) {
-                $charge->fuel_adjustment_percent = (float) ($formData['fuel_adjustment_percent'] ?? 0);
+                $updates['fuel_adjustment_percent'] = (float) ($formData['fuel_adjustment_percent'] ?? 0);
             }
             if (array_key_exists('vat_percent', $formData)) {
-                $charge->vat_percent = (float) ($formData['vat_percent'] ?? 0);
+                $updates['vat_percent'] = (float) ($formData['vat_percent'] ?? 0);
             }
             if (array_key_exists('note', $formData)) {
-                $charge->note = $formData['note'];
+                $updates['note'] = $formData['note'];
             }
             if (array_key_exists('delivery_notes', $formData) && is_array($formData['delivery_notes'])) {
-                $charge->delivery_notes = collect($formData['delivery_notes'])
+                $updates['delivery_notes'] = collect($formData['delivery_notes'])
                     ->map(function (array $note): array {
                         $raw = $note['chargeable_weight'] ?? null;
                         $clean = $raw !== null ? str_replace(',', '.', trim((string) $raw)) : null;
@@ -879,6 +882,11 @@ class TripStatisticsReport extends Page
                     ->values()
                     ->all();
             }
+
+            if ($updates !== []) {
+                $charge->fill($updates);
+            }
+
             if (array_key_exists('fees', $formData) && is_array($formData['fees'])) {
                 $this->saveChargeFees($charge, $formData['fees']);
             }
@@ -1024,9 +1032,12 @@ class TripStatisticsReport extends Page
             return [];
         }
 
-        return $query
+        /** @var EloquentCollection<int, FeeType> $feeTypes */
+        $feeTypes = $query
             ->orderBy('sort')
-            ->get()
+            ->get();
+
+        return $feeTypes
             ->map(fn (FeeType $feeType): array => [
                 'fee_type_id' => $feeType->id,
                 'quantity' => $quantities->get($feeType->id) === null ? null : (float) $quantities->get($feeType->id),
@@ -1731,14 +1742,19 @@ class TripStatisticsReport extends Page
                                     ->live()
                                     ->schema([
                                         Select::make('fee_type_id')
-                                            ->options(fn (): array => FeeType::query()
-                                                ->with('customer')
-                                                ->where('is_active', true)
-                                                ->availableFor($charge?->customer_id ?? $order?->customer_id)
-                                                ->orderBy('sort')
-                                                ->get()
-                                                ->mapWithKeys(fn (FeeType $feeType): array => [$feeType->id => $feeType->optionLabel()])
-                                                ->all())
+                                            ->options(function () use ($charge, $order): array {
+                                                /** @var EloquentCollection<int, FeeType> $feeTypes */
+                                                $feeTypes = FeeType::query()
+                                                    ->with('customer')
+                                                    ->where('is_active', true)
+                                                    ->availableFor($charge?->customer_id ?? $order?->customer_id)
+                                                    ->orderBy('sort')
+                                                    ->get();
+
+                                                return $feeTypes
+                                                    ->mapWithKeys(fn (FeeType $feeType): array => [$feeType->id => $feeType->optionLabel()])
+                                                    ->all();
+                                            })
                                             ->distinct()
                                             ->required()
                                             ->live()
@@ -2096,7 +2112,7 @@ class TripStatisticsReport extends Page
                         $unloadStr = $hasUnload ? $duration($totalUnload) : '—';
 
                         return new HtmlString(<<<HTML
-                            <div class="flex items-center justify-between rounded-xl bg-gradient-to-r from-sky-50/70 via-gray-50/80 to-amber-50/70 dark:from-sky-950/20 dark:via-gray-800/40 dark:to-amber-950/20 px-4 py-2.5 border border-gray-200 dark:border-gray-700 mt-1">
+                            <div class="flex items-center justify-between rounded-xl bg-linear-to-r from-sky-50/70 via-gray-50/80 to-amber-50/70 dark:from-sky-950/20 dark:via-gray-800/40 dark:to-amber-950/20 px-4 py-2.5 border border-gray-200 dark:border-gray-700 mt-1">
                                 <div class="flex items-center gap-2.5">
                                     <div class="w-2 h-2 rounded-full bg-sky-500"></div>
                                     <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">Tổng di chuyển:</span>
