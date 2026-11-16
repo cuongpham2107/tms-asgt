@@ -56,15 +56,24 @@ class CustomerLocationMasterSeeder extends Seeder
 
         // 4. Area Location Pivot
         if (! empty($data['area_location'])) {
+            $validLocationIds = DB::table('locations')->pluck('id')->flip()->all();
+            $validAreaIds = DB::table('areas')->pluck('id')->flip()->all();
+            $seededAreaLocations = 0;
+
             foreach (array_chunk($data['area_location'], 100) as $chunk) {
                 foreach ($chunk as $row) {
+                    if (! isset($validLocationIds[$row['location_id']], $validAreaIds[$row['area_id']])) {
+                        continue;
+                    }
+
                     DB::table('area_location')->updateOrInsert(
                         ['area_id' => $row['area_id'], 'location_id' => $row['location_id']],
                         $row
                     );
+                    $seededAreaLocations++;
                 }
             }
-            $this->command->info('Đã seed '.count($data['area_location']).' phân nhánh địa điểm (area_location).');
+            $this->command->info('Đã seed '.$seededAreaLocations.' phân nhánh địa điểm (area_location).');
         }
     }
 }
