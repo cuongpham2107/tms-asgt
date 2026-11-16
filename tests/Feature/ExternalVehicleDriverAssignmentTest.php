@@ -240,17 +240,17 @@ test('trip form checkpoint repeaters correctly switch visibility based on vehicl
         'status' => TripStatus::Pending,
     ]);
 
-    // Check visibility conditions as configured in TripForm
-    $rentRepeaterVisible = fn ($record) => $record?->vehicle?->type === VehicleOwnerType::Rent && blank($record?->driver_id);
-    $standardRepeaterVisible = fn ($record) => $record?->vehicle?->type !== VehicleOwnerType::Rent || filled($record?->driver_id);
+    // Check visibility conditions as configured in TripForm: mọi xe thuê ngoài đều dùng repeater 4 cột (không chọn tài xế nội bộ)
+    $rentRepeaterVisible = fn ($record): bool => $record?->vehicle?->type === VehicleOwnerType::Rent;
+    $standardRepeaterVisible = fn ($record): bool => $record?->vehicle?->type !== VehicleOwnerType::Rent;
 
     // Rent vehicle WITHOUT driver -> shows 4-col rent repeater, hides 6-col standard repeater
     expect($rentRepeaterVisible($tripRentNoDriver))->toBeTrue();
     expect($standardRepeaterVisible($tripRentNoDriver))->toBeFalse();
 
-    // Rent vehicle WITH driver -> hides 4-col rent repeater, shows 6-col standard repeater
-    expect($rentRepeaterVisible($tripRentWithDriver))->toBeFalse();
-    expect($standardRepeaterVisible($tripRentWithDriver))->toBeTrue();
+    // Rent vehicle even WITH legacy driver_id -> still shows 4-col rent repeater, hides 6-col standard repeater
+    expect($rentRepeaterVisible($tripRentWithDriver))->toBeTrue();
+    expect($standardRepeaterVisible($tripRentWithDriver))->toBeFalse();
 
     // Company vehicle -> hides 4-col rent repeater, shows 6-col standard repeater
     expect($rentRepeaterVisible($tripCompany))->toBeFalse();

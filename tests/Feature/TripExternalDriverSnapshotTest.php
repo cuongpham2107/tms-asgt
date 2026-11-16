@@ -1,11 +1,13 @@
 <?php
 
+use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use Carbon\Carbon;
@@ -135,6 +137,8 @@ test('edit trip form shows external_driver_name and hides driver_id for rented v
         ->mountTableAction('edit', $rentTrip)
         ->assertFormFieldHidden('driver_id')
         ->assertFormFieldVisible('external_driver_name')
+        ->assertFormFieldVisible('checkpoints_rent')
+        ->assertFormFieldHidden('checkpoints')
         ->fillForm(['external_driver_name' => 'Tài Xế Riêng Chuyến Này'])
         ->callMountedTableAction()
         ->assertHasNoTableActionErrors();
@@ -150,5 +154,49 @@ test('edit trip form shows external_driver_name and hides driver_id for rented v
         ->loadTable()
         ->mountTableAction('edit', $companyTrip)
         ->assertFormFieldVisible('driver_id')
-        ->assertFormFieldHidden('external_driver_name');
+        ->assertFormFieldHidden('external_driver_name')
+        ->assertFormFieldHidden('checkpoints_rent')
+        ->assertFormFieldVisible('checkpoints');
+});
+
+test('editing a rented trip with legacy driver_id hides checkpoints driver select and clears driver_id when saving external_driver_name', function () {
+    $legacyRentTrip = Trip::create([
+        'trip_code' => 'TRIP-RENT-LEGACY-DRV',
+        'vehicle_id' => $this->rentedVehicle->id,
+        'driver_id' => $this->companyDriver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-11-02 11:22'),
+        'completed_at' => Carbon::parse('2026-11-02 11:24'),
+    ]);
+
+    $legacyCheckpoint = TripCheckpoint::create([
+        'trip_id' => $legacyRentTrip->id,
+        'vehicle_id' => $this->rentedVehicle->id,
+        'driver_id' => $this->companyDriver->id,
+        'checkpoint_type' => CheckpointType::Started,
+        'occurred_at' => Carbon::parse('2026-11-02 11:22'),
+    ]);
+
+    Livewire::test(ListTrips::class, [
+        'orderType' => 'all',
+        'activePlaceFilter' => 'all',
+        'activeStatusFilter' => 'all',
+    ])
+        ->loadTable()
+        ->mountTableAction('edit', $legacyRentTrip)
+        ->assertFormFieldHidden('driver_id')
+        ->assertFormFieldVisible('external_driver_name')
+        ->assertSchemaStateSet(['external_driver_name' => $this->companyDriver->name])
+        ->assertFormFieldVisible('checkpoints_rent')
+        ->assertFormFieldHidden('checkpoints')
+        ->fillForm(['external_driver_name' => 'Lái Xe Thuê Ngoài Thực Tế'])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    $fresh = $legacyRentTrip->fresh();
+
+    expect($fresh->driver_id)->toBeNull()
+        ->and($fresh->external_driver_name)->toBe('Lái Xe Thuê Ngoài Thực Tế')
+        ->and($fresh->resolveDriverName())->toBe('Lái Xe Thuê Ngoài Thực Tế')
+        ->and($legacyCheckpoint->fresh()->driver_id)->toBeNull();
 });

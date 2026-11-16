@@ -320,11 +320,11 @@ class TripForm
                     ->columnSpanFull()
                     ->hidden(fn (?Model $record) => (bool) $record?->is_empty_run)
                     ->schema([
-                        // Repeater cho xe thuê ngoài không có lái xe (4 cột: Loại, Đơn hàng, Giờ, Điểm)
+                        // Repeater cho xe thuê ngoài (4 cột: Loại, Đơn hàng, Giờ, Điểm; luôn nhập tên lái xe ngoài)
                         Repeater::make('checkpoints_rent')
                             ->relationship('checkpoints', modifyQueryUsing: fn ($query) => $query->chronological())
                             ->label('Danh sách mốc hành trình')
-                            ->visible(fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent && blank($record?->driver_id))
+                            ->visible(fn (?Model $record): bool => $record?->vehicle?->type === VehicleOwnerType::Rent)
                             ->table([
                                 TableColumn::make('Loại')->width('220px'),
                                 TableColumn::make('Đơn hàng')->width('180px'),
@@ -442,15 +442,15 @@ class TripForm
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
                             ->rules([fn (): Closure => self::checkpointTimeOrderRule()])
-                            ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
-                            ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
+                            ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get, isRent: true))
+                            ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get, isRent: true))
                             ->columnSpanFull(),
 
-                        // Repeater cho xe công ty hoặc xe thuê ngoài có tài xế (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm)
+                        // Repeater cho xe công ty (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm)
                         Repeater::make('checkpoints')
                             ->relationship('checkpoints', modifyQueryUsing: fn ($query) => $query->chronological())
                             ->label('Danh sách mốc hành trình')
-                            ->visible(fn (?Model $record) => $record?->vehicle?->type !== VehicleOwnerType::Rent || filled($record?->driver_id))
+                            ->visible(fn (?Model $record): bool => $record?->vehicle?->type !== VehicleOwnerType::Rent)
                             ->table([
                                 TableColumn::make('Loại')->width('160px'),
                                 TableColumn::make('Đơn hàng')->width('110px'),
@@ -711,13 +711,20 @@ class TripForm
         };
     }
 
-    private static function fillCheckpointRelationshipData(array $data, $get): array
+    private static function fillCheckpointRelationshipData(array $data, $get, bool $isRent = false): array
     {
-        $driverId = ! empty($data['driver_id']) ? $data['driver_id'] : $get('../../driver_id');
-        $data['driver_id'] = $driverId;
-
         $vehicleId = ! empty($data['vehicle_id']) ? $data['vehicle_id'] : $get('../../vehicle_id');
         $data['vehicle_id'] = $vehicleId;
+
+        if ($isRent) {
+            $data['driver_id'] = null;
+            $data['shift_id'] = null;
+
+            return $data;
+        }
+
+        $driverId = ! empty($data['driver_id']) ? $data['driver_id'] : $get('../../driver_id');
+        $data['driver_id'] = $driverId;
 
         if (empty($data['shift_id']) && $driverId) {
             $shiftId = DriverShift::where('driver_id', $driverId)
