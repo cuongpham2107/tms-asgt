@@ -57,7 +57,7 @@ php artisan shield:generate --all --ignore-config-changes   # after adding a res
 
 ## Deploy / ops
 
-- Production is nginx (`nginx-tms-asgt.conf`) + pm2 (`pm2.json`: `schedule:work`, `queue:work`, `reverb:start`) on `/var/www/tms-asgt`, domain `tms.asgl.net.vn`.
+- Production runs in Docker (`docker-compose.yml`): `tms_app` (FrankenPHP + Octane Worker Mode, `.docker/frankenphp/Caddyfile`), `tms_postgres` (PostgreSQL 16), `tms_queue`, `tms_scheduler`, and `tms_reverb` behind host Nginx reverse proxy on port `8012`, domain `tms.asgl.net.vn`.
 - Scheduler (`routes/console.php`): EUP GPS sync every minute, monthly vehicle-km snapshot on the 23rd, auto-end driver shifts at 08:05 and 20:05.
 - External services to keep in mind: EUP GPS API (`EUP_API_*`), Firebase (`storage/firebase/firebase-credentials.json`), OSRM, Mapbox.
 - No CI. Verify locally: `vendor/bin/pint --dirty --format agent` then `php artisan test --compact`.
