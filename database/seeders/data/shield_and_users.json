@@ -1664,51 +1664,51 @@
     ],
     "role_has_permissions": [
         {
-            "permission_id": 169,
+            "permission_id": 1,
             "role_id": 1
         },
         {
-            "permission_id": 170,
+            "permission_id": 2,
             "role_id": 1
         },
         {
-            "permission_id": 171,
+            "permission_id": 3,
             "role_id": 1
         },
         {
-            "permission_id": 172,
+            "permission_id": 4,
             "role_id": 1
         },
         {
-            "permission_id": 173,
+            "permission_id": 5,
             "role_id": 1
         },
         {
-            "permission_id": 174,
+            "permission_id": 6,
             "role_id": 1
         },
         {
-            "permission_id": 175,
+            "permission_id": 7,
             "role_id": 1
         },
         {
-            "permission_id": 176,
+            "permission_id": 8,
             "role_id": 1
         },
         {
-            "permission_id": 177,
+            "permission_id": 9,
             "role_id": 1
         },
         {
-            "permission_id": 178,
+            "permission_id": 10,
             "role_id": 1
         },
         {
-            "permission_id": 179,
+            "permission_id": 11,
             "role_id": 1
         },
         {
-            "permission_id": 180,
+            "permission_id": 12,
             "role_id": 1
         },
         {
@@ -1757,54 +1757,6 @@
         },
         {
             "permission_id": 24,
-            "role_id": 1
-        },
-        {
-            "permission_id": 232,
-            "role_id": 1
-        },
-        {
-            "permission_id": 233,
-            "role_id": 1
-        },
-        {
-            "permission_id": 234,
-            "role_id": 1
-        },
-        {
-            "permission_id": 235,
-            "role_id": 1
-        },
-        {
-            "permission_id": 236,
-            "role_id": 1
-        },
-        {
-            "permission_id": 237,
-            "role_id": 1
-        },
-        {
-            "permission_id": 238,
-            "role_id": 1
-        },
-        {
-            "permission_id": 239,
-            "role_id": 1
-        },
-        {
-            "permission_id": 240,
-            "role_id": 1
-        },
-        {
-            "permission_id": 241,
-            "role_id": 1
-        },
-        {
-            "permission_id": 242,
-            "role_id": 1
-        },
-        {
-            "permission_id": 243,
             "role_id": 1
         },
         {
@@ -1904,102 +1856,6 @@
             "role_id": 1
         },
         {
-            "permission_id": 196,
-            "role_id": 1
-        },
-        {
-            "permission_id": 197,
-            "role_id": 1
-        },
-        {
-            "permission_id": 198,
-            "role_id": 1
-        },
-        {
-            "permission_id": 199,
-            "role_id": 1
-        },
-        {
-            "permission_id": 200,
-            "role_id": 1
-        },
-        {
-            "permission_id": 201,
-            "role_id": 1
-        },
-        {
-            "permission_id": 202,
-            "role_id": 1
-        },
-        {
-            "permission_id": 203,
-            "role_id": 1
-        },
-        {
-            "permission_id": 204,
-            "role_id": 1
-        },
-        {
-            "permission_id": 205,
-            "role_id": 1
-        },
-        {
-            "permission_id": 206,
-            "role_id": 1
-        },
-        {
-            "permission_id": 207,
-            "role_id": 1
-        },
-        {
-            "permission_id": 208,
-            "role_id": 1
-        },
-        {
-            "permission_id": 209,
-            "role_id": 1
-        },
-        {
-            "permission_id": 210,
-            "role_id": 1
-        },
-        {
-            "permission_id": 211,
-            "role_id": 1
-        },
-        {
-            "permission_id": 212,
-            "role_id": 1
-        },
-        {
-            "permission_id": 213,
-            "role_id": 1
-        },
-        {
-            "permission_id": 214,
-            "role_id": 1
-        },
-        {
-            "permission_id": 215,
-            "role_id": 1
-        },
-        {
-            "permission_id": 216,
-            "role_id": 1
-        },
-        {
-            "permission_id": 217,
-            "role_id": 1
-        },
-        {
-            "permission_id": 218,
-            "role_id": 1
-        },
-        {
-            "permission_id": 219,
-            "role_id": 1
-        },
-        {
             "permission_id": 49,
             "role_id": 1
         },
@@ -2093,102 +1949,6 @@
         },
         {
             "permission_id": 84,
-            "role_id": 1
-        },
-        {
-            "permission_id": 181,
-            "role_id": 1
-        },
-        {
-            "permission_id": 182,
-            "role_id": 1
-        },
-        {
-            "permission_id": 183,
-            "role_id": 1
-        },
-        {
-            "permission_id": 184,
-            "role_id": 1
-        },
-        {
-            "permission_id": 185,
-            "role_id": 1
-        },
-        {
-            "permission_id": 186,
-            "role_id": 1
-        },
-        {
-            "permission_id": 187,
-            "role_id": 1
-        },
-        {
-            "permission_id": 188,
-            "role_id": 1
-        },
-        {
-            "permission_id": 189,
-            "role_id": 1
-        },
-        {
-            "permission_id": 190,
-            "role_id": 1
-        },
-        {
-            "permission_id": 191,
-            "role_id": 1
-        },
-        {
-            "permission_id": 192,
-            "role_id": 1
-        },
-        {
-            "permission_id": 1,
-            "role_id": 1
-        },
-        {
-            "permission_id": 2,
-            "role_id": 1
-        },
-        {
-            "permission_id": 3,
-            "role_id": 1
-        },
-        {
-            "permission_id": 4,
-            "role_id": 1
-        },
-        {
-            "permission_id": 5,
-            "role_id": 1
-        },
-        {
-            "permission_id": 6,
-            "role_id": 1
-        },
-        {
-            "permission_id": 7,
-            "role_id": 1
-        },
-        {
-            "permission_id": 8,
-            "role_id": 1
-        },
-        {
-            "permission_id": 9,
-            "role_id": 1
-        },
-        {
-            "permission_id": 10,
-            "role_id": 1
-        },
-        {
-            "permission_id": 11,
-            "role_id": 1
-        },
-        {
-            "permission_id": 12,
             "role_id": 1
         },
         {
@@ -2480,6 +2240,246 @@
             "role_id": 1
         },
         {
+            "permission_id": 157,
+            "role_id": 1
+        },
+        {
+            "permission_id": 158,
+            "role_id": 1
+        },
+        {
+            "permission_id": 159,
+            "role_id": 1
+        },
+        {
+            "permission_id": 160,
+            "role_id": 1
+        },
+        {
+            "permission_id": 162,
+            "role_id": 1
+        },
+        {
+            "permission_id": 163,
+            "role_id": 1
+        },
+        {
+            "permission_id": 164,
+            "role_id": 1
+        },
+        {
+            "permission_id": 165,
+            "role_id": 1
+        },
+        {
+            "permission_id": 166,
+            "role_id": 1
+        },
+        {
+            "permission_id": 169,
+            "role_id": 1
+        },
+        {
+            "permission_id": 170,
+            "role_id": 1
+        },
+        {
+            "permission_id": 171,
+            "role_id": 1
+        },
+        {
+            "permission_id": 172,
+            "role_id": 1
+        },
+        {
+            "permission_id": 173,
+            "role_id": 1
+        },
+        {
+            "permission_id": 174,
+            "role_id": 1
+        },
+        {
+            "permission_id": 175,
+            "role_id": 1
+        },
+        {
+            "permission_id": 176,
+            "role_id": 1
+        },
+        {
+            "permission_id": 177,
+            "role_id": 1
+        },
+        {
+            "permission_id": 178,
+            "role_id": 1
+        },
+        {
+            "permission_id": 179,
+            "role_id": 1
+        },
+        {
+            "permission_id": 180,
+            "role_id": 1
+        },
+        {
+            "permission_id": 181,
+            "role_id": 1
+        },
+        {
+            "permission_id": 182,
+            "role_id": 1
+        },
+        {
+            "permission_id": 183,
+            "role_id": 1
+        },
+        {
+            "permission_id": 184,
+            "role_id": 1
+        },
+        {
+            "permission_id": 185,
+            "role_id": 1
+        },
+        {
+            "permission_id": 186,
+            "role_id": 1
+        },
+        {
+            "permission_id": 187,
+            "role_id": 1
+        },
+        {
+            "permission_id": 188,
+            "role_id": 1
+        },
+        {
+            "permission_id": 189,
+            "role_id": 1
+        },
+        {
+            "permission_id": 190,
+            "role_id": 1
+        },
+        {
+            "permission_id": 191,
+            "role_id": 1
+        },
+        {
+            "permission_id": 192,
+            "role_id": 1
+        },
+        {
+            "permission_id": 193,
+            "role_id": 1
+        },
+        {
+            "permission_id": 194,
+            "role_id": 1
+        },
+        {
+            "permission_id": 195,
+            "role_id": 1
+        },
+        {
+            "permission_id": 196,
+            "role_id": 1
+        },
+        {
+            "permission_id": 197,
+            "role_id": 1
+        },
+        {
+            "permission_id": 198,
+            "role_id": 1
+        },
+        {
+            "permission_id": 199,
+            "role_id": 1
+        },
+        {
+            "permission_id": 200,
+            "role_id": 1
+        },
+        {
+            "permission_id": 201,
+            "role_id": 1
+        },
+        {
+            "permission_id": 202,
+            "role_id": 1
+        },
+        {
+            "permission_id": 203,
+            "role_id": 1
+        },
+        {
+            "permission_id": 204,
+            "role_id": 1
+        },
+        {
+            "permission_id": 205,
+            "role_id": 1
+        },
+        {
+            "permission_id": 206,
+            "role_id": 1
+        },
+        {
+            "permission_id": 207,
+            "role_id": 1
+        },
+        {
+            "permission_id": 208,
+            "role_id": 1
+        },
+        {
+            "permission_id": 209,
+            "role_id": 1
+        },
+        {
+            "permission_id": 210,
+            "role_id": 1
+        },
+        {
+            "permission_id": 211,
+            "role_id": 1
+        },
+        {
+            "permission_id": 212,
+            "role_id": 1
+        },
+        {
+            "permission_id": 213,
+            "role_id": 1
+        },
+        {
+            "permission_id": 214,
+            "role_id": 1
+        },
+        {
+            "permission_id": 215,
+            "role_id": 1
+        },
+        {
+            "permission_id": 216,
+            "role_id": 1
+        },
+        {
+            "permission_id": 217,
+            "role_id": 1
+        },
+        {
+            "permission_id": 218,
+            "role_id": 1
+        },
+        {
+            "permission_id": 219,
+            "role_id": 1
+        },
+        {
             "permission_id": 220,
             "role_id": 1
         },
@@ -2528,55 +2528,55 @@
             "role_id": 1
         },
         {
-            "permission_id": 157,
+            "permission_id": 232,
             "role_id": 1
         },
         {
-            "permission_id": 158,
+            "permission_id": 233,
+            "role_id": 1
+        },
+        {
+            "permission_id": 234,
+            "role_id": 1
+        },
+        {
+            "permission_id": 235,
+            "role_id": 1
+        },
+        {
+            "permission_id": 236,
+            "role_id": 1
+        },
+        {
+            "permission_id": 237,
+            "role_id": 1
+        },
+        {
+            "permission_id": 238,
+            "role_id": 1
+        },
+        {
+            "permission_id": 239,
+            "role_id": 1
+        },
+        {
+            "permission_id": 240,
+            "role_id": 1
+        },
+        {
+            "permission_id": 241,
+            "role_id": 1
+        },
+        {
+            "permission_id": 242,
+            "role_id": 1
+        },
+        {
+            "permission_id": 243,
             "role_id": 1
         },
         {
             "permission_id": 244,
-            "role_id": 1
-        },
-        {
-            "permission_id": 159,
-            "role_id": 1
-        },
-        {
-            "permission_id": 195,
-            "role_id": 1
-        },
-        {
-            "permission_id": 194,
-            "role_id": 1
-        },
-        {
-            "permission_id": 193,
-            "role_id": 1
-        },
-        {
-            "permission_id": 160,
-            "role_id": 1
-        },
-        {
-            "permission_id": 162,
-            "role_id": 1
-        },
-        {
-            "permission_id": 163,
-            "role_id": 1
-        },
-        {
-            "permission_id": 164,
-            "role_id": 1
-        },
-        {
-            "permission_id": 165,
-            "role_id": 1
-        },
-        {
-            "permission_id": 166,
             "role_id": 1
         },
         {
@@ -2594,10 +2594,6 @@
         {
             "permission_id": 249,
             "role_id": 1
-        },
-        {
-            "permission_id": 250,
-            "role_id": 1
         }
     ],
     "users": [
@@ -2606,7 +2602,7 @@
             "name": "admin",
             "email": "admin@admin.com",
             "email_verified_at": null,
-            "password": "$2y$12$7WicaB9ppUHOhQqyyMaVsOnTBbs.TbVqZBoOjUj7wQRmIFj3NXXNm",
+            "password": "$2y$12$lm9UiUZlbUUXLBtgX4PAI.Gi42E30tdPyeuKXIzrCHZSsUufQaC62",
             "date_of_birth": null,
             "license_class": null,
             "license_number": null,
@@ -2620,10 +2616,10 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
-            "remember_token": "X6eVI3V8Dmj070ccq3uEH9KuyZHnvrcmaNecJRT9nyufzmhwVHFg7WxfyGub",
+            "is_active": true,
+            "remember_token": "uu0FNLoheEutOVRAE6xErJVTyJxbps96QM9IQ7WJbRnDFjg5LoPt1YkKHrvE",
             "created_at": "2026-07-14 20:17:03",
-            "updated_at": "2026-07-14 20:17:03",
+            "updated_at": "2026-11-10 19:39:42",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2643,7 +2639,7 @@
             "name": "Ngọ Văn Minh",
             "email": "nvm0709@tms.local",
             "email_verified_at": null,
-            "password": "$2y$12$8hjJyr3tOPNdUmzflJPxdOGryIi0wTNJf5CGRby\/LAJRNaDQGwEYW",
+            "password": "$2y$12$8hjJyr3tOPNdUmzflJPxdOGryIi0wTNJf5CGRby/LAJRNaDQGwEYW",
             "date_of_birth": "1976-09-07 00:00:00",
             "license_class": "C",
             "license_number": "990100991255",
@@ -2657,10 +2653,10 @@
             "phone": "0945791976",
             "address": "Thôn Thù Cốc, Xã Hợp Thịnh, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 08:16:05",
+            "updated_at": "2026-11-15 21:21:18",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2670,7 +2666,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[BhIHebIQe8hHxgOiyOzxD5]",
-            "fcm_token_updated_at": "2026-11-06 08:16:05",
+            "fcm_token_updated_at": "2026-11-15 21:21:18",
             "work_shift": "odd",
             "vehicle_id": 50,
             "employee_code": "ASGT-60006"
@@ -2694,10 +2690,10 @@
             "phone": "0984874566",
             "address": "Thượng Thôn, Xã Yên Phong, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 16:46:44",
+            "updated_at": "2026-11-15 22:57:25",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2707,7 +2703,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[SiZnuyAwvFbq9Ub7HWtfKF]",
-            "fcm_token_updated_at": "2026-11-05 16:46:44",
+            "fcm_token_updated_at": "2026-11-15 22:57:25",
             "work_shift": "even",
             "vehicle_id": 3,
             "employee_code": "ASGT-60010"
@@ -2731,10 +2727,10 @@
             "phone": "0989907942",
             "address": "Hương Câu, Xã Xuân Cẩm, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 06:26:59",
+            "updated_at": "2026-11-16 08:12:30",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2744,7 +2740,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "cihscN5eRe-I_gtMqaePOh:APA91bEIb6MLSK_Vox0Qzm60XCY1mgpzx2sk7mLp2lpX_ovVjitmul9rI0tN7vK4QD5AYqyJiK4BBrtn9NRqKdfbTABCfOgU_j8dVFgKzmbhy8ftt-YGkzY",
-            "fcm_token_updated_at": "2026-11-07 06:26:59",
+            "fcm_token_updated_at": "2026-11-16 08:12:30",
             "work_shift": "odd",
             "vehicle_id": 5,
             "employee_code": "ASGT-60011"
@@ -2768,10 +2764,10 @@
             "phone": "0962166087",
             "address": "Xã Ngọc Thiện, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 05:08:22",
+            "updated_at": "2026-11-16 05:37:01",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2781,7 +2777,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[IJnh8VN13t8EneeMj4b5Xl]",
-            "fcm_token_updated_at": "2026-11-06 05:08:22",
+            "fcm_token_updated_at": "2026-11-16 05:37:01",
             "work_shift": "even",
             "vehicle_id": 48,
             "employee_code": "ASGT-60030"
@@ -2805,10 +2801,10 @@
             "phone": "0911228677",
             "address": "Tổ dân phố 3, Phường Phúc Thuận, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:18:28",
+            "updated_at": "2026-11-16 08:01:51",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2818,7 +2814,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[yEzLjSCwbGOuDx0x9AVd9C]",
-            "fcm_token_updated_at": "2026-11-07 08:18:28",
+            "fcm_token_updated_at": "2026-11-16 08:01:51",
             "work_shift": "odd",
             "vehicle_id": 26,
             "employee_code": "ASGT-60031"
@@ -2842,10 +2838,10 @@
             "phone": "0974000902",
             "address": "Môn tự, Xã Kim Anh, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 05:37:34",
+            "updated_at": "2026-11-15 09:35:41",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2855,7 +2851,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "f3_qhejVTdCTL7CzlJKBln:APA91bFpQFOzZRuT5PsTWL5IdjsEb3muwoPO8rWXjkMogwOqZdgj2hPf2pdgENT6fyKGJCD6Rj7baRaVgqNDBLdlHdnFvsuT1ZOS_qEoU1t_gMYhj8Zo5Ss",
-            "fcm_token_updated_at": "2026-11-07 05:37:34",
+            "fcm_token_updated_at": "2026-11-15 09:35:41",
             "work_shift": "odd",
             "vehicle_id": 1645,
             "employee_code": "ASGT-60032"
@@ -2879,10 +2875,10 @@
             "phone": "0976451908",
             "address": "Bản Bùa Chung 2, Xã Gia Phù, Sơn La",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:18:03",
+            "updated_at": "2026-11-16 06:26:36",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2892,7 +2888,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[6WQzaRN6lq0fI7QIHC74l-]",
-            "fcm_token_updated_at": "2026-11-07 08:18:03",
+            "fcm_token_updated_at": "2026-11-16 06:26:36",
             "work_shift": "even",
             "vehicle_id": 1646,
             "employee_code": "ASGT-60040"
@@ -2916,10 +2912,10 @@
             "phone": "0974694892",
             "address": "TDP Bắc Nam, Phường Vạn Xuân, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:24:38",
+            "updated_at": "2026-11-16 04:43:13",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2929,7 +2925,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "f9GL9wYrQPSPluv-fgTmxD:APA91bFIyUR-fKDeL3TmqWb5g391QeqEZo3y4ZOHb9wgHoX61EAVjFZIFIQXyzs6f-yuaBq4ZTrvAEOTTAgarPaRbmMNFS2ujI16cAzQX4MAdfGTtwwVBtQ",
-            "fcm_token_updated_at": "2026-11-07 08:24:38",
+            "fcm_token_updated_at": "2026-11-16 04:43:13",
             "work_shift": "even",
             "vehicle_id": 10,
             "employee_code": "ASGT-60044"
@@ -2953,10 +2949,10 @@
             "phone": "0983599709",
             "address": "Tổ 13, Phường Gia Sàng,Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 07:18:35",
+            "updated_at": "2026-11-16 08:07:09",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -2966,7 +2962,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "fPpW7wAcRa64Mjxn_6L1L5:APA91bHuhDlidTzg3P44I49N6aUqWqiKCOe18p2sHQ5FeLTBjspYKgBHcu1z9E6UtwtZjRn13aKeFdVM71j8AfF6QiAoVFUumeGDBsjZKLS53WjgIKlHpyU",
-            "fcm_token_updated_at": "2026-11-06 07:18:35",
+            "fcm_token_updated_at": "2026-11-16 08:07:09",
             "work_shift": "odd",
             "vehicle_id": 10,
             "employee_code": "ASGT-60045"
@@ -2990,10 +2986,10 @@
             "phone": "0377993113",
             "address": "Thôn Lương Tân, Xã Yên Trung, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:19:37",
+            "updated_at": "2026-11-16 08:09:51",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3003,7 +2999,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[3GmAA6JL7VSa0t8xQAk8FN]",
-            "fcm_token_updated_at": "2026-11-07 08:19:37",
+            "fcm_token_updated_at": "2026-11-16 08:09:51",
             "work_shift": "odd",
             "vehicle_id": 40,
             "employee_code": "ASGT-60052"
@@ -3027,10 +3023,10 @@
             "phone": "0985533297",
             "address": "Bản Trò 2, Xã Phù Yên, Sơn La",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:21:33",
+            "updated_at": "2026-11-16 08:18:28",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3039,8 +3035,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "ExponentPushToken[roaiHDPWtiRnwdyPjTPFVr]",
-            "fcm_token_updated_at": "2026-11-07 08:21:33",
+            "fcm_token": null,
+            "fcm_token_updated_at": null,
             "work_shift": "odd",
             "vehicle_id": 6,
             "employee_code": "ASGT-60053"
@@ -3064,7 +3060,7 @@
             "phone": "0868825660",
             "address": "Thôn Đông Yên, Xã Tam Đa, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
             "updated_at": "2026-10-11 20:10:51",
@@ -3101,10 +3097,10 @@
             "phone": "0976304986",
             "address": "Đồng Vân, Xã Hoàng Vân, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:00:50",
+            "updated_at": "2026-11-16 08:09:02",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3114,7 +3110,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "cu9B9umFQVC6Pb7EFzzrlY:APA91bEL0hRn65PQ7lAjHOV1sKyZI1KfW64YQ3okUV-nEFtiEEUdqNi88K4udgesKPgGbTeCqyjZch9eZKnqIlai3BdY7-WZLR8H1sHt_15oaXgkSoo5mW8",
-            "fcm_token_updated_at": "2026-11-07 08:00:50",
+            "fcm_token_updated_at": "2026-11-16 08:09:02",
             "work_shift": "odd",
             "vehicle_id": 13,
             "employee_code": "ASGT-60055"
@@ -3138,10 +3134,10 @@
             "phone": "0978845362",
             "address": "Khối 13, Xã Sóc Sơn, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 20:34:45",
+            "updated_at": "2026-11-16 08:00:28",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3151,7 +3147,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[hxqbA8NqiXvUvguseUUimQ]",
-            "fcm_token_updated_at": "2026-11-06 20:34:45",
+            "fcm_token_updated_at": "2026-11-16 08:00:28",
             "work_shift": "odd",
             "vehicle_id": 47,
             "employee_code": "ASGT-60056"
@@ -3175,10 +3171,10 @@
             "phone": "0987314053",
             "address": "P204 B11, Phường Nghĩa Đô, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 20:31:00",
+            "updated_at": "2026-11-16 07:24:27",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3188,7 +3184,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[ezmz5NBGaqKRklVQAVYjPg]",
-            "fcm_token_updated_at": "2026-11-05 20:31:00",
+            "fcm_token_updated_at": "2026-11-16 07:24:27",
             "work_shift": "odd",
             "vehicle_id": 45,
             "employee_code": "ASGT-60057"
@@ -3212,10 +3208,10 @@
             "phone": "0965527385",
             "address": "Khu 5b, Xã Na Dương, Tỉnh Lạng Sơn",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 08:00:55",
+            "updated_at": "2026-11-16 08:07:02",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3225,7 +3221,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[gUnPPdFbCTAmLblNgMKZaN]",
-            "fcm_token_updated_at": "2026-11-06 08:00:55",
+            "fcm_token_updated_at": "2026-11-16 08:07:02",
             "work_shift": "odd",
             "vehicle_id": 19,
             "employee_code": "ASGT-60058"
@@ -3249,10 +3245,10 @@
             "phone": "0975990028",
             "address": "Xóm Tân Cương, Xã Thành Công, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 19:45:06",
+            "updated_at": "2026-11-15 06:17:33",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3262,7 +3258,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[WfjvFAPuJntoESwi0ugx3g]",
-            "fcm_token_updated_at": "2026-11-06 19:45:06",
+            "fcm_token_updated_at": "2026-11-15 06:17:33",
             "work_shift": "odd",
             "vehicle_id": 11,
             "employee_code": "ASGT-60059"
@@ -3286,10 +3282,10 @@
             "phone": "0985052947",
             "address": "Thôn Lạc Yên 1, Xã Hoàng Vân, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:00:23",
+            "updated_at": "2026-11-16 08:15:52",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3299,7 +3295,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "fbjqGnbrTuOQh6hJnI2xzY:APA91bFnWgFoKIguYIMH-I9AuEe6iBIQypt1EmzCeMDKRhMHhfzTlWQYy69ll0V3PiXy-h9AicNvUYy16czTOX1w4CccV4jiGCEqvcgDaQGB-tZA4GqaOJw",
-            "fcm_token_updated_at": "2026-11-07 08:00:23",
+            "fcm_token_updated_at": "2026-11-16 08:15:52",
             "work_shift": "odd",
             "vehicle_id": 20,
             "employee_code": "ASGT-60062"
@@ -3323,10 +3319,10 @@
             "phone": "0325881222",
             "address": "Xóm Thanh Chử, Phường Linh Sơn, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 10:34:17",
+            "updated_at": "2026-11-16 08:12:38",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3335,8 +3331,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "ExponentPushToken[wp6ECLCc5mKHc0uuS_blM0]",
-            "fcm_token_updated_at": "2026-11-06 10:34:17",
+            "fcm_token": "ExponentPushToken[GIUWZ9P5qXo4k26nE35-ao]",
+            "fcm_token_updated_at": "2026-11-16 08:12:38",
             "work_shift": "odd",
             "vehicle_id": 27,
             "employee_code": "ASGT-60063"
@@ -3360,10 +3356,10 @@
             "phone": "0964135389",
             "address": "Xóm Soi 1, Xã Phú Bình, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-01 14:12:21",
+            "updated_at": "2026-11-16 08:08:30",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3372,8 +3368,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "ExponentPushToken[HI65EpO6MYJ4jF01EOAp6i]",
-            "fcm_token_updated_at": "2026-11-01 14:12:21",
+            "fcm_token": "ExponentPushToken[X-DiAAHCamcvGYoowLaCzd]",
+            "fcm_token_updated_at": "2026-11-16 08:08:30",
             "work_shift": "even",
             "vehicle_id": 27,
             "employee_code": "ASGT-60064"
@@ -3397,7 +3393,7 @@
             "phone": "0976816292",
             "address": "Xóm 5 Tdp Yên Viên, Phường Vân Hà, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
             "updated_at": "2026-10-11 20:10:51",
@@ -3434,10 +3430,10 @@
             "phone": "0386978775",
             "address": "Thôn 4, Xã Thiệu Trung, Thanh Hóa",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 02:32:48",
+            "updated_at": "2026-11-14 14:28:48",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3447,7 +3443,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "fCTSp3jdSLWBeXKe19hn-O:APA91bFT36yzYDMihC2iM5nGRCTP2cz_2256gbTbLk2hn_4gpQMTU0lqoNjbHsLfHsMUdMrLkebfrny2oEM7jl8OF-3absU2TgPCMCmbx-huGIHbgenCu2M",
-            "fcm_token_updated_at": "2026-11-06 02:32:48",
+            "fcm_token_updated_at": "2026-11-14 14:28:48",
             "work_shift": "even",
             "vehicle_id": 5,
             "employee_code": "ASGT-60067"
@@ -3471,10 +3467,10 @@
             "phone": "0963142360",
             "address": "Thôn Thượng Đông Sơn, Xã Sóc Sơn, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 05:30:40",
+            "updated_at": "2026-11-16 02:08:35",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3484,7 +3480,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[6TOCISCibVoAMFvEM7LN02]",
-            "fcm_token_updated_at": "2026-11-07 05:30:40",
+            "fcm_token_updated_at": "2026-11-16 02:08:35",
             "work_shift": "even",
             "vehicle_id": 28,
             "employee_code": "ASGT-60068"
@@ -3508,10 +3504,10 @@
             "phone": "0965455995",
             "address": "Xuân Giang, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:02:57",
+            "updated_at": "2026-11-15 15:39:14",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3521,7 +3517,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[dbDC33OiP8nx4o1jlEOmdp]",
-            "fcm_token_updated_at": "2026-11-07 08:02:57",
+            "fcm_token_updated_at": "2026-11-15 15:39:14",
             "work_shift": "even",
             "vehicle_id": 8,
             "employee_code": "ASGT-60075"
@@ -3545,10 +3541,10 @@
             "phone": "0978671153",
             "address": "Xóm Quans chè, Nga My, Phú Bình, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:24:05",
+            "updated_at": "2026-11-16 06:40:26",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3558,7 +3554,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "e4AzClTFSvamyiDRXXEd1M:APA91bFjbg6jAiVHq4KsWjkRQ-YJGB5nTyJ3PJo52MX_iR10NldRK3I134u6Wp1X1Y2M83X_s1XlpTNMtl5Gfuh1CP3ZnGC1M1TvKaaDg59DXhb80tLwbx0",
-            "fcm_token_updated_at": "2026-11-07 08:24:05",
+            "fcm_token_updated_at": "2026-11-16 06:40:26",
             "work_shift": "even",
             "vehicle_id": 11,
             "employee_code": "ASGT-60076"
@@ -3582,10 +3578,10 @@
             "phone": "0987380382",
             "address": "Thôn Ấp Đồn Yên Trung, Yên Phong, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 06:01:25",
+            "updated_at": "2026-11-16 06:14:56",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3595,7 +3591,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "cWgla3S_SMmMi6OzWGzpZE:APA91bGca19lOuZ4m1QS1L8ZRGrejenJNpWdEpG5fhzB_pv0I89JL1kLCvAK9oo8f5QF85G_inDwGnvh0uEyk63vPbAJQUb7XnC4WCSR2T7WkCsWhYw9Bt8",
-            "fcm_token_updated_at": "2026-11-07 06:01:25",
+            "fcm_token_updated_at": "2026-11-16 06:14:56",
             "work_shift": "odd",
             "vehicle_id": 38,
             "employee_code": "ASGT-60077"
@@ -3619,10 +3615,10 @@
             "phone": "0982075232",
             "address": "Dược Thược, Tiên Dược, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:23:21",
+            "updated_at": "2026-11-15 10:42:27",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3631,8 +3627,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "ExponentPushToken[cPljONMwwm7Qx0Wc3d4UI2]",
-            "fcm_token_updated_at": "2026-11-07 08:23:21",
+            "fcm_token": null,
+            "fcm_token_updated_at": null,
             "work_shift": "even",
             "vehicle_id": 37,
             "employee_code": "ASGT-60079"
@@ -3656,10 +3652,10 @@
             "phone": "0977331366",
             "address": "Đồng Chầm, Tiên Dược, Sóc Sơn, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 07:57:50",
+            "updated_at": "2026-11-14 21:41:21",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3669,7 +3665,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[ZtOATSCCT9SWwxmTFT8dK_]",
-            "fcm_token_updated_at": "2026-11-07 07:57:50",
+            "fcm_token_updated_at": "2026-11-14 21:41:21",
             "work_shift": "even",
             "vehicle_id": 14,
             "employee_code": "ASGT-60081"
@@ -3693,10 +3689,10 @@
             "phone": "0985635582",
             "address": "Xuân Đoài Phù Linh, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 00:27:42",
+            "updated_at": "2026-11-16 08:11:30",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3706,7 +3702,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[EKTa_gNgYbS6F47_LkpmF_]",
-            "fcm_token_updated_at": "2026-11-06 00:27:42",
+            "fcm_token_updated_at": "2026-11-16 08:11:30",
             "work_shift": "even",
             "vehicle_id": 45,
             "employee_code": "ASGT-60083"
@@ -3730,10 +3726,10 @@
             "phone": "0983271826",
             "address": "Phù Linh, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 14:51:48",
+            "updated_at": "2026-11-16 08:21:35",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3743,7 +3739,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "fgqjlcOUSVaKop5KbuxXBA:APA91bFIcgRnVtpjRmWRMplMmMG_BVmoXoCc112RyUHgvs1sdAaX8S9P7iuzLUCOXNdhMrDaauAbkkUYQqYP6x7H93M0DL9N-lHmrm5K0wRyB8IniTcJ30w",
-            "fcm_token_updated_at": "2026-11-06 14:51:48",
+            "fcm_token_updated_at": "2026-11-16 08:21:35",
             "work_shift": "odd",
             "vehicle_id": 36,
             "employee_code": "ASGT-60086"
@@ -3767,10 +3763,10 @@
             "phone": "0985167376",
             "address": "Lập Trí, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:24:42",
+            "updated_at": "2026-11-16 06:47:50",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3780,7 +3776,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "dDlYKqXCTDil-iQEZ8GH7y:APA91bHF18SOx_AWDy40IdZWi4rNQxeP0NALukkLmbt9AHLMZ_b0709v4dEwDPDVkY498L_StL-USLiz9Wo6CdGRr6UOm7wTat_oNZAGisbbG61Wg9fprVs",
-            "fcm_token_updated_at": "2026-11-07 08:24:42",
+            "fcm_token_updated_at": "2026-11-16 06:47:50",
             "work_shift": "even",
             "vehicle_id": 21,
             "employee_code": "ASGT-60087"
@@ -3804,10 +3800,10 @@
             "phone": "0388568033",
             "address": "Lai Sơn, Bắc Sơn, Sóc Sơn Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:19:24",
+            "updated_at": "2026-11-14 20:59:03",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3817,7 +3813,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "c8SH2LP5TOm1BHP6HALK_2:APA91bE6ZQfOodNlLH1w2W9sV0yjX4EdAri-G4DN3cWi_DVuV-9Q0Jw98MDzHXAnme_Ed7IalKico2KIzDVPCIXuUcQMhgX4xYgN2oVMKIIhXzrM0Y2vxhk",
-            "fcm_token_updated_at": "2026-11-07 08:19:24",
+            "fcm_token_updated_at": "2026-11-14 20:59:03",
             "work_shift": "even",
             "vehicle_id": 23,
             "employee_code": "ASGT-60090"
@@ -3841,10 +3837,10 @@
             "phone": "0911117935",
             "address": "Mai Đình, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 23:47:43",
+            "updated_at": "2026-11-15 23:41:51",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3854,7 +3850,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "duaLJ8YlRVivQ9TZpWyFfM:APA91bGFlvoMYE2W3_P_dapQthR5JTqcidLySrZaTfTXULPNR7RWQZqRBZmd5sE7kRKbj_g1axe_fGv6BUsbUrD_NVU3nYJpnPsIXq5BE3_6Qvi55hUb0bs",
-            "fcm_token_updated_at": "2026-11-05 23:47:43",
+            "fcm_token_updated_at": "2026-11-15 23:41:51",
             "work_shift": "odd",
             "vehicle_id": 35,
             "employee_code": "ASGT-60092"
@@ -3878,10 +3874,10 @@
             "phone": "0983779623",
             "address": "Điềm Thuỵ Phú Bình, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 02:12:21",
+            "updated_at": "2026-11-15 21:20:41",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3890,8 +3886,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "epX72MYpQ6ipVkkFYnmnPi:APA91bFkTGmvY9X1JvwqXkLTPntORuCY3t3R1DcHkVqokCrW6FQLEBnreFaVnF93MaiXA4UjCMMi1DN-6BUxln247ueh5hwzqGRXoJ8V0ChOAhnApUwrJxU",
-            "fcm_token_updated_at": "2026-11-07 02:12:21",
+            "fcm_token": "dVbSb9IcQOmnr5A2iC5ldL:APA91bGkgD22lwqiXsy9kBPCvEsr-Xf3ZC-Qs7caGcqjRW5o7Il1joFJMMf-wguREFV-y_pytiFUT1_7JBGLORBVAtq8tFKL4jd_rP_0xKqyovvvVRr-060",
+            "fcm_token_updated_at": "2026-11-15 21:20:41",
             "work_shift": "odd",
             "vehicle_id": 12,
             "employee_code": "ASGT-60093"
@@ -3915,10 +3911,10 @@
             "phone": "0989181893",
             "address": "Thôn Đồng Chầm, Tiên Dược, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:20:39",
+            "updated_at": "2026-11-16 07:11:35",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3928,7 +3924,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "eoR7yasST6K3DF3u_KRYfe:APA91bGklqhmM7q0r3HhgSH_siLDSbayLgm7b-3ePBlSgSRxR3YGDs6agHfZvrUSlGk-lmCrxAX4ArEFrIb3ru-fsPv8QxhkzFEBSdMkpCnjEcrfPTV8pjQ",
-            "fcm_token_updated_at": "2026-11-07 08:20:39",
+            "fcm_token_updated_at": "2026-11-16 07:11:35",
             "work_shift": "even",
             "vehicle_id": 17,
             "employee_code": "ASGT-60094"
@@ -3952,10 +3948,10 @@
             "phone": "0989793128",
             "address": "Tổ Bẩn, Lương Sơn, Sông Công, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 20:41:56",
+            "updated_at": "2026-11-16 06:25:49",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -3965,7 +3961,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "cVWmjRFqT76QYiQ3XyC9X5:APA91bG6BVK1vhLZcdtBAK9RirQvfCUmb4dTQVi5vlKkMD-PrSX4TCa60ILoqhLIv77R_erK8Jiv2Be42w-foagr96m8Ctp6Js3jhjzpaGCU7mu9JHiExbE",
-            "fcm_token_updated_at": "2026-11-05 20:41:56",
+            "fcm_token_updated_at": "2026-11-16 06:25:49",
             "work_shift": "even",
             "vehicle_id": 24,
             "employee_code": "ASGT-60095"
@@ -3989,10 +3985,10 @@
             "phone": "0355582366",
             "address": "Mai Đình, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 19:24:33",
+            "updated_at": "2026-11-16 05:14:34",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4002,7 +3998,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "eExbMpscTsWZdFJxxh9CzK:APA91bEK8wBUWMhEL8xyfpJRaALCKXNH-KKf7TucnwTnQB9Am5lTrb8WjZlSB-pTtZdPcSKfKAFJU-HkC7Fs1-E0V-yMyZVxoz6U5Fpr1XYMaUGxozuzYrY",
-            "fcm_token_updated_at": "2026-11-06 19:24:33",
+            "fcm_token_updated_at": "2026-11-16 05:14:34",
             "work_shift": "even",
             "vehicle_id": 36,
             "employee_code": "ASGT-60096"
@@ -4026,7 +4022,7 @@
             "phone": "0964458489",
             "address": "Lương Châu, Tiên Dược, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 0,
+            "is_active": false,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
             "updated_at": "2026-10-29 13:29:21",
@@ -4063,10 +4059,10 @@
             "phone": "0982393782",
             "address": "Xã Thổ Tang, tỉnh Phú Thọ",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 06:53:38",
+            "updated_at": "2026-11-16 07:42:55",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4076,7 +4072,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[3EunO7H2qo9IsvvU4YJTOG]",
-            "fcm_token_updated_at": "2026-11-07 06:53:38",
+            "fcm_token_updated_at": "2026-11-16 07:42:55",
             "work_shift": "even",
             "vehicle_id": 8,
             "employee_code": "ASGT-60098"
@@ -4100,10 +4096,10 @@
             "phone": "0346863863",
             "address": "TDP Đại Thành, Phường Phổ Yên, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 11:54:32",
+            "updated_at": "2026-11-16 06:37:19",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4113,7 +4109,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "dAoVSHzTRZ6ZG_8EaZTNwX:APA91bEgZ1tNxCs3MK2AVxwyYxX0QypjoN8_IrdHB3VuX9jVMyipU3k-x--p1bUG-Hw4TMR3wqcS8WWi3VkjGjZbG0BQjzWHXCa7Tdc0UA2MkEFfOYBqR9s",
-            "fcm_token_updated_at": "2026-11-06 11:54:32",
+            "fcm_token_updated_at": "2026-11-16 06:37:19",
             "work_shift": "odd",
             "vehicle_id": null,
             "employee_code": "ASGT-60099"
@@ -4137,10 +4133,10 @@
             "phone": "0961536424",
             "address": "TDP Đội Cấn, Phường Vạn Xuân,  Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 17:54:16",
+            "updated_at": "2026-11-16 02:40:55",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4150,7 +4146,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[rTkSjGD_nrJniC6APDD3wQ]",
-            "fcm_token_updated_at": "2026-11-05 17:54:16",
+            "fcm_token_updated_at": "2026-11-16 02:40:55",
             "work_shift": "even",
             "vehicle_id": null,
             "employee_code": "ASGT-60101"
@@ -4174,10 +4170,10 @@
             "phone": "0826218079",
             "address": "Khối 13, Thôn Phố chợ, Sóc Sơn, Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 05:56:53",
+            "updated_at": "2026-11-16 08:02:50",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4187,7 +4183,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "f6O_6IPISgK43pSCN-0y9p:APA91bE3xkWEn_fitnaqlXt09NfDUooZduRQoUJR4OAr4KbfzUrEcul9wIs1Ca9Oo1dv9lMnlxpk2nd7KGWdtWek5Y7kNFncc-0NCVAxSLK7z9iRPqYaLf0",
-            "fcm_token_updated_at": "2026-11-07 05:56:53",
+            "fcm_token_updated_at": "2026-11-16 08:02:50",
             "work_shift": "odd",
             "vehicle_id": null,
             "employee_code": "ASGT-60104"
@@ -4211,10 +4207,10 @@
             "phone": "0988886935",
             "address": "Đại Lâm, Xã Tam Đa, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 05:27:23",
+            "updated_at": "2026-11-16 08:18:54",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4224,7 +4220,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "cX-DfCYnSjq71tjyZW7-JR:APA91bH-zfcECa-42_Qtgz8-Xe3elLVUDEU-irmpq1dsOrWnoCkQg8yC4WLxQojw75Zo6zzNnCECOuQ0tH6QsEXISM0p5qJmMEYXyJGJi7PH0PicsAohsgQ",
-            "fcm_token_updated_at": "2026-11-07 05:27:23",
+            "fcm_token_updated_at": "2026-11-16 08:18:54",
             "work_shift": "odd",
             "vehicle_id": 44,
             "employee_code": "ASGT-60120"
@@ -4248,10 +4244,10 @@
             "phone": "0947227968",
             "address": "Thôn Na, Xã Nội Bài, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 23:06:24",
+            "updated_at": "2026-11-16 07:23:42",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4260,8 +4256,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "cdSHVdtjR62Gm3yEZUyR2s:APA91bGHp4lIClqhvJGY_UL_MCYwYgFjCznmNnqmmCEk4hHDlyNN0sSKlZ3dIJ-6Nhgh7QgvBYb3NoCExq6-8WOUrFkgz5wONRfGDSimtXRk2RW4TFCn9as",
-            "fcm_token_updated_at": "2026-11-06 23:06:24",
+            "fcm_token": "cyy2YfASTzuO-8VZxYJWch:APA91bGfPfNiMgGc0ruhpeCuwRWpptFFC0XRxS7c-CyQdhAyLuFd3PlF2-WJ7KnQlXbIvj7MtKquqlnwMB3kNpRrWLRpdiWnpOPkZClb-pM3LrhOIG2Nw-U",
+            "fcm_token_updated_at": "2026-11-16 07:23:42",
             "work_shift": "odd",
             "vehicle_id": 62,
             "employee_code": "ASGT-60170"
@@ -4285,10 +4281,10 @@
             "phone": "0389391655",
             "address": "Thái Phù, Xã Sóc Sơn, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 05:03:08",
+            "updated_at": "2026-11-15 20:32:56",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4298,7 +4294,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "c8YrQhv2T82ZLIhSKQP6Od:APA91bGltSd7I9mXX2rjejDA3VGEQkJldyUvPjtneFZ3zEVwFihvUZHCXHgH5d5EcopTR30uLusyVwJuT_Bitvhe8b7xJf1WDJbdRnD6BfixEO7Vl0nefUE",
-            "fcm_token_updated_at": "2026-11-07 05:03:08",
+            "fcm_token_updated_at": "2026-11-15 20:32:56",
             "work_shift": "odd",
             "vehicle_id": 35,
             "employee_code": "ASGT-60180"
@@ -4322,10 +4318,10 @@
             "phone": "0989246299",
             "address": "Tdp 3, Phường Yên Dũng, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 15:41:45",
+            "updated_at": "2026-11-16 05:58:41",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4335,7 +4331,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[dVb-4BLhgmNPG8reUhvcTg]",
-            "fcm_token_updated_at": "2026-11-05 15:41:45",
+            "fcm_token_updated_at": "2026-11-16 05:58:41",
             "work_shift": "even",
             "vehicle_id": 41,
             "employee_code": "ASGT-60190"
@@ -4359,10 +4355,10 @@
             "phone": "0982408598",
             "address": "Khu 5, Phường Vũ Ninh, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 07:25:57",
+            "updated_at": "2026-11-16 08:13:49",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4371,8 +4367,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": null,
-            "fcm_token_updated_at": null,
+            "fcm_token": "fKurksUvQuyot72luyrzHc:APA91bHrKvGrcdAdm_5ooK_ZyyaK9zRai4ItKaFOjkyaPPPrEIEAjoRfKx6-oHBjY_j-iX4tBPiZaW0YokAnVjixG6k0Wl6aLgC-3RFNvsup4rv4AaNoV3M",
+            "fcm_token_updated_at": "2026-11-16 08:13:49",
             "work_shift": "odd",
             "vehicle_id": 1646,
             "employee_code": "ASGT-60200"
@@ -4396,10 +4392,10 @@
             "phone": "0855777052",
             "address": "Thôn Đồng Thôn, Xã Yên Phong, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 06:18:54",
+            "updated_at": "2026-11-14 06:12:08",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4409,7 +4405,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "fz5Jr2k9QGeOzTZ06F7Tki:APA91bEPRBI1PdRaAbmuQ5npnPwr0jiVC9IfR4LxSVAJ1ZlcR-NRPL4oaRK-IYJE5dtKtt0EWlzuIT19mKey3kH889nEK3ag6N0gdV_oi6TuPQMqF47S024",
-            "fcm_token_updated_at": "2026-11-06 06:18:54",
+            "fcm_token_updated_at": "2026-11-14 06:12:08",
             "work_shift": "even",
             "vehicle_id": 44,
             "employee_code": "ASGT-60210"
@@ -4433,10 +4429,10 @@
             "phone": "0399582136",
             "address": "Thái Học 3, Phường Chu Văn An, Thành Phố Hải Phòng",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 07:48:25",
+            "updated_at": "2026-11-16 08:04:40",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4446,7 +4442,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "eLi-UX7qSVSjSzAAKV5b6P:APA91bFMgMRhV16rPVwBhVWq14Xz-g19QVVWeL5ucidPQ1aSDhDQoCii6wQw3uNKrK12Z43UU-c6ZiZt26c9euokS8RAu_pDYwTiaqGknt8jCyincBVDm3s",
-            "fcm_token_updated_at": "2026-11-07 07:48:25",
+            "fcm_token_updated_at": "2026-11-16 08:04:40",
             "work_shift": "odd",
             "vehicle_id": 59,
             "employee_code": "ASGT-60230"
@@ -4470,10 +4466,10 @@
             "phone": "0392026556",
             "address": "Phường Chu Văn An, Thành Phố Hải Phòng",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:17:11",
+            "updated_at": "2026-11-16 03:05:16",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4483,7 +4479,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "dg9qBf7PSEKJztWiG1Ph55:APA91bH4Y5GmBqFTbx5I_Gg32XFEZUqVI4ulJYE37NlXl3FN6KoOXwqHbDK7Sg6zUc1y7BhRDlvZioSn5HpfXnX9T4okvWh-pvPn9aArtyXbDD-p_ZgNPUs",
-            "fcm_token_updated_at": "2026-11-07 08:17:11",
+            "fcm_token_updated_at": "2026-11-16 03:05:16",
             "work_shift": "even",
             "vehicle_id": 59,
             "employee_code": "ASGT-60240"
@@ -4507,10 +4503,10 @@
             "phone": "0395633218",
             "address": "Thôn Trung Lạc, Xã Yên Trung, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 05:07:57",
+            "updated_at": "2026-11-16 00:30:46",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4519,8 +4515,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "eqXiTgElRV6rGF1dNxHOO_:APA91bHOwoXaFKUXJw_LNbto5_4svhgVq0yxLVNPJINhJpOrSGgBJLKq1uuiK2uGbBZHDL6Z4KUTubFV0d5ejue9IoPg102vmSkuLjpnt0YRoudsoriavPw",
-            "fcm_token_updated_at": "2026-11-06 05:07:57",
+            "fcm_token": "disH0sMpSbaG_uWWYoOKHe:APA91bFcF9VaqlDFMpkQY2fZCkc9CmEXHJowEFQNcmnUuqqAorj7C57Dnc0raJDwCeHUF_olUabJiYuACsU0Z0YMm7nQQ0myLPEhWvKb9FeEq3vE9OGqr_Q",
+            "fcm_token_updated_at": "2026-11-16 00:30:46",
             "work_shift": "even",
             "vehicle_id": 38,
             "employee_code": "ASGT-60250"
@@ -4530,7 +4526,7 @@
             "name": "Trần Văn Dũng",
             "email": "tvd2203@tms.local",
             "email_verified_at": null,
-            "password": "$2y$12$22UwXOxIQnbnjb4QYbmPuO783xf9H1pXBdlueKOhgT\/.dqsAGYxdu",
+            "password": "$2y$12$22UwXOxIQnbnjb4QYbmPuO783xf9H1pXBdlueKOhgT/.dqsAGYxdu",
             "date_of_birth": "1981-03-22 00:00:00",
             "license_class": "C",
             "license_number": "240072240724",
@@ -4544,10 +4540,10 @@
             "phone": "0569128555",
             "address": "Xã Ngọc Thiện, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 23:08:40",
+            "updated_at": "2026-11-15 22:00:01",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4557,7 +4553,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "duy_AKuhSiWe5KYhxZTZQG:APA91bHFtLYwwunNtwfuAdD7x1NSiAlyauNfilRIe0rChl7Cgb7Ev5dxkWrASCt8BuZFAFQGEOKG8CjVwLAkQOBEbE7J5eQKCzwnJoGbdQZ3mohBtmWa-0Q",
-            "fcm_token_updated_at": "2026-11-06 23:08:40",
+            "fcm_token_updated_at": "2026-11-15 22:00:01",
             "work_shift": "even",
             "vehicle_id": 60,
             "employee_code": "ASGT-60270"
@@ -4581,10 +4577,10 @@
             "phone": "0936990230",
             "address": "Thôn Đồng Thôn, Xã Yên Phong, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 03:04:34",
+            "updated_at": "2026-11-16 08:05:34",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4594,7 +4590,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "d2e-kw9gQdKm-r6FutgGqX:APA91bEHCF0mILYFnUbsxwdXj7482PFQySNnLC_9OdrpbpT9fCx2OZHUrq5qVVavE845MoTyUcfHm2ZfMpKgHMAXpjMwUXdzcDUdupu4eTh7HrsfaeqhQwU",
-            "fcm_token_updated_at": "2026-11-07 03:04:34",
+            "fcm_token_updated_at": "2026-11-16 08:05:34",
             "work_shift": "odd",
             "vehicle_id": 60,
             "employee_code": "ASGT-60280"
@@ -4618,10 +4614,10 @@
             "phone": "0967084667",
             "address": "Thôn Thanh, Xã Nguyễn Văn Linh, Hưng Yên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 01:31:41",
+            "updated_at": "2026-11-16 08:05:29",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4631,7 +4627,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "dfH0DynRTwC6PU1_JU5mwd:APA91bHLVZpGPwOMSROtcOt3myfUwsr8boKjFNJb9d13Gl9cwG91IPakigVAPV3SXJxojs-wjNw4k3DC5sflgmPGwhdinyDKjYRwlueYH1lrQUy-UV_24s0",
-            "fcm_token_updated_at": "2026-11-07 01:31:41",
+            "fcm_token_updated_at": "2026-11-16 08:05:29",
             "work_shift": "odd",
             "vehicle_id": 31,
             "employee_code": "ASGT-60290"
@@ -4655,10 +4651,10 @@
             "phone": "0845688883",
             "address": "Xóm Đức Phú, Phường Phúc Thuận, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 19:10:03",
+            "updated_at": "2026-11-16 07:34:19",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4668,7 +4664,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "cSsvaSQKRuKLXsckrtHqJz:APA91bHAj-i2nl5777EfMDQiA6mWlnxTTCctqyKCwKIxnqp2usHGwpJWQkk45Rh_wpsYM8UpFA3On3XJTWum1DPkSx9jYMnosIgFYE5aLY1zzzo2GF5JeBE",
-            "fcm_token_updated_at": "2026-11-06 19:10:03",
+            "fcm_token_updated_at": "2026-11-16 07:34:19",
             "work_shift": "odd",
             "vehicle_id": 39,
             "employee_code": "ASGT-60340"
@@ -4692,10 +4688,10 @@
             "phone": "0985499380",
             "address": "Tân Phúc, Xã Trung Giã, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 08:30:01",
+            "updated_at": "2026-11-14 16:41:48",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4705,7 +4701,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": "[]",
             "fcm_token": "dQYcNlnKSyuH-HQ_sAFN5p:APA91bEUpYg9kBom1Xad_M9t8Lsu-bRVtjU0aOJMTk-VuXBKg1_zOCWQKVC6RYCFS1CA3DxpcisFhnwupPxF9repizEJTABbJkQLpBYYx8PiYnJbr64Pq0M",
-            "fcm_token_updated_at": "2026-11-06 08:30:01",
+            "fcm_token_updated_at": "2026-11-14 16:41:48",
             "work_shift": "odd",
             "vehicle_id": 52,
             "employee_code": "ASGT-60350"
@@ -4729,10 +4725,10 @@
             "phone": "0982747896",
             "address": "TDP Sơn Trung, Phường Phúc Thuận, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 05:52:02",
+            "updated_at": "2026-11-16 05:43:17",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4742,7 +4738,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[Hix26iBV_Fm9-A8WOBJ-Yk]",
-            "fcm_token_updated_at": "2026-11-06 05:52:02",
+            "fcm_token_updated_at": "2026-11-16 05:43:17",
             "work_shift": "even",
             "vehicle_id": 58,
             "employee_code": "ASGT-60360"
@@ -4766,10 +4762,10 @@
             "phone": "0963790140",
             "address": "Tổ Tiến bộ, Phường Bách Quang, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 06:16:03",
+            "updated_at": "2026-11-16 04:48:58",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4779,7 +4775,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "eHkVj2gWSLKSSY1NmQ0VyJ:APA91bFOANMMapZPeputxr4k6bqe_KILO4BCtauC6nG_U-5em_FpUqqcD7c7IthHYGhTblbf4w6JmtbSgGxWzJ1bpejpYyl6gTwK11KqE3b89qlIhauOBWg",
-            "fcm_token_updated_at": "2026-11-06 06:16:03",
+            "fcm_token_updated_at": "2026-11-16 04:48:58",
             "work_shift": "even",
             "vehicle_id": 1647,
             "employee_code": "ASGT-60380"
@@ -4803,10 +4799,10 @@
             "phone": "0964742907",
             "address": "Nam Cương, Xã Nội Bài, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 16:10:54",
+            "updated_at": "2026-11-12 08:45:37",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4816,7 +4812,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[hVSGQPK9tGSOzs3W7hqbe_]",
-            "fcm_token_updated_at": "2026-11-06 16:10:54",
+            "fcm_token_updated_at": "2026-11-12 08:45:37",
             "work_shift": "odd",
             "vehicle_id": 9,
             "employee_code": "ASGT-60390"
@@ -4840,10 +4836,10 @@
             "phone": "0981398239",
             "address": "Tổ 6, Xã Phượng Tiến, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 04:41:00",
+            "updated_at": "2026-11-15 16:41:39",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4853,7 +4849,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "dpn1eQdsRjKzgzg77GvvTg:APA91bGAQl8U1eVYbIy2xh5e_uhjUlFAjqZ9fgVGxU5FUy0c19Psod0v63FAIyqzDy2FtOtrdJJV1MMEDlSUqz4dzUBpDP3Sko8y5RoN6M6RZ0j-8Yd0A1k",
-            "fcm_token_updated_at": "2026-11-06 04:41:00",
+            "fcm_token_updated_at": "2026-11-15 16:41:39",
             "work_shift": "even",
             "vehicle_id": 61,
             "employee_code": "ASGT-60400"
@@ -4877,10 +4873,10 @@
             "phone": "0834794222",
             "address": "Tổ 4, Phường Gia Sàng, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 17:53:12",
+            "updated_at": "2026-11-16 07:01:03",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4890,7 +4886,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[-0LdlREyGoXDXRaTv7uAFe]",
-            "fcm_token_updated_at": "2026-11-06 17:53:12",
+            "fcm_token_updated_at": "2026-11-16 07:01:03",
             "work_shift": "even",
             "vehicle_id": 56,
             "employee_code": "ASGT-60420"
@@ -4902,32 +4898,32 @@
             "email_verified_at": null,
             "password": "$2y$12$GcLvfTzGUXP.JlO4vcGjUOxRGlk5UwM8w4uUefGhIpzPLJZnh4ouS",
             "date_of_birth": "1986-10-21 00:00:00",
-            "license_class": "E",
+            "license_class": "D",
             "license_number": "190117190799",
-            "license_expiry_date": "2026-10-29 00:00:00",
-            "license_image": null,
+            "license_expiry_date": "2031-10-22 00:00:00",
+            "license_image": "[]",
             "cccd": "024086015115",
             "cccd_issue_date": "2021-09-07 00:00:00",
             "certificates": null,
             "station": "TN",
-            "license_issue_date": "2021-10-29 00:00:00",
+            "license_issue_date": "2026-10-22 00:00:00",
             "phone": "0359401048",
             "address": "Thôn Giang Đông, Xã Hoàng Vân, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 23:59:51",
+            "updated_at": "2026-11-16 07:16:25",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
-            "aviation_security_cert_image": null,
+            "aviation_security_cert_image": "[]",
             "dangerous_goods_cert_number": null,
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
-            "dangerous_goods_cert_image": null,
+            "dangerous_goods_cert_image": "[]",
             "fcm_token": "dxxwS_YXSjyvibGzXIvmOk:APA91bHJPf5ECHNYFOLRA5fsbmyBM8Amjl1rnnI9SeKciS1-slwG95fDKhCnz7cJ5nE7GAcoZPQt6yZHRNHOrrvCxxHHFkeLaib34qNl4yiXRKVBG7luQzI",
-            "fcm_token_updated_at": "2026-11-06 23:59:51",
+            "fcm_token_updated_at": "2026-11-16 07:16:25",
             "work_shift": "odd",
             "vehicle_id": 1647,
             "employee_code": "ASGT-60460"
@@ -4951,10 +4947,10 @@
             "phone": "0973056773",
             "address": "Xóm Bản Màn, Phường Phan Đình Phùng, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-03 21:00:55",
+            "updated_at": "2026-11-16 07:02:27",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -4964,7 +4960,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ef0hjgQqSjygDn18HS1Tv2:APA91bFcIFkfx1T2c8AdcxrJ5jI9GHS2diFSahU_WB1hQIjzrJJd2dmmfknvgw1BsHcqUCe74m9Va45NmmlDWLjOHhTNa6_Ew2jWiN2Jp9dRXsVfky4H7LU",
-            "fcm_token_updated_at": "2026-11-03 21:00:55",
+            "fcm_token_updated_at": "2026-11-16 07:02:27",
             "work_shift": "even",
             "vehicle_id": 52,
             "employee_code": "ASGT-60530"
@@ -4988,10 +4984,10 @@
             "phone": "0377071779",
             "address": "Xóm Hắng, Phường Phổ Yên, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:02:06",
+            "updated_at": "2026-11-15 08:05:42",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5001,7 +4997,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "fOEivGw2TCedicytgLGcat:APA91bGuEELtPpbLXfRbvHJesM6GyqFmQLskH8sc-n_HdxviV7B8oLr_fgHlzAOyclMZL3f44ZyvhBfYYBTMo3zeG-leQDFcxLByqythwLP_cVvk5-VcH2U",
-            "fcm_token_updated_at": "2026-11-07 08:02:06",
+            "fcm_token_updated_at": "2026-11-15 08:05:42",
             "work_shift": "even",
             "vehicle_id": 29,
             "employee_code": "ASGT-60560"
@@ -5025,10 +5021,10 @@
             "phone": "0914446060",
             "address": "Tổ 7, Phường Bá Xuyên, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 00:33:30",
+            "updated_at": "2026-11-15 17:08:08",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5038,7 +5034,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[TWu3iWCDoB6O7z6fLQWs6g]",
-            "fcm_token_updated_at": "2026-11-06 00:33:30",
+            "fcm_token_updated_at": "2026-11-15 17:08:08",
             "work_shift": "odd",
             "vehicle_id": 58,
             "employee_code": "ASGT-60570"
@@ -5062,10 +5058,10 @@
             "phone": "0392878817",
             "address": "Xóm Cầu Tiến, Phường Vạn Xuân, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 17:47:47",
+            "updated_at": "2026-11-16 08:22:30",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5075,7 +5071,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "eGUEfXiLTTKLNnaKG_-e75:APA91bFwJOBLzfBLuYqRQM4hTBjYoYX36joeQuHr0MN_m1CZG7BAUPprtlepqgr89SHAdlDAhm7Qndt7Da44pnOwR_AE31UT7fOS1r70xLPXX3BvcxcJzjY",
-            "fcm_token_updated_at": "2026-11-06 17:47:47",
+            "fcm_token_updated_at": "2026-11-16 08:22:30",
             "work_shift": "odd",
             "vehicle_id": 57,
             "employee_code": "ASGT-60650"
@@ -5099,10 +5095,10 @@
             "phone": "0979082210",
             "address": "Tổ 4, Phường Gia Sàng, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:20:33",
+            "updated_at": "2026-11-15 18:10:42",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5112,7 +5108,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "dAGjV1TPSC66nOUdmHnCR9:APA91bFndvcnTcmbdbU5bHLcAMZxWUCcVUDk10MWN4lLxm2WEXqMb5PsCYEDfZxliRbWK2DtgxntlnyOjhp7IGMAfL2vIAlKw16zoRn_jDe7hyy3zXek59k",
-            "fcm_token_updated_at": "2026-11-07 08:20:33",
+            "fcm_token_updated_at": "2026-11-15 18:10:42",
             "work_shift": "even",
             "vehicle_id": 39,
             "employee_code": "ASGT-60690"
@@ -5136,10 +5132,10 @@
             "phone": "0912066602",
             "address": "TDP Quán Vã, Phường Phổ Yên, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 05:46:17",
+            "updated_at": "2026-11-16 08:12:23",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5149,7 +5145,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "fRKHgvxdQpCByrtGSnVWY-:APA91bGEW6sEhW3b5O90eE5It0brFYW3CLezYiYW1G_dwVnNlo56bJDsQLlq8F4VqEOQGEDFEL5i5yfIgu6ZXoYNnnssv-pEg5Yv2lFRWDIF2I6JpTOd6N8",
-            "fcm_token_updated_at": "2026-11-07 05:46:17",
+            "fcm_token_updated_at": "2026-11-16 08:12:23",
             "work_shift": "odd",
             "vehicle_id": 29,
             "employee_code": "ASGT-60740"
@@ -5173,10 +5169,10 @@
             "phone": "0383304391",
             "address": "Xóm Duyên Bắc, Phường Vạn Xuân, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 17:29:14",
+            "updated_at": "2026-11-16 07:01:29",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5186,7 +5182,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[j48W8tGZFoyxM4ZKDozCVU]",
-            "fcm_token_updated_at": "2026-11-06 17:29:14",
+            "fcm_token_updated_at": "2026-11-16 07:01:29",
             "work_shift": "even",
             "vehicle_id": 57,
             "employee_code": "ASGT-60770"
@@ -5210,10 +5206,10 @@
             "phone": "0911047411",
             "address": "Xóm 5, Phường Phúc Thuận, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 03:16:34",
+            "updated_at": "2026-11-16 08:12:08",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5223,7 +5219,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "cfhDeaxSS6SnTK8zNqMZmM:APA91bGNZEAuoc4vxC1ug8Eij-aN-u-ItPW_Ct19QOZPbdOtihZwrd1W9eulgm0ff48LhRBomm0AyEYQpcomBWEMWjDXAPxM1B76Enu6pOXIi9Ecx2g0RpY",
-            "fcm_token_updated_at": "2026-11-07 03:16:34",
+            "fcm_token_updated_at": "2026-11-16 08:12:08",
             "work_shift": "odd",
             "vehicle_id": 49,
             "employee_code": "ASGT-60800"
@@ -5247,10 +5243,10 @@
             "phone": "0973264317",
             "address": "Xóm Long Giàn, Xã Văn Hán, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 22:02:51",
+            "updated_at": "2026-11-16 08:16:17",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5260,7 +5256,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "eCmNZ60PQCSZBYuhKthSSs:APA91bGQ-aWTlare_U9nZv_Rqy5V7nGwnWO3l2myZ9HhnFlduqGLuy_3HJrl3eL0RSNDOfkGGWq3tjafc3tpNARQZ_aOw-B2DADDPmrRhP9u_poF--fsvb0",
-            "fcm_token_updated_at": "2026-11-06 22:02:51",
+            "fcm_token_updated_at": "2026-11-16 08:16:17",
             "work_shift": "odd",
             "vehicle_id": 55,
             "employee_code": "ASGT-60840"
@@ -5284,10 +5280,10 @@
             "phone": "0912198259",
             "address": "TDP Sơn Trung, Phường Phúc Thuận, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 17:18:13",
+            "updated_at": "2026-11-15 15:08:20",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5297,7 +5293,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "fPLbMHsZTnOQ3yZAHo8vBZ:APA91bEOKYB2ymfWhxl8YecZkSUOX5iGds-HR0FfrLt9SGc9AqHSjOiPbJr9x7obHlWrY4A6oGURu471d26NuBOza3kyfnm25NfODzZDogjPh2tAvHtE7bk",
-            "fcm_token_updated_at": "2026-11-06 17:18:13",
+            "fcm_token_updated_at": "2026-11-15 15:08:20",
             "work_shift": "odd",
             "vehicle_id": 30,
             "employee_code": "ASGT-60900"
@@ -5307,7 +5303,7 @@
             "name": "Trần Quốc Đạt",
             "email": "tqd2605@tms.local",
             "email_verified_at": null,
-            "password": "$2y$12$rBHppdNbrtNalBp7JjYxl.TGdbm4sOyOI\/hVqJmYNuUU8OmW7dYra",
+            "password": "$2y$12$rBHppdNbrtNalBp7JjYxl.TGdbm4sOyOI/hVqJmYNuUU8OmW7dYra",
             "date_of_birth": "1986-05-26 00:00:00",
             "license_class": "E",
             "license_number": "190096190340",
@@ -5321,10 +5317,10 @@
             "phone": "0927679666",
             "address": "Phường Vạn Xuân, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 09:01:33",
+            "updated_at": "2026-11-16 07:56:03",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5334,7 +5330,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[o3AWM9E1WdH_iyslc0oLyY]",
-            "fcm_token_updated_at": "2026-11-05 09:01:33",
+            "fcm_token_updated_at": "2026-11-16 07:56:03",
             "work_shift": "odd",
             "vehicle_id": 48,
             "employee_code": "ASGT-60940"
@@ -5358,10 +5354,10 @@
             "phone": "0986949445",
             "address": "Xóm Đèo Ngà, Xã Dân Tiến, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 15:48:27",
+            "updated_at": "2026-11-15 18:53:20",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5371,7 +5367,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[Gtg1APGAWZMbLCsIt2Y0Hj]",
-            "fcm_token_updated_at": "2026-11-06 15:48:27",
+            "fcm_token_updated_at": "2026-11-15 18:53:20",
             "work_shift": "odd",
             "vehicle_id": 43,
             "employee_code": "ASGT-60950"
@@ -5395,10 +5391,10 @@
             "phone": "0373570637",
             "address": "Đội 5 Khê Nữ, Xã Phúc Thịnh, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 08:02:33",
+            "updated_at": "2026-11-14 07:23:42",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5408,7 +5404,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ejoWqfufTFOddJ1It_Inh2:APA91bEj_MqtgRPStxvPxFMdFu6n2cjKf8DTonyQBKLxrnGWxYEZkLpW31jd7DilJ9Cr5XTUS6sjBC4ILeb9ExeujiDcXGlNQtRefGseTTv47lXJouqLUFY",
-            "fcm_token_updated_at": "2026-11-06 08:02:33",
+            "fcm_token_updated_at": "2026-11-14 07:23:42",
             "work_shift": "even",
             "vehicle_id": 62,
             "employee_code": "ASGT-60960"
@@ -5432,10 +5428,10 @@
             "phone": "0927580999",
             "address": "Hương Ninh, Xã Hợp Thịnh, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 15:48:52",
+            "updated_at": "2026-11-16 08:05:04",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5445,7 +5441,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[lgul70NsKQSbWIeQiX70Yf]",
-            "fcm_token_updated_at": "2026-11-06 15:48:52",
+            "fcm_token_updated_at": "2026-11-16 08:05:04",
             "work_shift": "odd",
             "vehicle_id": 33,
             "employee_code": "ASGT-60980"
@@ -5469,10 +5465,10 @@
             "phone": "0976661932",
             "address": "Trung Hòa, Xã Hợp Thịnh, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 06:03:14",
+            "updated_at": "2026-11-16 08:07:15",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5482,7 +5478,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ftCHVfBMTdqhvSW-SaP3sw:APA91bHgdkDIzM-7uKvOFzdM2quWYBy1C3QNY-F_YIs6gT5p4P1g0kHkgQ2_HxDvrRDF5kL_1_X5btvf-7bBBbHd9JVLZe6Enhqka9l4nxCHGVFBZ8dIatE",
-            "fcm_token_updated_at": "2026-11-07 06:03:14",
+            "fcm_token_updated_at": "2026-11-16 08:07:15",
             "work_shift": "even",
             "vehicle_id": 43,
             "employee_code": "ASGT-60990"
@@ -5506,10 +5502,10 @@
             "phone": "0943654669",
             "address": "Tổ dân phố số 1, Xã Võ Nhai, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 06:53:07",
+            "updated_at": "2026-11-16 08:04:58",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5519,7 +5515,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[wek18qCtNUR56A4L2229jU]",
-            "fcm_token_updated_at": "2026-11-07 06:53:07",
+            "fcm_token_updated_at": "2026-11-16 08:04:58",
             "work_shift": "odd",
             "vehicle_id": 61,
             "employee_code": "ASGT-61020"
@@ -5543,10 +5539,10 @@
             "phone": "0868473686",
             "address": "Thôn Phong Xá, Xã Tam Đa, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-10-11 20:10:51",
+            "updated_at": "2026-11-16 08:16:45",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5555,8 +5551,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": null,
-            "fcm_token_updated_at": null,
+            "fcm_token": "fF8Rve9QRd2ogPCZi8VmpS:APA91bFDyDHda0bfvb8u50P0bvKlgkn9gPm24o2IsCdHLLTrEDBypH5ZrUV-_W4Zckky9GNRijsLBngHThggNYAimrxK8m6k2BbJnI-RrcjQP8k8GNtazJg",
+            "fcm_token_updated_at": "2026-11-16 08:16:45",
             "work_shift": "odd",
             "vehicle_id": 41,
             "employee_code": "ASGT-61050"
@@ -5580,10 +5576,10 @@
             "phone": "0978630633",
             "address": "Xã Định Hóa, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 22:43:25",
+            "updated_at": "2026-11-15 08:15:39",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5593,7 +5589,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ebuoL9uWRkGu-lcceXBshh:APA91bEICaT-Oi9m5SpNM1e7SLNhkv7KPvN4x0XtR0DmaM-koR3ZXs1cqGyb4k2MN6XJxXEhO4vm4B4-ywwciQ0kxNLt2Mr7pLEW3PLgzvF4ONIN0NhKeLg",
-            "fcm_token_updated_at": "2026-11-05 22:43:25",
+            "fcm_token_updated_at": "2026-11-15 08:15:39",
             "work_shift": "even",
             "vehicle_id": 55,
             "employee_code": "ASGT-61070"
@@ -5617,10 +5613,10 @@
             "phone": "0963069303",
             "address": "Xóm Soi 1, Xã Phú Bình, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 21:27:40",
+            "updated_at": "2026-11-16 02:04:12",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5630,7 +5626,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[iGdDDYFjlrp7pqjw1RT3jt]",
-            "fcm_token_updated_at": "2026-11-05 21:27:40",
+            "fcm_token_updated_at": "2026-11-16 02:04:12",
             "work_shift": "even",
             "vehicle_id": 42,
             "employee_code": "ASGT-61150"
@@ -5654,10 +5650,10 @@
             "phone": "0984135822",
             "address": "Tổ 2, Phường Bá Xuyên, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 23:44:54",
+            "updated_at": "2026-11-16 08:13:06",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5667,7 +5663,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[Jv__HRKqkTWF4YYLio-_Fy]",
-            "fcm_token_updated_at": "2026-11-06 23:44:54",
+            "fcm_token_updated_at": "2026-11-16 08:13:06",
             "work_shift": "odd",
             "vehicle_id": 54,
             "employee_code": "ASGT-61240"
@@ -5691,10 +5687,10 @@
             "phone": "0969407196",
             "address": "Thôn Kép, Phường Tự Lạn, Bắc Ninh",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 08:37:35",
+            "updated_at": "2026-11-16 05:17:08",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5703,8 +5699,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "f1FrfmVVTqSyvaQsh9wQGC:APA91bEemFaPeuIMYGcSzNAU3wlKiv71XaGs9dIL-tnyqo8vA1fjY2mP7pdnLcU-8uPNjiuyEfrY-9zO00WtrcrgFzB23_XwMy0q49IyqqIAy6bvdmhzCIs",
-            "fcm_token_updated_at": "2026-11-06 08:37:35",
+            "fcm_token": "dU7Le34HRyGdWUyLkvljhm:APA91bE7VnG95HnGb5VS2kQXLvvcdZQnODUK0rHQhWGBjaCtUdQPFjB1GqLKCcNXlAEXGgx_Sd-IYWMTuVoTpT4D8tI6cVNMVqSeT8YzxLPfwX15UQ83bwE",
+            "fcm_token_updated_at": "2026-11-16 05:17:08",
             "work_shift": "even",
             "vehicle_id": 40,
             "employee_code": "ASGT-61250"
@@ -5714,7 +5710,7 @@
             "name": "Lê Đình Hoàng",
             "email": "ldh2210@tms.local",
             "email_verified_at": null,
-            "password": "$2y$12$eCB3DCtxXUV.wXom2Uv4auGA\/HSkqBEDmbIEImM.GdPwxGKAAszT6",
+            "password": "$2y$12$eCB3DCtxXUV.wXom2Uv4auGA/HSkqBEDmbIEImM.GdPwxGKAAszT6",
             "date_of_birth": "1981-10-22 00:00:00",
             "license_class": "D",
             "license_number": "010048001723",
@@ -5728,10 +5724,10 @@
             "phone": "0984643232",
             "address": "Xã Sóc Sơn, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 07:19:10",
+            "updated_at": "2026-11-16 05:58:34",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5741,7 +5737,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": "[]",
             "fcm_token": "ExponentPushToken[HT5q07LBJEFusDsq2Gop2W]",
-            "fcm_token_updated_at": "2026-11-07 07:19:10",
+            "fcm_token_updated_at": "2026-11-16 05:58:34",
             "work_shift": "even",
             "vehicle_id": 47,
             "employee_code": "ASGT-61260"
@@ -5765,10 +5761,10 @@
             "phone": "0965495000",
             "address": "Thôn Đồng Đài, Xã Sơn Dương, Tuyên Quang",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:19:46",
+            "updated_at": "2026-11-16 06:32:31",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5778,7 +5774,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[AIg9B1BrS44j0Xmm38S6JT]",
-            "fcm_token_updated_at": "2026-11-07 08:19:46",
+            "fcm_token_updated_at": "2026-11-16 06:32:31",
             "work_shift": "even",
             "vehicle_id": 54,
             "employee_code": "ASGT-61280"
@@ -5802,10 +5798,10 @@
             "phone": "0977567105",
             "address": "Xóm Thanh Hoa, Trung Thành, Phổ Yên, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:20:49",
+            "updated_at": "2026-11-15 05:35:21",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5815,7 +5811,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[VY-imVO70J-ZGlU0K2_3Nc]",
-            "fcm_token_updated_at": "2026-11-07 08:20:49",
+            "fcm_token_updated_at": "2026-11-15 05:35:21",
             "work_shift": "odd",
             "vehicle_id": 32,
             "employee_code": "ASGT-61290"
@@ -5839,10 +5835,10 @@
             "phone": "0978802213",
             "address": "Tổ 1, Phường Quan Triều, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 01:56:15",
+            "updated_at": "2026-11-15 16:23:37",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5851,8 +5847,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "cpGZYr4cThePdQ9NMHf51I:APA91bGQozqzaRSEdK5jV6-2jiAcnmprImfx8wQde-toiZeXB7yEE8eAgXXWtFmT8zjscNuM0kd38AScLuq_ctAu5kERhyk8nFqHNPGsZ7JqjDTwEXG8O7I",
-            "fcm_token_updated_at": "2026-11-07 01:56:15",
+            "fcm_token": "cj8thQeqT5G2aufvKrFMJp:APA91bHvbdcidPSVSd7o46yRF9VggCZeRcCvm9r19Haf6eWTh9uwe9rlfuTfMzxLHkGMSWc18uIM_Wj4VZwvKZMbCnAXk_P35tH2EVA7-wSpzJxpEfffNjo",
+            "fcm_token_updated_at": "2026-11-15 16:23:37",
             "work_shift": "odd",
             "vehicle_id": 53,
             "employee_code": "ASGT-61350"
@@ -5876,10 +5872,10 @@
             "phone": "0366576828",
             "address": "Xóm Diện, Phường Phổ Yên, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 19:46:42",
+            "updated_at": "2026-11-16 07:01:34",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5889,7 +5885,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": "[]",
             "fcm_token": "dNSt1RmRREa2P6Nww5ftsp:APA91bFJM1qvIdIf_x97WandJPhDDHy5l9cdvkyY63vYUhxVJLWLXw4eokWIr2pKWNly-6tevNNpfExKJKzO7yy1nCtCixBHZ4CoC23dOGnfr8cuOqCpxG4",
-            "fcm_token_updated_at": "2026-11-05 19:46:42",
+            "fcm_token_updated_at": "2026-11-16 07:01:34",
             "work_shift": "even",
             "vehicle_id": 53,
             "employee_code": "ASGT-61360"
@@ -5913,10 +5909,10 @@
             "phone": "0984279509",
             "address": "Xóm Hưng Thịnh, Phường Trung Thành, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:00:30",
+            "updated_at": "2026-11-15 08:48:35",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5925,8 +5921,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "fMQGRNOqTGKri94lh0jgxp:APA91bF8Zk_90gZf7LCLYKYnKupoV1yBzkfD1eoPw-KeKKgwsFArgp5-WIVgCEubpfv3tgnpjXu-ytpcXyCQoqXzcYlftvN4LxdiMgIiiw0QZ6wTMiiKvDQ",
-            "fcm_token_updated_at": "2026-11-07 08:00:30",
+            "fcm_token": "frT2auKYSRuPLrhg5jdWUx:APA91bFAge9MWTcmWFw4xYzPyM76KJeBI3HUkbooGi6eTVx9FQrHLn8tT7ztpEtDaoWCCHikwDBebLG2EfDCMasaDvWLNudgKMbNqLgs6oPZMaUpo8H5lho",
+            "fcm_token_updated_at": "2026-11-15 08:48:35",
             "work_shift": "odd",
             "vehicle_id": 51,
             "employee_code": "ASGT-61370"
@@ -5950,10 +5946,10 @@
             "phone": "0977116361",
             "address": "Xóm Tân Long, Phường Vạn Xuân, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:03:21",
+            "updated_at": "2026-11-16 07:57:58",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -5962,8 +5958,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": "ExponentPushToken[61o3pWJE2UA2KYJL3_Nc8e]",
-            "fcm_token_updated_at": "2026-11-07 08:03:21",
+            "fcm_token": "d19mZxHFQj-q9lMWsDGw69:APA91bEmnCpPgfvYq64tUC_FxvCqfYH0xjHZ_fBBeDzkU9rP03koTew_1DfgkB9ZLoV6lzHVc4UfzUOaY4gRnUtQa2CR3vAri5w8ioGc2JC97YqhyufP3Ho",
+            "fcm_token_updated_at": "2026-11-16 07:57:58",
             "work_shift": "odd",
             "vehicle_id": 56,
             "employee_code": "ASGT-61390"
@@ -5987,10 +5983,10 @@
             "phone": "0975108043",
             "address": "Thôn Thanh Trí, Xã Kim Anh, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 05:18:30",
+            "updated_at": "2026-11-15 22:01:46",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6000,7 +5996,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ddAbJgUyQ46E5aYWogxh5L:APA91bE844g765xooQnDskQDcKxwNLyfeXc7W11PAX_JDwDeWTojqFmmcxuKDAMin8YUmnTMvweOkP1639KPVTed1F7koo0lfhfsyPWtwXZGkNSjbu7gIXY",
-            "fcm_token_updated_at": "2026-11-06 05:18:30",
+            "fcm_token_updated_at": "2026-11-15 22:01:46",
             "work_shift": "even",
             "vehicle_id": 9,
             "employee_code": "ASGT-61400"
@@ -6024,10 +6020,10 @@
             "phone": "0976920576",
             "address": "Vụ Bản, Xã Kim Anh, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 17:36:11",
+            "updated_at": "2026-11-16 07:55:32",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6037,7 +6033,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "eCA21EUvRhWlVV7qCkcfoF:APA91bEqd4ZbO_WbegGT7ba4Y6C5A_9Cwvd1N35FYIBWh-1Xk3aozhXoE-4RRG654sUs_TPGSIF_wyKaIbd-DH-B_JC1gOUSc9X5DWtrbgK-jhvo3uiS70c",
-            "fcm_token_updated_at": "2026-11-05 17:36:11",
+            "fcm_token_updated_at": "2026-11-16 07:55:32",
             "work_shift": "odd",
             "vehicle_id": 37,
             "employee_code": "ASGT-61510"
@@ -6052,7 +6048,7 @@
             "license_class": "C",
             "license_number": "990128996698",
             "license_expiry_date": "2031-08-26 00:00:00",
-            "license_image": "[\"licenses\\\/01M4WVKWR0GDZ35F8Q5E8GC6PG.jpg\"]",
+            "license_image": "[\"licenses\\/01M4WVKWR0GDZ35F8Q5E8GC6PG.jpg\"]",
             "cccd": "001090041562",
             "cccd_issue_date": "2021-04-25 00:00:00",
             "certificates": null,
@@ -6061,10 +6057,10 @@
             "phone": "0966975134",
             "address": "Thôn Thụy Hương, Xã Nội Bài, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:11:07",
+            "updated_at": "2026-11-16 07:30:37",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6074,7 +6070,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "cZ8j9Pq1S7q8K-L0F8VoSA:APA91bEv2HFbOT2qdDRjfPVBopTLzvUjLXbrdkx-2eYHfl28ccvSu7xuBTP3Ff26P0wH5EAPM_J-UU0dqp_lc-DEio3FfYaa7OsNDaeCtjy4mDmwqnvosVc",
-            "fcm_token_updated_at": "2026-11-07 08:11:07",
+            "fcm_token_updated_at": "2026-11-16 07:30:37",
             "work_shift": "even",
             "vehicle_id": 1645,
             "employee_code": "ASGT-61540"
@@ -6098,10 +6094,10 @@
             "phone": "0967800298",
             "address": "Tổ dân phố A1, Phường Phúc Thuận, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:17:49",
+            "updated_at": "2026-11-15 16:40:56",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6111,7 +6107,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ci_NbyZDRcGQdXRSqyCQgD:APA91bGk54Ntr-STiWpWXzDYgYWxXG2Q8K9FoEjfFdA4Ouhy5_BvfzcRLIEvlErNmSmGMWRSHOfotzeZhuhOkIBliiKpXa69REJNtyhrIEIdGwPkoM1cJnw",
-            "fcm_token_updated_at": "2026-11-07 08:17:49",
+            "fcm_token_updated_at": "2026-11-15 16:40:56",
             "work_shift": "odd",
             "vehicle_id": 42,
             "employee_code": "ASGT-61550"
@@ -6135,10 +6131,10 @@
             "phone": "0964783909",
             "address": "Xóm Soi 1, Xã Phú Bình, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-04 08:33:41",
+            "updated_at": "2026-11-16 06:03:35",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6147,8 +6143,8 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": null,
-            "fcm_token_updated_at": null,
+            "fcm_token": "dWE2i_76RLOxsRhMSGvvwY:APA91bG7DXCVEmolWdFVrRymoJFsE549_IKd3BZAGxwYr7boZSNSFyeItDf102jMgnQDV-YwtaKHRHphTQqYOOayV9A3ycoM9tIMUwB5PCHvMpFgemiDUXw",
+            "fcm_token_updated_at": "2026-11-16 06:03:35",
             "work_shift": "even",
             "vehicle_id": 32,
             "employee_code": "ASGT-61610"
@@ -6172,10 +6168,10 @@
             "phone": "0979345051",
             "address": "Xóm Bãi Hu, Phường Phúc Thuận, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 02:18:08",
+            "updated_at": "2026-11-14 20:21:14",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6185,7 +6181,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "dHep5NrbRnSYfjwRRVWNn3:APA91bFhhe8Sm38vIwhkZ4G9DrdGKp2wkuIE1cXVt0DiNb0bLM2H_oP3u2504IS4RmVq2d2ATbpTWjdtM8zT1lEnPU0ev1gMyqEmhePDS1sk31a5SrTyd8c",
-            "fcm_token_updated_at": "2026-11-07 02:18:08",
+            "fcm_token_updated_at": "2026-11-14 20:21:14",
             "work_shift": "odd",
             "vehicle_id": 24,
             "employee_code": "ASGT-61670"
@@ -6209,10 +6205,10 @@
             "phone": "0986239590",
             "address": "Tổ 4, Phường Gia Sàng, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:13:41",
+            "updated_at": "2026-11-15 21:29:19",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6222,7 +6218,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[_7OjuaMxYTWP4so8SpHME3]",
-            "fcm_token_updated_at": "2026-11-07 08:13:41",
+            "fcm_token_updated_at": "2026-11-15 21:29:19",
             "work_shift": "even",
             "vehicle_id": 34,
             "employee_code": "ASGT-61750"
@@ -6246,10 +6242,10 @@
             "phone": "0969881981",
             "address": "TDP Cây Châm, Xã Phú Lương, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:22:53",
+            "updated_at": "2026-11-16 04:24:10",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6259,7 +6255,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "dp2ZeJ8pQta7rFjLaR5_aK:APA91bEdwTPEw8b_M7h8esH-W39EE8-AsJbhpNGNQGSorTpY2FI4_Sbo20q4Gr25hNJy3aa3_gzF2Kl7RkHeShY2gWdxNvSlchKyfj90gDOvGz0h1becjsI",
-            "fcm_token_updated_at": "2026-11-07 08:22:53",
+            "fcm_token_updated_at": "2026-11-16 04:24:10",
             "work_shift": "even",
             "vehicle_id": 49,
             "employee_code": "ASGT-61770"
@@ -6283,10 +6279,10 @@
             "phone": "0338859068",
             "address": "Tổ 4, Phường Gia Sàng, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-05 19:40:59",
+            "updated_at": "2026-11-16 03:08:04",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6296,7 +6292,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "eCdpqO-GQTGoCRUzn29lb_:APA91bEOP3P5GOAqri7kk_METsnjNbAFiP670d4LYi20XSTtx7bn1XwD821GZGBAbdSmSbFBzBfBmfaq0xAjtzGhFDbBjbR-4NrtHvkjNufBVkb-0AQQ9ic",
-            "fcm_token_updated_at": "2026-11-05 19:40:59",
+            "fcm_token_updated_at": "2026-11-16 03:08:04",
             "work_shift": "even",
             "vehicle_id": 20,
             "employee_code": "ASGT-61830"
@@ -6320,10 +6316,10 @@
             "phone": "0986947603",
             "address": "Xóm Hiệp Đồng, Phường Phổ Yên, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 08:06:46",
+            "updated_at": "2026-11-15 23:05:06",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6333,7 +6329,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "e5EF9z0iRb6_WFsJKhxl3R:APA91bFE6MtpA3Qs4C_OXD7LDaT3b192r0h9VsTGht7v8AufHCfN3PJIqPtCZGwmEg2lnBpRExgqxfMSDOFRZAoDjkzULsFmcWkth5IsTGIFtZpZ--QPbIg",
-            "fcm_token_updated_at": "2026-11-07 08:06:46",
+            "fcm_token_updated_at": "2026-11-15 23:05:06",
             "work_shift": "even",
             "vehicle_id": 51,
             "employee_code": "ASGT-61910"
@@ -6357,10 +6353,10 @@
             "phone": "0971093794",
             "address": "Thôn Lương Quy, Xã Thư Lâm, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 01:06:49",
+            "updated_at": "2026-11-16 08:14:26",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6370,7 +6366,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "dCSTXMPCTaSAFj0c1CN4WR:APA91bG80kqDbjI8NLOw-0umivOhCtxtQic5SjFr12Yh6OqF4xFgW2s1fgwsVOGfQk2yaMg7SIbh3TmqXgt5qC4UwLV-mgj6x2OO-F0MqeFfrosV4C5S3-8",
-            "fcm_token_updated_at": "2026-11-06 01:06:49",
+            "fcm_token_updated_at": "2026-11-16 08:14:26",
             "work_shift": "even",
             "vehicle_id": 46,
             "employee_code": "ASGT-61930"
@@ -6394,10 +6390,10 @@
             "phone": "0328821988",
             "address": "Xã Phú Bình, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-06 18:20:22",
+            "updated_at": "2026-11-16 08:15:53",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6407,7 +6403,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[MCqrTzHBxyuwQq_PZrFHf3]",
-            "fcm_token_updated_at": "2026-11-06 18:20:22",
+            "fcm_token_updated_at": "2026-11-16 08:15:53",
             "work_shift": "odd",
             "vehicle_id": 23,
             "employee_code": "ASGT-61950"
@@ -6431,10 +6427,10 @@
             "phone": "0986983599",
             "address": "Xã Kim Anh, Thành Phố Hà Nội",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-07 00:28:03",
+            "updated_at": "2026-11-15 22:24:25",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6444,7 +6440,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "ExponentPushToken[BCdWSXNzQgxdhaWTc2A90J]",
-            "fcm_token_updated_at": "2026-11-07 00:28:03",
+            "fcm_token_updated_at": "2026-11-15 22:24:25",
             "work_shift": "odd",
             "vehicle_id": 46,
             "employee_code": "ASGT-61970"
@@ -6468,10 +6464,10 @@
             "phone": "0987399743",
             "address": "Xóm Nông Vụ 4, Xã Thành Công, Thái Nguyên",
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-09 09:09:51",
-            "updated_at": "2026-11-04 04:40:37",
+            "updated_at": "2026-11-16 08:07:38",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6481,7 +6477,7 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
             "fcm_token": "cJigjC5hQYOu-Do9GZRFPx:APA91bEKfv-xbeb94LtBtRc1BTXhhEWHJ2fxY9Y3eppxJyJQrzRX8G-pxvoQ99IXzcFtYo9z_wYi9v2-wqEqrIu8g_onTMjeVaxIDjrdX9oTjw7e8DqncLE",
-            "fcm_token_updated_at": "2026-11-04 04:40:37",
+            "fcm_token_updated_at": "2026-11-16 08:07:38",
             "work_shift": "even",
             "vehicle_id": 50,
             "employee_code": "ASGT-61990"
@@ -6505,47 +6501,10 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 0,
+            "is_active": false,
             "remember_token": "TN9ksSxN3j",
             "created_at": "2026-10-11 20:28:28",
             "updated_at": "2026-10-11 20:28:28",
-            "aviation_security_cert_number": null,
-            "aviation_security_cert_issue_date": null,
-            "aviation_security_cert_expiry_date": null,
-            "aviation_security_cert_image": null,
-            "dangerous_goods_cert_number": null,
-            "dangerous_goods_cert_issue_date": null,
-            "dangerous_goods_cert_expiry_date": null,
-            "dangerous_goods_cert_image": null,
-            "fcm_token": null,
-            "fcm_token_updated_at": null,
-            "work_shift": null,
-            "vehicle_id": null,
-            "employee_code": null
-        },
-        {
-            "id": 431,
-            "name": "Em. Khương Danh Bình",
-            "email": "ltao@example.org",
-            "email_verified_at": "2026-10-11 20:28:35",
-            "password": "$2y$12$z0w3AvOC3k4aq2v1P\/QQ\/uYt.e1zzoBAimhpaQ5oP3R.VtOzMTd6O",
-            "date_of_birth": null,
-            "license_class": null,
-            "license_number": null,
-            "license_expiry_date": null,
-            "license_image": null,
-            "cccd": null,
-            "cccd_issue_date": null,
-            "certificates": null,
-            "station": null,
-            "license_issue_date": null,
-            "phone": null,
-            "address": null,
-            "avatar": null,
-            "is_active": 0,
-            "remember_token": "K0HR0TJMkn",
-            "created_at": "2026-10-11 20:28:35",
-            "updated_at": "2026-10-11 20:28:35",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6565,7 +6524,7 @@
             "name": "Đào Hải Long",
             "email": "long.dh@asgl.vn",
             "email_verified_at": null,
-            "password": "$2y$12$gF1ft5OQREn6A67\/VyrIIO2hDQDZGKXNdEY3pc1dgYr.ViVc3LxiG",
+            "password": "$2y$12$gF1ft5OQREn6A67/VyrIIO2hDQDZGKXNdEY3pc1dgYr.ViVc3LxiG",
             "date_of_birth": "1987-06-23 00:00:00",
             "license_class": "C",
             "license_number": "001087017945",
@@ -6579,10 +6538,10 @@
             "phone": "0943983991",
             "address": "P303 C9 Khu Tập Thể Kim Liên Đống Đa Hà Nội",
             "avatar": null,
-            "is_active": 1,
-            "remember_token": null,
+            "is_active": true,
+            "remember_token": "Ea7fiEMM15ZB0GTau3JvFIbyGN7cVsJ4NhUpjbhWqqpz0GkUdqP5NNhWpNYu",
             "created_at": "2026-10-13 18:48:22",
-            "updated_at": "2026-10-19 13:57:52",
+            "updated_at": "2026-11-12 10:06:35",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6594,7 +6553,7 @@
             "fcm_token": "ExponentPushToken[NfMMRqHJ_QP0K3gjScE59h]",
             "fcm_token_updated_at": "2026-10-15 11:30:08",
             "work_shift": "even",
-            "vehicle_id": 1648,
+            "vehicle_id": null,
             "employee_code": "ASGT-00298"
         },
         {
@@ -6616,10 +6575,10 @@
             "phone": "0964181383",
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-13 20:33:58",
-            "updated_at": "2026-11-06 12:46:46",
+            "updated_at": "2026-11-15 16:25:00",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -6628,10 +6587,10 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": "[]",
-            "fcm_token": "d6ar8X8HTDKVVubLteW1lQ:APA91bFCWzaaH4HRe2jr4CuN1HOQaFAUyOVXa6OpAFEFGwLC6l-sJ-qVpiS1D1N6HlKfyTKWxjVQgCo6AwYFhMzv1HzNvgP5mKBTbDrMPfaWeaaaJ6vQI6Y",
-            "fcm_token_updated_at": "2026-11-06 12:46:46",
-            "work_shift": "even",
-            "vehicle_id": null,
+            "fcm_token": "ExponentPushToken[zm2ZARGl4U3Lq6WBCcAJW6]",
+            "fcm_token_updated_at": "2026-11-15 16:25:00",
+            "work_shift": null,
+            "vehicle_id": 1648,
             "employee_code": "ASGT-00695"
         },
         {
@@ -6639,12 +6598,12 @@
             "name": "Trần Đức Sơn",
             "email": "tds@tms.local",
             "email_verified_at": null,
-            "password": "$2y$12$tope66SNQ3i84BG2OEcnaOzY7z3CyzUgPF8Msc523rOGH1Y2r7\/j2",
+            "password": "$2y$12$tope66SNQ3i84BG2OEcnaOzY7z3CyzUgPF8Msc523rOGH1Y2r7/j2",
             "date_of_birth": "1990-06-20 00:00:00",
             "license_class": "C",
             "license_number": "010170013458",
             "license_expiry_date": "2027-02-08 00:00:00",
-            "license_image": null,
+            "license_image": "[]",
             "cccd": "001090057669",
             "cccd_issue_date": "2021-07-24 00:00:00",
             "certificates": null,
@@ -6653,21 +6612,21 @@
             "phone": "0855299490",
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-14 13:52:38",
-            "updated_at": "2026-11-06 17:00:18",
+            "updated_at": "2026-11-15 08:50:40",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
-            "aviation_security_cert_image": null,
+            "aviation_security_cert_image": "[]",
             "dangerous_goods_cert_number": null,
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
-            "dangerous_goods_cert_image": null,
+            "dangerous_goods_cert_image": "[]",
             "fcm_token": "ExponentPushToken[7uRVY6HXYYVcDtZ5AdRJaP]",
-            "fcm_token_updated_at": "2026-11-06 17:00:18",
-            "work_shift": "odd",
+            "fcm_token_updated_at": "2026-11-15 08:50:40",
+            "work_shift": null,
             "vehicle_id": 1650,
             "employee_code": "ASGT 00916"
         },
@@ -6676,7 +6635,7 @@
             "name": "Cụ. Đỗ Đạt Bạch",
             "email": "odiep@example.org",
             "email_verified_at": "2026-10-15 09:55:40",
-            "password": "$2y$12$3MppaBIzz.qTUFY7H0hDZuXHMtl\/Qesa6V2OP1QsGTHQdB8PYYXCO",
+            "password": "$2y$12$3MppaBIzz.qTUFY7H0hDZuXHMtl/Qesa6V2OP1QsGTHQdB8PYYXCO",
             "date_of_birth": null,
             "license_class": null,
             "license_number": null,
@@ -6690,7 +6649,7 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 0,
+            "is_active": false,
             "remember_token": "OXq1qD7vgn",
             "created_at": "2026-10-15 09:55:40",
             "updated_at": "2026-10-15 09:55:40",
@@ -6727,8 +6686,8 @@
             "phone": "0981335280",
             "address": null,
             "avatar": null,
-            "is_active": 1,
-            "remember_token": null,
+            "is_active": true,
+            "remember_token": "xwSlbtY6KGRzqEV4KXdkC5yZYMYakgJZgEsjllVK7B7C8ylloLiYaCUbFpQZ",
             "created_at": "2026-10-15 12:31:56",
             "updated_at": "2026-10-19 13:57:53",
             "aviation_security_cert_number": null,
@@ -6750,7 +6709,7 @@
             "name": "Trần Thị Tốt",
             "email": "asgt-00221@asgt.vn",
             "email_verified_at": null,
-            "password": "$2y$12$0\/jkrxzNl6LLjuBoOxBe5uHPKX0Rma.ot3hzRA\/huhbvJx3A0Ycsi",
+            "password": "$2y$12$0/jkrxzNl6LLjuBoOxBe5uHPKX0Rma.ot3hzRA/huhbvJx3A0Ycsi",
             "date_of_birth": null,
             "license_class": null,
             "license_number": null,
@@ -6764,8 +6723,8 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
-            "remember_token": null,
+            "is_active": true,
+            "remember_token": "Yu1owe4hYtK3vD8pDUkC7Kxje3wCen6gXN9dkS9LHSpUfLs80Ac0nmoGGbQg",
             "created_at": "2026-10-19 13:57:51",
             "updated_at": "2026-10-19 13:57:51",
             "aviation_security_cert_number": null,
@@ -6801,7 +6760,7 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-19 13:57:52",
             "updated_at": "2026-10-19 13:57:52",
@@ -6838,8 +6797,8 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
-            "remember_token": "DtGBV7jphxT2jQgOPkTkDOWFmKj9R4rz44Wo1e0ZueAf57Z4ITcdG0lxgTzS",
+            "is_active": true,
+            "remember_token": "cDl2JEfwRonsFXTGS1eks25vXb1pUpAHA6odAe8tWvb23GIcvoU7ZMf35ptB",
             "created_at": "2026-10-19 13:57:52",
             "updated_at": "2026-10-19 13:57:52",
             "aviation_security_cert_number": null,
@@ -6875,7 +6834,7 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-19 13:57:53",
             "updated_at": "2026-10-27 10:20:54",
@@ -6912,8 +6871,8 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
-            "remember_token": "zqrYUtU199xXkCWPmjiL9o539ACc0ICqlDTlhffb7c1Abx9HnqsYtmpzYr59",
+            "is_active": true,
+            "remember_token": "6zDxgnNuOu23k2RuvkFdXb2oigquhmErEkuAzH0hDJstJu8ATEt7m4OeIZHj",
             "created_at": "2026-10-19 13:57:53",
             "updated_at": "2026-10-19 13:57:53",
             "aviation_security_cert_number": null,
@@ -6935,7 +6894,7 @@
             "name": "Đỗ Trường Giang",
             "email": "asgt-00418@asgt.vn",
             "email_verified_at": null,
-            "password": "$2y$12$ORkp\/eu25ElhNvvPe3dOEen.ytr6jk1dQcXPN1gl7dQmet1htaome",
+            "password": "$2y$12$ORkp/eu25ElhNvvPe3dOEen.ytr6jk1dQcXPN1gl7dQmet1htaome",
             "date_of_birth": null,
             "license_class": null,
             "license_number": null,
@@ -6949,7 +6908,7 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-19 13:57:53",
             "updated_at": "2026-10-19 13:57:53",
@@ -6986,8 +6945,8 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
-            "remember_token": "day9dgXCGPhZZoYkBDRNFU9euLNTJi9z104vwdx7yzm68Sxnot7uEsL0YUMX",
+            "is_active": true,
+            "remember_token": "tdIhfuiikZo7f2kr66AoOKDV5BYMwHOkd6Dcx03enDoMgZ1cX6AJ59nIij5c",
             "created_at": "2026-10-19 13:57:54",
             "updated_at": "2026-10-19 13:57:54",
             "aviation_security_cert_number": null,
@@ -7023,8 +6982,8 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
-            "remember_token": "NQuj4LR1h5wr2xjQOVLpruv3yDsJRBq2VSfN6X4nEd8Zi61Tj6cZ8uMO1AWY",
+            "is_active": true,
+            "remember_token": "lQjp5uA0L1nYPOkwya3Fh0FHMn2baetD7YBELYocouFNqvFVx9ITRMBUzZkv",
             "created_at": "2026-10-19 13:57:54",
             "updated_at": "2026-10-19 13:57:54",
             "aviation_security_cert_number": null,
@@ -7060,8 +7019,8 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
-            "remember_token": "cjhj5jVBYiv0T5ngbKeeUi7NRWaNjO7etIlCODLfHpECbNQWdpvhzljfZyuH",
+            "is_active": true,
+            "remember_token": "FuUzNKx0XV8D5Y2IsiSYBSAI3Gg0xRVDaCazWwJJ6Uy3NAeSAR6REgwJsCE8",
             "created_at": "2026-10-19 13:57:54",
             "updated_at": "2026-10-22 14:42:46",
             "aviation_security_cert_number": null,
@@ -7083,7 +7042,7 @@
             "name": "Nguyễn Ngọc Chân",
             "email": "asgt-00796@asgt.vn",
             "email_verified_at": null,
-            "password": "$2y$12$EyYVHPzTNU4b\/RyZ.KDAQODlPt\/wnT70HXox9t18hC92fddjuBN9e",
+            "password": "$2y$12$EyYVHPzTNU4b/RyZ.KDAQODlPt/wnT70HXox9t18hC92fddjuBN9e",
             "date_of_birth": null,
             "license_class": null,
             "license_number": null,
@@ -7097,7 +7056,7 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-19 13:57:55",
             "updated_at": "2026-10-19 13:57:55",
@@ -7120,7 +7079,7 @@
             "name": "Vũ Ngọc Duy",
             "email": "asgt-01026@asgt.vn",
             "email_verified_at": null,
-            "password": "$2y$12$pYm6mPu1fGW4ypjk\/RcJeuVaiUaCMgkY61X69O5A0cssi.liCYwfK",
+            "password": "$2y$12$pYm6mPu1fGW4ypjk/RcJeuVaiUaCMgkY61X69O5A0cssi.liCYwfK",
             "date_of_birth": null,
             "license_class": null,
             "license_number": null,
@@ -7134,7 +7093,7 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": "MnnDoxuUyH8eyRtyzqnaRU5f3SgXFc3Pgo1NrUIb4B3jFB9ONO02Up9PAhwX",
             "created_at": "2026-10-19 13:57:55",
             "updated_at": "2026-10-19 13:57:55",
@@ -7171,8 +7130,8 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
-            "remember_token": "hLSPeV8u8lI68n6Tbz3oM7NDKzWYQe1HWWrMOVhPWjzuDVAGsxouNibSAEI8",
+            "is_active": true,
+            "remember_token": "LWHeZpGSalvrArO6C3lIx00dyed1EuXTGSRPw3j5NgoKMZfsbURlM292Ngwc",
             "created_at": "2026-10-19 13:57:55",
             "updated_at": "2026-10-19 13:57:55",
             "aviation_security_cert_number": null,
@@ -7208,10 +7167,10 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": false,
             "remember_token": "dKRehBJFJI",
             "created_at": "2026-10-19 14:46:37",
-            "updated_at": "2026-10-19 14:46:37",
+            "updated_at": "2026-11-10 19:38:59",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -7231,7 +7190,7 @@
             "name": "Ông. Khương Lâm Tú",
             "email": "qchung@example.com",
             "email_verified_at": "2026-10-19 14:46:46",
-            "password": "$2y$12$P3yhJe6Bgxz7BEtHLdelwur29sh5GxrLmUv\/n1wdmsn5I7V5Z927W",
+            "password": "$2y$12$P3yhJe6Bgxz7BEtHLdelwur29sh5GxrLmUv/n1wdmsn5I7V5Z927W",
             "date_of_birth": null,
             "license_class": null,
             "license_number": null,
@@ -7245,10 +7204,10 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": false,
             "remember_token": "jZXtgAoE72",
             "created_at": "2026-10-19 14:46:46",
-            "updated_at": "2026-10-19 14:46:46",
+            "updated_at": "2026-11-10 19:39:14",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -7282,10 +7241,10 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": false,
             "remember_token": "NRLNi3wxWp",
             "created_at": "2026-10-19 14:46:57",
-            "updated_at": "2026-10-19 14:46:57",
+            "updated_at": "2026-11-10 19:39:05",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -7294,43 +7253,6 @@
             "dangerous_goods_cert_issue_date": null,
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": null,
-            "fcm_token": null,
-            "fcm_token_updated_at": null,
-            "work_shift": null,
-            "vehicle_id": null,
-            "employee_code": null
-        },
-        {
-            "id": 452,
-            "name": "Vũ Minh Tự",
-            "email": "vmt@tms.local",
-            "email_verified_at": null,
-            "password": "$2y$12$hTPYTwO\/SKzjmI1q2qinbuCp0iQWMAqmhddfbNalBYLwvAu7BhH26",
-            "date_of_birth": null,
-            "license_class": null,
-            "license_number": null,
-            "license_expiry_date": null,
-            "license_image": "[]",
-            "cccd": null,
-            "cccd_issue_date": null,
-            "certificates": null,
-            "station": null,
-            "license_issue_date": null,
-            "phone": "0929892345",
-            "address": null,
-            "avatar": null,
-            "is_active": 1,
-            "remember_token": null,
-            "created_at": "2026-10-21 11:01:23",
-            "updated_at": "2026-11-04 16:49:10",
-            "aviation_security_cert_number": null,
-            "aviation_security_cert_issue_date": null,
-            "aviation_security_cert_expiry_date": null,
-            "aviation_security_cert_image": "[]",
-            "dangerous_goods_cert_number": null,
-            "dangerous_goods_cert_issue_date": null,
-            "dangerous_goods_cert_expiry_date": null,
-            "dangerous_goods_cert_image": "[]",
             "fcm_token": null,
             "fcm_token_updated_at": null,
             "work_shift": null,
@@ -7356,10 +7278,10 @@
             "phone": "0977107091",
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-21 11:05:31",
-            "updated_at": "2026-11-06 17:41:00",
+            "updated_at": "2026-11-15 15:33:43",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -7369,10 +7291,10 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": "[]",
             "fcm_token": "ExponentPushToken[xvuqX5AEwVgrol5W98Py5D]",
-            "fcm_token_updated_at": "2026-11-06 17:41:00",
-            "work_shift": "odd",
-            "vehicle_id": 1656,
-            "employee_code": null
+            "fcm_token_updated_at": "2026-11-14 09:38:27",
+            "work_shift": null,
+            "vehicle_id": null,
+            "employee_code": "ASGT-01048"
         },
         {
             "id": 454,
@@ -7393,7 +7315,7 @@
             "phone": "0981335280",
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-21 16:15:22",
             "updated_at": "2026-10-21 16:15:22",
@@ -7416,7 +7338,7 @@
             "name": "THANH TÙNG",
             "email": "ptt1@tms.com",
             "email_verified_at": null,
-            "password": "$2y$12$hQW640LFv1toNUm4Ey0R\/u7CgQpnfSrZwnOzXUpKdvZKM.DNVHEcC",
+            "password": "$2y$12$hQW640LFv1toNUm4Ey0R/u7CgQpnfSrZwnOzXUpKdvZKM.DNVHEcC",
             "date_of_birth": null,
             "license_class": null,
             "license_number": null,
@@ -7430,7 +7352,7 @@
             "phone": "0356242404",
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-10-22 11:11:23",
             "updated_at": "2026-10-22 11:11:23",
@@ -7447,43 +7369,6 @@
             "work_shift": null,
             "vehicle_id": null,
             "employee_code": "ASGT0025"
-        },
-        {
-            "id": 456,
-            "name": "CUong",
-            "email": "cuongpham2107@gmail.com",
-            "email_verified_at": null,
-            "password": "$2y$12$u4xT6hpHGoAUufGxRqN4H.t9ZTi65znUouDRmGBfu2bNskpt9Ix4q",
-            "date_of_birth": null,
-            "license_class": null,
-            "license_number": null,
-            "license_expiry_date": null,
-            "license_image": "[]",
-            "cccd": null,
-            "cccd_issue_date": null,
-            "certificates": null,
-            "station": null,
-            "license_issue_date": null,
-            "phone": null,
-            "address": null,
-            "avatar": null,
-            "is_active": 1,
-            "remember_token": null,
-            "created_at": "2026-10-27 09:15:22",
-            "updated_at": "2026-11-05 10:06:03",
-            "aviation_security_cert_number": null,
-            "aviation_security_cert_issue_date": null,
-            "aviation_security_cert_expiry_date": null,
-            "aviation_security_cert_image": "[]",
-            "dangerous_goods_cert_number": null,
-            "dangerous_goods_cert_issue_date": null,
-            "dangerous_goods_cert_expiry_date": null,
-            "dangerous_goods_cert_image": "[]",
-            "fcm_token": "ExponentPushToken[eBuqvECbP0e-81ve5zEDmF]",
-            "fcm_token_updated_at": "2026-11-05 10:06:03",
-            "work_shift": null,
-            "vehicle_id": null,
-            "employee_code": "ASGL-00735"
         },
         {
             "id": 457,
@@ -7504,7 +7389,7 @@
             "phone": null,
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-11-03 14:26:36",
             "updated_at": "2026-11-03 14:50:53",
@@ -7541,10 +7426,10 @@
             "phone": "0983666048",
             "address": null,
             "avatar": null,
-            "is_active": 1,
+            "is_active": true,
             "remember_token": null,
             "created_at": "2026-11-06 13:15:26",
-            "updated_at": "2026-11-06 13:18:17",
+            "updated_at": "2026-11-16 07:37:39",
             "aviation_security_cert_number": null,
             "aviation_security_cert_issue_date": null,
             "aviation_security_cert_expiry_date": null,
@@ -7554,10 +7439,84 @@
             "dangerous_goods_cert_expiry_date": null,
             "dangerous_goods_cert_image": "[]",
             "fcm_token": "fA2h06_AS4qHIOiCmgiADN:APA91bFFOAj2zpdDkYO5iLiICzGcNdPOXud7CzjRbjqVwKwbEOm7tdpv2Dq9YfKxZrXWRBm4iKcmEqEExMLSKKMCqBYhGRkAc0yY6rIuJb2aZ3mVEJ5LTdg",
-            "fcm_token_updated_at": "2026-11-06 13:18:17",
+            "fcm_token_updated_at": "2026-11-16 07:37:39",
+            "work_shift": null,
+            "vehicle_id": 1657,
+            "employee_code": "asgt01068"
+        },
+        {
+            "id": 459,
+            "name": "Hoàng Bích Ngọc",
+            "email": "hoangbichngocbn@gmail.com",
+            "email_verified_at": null,
+            "password": "$2y$12$pDlYGelicc1kgggdJGnrNuN1Os/lRBZE8/NUIDJFpjKIU5aSgSdpK",
+            "date_of_birth": null,
+            "license_class": null,
+            "license_number": null,
+            "license_expiry_date": null,
+            "license_image": null,
+            "cccd": null,
+            "cccd_issue_date": null,
+            "certificates": null,
+            "station": null,
+            "license_issue_date": null,
+            "phone": "0962204567",
+            "address": null,
+            "avatar": null,
+            "is_active": true,
+            "remember_token": "jAbu2JqfAbwWmzPGbwNgTh4GpmeuQByi7DqnUBelG0aamLXE7KOG7BMH6vZH",
+            "created_at": "2026-11-10 11:36:00",
+            "updated_at": "2026-11-10 11:36:00",
+            "aviation_security_cert_number": null,
+            "aviation_security_cert_issue_date": null,
+            "aviation_security_cert_expiry_date": null,
+            "aviation_security_cert_image": null,
+            "dangerous_goods_cert_number": null,
+            "dangerous_goods_cert_issue_date": null,
+            "dangerous_goods_cert_expiry_date": null,
+            "dangerous_goods_cert_image": null,
+            "fcm_token": null,
+            "fcm_token_updated_at": null,
             "work_shift": null,
             "vehicle_id": null,
-            "employee_code": "asgt01068"
+            "employee_code": "asgt-01067"
+        },
+        {
+            "id": 460,
+            "name": "Nguyễn Văn Quý",
+            "email": "nvq0708@tms.local",
+            "email_verified_at": null,
+            "password": "$2y$12$I92groUNK/wrV9Sotr7MO.yA/g7esiyblxMq2krBAu4p8.5/UyUcK",
+            "date_of_birth": "1997-08-07 00:00:00",
+            "license_class": "C",
+            "license_number": "270208005912",
+            "license_expiry_date": "2030-03-17 00:00:00",
+            "license_image": "[]",
+            "cccd": "027097008841",
+            "cccd_issue_date": "2021-12-18 00:00:00",
+            "certificates": null,
+            "station": "BN",
+            "license_issue_date": "2025-03-17 00:00:00",
+            "phone": "0888886397",
+            "address": "Thôn Đông Phong, xã Tam Đa, Bắc Ninh",
+            "avatar": null,
+            "is_active": true,
+            "remember_token": null,
+            "created_at": "2026-11-14 16:40:26",
+            "updated_at": "2026-11-15 17:15:12",
+            "aviation_security_cert_number": null,
+            "aviation_security_cert_issue_date": null,
+            "aviation_security_cert_expiry_date": null,
+            "aviation_security_cert_image": "[]",
+            "dangerous_goods_cert_number": null,
+            "dangerous_goods_cert_issue_date": null,
+            "dangerous_goods_cert_expiry_date": null,
+            "dangerous_goods_cert_image": "[]",
+            "fcm_token": "cjZz-MnEQZynyMoPTRPDx5:APA91bGydhaiqArVqaloCYvFqw0Pwnz_DIGmxsGCw8SW247bUCoU8H-xIPu6AiEkfFnmpczA-weOby_mOf4sGUlqBuzQnl2_l6w1ZGtDnB_mOnPGVWKLSaY",
+            "fcm_token_updated_at": "2026-11-15 17:15:12",
+            "work_shift": "even",
+            "vehicle_id": 19,
+            "employee_code": "ASGT-60106"
         }
     ],
     "model_has_roles": [
@@ -8087,14 +8046,24 @@
             "model_id": 429
         },
         {
+            "role_id": 1,
+            "model_type": "App\\Models\\User",
+            "model_id": 432
+        },
+        {
             "role_id": 2,
             "model_type": "App\\Models\\User",
-            "model_id": 431
+            "model_id": 433
         },
         {
             "role_id": 2,
             "model_type": "App\\Models\\User",
             "model_id": 434
+        },
+        {
+            "role_id": 1,
+            "model_type": "App\\Models\\User",
+            "model_id": 436
         },
         {
             "role_id": 1,
@@ -8110,16 +8079,6 @@
             "role_id": 1,
             "model_type": "App\\Models\\User",
             "model_id": 439
-        },
-        {
-            "role_id": 1,
-            "model_type": "App\\Models\\User",
-            "model_id": 432
-        },
-        {
-            "role_id": 1,
-            "model_type": "App\\Models\\User",
-            "model_id": 436
         },
         {
             "role_id": 1,
@@ -8184,16 +8143,6 @@
         {
             "role_id": 2,
             "model_type": "App\\Models\\User",
-            "model_id": 433
-        },
-        {
-            "role_id": 2,
-            "model_type": "App\\Models\\User",
-            "model_id": 452
-        },
-        {
-            "role_id": 2,
-            "model_type": "App\\Models\\User",
             "model_id": 453
         },
         {
@@ -8209,17 +8158,22 @@
         {
             "role_id": 2,
             "model_type": "App\\Models\\User",
-            "model_id": 456
-        },
-        {
-            "role_id": 2,
-            "model_type": "App\\Models\\User",
             "model_id": 457
         },
         {
             "role_id": 2,
             "model_type": "App\\Models\\User",
             "model_id": 458
+        },
+        {
+            "role_id": 1,
+            "model_type": "App\\Models\\User",
+            "model_id": 459
+        },
+        {
+            "role_id": 2,
+            "model_type": "App\\Models\\User",
+            "model_id": 460
         }
     ]
 }

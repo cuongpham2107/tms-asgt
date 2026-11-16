@@ -52,6 +52,10 @@ class ShieldAndUserSeeder extends Seeder
         if (! empty($data['users'])) {
             foreach (array_chunk($data['users'], 50) as $chunk) {
                 foreach ($chunk as $row) {
+                    if (array_key_exists('is_active', $row) && $row['is_active'] !== null) {
+                        $row['is_active'] = (bool) $row['is_active'];
+                    }
+
                     DB::table('users')->updateOrInsert(['id' => $row['id']], $row);
                 }
             }

@@ -21,6 +21,13 @@ class PricingAndFeeSeeder extends Seeder
         // 1. Fee Types
         if (! empty($data['fee_types'])) {
             foreach ($data['fee_types'] as $row) {
+                if (array_key_exists('is_active', $row) && $row['is_active'] !== null) {
+                    $row['is_active'] = (bool) $row['is_active'];
+                }
+                if (array_key_exists('auto_apply', $row) && $row['auto_apply'] !== null) {
+                    $row['auto_apply'] = (bool) $row['auto_apply'];
+                }
+
                 DB::table('fee_types')->updateOrInsert(['id' => $row['id']], $row);
             }
             $this->command->info('Đã seed '.count($data['fee_types']).' loại phí (fee_types).');

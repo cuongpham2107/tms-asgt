@@ -22,6 +22,10 @@ class CustomerLocationMasterSeeder extends Seeder
         if (! empty($data['locations'])) {
             foreach (array_chunk($data['locations'], 100) as $chunk) {
                 foreach ($chunk as $row) {
+                    if (array_key_exists('is_active', $row) && $row['is_active'] !== null) {
+                        $row['is_active'] = (bool) $row['is_active'];
+                    }
+
                     DB::table('locations')->updateOrInsert(['id' => $row['id']], $row);
                 }
             }
@@ -31,6 +35,10 @@ class CustomerLocationMasterSeeder extends Seeder
         // 2. Customers
         if (! empty($data['customers'])) {
             foreach ($data['customers'] as $row) {
+                if (array_key_exists('is_active', $row) && $row['is_active'] !== null) {
+                    $row['is_active'] = (bool) $row['is_active'];
+                }
+
                 DB::table('customers')->updateOrInsert(['id' => $row['id']], $row);
             }
             $this->command->info('Đã seed '.count($data['customers']).' khách hàng (customers).');

@@ -36,107 +36,6 @@ class AggregateData implements Tool
     /** Km 1 ca vượt mức này coi là nhập sai (vd km đầu ca = 0) và không cộng vào tổng. */
     private const MAX_SHIFT_KM = 2000;
 
-    /** @var array<string, array{permission: string, date: string, status: string, metrics: array<string, array{0: string, 1: string}>}> */
-    private const DATASETS = [
-        'trips' => [
-            'permission' => 'ViewAny:Trip',
-            'date' => 'COALESCE(trips.started_at, trips.created_at)',
-            'status' => 'trips.status',
-            'driver' => 'trips.driver_id',
-            'metrics' => [
-                'count' => ['COUNT(DISTINCT trips.id)', 'Số chuyến'],
-                'km' => ['SUM(trips.total_km)', 'Tổng km'],
-                'km_loaded' => ['SUM(trips.total_km_loaded)', 'Km có hàng'],
-                'km_empty' => ['SUM(trips.total_km_empty)', 'Km rỗng'],
-                'vehicles' => ['COUNT(DISTINCT trips.vehicle_id)', 'Số xe'],
-                'drivers' => ['COUNT(DISTINCT trips.driver_id)', 'Số tài xế'],
-                'avg_trip_minutes' => ['AVG(CASE WHEN trips.completed_at IS NOT NULL AND trips.started_at IS NOT NULL THEN (julianday(trips.completed_at) - julianday(trips.started_at)) * 1440 END)', 'TB phút/chuyến (bắt đầu → hoàn thành)'],
-                'avg_pickup_minutes' => ["AVG((SELECT (julianday(MIN(CASE WHEN x.checkpoint_type = 'left_pickup' THEN x.occurred_at END)) - julianday(MIN(CASE WHEN x.checkpoint_type = 'arrived_pickup' THEN x.occurred_at END))) * 1440 FROM trip_checkpoints x WHERE x.trip_id = trips.id))", 'TB phút lấy hàng (đến → rời điểm lấy)'],
-            ],
-        ],
-        'orders' => [
-            'permission' => 'ViewAny:Order',
-            'date' => 'COALESCE(orders.planned_loading_at, orders.created_at)',
-            'status' => 'orders.status',
-            'driver' => 'trips.driver_id',
-            'metrics' => [
-                'count' => ['COUNT(DISTINCT orders.id)', 'Số đơn'],
-                'weight' => ['SUM(orders.chargeable_weight)', 'Trọng lượng tính cước'],
-                'missing_charge' => ["SUM(CASE WHEN orders.status = 'completed' AND order_charges.id IS NULL THEN 1 ELSE 0 END)", 'Đơn xong chưa có cước'],
-                'not_exported' => ['SUM(CASE WHEN order_charges.id IS NOT NULL AND order_charges.exported_at IS NULL THEN 1 ELSE 0 END)', 'Có cước chưa xuất bảng kê'],
-                'revenue' => ['SUM(order_charges.total)', 'Tổng tiền cước'],
-            ],
-        ],
-        'charges' => [
-            'permission' => 'ViewAny:Order',
-            'date' => ChargeSummary::CHARGE_DATE,
-            'status' => 'orders.status',
-            'driver' => 'trips.driver_id',
-            'metrics' => [
-                'count' => ['COUNT(order_charges.id)', 'Số đơn có cước'],
-                'revenue' => ['SUM(order_charges.total)', 'Tổng tiền'],
-                'subtotal' => ['SUM(order_charges.subtotal)', 'Trước VAT'],
-                'vat' => ['SUM(order_charges.vat_amount)', 'VAT'],
-                'not_exported' => ['SUM(CASE WHEN order_charges.exported_at IS NULL THEN 1 ELSE 0 END)', 'Chưa xuất bảng kê'],
-            ],
-        ],
-        'checkpoints' => [
-            'permission' => 'ViewAny:Trip',
-            'date' => 'trip_checkpoints.occurred_at',
-            'status' => 'trip_checkpoints.checkpoint_type',
-            'driver' => 'COALESCE(trip_checkpoints.driver_id, trips.driver_id)',
-            'metrics' => [
-                'count' => ['COUNT(*)', 'Số lần bấm mốc'],
-                'checked' => ["SUM(CASE WHEN trip_checkpoints.location_geo_status IN ('valid', 'out_of_range') THEN 1 ELSE 0 END)", 'Mốc đã kiểm tra vị trí'],
-                'wrong_location' => ["SUM(CASE WHEN trip_checkpoints.location_geo_status = 'out_of_range' THEN 1 ELSE 0 END)", 'Bấm sai vị trí điểm'],
-                'wrong_rate' => ["100.0 * SUM(CASE WHEN trip_checkpoints.location_geo_status = 'out_of_range' THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN trip_checkpoints.location_geo_status IN ('valid', 'out_of_range') THEN 1 ELSE 0 END), 0)", 'Tỉ lệ sai vị trí'],
-                'phone_away' => ["SUM(CASE WHEN trip_checkpoints.vehicle_geo_status = 'out_of_range' THEN 1 ELSE 0 END)", 'Điện thoại xa xe'],
-                'phone_away_rate' => ["100.0 * SUM(CASE WHEN trip_checkpoints.vehicle_geo_status = 'out_of_range' THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN trip_checkpoints.vehicle_geo_status IN ('valid', 'out_of_range') THEN 1 ELSE 0 END), 0)", 'Tỉ lệ điện thoại xa xe'],
-                'no_gps' => ["SUM(CASE WHEN trip_checkpoints.vehicle_geo_status = 'unverified' THEN 1 ELSE 0 END)", 'Không xác minh được (thiếu GPS)'],
-            ],
-        ],
-        'stops' => [
-            'permission' => 'ViewAny:Trip',
-            'date' => 'trip_checkpoints.occurred_at',
-            'status' => 'orders.status',
-            'driver' => 'COALESCE(trip_checkpoints.driver_id, trips.driver_id)',
-            'metrics' => [
-                'count' => ['COUNT(*)', 'Số điểm giao'],
-                'avg_minutes' => ['AVG((julianday(done.occurred_at) - julianday(trip_checkpoints.occurred_at)) * 1440)', 'TB phút tại điểm (đến → giao xong)'],
-                'max_minutes' => ['MAX((julianday(done.occurred_at) - julianday(trip_checkpoints.occurred_at)) * 1440)', 'Lâu nhất (phút)'],
-                'over_60' => ['SUM(CASE WHEN (julianday(done.occurred_at) - julianday(trip_checkpoints.occurred_at)) * 1440 > 60 THEN 1 ELSE 0 END)', 'Số điểm quá 60 phút'],
-            ],
-        ],
-        'shifts' => [
-            'permission' => 'ViewAny:DriverShift',
-            'date' => 'driver_shifts.start_time',
-            'status' => 'driver_shifts.shift_type',
-            'driver' => 'driver_shifts.driver_id',
-            'metrics' => [
-                'count' => ['COUNT(*)', 'Số ca'],
-                'hours' => ['SUM((julianday(driver_shifts.end_time) - julianday(driver_shifts.start_time)) * 24)', 'Tổng giờ trực'],
-                'avg_hours' => ['AVG((julianday(driver_shifts.end_time) - julianday(driver_shifts.start_time)) * 24)', 'TB giờ/ca'],
-                'km' => ['SUM(CASE WHEN driver_shifts.total_km BETWEEN 0 AND '.self::MAX_SHIFT_KM.' THEN driver_shifts.total_km END)', 'Km trong ca (bỏ ca nhập km sai)'],
-                'bad_km' => ['SUM(CASE WHEN driver_shifts.total_km > '.self::MAX_SHIFT_KM.' OR driver_shifts.total_km < 0 THEN 1 ELSE 0 END)', 'Ca nhập km sai (> 2.000 km)'],
-                'completed_trips' => ["SUM((SELECT COUNT(*) FROM trips t WHERE t.shift_id = driver_shifts.id AND t.status = 'completed'))", 'Chuyến hoàn thành'],
-                'no_trip' => ["SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM trips t WHERE t.shift_id = driver_shifts.id AND t.status != 'cancelled') THEN 1 ELSE 0 END)", 'Ca không chạy chuyến'],
-                'overtime' => ['SUM(CASE WHEN driver_shifts.is_overtime = 1 THEN 1 ELSE 0 END)', 'Ca tăng cường'],
-                'open' => ['SUM(CASE WHEN driver_shifts.end_time IS NULL THEN 1 ELSE 0 END)', 'Ca chưa kết thúc'],
-            ],
-        ],
-        'swaps' => [
-            'permission' => 'ViewAny:Trip',
-            'date' => 'driver_swaps.created_at',
-            'status' => 'driver_swaps.reason',
-            'driver' => 'driver_swaps.from_driver_id',
-            'metrics' => [
-                'count' => ['COUNT(*)', 'Số lần đảo lái'],
-                'trips' => ['COUNT(DISTINCT driver_swaps.trip_id)', 'Số chuyến có đảo lái'],
-                'receivers' => ['COUNT(DISTINCT driver_swaps.to_driver_id)', 'Số tài xế nhận'],
-            ],
-        ],
-    ];
-
     /** @var array<string, string> */
     private const DIMENSIONS = [
         'vehicle' => 'Xe',
@@ -151,8 +50,140 @@ class AggregateData implements Tool
         'month' => 'Tháng',
     ];
 
-    /** @var array<string, string> ponytail: strftime chỉ chạy trên SQLite (DB hiện tại), đổi sang DATE_FORMAT nếu chuyển MySQL. */
-    private const TIME_FORMATS = ['day' => '%Y-%m-%d', 'week' => '%Y-W%W', 'month' => '%Y-%m'];
+    /** @var array<string, array{sqlite: string, pgsql: string}> */
+    private const TIME_FORMATS = [
+        'day' => ['sqlite' => '%Y-%m-%d', 'pgsql' => 'YYYY-MM-DD'],
+        'week' => ['sqlite' => '%Y-W%W', 'pgsql' => 'IYYY-"W"IW'],
+        'month' => ['sqlite' => '%Y-%m', 'pgsql' => 'YYYY-MM'],
+    ];
+
+    /**
+     * @return array<string, array{permission: string, date: string, status: string, driver: string, metrics: array<string, array{0: string, 1: string}>}>
+     */
+    private function datasets(): array
+    {
+        $tripDurationMin = $this->diffMinutesSql('trips.completed_at', 'trips.started_at');
+        $pickupDurationMin = $this->diffMinutesSql(
+            "MIN(CASE WHEN x.checkpoint_type = 'left_pickup' THEN x.occurred_at END)",
+            "MIN(CASE WHEN x.checkpoint_type = 'arrived_pickup' THEN x.occurred_at END)"
+        );
+        $stopDurationMin = $this->diffMinutesSql('done.occurred_at', 'trip_checkpoints.occurred_at');
+        $shiftDurationHours = $this->diffHoursSql('driver_shifts.end_time', 'driver_shifts.start_time');
+
+        return [
+            'trips' => [
+                'permission' => 'ViewAny:Trip',
+                'date' => 'COALESCE(trips.started_at, trips.created_at)',
+                'status' => 'trips.status',
+                'driver' => 'trips.driver_id',
+                'metrics' => [
+                    'count' => ['COUNT(DISTINCT trips.id)', 'Số chuyến'],
+                    'km' => ['SUM(trips.total_km)', 'Tổng km'],
+                    'km_loaded' => ['SUM(trips.total_km_loaded)', 'Km có hàng'],
+                    'km_empty' => ['SUM(trips.total_km_empty)', 'Km rỗng'],
+                    'vehicles' => ['COUNT(DISTINCT trips.vehicle_id)', 'Số xe'],
+                    'drivers' => ['COUNT(DISTINCT trips.driver_id)', 'Số tài xế'],
+                    'avg_trip_minutes' => ["AVG(CASE WHEN trips.completed_at IS NOT NULL AND trips.started_at IS NOT NULL THEN {$tripDurationMin} END)", 'TB phút/chuyến (bắt đầu → hoàn thành)'],
+                    'avg_pickup_minutes' => ["AVG((SELECT {$pickupDurationMin} FROM trip_checkpoints x WHERE x.trip_id = trips.id))", 'TB phút lấy hàng (đến → rời điểm lấy)'],
+                ],
+            ],
+            'orders' => [
+                'permission' => 'ViewAny:Order',
+                'date' => 'COALESCE(orders.planned_loading_at, orders.created_at)',
+                'status' => 'orders.status',
+                'driver' => 'trips.driver_id',
+                'metrics' => [
+                    'count' => ['COUNT(DISTINCT orders.id)', 'Số đơn'],
+                    'weight' => ['SUM(orders.chargeable_weight)', 'Trọng lượng tính cước'],
+                    'missing_charge' => ["SUM(CASE WHEN orders.status = 'completed' AND order_charges.id IS NULL THEN 1 ELSE 0 END)", 'Đơn xong chưa có cước'],
+                    'not_exported' => ['SUM(CASE WHEN order_charges.id IS NOT NULL AND order_charges.exported_at IS NULL THEN 1 ELSE 0 END)', 'Có cước chưa xuất bảng kê'],
+                    'revenue' => ['SUM(order_charges.total)', 'Tổng tiền cước'],
+                ],
+            ],
+            'charges' => [
+                'permission' => 'ViewAny:Order',
+                'date' => ChargeSummary::CHARGE_DATE,
+                'status' => 'orders.status',
+                'driver' => 'trips.driver_id',
+                'metrics' => [
+                    'count' => ['COUNT(order_charges.id)', 'Số đơn có cước'],
+                    'revenue' => ['SUM(order_charges.total)', 'Tổng tiền'],
+                    'subtotal' => ['SUM(order_charges.subtotal)', 'Trước VAT'],
+                    'vat' => ['SUM(order_charges.vat_amount)', 'VAT'],
+                    'not_exported' => ['SUM(CASE WHEN order_charges.exported_at IS NULL THEN 1 ELSE 0 END)', 'Chưa xuất bảng kê'],
+                ],
+            ],
+            'checkpoints' => [
+                'permission' => 'ViewAny:Trip',
+                'date' => 'trip_checkpoints.occurred_at',
+                'status' => 'trip_checkpoints.checkpoint_type',
+                'driver' => 'COALESCE(trip_checkpoints.driver_id, trips.driver_id)',
+                'metrics' => [
+                    'count' => ['COUNT(*)', 'Số lần bấm mốc'],
+                    'checked' => ["SUM(CASE WHEN trip_checkpoints.location_geo_status IN ('valid', 'out_of_range') THEN 1 ELSE 0 END)", 'Mốc đã kiểm tra vị trí'],
+                    'wrong_location' => ["SUM(CASE WHEN trip_checkpoints.location_geo_status = 'out_of_range' THEN 1 ELSE 0 END)", 'Bấm sai vị trí điểm'],
+                    'wrong_rate' => ["100.0 * SUM(CASE WHEN trip_checkpoints.location_geo_status = 'out_of_range' THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN trip_checkpoints.location_geo_status IN ('valid', 'out_of_range') THEN 1 ELSE 0 END), 0)", 'Tỉ lệ sai vị trí'],
+                    'phone_away' => ["SUM(CASE WHEN trip_checkpoints.vehicle_geo_status = 'out_of_range' THEN 1 ELSE 0 END)", 'Điện thoại xa xe'],
+                    'phone_away_rate' => ["100.0 * SUM(CASE WHEN trip_checkpoints.vehicle_geo_status = 'out_of_range' THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN trip_checkpoints.vehicle_geo_status IN ('valid', 'out_of_range') THEN 1 ELSE 0 END), 0)", 'Tỉ lệ điện thoại xa xe'],
+                    'no_gps' => ["SUM(CASE WHEN trip_checkpoints.vehicle_geo_status = 'unverified' THEN 1 ELSE 0 END)", 'Không xác minh được (thiếu GPS)'],
+                ],
+            ],
+            'stops' => [
+                'permission' => 'ViewAny:Trip',
+                'date' => 'trip_checkpoints.occurred_at',
+                'status' => 'orders.status',
+                'driver' => 'COALESCE(trip_checkpoints.driver_id, trips.driver_id)',
+                'metrics' => [
+                    'count' => ['COUNT(*)', 'Số điểm giao'],
+                    'avg_minutes' => ["AVG({$stopDurationMin})", 'TB phút tại điểm (đến → giao xong)'],
+                    'max_minutes' => ["MAX({$stopDurationMin})", 'Lâu nhất (phút)'],
+                    'over_60' => ["SUM(CASE WHEN {$stopDurationMin} > 60 THEN 1 ELSE 0 END)", 'Số điểm quá 60 phút'],
+                ],
+            ],
+            'shifts' => [
+                'permission' => 'ViewAny:DriverShift',
+                'date' => 'driver_shifts.start_time',
+                'status' => 'driver_shifts.shift_type',
+                'driver' => 'driver_shifts.driver_id',
+                'metrics' => [
+                    'count' => ['COUNT(*)', 'Số ca'],
+                    'hours' => ["SUM({$shiftDurationHours})", 'Tổng giờ trực'],
+                    'avg_hours' => ["AVG({$shiftDurationHours})", 'TB giờ/ca'],
+                    'km' => ['SUM(CASE WHEN driver_shifts.total_km BETWEEN 0 AND '.self::MAX_SHIFT_KM.' THEN driver_shifts.total_km END)', 'Km trong ca (bỏ ca nhập km sai)'],
+                    'bad_km' => ['SUM(CASE WHEN driver_shifts.total_km > '.self::MAX_SHIFT_KM.' OR driver_shifts.total_km < 0 THEN 1 ELSE 0 END)', 'Ca nhập km sai (> 2.000 km)'],
+                    'completed_trips' => ["SUM((SELECT COUNT(*) FROM trips t WHERE t.shift_id = driver_shifts.id AND t.status = 'completed'))", 'Chuyến hoàn thành'],
+                    'no_trip' => ["SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM trips t WHERE t.shift_id = driver_shifts.id AND t.status != 'cancelled') THEN 1 ELSE 0 END)", 'Ca không chạy chuyến'],
+                    'overtime' => ['SUM(CASE WHEN driver_shifts.is_overtime THEN 1 ELSE 0 END)', 'Ca tăng cường'],
+                    'open' => ['SUM(CASE WHEN driver_shifts.end_time IS NULL THEN 1 ELSE 0 END)', 'Ca chưa kết thúc'],
+                ],
+            ],
+            'swaps' => [
+                'permission' => 'ViewAny:Trip',
+                'date' => 'driver_swaps.created_at',
+                'status' => 'driver_swaps.reason',
+                'driver' => 'driver_swaps.from_driver_id',
+                'metrics' => [
+                    'count' => ['COUNT(*)', 'Số lần đảo lái'],
+                    'trips' => ['COUNT(DISTINCT driver_swaps.trip_id)', 'Số chuyến có đảo lái'],
+                    'receivers' => ['COUNT(DISTINCT driver_swaps.to_driver_id)', 'Số tài xế nhận'],
+                ],
+            ],
+        ];
+    }
+
+    private function diffMinutesSql(string $endExpr, string $startExpr): string
+    {
+        return DB::getDriverName() === 'pgsql'
+            ? "EXTRACT(EPOCH FROM ({$endExpr} - {$startExpr})) / 60.0"
+            : "(julianday({$endExpr}) - julianday({$startExpr})) * 1440";
+    }
+
+    private function diffHoursSql(string $endExpr, string $startExpr): string
+    {
+        return DB::getDriverName() === 'pgsql'
+            ? "EXTRACT(EPOCH FROM ({$endExpr} - {$startExpr})) / 3600.0"
+            : "(julianday({$endExpr}) - julianday({$startExpr})) * 24";
+    }
 
     public function description(): Stringable|string
     {
@@ -169,8 +200,9 @@ class AggregateData implements Tool
 
     public function handle(Request $request): Stringable|string
     {
-        $datasetKey = array_key_exists($request->string('dataset')->toString(), self::DATASETS) ? $request->string('dataset')->toString() : 'trips';
-        $dataset = self::DATASETS[$datasetKey];
+        $datasets = $this->datasets();
+        $datasetKey = array_key_exists($request->string('dataset')->toString(), $datasets) ? $request->string('dataset')->toString() : 'trips';
+        $dataset = $datasets[$datasetKey];
 
         if ($denied = $this->denyUnless($dataset['permission'])) {
             return $denied;
@@ -242,15 +274,17 @@ class AggregateData implements Tool
         $owner = VehicleOwnerType::tryFrom($request->string('vehicle_owner')->toString());
         $orderType = OrderType::tryFrom($request->string('order_type')->toString());
 
+        $likeOperator = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
         return $query
             ->leftJoin('vehicles', 'vehicles.id', '=', 'trips.vehicle_id')
             ->leftJoin('users as drivers', 'drivers.id', '=', DB::raw($dataset['driver']))
             ->leftJoin('customers', 'customers.id', '=', 'orders.customer_id')
             ->leftJoin('locations', 'locations.id', '=', DB::raw($locationId))
             ->whereRaw("{$dataset['date']} BETWEEN ? AND ?", [$from->toDateTimeString(), $to->toDateTimeString()])
-            ->when($customer !== '', fn (Builder $q) => $q->where(fn (Builder $s) => $s->where('customers.code', 'like', "%{$customer}%")->orWhere('customers.name', 'like', "%{$customer}%")))
-            ->when($vehicle !== '', fn (Builder $q) => $q->where('vehicles.plate_number', 'like', "%{$vehicle}%"))
-            ->when($driver !== '', fn (Builder $q) => $q->where('drivers.name', 'like', "%{$driver}%"))
+            ->when($customer !== '', fn (Builder $q) => $q->where(fn (Builder $s) => $s->where('customers.code', $likeOperator, "%{$customer}%")->orWhere('customers.name', $likeOperator, "%{$customer}%")))
+            ->when($vehicle !== '', fn (Builder $q) => $q->where('vehicles.plate_number', $likeOperator, "%{$vehicle}%"))
+            ->when($driver !== '', fn (Builder $q) => $q->where('drivers.name', $likeOperator, "%{$driver}%"))
             ->when($owner, fn (Builder $q) => $q->where('vehicles.type', $owner->value))
             ->when($orderType, fn (Builder $q) => $q->where('orders.type', $orderType->value))
             ->when($status !== '', fn (Builder $q) => $q->where($dataset['status'], $status))
@@ -277,10 +311,14 @@ class AggregateData implements Tool
         $bindings = [];
         $selects = [];
 
+        $driver = DB::getDriverName() === 'pgsql' ? 'pgsql' : 'sqlite';
+
         foreach ($dimensions as $i => $dimension) {
             if (isset(self::TIME_FORMATS[$dimension])) {
-                $selects[] = "strftime(?, {$dataset['date']}) as d{$i}";
-                $bindings[] = self::TIME_FORMATS[$dimension];
+                $selects[] = $driver === 'pgsql'
+                    ? "to_char({$dataset['date']}, ?) as d{$i}"
+                    : "strftime(?, {$dataset['date']}) as d{$i}";
+                $bindings[] = self::TIME_FORMATS[$dimension][$driver];
             } else {
                 $selects[] = [
                     'vehicle' => 'vehicles.plate_number',
@@ -404,13 +442,15 @@ class AggregateData implements Tool
 
     public function schema(JsonSchema $schema): array
     {
+        $datasets = $this->datasets();
+
         return [
-            'dataset' => $schema->string()->enum(array_keys(self::DATASETS))->description('trips = chuyến xe, orders = đơn hàng, charges = cước đã tính (doanh thu), checkpoints = lần bấm mốc, stops = điểm giao, shifts = ca trực, swaps = đảo lái.')->required(),
+            'dataset' => $schema->string()->enum(array_keys($datasets))->description('trips = chuyến xe, orders = đơn hàng, charges = cước đã tính (doanh thu), checkpoints = lần bấm mốc, stops = điểm giao, shifts = ca trực, swaps = đảo lái.')->required(),
             'date_from' => $schema->string()->description('Ngày bắt đầu YYYY-MM-DD. Bỏ trống = đầu tháng này.'),
             'date_to' => $schema->string()->description('Ngày kết thúc YYYY-MM-DD. Bỏ trống = hôm nay.'),
             'group_by' => $schema->array()->items($schema->string()->enum(array_keys(self::DIMENSIONS)))->description('Tối đa 2 chiều gom nhóm. Bỏ trống = chỉ lấy tổng.'),
-            'metrics' => $schema->array()->items($schema->string()->enum(collect(self::DATASETS)->flatMap(fn (array $d): array => array_keys($d['metrics']))->unique()->values()->all()))
-                ->description(collect(self::DATASETS)->map(fn (array $d, string $key): string => $key.': '.implode(', ', array_keys($d['metrics'])))->implode('. ').'.'),
+            'metrics' => $schema->array()->items($schema->string()->enum(collect($datasets)->flatMap(fn (array $d): array => array_keys($d['metrics']))->unique()->values()->all()))
+                ->description(collect($datasets)->map(fn (array $d, string $key): string => $key.': '.implode(', ', array_keys($d['metrics'])))->implode('. ').'.'),
             'customer' => $schema->string()->description('Lọc theo mã hoặc tên khách.'),
             'vehicle' => $schema->string()->description('Lọc theo biển số.'),
             'driver' => $schema->string()->description('Lọc theo tên tài xế.'),

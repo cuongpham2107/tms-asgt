@@ -60,7 +60,7 @@ class TripController extends Controller
             ])
             ->select('trips.*')
             ->selectRaw('COALESCE((SELECT MIN(sent_at) FROM orders WHERE orders.trip_id = trips.id), trips.created_at) as first_sent_at')
-            ->orderByRaw('CASE WHEN is_empty_run = 0 THEN 0 ELSE 1 END')
+            ->orderByRaw('CASE WHEN is_empty_run THEN 1 ELSE 0 END')
             ->orderByRaw("CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered', 'return_trip') THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END")
             ->orderBy('first_sent_at', 'asc')
             ->get();
@@ -102,7 +102,7 @@ class TripController extends Controller
             ])
             ->select('trips.*')
             ->selectRaw('COALESCE((SELECT MIN(sent_at) FROM orders WHERE orders.trip_id = trips.id), trips.created_at) as first_sent_at')
-            ->orderByRaw('CASE WHEN is_empty_run = 0 THEN 0 ELSE 1 END')
+            ->orderByRaw('CASE WHEN is_empty_run THEN 1 ELSE 0 END')
             ->orderByRaw("CASE WHEN status IN ('started', 'arrived_pickup', 'delivering', 'arrived_delivery', 'delivered', 'return_trip') THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END")
             ->orderBy('first_sent_at', 'asc')
             ->first();
