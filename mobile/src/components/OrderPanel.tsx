@@ -429,7 +429,7 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                 setSelectedDpId(onlyDp.id);
             }
         }
-        // If selected DP is now completed, auto-advance to next pending
+        // If selected DP is now completed, auto-advance to next pending or clear selection
         if (selectedDpId && dpStatusMap[selectedDpId]?.completed) {
             const next = deliveryPoints.find(
                 (dp: any) =>
@@ -437,17 +437,22 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                     !dpStatusMap[dp.id]?.completed &&
                     dp.status !== "delivered",
             );
-            if (next) {
-                setSelectedDpId(next.id);
-            }
+            setSelectedDpId(next ? next.id : null);
         }
     }, [deliveryPoints, selectedDpId, dpStatusMap]);
     const activeDp = deliveryPoints.find((dp: any) => dp.id === activeDpId);
+    const getDpLabel = (dp: any, fallbackIdx?: number): string =>
+        dp?.code ||
+        dp?.location?.code ||
+        (dp?.sequence
+            ? `Điểm ${dp.sequence}`
+            : fallbackIdx !== undefined
+              ? `Điểm ${fallbackIdx + 1}`
+              : "...");
     // Map DP id to location code for timeline display
     const dpCodeMap: Record<string, string> = {};
-    deliveryPoints.forEach((dp: any) => {
-        dpCodeMap[dp.id] =
-            dp.code || dp.location?.code || `Điểm ${dp.sequence}`;
+    deliveryPoints.forEach((dp: any, idx: number) => {
+        dpCodeMap[dp.id] = getDpLabel(dp, idx);
     });
     const hasDeliveryPoint = !!activeDpId || deliveryPoints.length > 0;
     const hasEndCheckpoint = checkpoints.some(
@@ -478,6 +483,29 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
     const isMidDelivery = hasArrivedDelivery && !hasCompleted;
     const canSelectDp = !isMidDelivery;
 
+    // Đơn trống điểm trả (không có điểm điều hành tạo sẵn) → cho phép lái xe tự chọn thêm nhiều điểm theo Cách A
+    const hasPredefinedDp = deliveryPoints.some((dp: any) => !dp.is_driver_added);
+    const allowDynamicDelivery =
+        d.can_add_delivery_point !== undefined
+            ? Boolean(d.can_add_delivery_point)
+            : !hasPredefinedDp;
+    const canChooseFirstDeliveryPoint =
+        d.status === "in_transit" &&
+        hasLeftPickup &&
+        deliveryPoints.length === 0 &&
+        !hasArrivedDelivery;
+    const canChooseExtraDeliveryPoint =
+        allowDynamicDelivery &&
+        !hasEndCheckpoint &&
+        hasLeftPickup &&
+        deliveryPoints.length > 0 &&
+        !nextPendingDp &&
+        !isMidDelivery &&
+        (d.status === "completed" || d.status === "in_transit");
+    const showDeliveryPicker =
+        canChooseFirstDeliveryPoint || canChooseExtraDeliveryPoint;
+    const isAddingExtraDp = canChooseExtraDeliveryPoint && !!selectedLoc;
+
     // Can do actions on the SELECTED DP (not necessarily next pending)
     const canArrivePickup =
         (d.status === "assigned" || d.status === "sent") &&
@@ -486,17 +514,23 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
     const canLeftPickup =
         d.status === "sent" && hasArrivedPickup && !hasLeftPickup && !!shift;
     const canArriveDelivery =
-        d.status === "in_transit" &&
-        (!!activeDpId || !!selectedLoc) &&
-        !hasArrivedDelivery &&
-        !!shift;
+        !!shift &&
+        (isAddingExtraDp ||
+            (d.status === "in_transit" &&
+                (!!activeDpId || !!selectedLoc) &&
+                !hasArrivedDelivery));
     const canComplete =
+        !isAddingExtraDp &&
         d.status === "in_transit" &&
         (!!activeDpId || !!selectedLoc) &&
         hasArrivedDelivery &&
         !hasCompleted &&
         !!shift;
-    const canEnd = d.status === "completed" && !hasEndCheckpoint && !!shift;
+    const canEnd =
+        !isAddingExtraDp &&
+        d.status === "completed" &&
+        !hasEndCheckpoint &&
+        !!shift;
 
     async function pickImage() {
         suppressRefocus.current = true;
@@ -551,8 +585,10 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
             if (d.id) body.order_id = d.id;
             if (photos.length > 0) body.photos = photos;
 
-            // Nếu có delivery_point_id thì dùng, nếu không có nhưng đã chọn location thì gửi new_delivery_location_id
-            if (
+            // Nếu đang thêm điểm trả tiếp (Cách A) hoặc chưa có DP thì gửi new_delivery_location_id; ngược lại dùng delivery_point_id
+            if (isAddingExtraDp && selectedLoc && type === "arrived_delivery") {
+                body.new_delivery_location_id = selectedLoc.id;
+            } else if (
                 activeDpId &&
                 ["arrived_delivery", "completed", "end"].includes(type)
             ) {
@@ -865,28 +901,48 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
 
                 {beforeForm}
 
-                {/* Location picker — chỉ hiện khi trạng thái tiếp theo là đến điểm giao hàng */}
-                {d.status === "in_transit" &&
-                    hasLeftPickup &&
-                    !hasDeliveryPoint &&
-                    !hasArrivedDelivery && (
-                        <>
-                            <Text style={s.sectionTitle}>📍 Chọn điểm đến</Text>
-                            <View style={s.formCard}>
-                                {selectedLoc ? (
-                                    // Chạm vào ô để chọn lại điểm khác, không cần bấm ⓧ trước
+                {/* Location picker — hiện khi chưa có điểm trả hoặc đang được chọn thêm điểm trả (Cách A) */}
+                {showDeliveryPicker && (
+                    <>
+                        <Text style={s.sectionTitle}>
+                            {canChooseExtraDeliveryPoint
+                                ? "📍 Thêm điểm trả hàng (nếu có)"
+                                : "📍 Chọn điểm đến"}
+                        </Text>
+                        <View style={s.formCard}>
+                            {selectedLoc ? (
+                                // Chạm vào ô để chọn lại điểm khác; nếu đang thêm điểm phụ có thể huỷ chọn để Kết thúc đơn
+                                <View
+                                    style={{
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        gap: 8,
+                                    }}
+                                >
                                     <TouchableOpacity
-                                        style={s.selectedLoc}
+                                        style={[s.selectedLoc, { flex: 1 }]}
                                         activeOpacity={0.7}
                                         onPress={() => {
                                             setShowLocPicker(true);
                                             searchLocations("");
                                         }}
                                     >
-                                        <Text style={[s.selectedLocName, { flex: 1 }]}>
-                                            {selectedLoc.code || selectedLoc.name}
+                                        <Text
+                                            style={[
+                                                s.selectedLocName,
+                                                { flex: 1 },
+                                            ]}
+                                        >
+                                            {selectedLoc.code ||
+                                                selectedLoc.name}
                                         </Text>
-                                        <Text style={{ fontSize: 12, color: "#6366F1", fontWeight: "600" }}>
+                                        <Text
+                                            style={{
+                                                fontSize: 12,
+                                                color: "#6366F1",
+                                                fontWeight: "600",
+                                            }}
+                                        >
                                             Đổi
                                         </Text>
                                         <Ionicons
@@ -895,32 +951,57 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                             color="#6366F1"
                                         />
                                     </TouchableOpacity>
-                                ) : (
-                                    <TouchableOpacity
-                                        style={s.pickerBtn}
-                                        onPress={() => {
-                                            setShowLocPicker(true);
-                                            searchLocations("");
-                                        }}
-                                    >
-                                        <Ionicons
-                                            name="location-outline"
-                                            size={18}
-                                            color="#4F46E5"
-                                        />
-                                        <Text style={s.pickerBtnText}>
-                                            Chạm để chọn điểm đến
-                                        </Text>
-                                        <Ionicons
-                                            name="chevron-down"
-                                            size={16}
-                                            color="#9CA3AF"
-                                        />
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        </>
-                    )}
+                                    {canChooseExtraDeliveryPoint && (
+                                        <TouchableOpacity
+                                            onPress={() => setSelectedLoc(null)}
+                                            activeOpacity={0.7}
+                                            style={{
+                                                paddingHorizontal: 10,
+                                                paddingVertical: 10,
+                                                borderRadius: 10,
+                                                backgroundColor: "#FEF2F2",
+                                            }}
+                                        >
+                                            <Text
+                                                style={{
+                                                    fontSize: 12,
+                                                    color: "#DC2626",
+                                                    fontWeight: "600",
+                                                }}
+                                            >
+                                                Huỷ
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={s.pickerBtn}
+                                    onPress={() => {
+                                        setShowLocPicker(true);
+                                        searchLocations("");
+                                    }}
+                                >
+                                    <Ionicons
+                                        name="location-outline"
+                                        size={18}
+                                        color="#4F46E5"
+                                    />
+                                    <Text style={s.pickerBtnText}>
+                                        {canChooseExtraDeliveryPoint
+                                            ? "+ Chọn thêm điểm trả tiếp theo"
+                                            : "Chạm để chọn điểm đến"}
+                                    </Text>
+                                    <Ionicons
+                                        name="chevron-down"
+                                        size={16}
+                                        color="#9CA3AF"
+                                    />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </>
+                )}
 
                 {/* Modal chọn điểm đến */}
                 <Modal
@@ -1101,25 +1182,10 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                                             ? "#fff"
                                                             : isLocked
                                                               ? "#D1D5DB"
-                                                              : "#6B7280",
+                                                              : "#374151",
                                                     }}
                                                 >
-                                                    Điểm {dp.sequence || "?"}
-                                                </Text>
-                                                <Text
-                                                    style={{
-                                                        fontSize: 12,
-                                                        fontWeight: "600",
-                                                        color: isSelected
-                                                            ? "#C7D2FE"
-                                                            : isLocked
-                                                              ? "#E5E7EB"
-                                                              : "#9CA3AF",
-                                                    }}
-                                                >
-                                                    {dp.code ||
-                                                        dp.location?.code ||
-                                                        "..."}
+                                                    {getDpLabel(dp)}
                                                 </Text>
                                             </TouchableOpacity>
                                         );
@@ -1157,8 +1223,22 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                     }}
                                 >
                                     📋 Cập nhật chốt chặng
-                                    {deliveryPoints.length > 1 &&
-                                        nextPendingDp && (
+                                    {isAddingExtraDp && selectedLoc ? (
+                                        <Text
+                                            style={{
+                                                fontSize: 13,
+                                                fontWeight: "600",
+                                                color: "#4F46E5",
+                                            }}
+                                        >
+                                            {" "}
+                                            •{" "}
+                                            {selectedLoc.code ||
+                                                selectedLoc.name}
+                                        </Text>
+                                    ) : (
+                                        deliveryPoints.length > 0 &&
+                                        (activeDp || nextPendingDp) && (
                                             <Text
                                                 style={{
                                                     fontSize: 13,
@@ -1167,14 +1247,13 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                                 }}
                                             >
                                                 {" "}
-                                                • Điểm{" "}
-                                                {nextPendingDp.sequence ||
-                                                    deliveryPoints.indexOf(
-                                                        nextPendingDp,
-                                                    ) + 1}
-                                                /{deliveryPoints.length}
+                                                •{" "}
+                                                {getDpLabel(
+                                                    activeDp || nextPendingDp,
+                                                )}
                                             </Text>
-                                        )}
+                                        )
+                                    )}
                                 </Text>
                                 <Text
                                     style={{ fontSize: 13, color: "#6B7280" }}
@@ -1366,9 +1445,13 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                             />
                                             <Text style={s.btnText}>
                                                 Đến giao hàng
-                                                {activeDp?.sequence
-                                                    ? ` (Điểm ${activeDp.sequence})`
-                                                    : ""}
+                                                {isAddingExtraDp && selectedLoc
+                                                    ? ` (${selectedLoc.code || selectedLoc.name})`
+                                                    : activeDp
+                                                      ? ` (${getDpLabel(activeDp)})`
+                                                      : selectedLoc
+                                                        ? ` (${selectedLoc.code || selectedLoc.name})`
+                                                        : ""}
                                             </Text>
                                         </TouchableOpacity>
                                     )}
@@ -1390,8 +1473,8 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                             />
                                             <Text style={s.btnText}>
                                                 Giao hàng xong
-                                                {activeDp?.sequence
-                                                    ? ` (Điểm ${activeDp.sequence})`
+                                                {activeDp
+                                                    ? ` (${getDpLabel(activeDp)})`
                                                     : ""}
                                             </Text>
                                         </TouchableOpacity>

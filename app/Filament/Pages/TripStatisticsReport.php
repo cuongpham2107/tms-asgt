@@ -26,6 +26,7 @@ use App\Services\Export\BillingStatement\BillingStatementTemplates;
 use App\Services\Export\TripExcelExportService;
 use App\Services\Import\OrderPackagesImporter;
 use App\Services\ShiftScheduleService;
+use App\Services\Trip\DeliveryProgressSyncService;
 use BackedEnum;
 use Carbon\Carbon;
 use Closure;
@@ -1238,6 +1239,7 @@ class TripStatisticsReport extends Page
 
                 $order->update(Arr::except($data, ['deliveryPoints']));
                 $schema->model($order)->saveRelationships();
+                app(DeliveryProgressSyncService::class)->syncOrderProgress($order->refresh());
                 $order->refresh()->loadMissing('charge');
 
                 $isNowExternal = $order->isExternal();

@@ -284,6 +284,7 @@ class OrderForm extends CreatesOrderTransportCards
 
                                         return 'Thêm một hoặc nhiều điểm đến cho đơn hàng';
                                     })
+                                    ->defaultItems(0)
                                     ->collapsible()
                                     ->itemLabel(function (array $state): ?string {
                                         $parts = [];

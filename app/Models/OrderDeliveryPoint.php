@@ -19,6 +19,7 @@ class OrderDeliveryPoint extends Model
         'total_packages',
         'total_weight',
         'status',
+        'is_driver_added',
         'arrived_at',
         'delivered_at',
     ];
@@ -31,6 +32,7 @@ class OrderDeliveryPoint extends Model
             'total_packages' => 'integer',
             'total_weight' => 'decimal:2',
             'status' => OrderDeliveryPointStatus::class,
+            'is_driver_added' => 'boolean',
         ];
     }
 

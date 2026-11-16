@@ -13,6 +13,7 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\DeliveryProgressSyncService;
 use App\Services\Trip\Handlers\CompletedHandler;
 use App\Services\TripKmAdjustmentService;
 use Filament\Actions\Action;
@@ -212,6 +213,17 @@ class EditTripAction
                     ->orderByDesc('id')
                     ->first();
 
+                $beforeCheckpoints = collect($kmSnapshotBeforeEdit['checkpoints'] ?? []);
+                $currentCheckpoints = $trip->checkpoints;
+                $checkpointsChanged = $beforeCheckpoints->count() !== $currentCheckpoints->count()
+                    || $beforeCheckpoints->contains(function (array $before) use ($currentCheckpoints): bool {
+                        $current = $currentCheckpoints->firstWhere('id', $before['id']);
+
+                        return $current === null || $current->getRawOriginal('checkpoint_type') !== ($before['checkpoint_type'] ?? null);
+                    });
+
+                $syncService = app(DeliveryProgressSyncService::class);
+
                 if ($endCheckpoint !== null) {
                     $updates = [];
 
@@ -236,57 +248,66 @@ class EditTripAction
                         ->get()
                         ->each(fn ($order) => $order->update(['status' => OrderStatus::Completed]));
                 } elseif ($hadEndCheckpointBefore && ! in_array($trip->status, [TripStatus::Cancelled, TripStatus::DriverSwap], true)) {
-                    $updates = [
+                    $trip->update([
                         'completed_at' => null,
                         'end_km' => null,
-                    ];
+                    ]);
 
-                    if (static::applyCompletedCheckpoints($trip)) {
-                        $updates['status'] = TripStatus::Delivered;
-                    } elseif ($latestCheckpoint !== null) {
-                        $updates['status'] = $latestCheckpoint->checkpoint_type?->toTripStatus() ?? TripStatus::Started;
-                    } else {
-                        $updates['status'] = TripStatus::Pending;
-                    }
+                    $syncService->syncTripCheckpointsState($trip->refresh(), reconcileCheckpoints: true);
+                } elseif (! in_array($trip->status, [TripStatus::Completed, TripStatus::Cancelled, TripStatus::DriverSwap], true)) {
+                    $wasPending = ($kmSnapshotBeforeEdit['trip']['status'] ?? null) === TripStatus::Pending->value;
 
-                    $trip->update($updates);
-                } elseif ($latestCheckpoint !== null && ! in_array($trip->status, [TripStatus::Completed, TripStatus::Cancelled, TripStatus::DriverSwap], true)) {
-                    if (static::applyCompletedCheckpoints($trip)) {
-                        if ($trip->status !== TripStatus::Delivered) {
-                            $trip->update(['status' => TripStatus::Delivered]);
+                    if ($checkpointsChanged) {
+                        $syncService->syncTripCheckpointsState($trip, reconcileCheckpoints: true);
+
+                        $trip->refresh();
+                        if ($trip->started_at === null && $trip->checkpoints->isNotEmpty()) {
+                            $firstCheckpoint = $trip->checkpoints()->reorder()->orderBy('occurred_at')->orderBy('id')->first();
+                            $trip->update(['started_at' => $startedCheckpoint?->occurred_at ?? $firstCheckpoint?->occurred_at ?? now()]);
                         }
-                    } else {
-                        $wasPending = ($kmSnapshotBeforeEdit['trip']['status'] ?? null) === TripStatus::Pending->value;
-                        $existingLatest = collect($kmSnapshotBeforeEdit['checkpoints'] ?? [])->firstWhere('id', $latestCheckpoint->id);
-                        $isNewCheckpoint = $existingLatest === null;
-                        $checkpointTypeChanged = $existingLatest !== null && ($existingLatest['checkpoint_type'] ?? null) !== $latestCheckpoint->checkpoint_type?->value;
 
-                        // Chỉ cập nhật trạng thái chuyến nếu có mốc mới, mốc đổi loại, hoặc chuyến trước đó là chờ chạy
-                        if ($isNewCheckpoint || $checkpointTypeChanged || $wasPending) {
-                            $newStatus = $latestCheckpoint->checkpoint_type?->toTripStatus() ?? TripStatus::Started;
-                            $updates = [];
-
-                            if ($trip->status !== $newStatus) {
-                                $updates['status'] = $newStatus;
+                        if ($wasPending && ! $trip->isPending()) {
+                            foreach ($trip->orders()->where('status', OrderStatus::Assigned)->get() as $order) {
+                                $order->update([
+                                    'status' => OrderStatus::Sent,
+                                    'sent_at' => $trip->started_at ?? now(),
+                                ]);
                             }
-
-                            if ($trip->started_at === null) {
-                                $firstCheckpoint = $trip->checkpoints()->reorder()->orderBy('occurred_at')->orderBy('id')->first();
-                                $updates['started_at'] = $startedCheckpoint?->occurred_at ?? $firstCheckpoint?->occurred_at ?? now();
+                        }
+                    } elseif ($latestCheckpoint !== null) {
+                        if (static::applyCompletedCheckpoints($trip)) {
+                            if ($trip->status !== TripStatus::Delivered) {
+                                $trip->update(['status' => TripStatus::Delivered]);
                             }
+                        } else {
+                            if ($wasPending) {
+                                $newStatus = $latestCheckpoint->checkpoint_type?->toTripStatus() ?? TripStatus::Started;
+                                $updates = [];
 
-                            if (! empty($updates)) {
-                                $trip->update($updates);
-                            }
+                                if ($trip->status !== $newStatus) {
+                                    $updates['status'] = $newStatus;
+                                }
 
-                            if ($wasPending && ! $trip->isPending()) {
-                                foreach ($trip->orders()->where('status', OrderStatus::Assigned)->get() as $order) {
-                                    $order->update([
-                                        'status' => OrderStatus::Sent,
-                                        'sent_at' => $trip->started_at ?? now(),
-                                    ]);
+                                if ($trip->started_at === null) {
+                                    $firstCheckpoint = $trip->checkpoints()->reorder()->orderBy('occurred_at')->orderBy('id')->first();
+                                    $updates['started_at'] = $startedCheckpoint?->occurred_at ?? $firstCheckpoint?->occurred_at ?? now();
+                                }
+
+                                if (! empty($updates)) {
+                                    $trip->update($updates);
+                                }
+
+                                if (! $trip->isPending()) {
+                                    foreach ($trip->orders()->where('status', OrderStatus::Assigned)->get() as $order) {
+                                        $order->update([
+                                            'status' => OrderStatus::Sent,
+                                            'sent_at' => $trip->started_at ?? now(),
+                                        ]);
+                                    }
                                 }
                             }
+
+                            $syncService->syncTripCheckpointsState($trip, reconcileCheckpoints: false);
                         }
                     }
                 }

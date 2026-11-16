@@ -109,6 +109,8 @@ class OrderResource extends JsonResource
             // Delivery points (only when loaded)
             /** Danh sách các điểm giao hàng (nếu được load). */
             'delivery_points' => OrderDeliveryPointResource::collection($this->whenLoaded('deliveryPoints')),
+            /** Cho phép tài xế tự chọn thêm điểm trả hàng trên App. */
+            'can_add_delivery_point' => $this->canDriverAddDeliveryPoint(),
             // Trip checkpoints (only when loaded)
             /** Danh sách checkpoint hành trình (nếu được load). */
             'trip_checkpoints' => TripCheckpointResource::collection($this->whenLoaded('tripCheckpoints')),
