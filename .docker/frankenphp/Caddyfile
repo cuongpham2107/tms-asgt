@@ -27,8 +27,8 @@
 	route {
 		# Reverb WebSocket proxy
 		@reverb_ws {
-			header Connection *Upgrade*
-			header Upgrade websocket
+			header_regexp Connection (?i)upgrade
+			header_regexp Upgrade (?i)websocket
 			path /app/*
 		}
 		reverse_proxy @reverb_ws reverb:8085
