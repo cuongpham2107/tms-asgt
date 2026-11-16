@@ -621,21 +621,17 @@ abstract class CreatesOrderTransportCards
      */
     public static function findNearestLocation(float $lat, float $lng): array
     {
-        static $memoryLocations = null;
-
-        if ($memoryLocations === null) {
-            /** @var array<int, array<string, mixed>> $locations */
-            $memoryLocations = Cache::remember('active-locations-with-coords-v2', now()->addHour(), function (): array {
-                return Location::query()
-                    ->whereNotNull('lat')
-                    ->whereNotNull('lng')
-                    ->where('is_active', true)
-                    ->get(['id', 'name', 'code', 'lat', 'lng'])
-                    ->toArray();
-            });
-        }
-
-        $locations = $memoryLocations;
+        // Request-scoped via once() so Octane worker memory never retains stale locations across requests;
+        // cross-request caching is handled by Laravel Cache and invalidated in Location::booted().
+        /** @var array<int, array<string, mixed>> $locations */
+        $locations = once(fn (): array => Cache::remember('active-locations-with-coords-v2', now()->addHour(), function (): array {
+            return Location::query()
+                ->whereNotNull('lat')
+                ->whereNotNull('lng')
+                ->where('is_active', true)
+                ->get(['id', 'name', 'code', 'lat', 'lng'])
+                ->toArray();
+        }));
 
         $nearest = null;
         $minDistance = PHP_FLOAT_MAX;
@@ -817,14 +813,11 @@ abstract class CreatesOrderTransportCards
             return null;
         }
 
-        static $nameCache = [];
-        $id = (int) $locationId;
+        // Batch per-request lookup via once() instead of persistent static arrays under Octane.
+        /** @var array<int, string> $namesById */
+        $namesById = once(fn (): array => Location::query()->pluck('name', 'id')->all());
 
-        if (isset($nameCache[$id])) {
-            return $nameCache[$id];
-        }
-
-        return $nameCache[$id] = Location::query()->where('id', $id)->value('name');
+        return $namesById[(int) $locationId] ?? null;
     }
 
     public static function resolveProvinceName(int|string|null $provinceCode): ?string

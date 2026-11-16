@@ -5,10 +5,13 @@ namespace App\Filament\Widgets;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Services\ShiftScheduleService;
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\ChartWidget;
 
 class TripTrendChartWidget extends ChartWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Xu hướng Vận tải & Điều phối Chuyến xe';
 
     protected ?string $description = 'Theo dõi khối lượng chuyến xe và tiến độ hoàn thành đơn hàng';
@@ -43,6 +46,22 @@ class TripTrendChartWidget extends ChartWidget
             default => 7,
         };
 
+        $windowStart = $shiftNow->copy()->subDays($days - 1)->setTime(8, 0, 0);
+        $windowEnd = $shiftNow->copy()->addDay()->setTime(8, 0, 0);
+
+        $trips = Trip::query()
+            ->where(function ($q) use ($windowStart, $windowEnd) {
+                $q->whereBetween('started_at', [$windowStart, $windowEnd])
+                    ->orWhereBetween('completed_at', [$windowStart, $windowEnd])
+                    ->orWhere(fn ($sq) => $sq->whereNull('started_at')->whereBetween('created_at', [$windowStart, $windowEnd]));
+            })
+            ->get(['started_at', 'completed_at', 'created_at']);
+
+        $completedOrders = Order::query()
+            ->where('status', 'completed')
+            ->whereBetween('planned_loading_at', [$windowStart, $windowEnd])
+            ->get(['planned_loading_at']);
+
         $labels = [];
         $tripCounts = [];
         $orderCompletedCounts = [];
@@ -55,21 +74,24 @@ class TripTrendChartWidget extends ChartWidget
 
             $labels[] = $label;
 
-            $trips = Trip::query()
-                ->where(function ($q) use ($dayStart, $dayEnd) {
-                    $q->whereBetween('started_at', [$dayStart, $dayEnd])
-                        ->orWhereBetween('completed_at', [$dayStart, $dayEnd])
-                        ->orWhere(fn ($sq) => $sq->whereNull('started_at')->whereBetween('created_at', [$dayStart, $dayEnd]));
-                })
-                ->count();
+            $tripCounts[] = $trips->filter(function (Trip $trip) use ($dayStart, $dayEnd): bool {
+                if ($trip->started_at !== null && $trip->started_at->betweenIncluded($dayStart, $dayEnd)) {
+                    return true;
+                }
 
-            $completedOrders = Order::query()
-                ->where('status', 'completed')
-                ->whereBetween('planned_loading_at', [$dayStart, $dayEnd])
-                ->count();
+                if ($trip->completed_at !== null && $trip->completed_at->betweenIncluded($dayStart, $dayEnd)) {
+                    return true;
+                }
 
-            $tripCounts[] = $trips;
-            $orderCompletedCounts[] = $completedOrders;
+                return $trip->started_at === null
+                    && $trip->created_at !== null
+                    && $trip->created_at->betweenIncluded($dayStart, $dayEnd);
+            })->count();
+
+            $orderCompletedCounts[] = $completedOrders->filter(
+                fn (Order $order): bool => $order->planned_loading_at !== null
+                    && $order->planned_loading_at->betweenIncluded($dayStart, $dayEnd)
+            )->count();
         }
 
         return [
