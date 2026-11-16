@@ -25,6 +25,10 @@ class VehicleMasterSeeder extends Seeder
                 if (array_key_exists('is_active', $vehicleData) && $vehicleData['is_active'] !== null) {
                     $vehicleData['is_active'] = (bool) $vehicleData['is_active'];
                 }
+                // DB mới chưa có chuyến nào đang chạy nên chuẩn hoá trạng thái 'running' về 'on'.
+                if (($vehicleData['status'] ?? null) === 'running') {
+                    $vehicleData['status'] = 'on';
+                }
                 $vehicleData['current_driver_id'] = null;
                 $vehicleData['even_driver_id'] = null;
                 $vehicleData['odd_driver_id'] = null;
