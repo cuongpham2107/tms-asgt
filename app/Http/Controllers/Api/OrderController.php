@@ -28,7 +28,7 @@ class OrderController extends Controller
             ->with([
                 'customer',
                 'pickupLocation',
-                'deliveryPoints.location',
+                'deliveryPoints' => fn ($q) => $q->with('location')->orderBy('sequence')->orderBy('id'),
                 'trip.vehicle',
                 'tripCheckpoints' => fn ($query) => $query->with('photos')->with('driver')->orderBy('occurred_at'),
             ])
@@ -72,7 +72,7 @@ class OrderController extends Controller
         $order->load([
             'customer',
             'pickupLocation',
-            'deliveryPoints.location',
+            'deliveryPoints' => fn ($q) => $q->with('location')->orderBy('sequence')->orderBy('id'),
             'trip.vehicle',
             'tripCheckpoints' => fn ($query) => $query->with('photos')->with('driver')->orderBy('occurred_at'),
         ]);
@@ -107,6 +107,7 @@ class OrderController extends Controller
         $points = $order->deliveryPoints()
             ->select(['id', 'sequence', 'address'])
             ->orderBy('sequence')
+            ->orderBy('id')
             ->get();
 
         return response()->json([
@@ -132,7 +133,7 @@ class OrderController extends Controller
             ->with([
                 'customer',
                 'pickupLocation',
-                'deliveryPoints.location',
+                'deliveryPoints' => fn ($q) => $q->with('location')->orderBy('sequence')->orderBy('id'),
                 'trip.vehicle',
                 'trip.driverSwaps',
                 'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),

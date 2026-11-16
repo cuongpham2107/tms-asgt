@@ -108,7 +108,9 @@ class OrderResource extends JsonResource
             'notes' => $this->notes,
             // Delivery points (only when loaded)
             /** Danh sách các điểm giao hàng (nếu được load). */
-            'delivery_points' => OrderDeliveryPointResource::collection($this->whenLoaded('deliveryPoints')),
+            'delivery_points' => OrderDeliveryPointResource::collection(
+                $this->whenLoaded('deliveryPoints', fn () => $this->deliveryPoints->sortBy([['sequence', 'asc'], ['id', 'asc']])->values())
+            ),
             // Trip checkpoints (only when loaded)
             /** Danh sách checkpoint hành trình (nếu được load). */
             'trip_checkpoints' => TripCheckpointResource::collection($this->whenLoaded('tripCheckpoints')),

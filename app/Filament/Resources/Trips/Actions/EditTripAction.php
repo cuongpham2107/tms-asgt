@@ -33,6 +33,8 @@ class EditTripAction
             ->modal()
             ->modalWidth(Width::SevenExtraLarge)
             ->modalHeading(fn (?Model $record = null, $livewire = null): string => 'Sửa chuyến — '.(static::resolveTrip($record, $livewire)?->trip_code ?? ''))
+            ->authorize(fn (?Model $record = null, $livewire = null): bool => ($trip = static::resolveTrip($record, $livewire)) !== null
+                && (auth()->user()?->can('update', $trip) ?? false))
             ->visible(fn (?Model $record = null, $livewire = null): bool => static::resolveTrip($record, $livewire) !== null)
             ->beforeFormFilled(function (Action $action, ?Model $record = null, $livewire = null): void {
                 $trip = static::resolveTrip($record, $livewire);
@@ -124,18 +126,9 @@ class EditTripAction
                 $effectiveDriverId = $isRentVehicle ? null : ($newDriverId ?: $trip->driver_id);
                 if ($effectiveDriverId && (empty($trip->shift_id) || ($newDriverId && (int) $oldDriverId !== (int) $newDriverId))) {
                     $shiftId = DriverShift::where('driver_id', $effectiveDriverId)
-                        ->when($trip->vehicle_id, fn ($q) => $q->where('vehicle_id', $trip->vehicle_id))
                         ->whereNull('end_time')
                         ->latest('start_time')
                         ->value('id')
-                        ?? DriverShift::where('driver_id', $effectiveDriverId)
-                            ->whereNull('end_time')
-                            ->latest('start_time')
-                            ->value('id')
-                        ?? DriverShift::where('driver_id', $effectiveDriverId)
-                            ->when($trip->vehicle_id, fn ($q) => $q->where('vehicle_id', $trip->vehicle_id))
-                            ->latest('start_time')
-                            ->value('id')
                         ?? DriverShift::where('driver_id', $effectiveDriverId)
                             ->latest('start_time')
                             ->value('id');

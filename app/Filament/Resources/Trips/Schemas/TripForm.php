@@ -728,18 +728,9 @@ class TripForm
 
         if (empty($data['shift_id']) && $driverId) {
             $shiftId = DriverShift::where('driver_id', $driverId)
-                ->when($vehicleId, fn ($q) => $q->where('vehicle_id', $vehicleId))
                 ->whereNull('end_time')
                 ->latest('start_time')
                 ->value('id')
-                ?? DriverShift::where('driver_id', $driverId)
-                    ->whereNull('end_time')
-                    ->latest('start_time')
-                    ->value('id')
-                ?? DriverShift::where('driver_id', $driverId)
-                    ->when($vehicleId, fn ($q) => $q->where('vehicle_id', $vehicleId))
-                    ->latest('start_time')
-                    ->value('id')
                 ?? DriverShift::where('driver_id', $driverId)
                     ->latest('start_time')
                     ->value('id');

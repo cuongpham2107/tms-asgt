@@ -60,8 +60,8 @@ class DriverSwapController extends Controller
             }
 
             $oldShift = DriverShift::where('driver_id', $trip->driver_id)
-                ->where('vehicle_id', $trip->vehicle_id)
                 ->whereNull('end_time')
+                ->latest('start_time')
                 ->first();
 
             $fromShiftId = $oldShift?->id;
@@ -72,8 +72,8 @@ class DriverSwapController extends Controller
             }
 
             $newShift = DriverShift::where('driver_id', $user->id)
-                ->where('vehicle_id', $trip->vehicle_id)
                 ->whereNull('end_time')
+                ->latest('start_time')
                 ->first();
 
             $toShiftId = $newShift?->id;

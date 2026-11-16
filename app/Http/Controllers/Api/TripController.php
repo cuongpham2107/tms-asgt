@@ -53,7 +53,7 @@ class TripController extends Controller
                 'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft])->with([
                     'customer',
                     'pickupLocation',
-                    'deliveryPoints.location',
+                    'deliveryPoints' => fn ($q) => $q->with('location')->orderBy('sequence')->orderBy('id'),
                     'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
                 ]),
                 'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
@@ -95,7 +95,7 @@ class TripController extends Controller
                 'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft])->with([
                     'customer',
                     'pickupLocation',
-                    'deliveryPoints.location',
+                    'deliveryPoints' => fn ($q) => $q->with('location')->orderBy('sequence')->orderBy('id'),
                     'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
                 ]),
                 'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
@@ -145,7 +145,7 @@ class TripController extends Controller
             'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft])->with([
                 'customer',
                 'pickupLocation',
-                'deliveryPoints.location',
+                'deliveryPoints' => fn ($q) => $q->with('location')->orderBy('sequence')->orderBy('id'),
                 'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
             ]),
             'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
@@ -206,7 +206,7 @@ class TripController extends Controller
                 'orders' => fn ($q) => $q->whereNotIn('status', [OrderStatus::Draft])->with([
                     'customer',
                     'pickupLocation',
-                    'deliveryPoints.location',
+                    'deliveryPoints' => fn ($q) => $q->with('location')->orderBy('sequence')->orderBy('id'),
                     'tripCheckpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
                 ]),
                 'checkpoints' => fn ($q) => $q->with('photos')->with('driver')->orderBy('occurred_at'),
