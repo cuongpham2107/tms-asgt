@@ -8,6 +8,7 @@ use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
+use App\Filament\Resources\Orders\Schemas\OrderForm;
 use App\Models\Area;
 use App\Models\Location;
 use App\Models\Order;
@@ -183,22 +184,8 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->native(false)
                                             ->required()
                                             ->columnSpan(1),
-                                        Select::make('chargeable_weight')
-                                            ->label('Tải trọng tính cước')
-                                            ->suffix('tấn')
+                                        OrderForm::chargeableWeightSelect()
                                             ->required(fn (Get $get): bool => $get('order_type_code') === 'external')
-                                            ->native(false)
-                                            ->options([
-                                                '1.25' => '1.25',
-                                                '1.5' => '1.5',
-                                                '2.5' => '2.5',
-                                                '3.5' => '3.5',
-                                                '5' => '5',
-                                                '7' => '7',
-                                                '8' => '8',
-                                                '10' => '10',
-                                                '14' => '14',
-                                            ])
                                             ->visible(fn (Get $get): bool => $get('order_type_code') === 'external')
                                             ->columnSpan(1),
                                     ]),

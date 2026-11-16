@@ -14,6 +14,7 @@ use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
 use App\Models\Customer;
+use App\Models\FreightRate;
 use App\Models\Order;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
@@ -36,6 +37,37 @@ use Illuminate\Support\Facades\DB;
 
 class OrderForm extends CreatesOrderTransportCards
 {
+    /** @var array<string, string> */
+    public const CHARGEABLE_WEIGHT_OPTIONS = [
+        '1.25' => '1.25',
+        '1.5' => '1.5',
+        '2.5' => '2.5',
+        '3.5' => '3.5',
+        '5' => '5',
+        '7' => '7',
+        '8' => '8',
+        '10' => '10',
+        '14' => '14',
+    ];
+
+    /**
+     * Select tải trọng tính cước, chuẩn hoá giá trị decimal:2 từ DB (vd: "5.00" → "5")
+     * để khớp đúng key trong danh sách tùy chọn khi mở form sửa.
+     */
+    public static function chargeableWeightSelect(): Select
+    {
+        return Select::make('chargeable_weight')
+            ->label('Tải trọng tính cước')
+            ->suffix('tấn')
+            ->native(false)
+            ->options(self::CHARGEABLE_WEIGHT_OPTIONS)
+            ->formatStateUsing(static function (mixed $state): ?string {
+                $key = FreightRate::tonnageKey($state);
+
+                return $key !== '' ? $key : null;
+            });
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -164,22 +196,8 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->placeholder('Ví dụ: Hàng gia dụng')
                                     ->columnSpan(['default' => 1, 'sm' => fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2, 'md' => fn (Get $get): int => self::isExternalOrder($get) ? 2 : 4]),
 
-                                Select::make('chargeable_weight')
-                                    ->label('Tải trọng tính cước')
-                                    ->suffix('tấn')
+                                self::chargeableWeightSelect()
                                     ->required()
-                                    ->native(false)
-                                    ->options([
-                                        '1.25' => '1.25',
-                                        '1.5' => '1.5',
-                                        '2.5' => '2.5',
-                                        '3.5' => '3.5',
-                                        '5' => '5',
-                                        '7' => '7',
-                                        '8' => '8',
-                                        '10' => '10',
-                                        '14' => '14',
-                                    ])
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
                                     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 
