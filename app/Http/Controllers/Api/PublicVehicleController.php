@@ -20,9 +20,10 @@ class PublicVehicleController extends Controller
      * Tra cứu thông tin xe + lái xe + link bản đồ GPS theo biển số (hỗ trợ cả 4 số cuối hoặc biển đầy đủ).
      *
      * @queryParam search string Biển số hoặc 4 số cuối cần tìm. Example: 12067
+     * @queryParam tobot string Định dạng mẫu tin nhắn (`x5` mặc định tiếng Việt hoặc `x1` tiếng Anh). Example: x1
      * @queryParam limit int Số kết quả tối đa (mặc định 10, tối đa 25). Example: 5
      *
-     * @response array{query: string, count: int, data: array<int, array<string, mixed>>}
+     * @response array{query: string, tobot: string, count: int, data: array<int, array<string, mixed>>}
      */
     public function search(Request $request): JsonResponse
     {
@@ -35,13 +36,15 @@ class PublicVehicleController extends Controller
             ], 422);
         }
 
+        $tobot = strtolower(trim((string) $request->query('tobot', 'x5'))) === 'x1' ? 'x1' : 'x5';
         $limit = max(1, min((int) $request->query('limit', 10), 25));
 
         $vehicles = $this->lookupService->search($rawSearch, $limit);
-        $data = $vehicles->map(fn ($vehicle): array => $this->lookupService->formatVehiclePayload($vehicle))->values()->all();
+        $data = $vehicles->map(fn ($vehicle): array => $this->lookupService->formatVehiclePayload($vehicle, $tobot))->values()->all();
 
         return response()->json([
             'query' => $rawSearch,
+            'tobot' => $tobot,
             'count' => count($data),
             'data' => $data,
         ]);

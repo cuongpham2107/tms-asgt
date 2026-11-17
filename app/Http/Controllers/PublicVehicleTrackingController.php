@@ -29,6 +29,7 @@ class PublicVehicleTrackingController extends Controller
             'vehicles.public-tracking.position',
             $expiresAt,
             ['vehicle' => $vehicle],
+            absolute: false,
         );
 
         return view('public.vehicle-tracking', [

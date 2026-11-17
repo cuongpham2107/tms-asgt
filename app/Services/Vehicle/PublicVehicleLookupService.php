@@ -82,11 +82,11 @@ class PublicVehicleLookupService
     }
 
     /**
-     * Chuyển đổi Vehicle thành payload JSON + copy_text chuẩn Kakao/bot.
+     * Chuyển đổi Vehicle thành payload JSON + copy_text chuẩn Kakao/bot (`x5` mặc định hoặc `x1`).
      *
      * @return array<string, mixed>
      */
-    public function formatVehiclePayload(Vehicle $vehicle): array
+    public function formatVehiclePayload(Vehicle $vehicle, string $tobot = 'x5'): array
     {
         $todayShift = ShiftScheduleService::determineShift();
         $activeOrderTrip = $this->resolveNearestActiveOrderTrip($vehicle);
@@ -126,30 +126,32 @@ class PublicVehicleLookupService
         $openShift = $this->resolveOpenShift($driver);
         $shiftElapsedMinutes = $openShift?->start_time ? (int) $openShift->start_time->diffInMinutes(now()) : null;
 
-        $gpsUrl = URL::temporarySignedRoute(
+        $relativeGpsUrl = URL::temporarySignedRoute(
             'vehicles.public-tracking',
             now()->addHours(24),
             ['vehicle' => $vehicle],
+            absolute: false,
         );
+        $gpsUrl = rtrim((string) config('app.url'), '/').$relativeGpsUrl;
 
         $loadCapacityTons = $vehicle->load_capacity !== null ? (float) $vehicle->load_capacity : null;
         $loadCapacityKg = $loadCapacityTons !== null ? (int) round($loadCapacityTons * 1000) : null;
-
-        $formatDate = static fn ($date): string => $date instanceof CarbonInterface
-            ? $date->format('d/m/Y')
-            : ($date ? (string) $date : '—');
-
-        $copyText = 'Biển số xe: '.($vehicle->plate_number ?? '—')."\n"
-            .'Tải trọng: '.($loadCapacityTons !== null ? number_format($loadCapacityTons, 1, ',', '.').' tấn' : '—')."\n"
-            .'Loại xe: '.($vehicle->getVehicleTypeLabel() ?: '—')."\n"
-            .'Số đăng ký: '.($vehicle->registration_number ?? '—')."\n"
-            .'Họ tên lái xe: '.($driverName ?: '—')."\n"
-            .'SĐT: '.($driver?->phone ?: '—')."\n"
-            .'CCCD: '.($driver?->cccd ?: '—')."\n"
-            .'Cấp ngày: '.$formatDate($driver?->cccd_issue_date)."\n"
-            .'Sinh ngày: '.$formatDate($driver?->date_of_birth)."\n"
-            .'Nơi thường trú: '.($driver?->address ?: '—')."\n"
-            .'Link GPS: '.$gpsUrl;
+        $doorCount = $vehicle->door_count !== null ? (int) $vehicle->door_count : null;
+        $formattedPlate = $this->formatPlateNumber((string) ($vehicle->plate_number ?? ''));
+        $shiftElapsedLabel = $shiftElapsedMinutes !== null ? $this->formatShiftElapsed($shiftElapsedMinutes) : null;
+        $normalizedTobot = strtolower(trim($tobot)) === 'x1' ? 'x1' : 'x5';
+        $copyText = $this->buildCopyText(
+            tobot: $normalizedTobot,
+            plate: $formattedPlate !== '' ? $formattedPlate : '—',
+            phone: $driver?->phone ?: '—',
+            driverName: $driverName ?: '—',
+            loadCapacityKg: $loadCapacityKg,
+            doorCount: $doorCount,
+            keyTag: isset($vehicle->key_tag) && filled($vehicle->key_tag) ? (string) $vehicle->key_tag : null,
+            shiftElapsedMinutes: $shiftElapsedMinutes,
+            shiftElapsedLabel: $shiftElapsedLabel,
+            gpsUrl: $gpsUrl,
+        );
 
         $hasPosition = $vehicle->gps_lat !== null && $vehicle->gps_lng !== null;
         $lastUpdate = $vehicle->last_gps_update;
@@ -157,12 +159,13 @@ class PublicVehicleLookupService
         return [
             'id' => $vehicle->id,
             'plate_number' => $vehicle->plate_number,
+            'formatted_plate' => $formattedPlate !== '' ? $formattedPlate : null,
             'registration_number' => $vehicle->registration_number,
             'vehicle_type' => $vehicle->vehicle_type?->value,
             'vehicle_type_label' => $vehicle->getVehicleTypeLabel(),
             'load_capacity_tons' => $loadCapacityTons,
             'load_capacity_kg' => $loadCapacityKg,
-            'door_count' => $vehicle->door_count !== null ? (int) $vehicle->door_count : null,
+            'door_count' => $doorCount,
             'source' => $source,
             'shift_schedule' => $todayShift->value,
             'active_order' => $activeOrder ? [
@@ -297,6 +300,73 @@ class PublicVehicleLookupService
             ->whereNull('end_time')
             ->latest('start_time')
             ->first();
+    }
+
+    private function buildCopyText(
+        string $tobot,
+        string $plate,
+        string $phone,
+        string $driverName,
+        ?int $loadCapacityKg,
+        ?int $doorCount,
+        ?string $keyTag,
+        ?int $shiftElapsedMinutes,
+        ?string $shiftElapsedLabel,
+        string $gpsUrl,
+    ): string {
+        if ($tobot === 'x1') {
+            $payloadText = $loadCapacityKg !== null ? number_format($loadCapacityKg, 0, '.', ',').' kg' : '—';
+            $elapsedText = $shiftElapsedMinutes !== null ? $this->formatShiftElapsedShort($shiftElapsedMinutes) : 'Not in shift';
+
+            return $plate."\n"
+                .'Mobile: '.$phone."\n"
+                .'Driver: '.$driverName."\n"
+                .'Payload: '.$payloadText."\n"
+                .'Num. of doors: '.($doorCount !== null ? (string) $doorCount : '—')."\n"
+                .'Key tag: '.($keyTag ?: '—')."\n"
+                .'('.$elapsedText.")\n"
+                .$gpsUrl;
+        }
+
+        return $plate."\n"
+            .'SĐT: '.$phone."\n"
+            .'Lái xe: '.$driverName."\n"
+            .'Trọng tải cho phép: '.($loadCapacityKg !== null ? "{$loadCapacityKg} kg" : '—')."\n"
+            .'Số cửa: '.($doorCount !== null ? (string) $doorCount : '—')."\n"
+            .'('.($shiftElapsedLabel ?? 'Chưa vào ca').")\n"
+            .$gpsUrl;
+    }
+
+    private function formatShiftElapsedShort(int $minutes): string
+    {
+        $days = intdiv($minutes, 1440);
+        $hours = intdiv($minutes % 1440, 60);
+        $mins = $minutes % 60;
+
+        if ($days > 0) {
+            return "{$days}d{$hours}h{$mins}m ago";
+        }
+
+        if ($hours > 0) {
+            return "{$hours}h{$mins}m ago";
+        }
+
+        return "{$mins}m ago";
+    }
+
+    private function formatPlateNumber(string $plate): string
+    {
+        $clean = (string) preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($plate)));
+
+        if (preg_match('/^(\d{2}[A-Z]{1,2})(\d{3})(\d{2})$/', $clean, $matches) === 1) {
+            return "{$matches[1]}-{$matches[2]}.{$matches[3]}";
+        }
+
+        if (preg_match('/^(\d{2}[A-Z]{1,2})(\d{4})$/', $clean, $matches) === 1) {
+            return "{$matches[1]}-{$matches[2]}";
+        }
+
+        return trim($plate);
     }
 
     private function formatShiftElapsed(int $minutes): string

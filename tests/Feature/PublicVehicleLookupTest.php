@@ -69,13 +69,29 @@ it('validates minimum search length and matches normalized plate numbers', funct
             ->assertJsonPath('data.0.driver.name', 'Nguyễn Đức Thiện')
             ->assertJsonPath('data.0.driver.phone', '0392878817');
 
-        expect($response->json('data.0.copy_text'))
-            ->toContain('Biển số xe: 20C13238')
-            ->toContain('Tải trọng: 14,1 tấn')
-            ->toContain('Họ tên lái xe: Nguyễn Đức Thiện')
+        expect($response->json('data.0.formatted_plate'))->toBe('20C-132.38')
+            ->and($response->json('data.0.copy_text'))
+            ->toContain('20C-132.38')
             ->toContain('SĐT: 0392878817')
-            ->toContain('Link GPS: ');
+            ->toContain('Lái xe: Nguyễn Đức Thiện')
+            ->toContain('Trọng tải cho phép: 14100 kg')
+            ->toContain('Số cửa: 4')
+            ->toContain('http');
     }
+
+    $x1Response = $this->withHeader('X-Api-Key', $apiKey)
+        ->getJson('/api/public/vehicles/search?search=3238&tobot=x1')
+        ->assertOk()
+        ->assertJsonPath('tobot', 'x1');
+
+    expect($x1Response->json('data.0.copy_text'))
+        ->toContain('20C-132.38')
+        ->toContain('Mobile: 0392878817')
+        ->toContain('Driver: Nguyễn Đức Thiện')
+        ->toContain('Payload: 14,100 kg')
+        ->toContain('Num. of doors: 4')
+        ->toContain('Key tag: ')
+        ->toContain('http');
 });
 
 it('prefers nearest active order driver over scheduled even/odd driver', function (): void {
@@ -154,13 +170,13 @@ it('serves signed public vehicle GPS tracking page and rejects unsigned requests
 
     $this->get('/vi-tri-xe/'.$vehicle->id)->assertForbidden();
 
-    $signedUrl = URL::temporarySignedRoute('vehicles.public-tracking', now()->addHour(), ['vehicle' => $vehicle]);
-    $this->get($signedUrl)
+    $relativeSignedUrl = URL::temporarySignedRoute('vehicles.public-tracking', now()->addHour(), ['vehicle' => $vehicle], absolute: false);
+    $this->get($relativeSignedUrl.'&zarsrc=30')
         ->assertOk()
         ->assertSee('29H11223')
         ->assertSee('Hà Nội, Việt Nam');
 
-    $positionUrl = URL::temporarySignedRoute('vehicles.public-tracking.position', now()->addHour(), ['vehicle' => $vehicle]);
+    $positionUrl = URL::temporarySignedRoute('vehicles.public-tracking.position', now()->addHour(), ['vehicle' => $vehicle], absolute: false);
     $this->getJson($positionUrl)
         ->assertOk()
         ->assertJsonPath('has_position', true)

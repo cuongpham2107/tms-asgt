@@ -25,7 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Link theo dõi sai/hết hạn: trả trang thông báo thân thiện thay vì lỗi mặc định.
         $exceptions->render(function (InvalidSignatureException $e, Request $request) {
-            if ($request->is('theo-doi/*') && ! $request->expectsJson()) {
+            if (($request->is('theo-doi/*') || $request->is('vi-tri-xe/*')) && ! $request->expectsJson()) {
                 return response()->view('public.trip-tracking-expired', [], 403);
             }
         });

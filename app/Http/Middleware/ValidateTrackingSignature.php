@@ -20,7 +20,10 @@ class ValidateTrackingSignature
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->hasValidSignatureWhileIgnoring(fn (string $parameter): bool => $parameter !== 'expires')) {
+        $ignore = fn (string $parameter): bool => $parameter !== 'expires';
+
+        if (! $request->hasValidSignatureWhileIgnoring($ignore)
+            && ! $request->hasValidRelativeSignatureWhileIgnoring($ignore)) {
             throw new InvalidSignatureException;
         }
 
