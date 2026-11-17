@@ -2393,6 +2393,15 @@ class TripStatisticsReport extends Page
         $trips = $this->getFilteredTrips();
         $cargoRows = $baseRows
             ->filter(fn (array $row): bool => in_array($row['service_type'] ?? '', ['HHHK', 'Hàng ngoài'], true))
+            ->values()
+            ->sortBy(fn (array $row, int $index): array => [
+                match ($row['service_type'] ?? '') {
+                    'HHHK' => 0,
+                    'Hàng ngoài' => 1,
+                    default => 2,
+                },
+                $index,
+            ])
             ->values();
 
         if ($this->activeTab === 'empty') {
