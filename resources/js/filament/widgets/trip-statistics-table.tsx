@@ -32,6 +32,7 @@ interface Row {
     plate: string | null
     date: string | null
     journey: string | null
+    area: string | null
     timeA: string | null
     timeB: string | null
     timeC: string | null
@@ -339,6 +340,15 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean, canEd
         },
         { key: 'date', groupId: 0, label: 'Ngày', align: 'center', minWidth: 90, extra: 'px-3 text-gray-600 dark:text-gray-400', render: (row) => row.date || '—' },
         { key: 'journey', groupId: 0, label: 'Hành trình', minWidth: 130, extra: 'px-3.5 font-medium text-gray-800 dark:text-gray-200', render: (row) => row.journey || '—' },
+        {
+            key: 'area',
+            groupId: 0,
+            label: 'Khu vực',
+            align: 'center',
+            minWidth: 95,
+            extra: 'px-2.5',
+            render: (row) => (row.area ? badge(row.area, 'info') : '—'),
+        },
         { key: 'timeA', groupId: 1, label: 'TG đóng hàng (A)', align: 'center', minWidth: 115, extra: 'px-3 font-mono text-gray-700 dark:text-gray-300', render: (row) => row.timeA || '—' },
         { key: 'timeB', groupId: 1, label: 'TG xe chạy (B)', align: 'center', minWidth: 115, extra: 'px-3 font-mono text-gray-700 dark:text-gray-300', render: (row) => row.timeB || '—' },
         { key: 'timeC', groupId: 1, label: 'TG đến (C)', align: 'center', minWidth: 115, extra: 'px-3 font-mono text-gray-700 dark:text-gray-300', render: (row) => row.timeC || '—' },

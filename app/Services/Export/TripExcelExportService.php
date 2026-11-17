@@ -8,6 +8,7 @@ use App\Enums\FreightPricingMethod;
 use App\Enums\OrderType;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
+use App\Models\Area;
 use App\Models\FeeType;
 use App\Models\FreightRate;
 use App\Models\Order;
@@ -213,6 +214,8 @@ class TripExcelExportService
                     'orders.deliveryPoints.location',
                     'orders.tripCheckpoints',
                     'checkpoints',
+                    'startLocation.area',
+                    'endLocation.area',
                 ])
                 ->get();
         }
@@ -351,6 +354,8 @@ class TripExcelExportService
                     'orders.deliveryPoints.location',
                     'orders.tripCheckpoints',
                     'checkpoints',
+                    'startLocation.area',
+                    'endLocation.area',
                 ])
                 ->get();
         }
@@ -693,6 +698,7 @@ class TripExcelExportService
             'date' => $date,
             'plate_number' => $plateNumber,
             'journey' => $journey,
+            'area' => $this->resolveAreaLabel($order?->area ?? $trip->endLocation?->area ?? $trip->startLocation?->area),
             'time_a' => $timeA,
             'time_b' => $timeB,
             'time_c' => $timeC,
@@ -712,6 +718,19 @@ class TripExcelExportService
             'cargo_type' => $cargoType,
             'chargeable_weight' => $chargeableWeight,
         ];
+    }
+
+    private function resolveAreaLabel(?Area $area): string
+    {
+        if (! $area) {
+            return '';
+        }
+
+        if ($area->code === 'PROVINCE') {
+            return 'Điểm khác';
+        }
+
+        return (string) ($area->code ?: $area->name ?: '');
     }
 
     /**

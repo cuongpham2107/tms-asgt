@@ -1461,3 +1461,67 @@ test('trip statistics table warehouse column only displays ACSV, ALSC, NCTS and 
     expect($rowsByCode['ORD-WH-1']['warehouse'])->toBe('ACSV')
         ->and($rowsByCode['ORD-WH-2']['warehouse'])->toBe('');
 });
+
+test('trip statistics table includes area column and maps PROVINCE to Điểm khác', function () {
+    $provinceArea = Area::create([
+        'code' => 'PROVINCE',
+        'name' => 'Hàng đi điểm khác 3 điểm chính',
+        'is_active' => true,
+        'sort_order' => 6,
+    ]);
+
+    $tripNba = Trip::create([
+        'trip_code' => 'TRIP-AREA-NBA',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-21 09:00:00'),
+        'completed_at' => Carbon::parse('2026-04-21 10:00:00'),
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-AREA-NBA',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'trip_id' => $tripNba->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    $tripProvince = Trip::create([
+        'trip_code' => 'TRIP-AREA-PROV',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-21 11:00:00'),
+        'completed_at' => Carbon::parse('2026-04-21 12:00:00'),
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-AREA-PROV',
+        'type' => OrderType::External,
+        'area_id' => $provinceArea->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'trip_id' => $tripProvince->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    $hhhkRows = collect(Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'HHHK',
+    ])->instance()->getReactTableConfiguration()['rows'])->keyBy('code');
+
+    $externalRows = collect(Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'external',
+    ])->instance()->getReactTableConfiguration()['rows'])->keyBy('code');
+
+    expect($hhhkRows['ORD-AREA-NBA']['area'])->toBe('NBA')
+        ->and($externalRows['ORD-AREA-PROV']['area'])->toBe('Điểm khác');
+});

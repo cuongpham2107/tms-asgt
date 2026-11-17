@@ -110,8 +110,8 @@ trait HasTripStatistics
                 'orders.deliveryPoints.location',
                 'orders.tripCheckpoints',
                 'checkpoints',
-                'startLocation',
-                'endLocation',
+                'startLocation.area',
+                'endLocation.area',
             ])
             ->when($dateFrom || $dateTo, fn (Builder $q): Builder => DriverMonthlyKmReportService::applyCompletionWindow($q, $dateFrom, $dateTo))
             ->when(filled($search), function (Builder $q) use ($search): Builder {
@@ -123,6 +123,7 @@ trait HasTripStatistics
                         ->orWhereHas('orders', function (Builder $o) use ($search): void {
                             $o->where('order_code', 'like', "%{$search}%")
                                 ->orWhere('cargo_name', 'like', "%{$search}%")
+                                ->orWhereHas('area', fn ($a) => $a->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"))
                                 ->orWhereHas('customer', fn ($c) => $c->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"));
                         });
                 });
@@ -162,6 +163,7 @@ trait HasTripStatistics
                 return $q->where(function (Builder $sub) use ($search): void {
                     $sub->where('order_code', 'like', "%{$search}%")
                         ->orWhere('cargo_name', 'like', "%{$search}%")
+                        ->orWhereHas('area', fn ($a) => $a->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"))
                         ->orWhereHas('customer', fn ($c) => $c->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"));
                 });
             })
@@ -227,6 +229,7 @@ trait HasTripStatistics
                     $row['plate_number'] ?? '',
                     $row['driver_name'] ?? '',
                     $row['customer'] ?? '',
+                    $row['area'] ?? '',
                     $row['warehouse'] ?? '',
                     $row['journey'] ?? '',
                     $row['note'] ?? '',
@@ -361,6 +364,7 @@ trait HasTripStatistics
             'plate' => $row['plate_number'] ?? null,
             'date' => filled($row['date'] ?? null) ? Carbon::parse($row['date'])->format('d/m/Y') : null,
             'journey' => $row['journey'] ?? null,
+            'area' => filled($row['area'] ?? null) ? $row['area'] : null,
             'timeA' => $time($row['time_a'] ?? null),
             'timeB' => $time($row['time_b'] ?? null),
             'timeC' => $time($row['time_c'] ?? null),
