@@ -153,14 +153,8 @@ class TripObserver
                             ->alpineClickHandler("\$dispatch('close-modal', { id: 'database-notifications' }); markAsRead(); close(true);");
                     }
 
-                    $timelineUrl = TripResource::getUrl('timeline', ['record' => $trip]);
-                    if ($timelineUrl) {
-                        $actions[] = Action::make('view')
-                            ->label('Xem chi tiết')
-                            ->url($timelineUrl)
-                            ->markAsRead()
-                            ->close()
-                            ->alpineClickHandler("\$dispatch('close-modal', { id: 'database-notifications' }); markAsRead(); close(true);");
+                    if ($viewAction = $this->makeViewTimelineAction($trip)) {
+                        $actions[] = $viewAction;
                     }
                 } catch (Throwable) {
                 }
@@ -340,20 +334,8 @@ class TripObserver
 
             if (! empty($content['actions'])) {
                 $actions = $content['actions'];
-            } else {
-                try {
-                    $timelineUrl = TripResource::getUrl('timeline', ['record' => $trip]);
-                    if ($timelineUrl) {
-                        $actions[] = Action::make('view')
-                            ->label('Xem chi tiết')
-                            ->url($timelineUrl)
-                            ->markAsRead()
-                            ->close()
-                            ->alpineClickHandler("\$dispatch('close-modal', { id: 'database-notifications' }); markAsRead(); close(true);");
-                    }
-                } catch (Throwable) {
-                    // Route may not be resolvable in non-HTTP/isolated test contexts
-                }
+            } elseif ($viewAction = $this->makeViewTimelineAction($trip)) {
+                $actions[] = $viewAction;
             }
 
             $notification = Notification::make()
@@ -385,6 +367,29 @@ class TripObserver
         } else {
             DB::afterCommit($send);
         }
+    }
+
+    /**
+     * Tạo action "Xem chi tiết" mở timeline chuyến: chỉ đóng drawer và đánh dấu đã đọc, không xóa thông báo.
+     */
+    protected function makeViewTimelineAction(Trip $trip): ?Action
+    {
+        try {
+            $timelineUrl = TripResource::getUrl('timeline', ['record' => $trip]);
+        } catch (Throwable) {
+            // Route may not be resolvable in non-HTTP/isolated test contexts
+            return null;
+        }
+
+        if (blank($timelineUrl)) {
+            return null;
+        }
+
+        return Action::make('view')
+            ->label('Xem chi tiết')
+            ->url($timelineUrl)
+            ->markAsRead()
+            ->alpineClickHandler("\$dispatch('close-modal', { id: 'database-notifications' }); markAsRead();");
     }
 
     /**

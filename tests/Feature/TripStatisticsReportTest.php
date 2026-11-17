@@ -24,6 +24,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -418,6 +419,130 @@ test('trip statistics report exports excel reflecting active filters', function 
 
     // Dòng 6 không có dữ liệu vì đã lọc loại bỏ ORD-EXPORT-EXT
     expect($sheet1->getCell('B6')->getValue())->toBeNull();
+});
+
+test('trip statistics report exportExcel includes both HHHK and external cargo regardless of active tab and respects right-side filters', function () {
+    $loadExportedSpreadsheet = function (StreamedResponse $response): Spreadsheet {
+        ob_start();
+        $response->sendContent();
+        $binary = ob_get_clean();
+
+        $tmpPath = tempnam(sys_get_temp_dir(), 'trip_stats_export_').'.xlsx';
+        file_put_contents($tmpPath, $binary);
+
+        try {
+            return IOFactory::load($tmpPath);
+        } finally {
+            @unlink($tmpPath);
+        }
+    };
+
+    $tripHhhk = Trip::create([
+        'trip_code' => 'TRIP-BOTH-HHHK',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 09:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 10:00:00'),
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-BOTH-HHHK',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'trip_id' => $tripHhhk->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    $tripExt = Trip::create([
+        'trip_code' => 'TRIP-BOTH-EXT',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 11:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 12:00:00'),
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-BOTH-EXT',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer2->id,
+        'created_by' => $this->driver->id,
+        'trip_id' => $tripExt->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    Trip::create([
+        'trip_code' => 'TRIP-BOTH-EMPTY',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 13:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 14:00:00'),
+    ]);
+
+    // 1. Đang ở tab HHHK: Sheet 1 phải có cả HHHK và Hàng ngoài (không có Xe không hàng), Sheet 2 vẫn có Hàng ngoài
+    $hhhkTab = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'HHHK',
+    ]);
+    $spreadsheetHhhk = $loadExportedSpreadsheet($hhhkTab->instance()->exportExcel());
+    $sheet1Codes = collect([
+        $spreadsheetHhhk->getSheet(0)->getCell('B5')->getValue(),
+        $spreadsheetHhhk->getSheet(0)->getCell('B6')->getValue(),
+    ])->filter()->values()->all();
+
+    expect($sheet1Codes)->toEqualCanonicalizing(['ORD-BOTH-HHHK', 'ORD-BOTH-EXT'])
+        ->and($spreadsheetHhhk->getSheet(0)->getCell('B7')->getValue())->toBeNull()
+        ->and($spreadsheetHhhk->getSheet(1)->getCell('B3')->getValue())->toBe('ORD-BOTH-EXT');
+
+    // 2. Đang ở tab Hàng ngoài: Sheet 1 cũng phải có cả HHHK và Hàng ngoài (không bị lọc chỉ còn Hàng ngoài)
+    $extTab = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'external',
+    ]);
+    $spreadsheetExt = $loadExportedSpreadsheet($extTab->instance()->exportExcel());
+    $extSheet1Codes = collect([
+        $spreadsheetExt->getSheet(0)->getCell('B5')->getValue(),
+        $spreadsheetExt->getSheet(0)->getCell('B6')->getValue(),
+    ])->filter()->values()->all();
+
+    expect($extSheet1Codes)->toEqualCanonicalizing(['ORD-BOTH-HHHK', 'ORD-BOTH-EXT'])
+        ->and($spreadsheetExt->getSheet(0)->getCell('B7')->getValue())->toBeNull()
+        ->and($spreadsheetExt->getSheet(1)->getCell('B3')->getValue())->toBe('ORD-BOTH-EXT');
+
+    // 3. Lọc theo filter bên phải (customerId): cả Sheet 1 và Sheet 2 chỉ giữ đơn của khách được chọn
+    $filteredTab = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'HHHK',
+        'customerId' => $this->customer2->id,
+    ]);
+    $spreadsheetFiltered = $loadExportedSpreadsheet($filteredTab->instance()->exportExcel());
+
+    expect($spreadsheetFiltered->getSheet(0)->getCell('B5')->getValue())->toBe('ORD-BOTH-EXT')
+        ->and($spreadsheetFiltered->getSheet(0)->getCell('B6')->getValue())->toBeNull()
+        ->and($spreadsheetFiltered->getSheet(1)->getCell('B3')->getValue())->toBe('ORD-BOTH-EXT');
+
+    // 4. Đang ở tab Xe không hàng: Sheet 1 xuất Xe không hàng, Sheet 2 vẫn xuất Hàng ngoài theo bộ lọc bên phải
+    $emptyTab = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'empty',
+    ]);
+    $spreadsheetEmpty = $loadExportedSpreadsheet($emptyTab->instance()->exportExcel());
+
+    expect($spreadsheetEmpty->getSheet(0)->getCell('A5')->getValue())->toBe('Xe không hàng')
+        ->and($spreadsheetEmpty->getSheet(0)->getCell('B5')->getValue())->toBe('TRIP-BOTH-EMPTY')
+        ->and($spreadsheetEmpty->getSheet(0)->getCell('B6')->getValue())->toBeNull()
+        ->and($spreadsheetEmpty->getSheet(1)->getCell('B3')->getValue())->toBe('ORD-BOTH-EXT');
 });
 
 test('trip statistics report date preset buttons update dates and active state correctly', function () {
