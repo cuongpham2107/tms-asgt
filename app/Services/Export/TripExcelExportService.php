@@ -81,10 +81,11 @@ class TripExcelExportService
      *
      * @param  Collection<int, array<string, mixed>>  $rows
      * @param  Collection<int, Trip>|null  $trips
+     * @param  Collection<int, array<string, mixed>>|null  $externalRows
      */
-    public function exportFromRows(Collection $rows, ?Collection $trips = null, ?string $filename = null): StreamedResponse
+    public function exportFromRows(Collection $rows, ?Collection $trips = null, ?string $filename = null, ?Collection $externalRows = null): StreamedResponse
     {
-        $spreadsheet = $this->buildSpreadsheetFromRows($rows, $trips);
+        $spreadsheet = $this->buildSpreadsheetFromRows($rows, $trips, $externalRows);
 
         $defaultFilename = 'Tong-hop-chuyen-phuc-vu-'.now()->format('Ymd-His').'.xlsx';
         $finalFilename = $filename ?: $defaultFilename;
@@ -101,8 +102,9 @@ class TripExcelExportService
     /**
      * @param  Collection<int, array<string, mixed>>  $rows
      * @param  Collection<int, Trip>|null  $trips
+     * @param  Collection<int, array<string, mixed>>|null  $externalRows
      */
-    public function buildSpreadsheetFromRows(Collection $rows, ?Collection $trips = null): Spreadsheet
+    public function buildSpreadsheetFromRows(Collection $rows, ?Collection $trips = null, ?Collection $externalRows = null): Spreadsheet
     {
         $spreadsheet = new Spreadsheet;
 
@@ -115,7 +117,7 @@ class TripExcelExportService
         $sheet2 = $spreadsheet->createSheet();
         $sheet2->setTitle('Bảng dữ liệu hàng ngoài');
         if ($trips) {
-            $orderIds = $rows->pluck('order_id')->filter()->unique()->toArray();
+            $orderIds = ($externalRows ?? $rows)->pluck('order_id')->filter()->unique()->toArray();
             $filteredTrips = $trips->map(function (Trip $trip) use ($orderIds): Trip {
                 $clonedTrip = clone $trip;
                 $clonedOrders = $trip->orders->filter(fn (Order $o) => in_array($o->id, $orderIds));

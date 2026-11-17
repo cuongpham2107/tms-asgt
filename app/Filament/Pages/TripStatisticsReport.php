@@ -2389,20 +2389,24 @@ class TripStatisticsReport extends Page
 
     public function exportExcel(): StreamedResponse
     {
-        $rows = $this->getAllRows();
+        $baseRows = $this->getBaseFilteredRows();
         $trips = $this->getFilteredTrips();
+        $cargoRows = $baseRows
+            ->filter(fn (array $row): bool => in_array($row['service_type'] ?? '', ['HHHK', 'Hàng ngoài'], true))
+            ->values();
 
-        $tabSuffix = match ($this->activeTab) {
-            'HHHK' => 'HHHK',
-            'external' => 'Hang-ngoai',
-            'empty' => 'Xe-khong-hang',
-            default => 'Tong-hop',
-        };
+        if ($this->activeTab === 'empty') {
+            $summaryRows = $this->getAllRows();
+            $tabSuffix = 'Xe-khong-hang';
+        } else {
+            $summaryRows = $cargoRows;
+            $tabSuffix = 'Tong-hop';
+        }
 
         /** @var TripExcelExportService $exportService */
         $exportService = app(TripExcelExportService::class);
         $filename = "Bao-cao-thong-ke-{$tabSuffix}-".now()->format('Ymd-His').'.xlsx';
 
-        return $exportService->exportFromRows($rows, $trips, $filename);
+        return $exportService->exportFromRows($summaryRows, $trips, $filename, $cargoRows);
     }
 }
