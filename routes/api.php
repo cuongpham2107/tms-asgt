@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\DriverShiftController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OvertimeRegistrationController;
+use App\Http\Controllers\Api\PublicVehicleController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\ShiftStatusController;
 use App\Http\Controllers\Api\TripCheckpointController;
@@ -14,10 +15,15 @@ use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\TripKmReportController;
 use App\Http\Controllers\Api\VehicleSearchController;
 use App\Http\Middleware\EnsureRoleVehicle;
+use App\Http\Middleware\ValidatePublicApiKey;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/driver/version', [AppVersionController::class, 'show']);
 Route::post('/driver/login', [AuthController::class, 'login']);
+
+// API public (xác thực qua X-Api-Key) cho hệ thống ngoài tra cứu xe + lái xe + link GPS
+Route::middleware([ValidatePublicApiKey::class, 'throttle:60,1'])
+    ->get('/public/vehicles/search', [PublicVehicleController::class, 'search']);
 
 // OSRM routing – dùng chung cho admin backend (Filament map) và mobile app
 Route::post('/route', [RouteController::class, 'route']);

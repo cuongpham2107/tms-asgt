@@ -134,4 +134,11 @@ return [
     'mobile_ios_url' => env('MOBILE_IOS_URL', 'https://apps.apple.com/app/id6810122889'),
     'mobile_release_notes' => env('MOBILE_RELEASE_NOTES', 'Cập nhật tính năng và cải thiện hiệu năng hệ thống.'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Public Vehicle Lookup API Key
+    |--------------------------------------------------------------------------
+    */
+    'public_vehicle_api_key' => env('PUBLIC_VEHICLE_API_KEY') ?: env('APP_KEY'),
+
 ];

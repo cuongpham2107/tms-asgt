@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\PublicTripTrackingController;
+use App\Http\Controllers\PublicVehicleTrackingController;
 use App\Http\Controllers\TripPhotoDownloadController;
 use App\Http\Middleware\ValidateTrackingSignature;
 use Illuminate\Support\Facades\Route;
@@ -12,6 +13,15 @@ Route::middleware([ValidateTrackingSignature::class, 'throttle:120,1'])->prefix(
 
     Route::get('/vi-tri', [PublicTripTrackingController::class, 'position'])
         ->name('trips.public-tracking.position');
+});
+
+// Trang xem vị trí xe hiện tại công khai theo link ký thời hạn
+Route::middleware([ValidateTrackingSignature::class, 'throttle:120,1'])->prefix('vi-tri-xe/{vehicle}')->group(function () {
+    Route::get('/', [PublicVehicleTrackingController::class, 'show'])
+        ->name('vehicles.public-tracking');
+
+    Route::get('/vi-tri', [PublicVehicleTrackingController::class, 'position'])
+        ->name('vehicles.public-tracking.position');
 });
 
 // Tải tất cả ảnh của chuyến đi dạng file zip
