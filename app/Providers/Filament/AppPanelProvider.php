@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Plugins\FilamentChatAssistantPlugin;
+use App\Livewire\DatabaseNotifications;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Enums\UserMenuPosition;
 use Filament\Http\Middleware\Authenticate;
@@ -58,7 +59,7 @@ class AppPanelProvider extends PanelProvider
             // ->topbar(false)
             ->maxContentWidth(Width::Full)
             ->subNavigationPosition(SubNavigationPosition::Top)
-            ->databaseNotifications()
+            ->databaseNotifications(livewireComponent: DatabaseNotifications::class)
             ->databaseNotificationsPolling('30s')
             ->navigationGroups([
                 'Tổng quan',

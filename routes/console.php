@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\DatabaseNotification;
 use App\Models\VehicleGpsLog;
 use App\Services\EupGpsService;
 use Illuminate\Foundation\Inspiring;
@@ -31,6 +32,10 @@ Schedule::command('shifts:auto-end')
 Schedule::command('model:prune', ['--model' => [VehicleGpsLog::class]])
     ->daily()
     ->name('prune-vehicle-gps-logs');
+
+Schedule::command('model:prune', ['--model' => [DatabaseNotification::class]])
+    ->hourly()
+    ->name('prune-database-notifications');
 
 Schedule::command('db:backup --keep=3')
     ->dailyAt('01:00')
