@@ -486,35 +486,33 @@ test('trip statistics report exportExcel includes both HHHK and external cargo r
         'completed_at' => Carbon::parse('2026-04-20 14:00:00'),
     ]);
 
-    // 1. Đang ở tab HHHK: Sheet 1 phải có cả HHHK và Hàng ngoài (không có Xe không hàng), Sheet 2 vẫn có Hàng ngoài
+    // 1. Đang ở tab HHHK: Sheet 1 phải có cả HHHK và Hàng ngoài (sắp xếp theo loại hình phục vụ: HHHK trước, Hàng ngoài sau; không có Xe không hàng), Sheet 2 vẫn có Hàng ngoài
     $hhhkTab = Livewire::test(TripStatisticsReport::class, [
         'startDate' => '2026-04-01',
         'endDate' => '2026-04-30',
         'activeTab' => 'HHHK',
     ]);
     $spreadsheetHhhk = $loadExportedSpreadsheet($hhhkTab->instance()->exportExcel());
-    $sheet1Codes = collect([
-        $spreadsheetHhhk->getSheet(0)->getCell('B5')->getValue(),
-        $spreadsheetHhhk->getSheet(0)->getCell('B6')->getValue(),
-    ])->filter()->values()->all();
 
-    expect($sheet1Codes)->toEqualCanonicalizing(['ORD-BOTH-HHHK', 'ORD-BOTH-EXT'])
+    expect($spreadsheetHhhk->getSheet(0)->getCell('A5')->getValue())->toBe('HHHK')
+        ->and($spreadsheetHhhk->getSheet(0)->getCell('B5')->getValue())->toBe('ORD-BOTH-HHHK')
+        ->and($spreadsheetHhhk->getSheet(0)->getCell('A6')->getValue())->toBe('Hàng ngoài')
+        ->and($spreadsheetHhhk->getSheet(0)->getCell('B6')->getValue())->toBe('ORD-BOTH-EXT')
         ->and($spreadsheetHhhk->getSheet(0)->getCell('B7')->getValue())->toBeNull()
         ->and($spreadsheetHhhk->getSheet(1)->getCell('B3')->getValue())->toBe('ORD-BOTH-EXT');
 
-    // 2. Đang ở tab Hàng ngoài: Sheet 1 cũng phải có cả HHHK và Hàng ngoài (không bị lọc chỉ còn Hàng ngoài)
+    // 2. Đang ở tab Hàng ngoài: Sheet 1 cũng phải có cả HHHK và Hàng ngoài theo đúng thứ tự loại hình phục vụ
     $extTab = Livewire::test(TripStatisticsReport::class, [
         'startDate' => '2026-04-01',
         'endDate' => '2026-04-30',
         'activeTab' => 'external',
     ]);
     $spreadsheetExt = $loadExportedSpreadsheet($extTab->instance()->exportExcel());
-    $extSheet1Codes = collect([
-        $spreadsheetExt->getSheet(0)->getCell('B5')->getValue(),
-        $spreadsheetExt->getSheet(0)->getCell('B6')->getValue(),
-    ])->filter()->values()->all();
 
-    expect($extSheet1Codes)->toEqualCanonicalizing(['ORD-BOTH-HHHK', 'ORD-BOTH-EXT'])
+    expect($spreadsheetExt->getSheet(0)->getCell('A5')->getValue())->toBe('HHHK')
+        ->and($spreadsheetExt->getSheet(0)->getCell('B5')->getValue())->toBe('ORD-BOTH-HHHK')
+        ->and($spreadsheetExt->getSheet(0)->getCell('A6')->getValue())->toBe('Hàng ngoài')
+        ->and($spreadsheetExt->getSheet(0)->getCell('B6')->getValue())->toBe('ORD-BOTH-EXT')
         ->and($spreadsheetExt->getSheet(0)->getCell('B7')->getValue())->toBeNull()
         ->and($spreadsheetExt->getSheet(1)->getCell('B3')->getValue())->toBe('ORD-BOTH-EXT');
 
