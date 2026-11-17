@@ -653,25 +653,26 @@ test('trip statistics report only includes completed trips', function () {
         ->and($codes)->not->toContain('TRIP-CANCELLED');
 });
 
-test('trip statistics report formats duration from minutes to hours and minutes correctly', function () {
+test('trip statistics report formats duration as total minutes correctly', function () {
     $component = Livewire::test(TripStatisticsReport::class);
     $report = $component->instance();
 
-    // User's specific example: 11609 minutes = 193h 29p
-    expect($report->formatDuration(11609))->toBe('193h 29p');
+    expect($report->formatDuration(11609))->toBe('11609');
     expect($report->formatDurationTooltip(11609))->toBe('193 giờ 29 phút (11,609 phút)');
 
-    // Other cases
-    expect($report->formatDuration(40))->toBe('40p');
+    expect($report->formatDuration(90))->toBe('90');
+    expect($report->formatDurationTooltip(90))->toBe('1 giờ 30 phút (90 phút)');
+
+    expect($report->formatDuration(40))->toBe('40');
     expect($report->formatDurationTooltip(40))->toBe('40 phút');
 
-    expect($report->formatDuration(60))->toBe('1h');
+    expect($report->formatDuration(60))->toBe('60');
     expect($report->formatDurationTooltip(60))->toBe('1 giờ (60 phút)');
 
-    expect($report->formatDuration(75))->toBe('1h 15p');
+    expect($report->formatDuration(75))->toBe('75');
     expect($report->formatDurationTooltip(75))->toBe('1 giờ 15 phút (75 phút)');
 
-    expect($report->formatDuration(0))->toBe('0p');
+    expect($report->formatDuration(0))->toBe('0');
     expect($report->formatDurationTooltip(0))->toBe('0 phút');
 
     expect($report->formatDuration(null))->toBe('—');
@@ -1273,4 +1274,190 @@ test('trip statistics report and excel export display external_driver_name for r
         ->buildSpreadsheetFromRows($component->instance()->getAllRows(), $component->instance()->getFilteredTrips());
 
     expect($spreadsheet->getSheet(0)->getCell('U5')->getValue())->toBe('Nguyễn Văn Thuê Ngoài');
+});
+
+test('summary sheet column P only displays ACSV, ALSC, NCTS and leaves others empty', function () {
+    $service = app(TripExcelExportService::class);
+
+    $makeRow = fn (string $code, string $journey, string $warehouse): array => [
+        'service_type' => 'Hàng ngoài',
+        'code' => $code,
+        'date' => Carbon::parse('2026-04-20'),
+        'plate_number' => '29E12067',
+        'journey' => $journey,
+        'time_a' => null,
+        'time_b' => null,
+        'time_c' => null,
+        'time_d' => null,
+        'time_loading' => null,
+        'time_travel' => null,
+        'time_unloading' => null,
+        'time_waiting_22h' => 0,
+        'time_total_trip' => null,
+        'customer' => 'SEVT',
+        'warehouse' => $warehouse,
+        'vehicle_owner' => 'Xe công ty',
+        'vehicle_type' => 'Xe thường',
+        'note' => '',
+        'is_return_trip' => false,
+        'driver_name' => 'Tài xế A',
+        'km_loaded' => 0,
+        'km_empty' => 0,
+        'pcs' => 0,
+        'gw' => 0,
+        'cargo_type' => 'GCR',
+        'chargeable_weight' => 0,
+    ];
+
+    $spreadsheet = $service->buildSpreadsheetFromRows(collect([
+        $makeRow('ORD-1', 'ASG -> ALSC', 'ALSC'),
+        $makeRow('ORD-2', 'ACSV -> SEVT', 'SEVT'),
+        $makeRow('ORD-3', 'NEWWING -> ALSE -> NCTS', 'ALSE'),
+        $makeRow('ORD-4', 'SEVT -> ASGL', 'ASGL'),
+        $makeRow('ORD-5', 'ALSB -> ASG', 'ALSB'),
+    ]));
+
+    $sheet = $spreadsheet->getSheet(0);
+
+    expect($sheet->getCell('P5')->getValue())->toBe('ALSC')
+        ->and($sheet->getCell('P6')->getValue())->toBe('ACSV')
+        ->and($sheet->getCell('P7')->getValue())->toBe('NCTS')
+        ->and($sheet->getCell('P8')->getValue())->toBe('')
+        ->and($sheet->getCell('P9')->getValue())->toBe('');
+});
+
+test('summary sheet duration columns output numeric minutes in Excel', function () {
+    $service = app(TripExcelExportService::class);
+
+    $spreadsheet = $service->buildSpreadsheetFromRows(collect([[
+        'service_type' => 'Hàng ngoài',
+        'code' => 'ORD-DUR-1',
+        'date' => Carbon::parse('2026-04-20'),
+        'plate_number' => '29E12067',
+        'journey' => 'ASG -> ALSC',
+        'time_a' => null,
+        'time_b' => null,
+        'time_c' => null,
+        'time_d' => null,
+        'time_loading' => 0,
+        'time_travel' => 90,
+        'time_unloading' => 60,
+        'time_waiting_22h' => 150,
+        'time_total_trip' => 150,
+        'customer' => 'SEVT',
+        'warehouse' => 'ALSC',
+        'vehicle_owner' => 'Xe công ty',
+        'vehicle_type' => 'Xe thường',
+        'note' => '',
+        'is_return_trip' => false,
+        'driver_name' => 'Tài xế A',
+        'km_loaded' => 0,
+        'km_empty' => 0,
+        'pcs' => 0,
+        'gw' => 0,
+        'cargo_type' => 'GCR',
+        'chargeable_weight' => 0,
+    ]]));
+
+    $sheet = $spreadsheet->getSheet(0);
+
+    expect($sheet->getCell('J4')->getValue())->toBe('Thời gian xe đóng hàng (phút)')
+        ->and($sheet->getCell('N4')->getValue())->toBe('Thời gian cho 1 chuyến hàng (phút)')
+        ->and($sheet->getCell('J5')->getValue())->toBe(0)
+        ->and($sheet->getCell('K5')->getValue())->toBe(90)
+        ->and($sheet->getCell('L5')->getValue())->toBe(60)
+        ->and($sheet->getCell('M5')->getValue())->toBe(150)
+        ->and($sheet->getCell('N5')->getValue())->toBe(150);
+});
+
+test('trip statistics table warehouse column only displays ACSV, ALSC, NCTS and leaves others empty', function () {
+    $acsvLocation = Location::create([
+        'code' => 'ACSV',
+        'name' => 'Kho ACSV',
+        'address' => 'Nội Bài',
+        'lat' => 21.221,
+        'lng' => 105.806,
+        'loc_type' => 'pickup',
+        'is_active' => true,
+    ]);
+
+    $sevtLocation = Location::create([
+        'code' => 'SEVT',
+        'name' => 'Samsung Thái Nguyên',
+        'address' => 'Thái Nguyên',
+        'lat' => 21.425,
+        'lng' => 105.879,
+        'loc_type' => 'delivery',
+        'is_active' => true,
+    ]);
+
+    $tripPickupAcsv = Trip::create([
+        'trip_code' => 'TRIP-WH-ACSV',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 09:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 10:00:00'),
+    ]);
+
+    $orderPickupAcsv = Order::create([
+        'order_code' => 'ORD-WH-1',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'pickup_location_id' => $acsvLocation->id,
+        'trip_id' => $tripPickupAcsv->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    OrderDeliveryPoint::create([
+        'order_id' => $orderPickupAcsv->id,
+        'location_id' => $sevtLocation->id,
+        'sequence' => 1,
+        'arrived_at' => Carbon::parse('2026-04-20 09:30:00'),
+        'delivered_at' => Carbon::parse('2026-04-20 10:00:00'),
+    ]);
+
+    $tripOther = Trip::create([
+        'trip_code' => 'TRIP-WH-OTHER',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-20 11:00:00'),
+        'completed_at' => Carbon::parse('2026-04-20 12:00:00'),
+    ]);
+
+    $orderOther = Order::create([
+        'order_code' => 'ORD-WH-2',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'trip_id' => $tripOther->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    OrderDeliveryPoint::create([
+        'order_id' => $orderOther->id,
+        'location_id' => $sevtLocation->id,
+        'sequence' => 1,
+        'arrived_at' => Carbon::parse('2026-04-20 11:30:00'),
+        'delivered_at' => Carbon::parse('2026-04-20 12:00:00'),
+    ]);
+
+    $component = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'HHHK',
+    ]);
+
+    $rowsByCode = collect($component->instance()->getReactTableConfiguration()['rows'])
+        ->keyBy('code');
+
+    expect($rowsByCode['ORD-WH-1']['warehouse'])->toBe('ACSV')
+        ->and($rowsByCode['ORD-WH-2']['warehouse'])->toBe('');
 });

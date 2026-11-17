@@ -343,14 +343,14 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean, canEd
         { key: 'timeB', groupId: 1, label: 'TG xe chạy (B)', align: 'center', minWidth: 115, extra: 'px-3 font-mono text-gray-700 dark:text-gray-300', render: (row) => row.timeB || '—' },
         { key: 'timeC', groupId: 1, label: 'TG đến (C)', align: 'center', minWidth: 115, extra: 'px-3 font-mono text-gray-700 dark:text-gray-300', render: (row) => row.timeC || '—' },
         { key: 'timeD', groupId: 1, label: 'TG hạ hàng (D)', align: 'center', minWidth: 115, extra: 'px-3 font-mono text-gray-700 dark:text-gray-300', render: (row) => row.timeD || '—' },
-        { key: 'loading', groupId: 2, label: 'TG đóng (1)', title: 'B - A (giờ & phút)', align: 'center', minWidth: 85, extra: 'px-2.5 font-medium text-gray-700 dark:text-gray-300', render: (row) => <span title={row.loadingTitle}>{row.loading}</span> },
-        { key: 'travel', groupId: 2, label: 'TG chạy (2)', title: 'C - B (giờ & phút)', align: 'center', minWidth: 85, extra: 'px-2.5 font-medium text-gray-700 dark:text-gray-300', render: (row) => <span title={row.travelTitle}>{row.travel}</span> },
-        { key: 'unloading', groupId: 2, label: 'TG hạ (3)', title: 'D - C (giờ & phút)', align: 'center', minWidth: 85, extra: 'px-2.5 font-medium text-gray-700 dark:text-gray-300', render: (row) => <span title={row.unloadingTitle}>{row.unloading}</span> },
+        { key: 'loading', groupId: 2, label: 'TG đóng (1)', title: 'B - A (phút)', align: 'center', minWidth: 85, extra: 'px-2.5 font-medium text-gray-700 dark:text-gray-300', render: (row) => <span title={row.loadingTitle}>{row.loading}</span> },
+        { key: 'travel', groupId: 2, label: 'TG chạy (2)', title: 'C - B (phút)', align: 'center', minWidth: 85, extra: 'px-2.5 font-medium text-gray-700 dark:text-gray-300', render: (row) => <span title={row.travelTitle}>{row.travel}</span> },
+        { key: 'unloading', groupId: 2, label: 'TG hạ (3)', title: 'D - C (phút)', align: 'center', minWidth: 85, extra: 'px-2.5 font-medium text-gray-700 dark:text-gray-300', render: (row) => <span title={row.unloadingTitle}>{row.unloading}</span> },
         {
             key: 'waiting22h',
             groupId: 2,
             label: 'TG chờ 22:00',
-            title: 'Chờ hạ hàng sau 22:00 (giờ & phút)',
+            title: 'Chờ hạ hàng sau 22:00 (phút)',
             align: 'center',
             minWidth: 110,
             extra: 'px-3',
@@ -362,7 +362,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean, canEd
             key: 'totalTime',
             groupId: 2,
             label: 'Tổng TG (1+2+3)',
-            title: '(1) + (2) + (3) (giờ & phút)',
+            title: '(1) + (2) + (3) (phút)',
             align: 'center',
             minWidth: 105,
             extra: 'px-3 font-bold text-primary-600 dark:text-primary-400',
@@ -370,7 +370,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean, canEd
             render: (row) => <span title={row.totalTimeTitle}>{row.totalTime}</span>,
         },
         { key: 'customer', groupId: 3, label: 'Khách hàng', minWidth: 100, extra: 'px-3 font-semibold text-gray-800 dark:text-gray-200', render: (row) => row.customer || '—' },
-        { key: 'warehouse', groupId: 3, label: 'Kho đóng/trả', minWidth: 100, extra: 'px-3 text-gray-700 dark:text-gray-300', render: (row) => row.warehouse || '—' },
+        { key: 'warehouse', groupId: 3, label: 'Kho đóng/trả', minWidth: 100, extra: 'px-3 text-gray-700 dark:text-gray-300', render: (row) => row.warehouse || '' },
         {
             key: 'vehicleOwner',
             groupId: 3,
@@ -514,7 +514,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean, canEd
 const GROUP_DEFS = [
     { id: 0, title: '1. THÔNG TIN CHUYẾN & HÀNH TRÌNH' },
     { id: 1, title: '2. 4 MỐC THỜI GIAN THỰC TẾ' },
-    { id: 2, title: '3. THỜI LƯỢNG TÍNH TOÁN (GIỜ & PHÚT)' },
+    { id: 2, title: '3. THỜI LƯỢNG TÍNH TOÁN (PHÚT)' },
     { id: 3, title: '4. ĐỐI TÁC, XE & TÀI XẾ' },
     { id: 4, title: '5. SẢN LƯỢNG, KM & CƯỚC' },
     { id: 5, title: '6. CƯỚC VẬN CHUYỂN' },
@@ -815,7 +815,8 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                         <b className="font-semibold text-gray-900 dark:text-white">{metrics.km.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}</b> km
                     </span>
                     <span title={metrics.avgDurationTitle}>
-                        TB <b className="font-semibold text-gray-900 dark:text-white">{metrics.avgDuration}</b> / chuyến
+                        TB <b className="font-semibold text-gray-900 dark:text-white">{metrics.avgDuration}</b>
+                        {metrics.avgDuration !== '—' ? ' phút' : ''} / chuyến
                     </span>
                     {metrics.waiting22h > 0 && (
                         <span className="text-amber-600 dark:text-amber-400">

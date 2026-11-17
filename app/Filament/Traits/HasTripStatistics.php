@@ -410,7 +410,7 @@ trait HasTripStatistics
     }
 
     /**
-     * Định dạng thời gian từ số phút sang định dạng giờ và phút (ví dụ: 193h 29p, 45p, 2h).
+     * Định dạng thời gian từ số phút sang tổng số phút dạng số (ví dụ: 90, 60, 0).
      */
     public function formatDuration(?int $minutes): string
     {
@@ -419,21 +419,10 @@ trait HasTripStatistics
         }
 
         if ($minutes <= 0) {
-            return '0p';
+            return '0';
         }
 
-        $hours = intdiv($minutes, 60);
-        $mins = $minutes % 60;
-
-        if ($hours > 0 && $mins > 0) {
-            return "{$hours}h {$mins}p";
-        }
-
-        if ($hours > 0) {
-            return "{$hours}h";
-        }
-
-        return "{$mins}p";
+        return (string) $minutes;
     }
 
     /**

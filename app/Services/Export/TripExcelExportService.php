@@ -30,6 +30,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TripExcelExportService
 {
+    /** @var array<int, string> */
+    private const ALLOWED_SUMMARY_WAREHOUSES = ['ACSV', 'ALSC', 'NCTS'];
+
     /**
      * @param  Builder|Collection<int, Trip|Order>  $queryOrCollection
      */
@@ -264,11 +267,11 @@ class TripExcelExportService
             'G4' => 'Thời gian xe chạy',
             'H4' => 'Thời gian đến',
             'I4' => 'Thời gian hạ hàng',
-            'J4' => 'Thời gian xe đóng hàng',
-            'K4' => 'Thời gian xe di chuyển',
-            'L4' => 'Thời gian xe hạ hàng',
-            'M4' => 'Thời gian của chuyến tính đến thời gian chờ hạ hàng 22:00',
-            'N4' => 'Thời gian cho 1 chuyến hàng',
+            'J4' => 'Thời gian xe đóng hàng (phút)',
+            'K4' => 'Thời gian xe di chuyển (phút)',
+            'L4' => 'Thời gian xe hạ hàng (phút)',
+            'M4' => 'Thời gian của chuyến tính đến thời gian chờ hạ hàng 22:00 (phút)',
+            'N4' => 'Thời gian cho 1 chuyến hàng (phút)',
             'O4' => 'Khách hàng',
             'P4' => 'Kho đóng trả hàng',
             'Q4' => 'Quản lý xe (xe công ty or xe thuê)',
@@ -595,7 +598,7 @@ class TripExcelExportService
     }
 
     /**
-     * Định dạng số phút sang định dạng giờ và phút (ví dụ: 1h 30p, 45p, 0p).
+     * Định dạng số phút sang tổng số phút dạng số (ví dụ: 90, 45, 0).
      */
     public function formatDuration(?int $minutes): string
     {
@@ -604,21 +607,15 @@ class TripExcelExportService
         }
 
         if ($minutes <= 0) {
-            return '0p';
+            return '0';
         }
 
-        $hours = intdiv($minutes, 60);
-        $mins = $minutes % 60;
+        return (string) $minutes;
+    }
 
-        if ($hours > 0 && $mins > 0) {
-            return "{$hours}h {$mins}p";
-        }
-
-        if ($hours > 0) {
-            return "{$hours}h";
-        }
-
-        return "{$mins}p";
+    private function formatDurationCell(?int $minutes): int|string
+    {
+        return $minutes === null ? '' : max(0, $minutes);
     }
 
     /**
@@ -702,7 +699,7 @@ class TripExcelExportService
             'time_d' => $timeD,
             ...$this->tripDurations($timeA, $timeB, $timeC, $timeD, $order, $trip),
             'customer' => $customer,
-            'warehouse' => $warehouse,
+            'warehouse' => $this->resolveSummaryCargoWarehouse($warehouse, $journey),
             'vehicle_owner' => $ownerLabel,
             'vehicle_type' => $typeLabel,
             'note' => $note,
@@ -734,27 +731,25 @@ class TripExcelExportService
         $sheet->setCellValue("D{$row}", $data['plate_number'] ?? '');
 
         // Tab "Bảng tổng hợp chuyến phục vụ": nếu giao nhiều điểm, chỉ hiển thị điểm lấy và điểm trả cuối cùng
-        $journey = (string) ($data['journey'] ?? '');
-        if (str_contains($journey, ' -> ')) {
-            $parts = array_values(array_filter(array_map('trim', explode(' -> ', $journey))));
-            if (count($parts) > 2) {
-                $journey = $parts[0].' -> '.end($parts);
-            }
-        }
+        $rawJourney = (string) ($data['journey'] ?? '');
+        $journeyParts = $this->splitJourneyParts($rawJourney);
+        $journey = count($journeyParts) > 2
+            ? $journeyParts[0].' -> '.end($journeyParts)
+            : $rawJourney;
         $sheet->setCellValue("E{$row}", $journey);
         $sheet->setCellValue("F{$row}", $timeA ? $timeA->format('d/m/Y H:i') : '');
         $sheet->setCellValue("G{$row}", $timeB ? $timeB->format('d/m/Y H:i') : '');
         $sheet->setCellValue("H{$row}", $timeC ? $timeC->format('d/m/Y H:i') : '');
         $sheet->setCellValue("I{$row}", $timeD ? $timeD->format('d/m/Y H:i') : '');
 
-        $sheet->setCellValue("J{$row}", $data['time_loading'] !== null ? $this->formatDuration((int) $data['time_loading']) : '');
-        $sheet->setCellValue("K{$row}", $data['time_travel'] !== null ? $this->formatDuration((int) $data['time_travel']) : '');
-        $sheet->setCellValue("L{$row}", $data['time_unloading'] !== null ? $this->formatDuration((int) $data['time_unloading']) : '');
-        $sheet->setCellValue("M{$row}", ($data['time_waiting_22h'] ?? 0) > 0 ? $this->formatDuration((int) $data['time_waiting_22h']) : 0);
-        $sheet->setCellValue("N{$row}", $data['time_total_trip'] !== null ? $this->formatDuration((int) $data['time_total_trip']) : '');
+        $sheet->setCellValue("J{$row}", $this->formatDurationCell($data['time_loading'] !== null ? (int) $data['time_loading'] : null));
+        $sheet->setCellValue("K{$row}", $this->formatDurationCell($data['time_travel'] !== null ? (int) $data['time_travel'] : null));
+        $sheet->setCellValue("L{$row}", $this->formatDurationCell($data['time_unloading'] !== null ? (int) $data['time_unloading'] : null));
+        $sheet->setCellValue("M{$row}", ($data['time_waiting_22h'] ?? 0) > 0 ? (int) $data['time_waiting_22h'] : 0);
+        $sheet->setCellValue("N{$row}", $this->formatDurationCell($data['time_total_trip'] !== null ? (int) $data['time_total_trip'] : null));
 
         $sheet->setCellValue("O{$row}", $data['customer'] ?? '');
-        $sheet->setCellValue("P{$row}", $data['warehouse'] ?? '');
+        $sheet->setCellValue("P{$row}", $this->resolveSummaryCargoWarehouse((string) ($data['warehouse'] ?? ''), $rawJourney));
         $sheet->setCellValue("Q{$row}", $data['vehicle_owner'] ?? '');
         $sheet->setCellValue("R{$row}", $data['vehicle_type'] ?? '');
         $sheet->setCellValue("S{$row}", $data['note'] ?? '');
@@ -773,6 +768,50 @@ class TripExcelExportService
         $sheet->getStyle("Q{$row}:R{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("T{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("V{$row}:AA{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+    }
+
+    /**
+     * Tách chuỗi hành trình thành danh sách các điểm theo thứ tự.
+     *
+     * @return array<int, string>
+     */
+    private function splitJourneyParts(string $journey): array
+    {
+        if (! str_contains($journey, ' -> ')) {
+            $trimmed = trim($journey);
+
+            return $trimmed !== '' ? [$trimmed] : [];
+        }
+
+        return array_values(array_filter(array_map('trim', explode(' -> ', $journey))));
+    }
+
+    /**
+     * Cột "Kho đóng/trả" trên bảng và Excel "Bảng tổng hợp chuyến phục vụ":
+     * chỉ hiển thị khi điểm lấy hàng hoặc điểm giao hàng thuộc ACSV, ALSC, NCTS; còn lại để trống.
+     */
+    private function resolveSummaryCargoWarehouse(string $warehouse, string $journey): string
+    {
+        $warehouseCode = mb_strtoupper(trim($warehouse));
+        if (in_array($warehouseCode, self::ALLOWED_SUMMARY_WAREHOUSES, true)) {
+            return $warehouseCode;
+        }
+
+        $journeyParts = $this->splitJourneyParts($journey);
+
+        // Ưu tiên điểm giao hàng (từ phần tử thứ 2 trong journey) rồi mới đến điểm lấy hàng.
+        $orderedCandidates = count($journeyParts) > 1
+            ? [...array_slice($journeyParts, 1), $journeyParts[0]]
+            : $journeyParts;
+
+        foreach ($orderedCandidates as $part) {
+            $code = mb_strtoupper(trim($part));
+            if (in_array($code, self::ALLOWED_SUMMARY_WAREHOUSES, true)) {
+                return $code;
+            }
+        }
+
+        return '';
     }
 
     protected function writeTripSummaryRow(
@@ -858,9 +897,9 @@ class TripExcelExportService
             'Thời gian xe chạy',
             'Thời gian đến',
             'Thời gian hạ hàng',
-            'Thời gian xe đóng hàng',
-            'Thời gian xe di chuyển',
-            'Thời gian xe hạ hàng',
+            'Thời gian xe đóng hàng (phút)',
+            'Thời gian xe di chuyển (phút)',
+            'Thời gian xe hạ hàng (phút)',
             'Ghi chú',
             'Hình ảnh chứng từ',
             'Hàng quay đầu',
@@ -1189,9 +1228,9 @@ class TripExcelExportService
         $sheet->setCellValue("L{$row}", $tB ? $tB->format('d/m/Y H:i') : '');
         $sheet->setCellValue("M{$row}", $tC ? $tC->format('d/m/Y H:i') : '');
         $sheet->setCellValue("N{$row}", $tD ? $tD->format('d/m/Y H:i') : '');
-        $sheet->setCellValue("O{$row}", $durLoading !== null ? $this->formatDuration($durLoading) : '');
-        $sheet->setCellValue("P{$row}", $durTravel !== null ? $this->formatDuration($durTravel) : '');
-        $sheet->setCellValue("Q{$row}", $durUnloading !== null ? $this->formatDuration($durUnloading) : '');
+        $sheet->setCellValue("O{$row}", $this->formatDurationCell($durLoading));
+        $sheet->setCellValue("P{$row}", $this->formatDurationCell($durTravel));
+        $sheet->setCellValue("Q{$row}", $this->formatDurationCell($durUnloading));
         $sheet->setCellValue("R{$row}", $order->notes ?? '');
         $sheet->setCellValue("S{$row}", '');
         $sheet->setCellValue("T{$row}", $order->is_return_trip ? 'Hàng quay đầu' : '');
@@ -1261,9 +1300,9 @@ class TripExcelExportService
             $sheet->setCellValue("L{$currentRow}", $tB ? $tB->format('d/m/Y H:i') : '');
             $sheet->setCellValue("M{$currentRow}", $tC ? $tC->format('d/m/Y H:i') : '');
             $sheet->setCellValue("N{$currentRow}", $tD ? $tD->format('d/m/Y H:i') : '');
-            $sheet->setCellValue("O{$currentRow}", $durLoading !== null ? $this->formatDuration($durLoading) : '');
-            $sheet->setCellValue("P{$currentRow}", $durTravel !== null ? $this->formatDuration($durTravel) : '');
-            $sheet->setCellValue("Q{$currentRow}", $durUnloading !== null ? $this->formatDuration($durUnloading) : '');
+            $sheet->setCellValue("O{$currentRow}", $this->formatDurationCell($durLoading));
+            $sheet->setCellValue("P{$currentRow}", $this->formatDurationCell($durTravel));
+            $sheet->setCellValue("Q{$currentRow}", $this->formatDurationCell($durUnloading));
             $sheet->setCellValue("R{$currentRow}", $isFirst ? ($order->notes ?? '') : '');
             $sheet->setCellValue("S{$currentRow}", '');
             $sheet->setCellValue("T{$currentRow}", ($isLast && $order->is_return_trip) ? 'Hàng quay đầu' : '');
