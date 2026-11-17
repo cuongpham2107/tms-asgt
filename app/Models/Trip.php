@@ -286,7 +286,17 @@ class Trip extends Model
             app(TripKmCalculatorService::class)->calculate($this);
             app(ShiftKmCalculatorService::class)->calculateForTrip($this);
 
+            $this->orders()
+                ->whereNotIn('status', [
+                    OrderStatus::Cancelled->value,
+                    OrderStatus::Completed->value,
+                ])
+                ->get()
+                ->each(fn (Order $order) => $order->update(['status' => OrderStatus::Completed]));
+
             $this->createMissingEndCheckpoints($endKmValue, (string) $this->completed_at, $checkpointAttributes);
+
+            Vehicle::syncIdleStatus($this->vehicle_id, $this->id);
         });
     }
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CheckpointType;
 use App\Enums\ShiftType;
+use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -49,10 +50,18 @@ class DriverShift extends Model
 
     protected static function booted(): void
     {
+        static::saved(function (): void {
+            CreatesOrderTransportCards::clearTransportCardsCache();
+        });
+
         static::deleting(function (DriverShift $shift) {
             $shift->trips()->update(['shift_id' => null]);
             $shift->tripCheckpoints()->delete();
             $shift->driverSwaps()->delete();
+        });
+
+        static::deleted(function (): void {
+            CreatesOrderTransportCards::clearTransportCardsCache();
         });
     }
 

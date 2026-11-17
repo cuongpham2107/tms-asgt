@@ -2,10 +2,13 @@
 
 namespace App\Observers;
 
+use App\Enums\OrderStatus;
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Events\TripUpdated;
+use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Trips\TripResource;
+use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripKmReport;
@@ -30,6 +33,7 @@ class TripObserver
     public function created(Trip $trip): void
     {
         $this->broadcastTripChange($trip, 'created');
+        $this->invalidateTransportCardsCache();
 
         if ($trip->status === TripStatus::Delivered) {
             $this->notifyUsersTripDelivered($trip);
@@ -52,6 +56,22 @@ class TripObserver
     {
         $this->broadcastTripChange($trip, 'updated');
 
+        if ($trip->wasChanged('status') && $trip->status === TripStatus::Completed) {
+            $trip->orders()
+                ->whereNotIn('status', [
+                    OrderStatus::Cancelled->value,
+                    OrderStatus::Completed->value,
+                ])
+                ->get()
+                ->each(fn (Order $order) => $order->update(['status' => OrderStatus::Completed]));
+
+            Vehicle::syncIdleStatus($trip->vehicle_id, $trip->id);
+        }
+
+        if ($trip->wasChanged(['status', 'vehicle_id', 'driver_id', 'is_paused', 'end_km'])) {
+            $this->invalidateTransportCardsCache();
+        }
+
         if ($trip->wasChanged('status')) {
             if ($trip->status === TripStatus::Delivered) {
                 $this->notifyUsersTripDelivered($trip);
@@ -69,6 +89,19 @@ class TripObserver
     public function deleted(Trip $trip): void
     {
         $this->broadcastTripChange($trip, 'deleted');
+        Vehicle::syncIdleStatus($trip->vehicle_id, $trip->id);
+        $this->invalidateTransportCardsCache();
+    }
+
+    private function invalidateTransportCardsCache(): void
+    {
+        if (app()->runningUnitTests() || DB::transactionLevel() === 0) {
+            CreatesOrderTransportCards::clearTransportCardsCache();
+
+            return;
+        }
+
+        DB::afterCommit(static fn () => CreatesOrderTransportCards::clearTransportCardsCache());
     }
 
     /**

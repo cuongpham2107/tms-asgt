@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Enums\CheckpointType;
 use App\Enums\DriverWorkShift;
+use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Services\ShiftScheduleService;
 use Carbon\CarbonInterface;
 use Database\Factories\VehicleFactory;
@@ -67,7 +69,72 @@ class Vehicle extends Model
                     ]);
                 }
             }
+
+            if ($vehicle->wasRecentlyCreated || $vehicle->wasChanged([
+                'status',
+                'plate_number',
+                'vehicle_type',
+                'load_capacity',
+                'type',
+                'current_driver_id',
+                'even_driver_id',
+                'odd_driver_id',
+                'dangerous_goods_permit_number',
+                'dangerous_goods_permit_expiry_date',
+            ])) {
+                CreatesOrderTransportCards::clearTransportCardsCache();
+            }
         });
+    }
+
+    /**
+     * Trả xe về trạng thái Sẵn sàng nếu không còn đơn hàng hoặc chuyến không hàng nào đang hoạt động.
+     */
+    public static function syncIdleStatus(?int $vehicleId, ?int $excludeTripId = null): void
+    {
+        if (! $vehicleId) {
+            return;
+        }
+
+        $hasActiveOrders = Order::query()
+            ->whereHas('trip', function (Builder $q) use ($vehicleId, $excludeTripId): void {
+                $q->where('vehicle_id', $vehicleId)
+                    ->when($excludeTripId, fn (Builder $tq) => $tq->where('id', '!=', $excludeTripId))
+                    ->whereNotIn('status', [
+                        TripStatus::Completed->value,
+                        TripStatus::Cancelled->value,
+                        TripStatus::DriverSwap->value,
+                    ]);
+            })
+            ->whereIn('status', [
+                OrderStatus::Assigned->value,
+                OrderStatus::Sent->value,
+                OrderStatus::InTransit->value,
+            ])
+            ->exists();
+
+        $hasActiveEmptyRun = Trip::query()
+            ->where('vehicle_id', $vehicleId)
+            ->when($excludeTripId, fn (Builder $q) => $q->where('id', '!=', $excludeTripId))
+            ->where('is_empty_run', true)
+            ->whereIn('status', [
+                TripStatus::Started->value,
+                TripStatus::ArrivedPickup->value,
+                TripStatus::Delivering->value,
+                TripStatus::ArrivedDelivery->value,
+                TripStatus::ReturnTrip->value,
+            ])
+            ->exists();
+
+        if (! $hasActiveOrders && ! $hasActiveEmptyRun) {
+            $updated = self::where('id', $vehicleId)
+                ->where('status', VehicleStatus::Running->value)
+                ->update(['status' => VehicleStatus::On->value]);
+
+            if ($updated > 0) {
+                CreatesOrderTransportCards::clearTransportCardsCache();
+            }
+        }
     }
 
     protected $fillable = [

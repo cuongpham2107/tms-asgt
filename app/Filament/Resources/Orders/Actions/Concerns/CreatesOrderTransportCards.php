@@ -29,6 +29,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -93,6 +94,25 @@ abstract class CreatesOrderTransportCards
     }
 
     /**
+     * Truy vấn các đơn hàng đang còn hiệu lực gắn với chuyến chưa hoàn thành/huỷ/đảo lái.
+     */
+    private static function activeOrdersWithTripsQuery(): EloquentBuilder
+    {
+        return Order::query()
+            ->join('trips', 'orders.trip_id', '=', 'trips.id')
+            ->whereIn('orders.status', [
+                OrderStatus::Assigned->value,
+                OrderStatus::Sent->value,
+                OrderStatus::InTransit->value,
+            ])
+            ->whereNotIn('trips.status', [
+                TripStatus::Completed->value,
+                TripStatus::Cancelled->value,
+                TripStatus::DriverSwap->value,
+            ]);
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     protected static function resolveDriverCards(): array
@@ -126,9 +146,7 @@ abstract class CreatesOrderTransportCards
 
             $driverIds = $drivers->pluck('id')->all();
 
-            $activeOrdersByDriver = Order::query()
-                ->join('trips', 'orders.trip_id', '=', 'trips.id')
-                ->whereIn('orders.status', [OrderStatus::Assigned->value, OrderStatus::Sent->value])
+            $activeOrdersByDriver = self::activeOrdersWithTripsQuery()
                 ->whereIn('trips.driver_id', $driverIds)
                 ->groupBy('trips.driver_id')
                 ->selectRaw('trips.driver_id, count(*) as count')
@@ -280,9 +298,7 @@ abstract class CreatesOrderTransportCards
 
             $vehicleIds = $vehicles->pluck('id')->all();
 
-            $activeOrdersByVehicle = Order::query()
-                ->join('trips', 'orders.trip_id', '=', 'trips.id')
-                ->whereIn('orders.status', [OrderStatus::Assigned->value, OrderStatus::Sent->value])
+            $activeOrdersByVehicle = self::activeOrdersWithTripsQuery()
                 ->whereIn('trips.vehicle_id', $vehicleIds)
                 ->groupBy('trips.vehicle_id')
                 ->selectRaw('trips.vehicle_id, count(*) as count')
@@ -338,9 +354,7 @@ abstract class CreatesOrderTransportCards
                     ->find($selectedVehicleId);
 
                 if ($vehicle) {
-                    $activeCount = Order::query()
-                        ->join('trips', 'orders.trip_id', '=', 'trips.id')
-                        ->whereIn('orders.status', [OrderStatus::Assigned->value, OrderStatus::Sent->value])
+                    $activeCount = self::activeOrdersWithTripsQuery()
                         ->where('trips.vehicle_id', $selectedVehicleId)
                         ->count();
 
@@ -493,14 +507,9 @@ abstract class CreatesOrderTransportCards
             return [];
         }
 
-        $ordersByVehicle = Order::query()
+        $ordersByVehicle = self::activeOrdersWithTripsQuery()
             ->select('orders.id', 'orders.pickup_location_id', 'trips.vehicle_id', 'orders.created_at')
-            ->join('trips', 'orders.trip_id', '=', 'trips.id')
             ->whereIn('trips.vehicle_id', $vehicleIds)
-            ->whereIn('orders.status', [
-                OrderStatus::Assigned->value,
-                OrderStatus::Sent->value,
-            ])
             ->with(['pickupLocation' => fn ($q) => $q->select('id', 'name')])
             ->orderBy('orders.created_at', 'desc')
             ->get()

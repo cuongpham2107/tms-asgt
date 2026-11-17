@@ -5,7 +5,6 @@ namespace App\Services\Trip\Handlers;
 use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
-use App\Enums\VehicleStatus;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
@@ -99,15 +98,6 @@ class CompletedHandler implements CheckpointHandlerInterface
 
     private function resetVehicleIfIdle(Trip $trip): void
     {
-        $vehicleStillActive = Order::whereHas(
-            'trip',
-            fn ($q) => $q->where('vehicle_id', $trip->vehicle_id)
-        )
-            ->whereIn('status', [OrderStatus::Sent, OrderStatus::InTransit])
-            ->exists();
-
-        if (! $vehicleStillActive) {
-            Vehicle::where('id', $trip->vehicle_id)->update(['status' => VehicleStatus::On]);
-        }
+        Vehicle::syncIdleStatus($trip->vehicle_id);
     }
 }
