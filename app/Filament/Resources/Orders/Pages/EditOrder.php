@@ -6,6 +6,7 @@ use App\Enums\OrderDeliveryPointStatus;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Location;
 use App\Models\OrderDeliveryPoint;
+use App\Services\Trip\DeliveryProgressSyncService;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
@@ -62,5 +63,10 @@ class EditOrder extends EditRecord
         }
 
         return $data;
+    }
+
+    protected function afterSave(): void
+    {
+        app(DeliveryProgressSyncService::class)->syncOrderProgress($this->record);
     }
 }

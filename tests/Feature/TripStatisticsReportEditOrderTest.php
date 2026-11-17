@@ -273,3 +273,56 @@ test('order type cannot be changed when order charge is locked in editOrderActio
         ->and($filtered['notes'])->toBe('Vẫn giữ type external')
         ->and($order->fresh()->type)->toBe(OrderType::External);
 });
+
+test('external order chargeable_weight 5.00 is normalized to 5 when editing and saves without validation error', function () {
+    $order = Order::create([
+        'order_code' => 'ASG-EXT-5TON',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $this->trip->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'cargo_type' => CargoType::Gcr,
+        'chargeable_weight' => 5,
+        'total_weight' => 900,
+        'planned_loading_at' => Carbon::parse('2026-10-21 10:30:00'),
+        'status' => OrderStatus::Sent,
+        'created_by' => $this->user->id,
+    ]);
+
+    OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->deliveryLocation->id,
+        'sequence' => 1,
+    ]);
+
+    $order->update(['status' => OrderStatus::Completed]);
+
+    Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()])
+        ->assertFormSet([
+            'chargeable_weight' => '5',
+        ])
+        ->fillForm([
+            'notes' => 'Lưu bình thường với 5 tấn',
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($order->fresh()->notes)->toBe('Lưu bình thường với 5 tấn')
+        ->and($order->fresh()->chargeable_weight)->toBe('5.00');
+
+    Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-10-01',
+        'endDate' => '2026-10-31',
+        'activeTab' => 'external',
+    ])
+        ->callAction([
+            TestAction::make('editCharge')->arguments(['orderId' => $order->id]),
+            TestAction::make('editOrder')->schemaComponent('summary_order_code'),
+        ], data: [
+            'notes' => 'Sửa từ bảng kê vẫn hợp lệ',
+        ])
+        ->assertHasNoActionErrors();
+
+    expect($order->fresh()->notes)->toBe('Sửa từ bảng kê vẫn hợp lệ');
+});

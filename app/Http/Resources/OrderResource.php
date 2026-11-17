@@ -111,6 +111,8 @@ class OrderResource extends JsonResource
             'delivery_points' => OrderDeliveryPointResource::collection(
                 $this->whenLoaded('deliveryPoints', fn () => $this->deliveryPoints->sortBy([['sequence', 'asc'], ['id', 'asc']])->values())
             ),
+            /** Cho phép tài xế tự chọn thêm điểm trả hàng trên App. */
+            'can_add_delivery_point' => $this->canDriverAddDeliveryPoint(),
             // Trip checkpoints (only when loaded)
             /** Danh sách checkpoint hành trình (nếu được load). */
             'trip_checkpoints' => TripCheckpointResource::collection($this->whenLoaded('tripCheckpoints')),

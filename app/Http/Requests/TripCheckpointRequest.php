@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\CheckpointType;
+use App\Enums\OrderDeliveryPointStatus;
 use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\Order;
 use App\Models\Trip;
@@ -83,7 +84,16 @@ class TripCheckpointRequest extends FormRequest
                     $hasNewLocationId = ! empty($this->input('new_delivery_location_id'));
 
                     if ($hasDeliveryPoints && ! $hasDeliveryPointId) {
-                        $validator->errors()->add('delivery_point_id', 'Vui lòng chọn điểm giao hàng cụ thể để hoàn thành.');
+                        $canAppendDynamicPoint = $type === 'arrived_delivery'
+                            && $hasNewLocationId
+                            && $order->canDriverAddDeliveryPoint()
+                            && $order->deliveryPoints()
+                                ->where('status', '!=', OrderDeliveryPointStatus::Delivered->value)
+                                ->doesntExist();
+
+                        if (! $canAppendDynamicPoint) {
+                            $validator->errors()->add('delivery_point_id', 'Vui lòng chọn điểm giao hàng cụ thể để hoàn thành.');
+                        }
                     }
 
                     if (! $hasDeliveryPoints && ! $hasDeliveryPointId && ! $hasNewLocationId) {

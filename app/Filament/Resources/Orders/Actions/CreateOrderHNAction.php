@@ -7,6 +7,7 @@ use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
+use App\Filament\Resources\Orders\Schemas\OrderForm;
 use App\Models\Area;
 use App\Models\Order;
 use Filament\Actions\Action;
@@ -124,22 +125,8 @@ class CreateOrderHNAction extends CreatesOrderTransportCards
                         ->mask(RawJs::make('$money($input)'))
                         ->stripCharacters(',')
                         ->numeric(),
-                    Select::make('chargeable_weight')
-                        ->label('Tải trọng tính cước')
-                        ->suffix('tấn')
-                        ->required()
-                        ->native(false)
-                        ->options([
-                            '1.25' => '1.25',
-                            '1.5' => '1.5',
-                            '2.5' => '2.5',
-                            '3.5' => '3.5',
-                            '5' => '5',
-                            '7' => '7',
-                            '8' => '8',
-                            '10' => '10',
-                            '14' => '14',
-                        ]),
+                    OrderForm::chargeableWeightSelect()
+                        ->required(),
                     FreightRateType::select('rate_type')
                         ->label('Loại hình tính cước'),
                     Textarea::make('notes')

@@ -3,9 +3,13 @@
 namespace App\Services\Trip\Handlers;
 
 use App\Enums\OrderDeliveryPointStatus;
+use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
+use App\Enums\VehicleStatus;
+use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Models\Vehicle;
 use App\Services\Trip\DeliveryPointStatusUpdater;
 use Illuminate\Support\Collection;
 
@@ -32,6 +36,20 @@ class ArrivedDeliveryHandler implements CheckpointHandlerInterface
                 OrderDeliveryPointStatus::Arrived,
                 $occurredAt,
             );
+        }
+
+        // Nếu tài xế chọn giao thêm điểm trả tiếp theo sau khi điểm trước đã completed → mở lại InTransit cho đơn và Running cho xe
+        $orderIds = $checkpoints->pluck('order_id')->filter()->unique();
+        if ($orderIds->isNotEmpty()) {
+            Order::whereIn('id', $orderIds)
+                ->where('status', OrderStatus::Completed->value)
+                ->update(['status' => OrderStatus::InTransit->value]);
+        }
+
+        if ($trip->vehicle_id) {
+            Vehicle::where('id', $trip->vehicle_id)
+                ->where('status', VehicleStatus::On->value)
+                ->update(['status' => VehicleStatus::Running->value]);
         }
     }
 }

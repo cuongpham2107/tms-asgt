@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Enums\CargoType;
+use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\Priority;
+use App\Enums\TripStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -91,6 +93,36 @@ class Order extends Model implements HasTimeline
     public function isHhhk(): bool
     {
         return $this->type === OrderType::Hhhk;
+    }
+
+    /**
+     * Đơn cho phép tài xế tự chọn thêm nhiều điểm trả hàng trên App:
+     * đơn chưa kết thúc hẳn và chưa có điểm cố định nào do điều hành nhập từ Web.
+     */
+    public function canDriverAddDeliveryPoint(): bool
+    {
+        if (in_array($this->status, [OrderStatus::Draft, OrderStatus::Cancelled], true)) {
+            return false;
+        }
+
+        $trip = $this->trip;
+        if ($trip !== null && in_array($trip->status, [TripStatus::Completed, TripStatus::Cancelled, TripStatus::DriverSwap], true)) {
+            return false;
+        }
+
+        $hasEndCheckpoint = $this->relationLoaded('tripCheckpoints')
+            ? $this->tripCheckpoints->contains(fn (TripCheckpoint $cp): bool => $cp->checkpoint_type === CheckpointType::End)
+            : $this->tripCheckpoints()->where('checkpoint_type', CheckpointType::End->value)->exists();
+
+        if ($hasEndCheckpoint) {
+            return false;
+        }
+
+        $hasPredefinedPoint = $this->relationLoaded('deliveryPoints')
+            ? $this->deliveryPoints->contains(fn (OrderDeliveryPoint $dp): bool => ! (bool) $dp->is_driver_added)
+            : $this->deliveryPoints()->where('is_driver_added', false)->exists();
+
+        return ! $hasPredefinedPoint;
     }
 
     public function area(): BelongsTo

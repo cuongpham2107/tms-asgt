@@ -938,11 +938,7 @@ abstract class CreatesOrderTransportCards
             //     $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
             //     return $type === 'external' ? 1 : 0;
             // })
-            ->defaultItems(function (Get $get) use ($orderType): int {
-                $type = $orderType instanceof Closure ? $orderType($get) : $orderType;
-
-                return $type === 'external' ? 1 : 0;
-            })
+            ->defaultItems(0)
             ->collapsible()
             ->itemLabel(function (array $state): ?string {
                 $parts = [];

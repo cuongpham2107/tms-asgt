@@ -52,6 +52,7 @@ class DeliveryPointResolver
             'total_packages' => 0,
             'total_weight' => 0,
             'status' => OrderDeliveryPointStatus::Pending,
+            'is_driver_added' => true,
         ]);
     }
 }

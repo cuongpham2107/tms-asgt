@@ -18,7 +18,7 @@ function devApi(): string {
     return Platform.OS === "android" ? "http://10.0.2.2:8000/api/driver" : "http://localhost:8000/api/driver";
 }
 
-const API = __DEV__ ? devApi() : PRODUCTION_API;
+const API = process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? devApi() : PRODUCTION_API);
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 

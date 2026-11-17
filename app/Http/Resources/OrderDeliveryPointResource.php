@@ -45,6 +45,8 @@ class OrderDeliveryPointResource extends JsonResource
             'total_weight' => $this->total_weight,
             /** Trạng thái giao hàng tại điểm này (pending, arrived, completed). */
             'status' => $this->status,
+            /** Điểm do tài xế tự chọn trên App hay do điều hành tạo trên Web. */
+            'is_driver_added' => (bool) $this->is_driver_added,
             /** Nhãn tiếng Việt của trạng thái giao hàng tại điểm này. */
             'status_label' => $this->status?->getLabel(),
             /** Thời điểm xe đến điểm giao (ISO 8601). */
