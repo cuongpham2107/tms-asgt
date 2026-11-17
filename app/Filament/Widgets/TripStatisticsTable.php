@@ -45,6 +45,9 @@ class TripStatisticsTable extends Widget
     public ?int $customerId = null;
 
     #[Reactive]
+    public ?int $areaId = null;
+
+    #[Reactive]
     public string $vehicleOwner = 'all';
 
     #[Reactive]
@@ -98,6 +101,7 @@ class TripStatisticsTable extends Widget
                 'activeTab' => $this->activeTab,
                 'search' => (string) $this->search,
                 'customerId' => $this->customerId,
+                'areaId' => $this->areaId,
                 'vehicleOwner' => $this->vehicleOwner,
                 'chargeStatus' => $this->chargeStatus,
             ],
@@ -113,6 +117,9 @@ class TripStatisticsTable extends Widget
                     ['key' => 'missing', 'label' => 'Chưa có giá', 'count' => $chargeCounts['missing'], 'tone' => 'amber'],
                 ],
             'customers' => $this->getCustomerOptions(),
+            'areaFilters' => $isReady
+                ? $this->getAreaFilters()
+                : collect($this->getAreaOptions())->map(fn (array $area): array => [...$area, 'count' => 0])->all(),
             'metrics' => [
                 'trips' => $metrics['total_trips'],
                 'records' => $metrics['total_records'],

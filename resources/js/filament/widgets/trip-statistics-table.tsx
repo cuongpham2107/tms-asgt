@@ -77,11 +77,13 @@ interface Configuration {
         activeTab: string
         search: string
         customerId: number | null
+        areaId: number | null
         vehicleOwner: string
         chargeStatus: string | null
     }
     tabs: { key: string; label: string; count: number; tone: 'info' | 'warning' | 'gray' }[]
     chargeFilters: { key: string; label: string; count: number; tone: 'emerald' | 'amber' }[]
+    areaFilters: { id: number; label: string; count: number }[]
     customers: Record<string, string>
     metrics: {
         trips: number
@@ -101,6 +103,7 @@ interface PageApi {
     $set(path: string, value: JsonValue, live?: boolean): Promise<unknown>
     setActiveTab(tab: string): Promise<unknown>
     toggleChargeStatus(status: string): Promise<unknown>
+    toggleArea(areaId: number): Promise<unknown>
     resetFilters(): Promise<unknown>
     gotoPage(page: number): Promise<unknown>
     updateOrderMetric(orderId: number, field: string, value: string | null): Promise<unknown>
@@ -842,37 +845,64 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                 )}
             </div>
 
-            {/* Hàng 2: Chip lọc trạng thái cước (bên trái) + Bộ lọc tìm kiếm & quản lý cột (cuối dòng bên phải) */}
+            {/* Hàng 2: Chip lọc khu vực & trạng thái cước (bên trái) + Bộ lọc tìm kiếm & quản lý cột (cuối dòng bên phải) */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-                {configuration.chargeFilters.length > 0 ? (
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        <span>Lọc:</span>
-                        {configuration.chargeFilters.map((filter) => {
-                            const active = filters.chargeStatus === filter.key
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
+                    {(configuration.areaFilters ?? []).length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span>Khu vực:</span>
+                            {configuration.areaFilters.map((area) => {
+                                const active = filters.areaId === area.id
 
-                            return (
-                                <button
-                                    key={filter.key}
-                                    type="button"
-                                    aria-pressed={active}
-                                    title={active ? 'Bỏ lọc' : `Chỉ hiện các đơn ${filter.label.toLowerCase()}`}
-                                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 transition ${
-                                        active
-                                            ? `${chipActive[filter.tone]} font-semibold`
-                                            : 'ring-gray-950/10 hover:bg-gray-50 dark:ring-white/10 dark:hover:bg-white/5'
-                                    }`}
-                                    onClick={() => run(() => page.toggleChargeStatus(filter.key))}
-                                >
-                                    <span className={`h-3 w-3 rounded-sm ring-1 ${chipSwatches[filter.tone]}`} />
-                                    {filter.label}
-                                    <span className="font-mono text-[11px] opacity-70">{configuration.loaded ? count(filter.count) : <SkeletonBar className="w-4" />}</span>
-                                </button>
-                            )
-                        })}
-                    </div>
-                ) : (
-                    <div />
-                )}
+                                return (
+                                    <button
+                                        key={area.id}
+                                        type="button"
+                                        aria-pressed={active}
+                                        title={active ? 'Bỏ lọc' : `Chỉ hiện các chuyến khu vực ${area.label}`}
+                                        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 transition ${
+                                            active
+                                                ? 'bg-blue-100 ring-blue-500 text-blue-900 dark:bg-blue-950 dark:text-blue-200 font-semibold'
+                                                : 'ring-gray-950/10 hover:bg-gray-50 dark:ring-white/10 dark:hover:bg-white/5'
+                                        }`}
+                                        onClick={() => run(() => page.toggleArea(area.id))}
+                                    >
+                                        {area.label}
+                                        <span className="font-mono text-[11px] opacity-70">{configuration.loaded ? count(area.count) : <SkeletonBar className="w-4" />}</span>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    )}
+
+                    {configuration.chargeFilters.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span>Lọc:</span>
+                            {configuration.chargeFilters.map((filter) => {
+                                const active = filters.chargeStatus === filter.key
+
+                                return (
+                                    <button
+                                        key={filter.key}
+                                        type="button"
+                                        aria-pressed={active}
+                                        title={active ? 'Bỏ lọc' : `Chỉ hiện các đơn ${filter.label.toLowerCase()}`}
+                                        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 transition ${
+                                            active
+                                                ? `${chipActive[filter.tone]} font-semibold`
+                                                : 'ring-gray-950/10 hover:bg-gray-50 dark:ring-white/10 dark:hover:bg-white/5'
+                                        }`}
+                                        onClick={() => run(() => page.toggleChargeStatus(filter.key))}
+                                    >
+                                        <span className={`h-3 w-3 rounded-sm ring-1 ${chipSwatches[filter.tone]}`} />
+                                        {filter.label}
+                                        <span className="font-mono text-[11px] opacity-70">{configuration.loaded ? count(filter.count) : <SkeletonBar className="w-4" />}</span>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
 
                 <div className="ms-auto flex flex-wrap items-center gap-3">
                     <div className="fi-input-wrp w-64 max-w-xs">

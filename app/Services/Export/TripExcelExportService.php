@@ -693,6 +693,7 @@ class TripExcelExportService
             'trip_id' => $trip->id,
             'order_id' => $order?->id,
             'customer_id' => $order?->customer_id,
+            'area_id' => $order?->area_id ?? $trip->endLocation?->area_id ?? $trip->startLocation?->area_id,
             'service_type' => $serviceType,
             'code' => $code,
             'date' => $date,

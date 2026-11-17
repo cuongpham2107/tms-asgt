@@ -1524,4 +1524,23 @@ test('trip statistics table includes area column and maps PROVINCE to Điểm kh
 
     expect($hhhkRows['ORD-AREA-NBA']['area'])->toBe('NBA')
         ->and($externalRows['ORD-AREA-PROV']['area'])->toBe('Điểm khác');
+
+    $filteredByArea = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'external',
+        'areaId' => $provinceArea->id,
+    ]);
+
+    expect($filteredByArea->instance()->getAllRows()->pluck('code')->all())->toBe(['ORD-AREA-PROV'])
+        ->and($filteredByArea->instance()->getAreaFilters())->toContain(['id' => $provinceArea->id, 'label' => 'Điểm khác', 'count' => 1]);
+
+    $filteredByArea->call('toggleArea', $provinceArea->id);
+    expect($filteredByArea->get('areaId'))->toBeNull();
+
+    $filteredByArea->call('toggleArea', $provinceArea->id);
+    expect($filteredByArea->get('areaId'))->toBe($provinceArea->id);
+
+    $filteredByArea->call('resetFilters');
+    expect($filteredByArea->get('areaId'))->toBeNull();
 });

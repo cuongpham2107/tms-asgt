@@ -4,6 +4,7 @@ namespace App\Filament\Traits;
 
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
+use App\Models\Area;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderCharge;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Dữ liệu bảng Thống kê chuyến: dùng chung cho page (header actions, xuất Excel) và widget React.
- * Lớp dùng trait phải có các thuộc tính public: startDate, endDate, customerId, vehicleOwner,
+ * Lớp dùng trait phải có các thuộc tính public: startDate, endDate, customerId, areaId, vehicleOwner,
  * search, chargeStatus, page, perPage, activeTab.
  */
 trait HasTripStatistics
@@ -263,7 +264,7 @@ trait HasTripStatistics
      */
     public function getTabCounts(): array
     {
-        $baseRows = $this->getBaseFilteredRows();
+        $baseRows = $this->filterRowsByArea($this->getBaseFilteredRows());
 
         $tripCount = fn (string $serviceType): int => $baseRows->where('service_type', $serviceType)->pluck('trip_id')->unique()->count();
 
@@ -272,6 +273,50 @@ trait HasTripStatistics
             'external' => $tripCount('Hàng ngoài'),
             'empty' => $tripCount('Xe không hàng'),
         ];
+    }
+
+    /**
+     * Số chuyến theo từng khu vực (trong tab hiện tại, bỏ qua bộ lọc khu vực đang chọn).
+     *
+     * @return list<array{id: int, label: string, count: int}>
+     */
+    public function getAreaFilters(): array
+    {
+        $target = $this->activeTab ?: $this->serviceType;
+        $rows = $this->rowsForTabWithoutArea($target);
+
+        if ($target === 'external' && $this->chargeStatus !== null) {
+            $charges = $this->chargesByOrderId($rows);
+            $rows = $rows->filter(fn (array $row): bool => $this->chargeStatusOf($row, $charges) === $this->chargeStatus)->values();
+        }
+
+        $countsByAreaId = $rows
+            ->filter(fn (array $row): bool => filled($row['area_id'] ?? null))
+            ->groupBy('area_id')
+            ->map(fn (Collection $group): int => $group->pluck('trip_id')->unique()->count());
+
+        return collect($this->getAreaOptions())
+            ->map(fn (array $area): array => [
+                'id' => $area['id'],
+                'label' => $area['label'],
+                'count' => (int) $countsByAreaId->get($area['id'], 0),
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function filterRowsByArea(Collection $rows): Collection
+    {
+        if (! filled($this->areaId)) {
+            return $rows;
+        }
+
+        return $rows->filter(function (array $row): bool {
+            return (string) ($row['area_id'] ?? '') === (string) $this->areaId;
+        })->values();
     }
 
     /**
@@ -295,6 +340,14 @@ trait HasTripStatistics
      * @return Collection<int, array<string, mixed>>
      */
     private function rowsForTab(string $target): Collection
+    {
+        return $this->filterRowsByArea($this->rowsForTabWithoutArea($target));
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function rowsForTabWithoutArea(string $target): Collection
     {
         $rows = $this->getBaseFilteredRows();
 
@@ -522,6 +575,25 @@ trait HasTripStatistics
                 ->orderBy('code')
                 ->pluck('code', 'id')
                 ->toArray();
+        });
+    }
+
+    /**
+     * @return list<array{id: int, label: string}>
+     */
+    public function getAreaOptions(): array
+    {
+        return Cache::remember('trip_stats_area_options', 300, function (): array {
+            return Area::query()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->get(['id', 'code', 'name'])
+                ->map(fn (Area $area): array => [
+                    'id' => $area->id,
+                    'label' => $area->code === 'PROVINCE' ? 'Điểm khác' : (string) ($area->code ?: $area->name),
+                ])
+                ->values()
+                ->all();
         });
     }
 

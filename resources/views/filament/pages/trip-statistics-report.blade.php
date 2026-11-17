@@ -15,6 +15,7 @@
             'endDate' => $this->endDate,
             'activeTab' => $this->activeTab,
             'customerId' => $this->customerId,
+            'areaId' => $this->areaId,
             'vehicleOwner' => $this->vehicleOwner,
             'search' => $this->search,
             'chargeStatus' => $this->chargeStatus,

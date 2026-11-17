@@ -105,6 +105,9 @@ class TripStatisticsReport extends Page
     public ?int $customerId = null;
 
     #[Url]
+    public ?int $areaId = null;
+
+    #[Url]
     public string $vehicleOwner = 'all';
 
     #[Url]
@@ -193,6 +196,11 @@ class TripStatisticsReport extends Page
     public function updatedCustomerId(): void
     {
         $this->clearBaseRowsCache();
+        $this->page = 1;
+    }
+
+    public function updatedAreaId(): void
+    {
         $this->page = 1;
     }
 
@@ -472,6 +480,7 @@ class TripStatisticsReport extends Page
         $this->endDate = $shiftNow->format('Y-m-d');
         $this->datePreset = 'thisMonth';
         $this->customerId = null;
+        $this->areaId = null;
         $this->vehicleOwner = 'all';
         $this->search = null;
         $this->chargeStatus = null;
@@ -482,6 +491,12 @@ class TripStatisticsReport extends Page
     public function toggleChargeStatus(string $status): void
     {
         $this->chargeStatus = $this->chargeStatus === $status ? null : $status;
+        $this->page = 1;
+    }
+
+    public function toggleArea(int $areaId): void
+    {
+        $this->areaId = $this->areaId === $areaId ? null : $areaId;
         $this->page = 1;
     }
 
@@ -2443,7 +2458,7 @@ class TripStatisticsReport extends Page
 
     public function exportExcel(): StreamedResponse
     {
-        $baseRows = $this->getBaseFilteredRows();
+        $baseRows = $this->filterRowsByArea($this->getBaseFilteredRows());
         $trips = $this->getFilteredTrips();
         $cargoRows = $baseRows
             ->filter(fn (array $row): bool => in_array($row['service_type'] ?? '', ['HHHK', 'Hàng ngoài'], true))
