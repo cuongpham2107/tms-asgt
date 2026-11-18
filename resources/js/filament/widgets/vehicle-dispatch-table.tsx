@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { JsonValue, JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities, Snapshot } from '@filament/widgets/js-widget'
 import { requestDataOnce, SkeletonRows } from './table-skeleton'
@@ -6,21 +6,31 @@ import { requestDataOnce, SkeletonRows } from './table-skeleton'
 interface Row {
     id: number
     bsx: string
+    plateNumber: string
     ownerCategory: string
     orderType: string | null
     orderTypeColor: string | null
+    orderTypePriority: number
     statusLabel: string
+    statusPriority: number
     statusClass: string
     statusAction: { name: string; tooltip: string } | null
     pickup: string
     pickupTitle: string | null
     destination: string
     destinationTitle: string | null
+    plannedLoadingAt: string
+    plannedLoadingAtTitle: string | null
+    plannedLoadingTs: number | null
     xeCho: string
+    xeChoMinutes: number | null
     xeChoTone: 'danger' | 'warning' | 'success' | 'muted' | 'normal'
     xeChoTooltip: string
+    customer: string
+    customerTitle: string | null
     gps: string
     speed: string
+    speedValue: number | null
     speedClass: string
     movement: string
     movementClass: string
@@ -29,6 +39,7 @@ interface Row {
     tripId: number | null
     waitingOrders: number
     kmOver: string
+    kmOverValue: number | null
     kmOverClass: string
     kmOverTooltip: string
     kmOverFill: number
@@ -109,6 +120,106 @@ const stationTones: Record<string, string> = {
 }
 
 const cellClass = 'border-r border-gray-100 dark:border-white/5 py-1.5 align-middle whitespace-nowrap'
+
+type SortDirection = 'asc' | 'desc'
+
+interface ClientSort {
+    column: string
+    direction: SortDirection
+}
+
+const isBlankCell = (value: string | number | null | undefined): boolean =>
+    value === null || value === undefined || value === '' || value === '—'
+
+const compareNumbers = (a: number | null | undefined, b: number | null | undefined, dir: SortDirection): number => {
+    const aEmpty = a === null || a === undefined || Number.isNaN(a)
+    const bEmpty = b === null || b === undefined || Number.isNaN(b)
+
+    if (aEmpty && bEmpty) {
+        return 0
+    }
+    if (aEmpty) {
+        return 1
+    }
+    if (bEmpty) {
+        return -1
+    }
+
+    return dir === 'asc' ? a - b : b - a
+}
+
+const compareStrings = (a: string | null | undefined, b: string | null | undefined, dir: SortDirection): number => {
+    const aEmpty = isBlankCell(a)
+    const bEmpty = isBlankCell(b)
+
+    if (aEmpty && bEmpty) {
+        return 0
+    }
+    if (aEmpty) {
+        return 1
+    }
+    if (bEmpty) {
+        return -1
+    }
+
+    const cmp = String(a).localeCompare(String(b), 'vi', { numeric: true, sensitivity: 'base' })
+
+    return dir === 'asc' ? cmp : -cmp
+}
+
+const compareRowsByColumn = (a: Snapshot<Row>, b: Snapshot<Row>, column: string, direction: SortDirection): number => {
+    switch (column) {
+        case 'HT':
+            return compareStrings(a.tripId ? 'Có' : '', b.tripId ? 'Có' : '', direction)
+        case 'BSX':
+            return compareStrings(a.plateNumber, b.plateNumber, direction)
+        case 'Phân loại':
+            return compareStrings(a.ownerCategory, b.ownerCategory, direction)
+        case 'Loại đơn':
+            return compareNumbers(a.orderType ? a.orderTypePriority : null, b.orderType ? b.orderTypePriority : null, direction)
+        case 'Trạng thái':
+            return compareNumbers(a.statusPriority, b.statusPriority, direction)
+        case 'Điểm đi':
+            return compareStrings(a.pickup, b.pickup, direction)
+        case 'Điểm đến':
+            return compareStrings(a.destination, b.destination, direction)
+        case 'Thời gian dự kiến đóng':
+            return compareNumbers(a.plannedLoadingTs, b.plannedLoadingTs, direction)
+        case 'Xe chờ':
+            return compareNumbers(a.xeChoMinutes, b.xeChoMinutes, direction)
+        case 'Khách hàng':
+            return compareStrings(a.customer, b.customer, direction)
+        case 'Vị trí thực tế trên GPS':
+            return compareStrings(a.gps, b.gps, direction)
+        case 'Tốc độ':
+            return compareNumbers(a.speedValue, b.speedValue, direction)
+        case 'Status':
+            return compareStrings(a.movement, b.movement, direction)
+        case 'Chuyến':
+            return compareNumbers(a.tripCount, b.tripCount, direction)
+        case 'Đơn chờ':
+            return compareNumbers(a.waitingOrders, b.waitingOrders, direction)
+        case 'KM over':
+            return compareNumbers(a.kmOverValue, b.kmOverValue, direction)
+        case 'Tên lái xe':
+            return compareStrings(a.driverName, b.driverName, direction)
+        case 'Trực':
+            return compareStrings(a.station, b.station, direction)
+        case 'Ca':
+            return compareStrings(a.shift, b.shift, direction)
+        default:
+            return 0
+    }
+}
+
+const extractDatePart = (plannedLoadingAt: string): string | null => {
+    if (!plannedLoadingAt || plannedLoadingAt === '—') {
+        return null
+    }
+    const parts = plannedLoadingAt.trim().split(/\s+/)
+
+    return parts.length >= 2 ? parts[parts.length - 1] : null
+}
 
 /** Tách nút đếm ngược ra component riêng để tick mỗi giây không render lại toàn bộ 1.350+ ô của bảng. */
 function RefreshCountdownButton({ refreshSeconds, onRefresh }: { refreshSeconds: number; onRefresh: () => Promise<unknown> }) {
@@ -277,8 +388,18 @@ const DispatchRow = memo(function DispatchRow({
                 {row.destination}
             </td>
 
+            {isRent && (
+                <td className={`${cellClass} px-2 text-center font-mono text-[11px] font-medium text-gray-800 dark:text-gray-200`} title={row.plannedLoadingAtTitle ?? undefined}>
+                    {row.plannedLoadingAt === '—' ? <span className="font-sans text-gray-400">—</span> : row.plannedLoadingAt}
+                </td>
+            )}
+
             <td className={`${cellClass} px-1.5 text-center font-medium`} title={row.xeChoTooltip}>
                 <span className={xeChoTones[row.xeChoTone]}>{row.xeCho}</span>
+            </td>
+
+            <td className={`${cellClass} px-2 text-center font-semibold text-gray-800 dark:text-gray-200`} title={row.customerTitle ?? undefined}>
+                {row.customer === '—' ? <span className="text-gray-400 font-normal">—</span> : row.customer}
             </td>
 
             {!isRent && (
@@ -344,25 +465,27 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
     const [loadingActionRowId, setLoadingActionRowId] = useState<number | null>(null)
     const loadingActionRowIdRef = useRef<number | null>(null)
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-    const previousSearch = useRef(configuration.filters.search)
+    const [clientSort, setClientSort] = useState<ClientSort | null>(null)
+    const [filterGroup, setFilterGroup] = useState<string>('')
+    const [filterOrderType, setFilterOrderType] = useState<string>('')
+    const [filterStatus, setFilterStatus] = useState<string>('')
+    const [filterCustomer, setFilterCustomer] = useState<string>('')
+    const [filterPlannedDate, setFilterPlannedDate] = useState<string>('')
+    const [filterStation, setFilterStation] = useState<string>('')
 
     const refresh = useCallback(() => wire.$refresh(), [wire])
 
     useEffect(() => {
-        setSearch(configuration.filters.search)
-        previousSearch.current = configuration.filters.search
-    }, [configuration.filters.search])
+        setClientSort(null)
+        setFilterGroup('')
+        setFilterOrderType('')
+        setFilterStatus('')
+        setFilterCustomer('')
+        setFilterPlannedDate('')
+        setFilterStation('')
+    }, [configuration.ownerType])
 
-    // Gõ tìm kiếm: debounce 400ms rồi cập nhật state của page (URL + query).
-    useEffect(() => {
-        if (search === configuration.filters.search) {
-            return
-        }
-
-        const timer = setTimeout(() => void page.$set('searchQuery', search === '' ? null : search, true), 400)
-
-        return () => clearTimeout(timer)
-    }, [search, configuration.filters.search, page])
+    // Tìm kiếm lọc trực tiếp toàn bộ dữ liệu trên client để tránh race-condition xoá chữ khi Livewire/Echo làm mới bảng.
 
     const toggleGroup = useCallback((code: string) => setCollapsed((current) => ({ ...current, [code]: !current[code] })), [])
 
@@ -409,17 +532,174 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
     }, [page])
 
     const isRent = configuration.ownerType === 'rent'
-    const colCount = configuration.columns.length || (isRent ? 12 : 18)
+    const colCount = configuration.columns.length || (isRent ? 14 : 19)
 
-    const sortIndicator = (column: string) =>
-        configuration.sort.by === column ? <span className="text-[9px] font-bold text-amber-300">{configuration.sort.direction === 'asc' ? '▲' : '▼'}</span> : null
+    const filterOptions = useMemo(() => {
+        const orderTypes = new Set<string>()
+        const statuses = new Set<string>()
+        const customers = new Set<string>()
+        const plannedDates = new Set<string>()
+        const stations = new Set<string>()
+        const groups = configuration.groups.map((g) => ({ code: g.code, title: g.title }))
+
+        configuration.groups.forEach((group) => {
+            group.rows.forEach((row) => {
+                if (row.orderType) {
+                    orderTypes.add(row.orderType)
+                }
+                if (row.statusLabel && row.statusLabel !== '—') {
+                    statuses.add(row.statusLabel)
+                }
+                if (row.customer && row.customer !== '—') {
+                    row.customer
+                        .split(',')
+                        .map((item) => item.trim())
+                        .filter(Boolean)
+                        .forEach((code) => customers.add(code))
+                }
+                const datePart = extractDatePart(row.plannedLoadingAt)
+                if (datePart) {
+                    plannedDates.add(datePart)
+                }
+                if (row.station && row.station !== '—' && row.station !== 'OTHER') {
+                    stations.add(row.station)
+                }
+            })
+        })
+
+        return {
+            groups,
+            orderTypes: Array.from(orderTypes).sort((a, b) => a.localeCompare(b, 'vi')),
+            statuses: Array.from(statuses).sort((a, b) => a.localeCompare(b, 'vi')),
+            customers: Array.from(customers).sort((a, b) => a.localeCompare(b, 'vi')),
+            plannedDates: Array.from(plannedDates).sort((a, b) => {
+                const [da, ma, ya] = a.split('/').map(Number)
+                const [db, mb, yb] = b.split('/').map(Number)
+
+                return new Date(ya, ma - 1, da).getTime() - new Date(yb, mb - 1, db).getTime()
+            }),
+            stations: Array.from(stations).sort((a, b) => a.localeCompare(b, 'vi')),
+        }
+    }, [configuration.groups])
+
+    const displayedGroups = useMemo(() => {
+        const term = search.trim().toLocaleLowerCase('vi')
+
+        return configuration.groups
+            .filter((group) => !filterGroup || group.code === filterGroup)
+            .map((group) => {
+                const filteredRows = group.rows.filter((row) => {
+                    if (term !== '') {
+                        const haystack = [
+                            row.plateNumber,
+                            row.driverName,
+                            row.customer,
+                            row.customerTitle ?? '',
+                            row.pickup,
+                            row.destination,
+                            row.statusLabel,
+                            row.plannedLoadingAt,
+                            row.gps,
+                            row.station,
+                        ]
+                            .join(' ')
+                            .toLocaleLowerCase('vi')
+
+                        if (!haystack.includes(term)) {
+                            return false
+                        }
+                    }
+
+                    if (filterOrderType && row.orderType !== filterOrderType) {
+                        return false
+                    }
+
+                    if (filterStatus && row.statusLabel !== filterStatus) {
+                        return false
+                    }
+
+                    if (filterCustomer) {
+                        const rowCustomers = row.customer.split(',').map((item) => item.trim())
+                        if (!rowCustomers.includes(filterCustomer)) {
+                            return false
+                        }
+                    }
+
+                    if (filterPlannedDate && extractDatePart(row.plannedLoadingAt) !== filterPlannedDate) {
+                        return false
+                    }
+
+                    if (filterStation && row.station !== filterStation) {
+                        return false
+                    }
+
+                    return true
+                })
+
+                const sortedRows = clientSort
+                    ? [...filteredRows].sort((a, b) => compareRowsByColumn(a, b, clientSort.column, clientSort.direction))
+                    : filteredRows
+
+                return {
+                    ...group,
+                    rows: sortedRows,
+                    count: sortedRows.length,
+                }
+            })
+            .filter((group) => group.rows.length > 0)
+    }, [configuration.groups, search, filterGroup, filterOrderType, filterStatus, filterCustomer, filterPlannedDate, filterStation, clientSort])
+
+    const hasActiveClientControls =
+        search !== '' ||
+        filterGroup !== '' ||
+        filterOrderType !== '' ||
+        filterStatus !== '' ||
+        filterCustomer !== '' ||
+        filterPlannedDate !== '' ||
+        filterStation !== '' ||
+        clientSort !== null
+
+    const resetClientControls = () => {
+        setSearch('')
+        if (configuration.filters.search !== '') {
+            void page.$set('searchQuery', null, true)
+        }
+        setFilterGroup('')
+        setFilterOrderType('')
+        setFilterStatus('')
+        setFilterCustomer('')
+        setFilterPlannedDate('')
+        setFilterStation('')
+        setClientSort(null)
+    }
+
+    const toggleColumnSort = (column: string) => {
+        setClientSort((current) => {
+            if (current?.column !== column) {
+                return { column, direction: 'asc' }
+            }
+            if (current.direction === 'asc') {
+                return { column, direction: 'desc' }
+            }
+
+            return null
+        })
+    }
+
+    const renderSortIndicator = (column: string) => {
+        if (clientSort?.column === column) {
+            return <span className="text-[10px] font-bold text-amber-300">{clientSort.direction === 'asc' ? '▲' : '▼'}</span>
+        }
+
+        return <span className="text-[10px] text-white/40 group-hover/th:text-white/80">⇅</span>
+    }
 
     const headerClass = 'border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap'
 
     return (
         <div className="w-full space-y-3">
-            <div className="flex items-center gap-2">
-                <div className="w-full max-w-xs">
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="w-full sm:w-64">
                     <div className="fi-input-wrp">
                         <div className="fi-input-wrp-prefix fi-input-wrp-prefix-has-content">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="fi-icon fi-size-md fi-color-gray" aria-hidden="true">
@@ -430,7 +710,7 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                             <input
                                 type="search"
                                 className="fi-input"
-                                placeholder="Tìm biển số hoặc tên lái xe..."
+                                placeholder="Tìm BSX, lái xe, KH, điểm..."
                                 value={search}
                                 onChange={(event) => setSearch(event.target.value)}
                             />
@@ -438,11 +718,107 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                     </div>
                 </div>
 
-                {search !== '' && (
-                    <button type="button" className="fi-icon-btn fi-color-gray fi-size-md" title="Xoá tìm kiếm" onClick={() => setSearch('')}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="fi-icon fi-size-md" aria-hidden="true">
+                {filterOptions.groups.length > 1 && (
+                    <div className="fi-input-wrp w-40">
+                        <div className="fi-input-wrp-content-ctn">
+                            <select className="fi-select-input" aria-label="Địa điểm" value={filterGroup} onChange={(event) => setFilterGroup(event.target.value)}>
+                                <option value="">Tất cả địa điểm</option>
+                                {filterOptions.groups.map((g) => (
+                                    <option key={g.code} value={g.code}>
+                                        {g.title}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {filterOptions.orderTypes.length > 0 && (
+                    <div className="fi-input-wrp w-36">
+                        <div className="fi-input-wrp-content-ctn">
+                            <select className="fi-select-input" aria-label="Loại đơn" value={filterOrderType} onChange={(event) => setFilterOrderType(event.target.value)}>
+                                <option value="">Tất cả loại đơn</option>
+                                {filterOptions.orderTypes.map((type) => (
+                                    <option key={type} value={type}>
+                                        {type}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {filterOptions.statuses.length > 0 && (
+                    <div className="fi-input-wrp w-40">
+                        <div className="fi-input-wrp-content-ctn">
+                            <select className="fi-select-input" aria-label="Trạng thái" value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)}>
+                                <option value="">Tất cả trạng thái</option>
+                                {filterOptions.statuses.map((status) => (
+                                    <option key={status} value={status}>
+                                        {status}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {filterOptions.customers.length > 0 && (
+                    <div className="fi-input-wrp w-40">
+                        <div className="fi-input-wrp-content-ctn">
+                            <select className="fi-select-input" aria-label="Khách hàng" value={filterCustomer} onChange={(event) => setFilterCustomer(event.target.value)}>
+                                <option value="">Tất cả khách hàng</option>
+                                {filterOptions.customers.map((customer) => (
+                                    <option key={customer} value={customer}>
+                                        {customer}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {isRent && filterOptions.plannedDates.length > 0 && (
+                    <div className="fi-input-wrp w-36">
+                        <div className="fi-input-wrp-content-ctn">
+                            <select className="fi-select-input" aria-label="Ngày dự kiến đóng" value={filterPlannedDate} onChange={(event) => setFilterPlannedDate(event.target.value)}>
+                                <option value="">Tất cả ngày</option>
+                                {filterOptions.plannedDates.map((date) => (
+                                    <option key={date} value={date}>
+                                        {date}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {!isRent && filterOptions.stations.length > 0 && (
+                    <div className="fi-input-wrp w-32">
+                        <div className="fi-input-wrp-content-ctn">
+                            <select className="fi-select-input" aria-label="Trực" value={filterStation} onChange={(event) => setFilterStation(event.target.value)}>
+                                <option value="">Tất cả trực</option>
+                                {filterOptions.stations.map((station) => (
+                                    <option key={station} value={station}>
+                                        Trực {station}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {hasActiveClientControls && (
+                    <button
+                        type="button"
+                        className="inline-flex h-9 items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 shadow-xs transition hover:bg-gray-50 dark:border-white/10 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-white/5 cursor-pointer"
+                        title="Xoá bộ lọc và sắp xếp về mặc định"
+                        onClick={resetClientControls}
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="h-3.5 w-3.5" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
                         </svg>
+                        <span>Xoá lọc</span>
                     </button>
                 )}
 
@@ -459,9 +835,7 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                         </tr>
                         <tr className="text-white text-[11px] font-bold tracking-wide uppercase dark:bg-slate-950" style={{ backgroundColor: 'rgb(30 58 95)' }}>
                             {configuration.columns.map((label) => {
-                                const sortable = label === 'BSX' ? 'plate_number' : label === 'Loại đơn' ? 'order_type' : label === 'Trạng thái' ? 'status' : null
-
-                                if (!sortable) {
+                                if (label === 'Địa điểm') {
                                     return (
                                         <th key={label} className={headerClass}>
                                             {label}
@@ -472,13 +846,13 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                                 return (
                                     <th
                                         key={label}
-                                        className={`${headerClass} cursor-pointer hover:bg-white/10 select-none transition`}
-                                        title={`Bấm để sắp xếp theo ${label}`}
-                                        onClick={() => void page.sortTable(sortable)}
+                                        className={`group/th ${headerClass} cursor-pointer hover:bg-white/10 select-none transition`}
+                                        title={`Bấm để sắp xếp theo ${label} (tăng → giảm → mặc định)`}
+                                        onClick={() => toggleColumnSort(label)}
                                     >
                                         <span className="inline-flex items-center justify-center gap-1">
                                             <span>{label}</span>
-                                            {sortIndicator(sortable)}
+                                            {renderSortIndicator(label)}
                                         </span>
                                     </th>
                                 )
@@ -488,15 +862,15 @@ function DispatchTable({ configuration, wire }: { configuration: Snapshot<Config
                     <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                         {!configuration.loaded && <SkeletonRows columns={colCount} cellClassName="border-r border-gray-100 px-2 py-2.5 align-middle dark:border-white/5" />}
 
-                        {configuration.loaded && configuration.groups.length === 0 && (
+                        {configuration.loaded && displayedGroups.length === 0 && (
                             <tr>
                                 <td colSpan={colCount} className="py-8 text-center text-gray-500 italic">
-                                    {isRent ? 'Không có xe thuê ngoài nào đang chờ chạy.' : 'Không tìm thấy xe nào phù hợp.'}
+                                    {isRent && !hasActiveClientControls ? 'Không có xe thuê ngoài nào đang chờ chạy.' : 'Không tìm thấy xe nào phù hợp.'}
                                 </td>
                             </tr>
                         )}
 
-                        {configuration.groups.map((group) => {
+                        {displayedGroups.map((group) => {
                             const isCollapsed = collapsed[group.code] === true
 
                             return group.rows.map((row, index) => {

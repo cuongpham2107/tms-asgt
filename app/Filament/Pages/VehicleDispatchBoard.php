@@ -794,6 +794,84 @@ class VehicleDispatchBoard extends Page implements HasTable
         };
     }
 
+    public static function getCustomerLabel(Vehicle $record): string
+    {
+        $activeTrip = $record->active_trip;
+
+        if ($activeTrip === null) {
+            return '—';
+        }
+
+        $customers = $activeTrip->orders
+            ->map(fn (Order $o): ?string => $o->customer?->code ?: $o->customer?->name)
+            ->filter()
+            ->unique()
+            ->values();
+
+        return $customers->isNotEmpty() ? $customers->join(', ') : '—';
+    }
+
+    public static function getCustomerFullName(Vehicle $record): ?string
+    {
+        $activeTrip = $record->active_trip;
+
+        if ($activeTrip === null) {
+            return null;
+        }
+
+        $names = $activeTrip->orders
+            ->map(fn (Order $o): ?string => $o->customer?->name ?: $o->customer?->code)
+            ->filter()
+            ->unique()
+            ->values();
+
+        return $names->isNotEmpty() ? $names->join(', ') : null;
+    }
+
+    public static function getPlannedLoadingAt(Vehicle $record): string
+    {
+        return self::earliestPlannedLoadingAt($record)?->format('H:i d/m/Y') ?? '—';
+    }
+
+    public static function getPlannedLoadingTimestamp(Vehicle $record): ?int
+    {
+        return self::earliestPlannedLoadingAt($record)?->getTimestamp();
+    }
+
+    private static function earliestPlannedLoadingAt(Vehicle $record): mixed
+    {
+        $activeTrip = $record->active_trip;
+
+        if ($activeTrip === null) {
+            return null;
+        }
+
+        return $activeTrip->orders
+            ->pluck('planned_loading_at')
+            ->filter()
+            ->sort()
+            ->first();
+    }
+
+    public static function getPlannedLoadingAtTitle(Vehicle $record): ?string
+    {
+        $activeTrip = $record->active_trip;
+
+        if ($activeTrip === null) {
+            return null;
+        }
+
+        $times = $activeTrip->orders
+            ->pluck('planned_loading_at')
+            ->filter()
+            ->sort()
+            ->map(fn ($dt): string => $dt->format('H:i d/m/Y'))
+            ->unique()
+            ->values();
+
+        return $times->count() > 1 ? $times->join(', ') : null;
+    }
+
     public static function getPickupPoint(Vehicle $record): string
     {
         $activeTrip = $record->active_trip;

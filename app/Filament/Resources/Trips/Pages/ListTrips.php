@@ -580,19 +580,7 @@ class ListTrips extends ListRecords
                 filled($dateFrom) || filled($dateTo),
                 fn (Builder $query): Builder => $this->applyDateRangeFilter($query, $dateFrom, $dateTo),
             )
-            ->when(filled($search), function (Builder $query) use ($search): Builder {
-                return $query->where(function (Builder $query) use ($search): void {
-                    $query
-                        ->whereHas('vehicle', fn (Builder $q) => $q->where('plate_number', 'like', "%{$search}%"))
-                        ->orWhereHas('orders', fn (Builder $q) => $q
-                            ->where('order_code', 'like', "%{$search}%")
-                            ->orWhere('cargo_name', 'like', "%{$search}%")
-                            ->orWhereHas('trip.driver', fn (Builder $qd) => $qd->where('name', 'like', "%{$search}%"))
-                            ->orWhereHas('area', fn (Builder $qa) => $qa->where('code', 'like', "%{$search}%"))
-                            ->orWhereHas('customer', fn (Builder $qc) => $qc->where('name', 'like', "%{$search}%"))
-                        );
-                });
-            })
+            ->when(filled($search), fn (Builder $query): Builder => $this->applyTripSearchFilter($query, (string) $search))
             ->orderBy('trips.started_at', 'desc')
             ->orderBy('trips.created_at', 'desc');
 
@@ -748,26 +736,45 @@ class ListTrips extends ListRecords
                     return $query;
                 },
             )
-            ->when(filled($this->tripSearch), function (Builder $query) use ($actionRecordId): Builder {
-                $search = trim((string) $this->tripSearch);
+            ->when(
+                filled($this->tripSearch),
+                fn (Builder $query): Builder => $this->applyTripSearchFilter($query, (string) $this->tripSearch, $actionRecordId),
+            );
+    }
 
-                return $query->where(function (Builder $query) use ($search, $actionRecordId): void {
-                    $query
-                        ->where('trips.trip_code', 'like', "%{$search}%")
-                        ->orWhereHas('vehicle', fn (Builder $q) => $q->where('plate_number', 'like', "%{$search}%"))
-                        ->orWhereHas('orders', fn (Builder $q) => $q
-                            ->where('order_code', 'like', "%{$search}%")
-                            ->orWhere('cargo_name', 'like', "%{$search}%")
-                            ->orWhereHas('trip.driver', fn (Builder $qd) => $qd->where('name', 'like', "%{$search}%"))
-                            ->orWhereHas('area', fn (Builder $qa) => $qa->where('code', 'like', "%{$search}%"))
-                            ->orWhereHas('customer', fn (Builder $qc) => $qc->where('name', 'like', "%{$search}%"))
-                        );
+    /**
+     * Tìm chuyến theo mã chuyến, biển số, tài xế, đơn hàng, khu vực, khách hàng (không phân biệt hoa/thường).
+     */
+    private function applyTripSearchFilter(Builder $query, string $rawSearch, ?int $actionRecordId = null): Builder
+    {
+        $search = trim($rawSearch);
 
-                    if ($actionRecordId) {
-                        $query->orWhere('trips.id', $actionRecordId);
-                    }
-                });
-            });
+        if ($search === '') {
+            return $query;
+        }
+
+        return $query->where(function (Builder $query) use ($search, $actionRecordId): void {
+            $query
+                ->whereLike('trips.trip_code', "%{$search}%", caseSensitive: false)
+                ->orWhereLike('trips.external_driver_name', "%{$search}%", caseSensitive: false)
+                ->orWhereHas('driver', fn (Builder $qd) => $qd->whereLike('name', "%{$search}%", caseSensitive: false))
+                ->orWhereHas('vehicle', fn (Builder $q) => $q
+                    ->whereLike('plate_number', "%{$search}%", caseSensitive: false)
+                    ->orWhereLike('external_driver_name', "%{$search}%", caseSensitive: false))
+                ->orWhereHas('orders', fn (Builder $q) => $q
+                    ->whereLike('order_code', "%{$search}%", caseSensitive: false)
+                    ->orWhereLike('cargo_name', "%{$search}%", caseSensitive: false)
+                    ->orWhereHas('area', fn (Builder $qa) => $qa
+                        ->whereLike('code', "%{$search}%", caseSensitive: false)
+                        ->orWhereLike('name', "%{$search}%", caseSensitive: false))
+                    ->orWhereHas('customer', fn (Builder $qc) => $qc
+                        ->whereLike('code', "%{$search}%", caseSensitive: false)
+                        ->orWhereLike('name', "%{$search}%", caseSensitive: false)));
+
+            if ($actionRecordId) {
+                $query->orWhere('trips.id', $actionRecordId);
+            }
+        });
     }
 
     /**

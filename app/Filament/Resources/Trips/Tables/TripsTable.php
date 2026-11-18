@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Trips\Tables;
 
+use App\Enums\CheckpointType;
 use App\Enums\MapTile;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -53,6 +54,7 @@ class TripsTable extends BaseTable
                     'shift',
                     'startLocation',
                     'endLocation',
+                    'checkpoints.deliveryPoint.location',
                     'orders.customer',
                     'orders.pickupLocation',
                     'orders.deliveryPoints.location',
@@ -459,6 +461,20 @@ class TripsTable extends BaseTable
         foreach ($destinations as $d) {
             if (empty($deduped) || end($deduped) !== $d) {
                 $deduped[] = $d;
+            }
+        }
+
+        if (empty($deduped)) {
+            $checkpointDestinations = $record->checkpoints
+                ->filter(fn ($cp): bool => $cp->deliveryPoint !== null
+                    && in_array($cp->checkpoint_type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed, CheckpointType::End], true))
+                ->map(fn ($cp): ?string => $cp->deliveryPoint?->location?->code ?? $cp->deliveryPoint?->address)
+                ->filter();
+
+            foreach ($checkpointDestinations as $d) {
+                if (empty($deduped) || end($deduped) !== $d) {
+                    $deduped[] = $d;
+                }
             }
         }
 

@@ -55,6 +55,7 @@ trait HasVehicleDispatchRows
                         'driver.driverShifts' => fn ($dq) => $dq->whereNull('end_time'),
                         'startLocation',
                         'endLocation.area',
+                        'orders.customer',
                         'orders.pickupLocation',
                         'orders.deliveryPoints.location.area',
                         'latestPendingKmReport',
@@ -88,7 +89,10 @@ trait HasVehicleDispatchRows
             $term = mb_strtolower(trim($this->searchQuery));
 
             $vehicles = $vehicles->filter(fn (Vehicle $vehicle): bool => str_contains(mb_strtolower((string) $vehicle->plate_number), $term)
-                || str_contains(mb_strtolower(VehicleDispatchBoard::getDriverName($vehicle)), $term));
+                || str_contains(mb_strtolower(VehicleDispatchBoard::getDriverName($vehicle)), $term)
+                || str_contains(mb_strtolower(VehicleDispatchBoard::getCustomerLabel($vehicle)), $term)
+                || str_contains(mb_strtolower(VehicleDispatchBoard::getPickupPoint($vehicle)), $term)
+                || str_contains(mb_strtolower(VehicleDispatchBoard::getDeliveryPoint($vehicle)), $term));
         }
 
         $stationOrder = [

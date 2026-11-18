@@ -71,8 +71,8 @@ class ListFilterOvertimeRegistrations extends Filter
                     ->when(
                         $data['search'] ?? null,
                         fn (Builder $query, $search): Builder => $query->where(function (Builder $q) use ($search) {
-                            $q->whereHas('driver', fn (Builder $dq) => $dq->where('name', 'like', "%{$search}%"))
-                                ->orWhere('notes', 'like', "%{$search}%");
+                            $q->whereHas('driver', fn (Builder $dq) => $dq->whereLike('name', "%{$search}%", caseSensitive: false))
+                                ->orWhereLike('notes', "%{$search}%", caseSensitive: false);
                         })
                     )
                     ->when(

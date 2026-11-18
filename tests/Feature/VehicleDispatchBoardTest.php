@@ -1925,6 +1925,7 @@ test('rented vehicles dispatch sheet shows only rented vehicles with active or p
         'status' => TripStatus::Pending,
         'created_at' => now(),
     ]);
+    $plannedAt = now()->startOfHour();
     Order::create([
         'order_code' => 'ORD-RENT-HHHK-01',
         'trip_id' => $tripHhhk->id,
@@ -1932,13 +1933,17 @@ test('rented vehicles dispatch sheet shows only rented vehicles with active or p
         'area_id' => $area->id,
         'type' => OrderType::Hhhk,
         'status' => OrderStatus::Sent,
+        'planned_loading_at' => $plannedAt,
         'created_by' => $driver->id,
     ]);
 
     $config = dispatchWidgetConfiguration(['activeOwnerType' => 'rent']);
 
     expect($config['ownerType'])->toBe('rent')
-        ->and($config['columns'])->toHaveCount(12)
+        ->and($config['columns'])->toHaveCount(14)
+        ->and(array_search('Thời gian dự kiến đóng', $config['columns'], true))->toBe(array_search('Điểm đến', $config['columns'], true) + 1)
+        ->and(array_search('Xe chờ', $config['columns'], true))->toBe(array_search('Thời gian dự kiến đóng', $config['columns'], true) + 1)
+        ->and(array_search('Khách hàng', $config['columns'], true))->toBe(array_search('Xe chờ', $config['columns'], true) + 1)
         ->and($config['columns'])->not->toContain('Vị trí thực tế trên GPS')
         ->and($config['columns'])->not->toContain('Tốc độ')
         ->and($config['columns'])->not->toContain('Status')
@@ -1954,6 +1959,10 @@ test('rented vehicles dispatch sheet shows only rented vehicles with active or p
         ->and($nbRows)->toHaveCount(2)
         ->and($nbRows[0]['bsx'])->toContain('29H-RENT-HHHK')
         ->and($nbRows[0]['orderType'])->toBe('HHHK')
+        ->and($nbRows[0]['plannedLoadingAt'])->toBe($plannedAt->format('H:i d/m/Y'))
+        ->and($nbRows[0]['plannedLoadingTs'])->toBe($plannedAt->getTimestamp())
+        ->and($nbRows[0]['plateNumber'])->toBe('29H-RENT-HHHK')
+        ->and($nbRows[0]['customer'])->toBe('CUST-RENT')
         ->and($nbRows[0]['driverName'])->toBe('Nguyễn Văn Thuê Ngoài')
         ->and($nbRows[0]['statusAction']['name'] ?? null)->toBe('edit_trip')
         ->and($nbRows[1]['bsx'])->toContain('29H-RENT-EXT')

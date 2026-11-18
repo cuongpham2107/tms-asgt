@@ -172,6 +172,12 @@ class LocationForm
                             $set('coordinates', $result->coordinate->toArray());
                         }
                     }),
+                Textarea::make('statement_address')
+                    ->label('Địa chỉ dùng cho bảng kê')
+                    ->placeholder('Nhập địa chỉ hiển thị khi xuất bảng kê (nếu khác địa chỉ bản đồ)')
+                    ->helperText('Ưu tiên hiển thị trên bảng kê đối chiếu cước; để trống sẽ dùng Địa chỉ mặc định.')
+                    ->rows(2)
+                    ->columnSpanFull(),
 
                 MapPicker::make('coordinates')
                     ->label('Chọn vị trí trên bản đồ')

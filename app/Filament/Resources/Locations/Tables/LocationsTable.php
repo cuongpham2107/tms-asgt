@@ -71,6 +71,13 @@ class LocationsTable extends BaseTable
                     ->label('Địa chỉ')
                     ->limit(60)
                     ->wrap(),
+                TextColumn::make('statement_address')
+                    ->label('Địa chỉ bảng kê')
+                    ->placeholder('—')
+                    ->limit(60)
+                    ->wrap()
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->label('Tạo lúc')
                     ->dateTime()

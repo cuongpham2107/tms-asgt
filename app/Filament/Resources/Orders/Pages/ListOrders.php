@@ -214,16 +214,7 @@ class ListOrders extends ListRecords
                 fn (Builder $query): Builder => $query->where('orders.customer_id', $customerId),
             )
             ->when(filled($dateFrom) || filled($dateTo), fn (Builder $query): Builder => $this->applyDateRangeFilter($query, $dateFrom, $dateTo))
-            ->when(filled($search), function (Builder $query) use ($search): Builder {
-                return $query->where(function (Builder $query) use ($search): void {
-                    $query
-                        ->where('orders.order_code', 'like', "%{$search}%")
-                        ->orWhere('orders.cargo_name', 'like', "%{$search}%")
-                        ->orWhereHas('customer', fn (Builder $qc) => $qc->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('trip.vehicle', fn (Builder $qv) => $qv->where('plate_number', 'like', "%{$search}%"))
-                        ->orWhereHas('trip.driver', fn (Builder $qd) => $qd->where('name', 'like', "%{$search}%"));
-                });
-            })
+            ->when(filled($search), fn (Builder $query): Builder => $this->applyOrderSearchFilter($query, (string) $search, qualifyOrders: true))
             ->orderBy('orders.planned_loading_at', 'desc')
             ->orderBy('orders.created_at', 'desc');
 
@@ -543,19 +534,10 @@ class ListOrders extends ListRecords
                     fn (Builder $categoryQuery): Builder => $categoryQuery->where('code', $this->activePlaceFilter),
                 ),
             )
-            ->when(filled($this->orderSearch), function (Builder $query): Builder {
-                $search = trim((string) $this->orderSearch);
-
-                return $query->where(function (Builder $query) use ($search): void {
-                    $query
-                        ->where('order_code', 'like', "%{$search}%")
-                        ->orWhere('cargo_name', 'like', "%{$search}%")
-                        ->orWhere('pickup_address', 'like', "%{$search}%")
-                        ->orWhereHas('customer', fn (Builder $customerQuery): Builder => $customerQuery->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('trip.vehicle', fn (Builder $vehicleQuery): Builder => $vehicleQuery->where('plate_number', 'like', "%{$search}%"))
-                        ->orWhereHas('trip.driver', fn (Builder $driverQuery): Builder => $driverQuery->where('name', 'like', "%{$search}%"));
-                });
-            })
+            ->when(
+                filled($this->orderSearch),
+                fn (Builder $query): Builder => $this->applyOrderSearchFilter($query, (string) $this->orderSearch),
+            )
 
             ->when(
                 filled($this->startDate) || filled($this->endDate),
@@ -572,6 +554,36 @@ class ListOrders extends ListRecords
             );
 
         return $query;
+    }
+
+    /**
+     * Tìm đơn hàng theo mã đơn, tên hàng, điểm đón, khách hàng, biển số xe, lái xe (không phân biệt hoa/thường).
+     */
+    private function applyOrderSearchFilter(Builder $query, string $rawSearch, bool $qualifyOrders = false): Builder
+    {
+        $search = trim($rawSearch);
+
+        if ($search === '') {
+            return $query;
+        }
+
+        $prefix = $qualifyOrders ? 'orders.' : '';
+
+        return $query->where(function (Builder $query) use ($search, $prefix): void {
+            $query
+                ->whereLike($prefix.'order_code', "%{$search}%", caseSensitive: false)
+                ->orWhereLike($prefix.'cargo_name', "%{$search}%", caseSensitive: false)
+                ->orWhereLike($prefix.'pickup_address', "%{$search}%", caseSensitive: false)
+                ->orWhereHas('customer', fn (Builder $qc): Builder => $qc
+                    ->whereLike('code', "%{$search}%", caseSensitive: false)
+                    ->orWhereLike('name', "%{$search}%", caseSensitive: false))
+                ->orWhereHas('trip', fn (Builder $qt): Builder => $qt
+                    ->whereLike('external_driver_name', "%{$search}%", caseSensitive: false)
+                    ->orWhereHas('vehicle', fn (Builder $qv): Builder => $qv
+                        ->whereLike('plate_number', "%{$search}%", caseSensitive: false)
+                        ->orWhereLike('external_driver_name', "%{$search}%", caseSensitive: false))
+                    ->orWhereHas('driver', fn (Builder $qd): Builder => $qd->whereLike('name', "%{$search}%", caseSensitive: false)));
+        });
     }
 
     private function applyDateRangeFilter(Builder $query, ?string $startDate, ?string $endDate): Builder

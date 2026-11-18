@@ -3,11 +3,14 @@
 namespace App\Filament\Resources\Trips\Actions;
 
 use App\Enums\CheckpointType;
+use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Models\DriverShift;
+use App\Models\Order;
+use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
@@ -175,6 +178,8 @@ class EditTripAction
             ->after(function (?Model $record = null, $livewire = null) use (&$kmSnapshotBeforeEdit): void {
                 $trip = static::resolveTrip($record, $livewire) ?? $record;
                 /** @var Trip $trip */
+                $trip->refresh();
+                static::syncOrderDeliveryPointsFromCheckpoints($trip);
                 $trip->refresh();
                 $trip->loadMissing(['checkpoints', 'vehicle', 'orders']);
 
@@ -368,5 +373,121 @@ class EditTripAction
 
         return $activeOrders->exists()
             && (clone $activeOrders)->where('status', '!=', OrderStatus::Completed->value)->doesntExist();
+    }
+
+    /**
+     * Đồng bộ điểm giao (`order_delivery_points`) của đơn hàng theo điểm đã chỉnh trên mốc hành trình.
+     * Khi điều hành sửa `Điểm` sang kho khác (dropdown chọn từ `order_delivery_points` dùng chung trong khu vực),
+     * cập nhật lại điểm của chính đơn đó (hoặc tạo mới nếu chưa có) và gán lại `delivery_point_id` trên checkpoint.
+     */
+    public static function syncOrderDeliveryPointsFromCheckpoints(Trip $trip): void
+    {
+        $trip->loadMissing([
+            'orders.deliveryPoints',
+            'checkpoints.deliveryPoint',
+        ]);
+
+        foreach ($trip->orders as $order) {
+            if (! $order instanceof Order) {
+                continue;
+            }
+
+            $deliveryCheckpoints = $trip->checkpoints
+                ->where('order_id', $order->id)
+                ->filter(fn (TripCheckpoint $cp): bool => $cp->delivery_point_id !== null
+                    && in_array($cp->checkpoint_type, [
+                        CheckpointType::ArrivedDelivery,
+                        CheckpointType::Completed,
+                        CheckpointType::End,
+                    ], true))
+                ->sortBy(fn (TripCheckpoint $cp): array => [$cp->occurred_at?->getTimestamp() ?? 0, $cp->id])
+                ->values();
+
+            if ($deliveryCheckpoints->isEmpty()) {
+                continue;
+            }
+
+            $ownPoints = $order->deliveryPoints()->orderBy('sequence')->orderBy('id')->get()->keyBy('id');
+            $referencedOwnIds = $deliveryCheckpoints
+                ->pluck('delivery_point_id')
+                ->filter(fn ($dpId): bool => $dpId !== null && $ownPoints->has((int) $dpId))
+                ->map(fn ($dpId): int => (int) $dpId)
+                ->unique()
+                ->values()
+                ->all();
+
+            $orphanOwnPoints = $ownPoints
+                ->reject(fn (OrderDeliveryPoint $dp): bool => in_array($dp->id, $referencedOwnIds, true))
+                ->values();
+
+            $foreignGroups = $deliveryCheckpoints
+                ->filter(fn (TripCheckpoint $cp): bool => ! $ownPoints->has((int) $cp->delivery_point_id))
+                ->groupBy(fn (TripCheckpoint $cp): int => (int) $cp->delivery_point_id);
+
+            $orderTouched = false;
+
+            foreach ($foreignGroups as $foreignDpId => $checkpointsForPoint) {
+                $foreignDp = $checkpointsForPoint->first()?->deliveryPoint ?? OrderDeliveryPoint::with('location')->find($foreignDpId);
+                if (! $foreignDp) {
+                    continue;
+                }
+
+                $targetOwnPoint = $ownPoints->first(function (OrderDeliveryPoint $dp) use ($foreignDp): bool {
+                    if ($foreignDp->location_id !== null && $dp->location_id !== null) {
+                        return (int) $dp->location_id === (int) $foreignDp->location_id;
+                    }
+
+                    return filled($foreignDp->address)
+                        && mb_strtolower(trim((string) $dp->address)) === mb_strtolower(trim((string) $foreignDp->address));
+                });
+
+                $arrivedCp = $checkpointsForPoint->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+                $completedCp = $checkpointsForPoint->where('checkpoint_type', CheckpointType::Completed)->last();
+
+                if ($targetOwnPoint === null && $orphanOwnPoints->isNotEmpty()) {
+                    /** @var OrderDeliveryPoint $orphan */
+                    $orphan = $orphanOwnPoints->shift();
+                    $foreignDp->loadMissing('location');
+                    $orphan->update([
+                        'location_id' => $foreignDp->location_id,
+                        'address' => $foreignDp->location?->address ?? $foreignDp->location?->name ?? $foreignDp->address,
+                        'status' => $completedCp !== null
+                            ? OrderDeliveryPointStatus::Delivered
+                            : ($arrivedCp !== null ? OrderDeliveryPointStatus::Arrived : $orphan->status),
+                        'arrived_at' => $arrivedCp?->effectiveOccurredAt() ?? $orphan->arrived_at,
+                        'delivered_at' => $completedCp?->effectiveOccurredAt() ?? $orphan->delivered_at,
+                    ]);
+                    $targetOwnPoint = $orphan->fresh();
+                    $orderTouched = true;
+                } elseif ($targetOwnPoint === null) {
+                    $foreignDp->loadMissing('location');
+                    $nextSeq = (int) ($order->deliveryPoints()->max('sequence') ?? 0) + 1;
+                    $targetOwnPoint = OrderDeliveryPoint::create([
+                        'order_id' => $order->id,
+                        'location_id' => $foreignDp->location_id,
+                        'sequence' => $nextSeq,
+                        'address' => $foreignDp->location?->address ?? $foreignDp->location?->name ?? $foreignDp->address,
+                        'status' => $completedCp !== null
+                            ? OrderDeliveryPointStatus::Delivered
+                            : ($arrivedCp !== null ? OrderDeliveryPointStatus::Arrived : OrderDeliveryPointStatus::Pending),
+                        'arrived_at' => $arrivedCp?->effectiveOccurredAt(),
+                        'delivered_at' => $completedCp?->effectiveOccurredAt(),
+                    ]);
+                    $ownPoints->put($targetOwnPoint->id, $targetOwnPoint);
+                    $orderTouched = true;
+                }
+
+                $trip->checkpoints()
+                    ->where('order_id', $order->id)
+                    ->where('delivery_point_id', $foreignDpId)
+                    ->update(['delivery_point_id' => $targetOwnPoint->id]);
+
+                $orderTouched = true;
+            }
+
+            if ($orderTouched) {
+                $order->touch();
+            }
+        }
     }
 }

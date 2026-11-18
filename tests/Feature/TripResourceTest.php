@@ -642,3 +642,285 @@ test('ListTrips resets filters and displays target trip when tableActionRecord i
         ->assertSet('tripSearch', $trip->trip_code)
         ->assertCanSeeTableRecords([$trip]);
 });
+
+test('trip destination falls back to checkpoint delivery point when order has no delivery points', function () {
+    $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true]);
+    $customer = Customer::create(['code' => 'CUST-DP-FB', 'name' => 'Khách fallback']);
+    $pickupLoc = Location::create([
+        'code' => 'SEVT 1-2',
+        'name' => 'SEVT 1-2',
+        'address' => 'KCN Yên Bình',
+        'lat' => 21.4,
+        'lng' => 105.9,
+        'loc_type' => 'pickup',
+    ]);
+    $asglLoc = Location::create([
+        'code' => 'ASGL',
+        'name' => 'Kho ASGL',
+        'address' => 'Nội Bài',
+        'lat' => 21.2,
+        'lng' => 105.8,
+        'loc_type' => 'delivery',
+    ]);
+    $vehicle = Vehicle::create([
+        'plate_number' => '29H-19883',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $otherOrder = Order::create([
+        'order_code' => 'ORD-OTHER-DP',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'status' => OrderStatus::Completed,
+        'pickup_location_id' => $pickupLoc->id,
+    ]);
+    $sharedDp = $otherOrder->deliveryPoints()->create([
+        'location_id' => $asglLoc->id,
+        'sequence' => 1,
+        'status' => 'pending',
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-DP-FB',
+        'vehicle_id' => $vehicle->id,
+        'start_location_id' => $pickupLoc->id,
+        'end_location_id' => null,
+        'status' => TripStatus::Completed,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-436-FB',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'trip_id' => $trip->id,
+        'type' => OrderType::Hhhk,
+        'status' => OrderStatus::Completed,
+        'pickup_location_id' => $pickupLoc->id,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $sharedDp->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery,
+        'occurred_at' => now()->subMinutes(20),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $sharedDp->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'occurred_at' => now(),
+    ]);
+
+    $trip->load(['orders.deliveryPoints.location', 'checkpoints.deliveryPoint.location', 'endLocation']);
+
+    expect(TripsTable::getDeliveryDestination($trip))->toBe('ASGL')
+        ->and(app(\App\Services\Export\TripExcelExportService::class)->buildJourneyString($order, $trip))->toBe('SEVT 1-2 -> ASGL');
+});
+
+test('trip form deduplicates delivery point options by location and auto-fills order delivery point', function () {
+    $area = Area::create(['code' => 'NBO-DEDUP', 'name' => 'Nội Bài', 'is_active' => true]);
+    $customer = Customer::create(['code' => 'CUST-DEDUP', 'name' => 'Khách dedup']);
+    $asglLoc = Location::create([
+        'code' => 'ASGL',
+        'name' => 'Kho ASGL',
+        'address' => 'Nội Bài',
+        'lat' => 21.2,
+        'lng' => 105.8,
+        'loc_type' => 'delivery',
+    ]);
+
+    $otherOrder = Order::create([
+        'order_code' => 'ORD-OTHER-ASGL',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'status' => OrderStatus::Completed,
+    ]);
+    $otherOrder->deliveryPoints()->create([
+        'location_id' => $asglLoc->id,
+        'sequence' => 1,
+        'status' => 'pending',
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-CURR-ASGL',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'status' => OrderStatus::InProgress,
+    ]);
+    $ownDp = $order->deliveryPoints()->create([
+        'location_id' => $asglLoc->id,
+        'sequence' => 1,
+        'status' => 'pending',
+    ]);
+
+    $get = fn (string $key): mixed => match ($key) {
+        'order_id' => $order->id,
+        'delivery_point_id' => null,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery->value,
+        '../../checkpoints' => [
+            ['checkpoint_type' => CheckpointType::Started->value, 'order_id' => $order->id, 'delivery_point_id' => null],
+        ],
+        default => null,
+    };
+
+    $optionsMethod = new ReflectionMethod(\App\Filament\Resources\Trips\Schemas\TripForm::class, 'deliveryPointOptionsForCheckpoint');
+    $optionsMethod->setAccessible(true);
+    $options = $optionsMethod->invoke(null, $get);
+
+    $defaultMethod = new ReflectionMethod(\App\Filament\Resources\Trips\Schemas\TripForm::class, 'defaultDeliveryPointId');
+    $defaultMethod->setAccessible(true);
+    $defaultId = $defaultMethod->invoke(null, $get, 'checkpoints');
+
+    expect($options)->toBe([$ownDp->id => 'ASGL'])
+        ->and($defaultId)->toBe($ownDp->id);
+});
+
+test('trip form advances delivery point sequentially for multi-point orders', function () {
+    $area = Area::create(['code' => 'NBO-MP', 'name' => 'Nội Bài MP', 'is_active' => true]);
+    $customer = Customer::create(['code' => 'CUST-MP', 'name' => 'Khách đa điểm']);
+    $locAlsc = Location::create(['code' => 'ALSC-MP', 'name' => 'ALSC', 'address' => 'HN', 'lat' => 21.2, 'lng' => 105.8, 'loc_type' => 'delivery']);
+    $locSdv = Location::create(['code' => 'SDV-MP', 'name' => 'SDV', 'address' => 'BN', 'lat' => 21.3, 'lng' => 106.0, 'loc_type' => 'delivery']);
+
+    $order = Order::create([
+        'order_code' => 'ORD-2DP',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'status' => OrderStatus::InProgress,
+    ]);
+    $dp1 = $order->deliveryPoints()->create(['location_id' => $locAlsc->id, 'sequence' => 1, 'status' => 'pending']);
+    $dp2 = $order->deliveryPoints()->create(['location_id' => $locSdv->id, 'sequence' => 2, 'status' => 'pending']);
+
+    $nextMethod = new ReflectionMethod(\App\Filament\Resources\Trips\Schemas\TripForm::class, 'getNextCheckpointType');
+    $nextMethod->setAccessible(true);
+    $defaultMethod = new ReflectionMethod(\App\Filament\Resources\Trips\Schemas\TripForm::class, 'defaultDeliveryPointId');
+    $defaultMethod->setAccessible(true);
+
+    $afterDp1Completed = [
+        ['checkpoint_type' => CheckpointType::LeftPickup->value, 'order_id' => $order->id, 'delivery_point_id' => null],
+        ['checkpoint_type' => CheckpointType::ArrivedDelivery->value, 'order_id' => $order->id, 'delivery_point_id' => $dp1->id],
+        ['checkpoint_type' => CheckpointType::Completed->value, 'order_id' => $order->id, 'delivery_point_id' => $dp1->id],
+    ];
+    $getAfterDp1 = fn (string $key): mixed => match ($key) {
+        'order_id' => $order->id,
+        '../../checkpoints' => $afterDp1Completed,
+        default => null,
+    };
+
+    expect($nextMethod->invoke(null, $getAfterDp1, 'checkpoints'))->toBe(CheckpointType::ArrivedDelivery)
+        ->and($defaultMethod->invoke(null, $getAfterDp1, 'checkpoints'))->toBe($dp2->id);
+
+    $afterDp2Completed = [
+        ...$afterDp1Completed,
+        ['checkpoint_type' => CheckpointType::ArrivedDelivery->value, 'order_id' => $order->id, 'delivery_point_id' => $dp2->id],
+        ['checkpoint_type' => CheckpointType::Completed->value, 'order_id' => $order->id, 'delivery_point_id' => $dp2->id],
+    ];
+    $getAfterDp2 = fn (string $key): mixed => match ($key) {
+        'order_id' => $order->id,
+        '../../checkpoints' => $afterDp2Completed,
+        default => null,
+    };
+
+    expect($nextMethod->invoke(null, $getAfterDp2, 'checkpoints'))->toBe(CheckpointType::End)
+        ->and($defaultMethod->invoke(null, $getAfterDp2, 'checkpoints'))->toBe($dp2->id);
+});
+
+test('editing trip checkpoint delivery point updates order delivery point and relinks checkpoints', function () {
+    $area = Area::create(['code' => 'NBA-SYNC', 'name' => 'Nội Bài Sync', 'is_active' => true]);
+    $customer = Customer::create(['code' => 'CUST-SYNC', 'name' => 'Khách sync']);
+    $locWrong = Location::create(['code' => 'ALSW-S', 'name' => 'ALSW', 'address' => 'ALSW addr', 'lat' => 21.21, 'lng' => 105.81, 'loc_type' => 'delivery']);
+    $locRight = Location::create(['code' => 'ACSV-S', 'name' => 'ACSV', 'address' => 'ACSV addr', 'lat' => 21.22, 'lng' => 105.82, 'loc_type' => 'delivery']);
+    $vehicle = Vehicle::create([
+        'plate_number' => '29E-12091',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $otherOrder = Order::create([
+        'order_code' => 'ORD-FOREIGN-ACSV',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'status' => OrderStatus::Completed,
+    ]);
+    $foreignDpAcsv = $otherOrder->deliveryPoints()->create([
+        'location_id' => $locRight->id,
+        'sequence' => 1,
+        'status' => 'pending',
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-SYNC-596',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Delivered,
+    ]);
+    $order = Order::create([
+        'order_code' => 'ASG-596-TEST',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::Completed,
+    ]);
+    $ownWrongDp = $order->deliveryPoints()->create([
+        'location_id' => $locWrong->id,
+        'sequence' => 1,
+        'status' => 'delivered',
+    ]);
+
+    $cpArrived = TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $foreignDpAcsv->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery,
+        'occurred_at' => now()->subMinutes(10),
+    ]);
+    $cpCompleted = TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $foreignDpAcsv->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'occurred_at' => now(),
+    ]);
+
+    \App\Filament\Resources\Trips\Actions\EditTripAction::syncOrderDeliveryPointsFromCheckpoints($trip);
+
+    $ownWrongDp->refresh();
+    $cpArrived->refresh();
+    $cpCompleted->refresh();
+
+    expect($ownWrongDp->location_id)->toBe($locRight->id)
+        ->and($cpArrived->delivery_point_id)->toBe($ownWrongDp->id)
+        ->and($cpCompleted->delivery_point_id)->toBe($ownWrongDp->id)
+        ->and(TripsTable::getDeliveryDestination($trip->fresh(['orders.deliveryPoints.location', 'checkpoints.deliveryPoint.location', 'endLocation'])))->toBe('ACSV-S');
+});
+
+test('new checkpoint occurred_at defaults to previous checkpoint plus one minute', function () {
+    $method = new ReflectionMethod(TripForm::class, 'defaultCheckpointOccurredAt');
+
+    $getFirst = fn (string $key): mixed => match ($key) {
+        '../../checkpoints' => [],
+        '../../started_at' => '2026-11-18 14:17',
+        default => null,
+    };
+
+    expect($method->invoke(null, $getFirst, 'checkpoints', null))->toBe('2026-11-18 14:17');
+
+    $getSubsequent = fn (string $key): mixed => match ($key) {
+        '../../checkpoints' => [
+            ['checkpoint_type' => CheckpointType::Started->value, 'occurred_at' => '2026-11-18 14:17:00'],
+            ['checkpoint_type' => CheckpointType::ArrivedPickup->value, 'occurred_at' => '2026-11-18 14:25'],
+            ['checkpoint_type' => CheckpointType::LeftPickup->value, 'occurred_at' => null],
+        ],
+        '../../started_at' => '2026-11-18 14:17',
+        default => null,
+    };
+
+    expect($method->invoke(null, $getSubsequent, 'checkpoints', null))->toBe('2026-11-18 14:26');
+});

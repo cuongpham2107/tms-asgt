@@ -72,7 +72,21 @@ trait HasTripStatistics
     {
         return OrderCharge::query()
             ->whereIn('order_id', $rows->pluck('order_id')->filter())
-            ->get(['order_id', 'base_price', 'exported_at', 'manually_updated_at'])
+            ->get([
+                'order_id',
+                'price_code',
+                'rate_type',
+                'base_price',
+                'fuel_adjustment_percent',
+                'adjusted_price',
+                'waiting_minutes',
+                'waiting_fee',
+                'other_fees_total',
+                'vat_amount',
+                'total',
+                'exported_at',
+                'manually_updated_at',
+            ])
             ->keyBy('order_id');
     }
 
@@ -109,24 +123,21 @@ trait HasTripStatistics
                 'orders.area',
                 'orders.pickupLocation',
                 'orders.deliveryPoints.location',
-                'orders.tripCheckpoints',
-                'checkpoints',
+                'orders.tripCheckpoints.deliveryPoint.location',
+                'checkpoints.deliveryPoint.location',
                 'startLocation.area',
                 'endLocation.area',
             ])
             ->when($dateFrom || $dateTo, fn (Builder $q): Builder => DriverMonthlyKmReportService::applyCompletionWindow($q, $dateFrom, $dateTo))
             ->when(filled($search), function (Builder $q) use ($search): Builder {
                 return $q->where(function (Builder $sub) use ($search): void {
-                    $sub->where('trips.trip_code', 'like', "%{$search}%")
-                        ->orWhere('trips.external_driver_name', 'like', "%{$search}%")
-                        ->orWhereHas('vehicle', fn ($v) => $v->where('plate_number', 'like', "%{$search}%")->orWhere('external_driver_name', 'like', "%{$search}%"))
-                        ->orWhereHas('driver', fn ($d) => $d->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('orders', function (Builder $o) use ($search): void {
-                            $o->where('order_code', 'like', "%{$search}%")
-                                ->orWhere('cargo_name', 'like', "%{$search}%")
-                                ->orWhereHas('area', fn ($a) => $a->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"))
-                                ->orWhereHas('customer', fn ($c) => $c->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"));
-                        });
+                    $sub->whereLike('trips.trip_code', "%{$search}%", caseSensitive: false)
+                        ->orWhereLike('trips.external_driver_name', "%{$search}%", caseSensitive: false)
+                        ->orWhereHas('vehicle', fn ($v) => $v
+                            ->whereLike('plate_number', "%{$search}%", caseSensitive: false)
+                            ->orWhereLike('external_driver_name', "%{$search}%", caseSensitive: false))
+                        ->orWhereHas('driver', fn ($d) => $d->whereLike('name', "%{$search}%", caseSensitive: false))
+                        ->orWhereHas('orders', fn (Builder $o): Builder => $this->applyTripStatsOrderSearch($o, $search));
                 });
             })
             ->when($this->vehicleOwner !== 'all', function (Builder $q): Builder {
@@ -160,14 +171,7 @@ trait HasTripStatistics
 
                 return $q->where('planned_loading_at', '<=', $dateTo);
             })
-            ->when(filled($search), function (Builder $q) use ($search): Builder {
-                return $q->where(function (Builder $sub) use ($search): void {
-                    $sub->where('order_code', 'like', "%{$search}%")
-                        ->orWhere('cargo_name', 'like', "%{$search}%")
-                        ->orWhereHas('area', fn ($a) => $a->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"))
-                        ->orWhereHas('customer', fn ($c) => $c->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"));
-                });
-            })
+            ->when(filled($search), fn (Builder $q): Builder => $this->applyTripStatsOrderSearch($q, $search))
             ->when(filled($this->customerId), fn ($q) => $q->where('customer_id', $this->customerId));
 
         $unassignedOrders = $unassignedOrdersQuery->get();
@@ -177,6 +181,20 @@ trait HasTripStatistics
         $syntheticTrips = $exportService->convertOrdersToTripsCollection($unassignedOrders);
 
         return $trips->merge($syntheticTrips);
+    }
+
+    private function applyTripStatsOrderSearch(Builder $query, string $search): Builder
+    {
+        return $query->where(function (Builder $sub) use ($search): void {
+            $sub->whereLike('order_code', "%{$search}%", caseSensitive: false)
+                ->orWhereLike('cargo_name', "%{$search}%", caseSensitive: false)
+                ->orWhereHas('area', fn ($a) => $a
+                    ->whereLike('code', "%{$search}%", caseSensitive: false)
+                    ->orWhereLike('name', "%{$search}%", caseSensitive: false))
+                ->orWhereHas('customer', fn ($c) => $c
+                    ->whereLike('code', "%{$search}%", caseSensitive: false)
+                    ->orWhereLike('name', "%{$search}%", caseSensitive: false));
+        });
     }
 
     /**
@@ -320,20 +338,171 @@ trait HasTripStatistics
     }
 
     /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function filterRowsByJourney(Collection $rows): Collection
+    {
+        $selectedJourneys = array_values(array_filter(array_map(
+            static fn (mixed $value): string => trim((string) $value),
+            (array) ($this->journeys ?? []),
+        )));
+
+        if (empty($selectedJourneys)) {
+            return $rows;
+        }
+
+        return $rows
+            ->filter(fn (array $row): bool => in_array(trim((string) ($row['journey'] ?? '')), $selectedJourneys, true))
+            ->values();
+    }
+
+    /**
+     * Danh sách hành trình duy nhất trong tab/khu vực hiện tại kèm số lượng chuyến để lọc nhanh.
+     *
+     * @return list<array{value: string, count: int}>
+     */
+    public function getJourneyOptions(): array
+    {
+        $target = $this->activeTab ?: $this->serviceType;
+
+        return $this->rowsForTab($target)
+            ->map(fn (array $row): string => trim((string) ($row['journey'] ?? '')))
+            ->filter()
+            ->countBy()
+            ->map(fn (int $count, string $value): array => [
+                'value' => $value,
+                'count' => $count,
+            ])
+            ->sort(fn (array $a, array $b): int => strnatcasecmp($a['value'], $b['value']))
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return Collection<int, array<string, mixed>>
      */
     public function getAllRows(): Collection
     {
         $target = $this->activeTab ?: $this->serviceType;
-        $rows = $this->rowsForTab($target);
+        $rows = $this->filterRowsByJourney($this->rowsForTab($target));
 
-        if ($target !== 'external' || $this->chargeStatus === null) {
+        if ($target === 'external' && $this->chargeStatus !== null) {
+            $charges = $this->chargesByOrderId($rows);
+            $rows = $rows->filter(fn (array $row): bool => $this->chargeStatusOf($row, $charges) === $this->chargeStatus)->values();
+        }
+
+        return $this->sortRows($rows);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function sortRows(Collection $rows): Collection
+    {
+        $sortBy = $this->sortBy ?? null;
+        if (! filled($sortBy) || $rows->isEmpty()) {
             return $rows;
         }
 
-        $charges = $this->chargesByOrderId($rows);
+        $direction = ($this->sortDirection ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $chargeColumns = [
+            'priceCode', 'rateType', 'basePrice', 'fuelPercent',
+            'adjustedPrice', 'waitingDuration', 'waitingFee', 'otherFees', 'vat', 'total',
+        ];
+        $charges = in_array($sortBy, $chargeColumns, true)
+            ? $this->chargesByOrderId($rows)
+            : collect();
 
-        return $rows->filter(fn (array $row): bool => $this->chargeStatusOf($row, $charges) === $this->chargeStatus)->values();
+        $values = $rows->all();
+        usort($values, function (array $a, array $b) use ($sortBy, $direction, $charges): int {
+            $valA = $this->extractSortValue($a, $sortBy, $charges);
+            $valB = $this->extractSortValue($b, $sortBy, $charges);
+
+            $emptyA = $valA === null || $valA === '';
+            $emptyB = $valB === null || $valB === '';
+
+            if ($emptyA && $emptyB) {
+                return 0;
+            }
+            if ($emptyA) {
+                return 1;
+            }
+            if ($emptyB) {
+                return -1;
+            }
+
+            $cmp = (is_int($valA) || is_float($valA)) && (is_int($valB) || is_float($valB))
+                ? ($valA <=> $valB)
+                : strnatcasecmp((string) $valA, (string) $valB);
+
+            return $direction === 'desc' ? -$cmp : $cmp;
+        });
+
+        return collect($values);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  Collection<int, OrderCharge>  $charges
+     */
+    private function extractSortValue(array $row, string $sortBy, Collection $charges): int|float|string|null
+    {
+        $timestamp = static function (mixed $value): ?int {
+            if (blank($value)) {
+                return null;
+            }
+
+            return ($value instanceof Carbon ? $value : Carbon::parse($value))->getTimestamp();
+        };
+
+        $positiveNumber = static function (mixed $value): ?float {
+            return (float) $value > 0 ? (float) $value : null;
+        };
+
+        $charge = filled($row['order_id'] ?? null) ? $charges->get($row['order_id']) : null;
+
+        return match ($sortBy) {
+            'code' => trim((string) ($row['code'] ?? '')),
+            'plate' => trim((string) ($row['plate_number'] ?? '')),
+            'date' => $timestamp($row['date'] ?? null),
+            'journey' => trim((string) ($row['journey'] ?? '')),
+            'area' => trim((string) ($row['area'] ?? '')),
+            'timeA' => $timestamp($row['time_a'] ?? null),
+            'timeB' => $timestamp($row['time_b'] ?? null),
+            'timeC' => $timestamp($row['time_c'] ?? null),
+            'timeD' => $timestamp($row['time_d'] ?? null),
+            'loading' => $row['time_loading'] ?? null,
+            'travel' => $row['time_travel'] ?? null,
+            'unloading' => $row['time_unloading'] ?? null,
+            'waiting22h' => (int) ($row['time_waiting_22h'] ?? 0) > 0 ? (int) $row['time_waiting_22h'] : null,
+            'totalTime' => $row['time_total_trip'] ?? null,
+            'customer' => trim((string) ($row['customer'] ?? '')),
+            'warehouse' => trim((string) ($row['warehouse'] ?? '')),
+            'vehicleOwner' => trim((string) ($row['vehicle_owner'] ?? '')),
+            'vehicleType' => trim((string) ($row['vehicle_type'] ?? '')),
+            'note' => trim((string) ($row['note'] ?? '')),
+            'isReturnTrip' => ($row['is_return_trip'] ?? false) ? 1 : 0,
+            'driverName' => trim((string) ($row['driver_name'] ?? '')),
+            'kmLoaded' => $positiveNumber($row['km_loaded'] ?? 0),
+            'kmEmpty' => $positiveNumber($row['km_empty'] ?? 0),
+            'pcs' => $positiveNumber($row['pcs'] ?? 0),
+            'gw' => $positiveNumber($row['gw'] ?? 0),
+            'cargoType' => trim((string) ($row['cargo_type'] ?? '')),
+            'chargeableWeight' => $positiveNumber($row['chargeable_weight'] ?? 0),
+            'priceCode' => $charge?->price_code,
+            'rateType' => $charge?->rate_type,
+            'basePrice' => $charge?->base_price !== null ? (float) $charge->base_price : null,
+            'fuelPercent' => $charge !== null ? (float) $charge->fuel_adjustment_percent : null,
+            'adjustedPrice' => $charge?->adjusted_price !== null ? (float) $charge->adjusted_price : null,
+            'waitingDuration' => $charge !== null && (int) $charge->waiting_minutes > 0 ? (int) $charge->waiting_minutes : null,
+            'waitingFee' => $charge !== null ? (float) $charge->waiting_fee : null,
+            'otherFees' => $charge !== null ? (float) $charge->other_fees_total : null,
+            'vat' => $charge !== null ? (float) $charge->vat_amount : null,
+            'total' => $charge?->total !== null ? (float) $charge->total : null,
+            default => null,
+        };
     }
 
     /**

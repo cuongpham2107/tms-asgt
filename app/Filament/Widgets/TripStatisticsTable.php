@@ -47,6 +47,16 @@ class TripStatisticsTable extends Widget
     #[Reactive]
     public ?int $areaId = null;
 
+    /** @var array<int, string> */
+    #[Reactive]
+    public array $journeys = [];
+
+    #[Reactive]
+    public ?string $sortBy = null;
+
+    #[Reactive]
+    public string $sortDirection = 'asc';
+
     #[Reactive]
     public string $vehicleOwner = 'all';
 
@@ -102,6 +112,9 @@ class TripStatisticsTable extends Widget
                 'search' => (string) $this->search,
                 'customerId' => $this->customerId,
                 'areaId' => $this->areaId,
+                'journeys' => array_values($this->journeys),
+                'sortBy' => $this->sortBy,
+                'sortDirection' => $this->sortDirection,
                 'vehicleOwner' => $this->vehicleOwner,
                 'chargeStatus' => $this->chargeStatus,
             ],
@@ -117,6 +130,7 @@ class TripStatisticsTable extends Widget
                     ['key' => 'missing', 'label' => 'Chưa có giá', 'count' => $chargeCounts['missing'], 'tone' => 'amber'],
                 ],
             'customers' => $this->getCustomerOptions(),
+            'journeyOptions' => $isReady ? $this->getJourneyOptions() : [],
             'areaFilters' => $isReady
                 ? $this->getAreaFilters()
                 : collect($this->getAreaOptions())->map(fn (array $area): array => [...$area, 'count' => 0])->all(),

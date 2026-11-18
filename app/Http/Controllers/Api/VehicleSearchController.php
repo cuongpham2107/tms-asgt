@@ -25,7 +25,7 @@ class VehicleSearchController extends Controller
         $vehicles = Vehicle::query()
             ->where('is_active', true)
             ->when($q !== '', function ($query) use ($q): void {
-                $query->where('plate_number', 'like', "%{$q}%");
+                $query->whereLike('plate_number', "%{$q}%", caseSensitive: false);
             })
             ->orderBy('plate_number')
             ->limit(10)

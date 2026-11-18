@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { JsonValue, JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities, Snapshot } from '@filament/widgets/js-widget'
@@ -78,6 +78,9 @@ interface Configuration {
         search: string
         customerId: number | null
         areaId: number | null
+        journeys: string[]
+        sortBy: string | null
+        sortDirection: string
         vehicleOwner: string
         chargeStatus: string | null
     }
@@ -85,6 +88,7 @@ interface Configuration {
     chargeFilters: { key: string; label: string; count: number; tone: 'emerald' | 'amber' }[]
     areaFilters: { id: number; label: string; count: number }[]
     customers: Record<string, string>
+    journeyOptions: { value: string; count: number }[]
     metrics: {
         trips: number
         records: number
@@ -104,6 +108,9 @@ interface PageApi {
     setActiveTab(tab: string): Promise<unknown>
     toggleChargeStatus(status: string): Promise<unknown>
     toggleArea(areaId: number): Promise<unknown>
+    setJourneys(journeys: string[]): Promise<unknown>
+    sortTable(column: string): Promise<unknown>
+    setSort(column: string, direction: string): Promise<unknown>
     resetFilters(): Promise<unknown>
     gotoPage(page: number): Promise<unknown>
     updateOrderMetric(orderId: number, field: string, value: string | null): Promise<unknown>
@@ -394,7 +401,7 @@ function buildColumns(showChargeableWeight: boolean, showCharges: boolean, canEd
             render: (row) =>
                 !row.vehicleOwner
                     ? ''
-                    : badge(row.vehicleOwner, row.vehicleOwner === 'Xe công ty' ? 'info' : row.vehicleOwner === 'Xe thuê' ? 'warning' : 'gray'),
+                    : badge(row.vehicleOwner, row.vehicleOwner === 'Xe công ty' ? 'info' : 'warning'),
         },
         { key: 'vehicleType', groupId: 3, label: 'Loại xe', align: 'center', minWidth: 90, extra: 'px-3 text-gray-600 dark:text-gray-400', render: (row) => row.vehicleType ?? '' },
         {
@@ -715,10 +722,275 @@ function pageNumbers(current: number, last: number): (number | null)[] {
     return result
 }
 
+interface JourneyFilterPopoverProps {
+    options: { value: string; count: number }[]
+    selected: string[]
+    sortBy: string | null
+    sortDirection: string
+    onApply: (journeys: string[]) => void
+    onSort: (direction: 'asc' | 'desc') => void
+}
+
+function JourneyFilterPopover({ options, selected, sortBy, sortDirection, onApply, onSort }: JourneyFilterPopoverProps) {
+    const [open, setOpen] = useState(false)
+    const [keyword, setKeyword] = useState('')
+    const [draft, setDraft] = useState<Set<string>>(() => new Set())
+    const selectAllRef = useRef<HTMLInputElement | null>(null)
+
+    const allValues = useMemo(() => options.map((option) => option.value), [options])
+
+    const visibleOptions = useMemo(() => {
+        const needle = keyword.trim().toLowerCase()
+        if (!needle) {
+            return options
+        }
+
+        return options.filter((option) => option.value.toLowerCase().includes(needle))
+    }, [options, keyword])
+
+    const visibleSelectedCount = useMemo(
+        () => visibleOptions.filter((option) => draft.has(option.value)).length,
+        [visibleOptions, draft]
+    )
+
+    const allVisibleSelected = visibleOptions.length > 0 && visibleSelectedCount === visibleOptions.length
+    const someVisibleSelected = visibleSelectedCount > 0 && visibleSelectedCount < visibleOptions.length
+
+    useEffect(() => {
+        if (selectAllRef.current) {
+            selectAllRef.current.indeterminate = someVisibleSelected
+        }
+    }, [someVisibleSelected, open])
+
+    const handleToggleOpen = () => {
+        if (!open) {
+            setKeyword('')
+            setDraft(new Set(selected.length > 0 ? selected : allValues))
+        }
+        setOpen((prev) => !prev)
+    }
+
+    const handleToggleSelectAllVisible = () => {
+        setDraft((prev) => {
+            const next = new Set(prev)
+            if (allVisibleSelected) {
+                visibleOptions.forEach((option) => next.delete(option.value))
+            } else {
+                visibleOptions.forEach((option) => next.add(option.value))
+            }
+
+            return next
+        })
+    }
+
+    const handleToggleItem = (value: string) => {
+        setDraft((prev) => {
+            const next = new Set(prev)
+            if (next.has(value)) {
+                next.delete(value)
+            } else {
+                next.add(value)
+            }
+
+            return next
+        })
+    }
+
+    const handleApply = () => {
+        const chosen = allValues.filter((value) => draft.has(value))
+        if (chosen.length === 0) {
+            return
+        }
+        onApply(chosen.length === allValues.length ? [] : chosen)
+        setOpen(false)
+    }
+
+    const handleClearFilter = () => {
+        onApply([])
+        setOpen(false)
+    }
+
+    const isFiltered = selected.length > 0
+    const buttonLabel = !isFiltered
+        ? 'Tất cả hành trình'
+        : selected.length === 1
+          ? selected[0]
+          : `Hành trình (${selected.length})`
+
+    const isSortedAsc = sortBy === 'journey' && sortDirection === 'asc'
+    const isSortedDesc = sortBy === 'journey' && sortDirection === 'desc'
+
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                aria-label="Hành trình"
+                aria-expanded={open}
+                onClick={handleToggleOpen}
+                className={`inline-flex h-9 max-w-[220px] items-center justify-between gap-2 rounded-lg border px-3 text-sm shadow-xs transition cursor-pointer ${
+                    isFiltered || open
+                        ? 'border-primary-500 bg-primary-50/70 font-medium text-primary-700 ring-1 ring-primary-500 dark:border-primary-400 dark:bg-primary-950/40 dark:text-primary-300'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-white/5'
+                }`}
+            >
+                <span className="flex min-w-0 items-center gap-1.5">
+                    <svg className="h-3.5 w-3.5 shrink-0 opacity-75" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path
+                            fillRule="evenodd"
+                            d="M2.628 1.601C5.028 1.206 7.49 1 10 1s4.973.206 7.372.601a.75.75 0 0 1 .628.74v2.288a2.25 2.25 0 0 1-.659 1.59l-4.682 4.683a2.25 2.25 0 0 0-.659 1.59v3.037c0 .684-.31 1.33-.844 1.757l-1.937 1.55A.75.75 0 0 1 8 18.25v-5.757a2.25 2.25 0 0 0-.659-1.591L2.659 6.22A2.25 2.25 0 0 1 2 4.629V2.34a.75.75 0 0 1 .628-.74Z"
+                            clipRule="evenodd"
+                        />
+                    </svg>
+                    <span className="truncate">{buttonLabel}</span>
+                </span>
+                <svg className="h-4 w-4 shrink-0 opacity-60" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path
+                        fillRule="evenodd"
+                        d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+                        clipRule="evenodd"
+                    />
+                </svg>
+            </button>
+
+            {open && (
+                <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+                    <div className="absolute right-0 top-full z-50 mt-2 w-96 rounded-xl bg-white shadow-xl ring-1 ring-gray-950/10 dark:bg-gray-900 dark:ring-white/15">
+                        <div className="border-b border-gray-100 p-2 dark:border-white/5">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onSort('asc')
+                                    setOpen(false)
+                                }}
+                                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
+                                    isSortedAsc
+                                        ? 'bg-primary-50 font-semibold text-primary-700 dark:bg-primary-950/40 dark:text-primary-300'
+                                        : 'text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/5'
+                                }`}
+                            >
+                                <span className="inline-flex min-w-9 shrink-0 items-center justify-center rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-600 dark:bg-white/10 dark:text-gray-300">
+                                    A↓Z
+                                </span>
+                                <span className="truncate">Sắp xếp A → Z</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onSort('desc')
+                                    setOpen(false)
+                                }}
+                                className={`mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
+                                    isSortedDesc
+                                        ? 'bg-primary-50 font-semibold text-primary-700 dark:bg-primary-950/40 dark:text-primary-300'
+                                        : 'text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/5'
+                                }`}
+                            >
+                                <span className="inline-flex min-w-9 shrink-0 items-center justify-center rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-gray-600 dark:bg-white/10 dark:text-gray-300">
+                                    Z↓A
+                                </span>
+                                <span className="truncate">Sắp xếp Z → A</span>
+                            </button>
+                            <button
+                                type="button"
+                                disabled={!isFiltered}
+                                onClick={handleClearFilter}
+                                className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-200 dark:hover:bg-white/5 cursor-pointer"
+                            >
+                                <span className="inline-flex min-w-9 shrink-0 items-center justify-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500 dark:bg-white/10 dark:text-gray-400">
+                                    ✕
+                                </span>
+                                <span className="truncate">Xoá lọc "Hành trình"</span>
+                            </button>
+                        </div>
+
+                        <div className="p-2.5">
+                            <div className="relative">
+                                <input
+                                    type="search"
+                                    value={keyword}
+                                    onChange={(event) => setKeyword(event.target.value)}
+                                    placeholder="Tìm hành trình..."
+                                    autoFocus
+                                    className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-white/15 dark:bg-gray-800 dark:text-white"
+                                />
+                            </div>
+
+                            <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50/50 dark:border-white/10 dark:bg-gray-950/30">
+                                <label className="flex cursor-pointer items-center gap-2 border-b border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-100/70 dark:border-white/10 dark:text-gray-100 dark:hover:bg-white/5">
+                                    <input
+                                        ref={selectAllRef}
+                                        type="checkbox"
+                                        className="fi-checkbox-input rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                        checked={allVisibleSelected}
+                                        onChange={handleToggleSelectAllVisible}
+                                        disabled={visibleOptions.length === 0}
+                                    />
+                                    <span>{keyword.trim() ? '(Chọn tất cả kết quả)' : '(Chọn tất cả)'}</span>
+                                </label>
+
+                                <div className="max-h-56 overflow-y-auto p-1">
+                                    {visibleOptions.length === 0 ? (
+                                        <div className="px-2 py-4 text-center text-xs text-gray-400">Không tìm thấy hành trình phù hợp</div>
+                                    ) : (
+                                        visibleOptions.map((option) => (
+                                            <label
+                                                key={option.value}
+                                                className="flex cursor-pointer items-center justify-between gap-2 rounded px-2 py-1 text-xs text-gray-700 hover:bg-white dark:text-gray-200 dark:hover:bg-white/5"
+                                            >
+                                                <span className="flex min-w-0 items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="fi-checkbox-input rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                                        checked={draft.has(option.value)}
+                                                        onChange={() => handleToggleItem(option.value)}
+                                                    />
+                                                    <span className="truncate">{option.value}</span>
+                                                </span>
+                                                <span className="shrink-0 text-[10px] tabular-nums text-gray-400">{option.count}</span>
+                                            </label>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="mt-2.5 flex items-center justify-between gap-2">
+                                <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                                    Đã chọn {draft.size}/{options.length}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOpen(false)}
+                                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-white/5 cursor-pointer"
+                                    >
+                                        Huỷ
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={draft.size === 0 || options.length === 0}
+                                        onClick={handleApply}
+                                        className="rounded-lg bg-primary-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                                    >
+                                        OK
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+        </div>
+    )
+}
+
 function TripStatistics({ configuration, wire }: { configuration: Snapshot<Configuration>; wire: Wire }) {
     const page = wire.$parent
     const [busy, setBusy] = useState(false)
     const [search, setSearch] = useState(configuration.filters.search)
+    const isSearchFocusedRef = useRef(false)
+    const searchRef = useRef(search)
+    searchRef.current = search
 
     const run = (action: () => Promise<unknown>) => {
         setBusy(true)
@@ -726,6 +998,9 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
     }
 
     useEffect(() => {
+        if (isSearchFocusedRef.current && searchRef.current !== configuration.filters.search) {
+            return
+        }
         setSearch(configuration.filters.search)
     }, [configuration.filters.search])
 
@@ -737,7 +1012,7 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
         const timer = setTimeout(() => run(() => page.$set('search', search, true)), 400)
 
         return () => clearTimeout(timer)
-    }, [search])
+    }, [search, configuration.filters.search, page])
 
     const canEditCharges = configuration.canEditCharges === true
 
@@ -917,6 +1192,12 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                                 className="fi-input"
                                 placeholder="Mã đơn, BSX, lái xe..."
                                 value={search}
+                                onFocus={() => {
+                                    isSearchFocusedRef.current = true
+                                }}
+                                onBlur={() => {
+                                    isSearchFocusedRef.current = false
+                                }}
                                 onChange={(event) => setSearch(event.target.value)}
                             />
                         </div>
@@ -939,6 +1220,15 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                             </select>
                         </div>
                     </div>
+                                
+                    <JourneyFilterPopover
+                        options={configuration.journeyOptions ?? []}
+                        selected={filters.journeys ?? []}
+                        sortBy={filters.sortBy}
+                        sortDirection={filters.sortDirection}
+                        onApply={(journeys) => run(() => page.setJourneys(journeys))}
+                        onSort={(direction) => run(() => page.setSort('journey', direction))}
+                    />
 
                     <div className="fi-input-wrp w-40">
                         <div className="fi-input-wrp-content-ctn">
@@ -1057,11 +1347,14 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                             <tr className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-white">
                                 {visibleColumns.map((column) => {
                                     const sticky = stickyMap.get(column.key)
+                                    const label = column.key === 'code' ? configuration.codeLabel : column.key === 'warehouse' ? configuration.warehouseLabel : column.label
+                                    const sortable = column.key !== 'stt' && column.key !== 'actions'
+                                    const isSorted = filters.sortBy === column.key
 
                                     return (
                                         <th
                                             key={column.key}
-                                            title={column.title}
+                                            title={sortable ? `${column.title ? `${column.title} · ` : ''}Bấm để sắp xếp theo ${label} (tăng → giảm → mặc định)` : column.title}
                                             style={columnStyle(column, sticky)}
                                             className={[
                                                 'border-b border-r border-white/25 px-2.5 py-2.5',
@@ -1070,11 +1363,24 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                                                 alignmentClass(column.align),
                                                 column.titleClassName ?? '',
                                                 column.key === 'code' ? 'truncate' : '',
+                                                sortable ? 'group/th cursor-pointer select-none transition hover:bg-white/10' : '',
                                             ]
                                                 .filter(Boolean)
                                                 .join(' ')}
+                                            onClick={sortable ? () => run(() => page.sortTable(column.key)) : undefined}
                                         >
-                                            {column.key === 'code' ? configuration.codeLabel : column.key === 'warehouse' ? configuration.warehouseLabel : column.label}
+                                            {sortable ? (
+                                                <span className="inline-flex items-center justify-center gap-1">
+                                                    <span>{label}</span>
+                                                    {isSorted ? (
+                                                        <span className="text-[10px] font-bold text-amber-300">{filters.sortDirection === 'desc' ? '▼' : '▲'}</span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-white/40 group-hover/th:text-white/80">⇅</span>
+                                                    )}
+                                                </span>
+                                            ) : (
+                                                label
+                                            )}
                                         </th>
                                     )
                                 })}

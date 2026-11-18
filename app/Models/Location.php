@@ -20,6 +20,7 @@ class Location extends Model
         'code',
         'name',
         'address',
+        'statement_address',
         'old_address',
         'lat',
         'lng',

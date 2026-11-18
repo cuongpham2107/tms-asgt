@@ -27,10 +27,9 @@ class LocationController extends Controller
 
         if (filled($search)) {
             $query->where(function ($q) use ($search): void {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('code', 'like', "%{$search}%")
-                    ->orWhere('address', 'like', "%{$search}%");
-
+                $q->whereLike('name', "%{$search}%", caseSensitive: false)
+                    ->orWhereLike('code', "%{$search}%", caseSensitive: false)
+                    ->orWhereLike('address', "%{$search}%", caseSensitive: false);
             });
         }
         if (filled($area_id)) {

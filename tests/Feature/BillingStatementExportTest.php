@@ -221,7 +221,7 @@ test('clc sdv template skips orders of other rate types and prefixes the company
     $this->charge->update(['rate_type' => FreightRateType::ClcSdv->value]);
     $sheet = $build()['spreadsheet']->getActiveSheet();
 
-    expect(findCell($sheet, 'CÔNG TY CỔ PHẦN TIẾP VẬN THẾ KỶ (CLC) - KCN Yên Phong, Yên Trung, Bắc Ninh'))->not->toBeNull()
+    expect(findCell($sheet, 'CÔNG TY CỔ PHẦN TIẾP VẬN THẾ KỶ (CLC), KCN Yên Phong, Yên Trung, Bắc Ninh'))->not->toBeNull()
         ->and(findCell($sheet, 'SEV, KCN Yên Phong, Bắc Ninh'))->not->toBeNull();
 });
 
@@ -336,4 +336,21 @@ test('return trip order follows its parent order and shares its stt', function (
         ->and($sheet->getCell('S14')->getValue())->toBe(581_000.0)
         ->and($sheet->getCell('A15')->getValue())->toBe(2)
         ->and($sheet->getCell('S15')->getValue())->toBe(1_162_000.0);
+});
+
+test('billing statement prefers location statement_address over map address', function () {
+    $this->order->pickupLocation->update([
+        'address' => 'Địa chỉ bản đồ đầy đủ',
+        'statement_address' => 'Kho ASGL Nội Bài (Bảng kê)',
+    ]);
+    $this->order->deliveryPoints->first()->location->update([
+        'address' => 'Địa chỉ giao trên bản đồ',
+        'statement_address' => 'SEVT Thái Nguyên (Bảng kê)',
+    ]);
+
+    $rows = ($this->page)()->instance()->getAllRows();
+    $sheet = app(BillingStatementExporter::class)->build($rows, $this->customer, 'ALSB')['spreadsheet']->getActiveSheet();
+
+    expect((string) $sheet->getCell('E13')->getValue())->toContain('Kho ASGL Nội Bài (Bảng kê)')
+        ->and((string) $sheet->getCell('F13')->getValue())->toContain('SEVT Thái Nguyên (Bảng kê)');
 });

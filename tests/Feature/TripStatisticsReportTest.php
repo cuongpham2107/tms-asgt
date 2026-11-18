@@ -2,6 +2,7 @@
 
 use App\Enums\CargoType;
 use App\Enums\CheckpointType;
+use App\Enums\DriverSwapReason;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -11,6 +12,7 @@ use App\Filament\Pages\TripStatisticsReport;
 use App\Filament\Widgets\TripStatisticsTable;
 use App\Models\Area;
 use App\Models\Customer;
+use App\Models\DriverSwap;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
@@ -1541,6 +1543,334 @@ test('trip statistics table includes area column and maps PROVINCE to Điểm kh
     $filteredByArea->call('toggleArea', $provinceArea->id);
     expect($filteredByArea->get('areaId'))->toBe($provinceArea->id);
 
+    $spreadsheet = app(TripExcelExportService::class)
+        ->buildSpreadsheetFromRows($filteredByArea->instance()->getAllRows(), $filteredByArea->instance()->getFilteredTrips());
+
+    expect($spreadsheet->getSheet(0)->getCell('AB4')->getValue())->toBe('Khu vực')
+        ->and($spreadsheet->getSheet(0)->getCell('AB5')->getValue())->toBe('Điểm khác');
+
     $filteredByArea->call('resetFilters');
     expect($filteredByArea->get('areaId'))->toBeNull();
+});
+
+test('trip statistics journey falls back to trip endLocation when order has no delivery points', function () {
+    $nctsLocation = Location::create([
+        'code' => 'NCTS',
+        'name' => 'Kho NCTS',
+        'address' => 'Nội Bài',
+        'lat' => 21.221,
+        'lng' => 105.806,
+        'loc_type' => 'pickup',
+        'is_active' => true,
+    ]);
+
+    $sdvLocation = Location::create([
+        'code' => 'SDV',
+        'name' => 'Công ty SDV',
+        'address' => 'Bắc Ninh',
+        'lat' => 21.18,
+        'lng' => 106.05,
+        'loc_type' => 'delivery',
+        'is_active' => true,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-NO-DP-1',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'start_location_id' => $nctsLocation->id,
+        'end_location_id' => $sdvLocation->id,
+        'started_at' => Carbon::parse('2026-04-22 09:00:00'),
+        'completed_at' => Carbon::parse('2026-04-22 10:00:00'),
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-NO-DP-1',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'pickup_location_id' => $nctsLocation->id,
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    $rows = collect(Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'HHHK',
+    ])->instance()->getReactTableConfiguration()['rows'])->keyBy('code');
+
+    expect($rows['ORD-NO-DP-1']['journey'])->toBe('NCTS -> SDV')
+        ->and($rows['ORD-NO-DP-1']['warehouse'])->toBe('NCTS');
+});
+
+test('trip statistics report supports column sorting and filtering by journey', function () {
+    $acsvLocation = Location::create([
+        'code' => 'ACSV',
+        'name' => 'Kho ACSV',
+        'address' => 'Nội Bài',
+        'lat' => 21.221,
+        'lng' => 105.806,
+        'loc_type' => 'pickup',
+        'is_active' => true,
+    ]);
+
+    $sevtLocation = Location::create([
+        'code' => 'SEVT',
+        'name' => 'Samsung TN',
+        'address' => 'Thái Nguyên',
+        'lat' => 21.425,
+        'lng' => 105.879,
+        'loc_type' => 'delivery',
+        'is_active' => true,
+    ]);
+
+    $trip1 = Trip::create([
+        'trip_code' => 'TRIP-SORT-1',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-23 09:00:00'),
+        'completed_at' => Carbon::parse('2026-04-23 10:00:00'),
+    ]);
+
+    $order1 = Order::create([
+        'order_code' => 'ORD-SORT-1',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'pickup_location_id' => $this->pickupLocation->id, // ASG
+        'trip_id' => $trip1->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+    OrderDeliveryPoint::create([
+        'order_id' => $order1->id,
+        'location_id' => $sevtLocation->id,
+        'sequence' => 1,
+        'arrived_at' => Carbon::parse('2026-04-23 09:30:00'),
+        'delivered_at' => Carbon::parse('2026-04-23 10:00:00'),
+    ]);
+
+    $trip2 = Trip::create([
+        'trip_code' => 'TRIP-SORT-2',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-23 11:00:00'),
+        'completed_at' => Carbon::parse('2026-04-23 12:00:00'),
+    ]);
+
+    $order2 = Order::create([
+        'order_code' => 'ORD-SORT-2',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'pickup_location_id' => $acsvLocation->id,
+        'trip_id' => $trip2->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+    OrderDeliveryPoint::create([
+        'order_id' => $order2->id,
+        'location_id' => $this->deliveryLocation->id, // ALSC
+        'sequence' => 1,
+        'arrived_at' => Carbon::parse('2026-04-23 11:30:00'),
+        'delivered_at' => Carbon::parse('2026-04-23 12:00:00'),
+    ]);
+
+    $component = Livewire::test(TripStatisticsReport::class, [
+        'startDate' => '2026-04-01',
+        'endDate' => '2026-04-30',
+        'activeTab' => 'HHHK',
+    ]);
+
+    expect($component->instance()->getJourneyOptions())->toBe([
+        ['value' => 'ACSV -> ALSC', 'count' => 1],
+        ['value' => 'ASG -> SEVT', 'count' => 1],
+    ]);
+
+    // Asc by journey: ACSV -> ALSC before ASG -> SEVT
+    $component->call('sortTable', 'journey');
+    expect($component->get('sortBy'))->toBe('journey')
+        ->and($component->get('sortDirection'))->toBe('asc')
+        ->and($component->instance()->getAllRows()->pluck('journey')->all())->toBe(['ACSV -> ALSC', 'ASG -> SEVT']);
+
+    // Desc by journey: ASG -> SEVT before ACSV -> ALSC
+    $component->call('sortTable', 'journey');
+    expect($component->get('sortDirection'))->toBe('desc')
+        ->and($component->instance()->getAllRows()->pluck('journey')->all())->toBe(['ASG -> SEVT', 'ACSV -> ALSC']);
+
+    // Direct setSort from Excel popover
+    $component->call('setSort', 'journey', 'asc');
+    expect($component->get('sortBy'))->toBe('journey')
+        ->and($component->get('sortDirection'))->toBe('asc');
+
+    // Third click resets to default
+    $component->call('sortTable', 'journey');
+    expect($component->get('sortBy'))->toBeNull();
+
+    // Filter by multiple journeys
+    $component->call('setJourneys', ['ACSV -> ALSC', 'ASG -> SEVT']);
+    expect($component->instance()->getAllRows()->pluck('code')->all())->toBe(['ORD-SORT-1', 'ORD-SORT-2']);
+
+    // Filter by single journey
+    $component->call('setJourneys', ['ACSV -> ALSC']);
+    expect($component->instance()->getAllRows()->pluck('code')->all())->toBe(['ORD-SORT-2']);
+
+    $component->call('resetFilters');
+    expect($component->get('journeys'))->toBe([])
+        ->and($component->get('sortBy'))->toBeNull();
+});
+
+test('trip excel summary splits km by driver when trip has driver swap', function () {
+    $driverFirst = User::factory()->create(['name' => 'Đỗ Văn Thìn']);
+    $driverSecond = User::factory()->create(['name' => 'Trần Văn Thích']);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-SWAP-393',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $driverSecond->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-10 08:30:00'),
+        'completed_at' => Carbon::parse('2026-04-10 11:30:00'),
+        'start_km' => 153892,
+        'end_km' => 153901,
+        'total_km' => 9,
+        'total_km_loaded' => 6,
+        'total_km_empty' => 3,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-393-SWAP',
+        'customer_id' => $this->customer->id,
+        'area_id' => $this->area->id,
+        'trip_id' => $trip->id,
+        'type' => OrderType::Hhhk,
+        'status' => OrderStatus::Completed,
+        'pickup_location_id' => $this->location->id,
+        'planned_loading_at' => Carbon::parse('2026-04-10 08:30:00'),
+        'total_packages' => 1,
+        'total_weight' => 100,
+        'loaded_km' => 6,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $driverFirst->id,
+        'checkpoint_type' => CheckpointType::Started,
+        'km_reading' => 153892,
+        'occurred_at' => Carbon::parse('2026-04-10 08:30:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $driverFirst->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'km_reading' => 153895,
+        'occurred_at' => Carbon::parse('2026-04-10 08:45:00'),
+    ]);
+    $swapCp = TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $driverFirst->id,
+        'checkpoint_type' => CheckpointType::DriverSwap,
+        'km_reading' => 153895,
+        'occurred_at' => Carbon::parse('2026-04-10 09:30:00'),
+    ]);
+    DriverSwap::create([
+        'trip_id' => $trip->id,
+        'from_driver_id' => $driverFirst->id,
+        'to_driver_id' => $driverSecond->id,
+        'checkpoint_id' => $swapCp->id,
+        'handover_km' => 153895,
+        'reason' => DriverSwapReason::CargoNotUnloaded,
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'driver_id' => $driverSecond->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'km_reading' => 153901,
+        'occurred_at' => Carbon::parse('2026-04-10 11:30:00'),
+    ]);
+
+    $spreadsheet = app(TripExcelExportService::class)->buildSpreadsheet(collect([$trip->fresh(['vehicle', 'driver', 'orders.customer', 'orders.area', 'orders.pickupLocation', 'orders.deliveryPoints.location', 'orders.tripCheckpoints', 'checkpoints', 'startLocation.area', 'endLocation.area'])]));
+    $sheet = $spreadsheet->getSheet(0);
+
+    expect($sheet->getCell('AC4')->getValue())->toBe('Họ tên lái xe đảo lái')
+        ->and($sheet->getCell('AD4')->getValue())->toBe('Km có hàng')
+        ->and($sheet->getCell('AE4')->getValue())->toBe('Km không hàng')
+        ->and($sheet->getCell('U5')->getValue())->toBe('Đỗ Văn Thìn')
+        ->and($sheet->getCell('V5')->getValue())->toBe('')
+        ->and((float) $sheet->getCell('W5')->getValue())->toBe(3.0)
+        ->and($sheet->getCell('AC5')->getValue())->toBe('Trần Văn Thích')
+        ->and((float) $sheet->getCell('AD5')->getValue())->toBe(6.0)
+        ->and($sheet->getCell('AE5')->getValue())->toBe('');
+});
+
+test('trip excel summary displays rented vehicle owner name when available', function () {
+    $rentWithOwner = Vehicle::create([
+        'plate_number' => '29E-99901',
+        'type' => VehicleOwnerType::Rent,
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'Tam Bảo',
+        'is_active' => true,
+    ]);
+
+    $rentWithoutOwner = Vehicle::create([
+        'plate_number' => '29E-99902',
+        'type' => VehicleOwnerType::Rent,
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => '',
+        'is_active' => true,
+    ]);
+
+    $trip1 = Trip::create([
+        'trip_code' => 'TRIP-RENT-1',
+        'vehicle_id' => $rentWithOwner->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-11 08:30:00'),
+        'completed_at' => Carbon::parse('2026-04-11 09:30:00'),
+    ]);
+    $trip2 = Trip::create([
+        'trip_code' => 'TRIP-RENT-2',
+        'vehicle_id' => $rentWithoutOwner->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-04-11 10:30:00'),
+        'completed_at' => Carbon::parse('2026-04-11 11:30:00'),
+    ]);
+
+    Order::create([
+        'order_code' => 'ORD-RENT-1',
+        'customer_id' => $this->customer->id,
+        'area_id' => $this->area->id,
+        'trip_id' => $trip1->id,
+        'type' => OrderType::Hhhk,
+        'status' => OrderStatus::Completed,
+        'pickup_location_id' => $this->location->id,
+    ]);
+    Order::create([
+        'order_code' => 'ORD-RENT-2',
+        'customer_id' => $this->customer->id,
+        'area_id' => $this->area->id,
+        'trip_id' => $trip2->id,
+        'type' => OrderType::Hhhk,
+        'status' => OrderStatus::Completed,
+        'pickup_location_id' => $this->location->id,
+    ]);
+
+    $spreadsheet = app(TripExcelExportService::class)->buildSpreadsheet(
+        collect([$trip1->fresh(['vehicle', 'driver', 'orders.customer', 'orders.area', 'orders.pickupLocation', 'orders.deliveryPoints.location', 'orders.tripCheckpoints', 'checkpoints', 'startLocation.area', 'endLocation.area']), $trip2->fresh(['vehicle', 'driver', 'orders.customer', 'orders.area', 'orders.pickupLocation', 'orders.deliveryPoints.location', 'orders.tripCheckpoints', 'checkpoints', 'startLocation.area', 'endLocation.area'])])
+    );
+    $sheet = $spreadsheet->getSheet(0);
+
+    expect($sheet->getCell('Q5')->getValue())->toBe('Tam Bảo')
+        ->and($sheet->getCell('Q6')->getValue())->toBe('Xe thuê');
 });

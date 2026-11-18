@@ -71,8 +71,8 @@ class ListFilterDriverShifts extends Filter
                     ->when(
                         $data['search'] ?? null,
                         fn (Builder $query, $search): Builder => $query->where(function (Builder $q) use ($search) {
-                            $q->whereHas('driver', fn (Builder $dq) => $dq->where('name', 'like', "%{$search}%"))
-                                ->orWhereHas('trips.vehicle', fn (Builder $vq) => $vq->where('plate_number', 'like', "%{$search}%"));
+                            $q->whereHas('driver', fn (Builder $dq) => $dq->whereLike('name', "%{$search}%", caseSensitive: false))
+                                ->orWhereHas('trips.vehicle', fn (Builder $vq) => $vq->whereLike('plate_number', "%{$search}%", caseSensitive: false));
                         })
                     )
                     ->when(

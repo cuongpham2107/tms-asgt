@@ -571,18 +571,22 @@ class BillingStatementExporter
 
     private function address(?Location $location, ?string $fallback): string
     {
-        return (string) ($location?->address ?: $fallback ?: $location?->name);
+        return (string) ($location?->statement_address ?: $location?->address ?: $fallback ?: $location?->name);
     }
 
     /**
-     * "Tên công ty - địa chỉ"; bỏ tên nếu địa chỉ đã chứa tên.
+     * "Tên công ty, địa chỉ"; bỏ tên nếu địa chỉ đã chứa tên.
      */
     private function addressWithName(?Location $location, ?string $fallback): string
     {
         $address = $this->address($location, $fallback);
         $name = trim((string) $location?->name);
 
-        return $name === '' || str_contains(mb_strtolower($address), mb_strtolower($name)) ? $address : "{$name} - {$address}";
+        if ($name === '' || str_contains(mb_strtolower($address), mb_strtolower($name))) {
+            return $address;
+        }
+
+        return $address === '' ? $name : "{$name}, {$address}";
     }
 
     private function percent(float $value): string

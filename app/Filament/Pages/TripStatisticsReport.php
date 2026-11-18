@@ -107,6 +107,16 @@ class TripStatisticsReport extends Page
     #[Url]
     public ?int $areaId = null;
 
+    /** @var array<int, string> */
+    #[Url]
+    public array $journeys = [];
+
+    #[Url]
+    public ?string $sortBy = null;
+
+    #[Url]
+    public string $sortDirection = 'asc';
+
     #[Url]
     public string $vehicleOwner = 'all';
 
@@ -158,12 +168,14 @@ class TripStatisticsReport extends Page
     {
         $this->activeTab = $tab;
         $this->serviceType = $tab;
+        $this->journeys = [];
         $this->page = 1;
     }
 
     public function updatedActiveTab(): void
     {
         $this->serviceType = $this->activeTab;
+        $this->journeys = [];
         $this->page = 1;
     }
 
@@ -190,6 +202,7 @@ class TripStatisticsReport extends Page
     public function updatedServiceType(): void
     {
         $this->activeTab = $this->serviceType;
+        $this->journeys = [];
         $this->page = 1;
     }
 
@@ -201,6 +214,50 @@ class TripStatisticsReport extends Page
 
     public function updatedAreaId(): void
     {
+        $this->journeys = [];
+        $this->page = 1;
+    }
+
+    /**
+     * @param  array<int, string>  $journeys
+     */
+    public function setJourneys(array $journeys): void
+    {
+        $this->journeys = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $value): string => trim((string) $value),
+            $journeys,
+        ))));
+        $this->page = 1;
+    }
+
+    public function updatedJourneys(): void
+    {
+        $this->journeys = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $value): string => trim((string) $value),
+            $this->journeys,
+        ))));
+        $this->page = 1;
+    }
+
+    public function setSort(string $column, string $direction = 'asc'): void
+    {
+        $this->sortBy = $column;
+        $this->sortDirection = $direction === 'desc' ? 'desc' : 'asc';
+        $this->page = 1;
+    }
+
+    public function sortTable(string $column): void
+    {
+        if ($this->sortBy !== $column) {
+            $this->sortBy = $column;
+            $this->sortDirection = 'asc';
+        } elseif ($this->sortDirection === 'asc') {
+            $this->sortDirection = 'desc';
+        } else {
+            $this->sortBy = null;
+            $this->sortDirection = 'asc';
+        }
+
         $this->page = 1;
     }
 
@@ -481,6 +538,9 @@ class TripStatisticsReport extends Page
         $this->datePreset = 'thisMonth';
         $this->customerId = null;
         $this->areaId = null;
+        $this->journeys = [];
+        $this->sortBy = null;
+        $this->sortDirection = 'asc';
         $this->vehicleOwner = 'all';
         $this->search = null;
         $this->chargeStatus = null;
@@ -2458,7 +2518,9 @@ class TripStatisticsReport extends Page
 
     public function exportExcel(): StreamedResponse
     {
-        $baseRows = $this->filterRowsByArea($this->getBaseFilteredRows());
+        $baseRows = $this->sortRows(
+            $this->filterRowsByJourney($this->filterRowsByArea($this->getBaseFilteredRows()))
+        );
         $trips = $this->getFilteredTrips();
         $cargoRows = $baseRows
             ->filter(fn (array $row): bool => in_array($row['service_type'] ?? '', ['HHHK', 'Hàng ngoài'], true))

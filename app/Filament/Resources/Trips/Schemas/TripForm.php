@@ -355,12 +355,13 @@ class TripForm
                                             if (filled($occurredAt)) {
                                                 $set('../../started_at', $occurredAt);
                                             }
-                                        } elseif ($type !== null) {
-                                            $tripStatus = $type->toTripStatus();
-                                            if ($tripStatus !== null) {
-                                                $set('../../status', $tripStatus);
+                                            } elseif ($type !== null) {
+                                                $tripStatus = $type->toTripStatus();
+                                                if ($tripStatus !== null) {
+                                                    $set('../../status', $tripStatus);
+                                                }
                                             }
-                                        }
+                                        self::syncDeliveryPointOnTypeChange($type, $set, $get, 'checkpoints_rent');
                                     })
                                     ->default(fn ($get) => self::getNextCheckpointType($get, 'checkpoints_rent')),
                                 Select::make('order_id')
@@ -378,6 +379,8 @@ class TripForm
                                     })
                                     ->searchable()
                                     ->native(false)
+                                    ->live()
+                                    ->afterStateUpdated(fn ($state, $set, $get) => self::syncDeliveryPointOnOrderChange($state, $set, $get))
                                     ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
                                         $get,
                                         'checkpoints_rent',
@@ -401,42 +404,16 @@ class TripForm
                                         }
                                     })
                                     ->native(true)
-                                    ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
-                                        $get,
-                                        'checkpoints_rent',
-                                        'occurred_at',
-                                        fn () => $get('../../started_at') ?? $record?->started_at?->format('Y-m-d H:i') ?? now()->format('Y-m-d H:i'),
-                                    )),
+                                    ->default(fn ($get, ?Model $record): string => self::defaultCheckpointOccurredAt($get, 'checkpoints_rent', $record)),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')
-                                    ->options(function ($get): array {
-                                        $orderId = $get('order_id');
-                                        if (! $orderId) {
-                                            return [];
-                                        }
-
-                                        $areaId = Order::find($orderId)?->area_id;
-                                        if (! $areaId) {
-                                            return [];
-                                        }
-
-                                        return OrderDeliveryPoint::whereHas('order', fn ($q) => $q->where('area_id', $areaId))
-                                            ->with('location')
-                                            ->get()
-                                            ->mapWithKeys(fn ($dp) => [$dp->id => $dp->location?->code ?? 'DP#'.$dp->id])
-                                            ->toArray();
-                                    })
+                                    ->options(fn ($get): array => self::deliveryPointOptionsForCheckpoint($get))
                                     ->placeholder(fn ($get): string => self::pickupPointLabel($get) ?? 'Chọn điểm')
                                     ->disabled(fn ($get): bool => self::isPickupCheckpoint($get))
                                     ->searchable()
                                     ->native(false)
                                     ->nullable()
-                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
-                                        $get,
-                                        'checkpoints_rent',
-                                        'delivery_point_id',
-                                        null,
-                                    )),
+                                    ->default(fn ($get, ?Model $record): ?int => self::defaultDeliveryPointId($get, 'checkpoints_rent', null, $record)),
                             ])
                             ->addable()
                             ->deletable()
@@ -499,6 +476,7 @@ class TripForm
                                                 $set('../../status', $tripStatus);
                                             }
                                         }
+                                        self::syncDeliveryPointOnTypeChange($type, $set, $get, 'checkpoints');
                                     })
                                     ->default(fn ($get) => self::getNextCheckpointType($get, 'checkpoints')),
                                 Select::make('order_id')
@@ -516,6 +494,8 @@ class TripForm
                                     })
                                     ->searchable()
                                     ->native(false)
+                                    ->live()
+                                    ->afterStateUpdated(fn ($state, $set, $get) => self::syncDeliveryPointOnOrderChange($state, $set, $get))
                                     ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
                                         $get,
                                         'checkpoints',
@@ -580,42 +560,16 @@ class TripForm
                                         }
                                     })
                                     ->native(true)
-                                    ->default(fn ($get, ?Model $record) => self::getPreviousCheckpointValue(
-                                        $get,
-                                        'checkpoints',
-                                        'occurred_at',
-                                        fn () => $get('../../started_at') ?? $record?->started_at?->format('Y-m-d H:i') ?? now()->format('Y-m-d H:i'),
-                                    )),
+                                    ->default(fn ($get, ?Model $record): string => self::defaultCheckpointOccurredAt($get, 'checkpoints', $record)),
                                 Select::make('delivery_point_id')
                                     ->label('Điểm giao')
-                                    ->options(function ($get): array {
-                                        $orderId = $get('order_id');
-                                        if (! $orderId) {
-                                            return [];
-                                        }
-
-                                        $areaId = Order::find($orderId)?->area_id;
-                                        if (! $areaId) {
-                                            return [];
-                                        }
-
-                                        return OrderDeliveryPoint::whereHas('order', fn ($q) => $q->where('area_id', $areaId))
-                                            ->with('location')
-                                            ->get()
-                                            ->mapWithKeys(fn ($dp) => [$dp->id => $dp->location?->code ?? 'DP#'.$dp->id])
-                                            ->toArray();
-                                    })
+                                    ->options(fn ($get): array => self::deliveryPointOptionsForCheckpoint($get))
                                     ->placeholder(fn ($get): string => self::pickupPointLabel($get) ?? 'Chọn điểm')
                                     ->disabled(fn ($get): bool => self::isPickupCheckpoint($get))
                                     ->searchable()
                                     ->native(false)
                                     ->nullable()
-                                    ->default(fn ($get) => self::getPreviousCheckpointValue(
-                                        $get,
-                                        'checkpoints',
-                                        'delivery_point_id',
-                                        null,
-                                    )),
+                                    ->default(fn ($get, ?Model $record): ?int => self::defaultDeliveryPointId($get, 'checkpoints', null, $record)),
                             ])
                             ->addable()
                             ->deletable()
@@ -770,6 +724,46 @@ class TripForm
     }
 
     /**
+     * Gợi ý thời gian cho mốc hành trình mới: tăng +1 phút so với mốc liền trước (nếu đã có mốc),
+     * hoặc lấy thời gian bắt đầu chuyến / hiện tại cho mốc đầu tiên.
+     */
+    private static function defaultCheckpointOccurredAt(callable $get, string $repeaterName, ?Model $record): string
+    {
+        $tz = config('app.timezone');
+        $parseFormatted = static function (mixed $raw) use ($tz): Carbon {
+            if ($raw instanceof DateTimeInterface) {
+                return Carbon::instance($raw)->setTimezone($tz);
+            }
+
+            return Carbon::parse((string) $raw, $tz)->setTimezone($tz);
+        };
+
+        $checkpoints = $get("../../{$repeaterName}");
+        if (is_array($checkpoints) && ! empty($checkpoints)) {
+            $prev = collect($checkpoints)->reverse()->first(fn ($item): bool => is_array($item) && filled($item['occurred_at'] ?? null));
+            if ($prev && filled($prev['occurred_at'] ?? null)) {
+                try {
+                    return $parseFormatted($prev['occurred_at'])->copy()->addMinute()->format('Y-m-d H:i');
+                } catch (\Throwable) {
+                    // Fallback to trip start time or now() when intermediate value is invalid.
+                }
+            }
+        }
+
+        $fallback = collect([
+            $get('../../started_at'),
+            $record instanceof Trip ? $record->started_at : null,
+            now(),
+        ])->first(fn ($value): bool => filled($value));
+
+        try {
+            return $parseFormatted($fallback)->format('Y-m-d H:i');
+        } catch (\Throwable) {
+            return now()->format('Y-m-d H:i');
+        }
+    }
+
+    /**
      * Xác định loại mốc hành trình tiếp theo dựa trên lịch sử các mốc trước đó.
      * Nếu mốc gần nhất là đảo lái (driver_swap) hoặc huỷ chuyến (cancelled),
      * bỏ qua và lấy trạng thái tiếp theo của mốc hợp lệ trước đó.
@@ -805,7 +799,213 @@ class TripForm
             ? $raw
             : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
 
+        if ($type === CheckpointType::Completed && filled($lastCheckpoint['order_id'] ?? null)) {
+            $orderId = (int) $lastCheckpoint['order_id'];
+            $completedIds = self::completedDeliveryPointIdsForOrder($get, $repeaterName, $orderId);
+            if (self::resolveOrderDeliveryPointId($orderId, $completedIds) !== null) {
+                return CheckpointType::ArrivedDelivery;
+            }
+        }
+
         return $type?->getNextType();
+    }
+
+    /**
+     * Danh sách điểm giao hiển thị trong dropdown cột Điểm: gồm điểm giao của chính đơn và các điểm cùng khu vực,
+     * gộp trùng theo địa điểm để mỗi mã kho chỉ hiện 1 lần (ưu tiên giá trị đang chọn rồi đến điểm của đơn hiện tại).
+     *
+     * @return array<int, string>
+     */
+    private static function deliveryPointOptionsForCheckpoint(callable $get): array
+    {
+        $orderId = $get('order_id');
+        $currentId = $get('delivery_point_id');
+
+        if (! $orderId && ! $currentId) {
+            return [];
+        }
+
+        $areaId = $orderId ? Order::find($orderId)?->area_id : null;
+
+        $points = OrderDeliveryPoint::query()
+            ->where(function ($query) use ($orderId, $areaId, $currentId): void {
+                if ($currentId) {
+                    $query->whereKey($currentId);
+                }
+                if ($orderId) {
+                    $query->orWhere('order_id', $orderId);
+                }
+                if ($areaId) {
+                    $query->orWhereHas('order', fn ($sub) => $sub->where('area_id', $areaId));
+                }
+            })
+            ->with('location')
+            ->get()
+            ->sortBy(function (OrderDeliveryPoint $dp) use ($currentId, $orderId): array {
+                $priority = match (true) {
+                    $currentId && (int) $dp->id === (int) $currentId => 0,
+                    $orderId && (int) $dp->order_id === (int) $orderId => 1,
+                    default => 2,
+                };
+
+                return [$priority, (int) ($dp->sequence ?? 0), (int) $dp->id];
+            });
+
+        $options = [];
+        $seen = [];
+
+        foreach ($points as $dp) {
+            $dedupKey = $dp->location_id !== null
+                ? 'loc:'.$dp->location_id
+                : (filled($dp->address) ? 'addr:'.mb_strtolower(trim((string) $dp->address)) : 'dp:'.$dp->id);
+
+            if (isset($seen[$dedupKey])) {
+                continue;
+            }
+
+            $seen[$dedupKey] = true;
+            $options[$dp->id] = $dp->location?->code ?? 'DP#'.$dp->id;
+        }
+
+        natcasesort($options);
+
+        return $options;
+    }
+
+    /**
+     * Tự động gợi ý điểm giao cho mốc mới:
+     * - Bỏ qua các mốc đầu / lấy hàng (`started`, `arrived_pickup`, `left_pickup`)
+     * - Với đơn có nhiều điểm giao: sau khi hoàn thành điểm trước sẽ tự gợi ý điểm giao chưa hoàn thành tiếp theo
+     * - Mốc kết thúc (`end`) lấy lại điểm giao cuối cùng.
+     */
+    private static function defaultDeliveryPointId(
+        callable $get,
+        string $repeaterName,
+        ?CheckpointType $explicitType = null,
+        ?Model $record = null,
+    ): ?int {
+        $raw = $get('checkpoint_type');
+        $type = $explicitType
+            ?? ($raw instanceof CheckpointType ? $raw : (is_string($raw) ? CheckpointType::tryFrom($raw) : null))
+            ?? self::getNextCheckpointType($get, $repeaterName);
+
+        if (in_array($type, [CheckpointType::Started, CheckpointType::ArrivedPickup, CheckpointType::LeftPickup], true)) {
+            return null;
+        }
+
+        $tripId = $get('../../id')
+            ?? ($record instanceof TripCheckpoint ? $record->trip_id : ($record instanceof Trip ? $record->id : null));
+
+        $orderId = $get('order_id') ?? self::getPreviousCheckpointValue(
+            $get,
+            $repeaterName,
+            'order_id',
+            fn () => $tripId ? Order::where('trip_id', $tripId)->value('id') : null,
+        );
+
+        $completedIds = $orderId
+            ? self::completedDeliveryPointIdsForOrder($get, $repeaterName, (int) $orderId)
+            : [];
+
+        $prevId = self::getPreviousCheckpointValue($get, $repeaterName, 'delivery_point_id', null);
+        if (filled($prevId)) {
+            $prevInt = (int) $prevId;
+            if ($type === CheckpointType::End || ! in_array($prevInt, $completedIds, true)) {
+                return $prevInt;
+            }
+        }
+
+        if (! in_array($type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed, CheckpointType::End], true)) {
+            return null;
+        }
+
+        $nextId = self::resolveOrderDeliveryPointId($orderId ? (int) $orderId : null, $completedIds);
+        if ($nextId !== null) {
+            return $nextId;
+        }
+
+        return filled($prevId) ? (int) $prevId : null;
+    }
+
+    private static function syncDeliveryPointOnTypeChange(?CheckpointType $type, callable $set, callable $get, string $repeaterName): void
+    {
+        if (in_array($type, [CheckpointType::Started, CheckpointType::ArrivedPickup, CheckpointType::LeftPickup], true)) {
+            $set('delivery_point_id', null);
+
+            return;
+        }
+
+        if (filled($get('delivery_point_id'))) {
+            return;
+        }
+
+        $suggested = self::defaultDeliveryPointId($get, $repeaterName, $type);
+        if ($suggested !== null) {
+            $set('delivery_point_id', $suggested);
+        }
+    }
+
+    private static function syncDeliveryPointOnOrderChange(mixed $orderId, callable $set, callable $get): void
+    {
+        $raw = $get('checkpoint_type');
+        $type = $raw instanceof CheckpointType ? $raw : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
+
+        if (! in_array($type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed, CheckpointType::End], true)) {
+            return;
+        }
+
+        $set('delivery_point_id', $orderId ? self::resolveOrderDeliveryPointId((int) $orderId) : null);
+    }
+
+    /**
+     * @param  list<int>  $excludeIds
+     */
+    private static function resolveOrderDeliveryPointId(?int $orderId, array $excludeIds = []): ?int
+    {
+        if (! $orderId) {
+            return null;
+        }
+
+        $dpId = OrderDeliveryPoint::where('order_id', $orderId)
+            ->when($excludeIds !== [], fn ($q) => $q->whereNotIn('id', $excludeIds))
+            ->orderBy('sequence')
+            ->value('id');
+
+        return $dpId ? (int) $dpId : null;
+    }
+
+    /**
+     * Danh sách delivery_point_id của đơn hàng đã có mốc `completed` ở các dòng phía trên.
+     *
+     * @return list<int>
+     */
+    private static function completedDeliveryPointIdsForOrder(callable $get, string $repeaterName, int $orderId): array
+    {
+        $checkpoints = $get("../../{$repeaterName}");
+        if (! is_array($checkpoints) || empty($checkpoints)) {
+            return [];
+        }
+
+        $completedIds = [];
+        foreach ($checkpoints as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            if ((int) ($item['order_id'] ?? 0) !== $orderId) {
+                continue;
+            }
+            if (blank($item['delivery_point_id'] ?? null)) {
+                continue;
+            }
+
+            $raw = $item['checkpoint_type'] ?? null;
+            $type = $raw instanceof CheckpointType ? $raw : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
+            if ($type === CheckpointType::Completed) {
+                $completedIds[] = (int) $item['delivery_point_id'];
+            }
+        }
+
+        return array_values(array_unique($completedIds));
     }
 
     /**

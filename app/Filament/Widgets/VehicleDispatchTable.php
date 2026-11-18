@@ -28,19 +28,19 @@ class VehicleDispatchTable extends Widget
     /** @var array<int, string> */
     private const COLUMNS = [
         'Địa điểm', 'HT', 'BSX', 'Phân loại', 'Loại đơn', 'Trạng thái', 'Điểm đi', 'Điểm đến',
-        'Xe chờ', 'Vị trí thực tế trên GPS', 'Tốc độ', 'Status', 'Chuyến', 'Đơn chờ', 'KM over',
+        'Xe chờ', 'Khách hàng', 'Vị trí thực tế trên GPS', 'Tốc độ', 'Status', 'Chuyến', 'Đơn chờ', 'KM over',
         'Tên lái xe', 'Trực', 'Ca',
     ];
 
     /**
      * Cột hiển thị cho sheet Xe thuê ngoài: bỏ các cột GPS (Vị trí thực tế trên GPS, Tốc độ, Status),
-     * KM over, Trực, Ca; giữ nguyên 12 cột còn lại.
+     * KM over, Trực, Ca; bổ sung Thời gian dự kiến đóng trước Xe chờ / Khách hàng (14 cột).
      *
      * @var array<int, string>
      */
     private const RENT_COLUMNS = [
         'Địa điểm', 'HT', 'BSX', 'Phân loại', 'Loại đơn', 'Trạng thái', 'Điểm đi', 'Điểm đến',
-        'Xe chờ', 'Chuyến', 'Đơn chờ', 'Tên lái xe',
+        'Thời gian dự kiến đóng', 'Xe chờ', 'Khách hàng', 'Chuyến', 'Đơn chờ', 'Tên lái xe',
     ];
 
     protected ?string $heading = 'Bảng kiểm soát tình trạng xe';
@@ -136,17 +136,24 @@ class VehicleDispatchTable extends Widget
         return [
             'id' => $vehicle->id,
             'bsx' => VehicleDispatchBoard::renderBsx($vehicle),
+            'plateNumber' => (string) $vehicle->plate_number,
             'ownerCategory' => VehicleDispatchBoard::getOwnerCategory($vehicle),
             'orderType' => $orderType?->getLabel(),
             'orderTypeColor' => $orderType?->getColor(),
+            'orderTypePriority' => VehicleDispatchBoard::getOrderTypeSortPriority($vehicle),
             'statusLabel' => VehicleDispatchBoard::getTripStatusLabel($vehicle),
+            'statusPriority' => VehicleDispatchBoard::getTripStatusSortPriority($vehicle),
             'statusClass' => VehicleDispatchBoard::getTripStatusBadgeClass($vehicle),
             'statusAction' => $statusAction,
             'pickup' => VehicleDispatchBoard::getPickupPoint($vehicle),
             'pickupTitle' => VehicleDispatchBoard::getPickupPointFullName($vehicle),
             'destination' => VehicleDispatchBoard::getDeliveryPoint($vehicle),
             'destinationTitle' => VehicleDispatchBoard::getDeliveryPointFullName($vehicle),
+            'plannedLoadingAt' => VehicleDispatchBoard::getPlannedLoadingAt($vehicle),
+            'plannedLoadingAtTitle' => VehicleDispatchBoard::getPlannedLoadingAtTitle($vehicle),
+            'plannedLoadingTs' => VehicleDispatchBoard::getPlannedLoadingTimestamp($vehicle),
             'xeCho' => $xeCho['text'],
+            'xeChoMinutes' => $xeCho['text'] === '—' ? null : (int) $xeCho['minutes'],
             'xeChoTone' => match (true) {
                 $xeCho['isAlert'] => 'danger',
                 $xeCho['isWarning'] => 'warning',
@@ -155,8 +162,11 @@ class VehicleDispatchTable extends Widget
                 default => 'normal',
             },
             'xeChoTooltip' => $xeCho['tooltip'],
+            'customer' => VehicleDispatchBoard::getCustomerLabel($vehicle),
+            'customerTitle' => VehicleDispatchBoard::getCustomerFullName($vehicle),
             'gps' => VehicleDispatchBoard::getGpsLocation($vehicle),
             'speed' => VehicleDispatchBoard::getSpeed($vehicle),
+            'speedValue' => $vehicle->gps_speed !== null ? (float) $vehicle->gps_speed : null,
             'speedClass' => VehicleDispatchBoard::getSpeedAlertClass($vehicle),
             'movement' => VehicleDispatchBoard::getMovementStatusText($vehicle),
             'movementClass' => VehicleDispatchBoard::getMovementStatusCellClass($vehicle),
@@ -165,6 +175,7 @@ class VehicleDispatchTable extends Widget
             'tripId' => $activeTrip?->id,
             'waitingOrders' => VehicleDispatchBoard::getWaitingOrdersCount($vehicle),
             'kmOver' => $kmOver['text'],
+            'kmOverValue' => $kmOver['delta'],
             'kmOverClass' => $kmOver['cellClass'],
             'kmOverTooltip' => $kmOver['tooltip'],
             'kmOverFill' => $kmOver['fillPercent'],

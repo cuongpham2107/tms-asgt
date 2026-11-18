@@ -9,12 +9,17 @@ use App\Enums\OrderType;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
 use App\Models\Area;
+use App\Models\DriverSwap;
 use App\Models\FeeType;
 use App\Models\FreightRate;
 use App\Models\Order;
 use App\Models\OrderCharge;
 use App\Models\Trip;
+use App\Models\TripCheckpoint;
+use App\Models\User;
+use App\Models\Vehicle;
 use App\Services\Billing\OrderChargeCalculator;
+use App\Services\TripKmSplitService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -110,6 +115,18 @@ class TripExcelExportService
      */
     public function buildSpreadsheetFromRows(Collection $rows, ?Collection $trips = null, ?Collection $externalRows = null): Spreadsheet
     {
+        if ($trips !== null && $rows->contains(fn (array $row): bool => ! array_key_exists('driver_km_splits', $row))) {
+            $splitsByTripId = $this->resolveTripDriverSplitsByTripId($trips);
+            $rows = $rows->map(function (array $row) use ($splitsByTripId): array {
+                if (! array_key_exists('driver_km_splits', $row)) {
+                    $tripId = $row['trip_id'] ?? null;
+                    $row['driver_km_splits'] = $tripId !== null ? ($splitsByTripId[$tripId] ?? []) : [];
+                }
+
+                return $row;
+            });
+        }
+
         $spreadsheet = new Spreadsheet;
 
         // Sheet 1: Bảng tổng hợp chuyến phục vụ
@@ -153,8 +170,8 @@ class TripExcelExportService
                 'deliveryPoints.location',
                 'trip.vehicle',
                 'trip.driver',
-                'trip.checkpoints',
-                'tripCheckpoints',
+                'trip.checkpoints.deliveryPoint.location',
+                'tripCheckpoints.deliveryPoint.location',
             ])->get();
         }
 
@@ -212,8 +229,8 @@ class TripExcelExportService
                     'orders.area',
                     'orders.pickupLocation',
                     'orders.deliveryPoints.location',
-                    'orders.tripCheckpoints',
-                    'checkpoints',
+                    'orders.tripCheckpoints.deliveryPoint.location',
+                    'checkpoints.deliveryPoint.location',
                     'startLocation.area',
                     'endLocation.area',
                 ])
@@ -252,12 +269,19 @@ class TripExcelExportService
      */
     public function buildTripSummarySheetFromRows(Worksheet $sheet, Collection $rows): void
     {
+        $maxSwapDrivers = max(
+            1,
+            (int) $rows->map(fn (array $row): int => max(0, count($row['driver_km_splits'] ?? []) - 1))->max(),
+        );
+        $lastColIndex = 28 + ($maxSwapDrivers * 3);
+        $lastCol = Coordinate::stringFromColumnIndex($lastColIndex);
+
         // 1. Tiêu đề lớn
-        $sheet->mergeCells('A1:AA2');
+        $sheet->mergeCells("A1:{$lastCol}2");
         $sheet->setCellValue('A1', 'BẢNG THỐNG KÊ TỔNG HỢP CÁC CHUYẾN ĐÃ PHỤC VỤ');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14)->setColor(new Color('1E3A8A'));
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('A1:AA2')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('DBEAFE');
+        $sheet->getStyle("A1:{$lastCol}2")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('DBEAFE');
 
         // 2. Dòng Headers (Dòng 4)
         $headers = [
@@ -288,7 +312,19 @@ class TripExcelExportService
             'Y4' => 'GW',
             'Z4' => 'Loại hàng',
             'AA4' => 'Trọng tải tính cước',
+            'AB4' => 'Khu vực',
         ];
+
+        for ($slot = 1; $slot <= $maxSwapDrivers; $slot++) {
+            $baseColIdx = 29 + (($slot - 1) * 3);
+            $nameCol = Coordinate::stringFromColumnIndex($baseColIdx);
+            $loadedCol = Coordinate::stringFromColumnIndex($baseColIdx + 1);
+            $emptyCol = Coordinate::stringFromColumnIndex($baseColIdx + 2);
+
+            $headers["{$nameCol}4"] = $slot === 1 ? 'Họ tên lái xe đảo lái' : "Họ tên lái xe đảo lái {$slot}";
+            $headers["{$loadedCol}4"] = 'Km có hàng';
+            $headers["{$emptyCol}4"] = 'Km không hàng';
+        }
 
         foreach ($headers as $cell => $title) {
             $sheet->setCellValue($cell, $title);
@@ -309,19 +345,19 @@ class TripExcelExportService
                 'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => '93C5FD']],
             ],
         ];
-        $sheet->getStyle('A4:AA4')->applyFromArray($headerStyle);
+        $sheet->getStyle("A4:{$lastCol}4")->applyFromArray($headerStyle);
         $sheet->getRowDimension(4)->setRowHeight(35);
 
         // 3. Đổ dữ liệu từ các dòng đã lọc
         $row = 5;
         foreach ($rows as $rowData) {
-            $this->writeTripSummaryRowFromData($sheet, $row, $rowData);
+            $this->writeTripSummaryRowFromData($sheet, $row, $rowData, $maxSwapDrivers);
             $row++;
         }
 
         // Định dạng viền và căn chỉnh toàn bộ bảng
         $lastRow = max(5, $row - 1);
-        $dataRange = "A5:AA{$lastRow}";
+        $dataRange = "A5:{$lastCol}{$lastRow}";
         $sheet->getStyle($dataRange)->applyFromArray([
             'borders' => [
                 'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'E2E8F0']],
@@ -331,10 +367,9 @@ class TripExcelExportService
         ]);
 
         // Auto width các cột
-        foreach (range('A', 'Z') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+        for ($colIdx = 1; $colIdx <= $lastColIndex; $colIdx++) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($colIdx))->setAutoSize(true);
         }
-        $sheet->getColumnDimension('AA')->setAutoSize(true);
     }
 
     /**
@@ -352,19 +387,21 @@ class TripExcelExportService
                     'orders.area',
                     'orders.pickupLocation',
                     'orders.deliveryPoints.location',
-                    'orders.tripCheckpoints',
-                    'checkpoints',
+                    'orders.tripCheckpoints.deliveryPoint.location',
+                    'checkpoints.deliveryPoint.location',
                     'startLocation.area',
                     'endLocation.area',
                 ])
                 ->get();
         }
 
+        $driverSplitsByTripId = $this->resolveTripDriverSplitsByTripId($trips);
         $rows = collect();
 
         foreach ($trips as $trip) {
             $vehicle = $trip->vehicle;
             $driverName = $trip->resolveDriverName() ?? '';
+            $driverSplits = $trip->id !== null ? ($driverSplitsByTripId[$trip->id] ?? []) : [];
             $orders = $trip->orders;
 
             // Nếu chuyến rỗng không có đơn hàng (Empty Run)
@@ -395,7 +432,7 @@ class TripExcelExportService
                     timeD: $tD,
                     customer: '',
                     warehouse: $endLoc,
-                    vehicleOwner: $vehicle?->type?->value ?? '',
+                    vehicleOwner: $this->resolveVehicleOwnerValue($vehicle),
                     vehicleType: $vehicle?->vehicle_type?->value ?? '',
                     note: $trip->note ?? '',
                     isReturnTrip: true,
@@ -405,7 +442,8 @@ class TripExcelExportService
                     pcs: 0,
                     gw: 0,
                     cargoType: '',
-                    chargeableWeight: 0
+                    chargeableWeight: 0,
+                    driverKmSplits: $driverSplits
                 ));
 
                 continue;
@@ -436,10 +474,17 @@ class TripExcelExportService
                     ?? $trip->completed_at;
 
                 // Hành trình viết tắt
-                $journey = $this->buildJourneyString($order);
+                $journey = $this->buildJourneyString($order, $trip);
 
                 // Kho đóng trả hàng
+                $checkpointDeliveryLocation = $checkpoints
+                    ->first(fn ($cp): bool => $cp->deliveryPoint !== null
+                        && in_array($cp->checkpoint_type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed, CheckpointType::End], true))
+                    ?->deliveryPoint?->location?->code;
+
                 $warehouse = $order->deliveryPoints->first()?->location?->code
+                    ?? $checkpointDeliveryLocation
+                    ?? $trip->endLocation?->code
                     ?? $order->pickupLocation?->code
                     ?? '';
 
@@ -459,7 +504,7 @@ class TripExcelExportService
                     timeD: $tD,
                     customer: $order->customer?->code ?? $order->customer?->name ?? '',
                     warehouse: $warehouse,
-                    vehicleOwner: $vehicle?->type?->value ?? '',
+                    vehicleOwner: $this->resolveVehicleOwnerValue($vehicle),
                     vehicleType: $vehicle?->vehicle_type?->value ?? '',
                     note: $order->notes ?? $trip->note ?? '',
                     isReturnTrip: (bool) $order->is_return_trip,
@@ -469,7 +514,8 @@ class TripExcelExportService
                     pcs: (int) ($order->total_packages ?? 0),
                     gw: (float) ($order->total_weight ?? 0),
                     cargoType: $order->cargo_type?->value ?? ($order->cargo_type instanceof CargoType ? $order->cargo_type->getLabel() : ''),
-                    chargeableWeight: (float) ($order->chargeable_weight ?? 0)
+                    chargeableWeight: (float) ($order->chargeable_weight ?? 0),
+                    driverKmSplits: $driverSplits
                 ));
             }
         }
@@ -637,8 +683,8 @@ class TripExcelExportService
                 'deliveryPoints.location',
                 'trip.vehicle',
                 'trip.driver',
-                'trip.checkpoints',
-                'tripCheckpoints',
+                'trip.checkpoints.deliveryPoint.location',
+                'tripCheckpoints.deliveryPoint.location',
             ])->get();
         }
 
@@ -674,7 +720,8 @@ class TripExcelExportService
         int $pcs,
         float $gw,
         string $cargoType,
-        float $chargeableWeight
+        float $chargeableWeight,
+        array $driverKmSplits = []
     ): array {
         $ownerLabel = match ($vehicleOwner) {
             'company', VehicleOwnerType::Company->value => 'Xe công ty',
@@ -712,6 +759,7 @@ class TripExcelExportService
             'note' => $note,
             'is_return_trip' => $isReturnTrip,
             'driver_name' => $driverName,
+            'driver_km_splits' => $driverKmSplits,
             'km_loaded' => $kmLoaded,
             'km_empty' => $kmEmpty,
             'pcs' => $pcs,
@@ -719,6 +767,21 @@ class TripExcelExportService
             'cargo_type' => $cargoType,
             'chargeable_weight' => $chargeableWeight,
         ];
+    }
+
+    private function resolveVehicleOwnerValue(?Vehicle $vehicle): string
+    {
+        if (! $vehicle) {
+            return '';
+        }
+
+        if ($vehicle->type === VehicleOwnerType::Rent) {
+            $owner = trim((string) ($vehicle->owner ?? ''));
+
+            return $owner !== '' ? $owner : VehicleOwnerType::Rent->value;
+        }
+
+        return $vehicle->type?->value ?? '';
     }
 
     private function resolveAreaLabel(?Area $area): string
@@ -735,9 +798,100 @@ class TripExcelExportService
     }
 
     /**
+     * Tách km có hàng / không hàng theo từng tài xế cho các chuyến có đảo lái.
+     * Trả về rỗng nếu chuyến không có đảo lái hoặc chỉ có 1 tài xế thực tế (self-swap).
+     *
+     * @param  Collection<int, Trip>  $trips
+     * @return array<int, list<array{driver_name: string, km_loaded: float, km_empty: float}>>
+     */
+    private function resolveTripDriverSplitsByTripId(Collection $trips): array
+    {
+        $tripIds = $trips->pluck('id')->filter()->unique()->values()->all();
+        if ($tripIds === []) {
+            return [];
+        }
+
+        $swapTripIds = DriverSwap::whereIn('trip_id', $tripIds)
+            ->distinct()
+            ->pluck('trip_id')
+            ->merge(
+                TripCheckpoint::whereIn('trip_id', $tripIds)
+                    ->where('checkpoint_type', CheckpointType::DriverSwap)
+                    ->distinct()
+                    ->pluck('trip_id')
+            )
+            ->unique()
+            ->flip();
+
+        if ($swapTripIds->isEmpty()) {
+            return [];
+        }
+
+        /** @var array<int, list<int>> $orderedDriversByTrip */
+        $orderedDriversByTrip = [];
+        $allDriverIds = [];
+
+        foreach ($trips as $trip) {
+            if ($trip->id === null || ! $swapTripIds->has($trip->id)) {
+                continue;
+            }
+
+            $segments = TripKmSplitService::segments($trip);
+            if ($segments === []) {
+                continue;
+            }
+
+            $driverIds = [];
+            foreach ($segments as [, , , $driverId]) {
+                if ($driverId !== null && ! in_array((int) $driverId, $driverIds, true)) {
+                    $driverIds[] = (int) $driverId;
+                }
+            }
+
+            if (count($driverIds) < 2) {
+                continue;
+            }
+
+            $orderedDriversByTrip[$trip->id] = $driverIds;
+            foreach ($driverIds as $driverId) {
+                $allDriverIds[$driverId] = true;
+            }
+        }
+
+        if ($orderedDriversByTrip === []) {
+            return [];
+        }
+
+        $driverNames = User::whereIn('id', array_keys($allDriverIds))->pluck('name', 'id');
+        $tripsById = $trips->whereNotNull('id')->keyBy('id');
+        $result = [];
+
+        foreach ($orderedDriversByTrip as $tripId => $driverIds) {
+            $trip = $tripsById->get($tripId);
+            if (! $trip) {
+                continue;
+            }
+
+            $splits = [];
+            foreach ($driverIds as $driverId) {
+                $km = TripKmSplitService::driverKm($trip, $driverId);
+                $splits[] = [
+                    'driver_name' => trim((string) ($driverNames->get($driverId) ?? '')),
+                    'km_loaded' => round((float) $km['total_km_loaded'], 1),
+                    'km_empty' => round((float) $km['total_km_empty'], 1),
+                ];
+            }
+
+            $result[$tripId] = $splits;
+        }
+
+        return $result;
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      */
-    public function writeTripSummaryRowFromData(Worksheet $sheet, int $row, array $data): void
+    public function writeTripSummaryRowFromData(Worksheet $sheet, int $row, array $data, int $maxSwapDrivers = 1): void
     {
         $date = $data['date'] instanceof Carbon ? $data['date'] : ($data['date'] ? Carbon::parse($data['date']) : null);
         $timeA = $data['time_a'] instanceof Carbon ? $data['time_a'] : ($data['time_a'] ? Carbon::parse($data['time_a']) : null);
@@ -774,13 +928,44 @@ class TripExcelExportService
         $sheet->setCellValue("R{$row}", $data['vehicle_type'] ?? '');
         $sheet->setCellValue("S{$row}", $data['note'] ?? '');
         $sheet->setCellValue("T{$row}", ($data['is_return_trip'] ?? false) ? 'Hàng quay đầu' : '');
-        $sheet->setCellValue("U{$row}", $data['driver_name'] ?? '');
-        $sheet->setCellValue("V{$row}", ($data['km_loaded'] ?? 0) > 0 ? $data['km_loaded'] : '');
-        $sheet->setCellValue("W{$row}", ($data['km_empty'] ?? 0) > 0 ? $data['km_empty'] : '');
+
+        $splits = is_array($data['driver_km_splits'] ?? null) ? $data['driver_km_splits'] : [];
+        if (count($splits) >= 2) {
+            $primarySplit = $splits[0];
+            $primaryDriverName = ($primarySplit['driver_name'] ?? '') !== ''
+                ? $primarySplit['driver_name']
+                : ($data['driver_name'] ?? '');
+            $primaryKmLoaded = (float) ($primarySplit['km_loaded'] ?? 0);
+            $primaryKmEmpty = (float) ($primarySplit['km_empty'] ?? 0);
+            $extraSplits = array_slice($splits, 1);
+        } else {
+            $primaryDriverName = $data['driver_name'] ?? '';
+            $primaryKmLoaded = (float) ($data['km_loaded'] ?? 0);
+            $primaryKmEmpty = (float) ($data['km_empty'] ?? 0);
+            $extraSplits = [];
+        }
+
+        $sheet->setCellValue("U{$row}", $primaryDriverName);
+        $sheet->setCellValue("V{$row}", $primaryKmLoaded > 0 ? $primaryKmLoaded : '');
+        $sheet->setCellValue("W{$row}", $primaryKmEmpty > 0 ? $primaryKmEmpty : '');
         $sheet->setCellValue("X{$row}", ($data['pcs'] ?? 0) > 0 ? $data['pcs'] : '');
         $sheet->setCellValue("Y{$row}", ($data['gw'] ?? 0) > 0 ? $data['gw'] : '');
         $sheet->setCellValue("Z{$row}", $data['cargo_type'] ?? '');
         $sheet->setCellValue("AA{$row}", ($data['chargeable_weight'] ?? 0) > 0 ? $data['chargeable_weight'] : '');
+        $sheet->setCellValue("AB{$row}", $data['area'] ?? '');
+
+        for ($slot = 0; $slot < $maxSwapDrivers; $slot++) {
+            $baseColIdx = 29 + ($slot * 3);
+            $nameCol = Coordinate::stringFromColumnIndex($baseColIdx);
+            $loadedCol = Coordinate::stringFromColumnIndex($baseColIdx + 1);
+            $emptyCol = Coordinate::stringFromColumnIndex($baseColIdx + 2);
+            $swapSplit = $extraSplits[$slot] ?? null;
+
+            $sheet->setCellValue("{$nameCol}{$row}", $swapSplit['driver_name'] ?? '');
+            $sheet->setCellValue("{$loadedCol}{$row}", ($swapSplit && ($swapSplit['km_loaded'] ?? 0) > 0) ? $swapSplit['km_loaded'] : '');
+            $sheet->setCellValue("{$emptyCol}{$row}", ($swapSplit && ($swapSplit['km_empty'] ?? 0) > 0) ? $swapSplit['km_empty'] : '');
+            $sheet->getStyle("{$loadedCol}{$row}:{$emptyCol}{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        }
 
         // Căn giữa các cột mã, ngày, BSX, thời gian
         $sheet->getStyle("A{$row}:D{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
@@ -788,6 +973,7 @@ class TripExcelExportService
         $sheet->getStyle("Q{$row}:R{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("T{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle("V{$row}:AA{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->getStyle("AB{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
     }
 
     /**
@@ -1337,13 +1523,24 @@ class TripExcelExportService
         return $currentRow;
     }
 
-    public function buildJourneyString(Order $order): string
+    public function buildJourneyString(Order $order, ?Trip $trip = null): string
     {
-        $order->loadMissing(['pickupLocation', 'deliveryPoints.location']);
+        $order->loadMissing([
+            'pickupLocation',
+            'deliveryPoints.location',
+            'tripCheckpoints.deliveryPoint.location',
+            'trip.startLocation',
+            'trip.endLocation',
+            'trip.checkpoints.deliveryPoint.location',
+        ]);
+        $effectiveTrip = $trip ?? $order->trip;
 
         $pickupCode = $order->pickupLocation?->code;
         if (! $pickupCode && $order->pickup_address) {
             $pickupCode = $this->extractLocationShortName($order->pickup_address);
+        }
+        if (! $pickupCode) {
+            $pickupCode = $effectiveTrip?->startLocation?->code;
         }
 
         $points = collect();
@@ -1352,11 +1549,35 @@ class TripExcelExportService
         }
 
         $deliveryPoints = $order->deliveryPoints->sortBy('sequence');
+        $hasDeliveryPointCode = false;
         foreach ($deliveryPoints as $dp) {
             $code = $dp->location?->code ?: $this->extractLocationShortName($dp->address ?? '');
             if ($code) {
                 $points->push($code);
+                $hasDeliveryPointCode = true;
             }
+        }
+
+        if (! $hasDeliveryPointCode) {
+            $checkpoints = $order->tripCheckpoints->isNotEmpty()
+                ? $order->tripCheckpoints
+                : ($effectiveTrip?->checkpoints ?? collect());
+
+            $checkpointCodes = $checkpoints
+                ->filter(fn ($cp): bool => $cp->deliveryPoint !== null
+                    && in_array($cp->checkpoint_type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed, CheckpointType::End], true))
+                ->map(fn ($cp): string => trim((string) ($cp->deliveryPoint?->location?->code ?: $this->extractLocationShortName($cp->deliveryPoint?->address ?? ''))))
+                ->filter()
+                ->unique();
+
+            foreach ($checkpointCodes as $code) {
+                $points->push($code);
+                $hasDeliveryPointCode = true;
+            }
+        }
+
+        if (! $hasDeliveryPointCode && $effectiveTrip?->endLocation?->code) {
+            $points->push($effectiveTrip->endLocation->code);
         }
 
         if ($points->isNotEmpty()) {
