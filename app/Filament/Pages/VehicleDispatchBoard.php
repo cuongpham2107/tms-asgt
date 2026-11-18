@@ -501,23 +501,37 @@ class VehicleDispatchBoard extends Page implements HasTable
 
         $trips = $vehicle->trips ?? $this->getTodayTripsForVehicle($vehicle);
 
-        return $trips->sort(function (Trip $a, Trip $b) {
-            $pA = self::getTripPriority($a);
-            $pB = self::getTripPriority($b);
+        return self::sortTripsForShift($trips);
+    }
 
-            if ($pA !== $pB) {
-                return $pA <=> $pB;
-            }
+    /**
+     * Sắp xếp danh sách chuyến trong ca theo mức độ ưu tiên trạng thái và thời gian.
+     *
+     * @param  Collection<int, Trip>  $trips
+     * @return Collection<int, Trip>
+     */
+    public static function sortTripsForShift(Collection $trips): Collection
+    {
+        return $trips
+            ->reject(fn (Trip $trip): bool => $trip->status === TripStatus::Cancelled)
+            ->sort(function (Trip $a, Trip $b) {
+                $pA = self::getTripPriority($a);
+                $pB = self::getTripPriority($b);
 
-            $timeA = $a->started_at ?? $a->created_at;
-            $timeB = $b->started_at ?? $b->created_at;
+                if ($pA !== $pB) {
+                    return $pA <=> $pB;
+                }
 
-            if ($timeA && $timeB && ! $timeA->equalTo($timeB)) {
-                return $timeA->lessThan($timeB) ? -1 : 1;
-            }
+                $timeA = $a->started_at ?? $a->created_at;
+                $timeB = $b->started_at ?? $b->created_at;
 
-            return $a->id <=> $b->id;
-        })->values();
+                if ($timeA && $timeB && ! $timeA->equalTo($timeB)) {
+                    return $timeA->lessThan($timeB) ? -1 : 1;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
     }
 
     public function getSelectedVehicleForGps(): ?Vehicle
@@ -611,7 +625,7 @@ class VehicleDispatchBoard extends Page implements HasTable
 
         $titleAttr = $tooltip ? ' title="'.e($tooltip).'"' : '';
 
-        return "<div{$titleAttr} class='cursor-default'><span class='font-bold text-primary-600 dark:text-primary-400'>{$plate}</span>".($tonnage ? " <span class='text-xs text-gray-500 dark:text-gray-400 font-medium'>{$tonnage}</span>" : '').$extra.$note.'</div>';
+        return "<div{$titleAttr} class='cursor-pointer'><span class='text-[13px] font-bold text-primary-600 dark:text-primary-400'>{$plate}</span>".($tonnage ? " <span class='text-xs text-gray-500 dark:text-gray-400 font-medium'>{$tonnage}</span>" : '').$extra.$note.'</div>';
     }
 
     public static function getLatestCompletedTripInShift(Vehicle $record): ?Trip
@@ -749,13 +763,18 @@ class VehicleDispatchBoard extends Page implements HasTable
             return 'bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 font-normal';
         }
 
-        if ($activeTrip->isPaused()) {
+        return self::resolveTripStatusBadgeClass($activeTrip);
+    }
+
+    public static function resolveTripStatusBadgeClass(Trip $trip): string
+    {
+        if ($trip->isPaused()) {
             return 'bg-yellow-400 text-gray-900 font-bold animate-pulse';
         }
 
-        $status = $activeTrip->status instanceof TripStatus
-            ? $activeTrip->status
-            : TripStatus::tryFrom((string) $activeTrip->status);
+        $status = $trip->status instanceof TripStatus
+            ? $trip->status
+            : TripStatus::tryFrom((string) $trip->status);
 
         return match ($status) {
             TripStatus::Pending => 'bg-indigo-600 text-white font-semibold',

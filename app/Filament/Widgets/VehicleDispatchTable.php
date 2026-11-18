@@ -4,13 +4,18 @@ namespace App\Filament\Widgets;
 
 use App\Enums\TripStatus;
 use App\Filament\Pages\VehicleDispatchBoard;
+use App\Filament\Resources\Trips\TripResource;
 use App\Filament\Traits\HasVehicleDispatchRows;
+use App\Models\Order;
+use App\Models\Trip;
 use App\Models\Vehicle;
+use App\Services\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\Concerns\HasJsRenderer;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Vite;
 use Livewire\Attributes\Reactive;
+use Throwable;
 
 /**
  * Bảng "Kiểm soát tình trạng xe" do React vẽ. Page giữ bộ lọc (URL), modal chi tiết và action
@@ -106,6 +111,7 @@ class VehicleDispatchTable extends Widget
             'filters' => ['search' => (string) $this->searchQuery],
             'sort' => ['by' => $this->sortBy, 'direction' => $this->sortDirection],
             'refreshSeconds' => VehicleDispatchBoard::REFRESH_SECONDS,
+            'shiftDate' => ShiftScheduleService::getShiftDate()->format('d/m/Y'),
             'totalVehicles' => collect($groups)->sum('count'),
         ];
     }
@@ -137,6 +143,7 @@ class VehicleDispatchTable extends Widget
             'id' => $vehicle->id,
             'bsx' => VehicleDispatchBoard::renderBsx($vehicle),
             'plateNumber' => (string) $vehicle->plate_number,
+            'loadCapacity' => $vehicle->load_capacity ? round((float) $vehicle->load_capacity, 1).'T' : null,
             'ownerCategory' => VehicleDispatchBoard::getOwnerCategory($vehicle),
             'orderType' => $orderType?->getLabel(),
             'orderTypeColor' => $orderType?->getColor(),
@@ -182,6 +189,102 @@ class VehicleDispatchTable extends Widget
             'driverName' => VehicleDispatchBoard::getDriverName($vehicle),
             'station' => $station,
             'shift' => VehicleDispatchBoard::getShiftLabel($vehicle),
+            'shiftTrips' => $this->shiftTripsPayload($vehicle),
         ];
+    }
+
+    /**
+     * Danh sách chuyến trong ca trực để render dạng tree row bên dưới dòng xe.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function shiftTripsPayload(Vehicle $vehicle): array
+    {
+        $trips = $vehicle->relationLoaded('trips')
+            ? VehicleDispatchBoard::sortTripsForShift($vehicle->trips)
+            : collect();
+
+        $runningStatuses = VehicleDispatchBoard::runningTripStatuses();
+
+        return $trips->map(function (Trip $trip) use ($vehicle, $runningStatuses): array {
+            $firstOrder = $trip->orders->first();
+            $orderType = $firstOrder?->type;
+            $pickup = $trip->startLocation?->code
+                ?? $firstOrder?->pickupLocation?->code
+                ?? $firstOrder?->pickup_address;
+
+            $deliveryCodes = $trip->endLocation?->code
+                ?? $trip->orders
+                    ->flatMap(fn (Order $order) => $order->deliveryPoints)
+                    ->map(fn ($dp) => $dp->location?->code ?? $dp->address)
+                    ->filter()
+                    ->unique()
+                    ->join(', ');
+
+            $plannedAt = $trip->orders
+                ->pluck('planned_loading_at')
+                ->filter()
+                ->sort()
+                ->first();
+
+            $isActive = in_array($trip->status, $runningStatuses, true);
+            $isPending = $trip->status === TripStatus::Pending;
+            $isCompleted = $trip->status === TripStatus::Completed;
+
+            $timelineUrl = null;
+            try {
+                $timelineUrl = TripResource::getUrl('timeline', ['record' => $trip]);
+            } catch (Throwable) {
+            }
+
+            $driverName = $vehicle->isRent() && filled($trip->external_driver_name)
+                ? trim((string) $trip->external_driver_name)
+                : ($trip->driver?->name ?? '—');
+
+            $orders = $trip->orders->map(function (Order $order): array {
+                $status = $order->status;
+
+                return [
+                    'id' => $order->id,
+                    'orderCode' => (string) $order->order_code,
+                    'statusLabel' => $status?->getLabel() ?? (string) $status,
+                    'statusColor' => (string) ($status?->getColor() ?? 'gray'),
+                    'customerCode' => $order->customer?->code,
+                    'pickup' => $order->pickupLocation?->code ?? $order->pickup_address ?? '—',
+                    'destination' => $order->deliveryPoints
+                        ->map(fn ($dp) => $dp->location?->code ?? $dp->address)
+                        ->filter()
+                        ->join(', ') ?: '—',
+                ];
+            })->values()->all();
+
+            return [
+                'id' => $trip->id,
+                'tripCode' => (string) $trip->trip_code,
+                'isEmptyRun' => (bool) $trip->is_empty_run,
+                'orderType' => $orderType?->getLabel(),
+                'orderTypeColor' => $orderType?->getColor(),
+                'isActive' => $isActive,
+                'isPending' => $isPending,
+                'isCompleted' => $isCompleted,
+                'statusLabel' => $trip->getStatusLabel(),
+                'statusColor' => (string) ($trip->status?->getColor() ?? ($isCompleted ? 'success' : ($isActive ? 'warning' : ($isPending ? 'info' : 'gray')))),
+                'driverName' => $driverName,
+                'startedAt' => $trip->started_at ? $trip->started_at->format('H:i d/m') : 'Chưa bắt đầu',
+                'startKm' => $trip->start_km ? number_format((float) $trip->start_km, 1) : null,
+                'completedAt' => $trip->completed_at
+                    ? $trip->completed_at->format('H:i d/m')
+                    : ($isActive ? 'Đang chạy' : ($isPending ? 'Chờ chạy' : '—')),
+                'endKm' => $trip->end_km ? number_format((float) $trip->end_km, 1) : null,
+                'totalKm' => $trip->total_km ? number_format((float) $trip->total_km, 1).' km' : null,
+                'totalKmValue' => $trip->total_km ? (float) $trip->total_km : 0.0,
+                'pickup' => $pickup ?: null,
+                'destination' => $deliveryCodes ?: null,
+                'plannedLoadingAt' => $plannedAt ? $plannedAt->format('H:i d/m/Y') : '—',
+                'ordersCount' => $trip->orders->count(),
+                'orders' => $orders,
+                'timelineUrl' => $timelineUrl,
+            ];
+        })->all();
     }
 }

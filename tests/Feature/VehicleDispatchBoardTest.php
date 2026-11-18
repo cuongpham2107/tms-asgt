@@ -2054,3 +2054,72 @@ test('vehicle freezeActiveTrip resets when trips relation is reloaded', function
 
     expect($vehicle->active_trip?->id)->toBe($secondTrip->id);
 });
+
+test('VehicleDispatchTable renderer configuration includes sorted shiftTrips payload for inline tree expansion', function () {
+    $driver = User::factory()->create(['name' => 'Tài xế Tree', 'station' => OnDutyLocation::Nba]);
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '29C-TREE-01',
+        'type' => VehicleOwnerType::Company,
+        'current_driver_id' => $driver->id,
+        'is_active' => true,
+    ]);
+
+    $completedTrip = Trip::factory()->create([
+        'trip_code' => 'TRIP-TREE-DONE',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subHours(2),
+        'completed_at' => now()->subHour(),
+        'total_km' => 18.5,
+    ]);
+
+    $activeTrip = Trip::factory()->create([
+        'trip_code' => 'TRIP-TREE-RUN',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => now()->subMinutes(20),
+    ]);
+
+    Trip::factory()->create([
+        'trip_code' => 'TRIP-TREE-CANCEL',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Cancelled,
+        'started_at' => now()->subMinutes(10),
+    ]);
+
+    $customer = Customer::create(['code' => 'CUST-TREE', 'name' => 'Khách Tree']);
+    $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true]);
+
+    Order::create([
+        'order_code' => 'ORD-TREE-1',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'trip_id' => $activeTrip->id,
+        'type' => OrderType::Hhhk,
+        'status' => OrderStatus::InTransit,
+        'created_by' => $driver->id,
+    ]);
+
+    $widget = new VehicleDispatchTable;
+    $widget->isReady = true;
+
+    $config = $widget->getRendererConfiguration();
+    $row = collect($config['groups'])
+        ->flatMap(fn (array $group): array => $group['rows'])
+        ->firstWhere('id', $vehicle->id);
+
+    expect($row)->not->toBeNull()
+        ->and($config['shiftDate'])->not->toBeEmpty()
+        ->and($row['shiftTrips'])->toHaveCount(2)
+        ->and($row['shiftTrips'][0]['tripCode'])->toBe('TRIP-TREE-RUN')
+        ->and($row['shiftTrips'][0]['isActive'])->toBeTrue()
+        ->and($row['shiftTrips'][0]['ordersCount'])->toBe(1)
+        ->and($row['shiftTrips'][0]['orders'][0]['orderCode'])->toBe('ORD-TREE-1')
+        ->and($row['shiftTrips'][0]['orders'][0]['customerCode'])->toBe('CUST-TREE')
+        ->and($row['shiftTrips'][1]['tripCode'])->toBe('TRIP-TREE-DONE')
+        ->and($row['shiftTrips'][1]['isCompleted'])->toBeTrue()
+        ->and($row['shiftTrips'][1]['totalKm'])->toBe('18.5 km');
+});
