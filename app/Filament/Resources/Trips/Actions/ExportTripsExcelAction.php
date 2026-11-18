@@ -11,6 +11,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Support\Enums\Width;
 use Spatie\Permission\Models\Role;
@@ -38,6 +39,7 @@ class ExportTripsExcelAction
                 'vehicle_id' => null,
                 'driver_id' => null,
                 'search' => $livewire->tripSearch,
+                'show_mine_only' => $livewire->showMineOnly,
             ])
             ->schema([
                 Grid::make(2)->schema([
@@ -122,9 +124,14 @@ class ExportTripsExcelAction
                             ->pluck('name', 'id')
                             ->toArray()),
                 ]),
-                TextInput::make('search')
-                    ->label('Từ khóa tìm kiếm')
-                    ->placeholder('Biển số xe, tài xế, mã đơn, khách hàng...'),
+                Grid::make(2)->schema([
+                    TextInput::make('search')
+                        ->label('Từ khóa tìm kiếm')
+                        ->placeholder('Biển số xe, tài xế, mã đơn, khách hàng...'),
+                    Toggle::make('show_mine_only')
+                        ->label('Chỉ xuất đơn của tôi')
+                        ->inline(false),
+                ]),
             ])
             ->action(fn (array $data, ListTrips $livewire, TripExcelExportService $exportService): StreamedResponse => $livewire->exportExcel($exportService, $data));
     }

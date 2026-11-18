@@ -8,6 +8,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
+use App\Filament\Resources\Trips\Actions\EditTripAction;
 use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Filament\Resources\Trips\Pages\ViewTripTimeline;
 use App\Filament\Resources\Trips\Tables\TripsTable;
@@ -22,6 +23,7 @@ use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Export\TripExcelExportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -720,7 +722,7 @@ test('trip destination falls back to checkpoint delivery point when order has no
     $trip->load(['orders.deliveryPoints.location', 'checkpoints.deliveryPoint.location', 'endLocation']);
 
     expect(TripsTable::getDeliveryDestination($trip))->toBe('ASGL')
-        ->and(app(\App\Services\Export\TripExcelExportService::class)->buildJourneyString($order, $trip))->toBe('SEVT 1-2 -> ASGL');
+        ->and(app(TripExcelExportService::class)->buildJourneyString($order, $trip))->toBe('SEVT 1-2 -> ASGL');
 });
 
 test('trip form deduplicates delivery point options by location and auto-fills order delivery point', function () {
@@ -769,11 +771,11 @@ test('trip form deduplicates delivery point options by location and auto-fills o
         default => null,
     };
 
-    $optionsMethod = new ReflectionMethod(\App\Filament\Resources\Trips\Schemas\TripForm::class, 'deliveryPointOptionsForCheckpoint');
+    $optionsMethod = new ReflectionMethod(App\Filament\Resources\Trips\Schemas\TripForm::class, 'deliveryPointOptionsForCheckpoint');
     $optionsMethod->setAccessible(true);
     $options = $optionsMethod->invoke(null, $get);
 
-    $defaultMethod = new ReflectionMethod(\App\Filament\Resources\Trips\Schemas\TripForm::class, 'defaultDeliveryPointId');
+    $defaultMethod = new ReflectionMethod(App\Filament\Resources\Trips\Schemas\TripForm::class, 'defaultDeliveryPointId');
     $defaultMethod->setAccessible(true);
     $defaultId = $defaultMethod->invoke(null, $get, 'checkpoints');
 
@@ -796,9 +798,9 @@ test('trip form advances delivery point sequentially for multi-point orders', fu
     $dp1 = $order->deliveryPoints()->create(['location_id' => $locAlsc->id, 'sequence' => 1, 'status' => 'pending']);
     $dp2 = $order->deliveryPoints()->create(['location_id' => $locSdv->id, 'sequence' => 2, 'status' => 'pending']);
 
-    $nextMethod = new ReflectionMethod(\App\Filament\Resources\Trips\Schemas\TripForm::class, 'getNextCheckpointType');
+    $nextMethod = new ReflectionMethod(App\Filament\Resources\Trips\Schemas\TripForm::class, 'getNextCheckpointType');
     $nextMethod->setAccessible(true);
-    $defaultMethod = new ReflectionMethod(\App\Filament\Resources\Trips\Schemas\TripForm::class, 'defaultDeliveryPointId');
+    $defaultMethod = new ReflectionMethod(App\Filament\Resources\Trips\Schemas\TripForm::class, 'defaultDeliveryPointId');
     $defaultMethod->setAccessible(true);
 
     $afterDp1Completed = [
@@ -889,7 +891,7 @@ test('editing trip checkpoint delivery point updates order delivery point and re
         'occurred_at' => now(),
     ]);
 
-    \App\Filament\Resources\Trips\Actions\EditTripAction::syncOrderDeliveryPointsFromCheckpoints($trip);
+    EditTripAction::syncOrderDeliveryPointsFromCheckpoints($trip);
 
     $ownWrongDp->refresh();
     $cpArrived->refresh();
@@ -923,4 +925,92 @@ test('new checkpoint occurred_at defaults to previous checkpoint plus one minute
     };
 
     expect($method->invoke(null, $getSubsequent, 'checkpoints', null))->toBe('2026-11-18 14:26');
+});
+
+test('ListTrips showMineOnly button filters trips with orders or empty runs created by current user', function () {
+    $currentUser = User::first();
+    $otherUser = User::factory()->create();
+
+    $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true]);
+    $customer = Customer::create(['code' => 'CUST-MINE', 'name' => 'Khách mine']);
+    $vehicle = Vehicle::create([
+        'plate_number' => '29C-88888',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    // 1. Chuyến không hàng do user hiện tại tạo (TripObserver tự gán created_by = Auth::id())
+    $myEmptyTrip = Trip::create([
+        'trip_code' => 'TRIP-MINE-EMPTY',
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Started,
+        'is_empty_run' => true,
+        'started_at' => now(),
+    ]);
+    expect($myEmptyTrip->created_by)->toBe($currentUser->id);
+
+    // 2. Chuyến do người khác tạo nhưng chứa đơn hàng do user hiện tại tạo
+    $myOrderTrip = Trip::create([
+        'trip_code' => 'TRIP-MINE-ORDER',
+        'vehicle_id' => $vehicle->id,
+        'created_by' => $otherUser->id,
+        'status' => TripStatus::Started,
+        'started_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-MINE-1',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'trip_id' => $myOrderTrip->id,
+        'type' => OrderType::Hhhk,
+        'status' => OrderStatus::InTransit,
+        'created_by' => $currentUser->id,
+    ]);
+
+    // 3. Chuyến do người khác tạo hoàn toàn (cả chuyến và đơn đều của người khác)
+    $otherTrip = Trip::create([
+        'trip_code' => 'TRIP-OTHER-USER',
+        'vehicle_id' => $vehicle->id,
+        'created_by' => $otherUser->id,
+        'status' => TripStatus::Started,
+        'started_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ORD-OTHER-1',
+        'customer_id' => $customer->id,
+        'area_id' => $area->id,
+        'trip_id' => $otherTrip->id,
+        'type' => OrderType::Hhhk,
+        'status' => OrderStatus::InTransit,
+        'created_by' => $otherUser->id,
+    ]);
+
+    // Mặc định showMineOnly = false: thấy cả 3 chuyến + thấy nút "Đơn của tôi"
+    $component = Livewire::test(ListTrips::class, [
+        'orderType' => 'all',
+        'activePlaceFilter' => 'all',
+    ])
+        ->loadTable()
+        ->assertSet('showMineOnly', false)
+        ->assertSee('Đơn của tôi')
+        ->assertSeeHtml("wire:click=\"\$toggle('showMineOnly')\"")
+        ->assertCanSeeTableRecords([$myEmptyTrip, $myOrderTrip, $otherTrip]);
+
+    // Bật "Đơn của tôi": chỉ còn chuyến của tôi (chuyến không hàng của tôi + chuyến có đơn của tôi)
+    $component
+        ->set('showMineOnly', true)
+        ->assertSet('showMineOnly', true)
+        ->assertCanSeeTableRecords([$myEmptyTrip, $myOrderTrip])
+        ->assertCanNotSeeTableRecords([$otherTrip]);
+
+    /** @var ListTrips $instance */
+    $instance = $component->instance();
+    expect($instance->getOrderTypeCount('all'))->toBe(2)
+        ->and($instance->getOrderTypeCount('empty'))->toBe(1)
+        ->and($instance->getOrderTypeCount('HHHK'))->toBe(1)
+        ->and($instance->getExportTripsQuery(['show_mine_only' => true])->pluck('trips.id')->all())
+        ->toEqualCanonicalizing([$myEmptyTrip->id, $myOrderTrip->id]);
 });

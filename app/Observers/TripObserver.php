@@ -17,6 +17,7 @@ use App\Models\Vehicle;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -24,6 +25,10 @@ class TripObserver
 {
     public function creating(Trip $trip): void
     {
+        if ($trip->created_by === null && Auth::id() !== null) {
+            $trip->created_by = Auth::id();
+        }
+
         $this->syncExternalDriverSnapshot($trip, isCreating: true);
     }
 

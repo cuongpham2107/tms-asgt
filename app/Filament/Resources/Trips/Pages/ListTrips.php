@@ -22,6 +22,7 @@ use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Request;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -83,6 +84,9 @@ class ListTrips extends ListRecords
     #[Url]
     public ?string $activePlaceFilter = 'NBA';
 
+    #[Url]
+    public bool $showMineOnly = false;
+
     /**
      * Catch layer clicks from the map widget inside the column-action modal.
      * The action uses `<x-filament-leaflet::map widget>` which dispatches
@@ -141,6 +145,7 @@ class ListTrips extends ListRecords
                 $this->orderType = 'all';
                 $this->activePlaceFilter = 'all';
                 $this->vehicleOwner = 'all';
+                $this->showMineOnly = false;
                 $this->dateFrom = null;
                 $this->dateTo = null;
                 $this->tripSearch = $targetTrip->trip_code;
@@ -197,6 +202,7 @@ class ListTrips extends ListRecords
             $this->vehicleOwner,
             $this->orderType,
             $this->activePlaceFilter,
+            $this->showMineOnly,
         ]));
 
         return $this->memoizedCounts[$key] ??= $callback();
@@ -480,7 +486,8 @@ class ListTrips extends ListRecords
 
                 return $query->whereHas('orders', fn (Builder $q): Builder => $q->where('type', $this->orderType));
             })
-            ->when($except !== 'place' && $this->activePlaceFilter !== 'all', fn (Builder $query): Builder => $query->whereHas('orders.area', fn (Builder $q) => $q->where('code', $this->activePlaceFilter)));
+            ->when($except !== 'place' && $this->activePlaceFilter !== 'all', fn (Builder $query): Builder => $query->whereHas('orders.area', fn (Builder $q) => $q->where('code', $this->activePlaceFilter)))
+            ->when($this->showMineOnly, fn (Builder $query): Builder => $this->applyMineOnlyFilter($query));
     }
 
     public function filtersForm(Schema $form): Schema
@@ -527,6 +534,7 @@ class ListTrips extends ListRecords
         $place = $data['place'] ?? 'all';
         $vehicleId = $data['vehicle_id'] ?? null;
         $driverId = $data['driver_id'] ?? null;
+        $showMineOnly = (bool) ($data['show_mine_only'] ?? false);
         $search = trim((string) ($data['search'] ?? ''));
         $dateFrom = $data['date_from'] ?? null;
         $dateTo = $data['date_to'] ?? null;
@@ -580,6 +588,7 @@ class ListTrips extends ListRecords
                 filled($dateFrom) || filled($dateTo),
                 fn (Builder $query): Builder => $this->applyDateRangeFilter($query, $dateFrom, $dateTo),
             )
+            ->when($showMineOnly, fn (Builder $query): Builder => $this->applyMineOnlyFilter($query))
             ->when(filled($search), fn (Builder $query): Builder => $this->applyTripSearchFilter($query, (string) $search))
             ->orderBy('trips.started_at', 'desc')
             ->orderBy('trips.created_at', 'desc');
@@ -737,9 +746,35 @@ class ListTrips extends ListRecords
                 },
             )
             ->when(
+                $this->showMineOnly,
+                fn (Builder $query): Builder => $this->applyMineOnlyFilter($query, $actionRecordId ? (int) $actionRecordId : null),
+            )
+            ->when(
                 filled($this->tripSearch),
                 fn (Builder $query): Builder => $this->applyTripSearchFilter($query, (string) $this->tripSearch, $actionRecordId),
             );
+    }
+
+    /**
+     * Lọc các chuyến liên quan tới người dùng hiện tại: chuyến có đơn hàng do user tạo
+     * hoặc chuyến (kể cả chuyến không hàng) do chính user tạo.
+     */
+    private function applyMineOnlyFilter(Builder $query, ?int $actionRecordId = null): Builder
+    {
+        $userId = Auth::id();
+
+        if ($userId === null) {
+            return $actionRecordId ? $query->where('trips.id', $actionRecordId) : $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $mine) use ($userId, $actionRecordId): void {
+            $mine->where('trips.created_by', $userId)
+                ->orWhereHas('orders', fn (Builder $oq): Builder => $oq->where('orders.created_by', $userId));
+
+            if ($actionRecordId) {
+                $mine->orWhere('trips.id', $actionRecordId);
+            }
+        });
     }
 
     /**
@@ -854,6 +889,11 @@ class ListTrips extends ListRecords
     }
 
     public function updatedDateTo(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedShowMineOnly(): void
     {
         $this->resetPage();
     }

@@ -54,6 +54,7 @@ class Trip extends Model
         'driver_id',
         'external_driver_name',
         'shift_id',
+        'created_by',
         'status',
         'started_at',
         'completed_at',
@@ -101,6 +102,11 @@ class Trip extends Model
     public function shift(): BelongsTo
     {
         return $this->belongsTo(DriverShift::class, 'shift_id');
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function startLocation(): BelongsTo
