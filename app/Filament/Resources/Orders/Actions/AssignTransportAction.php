@@ -138,7 +138,8 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
                 }
 
-                static::createCheckpointsForExternalVehicle($trip, collect([$record]));
+                // Tạm thời ẩn tự tạo checkpoint cho xe thuê ngoài để điều hành tự thêm khi chỉnh sửa chuyến.
+                // static::createCheckpointsForExternalVehicle($trip, collect([$record]));
 
                 if ($orderStatus === OrderStatus::Sent) {
                     try {

@@ -213,7 +213,8 @@ class OrdersTable extends BaseTable
                                     'sent_at' => now(),
                                 ]);
 
-                                CreatesOrderTransportCards::createCheckpointsForExternalVehicle($trip, collect([$record]));
+                                // Tạm thời ẩn tự tạo checkpoint cho xe thuê ngoài để điều hành tự thêm khi chỉnh sửa chuyến.
+                                // CreatesOrderTransportCards::createCheckpointsForExternalVehicle($trip, collect([$record]));
 
                                 try {
                                     app(DriverNotificationService::class)->sendOrderAssigned($record, $trip);

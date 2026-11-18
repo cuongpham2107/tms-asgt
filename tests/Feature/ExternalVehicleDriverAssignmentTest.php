@@ -281,7 +281,7 @@ test('createSingleOrder with rent vehicle WITH driver creates trip with driver a
         ->and($trip->checkpoints()->count())->toBe(0);
 });
 
-test('createSingleOrder with rent vehicle WITHOUT driver creates trip without driver and generates 5 fake checkpoints', function () {
+test('createSingleOrder with rent vehicle WITHOUT driver creates trip without driver and does not auto-generate checkpoints', function () {
     $schema = Mockery::mock(Schema::class);
     $schema->shouldReceive('getRawState')->andReturn(['deliveryPoints' => []]);
 
@@ -302,5 +302,5 @@ test('createSingleOrder with rent vehicle WITHOUT driver creates trip without dr
     $trip = $order->trip;
     expect($trip->vehicle_id)->toBe($this->rentVehicle->id)
         ->and($trip->driver_id)->toBeNull()
-        ->and($trip->checkpoints()->count())->toBe(5);
+        ->and($trip->checkpoints()->count())->toBe(0);
 });

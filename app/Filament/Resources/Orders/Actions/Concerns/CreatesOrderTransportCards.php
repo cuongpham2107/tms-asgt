@@ -1144,7 +1144,8 @@ abstract class CreatesOrderTransportCards
                     throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
                 }
 
-                static::createCheckpointsForExternalVehicle($trip, collect([$order]));
+                // Tạm thời ẩn tự tạo checkpoint cho xe thuê ngoài để điều hành tự thêm khi chỉnh sửa chuyến.
+                // static::createCheckpointsForExternalVehicle($trip, collect([$order]));
 
                 try {
                     app(DriverNotificationService::class)->sendOrderAssigned($order, $trip);
