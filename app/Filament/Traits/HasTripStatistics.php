@@ -2,6 +2,7 @@
 
 namespace App\Filament\Traits;
 
+use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Models\Area;
@@ -9,7 +10,6 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderCharge;
 use App\Models\Trip;
-use App\Services\DriverMonthlyKmReportService;
 use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
@@ -110,8 +110,8 @@ trait HasTripStatistics
      */
     public function getFilteredTrips(): Collection
     {
-        $dateFrom = $this->startDate ? Carbon::parse($this->startDate)->setTime(8, 0, 0) : null;
-        $dateTo = $this->endDate ? Carbon::parse($this->endDate)->addDay()->setTime(8, 0, 0) : null;
+        $dateFrom = $this->startDate ? Carbon::parse($this->startDate)->startOfDay() : null;
+        $dateTo = $this->endDate ? Carbon::parse($this->endDate)->endOfDay() : null;
         $search = trim((string) $this->search);
 
         $tripsQuery = Trip::query()
@@ -128,7 +128,7 @@ trait HasTripStatistics
                 'startLocation.area',
                 'endLocation.area',
             ])
-            ->when($dateFrom || $dateTo, fn (Builder $q): Builder => DriverMonthlyKmReportService::applyCompletionWindow($q, $dateFrom, $dateTo))
+            ->when($dateFrom || $dateTo, fn (Builder $q): Builder => $this->applyTripStatsLoadingWindow($q, $dateFrom, $dateTo))
             ->when(filled($search), function (Builder $q) use ($search): Builder {
                 return $q->where(function (Builder $sub) use ($search): void {
                     $sub->whereLike('trips.trip_code', "%{$search}%", caseSensitive: false)
@@ -161,16 +161,7 @@ trait HasTripStatistics
                 'deliveryPoints.location',
                 'tripCheckpoints',
             ])
-            ->when($dateFrom || $dateTo, function (Builder $q) use ($dateFrom, $dateTo): Builder {
-                if ($dateFrom && $dateTo) {
-                    return $q->whereBetween('planned_loading_at', [$dateFrom, $dateTo]);
-                }
-                if ($dateFrom) {
-                    return $q->where('planned_loading_at', '>=', $dateFrom);
-                }
-
-                return $q->where('planned_loading_at', '<=', $dateTo);
-            })
+            ->when($dateFrom || $dateTo, fn (Builder $q): Builder => $this->applyUnassignedOrderLoadingWindow($q, $dateFrom, $dateTo))
             ->when(filled($search), fn (Builder $q): Builder => $this->applyTripStatsOrderSearch($q, $search))
             ->when(filled($this->customerId), fn ($q) => $q->where('customer_id', $this->customerId));
 
@@ -181,6 +172,64 @@ trait HasTripStatistics
         $syntheticTrips = $exportService->convertOrdersToTripsCollection($unassignedOrders);
 
         return $trips->merge($syntheticTrips);
+    }
+
+    /**
+     * Lọc sơ bộ ở tầng SQL để lấy mọi chuyến có khả năng có ngày đóng hàng (time_a) nằm trong khoảng [dateFrom, dateTo].
+     * Độ chính xác tuyệt đối theo ngày đóng hàng của từng dòng được chốt tại getBaseFilteredRows().
+     */
+    private function applyTripStatsLoadingWindow(Builder $query, ?Carbon $dateFrom, ?Carbon $dateTo): Builder
+    {
+        return $query->where(function (Builder $q) use ($dateFrom, $dateTo): void {
+            $applyRange = static function (Builder $b, string $column) use ($dateFrom, $dateTo): void {
+                if ($dateFrom !== null) {
+                    $b->where($column, '>=', $dateFrom);
+                }
+                if ($dateTo !== null) {
+                    $b->where($column, '<=', $dateTo);
+                }
+            };
+
+            $q->where(fn (Builder $sub) => $applyRange($sub, 'trips.started_at'))
+                ->orWhere(fn (Builder $sub) => $applyRange($sub, 'trips.completed_at'))
+                ->orWhere(fn (Builder $sub) => $sub
+                    ->whereNull('trips.started_at')
+                    ->whereNull('trips.completed_at')
+                    ->tap(fn (Builder $s) => $applyRange($s, 'trips.created_at')))
+                ->orWhereHas('orders', fn (Builder $o) => $applyRange($o, 'orders.planned_loading_at'))
+                ->orWhereHas('checkpoints', fn (Builder $cp) => $cp
+                    ->whereIn('checkpoint_type', [CheckpointType::ArrivedPickup, CheckpointType::Started])
+                    ->where(function (Builder $t) use ($applyRange): void {
+                        $t->where(fn (Builder $a) => $applyRange($a, 'trip_checkpoints.adjusted_at'))
+                            ->orWhere(fn (Builder $oc) => $oc
+                                ->whereNull('trip_checkpoints.adjusted_at')
+                                ->tap(fn (Builder $s) => $applyRange($s, 'trip_checkpoints.occurred_at')));
+                    }));
+        });
+    }
+
+    private function applyUnassignedOrderLoadingWindow(Builder $query, ?Carbon $dateFrom, ?Carbon $dateTo): Builder
+    {
+        return $query->where(function (Builder $q) use ($dateFrom, $dateTo): void {
+            $applyRange = static function (Builder $b, string $column) use ($dateFrom, $dateTo): void {
+                if ($dateFrom !== null) {
+                    $b->where($column, '>=', $dateFrom);
+                }
+                if ($dateTo !== null) {
+                    $b->where($column, '<=', $dateTo);
+                }
+            };
+
+            $q->where(fn (Builder $sub) => $applyRange($sub, 'orders.planned_loading_at'))
+                ->orWhereHas('tripCheckpoints', fn (Builder $cp) => $cp
+                    ->where('checkpoint_type', CheckpointType::ArrivedPickup)
+                    ->where(function (Builder $t) use ($applyRange): void {
+                        $t->where(fn (Builder $a) => $applyRange($a, 'trip_checkpoints.adjusted_at'))
+                            ->orWhere(fn (Builder $oc) => $oc
+                                ->whereNull('trip_checkpoints.adjusted_at')
+                                ->tap(fn (Builder $s) => $applyRange($s, 'trip_checkpoints.occurred_at')));
+                    }));
+        });
     }
 
     private function applyTripStatsOrderSearch(Builder $query, string $search): Builder
@@ -222,6 +271,30 @@ trait HasTripStatistics
         /** @var TripExcelExportService $exportService */
         $exportService = app(TripExcelExportService::class);
         $rows = $exportService->getTripSummaryRows($trips);
+
+        // 0. Lọc chính xác theo Ngày đóng hàng (time_a / date) trong khoảng [startDate 00:00:00, endDate 23:59:59]
+        if (filled($this->startDate) || filled($this->endDate)) {
+            $dateFrom = filled($this->startDate) ? Carbon::parse($this->startDate)->startOfDay() : null;
+            $dateTo = filled($this->endDate) ? Carbon::parse($this->endDate)->endOfDay() : null;
+
+            $rows = $rows->filter(function (array $row) use ($dateFrom, $dateTo): bool {
+                $rawLoadingDate = $row['time_a'] ?? $row['date'] ?? null;
+                if (blank($rawLoadingDate)) {
+                    return false;
+                }
+
+                $loadingAt = $rawLoadingDate instanceof Carbon ? $rawLoadingDate : Carbon::parse($rawLoadingDate);
+
+                if ($dateFrom !== null && $loadingAt->lt($dateFrom)) {
+                    return false;
+                }
+                if ($dateTo !== null && $loadingAt->gt($dateTo)) {
+                    return false;
+                }
+
+                return true;
+            })->values();
+        }
 
         // 1. Lọc theo Khách hàng
         if (filled($this->customerId)) {

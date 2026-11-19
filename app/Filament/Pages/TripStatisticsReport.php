@@ -25,7 +25,6 @@ use App\Services\Export\BillingStatement\BillingStatementExporter;
 use App\Services\Export\BillingStatement\BillingStatementTemplates;
 use App\Services\Export\TripExcelExportService;
 use App\Services\Import\OrderPackagesImporter;
-use App\Services\ShiftScheduleService;
 use App\Services\Trip\DeliveryProgressSyncService;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -137,14 +136,14 @@ class TripStatisticsReport extends Page
 
     public function mount(): void
     {
-        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+        $now = now();
 
         if (blank($this->startDate)) {
-            $this->startDate = $shiftNow->copy()->startOfMonth()->format('Y-m-d');
+            $this->startDate = $now->copy()->startOfMonth()->format('Y-m-d');
         }
 
         if (blank($this->endDate)) {
-            $this->endDate = $shiftNow->format('Y-m-d');
+            $this->endDate = $now->format('Y-m-d');
         }
 
         $this->syncDatePreset();
@@ -293,28 +292,28 @@ class TripStatisticsReport extends Page
     public function setDatePreset(string $preset): void
     {
         $this->datePreset = $preset;
-        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
+        $now = now();
 
         match ($preset) {
             'today' => [
-                $this->startDate = $shiftNow->format('Y-m-d'),
-                $this->endDate = $shiftNow->format('Y-m-d'),
+                $this->startDate = $now->format('Y-m-d'),
+                $this->endDate = $now->format('Y-m-d'),
             ],
             'yesterday' => [
-                $this->startDate = $shiftNow->copy()->subDay()->format('Y-m-d'),
-                $this->endDate = $shiftNow->copy()->subDay()->format('Y-m-d'),
+                $this->startDate = $now->copy()->subDay()->format('Y-m-d'),
+                $this->endDate = $now->copy()->subDay()->format('Y-m-d'),
             ],
             'last7days' => [
-                $this->startDate = $shiftNow->copy()->subDays(6)->format('Y-m-d'),
-                $this->endDate = $shiftNow->format('Y-m-d'),
+                $this->startDate = $now->copy()->subDays(6)->format('Y-m-d'),
+                $this->endDate = $now->format('Y-m-d'),
             ],
             'thisMonth' => [
-                $this->startDate = $shiftNow->copy()->startOfMonth()->format('Y-m-d'),
-                $this->endDate = $shiftNow->format('Y-m-d'),
+                $this->startDate = $now->copy()->startOfMonth()->format('Y-m-d'),
+                $this->endDate = $now->format('Y-m-d'),
             ],
             'lastMonth' => [
-                $this->startDate = $shiftNow->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d'),
-                $this->endDate = $shiftNow->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
+                $this->startDate = $now->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d'),
+                $this->endDate = $now->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
             ],
             default => null,
         };
@@ -329,32 +328,32 @@ class TripStatisticsReport extends Page
             return;
         }
 
-        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
-        $today = $shiftNow->format('Y-m-d');
-        $yesterday = $shiftNow->copy()->subDay()->format('Y-m-d');
+        $now = now();
+        $today = $now->format('Y-m-d');
+        $yesterday = $now->copy()->subDay()->format('Y-m-d');
 
         $this->datePreset = match (true) {
-            $this->startDate === $shiftNow->copy()->startOfMonth()->format('Y-m-d') && $this->endDate === $today => 'thisMonth',
+            $this->startDate === $now->copy()->startOfMonth()->format('Y-m-d') && $this->endDate === $today => 'thisMonth',
             $this->startDate === $today && $this->endDate === $today => 'today',
             $this->startDate === $yesterday && $this->endDate === $yesterday => 'yesterday',
-            $this->startDate === $shiftNow->copy()->subDays(6)->format('Y-m-d') && $this->endDate === $today => 'last7days',
-            $this->startDate === $shiftNow->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === $shiftNow->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d') => 'lastMonth',
+            $this->startDate === $now->copy()->subDays(6)->format('Y-m-d') && $this->endDate === $today => 'last7days',
+            $this->startDate === $now->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === $now->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d') => 'lastMonth',
             default => null,
         };
     }
 
     private function matchesPresetDates(string $preset): bool
     {
-        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
-        $today = $shiftNow->format('Y-m-d');
-        $yesterday = $shiftNow->copy()->subDay()->format('Y-m-d');
+        $now = now();
+        $today = $now->format('Y-m-d');
+        $yesterday = $now->copy()->subDay()->format('Y-m-d');
 
         return match ($preset) {
             'today' => $this->startDate === $today && $this->endDate === $today,
             'yesterday' => $this->startDate === $yesterday && $this->endDate === $yesterday,
-            'last7days' => $this->startDate === $shiftNow->copy()->subDays(6)->format('Y-m-d') && $this->endDate === $today,
-            'thisMonth' => $this->startDate === $shiftNow->copy()->startOfMonth()->format('Y-m-d') && $this->endDate === $today,
-            'lastMonth' => $this->startDate === $shiftNow->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === $shiftNow->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
+            'last7days' => $this->startDate === $now->copy()->subDays(6)->format('Y-m-d') && $this->endDate === $today,
+            'thisMonth' => $this->startDate === $now->copy()->startOfMonth()->format('Y-m-d') && $this->endDate === $today,
+            'lastMonth' => $this->startDate === $now->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d') && $this->endDate === $now->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
             default => false,
         };
     }
@@ -532,9 +531,9 @@ class TripStatisticsReport extends Page
 
     public function resetFilters(): void
     {
-        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
-        $this->startDate = $shiftNow->copy()->startOfMonth()->format('Y-m-d');
-        $this->endDate = $shiftNow->format('Y-m-d');
+        $now = now();
+        $this->startDate = $now->copy()->startOfMonth()->format('Y-m-d');
+        $this->endDate = $now->format('Y-m-d');
         $this->datePreset = 'thisMonth';
         $this->customerId = null;
         $this->areaId = null;

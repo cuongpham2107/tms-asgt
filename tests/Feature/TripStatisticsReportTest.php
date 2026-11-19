@@ -1711,13 +1711,15 @@ test('trip statistics report supports column sorting and filtering by journey', 
     expect($component->get('sortBy'))->toBe('journey')
         ->and($component->get('sortDirection'))->toBe('asc');
 
-    // Third click resets to default
+    // Second click after asc switches to desc, third click resets to default
+    $component->call('sortTable', 'journey');
+    expect($component->get('sortDirection'))->toBe('desc');
     $component->call('sortTable', 'journey');
     expect($component->get('sortBy'))->toBeNull();
 
     // Filter by multiple journeys
     $component->call('setJourneys', ['ACSV -> ALSC', 'ASG -> SEVT']);
-    expect($component->instance()->getAllRows()->pluck('code')->all())->toBe(['ORD-SORT-1', 'ORD-SORT-2']);
+    expect($component->instance()->getAllRows()->pluck('code')->all())->toEqualCanonicalizing(['ORD-SORT-1', 'ORD-SORT-2']);
 
     // Filter by single journey
     $component->call('setJourneys', ['ACSV -> ALSC']);
@@ -1749,11 +1751,12 @@ test('trip excel summary splits km by driver when trip has driver swap', functio
     $order = Order::create([
         'order_code' => 'ASG-393-SWAP',
         'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
         'area_id' => $this->area->id,
         'trip_id' => $trip->id,
         'type' => OrderType::Hhhk,
         'status' => OrderStatus::Completed,
-        'pickup_location_id' => $this->location->id,
+        'pickup_location_id' => $this->pickupLocation->id,
         'planned_loading_at' => Carbon::parse('2026-04-10 08:30:00'),
         'total_packages' => 1,
         'total_weight' => 100,
@@ -1791,6 +1794,7 @@ test('trip excel summary splits km by driver when trip has driver swap', functio
         'checkpoint_id' => $swapCp->id,
         'handover_km' => 153895,
         'reason' => DriverSwapReason::CargoNotUnloaded,
+        'created_by' => $driverFirst->id,
     ]);
     TripCheckpoint::create([
         'trip_id' => $trip->id,
@@ -1850,20 +1854,22 @@ test('trip excel summary displays rented vehicle owner name when available', fun
     Order::create([
         'order_code' => 'ORD-RENT-1',
         'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
         'area_id' => $this->area->id,
         'trip_id' => $trip1->id,
         'type' => OrderType::Hhhk,
         'status' => OrderStatus::Completed,
-        'pickup_location_id' => $this->location->id,
+        'pickup_location_id' => $this->pickupLocation->id,
     ]);
     Order::create([
         'order_code' => 'ORD-RENT-2',
         'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
         'area_id' => $this->area->id,
         'trip_id' => $trip2->id,
         'type' => OrderType::Hhhk,
         'status' => OrderStatus::Completed,
-        'pickup_location_id' => $this->location->id,
+        'pickup_location_id' => $this->pickupLocation->id,
     ]);
 
     $spreadsheet = app(TripExcelExportService::class)->buildSpreadsheet(
@@ -1873,4 +1879,125 @@ test('trip excel summary displays rented vehicle owner name when available', fun
 
     expect($sheet->getCell('Q5')->getValue())->toBe('Tam Bảo')
         ->and($sheet->getCell('Q6')->getValue())->toBe('Xe thuê');
+});
+
+test('trip statistics report filters by loading date (time_a) instead of unloading date and returns only the selected calendar date', function () {
+    Carbon::setTestNow('2026-11-19 07:30:00');
+
+    // Chuyến 1: Đóng hàng tối 18/11 (23:18 18/11) nhưng hạ hàng rạng sáng 19/11 (01:25 19/11)
+    $tripLoaded18Unloaded19 = Trip::create([
+        'trip_code' => 'TRIP-LOAD-18',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-11-19 00:45:00'),
+        'completed_at' => Carbon::parse('2026-11-19 01:25:00'),
+    ]);
+
+    $order18 = Order::create([
+        'order_code' => 'ASG-651',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'planned_loading_at' => Carbon::parse('2026-11-18 23:00:00'),
+        'trip_id' => $tripLoaded18Unloaded19->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $tripLoaded18Unloaded19->id,
+        'order_id' => $order18->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'occurred_at' => Carbon::parse('2026-11-18 23:18:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $tripLoaded18Unloaded19->id,
+        'order_id' => $order18->id,
+        'checkpoint_type' => CheckpointType::LeftPickup,
+        'occurred_at' => Carbon::parse('2026-11-19 00:45:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $tripLoaded18Unloaded19->id,
+        'order_id' => $order18->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery,
+        'occurred_at' => Carbon::parse('2026-11-19 00:56:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $tripLoaded18Unloaded19->id,
+        'order_id' => $order18->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'occurred_at' => Carbon::parse('2026-11-19 01:25:00'),
+    ]);
+
+    // Chuyến 2: Đóng hàng sáng 19/11 (03:12 19/11) và hạ hàng 06:12 19/11
+    $tripLoaded19 = Trip::create([
+        'trip_code' => 'TRIP-LOAD-19',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-11-19 04:08:00'),
+        'completed_at' => Carbon::parse('2026-11-19 06:12:00'),
+    ]);
+
+    $order19 = Order::create([
+        'order_code' => 'ASG-662',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'created_by' => $this->driver->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'planned_loading_at' => Carbon::parse('2026-11-19 03:00:00'),
+        'trip_id' => $tripLoaded19->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $tripLoaded19->id,
+        'order_id' => $order19->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'occurred_at' => Carbon::parse('2026-11-19 03:12:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $tripLoaded19->id,
+        'order_id' => $order19->id,
+        'checkpoint_type' => CheckpointType::LeftPickup,
+        'occurred_at' => Carbon::parse('2026-11-19 04:08:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $tripLoaded19->id,
+        'order_id' => $order19->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery,
+        'occurred_at' => Carbon::parse('2026-11-19 05:16:00'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $tripLoaded19->id,
+        'order_id' => $order19->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'occurred_at' => Carbon::parse('2026-11-19 06:12:00'),
+    ]);
+
+    // 1. Chọn ngày 19/11/2026 (hoặc bấm Hôm nay lúc 07:30 sáng 19/11): chỉ ra đúng đơn đóng hàng ngày 19/11 (ASG-662), không dính đơn đóng hàng ngày 18/11 (ASG-651)
+    $component = Livewire::test(TripStatisticsReport::class)
+        ->call('setDatePreset', 'today')
+        ->assertSet('startDate', '2026-11-19')
+        ->assertSet('endDate', '2026-11-19');
+
+    $rows19 = $component->instance()->getAllRows();
+    expect($rows19->pluck('code')->all())->toBe(['ASG-662']);
+    expect(Carbon::parse($rows19->first()['date'])->format('d/m/Y'))->toBe('19/11/2026');
+
+    // 2. Chọn ngày 18/11/2026 (hoặc Hôm qua): chỉ ra đúng đơn đóng hàng ngày 18/11 (ASG-651) và cột Ngày hiển thị 18/11/2026
+    $component->call('setDatePreset', 'yesterday')
+        ->assertSet('startDate', '2026-11-18')
+        ->assertSet('endDate', '2026-11-18');
+
+    $rows18 = $component->instance()->getAllRows();
+    expect($rows18->pluck('code')->all())->toBe(['ASG-651']);
+    expect(Carbon::parse($rows18->first()['date'])->format('d/m/Y'))->toBe('18/11/2026');
+
+    Carbon::setTestNow();
 });
