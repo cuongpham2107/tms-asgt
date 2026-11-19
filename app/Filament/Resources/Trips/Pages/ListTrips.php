@@ -523,7 +523,7 @@ class ListTrips extends ListRecords
         $exportService ??= app(TripExcelExportService::class);
         $query = empty($data) ? $this->getTableQuery() : $this->getExportTripsQuery($data);
 
-        return $exportService->export($query);
+        return $exportService->export($query, includeStatusColumn: true);
     }
 
     public function getExportTripsQuery(array $data): Builder

@@ -2001,3 +2001,40 @@ test('trip statistics report filters by loading date (time_a) instead of unloadi
 
     Carbon::setTestNow();
 });
+
+test('trip excel export includes trip status column when includeStatusColumn is enabled', function () {
+    $completedTrip = Trip::create([
+        'trip_code' => 'TRIP-ST-DONE',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-11-19 08:00:00'),
+        'completed_at' => Carbon::parse('2026-11-19 09:00:00'),
+    ]);
+    $cancelledTrip = Trip::create([
+        'trip_code' => 'TRIP-ST-CANCEL',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Cancelled,
+        'started_at' => Carbon::parse('2026-11-19 10:00:00'),
+    ]);
+    $inProgressTrip = Trip::create([
+        'trip_code' => 'TRIP-ST-RUN',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Delivering,
+        'started_at' => Carbon::parse('2026-11-19 11:00:00'),
+    ]);
+
+    $trips = collect([$completedTrip, $cancelledTrip, $inProgressTrip]);
+
+    $withStatus = app(TripExcelExportService::class)->buildSpreadsheet($trips, includeStatusColumn: true)->getSheet(0);
+    expect($withStatus->getCell('AF4')->getValue())->toBe('Trạng thái chuyến')
+        ->and($withStatus->getCell('AF5')->getValue())->toBe('Hoàn thành')
+        ->and($withStatus->getCell('AF6')->getValue())->toBe('Đã huỷ')
+        ->and($withStatus->getCell('AF7')->getValue())->toBe('Chưa hoàn thành (Đang giao)');
+
+    // Mặc định (Bảng kê) không có cột Trạng thái chuyến
+    $withoutStatus = app(TripExcelExportService::class)->buildSpreadsheet($trips)->getSheet(0);
+    expect($withoutStatus->getCell('AF4')->getValue())->toBeNull();
+});

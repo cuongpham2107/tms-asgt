@@ -6,6 +6,7 @@ use App\Enums\CargoType;
 use App\Enums\CheckpointType;
 use App\Enums\FreightPricingMethod;
 use App\Enums\OrderType;
+use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
 use App\Models\Area;
@@ -42,14 +43,14 @@ class TripExcelExportService
     /**
      * @param  Builder|Collection<int, Trip|Order>  $queryOrCollection
      */
-    public function export(Builder|Collection $queryOrCollection, ?string $filename = null): StreamedResponse
+    public function export(Builder|Collection $queryOrCollection, ?string $filename = null, bool $includeStatusColumn = false): StreamedResponse
     {
         if ($queryOrCollection instanceof Builder) {
             if ($queryOrCollection->getModel() instanceof Order) {
                 return $this->exportFromOrders($queryOrCollection, $filename);
             }
 
-            return $this->exportFromTrips($queryOrCollection, $filename);
+            return $this->exportFromTrips($queryOrCollection, $filename, $includeStatusColumn);
         }
 
         $first = $queryOrCollection->first();
@@ -63,15 +64,15 @@ class TripExcelExportService
         /** @var Collection<int, Trip> $trips */
         $trips = $queryOrCollection;
 
-        return $this->exportFromTrips($trips, $filename);
+        return $this->exportFromTrips($trips, $filename, $includeStatusColumn);
     }
 
     /**
      * @param  Builder|Collection<int, Trip>  $trips
      */
-    public function exportFromTrips(Builder|Collection $trips, ?string $filename = null): StreamedResponse
+    public function exportFromTrips(Builder|Collection $trips, ?string $filename = null, bool $includeStatusColumn = false): StreamedResponse
     {
-        $spreadsheet = $this->buildSpreadsheet($trips);
+        $spreadsheet = $this->buildSpreadsheet($trips, $includeStatusColumn);
 
         $defaultFilename = 'Tong-hop-chuyen-phuc-vu-'.now()->format('Ymd-His').'.xlsx';
         $finalFilename = $filename ?: $defaultFilename;
@@ -218,7 +219,7 @@ class TripExcelExportService
     /**
      * @param  Builder|Collection<int, Trip>  $trips
      */
-    public function buildSpreadsheet(Builder|Collection $trips): Spreadsheet
+    public function buildSpreadsheet(Builder|Collection $trips, bool $includeStatusColumn = false): Spreadsheet
     {
         if ($trips instanceof Builder) {
             $trips = $trips
@@ -242,7 +243,7 @@ class TripExcelExportService
         // Sheet 1: Bảng tổng hợp chuyến phục vụ
         $sheet1 = $spreadsheet->getActiveSheet();
         $sheet1->setTitle('Bảng tổng hợp chuyến phục vụ');
-        $this->buildTripSummarySheet($sheet1, $trips);
+        $this->buildTripSummarySheet($sheet1, $trips, $includeStatusColumn);
 
         // Sheet 2: Bảng dữ liệu hàng ngoài
         $sheet2 = $spreadsheet->createSheet();
@@ -258,22 +259,22 @@ class TripExcelExportService
     /**
      * @param  Collection<int, Trip>  $trips
      */
-    protected function buildTripSummarySheet(Worksheet $sheet, Collection $trips): void
+    protected function buildTripSummarySheet(Worksheet $sheet, Collection $trips, bool $includeStatusColumn = false): void
     {
         $rows = $this->getTripSummaryRows($trips);
-        $this->buildTripSummarySheetFromRows($sheet, $rows);
+        $this->buildTripSummarySheetFromRows($sheet, $rows, $includeStatusColumn);
     }
 
     /**
      * @param  Collection<int, array<string, mixed>>  $rows
      */
-    public function buildTripSummarySheetFromRows(Worksheet $sheet, Collection $rows): void
+    public function buildTripSummarySheetFromRows(Worksheet $sheet, Collection $rows, bool $includeStatusColumn = false): void
     {
         $maxSwapDrivers = max(
             1,
             (int) $rows->map(fn (array $row): int => max(0, count($row['driver_km_splits'] ?? []) - 1))->max(),
         );
-        $lastColIndex = 28 + ($maxSwapDrivers * 3);
+        $lastColIndex = 28 + ($maxSwapDrivers * 3) + ($includeStatusColumn ? 1 : 0);
         $lastCol = Coordinate::stringFromColumnIndex($lastColIndex);
 
         // 1. Tiêu đề lớn
@@ -326,6 +327,11 @@ class TripExcelExportService
             $headers["{$emptyCol}4"] = 'Km không hàng';
         }
 
+        if ($includeStatusColumn) {
+            $statusCol = Coordinate::stringFromColumnIndex($lastColIndex);
+            $headers["{$statusCol}4"] = 'Trạng thái chuyến';
+        }
+
         foreach ($headers as $cell => $title) {
             $sheet->setCellValue($cell, $title);
         }
@@ -351,7 +357,7 @@ class TripExcelExportService
         // 3. Đổ dữ liệu từ các dòng đã lọc
         $row = 5;
         foreach ($rows as $rowData) {
-            $this->writeTripSummaryRowFromData($sheet, $row, $rowData, $maxSwapDrivers);
+            $this->writeTripSummaryRowFromData($sheet, $row, $rowData, $maxSwapDrivers, $includeStatusColumn);
             $row++;
         }
 
@@ -736,8 +742,20 @@ class TripExcelExportService
             default => $vehicleType ?: 'Xe thường',
         };
 
+        $statusEnum = $trip->status instanceof TripStatus
+            ? $trip->status
+            : (is_string($trip->status) ? TripStatus::tryFrom($trip->status) : null);
+
+        $tripStatusLabel = match ($statusEnum) {
+            TripStatus::Completed => 'Hoàn thành',
+            TripStatus::Cancelled => 'Đã huỷ',
+            null => '',
+            default => 'Chưa hoàn thành ('.$statusEnum->getLabel().')',
+        };
+
         return [
             'trip_id' => $trip->id,
+            'trip_status' => $tripStatusLabel,
             'order_id' => $order?->id,
             'customer_id' => $order?->customer_id,
             'area_id' => $order?->area_id ?? $trip->endLocation?->area_id ?? $trip->startLocation?->area_id,
@@ -891,7 +909,7 @@ class TripExcelExportService
     /**
      * @param  array<string, mixed>  $data
      */
-    public function writeTripSummaryRowFromData(Worksheet $sheet, int $row, array $data, int $maxSwapDrivers = 1): void
+    public function writeTripSummaryRowFromData(Worksheet $sheet, int $row, array $data, int $maxSwapDrivers = 1, bool $includeStatusColumn = false): void
     {
         $date = $data['date'] instanceof Carbon ? $data['date'] : ($data['date'] ? Carbon::parse($data['date']) : null);
         $timeA = $data['time_a'] instanceof Carbon ? $data['time_a'] : ($data['time_a'] ? Carbon::parse($data['time_a']) : null);
@@ -965,6 +983,12 @@ class TripExcelExportService
             $sheet->setCellValue("{$loadedCol}{$row}", ($swapSplit && ($swapSplit['km_loaded'] ?? 0) > 0) ? $swapSplit['km_loaded'] : '');
             $sheet->setCellValue("{$emptyCol}{$row}", ($swapSplit && ($swapSplit['km_empty'] ?? 0) > 0) ? $swapSplit['km_empty'] : '');
             $sheet->getStyle("{$loadedCol}{$row}:{$emptyCol}{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        }
+
+        if ($includeStatusColumn) {
+            $statusCol = Coordinate::stringFromColumnIndex(29 + ($maxSwapDrivers * 3));
+            $sheet->setCellValue("{$statusCol}{$row}", $data['trip_status'] ?? '');
+            $sheet->getStyle("{$statusCol}{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         }
 
         // Căn giữa các cột mã, ngày, BSX, thời gian
