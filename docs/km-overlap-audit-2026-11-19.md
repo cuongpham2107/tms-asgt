@@ -2,8 +2,6 @@
 
 - **Thời điểm cập nhật:** 19/11/2026 11:28 (GMT+7)
 - **Tổng số xe kiểm tra:** 68 xe
-- **Trạng thái xử lý:** Đã sửa xong **7/10** trường hợp bị trùng Km (3 chuyến không hàng `#350`, `#615`, `#616` và 4 chuyến có hàng `#139`, `#619`, `#323`, `#419`). Hiện toàn hệ thống chỉ còn **2 xe (3 cặp)** cần Điều hành quyết định nghiệp vụ.
-
 ---
 
 ## 1. Các trường hợp còn lại (2 xe)
