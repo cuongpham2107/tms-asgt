@@ -50,17 +50,22 @@ class TripCheckpointService
 
         // Return trip: no orders, just update existing checkpoint km_reading
         if ($trip->status === TripStatus::ReturnTrip && in_array($checkpointType, [CheckpointType::Started, CheckpointType::End], true)) {
-            $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id);
+            $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id)
+                ?? ($trip->vehicle_id !== null ? Trip::getActiveCargoTripForVehicle($trip->vehicle_id, $trip->id) : null);
             if ($activeCargoTrip !== null) {
                 $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);
                 $orderCodes = $activeCargoTrip->orders()->pluck('order_code')->filter()->join(', ');
                 $driverName = $activeCargoTrip->driver?->name ?? 'Không xác định';
+                $reason = $activeCargoTrip->status === TripStatus::Delivered
+                    ? 'chưa bấm "Kết thúc đơn hàng" (chưa hoàn thiện chuyến)'
+                    : 'chưa hoàn thiện chuyến';
                 throw ValidationException::withMessages([
                     'checkpoint_type' => sprintf(
-                        'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi thực hiện chuyến không hàng.',
+                        'Xe %s, mã đơn %s, lái xe %s %s, yêu cầu lái xe hoàn thành trước khi thực hiện chuyến không hàng.',
                         $plateNumber,
                         $orderCodes,
-                        $driverName
+                        $driverName,
+                        $reason
                     ),
                 ]);
             }
@@ -138,25 +143,30 @@ class TripCheckpointService
             return;
         }
 
-        // Nếu trip này là chuyến không hàng: kiểm tra tài xế có chuyến có hàng nào đang chạy không
+        // Nếu trip này là chuyến không hàng: kiểm tra tài xế hoặc xe có chuyến có hàng nào đang chạy / chưa Kết thúc đơn hàng không
         if ($trip->is_empty_run) {
-            $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id);
+            $activeCargoTrip = Trip::getActiveCargoTripForDriver($trip->driver_id, $trip->id)
+                ?? ($trip->vehicle_id !== null ? Trip::getActiveCargoTripForVehicle($trip->vehicle_id, $trip->id) : null);
             if ($activeCargoTrip !== null) {
                 $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);
                 $orderCodes = $activeCargoTrip->orders()->pluck('order_code')->filter()->join(', ');
                 $driverName = $activeCargoTrip->driver?->name ?? 'Không xác định';
+                $reason = $activeCargoTrip->status === TripStatus::Delivered
+                    ? 'chưa bấm "Kết thúc đơn hàng" (chưa hoàn thiện chuyến)'
+                    : 'chưa hoàn thiện chuyến';
                 throw ValidationException::withMessages([
                     'checkpoint_type' => sprintf(
-                        'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi bắt đầu chuyến không hàng.',
+                        'Xe %s, mã đơn %s, lái xe %s %s, yêu cầu lái xe hoàn thành trước khi bắt đầu chuyến không hàng.',
                         $plateNumber,
                         $orderCodes,
-                        $driverName
+                        $driverName,
+                        $reason
                     ),
                 ]);
             }
         }
 
-        // Nếu trip này là chuyến có hàng: chỉ kiểm tra các chuyến có hàng khác đang chạy (chuyến không hàng chưa chạy sẽ không chặn)
+        // Nếu trip này là chuyến có hàng: kiểm tra các chuyến có hàng khác đang chạy hoặc chưa bấm "Kết thúc đơn hàng" (Delivered)
         $activeTripQuery = Trip::where('driver_id', $trip->driver_id)
             ->where('id', '!=', $trip->id)
             ->whereIn('status', array_filter(
@@ -174,18 +184,24 @@ class TripCheckpointService
             return;
         }
 
+        $reason = $activeTrip->status === TripStatus::Delivered
+            ? 'chưa bấm "Kết thúc đơn hàng" (chưa hoàn thiện chuyến)'
+            : 'chưa hoàn thiện chuyến';
+
         throw ValidationException::withMessages([
             'checkpoint_type' => sprintf(
-                'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi bắt đầu chuyến mới.',
+                'Xe %s, mã đơn %s, lái xe %s %s, yêu cầu lái xe hoàn thành trước khi bắt đầu chuyến mới.',
                 $activeTrip->vehicle?->plate_number ?? ('#'.$activeTrip->id),
                 $activeTrip->orders()->pluck('order_code')->filter()->join(', '),
                 $activeTrip->driver?->name ?? 'Không xác định',
+                $reason,
             ),
         ]);
     }
 
     /**
-     * Khi bắt đầu chuyến mới, kiểm tra xe không có chuyến nào khác đang chạy.
+     * Khi bắt đầu chuyến mới, kiểm tra xe không có chuyến nào khác đang chạy
+     * hoặc chưa bấm "Kết thúc đơn hàng".
      * Ngăn trường hợp điều hành gán order vào xe đang chạy chuyến cũ.
      *
      * @throws ValidationException
@@ -200,7 +216,7 @@ class TripCheckpointService
             ->where('id', '!=', $trip->id)
             ->whereIn('status', array_filter(
                 TripStatus::activeStatuses(),
-                fn (TripStatus $s) => $s !== TripStatus::Pending,
+                fn (TripStatus $s) => ! in_array($s, [TripStatus::Pending, TripStatus::DriverSwap]),
             ));
 
         if (! $trip->is_empty_run) {
@@ -211,6 +227,17 @@ class TripCheckpointService
 
         if ($activeTrip === null) {
             return;
+        }
+
+        if ($activeTrip->status === TripStatus::Delivered) {
+            throw ValidationException::withMessages([
+                'checkpoint_type' => sprintf(
+                    'Xe biển số %s đang chạy chuyến chưa bấm "Kết thúc đơn hàng" (tài xế: %s, trạng thái: %s). Vui lòng hoàn tất chuyến hiện tại trước khi bắt đầu chuyến mới.',
+                    $activeTrip->vehicle?->plate_number ?? ('#'.$activeTrip->id),
+                    $activeTrip->driver?->name ?? 'Chưa gán tài xế',
+                    $activeTrip->status->label(),
+                ),
+            ]);
         }
 
         throw ValidationException::withMessages([

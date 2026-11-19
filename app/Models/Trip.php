@@ -240,14 +240,34 @@ class Trip extends Model
     }
 
     /**
-     * Tìm chuyến có hàng đang chạy của một tài xế.
+     * Tìm chuyến có hàng đang chạy của một tài xế (bao gồm cả chuyến đã giao hàng nhưng chưa bấm Kết thúc đơn hàng).
      * Chuyến có hàng đang chạy: is_empty_run = false, status thuộc nhóm đang chạy (không tính Pending).
      */
     public static function getActiveCargoTripForDriver(int $driverId, ?int $excludeTripId = null): ?self
     {
         return self::query()
-            ->with('vehicle')
+            ->with(['vehicle', 'driver'])
             ->where('driver_id', $driverId)
+            ->where('is_empty_run', false)
+            ->when($excludeTripId, fn ($q) => $q->where('id', '!=', $excludeTripId))
+            ->whereIn('status', [
+                TripStatus::Started,
+                TripStatus::ArrivedPickup,
+                TripStatus::Delivering,
+                TripStatus::ArrivedDelivery,
+                TripStatus::Delivered,
+            ])
+            ->first();
+    }
+
+    /**
+     * Tìm chuyến có hàng đang chạy trên cùng một xe (kể cả khi tài xế khác để treo chưa bấm Kết thúc đơn hàng).
+     */
+    public static function getActiveCargoTripForVehicle(int $vehicleId, ?int $excludeTripId = null): ?self
+    {
+        return self::query()
+            ->with(['vehicle', 'driver'])
+            ->where('vehicle_id', $vehicleId)
             ->where('is_empty_run', false)
             ->when($excludeTripId, fn ($q) => $q->where('id', '!=', $excludeTripId))
             ->whereIn('status', [

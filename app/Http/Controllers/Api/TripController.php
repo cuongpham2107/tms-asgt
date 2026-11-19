@@ -262,18 +262,23 @@ class TripController extends Controller
         }
 
         if ($trip->is_empty_run || $trip->status === TripStatus::ReturnTrip) {
-            $activeCargoTrip = Trip::getActiveCargoTripForDriver($user->id, $trip->id);
+            $activeCargoTrip = Trip::getActiveCargoTripForDriver($user->id, $trip->id)
+                ?? ($trip->vehicle_id !== null ? Trip::getActiveCargoTripForVehicle($trip->vehicle_id, $trip->id) : null);
             if ($activeCargoTrip !== null) {
                 $plateNumber = $activeCargoTrip->vehicle?->plate_number ?? ('#'.$activeCargoTrip->id);
                 $orderCodes = $activeCargoTrip->orders()->pluck('order_code')->filter()->join(', ');
                 $driverName = $activeCargoTrip->driver?->name ?? ($user->name ?? 'Không xác định');
+                $reason = $activeCargoTrip->status === TripStatus::Delivered
+                    ? 'chưa bấm "Kết thúc đơn hàng" (chưa hoàn thiện chuyến)'
+                    : 'chưa hoàn thiện chuyến';
 
                 return response()->json([
                     'message' => sprintf(
-                        'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi kết thúc chuyến không hàng.',
+                        'Xe %s, mã đơn %s, lái xe %s %s, yêu cầu lái xe hoàn thành trước khi kết thúc chuyến không hàng.',
                         $plateNumber,
                         $orderCodes,
-                        $driverName
+                        $driverName,
+                        $reason
                     ),
                     'active_trip_id' => $activeCargoTrip->id,
                 ], 422);
