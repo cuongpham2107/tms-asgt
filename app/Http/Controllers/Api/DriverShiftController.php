@@ -225,11 +225,15 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Cần nhập km kết thúc trước khi kết thúc ca.'], 422);
         }
 
-        // Gate: không cho kết thúc ca nếu còn trip đang chạy với đơn hàng chưa hoàn thành (Sent, InTransit)
+        // Gate: không cho kết thúc ca nếu còn trip đang chạy chưa kết thúc chuyến (kể cả đã giao hàng xong nhưng chưa chốt Kết thúc đơn hàng)
         $incompleteTrips = Trip::where('driver_id', $user->id)
             ->where(function ($query) {
                 $query->whereHas('orders', function ($q) {
-                    $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value]);
+                    $q->whereIn('status', [
+                        OrderStatus::Sent->value,
+                        OrderStatus::InTransit->value,
+                        OrderStatus::Completed->value,
+                    ]);
                 })->orWhere(function ($q) {
                     $q->where('is_empty_run', true)
                         ->whereIn('status', [

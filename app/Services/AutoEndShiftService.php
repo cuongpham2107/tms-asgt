@@ -77,15 +77,19 @@ class AutoEndShiftService
     }
 
     /**
-     * Kiểm tra xem tài xế có chuyến/đơn nào đang làm dở (Sent / InTransit) hay không.
-     * Lưu ý: Nếu đơn/chuyến đã bàn giao đảo lái (DriverSwap) thì KHÔNG coi là làm dở.
+     * Kiểm tra xem tài xế có chuyến/đơn nào đang làm dở (Sent / InTransit, hoặc đã Delivered nhưng chưa chốt Kết thúc đơn hàng) hay không.
+     * Lưu ý: Nếu đơn/chuyến đã bàn giao đảo lái (DriverSwap) hoặc chuyến đã Completed thì KHÔNG coi là làm dở.
      */
     public function hasIncompleteOrders(DriverShift $shift): bool
     {
         return Trip::where('driver_id', $shift->driver_id)
             ->where(function ($query) {
                 $query->whereHas('orders', function ($q) {
-                    $q->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value]);
+                    $q->whereIn('status', [
+                        OrderStatus::Sent->value,
+                        OrderStatus::InTransit->value,
+                        OrderStatus::Completed->value,
+                    ]);
                 })->orWhere(function ($q) {
                     $q->where('is_empty_run', true)
                         ->whereIn('status', [

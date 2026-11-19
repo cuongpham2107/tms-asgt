@@ -391,3 +391,44 @@ test('ca X vào sáng sớm (07:30) không bị auto-end lúc 08:00 cùng ngày'
     $shift->refresh();
     expect($shift->end_time->format('Y-m-d H:i:s'))->toBe('2026-10-28 08:00:00');
 });
+
+test('it does not auto-end shift when trip is in delivered status awaiting end checkpoint', function () {
+    Carbon::setTestNow('2026-10-21 08:00:00');
+
+    $shift = DriverShift::create([
+        'driver_id' => $this->driver->id,
+        'shift_type' => ShiftType::MorningHalf,
+        'start_time' => now(),
+        'start_km' => 1000.0,
+    ]);
+
+    $customer = Customer::create(['code' => 'CUST-DELIV', 'name' => 'Công ty Đã Giao']);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-DELIVERED-001',
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'shift_id' => $shift->id,
+        'status' => TripStatus::Delivered,
+        'start_km' => 1000.0,
+        'started_at' => now(),
+    ]);
+
+    Order::create([
+        'area_id' => $this->area->id,
+        'created_by' => $this->driver->id,
+        'order_code' => 'ORD-DELIVERED-001',
+        'trip_id' => $trip->id,
+        'customer_id' => $customer->id,
+        'cargo_name' => 'Hàng đã giao chờ kết thúc đơn',
+        'cargo_type' => CargoType::Gcr,
+        'type' => OrderType::Hhhk,
+        'priority' => Priority::Medium,
+        'status' => OrderStatus::Completed,
+    ]);
+
+    Carbon::setTestNow('2026-10-21 20:10:00');
+    $this->artisan('shifts:auto-end')->assertSuccessful();
+
+    expect($shift->fresh()->end_time)->toBeNull();
+});

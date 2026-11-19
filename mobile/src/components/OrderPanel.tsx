@@ -113,7 +113,7 @@ interface OrderPanelProps {
 
 /** Thông tin đơn + các bước chốt mốc (lấy hàng → giao hàng → kết thúc) + lịch sử chốt chặng. */
 export default function OrderPanel({ order, embedded = false, reloadToken = 0, onChanged, beforeForm }: OrderPanelProps) {
-    const { token, shift } = useAuth();
+    const { token, shift, setShift } = useAuth();
     const { showLoading, hideLoading } = useLoading();
     const isSwapped = order?.is_swapped || false;
     const [km, setKm] = useState("");
@@ -205,6 +205,12 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
     useFocusEffect(
         useCallback(() => {
             loadDetail();
+            if (token && !shift) {
+                api.shifts
+                    .current(token)
+                    .then((res) => setShift(res?.shift ?? null))
+                    .catch(() => null);
+            }
         }, [order?.id, token]),
     );
     useEffect(() => {
@@ -507,14 +513,21 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
     const isAddingExtraDp = canChooseExtraDeliveryPoint && !!selectedLoc;
 
     // Can do actions on the SELECTED DP (not necessarily next pending)
+    // Khi chuyến/đơn đã bắt đầu chạy hoặc đã giao xong chờ kết thúc đơn, luôn hiển thị ô nhập Km kể cả khi ca vừa bị đóng
+    const hasProgress =
+        hasArrivedPickup ||
+        checkpoints.length > 0 ||
+        d.status === "in_transit" ||
+        d.status === "completed";
+    const canActOnShift = !!shift || hasProgress;
     const canArrivePickup =
         (d.status === "assigned" || d.status === "sent") &&
         !hasArrivedPickup &&
-        !!shift;
+        canActOnShift;
     const canLeftPickup =
-        d.status === "sent" && hasArrivedPickup && !hasLeftPickup && !!shift;
+        d.status === "sent" && hasArrivedPickup && !hasLeftPickup && canActOnShift;
     const canArriveDelivery =
-        !!shift &&
+        canActOnShift &&
         (isAddingExtraDp ||
             (d.status === "in_transit" &&
                 (!!activeDpId || !!selectedLoc) &&
@@ -525,12 +538,12 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
         (!!activeDpId || !!selectedLoc) &&
         hasArrivedDelivery &&
         !hasCompleted &&
-        !!shift;
+        canActOnShift;
     const canEnd =
         !isAddingExtraDp &&
         d.status === "completed" &&
         !hasEndCheckpoint &&
-        !!shift;
+        canActOnShift;
 
     async function pickImage() {
         suppressRefocus.current = true;
@@ -610,7 +623,14 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
             setKm("");
             setPhotos([]);
             setSelectedLoc(null);
-            await Promise.all([loadDetail(), Promise.resolve(onChanged?.())]);
+            await Promise.all([
+                loadDetail(),
+                Promise.resolve(onChanged?.()),
+                api.shifts
+                    .current(token)
+                    .then((res) => setShift(res?.shift ?? null))
+                    .catch(() => null),
+            ]);
         } catch (e: any) {
             if (e.geofence) {
                 setGeofenceBlock({ error: e.geofence, type });
@@ -1275,6 +1295,18 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                 </Text>
                             </View>
                             <View style={s.formCard}>
+                                <Text
+                                    style={{
+                                        fontSize: 13,
+                                        fontWeight: "600",
+                                        color: "#374151",
+                                        marginBottom: 6,
+                                    }}
+                                >
+                                    {canEnd
+                                        ? "Số Km kết thúc đơn hàng (chạm để sửa):"
+                                        : "Số Km đồng hồ hiện tại (chạm để sửa):"}
+                                </Text>
                                 <Pressable
                                     style={s.inputBox}
                                     onPress={() => kmInputRef.current?.focus()}
@@ -1515,7 +1547,7 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                     myDriverId={shift?.driver?.id}
                 />
 
-                {d.status === "completed" && (
+                {d.status === "completed" && hasEndCheckpoint && (
                     <View style={s.doneCard}>
                         <Ionicons
                             name="checkmark-circle"

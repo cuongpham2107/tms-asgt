@@ -94,58 +94,18 @@ export default function ProfileScreen() {
 
   const driver = localDriver;
   const shiftTrips: any[] = shift?.trips || [];
-  const activeTrips = shiftTrips.filter((t: any) => t.status !== "completed" && t.status !== "driver_swap" && t.status !== "cancelled" && t.status !== "pending");
+  const getActiveTrips = (tripsList: any[]) =>
+    (tripsList || []).filter(
+      (t: any) =>
+        t.status !== "completed" &&
+        t.status !== "driver_swap" &&
+        t.status !== "cancelled" &&
+        t.status !== "pending"
+    );
+  const activeTrips = getActiveTrips(shiftTrips);
 
   const handleEndShift = () => {
     if (!shift?.id) { showAlert("Không có ca", "Bạn chưa vào ca"); return; }
-
-    if (activeTrips.length > 0) {
-      const plate =
-        Array.from(
-          new Set(
-            activeTrips
-              .map((t: any) => t.vehicle?.plate_number)
-              .filter(Boolean)
-          )
-        ).join(", ") ||
-        shift?.vehicle?.plate_number ||
-        "—";
-
-      const orderCodes =
-        Array.from(
-          new Set(
-            activeTrips
-              .flatMap((t: any) =>
-                Array.isArray(t.orders) && t.orders.length > 0
-                  ? t.orders.map((o: any) => o.order_code).filter(Boolean)
-                  : [t.trip_code]
-              )
-              .filter(Boolean)
-          )
-        ).join(", ") || "—";
-
-      const driverName =
-        driver?.name ||
-        shift?.driver?.name ||
-        activeTrips[0]?.driver?.name ||
-        "lái xe";
-
-      const targetTrip = activeTrips[0];
-      showAlert(
-        "Không thể kết thúc ca",
-        `Xe ${plate}, mã đơn ${orderCodes}, lái xe ${driverName} chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi kết thúc ca.`,
-        () => {
-          if (targetTrip?.id) {
-            router.push({
-              pathname: "/trip-detail",
-              params: { id: String(targetTrip.id) },
-            });
-          }
-        }
-      );
-      return;
-    }
-
     doEnd();
   };
 
@@ -153,13 +113,66 @@ export default function ProfileScreen() {
     setEnding(true); showLoading();
     try {
       // Đồng bộ lại ca từ server trước khi kết thúc: ca có thể đã bị auto-end (08:00/20:00),
-      // admin kết thúc, hoặc kết thúc từ thiết bị khác → app đang giữ state cũ.
+      // admin kết thúc, hoặc chuyến vừa hoàn thành mà state local chưa kịp đồng bộ.
       const fresh = await api.shifts.current(token!).catch(() => undefined);
       const liveShift = fresh === undefined ? shift : (fresh?.shift ?? null);
 
       if (!liveShift) {
         setShift(null);
         showAlert("Thông báo", "Ca làm việc đã kết thúc trước đó.");
+        return;
+      }
+
+      setShift(liveShift);
+      if (liveShift?.driver) setLocalDriver(liveShift.driver);
+
+      const liveActiveTrips = getActiveTrips(liveShift.trips || []);
+      if (liveActiveTrips.length > 0) {
+        const plate =
+          Array.from(
+            new Set(
+              liveActiveTrips
+                .map((t: any) => t.vehicle?.plate_number)
+                .filter(Boolean)
+            )
+          ).join(", ") ||
+          liveShift?.vehicle?.plate_number ||
+          shift?.vehicle?.plate_number ||
+          "—";
+
+        const orderCodes =
+          Array.from(
+            new Set(
+              liveActiveTrips
+                .flatMap((t: any) =>
+                  Array.isArray(t.orders) && t.orders.length > 0
+                    ? t.orders.map((o: any) => o.order_code).filter(Boolean)
+                    : [t.trip_code]
+                )
+                .filter(Boolean)
+            )
+          ).join(", ") || "—";
+
+        const driverName =
+          liveShift?.driver?.name ||
+          driver?.name ||
+          shift?.driver?.name ||
+          liveActiveTrips[0]?.driver?.name ||
+          "lái xe";
+
+        const targetTrip = liveActiveTrips[0];
+        showAlert(
+          "Không thể kết thúc ca",
+          `Xe ${plate}, mã đơn ${orderCodes}, lái xe ${driverName} chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi kết thúc ca.`,
+          () => {
+            if (targetTrip?.id) {
+              router.push({
+                pathname: "/trip-detail",
+                params: { id: String(targetTrip.id) },
+              });
+            }
+          }
+        );
         return;
       }
 

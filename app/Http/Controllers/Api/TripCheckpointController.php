@@ -39,7 +39,7 @@ class TripCheckpointController extends Controller
             ->whereNull('end_time')
             ->first();
 
-        if (! $activeShift) {
+        if (! $activeShift && $trip->isPending() && $trip->shift_id === null) {
             return response()->json(['message' => 'Bạn cần vào ca trước khi cập nhật chuyến'], 422);
         }
 

@@ -50,9 +50,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         prev.id === next.id &&
         prev.end_time === next.end_time &&
         prev.total_km === next.total_km &&
+        prev.total_km_loaded === next.total_km_loaded &&
+        prev.total_km_empty === next.total_km_empty &&
+        prev.vehicle?.id === next.vehicle?.id &&
         prev.vehicle?.current_mileage === next.vehicle?.current_mileage
       ) {
-        return prev;
+        const prevTrips: any[] = Array.isArray(prev.trips) ? prev.trips : [];
+        const nextTrips: any[] = Array.isArray(next.trips) ? next.trips : [];
+        if (prevTrips.length === nextTrips.length) {
+          const sameTrips = prevTrips.every((pt, idx) => {
+            const nt = nextTrips[idx];
+            return (
+              pt?.id === nt?.id &&
+              pt?.status === nt?.status &&
+              pt?.end_km === nt?.end_km &&
+              pt?.completed_at === nt?.completed_at &&
+              (pt?.orders?.length ?? 0) === (nt?.orders?.length ?? 0)
+            );
+          });
+          if (sameTrips) {
+            return prev;
+          }
+        }
       }
       return next;
     });

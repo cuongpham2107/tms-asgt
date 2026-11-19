@@ -121,7 +121,7 @@ const localISO = (d: Date = new Date()) => {
 };
 
 export default function TripDetailScreen() {
-    const { token, shift } = useAuth();
+    const { token, shift, setShift } = useAuth();
     const router = useRouter();
     const { showLoading, hideLoading } = useLoading();
     const params = useLocalSearchParams<{ id: string; trip: string }>();
@@ -353,6 +353,12 @@ export default function TripDetailScreen() {
         useCallback(() => {
             clearNotificationBadge();
             load();
+            if (token && !shift) {
+                api.shifts
+                    .current(token)
+                    .then((res) => setShift(res?.shift ?? null))
+                    .catch(() => null);
+            }
         }, [token, tripId]),
     );
 
@@ -387,6 +393,9 @@ export default function TripDetailScreen() {
     const isCurrentShift =
         !!currentShiftId &&
         (!tripShiftId || String(tripShiftId) === String(currentShiftId));
+    const isInProgressTrip = !["pending", "completed", "driver_swap", "cancelled"].includes(
+        currentStatus,
+    );
     const canStart =
         currentStatus === "pending" &&
         !isReturnTrip &&
@@ -394,13 +403,9 @@ export default function TripDetailScreen() {
         !!shift &&
         isCurrentShift;
     const canComplete =
-        (!["pending", "completed", "driver_swap", "cancelled"].includes(
-            currentStatus,
-        ) ||
-            (isReturnTrip && currentStatus !== "completed")) &&
+        (isInProgressTrip || (isReturnTrip && currentStatus !== "completed")) &&
         !isSwapped &&
-        !!shift &&
-        isCurrentShift;
+        (isCurrentShift || isInProgressTrip);
     const isEmptyRun =
         (detail?.is_empty_run ?? trip?.is_empty_run ?? false) === true ||
         currentStatus === "return_trip";
@@ -436,7 +441,7 @@ export default function TripDetailScreen() {
     const showHandover = canComplete && hasIncompleteOrders && !isReturnTrip;
     // Đã bàn giao (đảo lái) thì không còn báo sai lệch km cho chuyến này
     const showReportKm =
-        !isSwapped && !!shift && isCurrentShift && !isOrderDone && currentStatus !== "driver_swap";
+        !isSwapped && (isCurrentShift || isInProgressTrip) && !isOrderDone && currentStatus !== "driver_swap";
 
     // Auto lấy km hiện tại của xe
     const vehicleKm = detail?.vehicle?.km_reading ?? trip?.vehicle?.km_reading;
@@ -480,7 +485,13 @@ export default function TripDetailScreen() {
                 }
             }
             await api.trips.checkpoint(String(tripId), body, token);
-            await load();
+            await Promise.all([
+                load(),
+                api.shifts
+                    .current(token)
+                    .then((res) => setShift(res?.shift ?? null))
+                    .catch(() => null),
+            ]);
         } catch (e: any) {
             const msg = e.message || "";
             let targetTripId: string | number | undefined = e.active_trip_id;
@@ -606,7 +617,13 @@ export default function TripDetailScreen() {
                         gpsRes.coords ?? undefined,
                     );
                     showAlert("Thành công", "Đã kết thúc chuyến quay đầu");
-                    await load();
+                    await Promise.all([
+                        load(),
+                        api.shifts
+                            .current(token)
+                            .then((res) => setShift(res?.shift ?? null))
+                            .catch(() => null),
+                    ]);
                 } catch (e: any) {
                     showAlert("Lỗi", e.message);
                 } finally {
@@ -647,7 +664,13 @@ export default function TripDetailScreen() {
             setShowCompleteModal(false);
             // Tải lại cả chuyến lẫn khung đơn nhúng để giao diện chuyển sang trạng thái mới (đảo lái/hoàn thành)
             setOrderReloadToken((t) => t + 1);
-            await load();
+            await Promise.all([
+                load(),
+                api.shifts
+                    .current(token)
+                    .then((res) => setShift(res?.shift ?? null))
+                    .catch(() => null),
+            ]);
         } catch (e: any) {
             if (e.geofence) {
                 setGeofenceBlock({ error: e.geofence, km });
