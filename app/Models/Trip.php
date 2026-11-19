@@ -302,8 +302,46 @@ class Trip extends Model
 
             $this->createMissingEndCheckpoints($endKmValue, (string) $this->completed_at, $checkpointAttributes);
 
+            $this->syncPendingEmptyRunsStartKm($endKmValue);
+
             Vehicle::syncIdleStatus($this->vehicle_id, $this->id);
         });
+    }
+
+    /**
+     * Đồng bộ lại start_km (và checkpoint started) cho các chuyến không hàng đang chờ
+     * trên cùng xe nếu được điều hành tạo trước khi chuyến có hàng này kết thúc.
+     */
+    private function syncPendingEmptyRunsStartKm(float $endKm): void
+    {
+        if ($this->is_empty_run || $this->vehicle_id === null || $endKm <= 0) {
+            return;
+        }
+
+        $pendingEmptyRuns = self::query()
+            ->where('vehicle_id', $this->vehicle_id)
+            ->where('id', '!=', $this->id)
+            ->where('is_empty_run', true)
+            ->where('status', TripStatus::ReturnTrip)
+            ->where(function ($query) use ($endKm): void {
+                $query->whereNull('start_km')
+                    ->orWhere('start_km', '<', $endKm);
+            })
+            ->get();
+
+        foreach ($pendingEmptyRuns as $emptyRun) {
+            $emptyRun->start_km = $endKm;
+            $emptyRun->save();
+
+            TripCheckpoint::query()
+                ->where('trip_id', $emptyRun->id)
+                ->where('checkpoint_type', CheckpointType::Started->value)
+                ->where(function ($query) use ($endKm): void {
+                    $query->whereNull('km_reading')
+                        ->orWhere('km_reading', '<', $endKm);
+                })
+                ->update(['km_reading' => $endKm]);
+        }
     }
 
     /**

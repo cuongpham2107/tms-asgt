@@ -339,3 +339,57 @@ test('TripCheckpointService::recordCheckpoint updates trip and shift km in real 
     expect((float) $shift->total_km_loaded)->toBe(65.0);
     expect((float) $shift->total_km_empty)->toBe(20.0);
 });
+
+test('completing cargo trip syncs start_km and started checkpoint of pending empty run on same vehicle', function () {
+    $cargoTrip = createTripWithOrder($this, 292017);
+    $order = createOrderOnTrip($cargoTrip, $this->driver, $this->area, $this->customer);
+
+    createCheckpoint($cargoTrip, $order, CheckpointType::ArrivedPickup->value, 292020);
+
+    // Chuyến không hàng được tạo trước khi chuyến có hàng kết thúc → tạm lấy start_km cũ (292020)
+    $pendingEmptyRun = Trip::create([
+        'trip_code' => 'TRIP-EMPTY-PENDING',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::ReturnTrip,
+        'is_empty_run' => true,
+        'started_at' => now(),
+        'start_km' => 292020,
+    ]);
+
+    $emptyStartedCp = TripCheckpoint::create([
+        'trip_id' => $pendingEmptyRun->id,
+        'driver_id' => $this->driver->id,
+        'vehicle_id' => $this->vehicle->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'occurred_at' => now(),
+        'km_reading' => 292020,
+    ]);
+
+    // Chuyến không hàng đã hoàn thành trước đó không được bị sửa
+    $completedEmptyRun = Trip::create([
+        'trip_code' => 'TRIP-EMPTY-DONE',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'is_empty_run' => true,
+        'started_at' => now()->subHours(5),
+        'completed_at' => now()->subHours(4),
+        'start_km' => 291900,
+        'end_km' => 291950,
+        'total_km' => 50,
+    ]);
+
+    // Chuyến có hàng hoàn thành với end_km = 292069
+    createCheckpoint($cargoTrip, $order, CheckpointType::Completed->value, 292069);
+    $cargoTrip->complete(endKm: 292069);
+
+    expect((float) $pendingEmptyRun->fresh()->start_km)->toBe(292069.0)
+        ->and((float) $emptyStartedCp->fresh()->km_reading)->toBe(292069.0)
+        ->and((float) $completedEmptyRun->fresh()->start_km)->toBe(291900.0);
+
+    // Khi hoàn thành chuyến không hàng ở 292107 → chỉ tính đúng 38 km (không trùng 49 km)
+    $pendingEmptyRun->refresh();
+    $pendingEmptyRun->complete(endKm: 292107);
+    expect((float) $pendingEmptyRun->fresh()->total_km)->toBe(38.0);
+});
