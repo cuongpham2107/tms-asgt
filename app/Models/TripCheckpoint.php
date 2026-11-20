@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CheckpointType;
 use App\Enums\GeoCheckStatus;
+use App\Models\Concerns\LogsChanges;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TripCheckpoint extends Model
 {
+    use LogsChanges;
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -138,5 +141,10 @@ class TripCheckpoint extends Model
         return Attribute::make(
             get: fn () => $this->shift?->shift_type?->getLabel(),
         );
+    }
+
+    protected function activityIgnoredAttributes(): array
+    {
+        return ['eup_lat', 'eup_lng', 'eup_recorded_at', 'eup_speed', 'gps_accuracy'];
     }
 }

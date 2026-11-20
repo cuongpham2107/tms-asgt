@@ -505,7 +505,7 @@ class TripStatisticsReport extends Page
                         ->whereIn('order_id', $result['order_ids'])
                         ->whereNotNull('base_price')
                         ->whereNull('exported_at')
-                        ->update(['exported_at' => now(), 'exported_by' => Auth::id()]);
+                        ->get()->each->update(['exported_at' => now(), 'exported_by' => Auth::id()]);
                     $this->clearBaseRowsCache();
                     $this->bumpDataVersion();
                 }
@@ -1021,7 +1021,7 @@ class TripStatisticsReport extends Page
             return;
         }
 
-        OrderCharge::where('order_id', $orderId)->update(['exported_at' => null, 'exported_by' => null]);
+        OrderCharge::where('order_id', $orderId)->get()->each->update(['exported_at' => null, 'exported_by' => null]);
 
         $this->clearBaseRowsCache();
         $this->bumpDataVersion();
@@ -1037,7 +1037,7 @@ class TripStatisticsReport extends Page
             return;
         }
 
-        OrderCharge::where('order_id', $orderId)->update([
+        OrderCharge::where('order_id', $orderId)->get()->each->update([
             'exported_at' => now(),
             'exported_by' => Auth::id(),
         ]);

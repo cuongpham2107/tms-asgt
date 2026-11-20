@@ -359,7 +359,7 @@ class TripController extends Controller
                         OrderStatus::InTransit->value,
                         OrderStatus::Assigned->value,
                     ])
-                    ->update(['status' => OrderStatus::DriverSwap->value]);
+                    ->get()->each->update(['status' => OrderStatus::DriverSwap]);
 
                 // Cập nhật km hiện tại của xe
                 if ($endKm > 0 && $trip->vehicle) {

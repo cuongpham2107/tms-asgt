@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use App\Enums\CargoType;
+use App\Models\Concerns\LogsChanges;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OrderCharge extends Model
 {
+    use LogsChanges;
+
     protected $fillable = [
         'order_id',
         'trip_id',

@@ -36,7 +36,9 @@ class SendOrderAction
                         return;
                     }
 
-                    Order::query()->whereKey($record->id)->update([
+                    // Cập nhật trên bản đọc mới để có Nhật ký mà $record (dùng gửi thông báo) vẫn giữ dữ liệu cũ.
+
+                    Order::query()->findOrFail($record->id)->update([
                         'status' => OrderStatus::Sent->value,
                         'sent_at' => now(),
                     ]);

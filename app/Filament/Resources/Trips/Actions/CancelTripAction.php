@@ -101,8 +101,8 @@ class CancelTripAction
                                 OrderStatus::Completed->value,
                                 OrderStatus::Cancelled->value,
                             ])
-                            ->update([
-                                'status' => OrderStatus::Cancelled->value,
+                            ->get()->each->update([
+                                'status' => OrderStatus::Cancelled,
                                 'cancelled_at' => now(),
                                 'cancel_reason' => $data['cancel_reason'] ?? '',
                             ]);

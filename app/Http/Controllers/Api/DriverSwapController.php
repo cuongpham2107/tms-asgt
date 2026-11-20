@@ -126,7 +126,7 @@ class DriverSwapController extends Controller
 
             $trip->orders()
                 ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
-                ->update(['status' => OrderStatus::DriverSwap->value]);
+                ->get()->each->update(['status' => OrderStatus::DriverSwap]);
 
             app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
 

@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsChanges;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OrderChargeFee extends Model
 {
+    use LogsChanges;
+
     protected $fillable = [
         'order_charge_id',
         'fee_type_id',

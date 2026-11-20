@@ -97,7 +97,7 @@ class ReassignTransportAction extends CreatesOrderTransportCards
                             'shift_id' => $newShift?->id,
                         ]);
 
-                        $record->checkpoints()->update([
+                        $record->checkpoints()->get()->each->update([
                             'vehicle_id' => $newVehicleId,
                             'driver_id' => $newDriverId,
                             'shift_id' => $newShift?->id,

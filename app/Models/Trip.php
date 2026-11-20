@@ -9,6 +9,7 @@ use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointGeofenceService;
 use App\Services\TripKmCalculatorService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,6 +25,33 @@ class Trip extends Model
 {
     use HasFactory;
     use LogsActivity;
+
+    /**
+     * Chuyến của tài xế còn chưa xong — chặn Rời xe / Kết thúc ca (kể cả đã giao hàng nhưng chưa bấm Kết thúc đơn hàng).
+     *
+     * @param  Builder<Trip>  $query
+     */
+    public function scopeUnfinishedForDriver(Builder $query, int $driverId): void
+    {
+        $running = [
+            TripStatus::Started,
+            TripStatus::ArrivedPickup,
+            TripStatus::Delivering,
+            TripStatus::ArrivedDelivery,
+            TripStatus::Delivered,
+            TripStatus::ReturnTrip,
+        ];
+
+        $query->where('driver_id', $driverId)
+            ->where(function (Builder $query) use ($running): void {
+                $query->whereHas('orders', fn (Builder $orders) => $orders->whereIn('status', [
+                    OrderStatus::Sent->value,
+                    OrderStatus::InTransit->value,
+                    OrderStatus::Completed->value,
+                ]))->orWhere(fn (Builder $empty) => $empty->where('is_empty_run', true)->whereIn('status', $running));
+            })
+            ->whereIn('status', $running);
+    }
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -360,7 +388,7 @@ class Trip extends Model
                     $query->whereNull('km_reading')
                         ->orWhere('km_reading', '<', $endKm);
                 })
-                ->update(['km_reading' => $endKm]);
+                ->get()->each->update(['km_reading' => $endKm]);
         }
     }
 

@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\TripKmReportController;
 use App\Http\Controllers\Api\VehicleSearchController;
 use App\Http\Middleware\EnsureRoleVehicle;
+use App\Http\Middleware\LogDriverApiErrors;
 use App\Http\Middleware\ValidatePublicApiKey;
 use Illuminate\Support\Facades\Route;
 
@@ -28,7 +29,7 @@ Route::middleware([ValidatePublicApiKey::class, 'throttle:60,1'])
 // OSRM routing – dùng chung cho admin backend (Filament map) và mobile app
 Route::post('/route', [RouteController::class, 'route']);
 
-Route::middleware(['auth:sanctum', EnsureRoleVehicle::class])->prefix('driver')->group(function () {
+Route::middleware(['auth:sanctum', EnsureRoleVehicle::class, LogDriverApiErrors::class])->prefix('driver')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
     Route::post('/account/delete-request', [AuthController::class, 'requestDeleteAccount']);

@@ -2,9 +2,10 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\DriverWorkShift;
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\OnDutyLocation;
+use App\Models\Concerns\LogsChanges;
 use Carbon\CarbonInterface;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
@@ -61,6 +62,7 @@ class User extends Authenticatable implements FilamentUser
     use HasApiTokens, HasFactory, Notifiable;
 
     use HasRoles;
+    use LogsChanges;
 
     public function canAccessPanel(Panel $panel): bool
     {
@@ -353,5 +355,18 @@ class User extends Authenticatable implements FilamentUser
     public function scopeActiveDrivers(Builder $query): Builder
     {
         return $query->role('driver')->where('is_active', true);
+    }
+
+    /**
+     * Không ghi mật khẩu, token FCM và ảnh giấy tờ.
+     *
+     * @return list<string>
+     */
+    protected function activityLoggedAttributes(): array
+    {
+        return [
+            'employee_code', 'name', 'email', 'phone', 'station', 'work_shift', 'vehicle_id', 'is_active',
+            'license_number', 'license_class', 'license_expiry_date',
+        ];
     }
 }

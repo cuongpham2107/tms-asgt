@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\FeeCalcMethod;
+use App\Models\Concerns\LogsChanges;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class FeeType extends Model
 {
+    use LogsChanges;
+
     protected $fillable = [
         'customer_id',
         'code',

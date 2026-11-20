@@ -45,7 +45,9 @@ class CancelOrderAction
                         return;
                     }
 
-                    Order::query()->whereKey($record->id)->update([
+                    // Cập nhật trên bản đọc mới để có Nhật ký mà $record (dùng gửi thông báo) vẫn giữ dữ liệu cũ.
+
+                    Order::query()->findOrFail($record->id)->update([
                         'status' => OrderStatus::Cancelled->value,
                         'cancelled_at' => now(),
                         'cancel_reason' => $data['cancel_reason'] ?? null,
@@ -53,8 +55,8 @@ class CancelOrderAction
 
                     // Mỗi chuyến chỉ có 1 đơn: huỷ đơn là huỷ luôn chuyến.
                     if ($record->trip_id !== null) {
-                        Trip::query()->whereKey($record->trip_id)->update([
-                            'status' => TripStatus::Cancelled->value,
+                        Trip::query()->whereKey($record->trip_id)->get()->each->update([
+                            'status' => TripStatus::Cancelled,
                         ]);
                     }
 

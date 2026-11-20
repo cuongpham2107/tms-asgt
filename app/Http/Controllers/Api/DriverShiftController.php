@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\CheckpointType;
-use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EndShiftRequest;
@@ -377,34 +376,8 @@ class DriverShiftController extends Controller
      */
     private function unfinishedTripsResponse(User $user): ?JsonResponse
     {
-        $incompleteTrips = Trip::where('driver_id', $user->id)
-            ->where(function ($query) {
-                $query->whereHas('orders', function ($q) {
-                    $q->whereIn('status', [
-                        OrderStatus::Sent->value,
-                        OrderStatus::InTransit->value,
-                        OrderStatus::Completed->value,
-                    ]);
-                })->orWhere(function ($q) {
-                    $q->where('is_empty_run', true)
-                        ->whereIn('status', [
-                            TripStatus::Started,
-                            TripStatus::ArrivedPickup,
-                            TripStatus::Delivering,
-                            TripStatus::ArrivedDelivery,
-                            TripStatus::Delivered,
-                            TripStatus::ReturnTrip,
-                        ]);
-                });
-            })
-            ->whereIn('status', [
-                TripStatus::Started,
-                TripStatus::ArrivedPickup,
-                TripStatus::Delivering,
-                TripStatus::ArrivedDelivery,
-                TripStatus::Delivered,
-                TripStatus::ReturnTrip,
-            ])
+        $incompleteTrips = Trip::query()
+            ->unfinishedForDriver($user->id)
             ->with(['vehicle', 'orders'])
             ->get();
 

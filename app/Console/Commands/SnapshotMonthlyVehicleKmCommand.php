@@ -8,7 +8,6 @@ use App\Models\Vehicle;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 #[Signature('vehicles:snapshot-monthly-km')]
@@ -59,19 +58,20 @@ class SnapshotMonthlyVehicleKmCommand extends Command
         foreach ($vehicleStartKmFromTrip as $vehicleId => $startKm) {
             $effectiveKm = $startKm ?? Vehicle::where('id', $vehicleId)->value('current_mileage');
             if ($effectiveKm !== null) {
-                Vehicle::where('id', $vehicleId)->update(['monthly_start_km' => $effectiveKm]);
+                Vehicle::find($vehicleId)?->update(['monthly_start_km' => $effectiveKm]);
                 $deferredCount++;
             }
         }
 
         // Cập nhật cho các xe còn lại (không có chuyến đang chạy):
         // monthly_start_km = current_mileage
-        $regularCount = Vehicle::query()
+        // Cập nhật từng xe để Nhật ký hoạt động ghi lại km đầu chu kỳ cũ → mới.
+        $regularVehicles = Vehicle::query()
             ->whereNotNull('current_mileage')
             ->when(! empty($activeVehicleIds), fn ($q) => $q->whereNotIn('id', $activeVehicleIds))
-            ->update([
-                'monthly_start_km' => DB::raw('current_mileage'),
-            ]);
+            ->get();
+        $regularVehicles->each(fn (Vehicle $vehicle) => $vehicle->update(['monthly_start_km' => $vehicle->current_mileage]));
+        $regularCount = $regularVehicles->count();
 
         $totalUpdated = $deferredCount + $regularCount;
         $message = "Đã hoàn thành chốt Km đầu chu kỳ tháng cho {$totalUpdated} xe ({$regularCount} xe chốt theo km hiện tại, {$deferredCount} xe đang chạy chuyến để sang tháng sau tính theo start_km của chuyến).";

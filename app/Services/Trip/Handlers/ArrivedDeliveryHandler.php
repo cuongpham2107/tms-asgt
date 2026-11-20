@@ -43,13 +43,13 @@ class ArrivedDeliveryHandler implements CheckpointHandlerInterface
         if ($orderIds->isNotEmpty()) {
             Order::whereIn('id', $orderIds)
                 ->where('status', OrderStatus::Completed->value)
-                ->update(['status' => OrderStatus::InTransit->value]);
+                ->get()->each->update(['status' => OrderStatus::InTransit]);
         }
 
         if ($trip->vehicle_id) {
             Vehicle::where('id', $trip->vehicle_id)
                 ->where('status', VehicleStatus::On->value)
-                ->update(['status' => VehicleStatus::Running->value]);
+                ->get()->each->update(['status' => VehicleStatus::Running]);
         }
     }
 }

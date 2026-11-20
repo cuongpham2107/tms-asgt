@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CargoType;
 use App\Enums\FreightPricingMethod;
 use App\Enums\VehicleType;
+use App\Models\Concerns\LogsChanges;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class FreightRate extends Model
 {
+    use LogsChanges;
+
     protected $attributes = [
         'pricing_method' => 'by_vehicle',
         'prices' => '{}',

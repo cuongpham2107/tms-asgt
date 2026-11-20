@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CheckpointType;
 use App\Enums\ShiftType;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
+use App\Models\Concerns\LogsChanges;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,6 +13,8 @@ use Illuminate\Support\Collection;
 
 class DriverShift extends Model
 {
+    use LogsChanges;
+
     protected $fillable = [
         'driver_id',
         'shift_type',

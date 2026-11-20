@@ -3,6 +3,8 @@
 namespace App\Services\ActivityLog;
 
 use App\Enums\CargoType;
+use App\Enums\CheckpointType;
+use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\Priority;
@@ -12,6 +14,7 @@ use App\Models\Customer;
 use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
+use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -67,6 +70,29 @@ class ActivityLogFormatter
             'priority' => 'Độ ưu tiên',
             'type' => 'Loại đơn hàng',
             'trip_sequence' => 'Thứ tự trong chuyến',
+            'checkpoint_type' => 'Loại mốc',
+            'occurred_at' => 'Giờ mốc',
+            'adjusted_at' => 'Giờ mốc điều chỉnh',
+            'km_reading' => 'Km mốc',
+            'order_id' => 'Đơn hàng',
+            'delivery_point_id' => 'Điểm giao',
+            'location_id' => 'Kho / điểm',
+            'sequence' => 'Thứ tự điểm',
+            'is_driver_added' => 'Lái xe tự thêm',
+            'arrived_at' => 'Giờ đến',
+            'delivered_at' => 'Giờ giao xong',
+            'start_time' => 'Bắt đầu ca',
+            'end_time' => 'Kết thúc ca',
+            'current_mileage' => 'Km hiện tại của xe',
+            'monthly_start_km' => 'Km đầu chu kỳ (ngày 23)',
+            'is_active' => 'Đang hoạt động',
+            'total' => 'Tổng tiền',
+            'waiting_minutes' => 'Phút chờ tính tiền',
+            'waiting_fee' => 'Phí giờ chờ',
+            'amount' => 'Số tiền',
+            'fee_type_id' => 'Loại phí',
+            'vehicle_geo_status' => 'Kiểm tra vị trí xe',
+            'location_geo_status' => 'Kiểm tra vị trí kho',
         ];
 
         return $labels[$field] ?? ucfirst(str_replace('_', ' ', $field));
@@ -107,11 +133,34 @@ class ActivityLogFormatter
             return self::resolveRelation(Area::class, $value, fn (Area $a) => $a->name.($a->code ? ' ('.$a->code.')' : ''));
         }
 
+        if ($field === 'location_id') {
+            return self::resolveRelation(Location::class, $value, fn (Location $l) => ($l->code ? '['.$l->code.'] ' : '').$l->name);
+        }
+
+        if ($field === 'delivery_point_id') {
+            return self::resolveRelation(OrderDeliveryPoint::class, $value, fn (OrderDeliveryPoint $dp) => 'Điểm '.$dp->sequence.($dp->location?->code ? ' ('.$dp->location->code.')' : ''));
+        }
+
+        if ($field === 'order_id') {
+            return self::resolveRelation(Order::class, $value, fn (Order $o) => $o->order_code);
+        }
+
+        if ($field === 'checkpoint_type') {
+            return ($value instanceof CheckpointType ? $value : CheckpointType::tryFrom((string) $value))?->getLabel() ?? (string) $value;
+        }
+
         if ($field === 'parent_order_id') {
             return self::resolveRelation(Order::class, $value, fn (Order $o) => $o->order_code);
         }
 
         // 2. Resolve Enums
+        if ($field === 'status' && in_array($subjectType, [OrderDeliveryPoint::class, 'order_delivery_point'], true)) {
+            $enum = $value instanceof OrderDeliveryPointStatus ? $value : OrderDeliveryPointStatus::tryFrom((string) $value);
+            if ($enum) {
+                return $enum->getLabel();
+            }
+        }
+
         if ($field === 'status') {
             $isTrip = $subjectType === Trip::class || $subjectType === 'App\Models\Trip' || $subjectType === 'trip';
             if ($isTrip) {
@@ -154,12 +203,12 @@ class ActivityLogFormatter
         }
 
         // 3. Resolve Booleans
-        if (is_bool($value) || in_array($field, ['is_return_trip', 'is_empty_run'])) {
+        if (is_bool($value) || in_array($field, ['is_return_trip', 'is_empty_run', 'is_driver_added', 'is_active'])) {
             return (bool) $value ? 'Có' : 'Không';
         }
 
         // 4. Resolve Datetime Fields
-        if (in_array($field, ['planned_loading_at', 'started_at', 'completed_at', 'cancelled_at', 'sent_at', 'created_at', 'updated_at'])) {
+        if (in_array($field, ['planned_loading_at', 'started_at', 'completed_at', 'cancelled_at', 'sent_at', 'created_at', 'updated_at', 'occurred_at', 'adjusted_at', 'arrived_at', 'delivered_at', 'start_time', 'end_time'])) {
             try {
                 return Carbon::parse($value)->format('H:i d/m/Y');
             } catch (Throwable) {
@@ -172,7 +221,7 @@ class ActivityLogFormatter
             return number_format((float) $value, 2, ',', '.').' kg';
         }
 
-        if (in_array($field, ['total_km', 'total_km_loaded', 'total_km_empty', 'start_km', 'end_km', 'loaded_km']) && is_numeric($value)) {
+        if (in_array($field, ['total_km', 'total_km_loaded', 'total_km_empty', 'start_km', 'end_km', 'loaded_km', 'km_reading', 'current_mileage', 'monthly_start_km']) && is_numeric($value)) {
             return number_format((float) $value, 1, ',', '.').' km';
         }
 

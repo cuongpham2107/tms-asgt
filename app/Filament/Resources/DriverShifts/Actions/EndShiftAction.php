@@ -93,7 +93,7 @@ class EndShiftAction
 
                         $trip->orders()
                             ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
-                            ->update(['status' => OrderStatus::DriverSwap->value]);
+                            ->get()->each->update(['status' => OrderStatus::DriverSwap]);
 
                         TripCheckpoint::create([
                             'trip_id' => $trip->id,

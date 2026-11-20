@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LogsChanges;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WaitingFeeRate extends Model
 {
+    use LogsChanges;
+
     public const MODE_NORMAL = 'normal';
 
     public const MODE_LOADING = 'loading';

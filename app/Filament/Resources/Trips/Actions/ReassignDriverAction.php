@@ -370,7 +370,7 @@ class ReassignDriverAction
 
         $trip->orders()
             ->where('status', OrderStatus::DriverSwap->value)
-            ->update(['status' => $restoredStatus->value]);
+            ->get()->each->update(['status' => $restoredStatus]);
 
         if ($newDriver !== null) {
             try {

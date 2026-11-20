@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use App\Enums\OrderDeliveryPointStatus;
+use App\Models\Concerns\LogsChanges;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OrderDeliveryPoint extends Model
 {
+    use LogsChanges;
+
     protected $fillable = [
         'order_id',
         'location_id',

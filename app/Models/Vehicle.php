@@ -10,6 +10,7 @@ use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
+use App\Models\Concerns\LogsChanges;
 use App\Services\ShiftScheduleService;
 use Carbon\CarbonInterface;
 use Database\Factories\VehicleFactory;
@@ -26,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Vehicle extends Model
 {
     use HasFactory;
+    use LogsChanges;
 
     private ?Trip $frozenActiveTrip = null;
 
@@ -526,5 +528,19 @@ class Vehicle extends Model
             ->whereBetween('recorded_at', [$from, $to])
             ->orderBy('recorded_at')
             ->get();
+    }
+
+    /**
+     * Bỏ các trường GPS cập nhật liên tục; chỉ ghi thông tin xe, km và phân công lái xe.
+     *
+     * @return list<string>
+     */
+    protected function activityLoggedAttributes(): array
+    {
+        return [
+            'plate_number', 'registration_number', 'vehicle_type', 'owner', 'type', 'load_capacity',
+            'current_mileage', 'monthly_start_km', 'current_driver_id', 'even_driver_id', 'odd_driver_id',
+            'external_driver_name', 'is_active', 'status', 'off_reason', 'notes',
+        ];
     }
 }

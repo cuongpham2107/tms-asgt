@@ -38,7 +38,7 @@ class BulkSendOrderAction
                 }
 
                 try {
-                    Order::query()->whereIn('id', $assignOrders->pluck('id'))->update([
+                    Order::query()->whereIn('id', $assignOrders->pluck('id'))->get()->each->update([
                         'status' => OrderStatus::Sent->value,
                         'sent_at' => now(),
                     ]);

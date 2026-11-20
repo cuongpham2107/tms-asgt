@@ -190,7 +190,7 @@ class TripKmAdjustmentService
                     ->whereNotNull('km_reading')
                     ->where('km_reading', $oldKm)
                     ->where('occurred_at', $targetCp->occurred_at)
-                    ->update(['km_reading' => $correctedKm]);
+                    ->get()->each->update(['km_reading' => $correctedKm]);
 
                 // Cập nhật start_km / end_km của trip nếu checkpoint nằm ở mốc biên
                 $this->syncTripBoundary($trip, $targetCp, $correctedKm);

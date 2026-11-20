@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\LogDriverApiErrors;
 use App\Models\DatabaseNotification;
 use App\Models\VehicleGpsLog;
 use App\Services\EupGpsService;
@@ -40,4 +41,16 @@ Schedule::command('model:prune', ['--model' => [DatabaseNotification::class]])
 Schedule::command('db:backup --keep=3')
     ->dailyAt('01:00')
     ->name('daily-database-backup')
+    ->withoutOverlapping();
+
+// Dọn Nhật ký hoạt động hàng tháng cho nhẹ database: giữ ACTIVITYLOG_KEEP_DAYS ngày (mặc định 90),
+// riêng log lỗi API của App tài xế chỉ giữ 30 ngày.
+Schedule::command('activitylog:clean', ['--force' => true])
+    ->monthlyOn(1, '02:00')
+    ->name('clean-activity-log')
+    ->withoutOverlapping();
+
+Schedule::command('activitylog:clean', [LogDriverApiErrors::LOG_NAME, '--days' => 30, '--force' => true])
+    ->monthlyOn(1, '02:10')
+    ->name('clean-driver-api-error-log')
     ->withoutOverlapping();
