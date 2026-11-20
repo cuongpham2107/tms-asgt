@@ -657,6 +657,7 @@ class ListTrips extends ListRecords
             .' ELSE 99 END';
 
         $actionRecordId = $this->deepLinkTripId;
+        $hasSearch = filled(trim((string) $this->tripSearch));
 
         $query = TripResource::getEloquentQuery()
             ->orderByRaw($caseSql)
@@ -670,10 +671,8 @@ class ListTrips extends ListRecords
                 'orders.deliveryPoints.location',
             ]);
 
-        $search = trim((string) ($this->tripSearch ?? ''));
-
-        if ($search !== '') {
-            return $this->applyTripSearchFilter($query, $search, $actionRecordId);
+        if ($hasSearch) {
+            return $this->applyTripSearchFilter($query, (string) $this->tripSearch, $actionRecordId);
         }
 
         return $query

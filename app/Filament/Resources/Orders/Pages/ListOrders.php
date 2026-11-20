@@ -503,6 +503,8 @@ class ListOrders extends ListRecords
             .collect($statusOrder)->map(fn ($ord, $status) => "WHEN '{$status}' THEN {$ord}")->implode(' ')
             .' END';
 
+        $hasSearch = filled(trim((string) $this->orderSearch));
+
         /** @var Builder $query */
         $query = OrderResource::getEloquentQuery()
             ->leftJoin('areas', 'orders.area_id', '=', 'areas.id')
@@ -518,10 +520,8 @@ class ListOrders extends ListRecords
                 'trip.driver',
             ]);
 
-        $search = trim((string) ($this->orderSearch ?? ''));
-
-        if ($search !== '') {
-            return $this->applyOrderSearchFilter($query, $search);
+        if ($hasSearch) {
+            return $this->applyOrderSearchFilter($query, (string) $this->orderSearch, qualifyOrders: true);
         }
 
         $query

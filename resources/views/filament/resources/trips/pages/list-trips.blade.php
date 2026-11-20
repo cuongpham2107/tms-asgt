@@ -79,7 +79,15 @@
         </div>
 
         {{-- Active filter summary --}}
-        @if ($activeStatusFilter !== 'all' || $vehicleOwner !== 'all' || $orderType !== 'all' || $activePlaceFilter !== 'all')
+        @if (filled(trim((string) $tripSearch)))
+            <div class="flex items-center gap-2 text-xs text-primary-700 dark:text-primary-300">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1 font-medium ring-1 ring-inset ring-primary-500/20 dark:bg-primary-950/60">
+                    <x-filament::icon icon="heroicon-m-magnifying-glass" class="h-3.5 w-3.5" />
+                    <span>Đang tìm <strong>"{{ trim((string) $tripSearch) }}"</strong> trên toàn bộ chuyến đi (tạm bỏ qua bộ lọc)</span>
+                    <button wire:click="$set('tripSearch', '')" class="ml-1 hover:text-red-500 cursor-pointer" title="Xóa tìm kiếm">&times;</button>
+                </span>
+            </div>
+        @elseif ($activeStatusFilter !== 'all' || $vehicleOwner !== 'all' || $orderType !== 'all' || $activePlaceFilter !== 'all')
             <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span>Đang lọc:</span>
                 @if ($activeStatusFilter !== 'all')

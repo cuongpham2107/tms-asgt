@@ -73,8 +73,10 @@ beforeEach(function () {
 test('list orders searches case-insensitively by order code, customer code, and plate number', function () {
     foreach (['asg-450', 'ASG-450', 'alsb', '29e25824'] as $keyword) {
         Livewire::test(ListOrders::class, [
+            'activeStatusFilter' => 'completed',
             'orderSearch' => $keyword,
         ])
+            ->loadTable()
             ->assertCanSeeTableRecords([$this->order]);
     }
 });
@@ -82,50 +84,69 @@ test('list orders searches case-insensitively by order code, customer code, and 
 test('list trips searches case-insensitively by order code, trip code, plate number, and driver', function () {
     foreach (['asg-450', 'cd-2026-11-18-450', '29e25824', 'nguyễn văn admin'] as $keyword) {
         Livewire::test(ListTrips::class, [
+            'activeStatusFilter' => 'completed',
             'tripSearch' => $keyword,
         ])
+            ->loadTable()
             ->assertCanSeeTableRecords([$this->trip]);
     }
 });
 
-test('list orders and list trips search bypasses default status, type, area, mine-only, and date filters', function () {
-    $otherUser = User::factory()->create(['name' => 'Người Tạo Khác']);
+test('list orders and list trips search globally across all statuses, areas, types, owners, and dates', function () {
+    $otherUser = User::factory()->create(['name' => 'Điều hành khác']);
     $otherArea = Area::create([
-        'type' => 'external',
-        'code' => 'HPH',
-        'name' => 'Hải Phòng',
+        'type' => 'HHHK',
+        'code' => 'BN',
+        'name' => 'Bắc Ninh',
         'is_active' => true,
         'sort_order' => 2,
     ]);
+    $rentVehicle = Vehicle::create([
+        'plate_number' => '99C88888',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'Thuê ngoài',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Rent,
+    ]);
 
     $oldTrip = Trip::create([
-        'trip_code' => 'CD-2025-01-10-999',
-        'vehicle_id' => $this->vehicle->id,
+        'trip_code' => 'CD-OLD-999',
+        'vehicle_id' => $rentVehicle->id,
         'driver_id' => $otherUser->id,
-        'status' => TripStatus::Completed,
-        'started_at' => now()->subMonths(3),
-        'completed_at' => now()->subMonths(3)->addHour(),
         'created_by' => $otherUser->id,
+        'status' => TripStatus::Cancelled,
+        'started_at' => now()->subMonths(3),
+        'completed_at' => now()->subMonths(3),
     ]);
 
     $oldOrder = Order::create([
-        'order_code' => 'EXT-999',
+        'order_code' => 'EXT-OLD-999',
         'type' => OrderType::External,
         'area_id' => $otherArea->id,
         'customer_id' => $this->customer->id,
         'trip_id' => $oldTrip->id,
-        'status' => OrderStatus::Completed,
+        'status' => OrderStatus::Cancelled,
         'planned_loading_at' => now()->subMonths(3),
         'created_by' => $otherUser->id,
     ]);
 
-    Livewire::test(ListOrders::class, [
-        'orderSearch' => 'ext-999',
-    ])
+    // ListOrders mặc định đang lọc: HHHK + active (ẩn Completed/Cancelled) + NBA + showMineOnly + tháng này
+    // Khi gõ search vẫn phải tìm ra đơn Hàng ngoài, Đã hủy, khu vực BN, của user khác, từ 3 tháng trước
+    Livewire::test(ListOrders::class)
+        ->loadTable()
+        ->assertCanNotSeeTableRecords([$oldOrder])
+        ->set('orderSearch', 'ext-old-999')
         ->assertCanSeeTableRecords([$oldOrder]);
 
+    // ListTrips mặc định đang lọc: HHHK + active + NBA + tháng này + bật showMineOnly + Xe công ty
+    // Khi gõ search vẫn phải tìm ra chuyến Hàng ngoài, Đã hủy, xe thuê, khu vực BN, của user khác, từ 3 tháng trước
     Livewire::test(ListTrips::class, [
-        'tripSearch' => 'cd-2025-01-10-999',
+        'showMineOnly' => true,
+        'vehicleOwner' => 'company',
     ])
+        ->loadTable()
+        ->assertCanNotSeeTableRecords([$oldTrip])
+        ->set('tripSearch', 'cd-old-999')
         ->assertCanSeeTableRecords([$oldTrip]);
 });
