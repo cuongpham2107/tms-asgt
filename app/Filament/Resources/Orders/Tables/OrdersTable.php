@@ -20,6 +20,7 @@ use App\Models\Trip;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
 use App\Services\OsrmService;
+use App\Services\Trip\DeliveryProgressSyncService;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
@@ -229,7 +230,9 @@ class OrdersTable extends BaseTable
                             }
 
                             return $record;
-                        }),
+                        })
+                        // Thêm / bớt điểm trả cho đơn đã giao xong: mở lại đơn và chuyến để app tài xế hiện bước cho điểm mới.
+                        ->after(fn (Order $record) => app(DeliveryProgressSyncService::class)->syncOrderProgress($record->refresh())),
 
                     // UnsendOrderAction::make(),
                     // CreateReturnTripAction::make(),

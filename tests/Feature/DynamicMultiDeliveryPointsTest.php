@@ -402,3 +402,68 @@ test('deleting completed checkpoint and adding new delivery point on web reopens
         ->and($order->fresh()->status)->toBe(OrderStatus::InTransit)
         ->and($trip->fresh()->status)->toBe(TripStatus::ArrivedDelivery);
 });
+
+test('adding a delivery point in the order list edit modal reopens a delivered order and trip for the driver app', function () {
+    $this->actingAs($this->admin);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-REOPEN-MODAL',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'status' => TripStatus::Delivered,
+        'start_km' => 1000.0,
+        'started_at' => now()->subHours(2),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-1011',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $trip->id,
+        'pickup_location_id' => $this->pickup->id,
+        'cargo_type' => 'GCR',
+        'chargeable_weight' => 5,
+        'planned_loading_at' => now()->subHours(2),
+        'status' => OrderStatus::Completed,
+        'created_by' => $this->admin->id,
+    ]);
+
+    $delivered = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->dpLoc1->id,
+        'sequence' => 1,
+        'status' => OrderDeliveryPointStatus::Delivered,
+        'arrived_at' => now()->subHour(),
+        'delivered_at' => now()->subMinutes(30),
+    ]);
+
+    foreach ([CheckpointType::Started, CheckpointType::ArrivedPickup, CheckpointType::LeftPickup, CheckpointType::ArrivedDelivery, CheckpointType::Completed] as $index => $type) {
+        TripCheckpoint::create([
+            'trip_id' => $trip->id,
+            'order_id' => $order->id,
+            'delivery_point_id' => in_array($type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed], true) ? $delivered->id : null,
+            'driver_id' => $this->driver->id,
+            'checkpoint_type' => $type->value,
+            'km_reading' => 1000.0 + $index * 5,
+            'occurred_at' => now()->subMinutes(120 - $index * 20),
+        ]);
+    }
+
+    Livewire::test(ListOrders::class, ['showMineOnly' => false, 'activePlaceFilter' => 'all', 'activeOrderTypeFilter' => 'all', 'activeStatusFilter' => 'completed'])
+        ->loadTable()
+        ->mountTableAction('edit', $order)
+        ->setTableActionData([
+            'deliveryPoints' => [
+                'record-'.$delivered->id => ['location_id' => $this->dpLoc1->id],
+                'new-dp-2' => ['location_id' => $this->dpLoc2->id],
+            ],
+        ])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($order->fresh()->deliveryPoints()->count())->toBe(2)
+        ->and($order->fresh()->status)->toBe(OrderStatus::InTransit)
+        ->and($trip->fresh()->status)->toBe(TripStatus::Delivering);
+});
