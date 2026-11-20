@@ -22,6 +22,8 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\WaitingFeeRate;
 use App\Services\Billing\OrderChargeCalculator;
+use App\Services\Export\BillingStatement\BillingStatementExporter;
+use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -301,6 +303,15 @@ test('loading and unloading deduct their own free minutes when both waiting rows
         ->and((float) $charge->waiting_fee)->toBe(100_000.0)
         ->and(app(OrderChargeCalculator::class)->explainWaiting($order, $charge))
         ->toContain("miễn đóng hàng 240', hạ hàng 120'/điểm → tính 90' = 2 × 50.000 đ");
+
+    // Bảng kê theo mẫu khách (cột "Giờ chờ tại điểm đóng hàng SDV / hạ hàng NBA") dùng cùng mức miễn phí từng đầu
+    $row = app(TripExcelExportService::class)->getTripSummaryRowsFromOrders(Order::query()->whereKey($order->id))->first();
+    $values = (fn (): array => $this->rowValues($order->fresh(['charge.fees', 'deliveryPoints.location']), $row, 1, [], true))
+        ->call(app(BillingStatementExporter::class));
+
+    expect($values['wait_loading'])->toBe(60)
+        ->and($values['wait_unloading'])->toBe(30)
+        ->and($values['wait_total'])->toBe(90);
 });
 
 test('multi-point order deducts free minutes per delivery point for waiting time', function () {
