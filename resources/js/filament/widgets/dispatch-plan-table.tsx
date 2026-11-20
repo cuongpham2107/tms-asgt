@@ -65,7 +65,6 @@ type Wire = JsWidgetUtilities<WidgetMethods>["$wire"];
 
 /** Tự tải lại để "còn X phút" và đơn mới tạo luôn đúng khi điều hành để màn hình mở. */
 const REFRESH_MS = 60_000;
-const AREA_STORAGE_KEY = "tms.dispatchPlan.areas";
 const MINE_STORAGE_KEY = "tms.dispatchPlan.mineOnly";
 const COLUMN_COUNT = 9;
 const MINUTES_PER_DAY = 1440;
@@ -77,23 +76,6 @@ const HEADER_CELL = `px-2 py-2 text-center whitespace-nowrap ${HEADER_LINE}`;
 const CELL = "border-r border-gray-100 px-2 py-1.5 align-middle dark:border-white/5";
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
-
-function readStoredAreas(): number[] {
-    try {
-        const value = JSON.parse(window.localStorage.getItem(AREA_STORAGE_KEY) ?? "[]");
-        return Array.isArray(value) ? value.filter((id): id is number => typeof id === "number") : [];
-    } catch {
-        return [];
-    }
-}
-
-function storeAreas(ids: number[]): void {
-    try {
-        window.localStorage.setItem(AREA_STORAGE_KEY, JSON.stringify(ids));
-    } catch {
-        // Trình duyệt chặn localStorage: bộ lọc chỉ mất khi tải lại trang.
-    }
-}
 
 function readStoredMineOnly(): boolean {
     try {
@@ -297,7 +279,7 @@ const PlanRowView = memo(function PlanRowView({
 
             <td className={`${CELL} text-center`}>
                 {isPlanned(row) && (
-                    <span className="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-inset ring-sky-600/20 dark:bg-sky-500/15 dark:text-sky-300">
+                    <span className="inline-flex rounded-md bg-red-600 px-1.5 py-0.5 text-[11px] font-bold text-white shadow-sm">
                         Kế hoạch
                     </span>
                 )}
@@ -364,7 +346,8 @@ const PlanRowView = memo(function PlanRowView({
 
 function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configuration>; wire: Wire }) {
     const page = wire.$parent;
-    const [selectedAreas, setSelectedAreas] = useState<number[]>(readStoredAreas);
+    // Chỉ chọn một khu vực; mỗi lần mở trang luôn về "Tất cả KV".
+    const [selectedArea, setSelectedArea] = useState<number | null>(null);
     const [search, setSearch] = useState("");
     const [mineOnly, setMineOnly] = useState<boolean>(readStoredMineOnly);
     const [plannedOnly, setPlannedOnly] = useState(false);
@@ -395,17 +378,14 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
         return () => window.clearInterval(timer);
     }, [wire]);
 
+    /** Bấm khu vực khác thì thay lựa chọn cũ; bấm lại khu vực đang chọn thì về Tất cả KV. */
     const toggleArea = useCallback((id: number) => {
-        setSelectedAreas((current) => {
-            const next = current.includes(id) ? current.filter((value) => value !== id) : [...current, id];
-            storeAreas(next);
-            return next;
-        });
+        setSelectedArea((current) => (current === id ? null : id));
     }, []);
 
     const clearAreas = useCallback(() => {
-        storeAreas([]);
-        setSelectedAreas([]);
+        setSelectedArea(null);
+        setPlannedOnly(false);
     }, []);
 
     const assign = useCallback(
@@ -456,7 +436,7 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                 return false;
             }
 
-            if (selectedAreas.length > 0 && (row.areaId === null || !selectedAreas.includes(row.areaId))) {
+            if (selectedArea !== null && row.areaId !== selectedArea) {
                 return false;
             }
 
@@ -472,7 +452,7 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
 
             return haystack.includes(keyword);
         });
-    }, [scopedRows, selectedAreas, search, plannedOnly]);
+    }, [scopedRows, selectedArea, search, plannedOnly]);
 
     const sortedRows = useMemo(
         () => (sort === null ? visibleRows : [...visibleRows].sort((a, b) => compareRows(a, b, sort.key, sort.direction))),
@@ -500,7 +480,7 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
 
                 <span aria-hidden="true" className="mx-1 h-5 w-px bg-gray-200 dark:bg-white/10" />
 
-                <FilterChip active={selectedAreas.length === 0} onClick={clearAreas}>
+                <FilterChip active={selectedArea === null && !plannedOnly} onClick={clearAreas}>
                     Tất cả KV
                     <ChipCount>{configuration.loaded ? scopedRows.length : <SkeletonBar className="w-4" />}</ChipCount>
                 </FilterChip>
@@ -508,13 +488,13 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                     active={plannedOnly}
                     onClick={() => setPlannedOnly((current) => !current)}
                     title="Chỉ hiện đơn có giờ đóng hàng dự kiến sau thời điểm hiện tại"
-                    activeClassName="bg-sky-100 ring-sky-500 text-sky-900 dark:bg-sky-950 dark:text-sky-200"
+                    activeClassName="bg-red-600 ring-red-600 text-white dark:bg-red-600 dark:text-white"
                 >
                     Kế hoạch
                     <ChipCount>{configuration.loaded ? plannedCount : <SkeletonBar className="w-4" />}</ChipCount>
                 </FilterChip>
                 {configuration.areas.map((area) => (
-                    <FilterChip key={area.id} active={selectedAreas.includes(area.id)} title={area.name} onClick={() => toggleArea(area.id)}>
+                    <FilterChip key={area.id} active={selectedArea === area.id} title={area.name} onClick={() => toggleArea(area.id)}>
                         {area.code}
                         <ChipCount>{configuration.loaded ? countsByArea.get(area.id) ?? 0 : <SkeletonBar className="w-4" />}</ChipCount>
                     </FilterChip>
@@ -589,7 +569,7 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                         {configuration.rows.length === 0
                                             ? "Đơn nháp có giờ đóng hàng dự kiến sẽ hiện ở đây."
-                                            : "Thử bỏ lọc Đơn của tôi, Kế hoạch, bớt khu vực hoặc đổi từ khoá tìm kiếm."}
+                                            : "Thử bỏ lọc Đơn của tôi, Kế hoạch, chọn Tất cả KV hoặc đổi từ khoá tìm kiếm."}
                                     </p>
                                 </td>
                             </tr>
