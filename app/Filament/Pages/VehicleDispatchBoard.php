@@ -12,6 +12,7 @@ use App\Enums\OrderType;
 use App\Enums\ShiftType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleStatus;
+use App\Filament\Resources\Orders\Actions\AssignTransportAction;
 use App\Filament\Resources\Trips\Actions\EditTripAction;
 use App\Filament\Resources\Trips\Actions\ReassignDriverAction;
 use App\Filament\Resources\Trips\Actions\ResolveKmReportAction;
@@ -72,7 +73,7 @@ class VehicleDispatchBoard extends Page implements HasTable
     protected string $view = 'filament.pages.vehicle-dispatch-board';
 
     #[Url]
-    public string $activeTab = 'vehicles'; // vehicles, duty
+    public string $activeTab = 'vehicles'; // vehicles, rent, duty, plan
 
     #[Url]
     public string $dutyStationFilter = 'all';
@@ -232,6 +233,21 @@ class VehicleDispatchBoard extends Page implements HasTable
     {
         return EditTripAction::make('edit_trip')
             ->record(fn (array $arguments = []): ?Trip => isset($arguments['trip']) ? Trip::find($arguments['trip']) : null);
+    }
+
+    /**
+     * Tab Kế hoạch (React) bấm "Gán lái, xe" trên một đơn nháp.
+     */
+    public function openAssignTransport(int $orderId): void
+    {
+        $this->mountAction('assign_transport', ['order' => $orderId]);
+    }
+
+    public function assign_transportAction(): Action
+    {
+        return AssignTransportAction::make()
+            ->record(fn (array $arguments = []): ?Order => isset($arguments['order']) ? Order::find($arguments['order']) : null)
+            ->after(fn () => $this->dataVersion++);
     }
 
     public function getSelectedVehicleForSwap(): ?Vehicle
@@ -1792,13 +1808,14 @@ class VehicleDispatchBoard extends Page implements HasTable
         return match ($this->activeTab) {
             'duty' => 'Tổng hợp ca trực lái xe',
             'rent' => 'Kiểm soát xe thuê',
+            'plan' => 'Kế hoạch đơn chưa gán lái, xe',
             default => 'Kiểm soát tình trạng xe',
         };
     }
 
     public function switchTab(string $tab): void
     {
-        $this->activeTab = in_array($tab, ['vehicles', 'rent', 'duty'], true) ? $tab : 'vehicles';
+        $this->activeTab = in_array($tab, ['vehicles', 'rent', 'duty', 'plan'], true) ? $tab : 'vehicles';
 
         if ($this->activeTab === 'rent') {
             $this->activeOwnerType = 'rent';

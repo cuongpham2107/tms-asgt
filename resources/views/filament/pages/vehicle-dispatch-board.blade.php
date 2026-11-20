@@ -29,8 +29,8 @@
             wire:click="switchTab('vehicles')"
             @class([
                 'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer',
-                'bg-primary-600 text-white shadow-xs' => $activeTab === 'vehicles' || ! in_array($activeTab, ['rent', 'duty'], true),
-                'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white' => in_array($activeTab, ['rent', 'duty'], true),
+                'bg-primary-600 text-white shadow-xs' => $activeTab === 'vehicles' || ! in_array($activeTab, ['rent', 'duty', 'plan'], true),
+                'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white' => in_array($activeTab, ['rent', 'duty', 'plan'], true),
             ])
         >
             <x-filament::icon icon="heroicon-m-truck" class="h-4 w-4" />
@@ -62,9 +62,27 @@
             <x-filament::icon icon="heroicon-m-clipboard-document-list" class="h-4 w-4" />
             <span>Tổng hợp ca trực lái xe</span>
         </button>
+
+        <button
+            type="button"
+            wire:click="switchTab('plan')"
+            @class([
+                'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer',
+                'bg-primary-600 text-white shadow-xs' => $activeTab === 'plan',
+                'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white' => $activeTab !== 'plan',
+            ])
+        >
+            <x-filament::icon icon="heroicon-m-calendar-days" class="h-4 w-4" />
+            <span>Kế hoạch</span>
+        </button>
     </div>
 
-    @if ($activeTab === 'duty')
+    @if ($activeTab === 'plan')
+        {{-- Đơn nháp sắp đóng hàng (React vẽ); nút Gán lái, xe mở action của page --}}
+        <div class="fi-js-widget-bare">
+            @livewire(\App\Filament\Widgets\DispatchPlanTable::class, ['dataVersion' => $this->dataVersion])
+        </div>
+    @elseif ($activeTab === 'duty')
         @php
             $dutyDrivers = $this->getDutyDriverRows();
             $dutySummary = $this->getDutySummaryData();
