@@ -96,8 +96,8 @@ class Order extends Model implements HasTimeline
     }
 
     /**
-     * Đơn cho phép tài xế tự chọn thêm nhiều điểm trả hàng trên App:
-     * đơn chưa kết thúc hẳn và chưa có điểm cố định nào do điều hành nhập từ Web.
+     * Đơn cho phép tài xế tự chọn thêm điểm trả hàng trên App khi đơn chưa bấm Kết thúc,
+     * kể cả đơn đã có điểm do điều hành nhập (điểm mới chỉ nối sau khi giao xong các điểm có sẵn — xem TripCheckpointRequest).
      */
     public function canDriverAddDeliveryPoint(): bool
     {
@@ -114,15 +114,7 @@ class Order extends Model implements HasTimeline
             ? $this->tripCheckpoints->contains(fn (TripCheckpoint $cp): bool => $cp->checkpoint_type === CheckpointType::End)
             : $this->tripCheckpoints()->where('checkpoint_type', CheckpointType::End->value)->exists();
 
-        if ($hasEndCheckpoint) {
-            return false;
-        }
-
-        $hasPredefinedPoint = $this->relationLoaded('deliveryPoints')
-            ? $this->deliveryPoints->contains(fn (OrderDeliveryPoint $dp): bool => ! (bool) $dp->is_driver_added)
-            : $this->deliveryPoints()->where('is_driver_added', false)->exists();
-
-        return ! $hasPredefinedPoint;
+        return ! $hasEndCheckpoint;
     }
 
     public function area(): BelongsTo

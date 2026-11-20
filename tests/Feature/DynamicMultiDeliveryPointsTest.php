@@ -209,7 +209,7 @@ test('driver can add multiple delivery points sequentially via API when order ha
         ->and($order->fresh()->canDriverAddDeliveryPoint())->toBeFalse();
 });
 
-test('order with predefined delivery point keeps old behavior and blocks dynamic extra location', function () {
+test('driver can append a delivery point after finishing the predefined ones but not while one is still pending', function () {
     Sanctum::actingAs($this->driver);
 
     $trip = Trip::create([
@@ -217,7 +217,7 @@ test('order with predefined delivery point keeps old behavior and blocks dynamic
         'vehicle_id' => $this->vehicle->id,
         'driver_id' => $this->driver->id,
         'shift_id' => $this->shift->id,
-        'status' => TripStatus::Delivering,
+        'status' => TripStatus::Delivered,
         'started_at' => now()->subHour(),
     ]);
 
@@ -229,7 +229,7 @@ test('order with predefined delivery point keeps old behavior and blocks dynamic
         'trip_id' => $trip->id,
         'pickup_location_id' => $this->pickup->id,
         'chargeable_weight' => 5,
-        'status' => OrderStatus::InTransit,
+        'status' => OrderStatus::Completed,
         'created_by' => $this->admin->id,
     ]);
 
@@ -237,12 +237,11 @@ test('order with predefined delivery point keeps old behavior and blocks dynamic
         'order_id' => $order->id,
         'location_id' => $this->dpLoc1->id,
         'sequence' => 1,
-        'status' => OrderDeliveryPointStatus::Delivered,
+        'status' => OrderDeliveryPointStatus::Pending,
         'is_driver_added' => false,
     ]);
 
-    expect($order->canDriverAddDeliveryPoint())->toBeFalse();
-
+    // Điểm điều hành tạo chưa giao: không được chèn điểm mới.
     $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
         'checkpoint_type' => 'arrived_delivery',
         'order_id' => $order->id,
@@ -250,6 +249,29 @@ test('order with predefined delivery point keeps old behavior and blocks dynamic
         'km_reading' => 1015.0,
     ])->assertUnprocessable()
         ->assertJsonValidationErrors('delivery_point_id');
+
+    $fixedDp->update(['status' => OrderDeliveryPointStatus::Delivered]);
+
+    expect($order->fresh()->canDriverAddDeliveryPoint())->toBeTrue();
+
+    $this->getJson("/api/driver/orders/{$order->id}")
+        ->assertSuccessful()
+        ->assertJsonPath('data.can_add_delivery_point', true);
+
+    // Giao xong điểm có sẵn, chưa bấm Kết thúc: tài xế tự chọn thêm điểm hạ.
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_delivery',
+        'order_id' => $order->id,
+        'new_delivery_location_id' => $this->dpLoc2->id,
+        'km_reading' => 1015.0,
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
+
+    $added = $order->deliveryPoints()->orderBy('sequence')->get()->last();
+    expect($added->is_driver_added)->toBeTrue()
+        ->and($added->sequence)->toBe(2)
+        ->and($added->location_id)->toBe($this->dpLoc2->id)
+        ->and($order->fresh()->status)->toBe(OrderStatus::InTransit);
 });
 
 test('external order creation allows empty delivery points by default', function () {
