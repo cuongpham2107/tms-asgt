@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { JsonValue, JsWidgetProps, JsWidgetRenderer, JsWidgetUtilities, Snapshot } from '@filament/widgets/js-widget'
 import { requestDataOnce, SkeletonBar, SkeletonRows } from './table-skeleton'
+import { ChipCount, FilterChip, SearchInput, SegmentedTabs, SelectInput } from './filter-controls'
 
 interface Charge {
     priceCode: string | null
@@ -1067,26 +1068,17 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
         <div className={`w-full space-y-3 transition-opacity ${busy ? 'pointer-events-none opacity-60' : ''}`}>
             {/* Hàng 1: Tab theo loại hình + Số liệu tổng hợp */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="inline-flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-white/5">
-                    {configuration.tabs.map((tab) => {
-                        const active = filters.activeTab === tab.key
-
-                        return (
-                            <button
-                                key={tab.key}
-                                type="button"
-                                aria-pressed={active}
-                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                                    active ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-white/10'
-                                }`}
-                                onClick={() => run(() => page.setActiveTab(tab.key))}
-                            >
-                                {tab.label}
-                                <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white/20 text-white' : tabCountTones[tab.tone]}`}>{configuration.loaded ? count(tab.count) : <SkeletonBar className="w-4" />}</span>
-                            </button>
-                        )
-                    })}
-                </div>
+                <SegmentedTabs
+                    label="Loại hình"
+                    active={filters.activeTab}
+                    onChange={(key) => run(() => page.setActiveTab(key))}
+                    items={configuration.tabs.map((tab) => ({
+                        key: tab.key,
+                        label: tab.label,
+                        count: configuration.loaded ? count(tab.count) : <SkeletonBar className="w-4" />,
+                        countClassName: tabCountTones[tab.tone],
+                    }))}
+                />
 
                 {!configuration.loaded ? (
                     <div className="ms-auto flex items-center gap-4" aria-hidden="true">
@@ -1126,101 +1118,67 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                     {(configuration.areaFilters ?? []).length > 0 && (
                         <div className="flex flex-wrap items-center gap-2">
                             <span>Khu vực:</span>
-                            {configuration.areaFilters.map((area) => {
-                                const active = filters.areaId === area.id
-
-                                return (
-                                    <button
-                                        key={area.id}
-                                        type="button"
-                                        aria-pressed={active}
-                                        title={active ? 'Bỏ lọc' : `Chỉ hiện các chuyến khu vực ${area.label}`}
-                                        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 transition ${
-                                            active
-                                                ? 'bg-blue-100 ring-blue-500 text-blue-900 dark:bg-blue-950 dark:text-blue-200 font-semibold'
-                                                : 'ring-gray-950/10 hover:bg-gray-50 dark:ring-white/10 dark:hover:bg-white/5'
-                                        }`}
-                                        onClick={() => run(() => page.toggleArea(area.id))}
-                                    >
-                                        {area.label}
-                                        <span className="font-mono text-[11px] opacity-70">{configuration.loaded ? count(area.count) : <SkeletonBar className="w-4" />}</span>
-                                    </button>
-                                )
-                            })}
+                            {configuration.areaFilters.map((area) => (
+                                <FilterChip
+                                    key={area.id}
+                                    active={filters.areaId === area.id}
+                                    title={filters.areaId === area.id ? 'Bỏ lọc' : `Chỉ hiện các chuyến khu vực ${area.label}`}
+                                    onClick={() => run(() => page.toggleArea(area.id))}
+                                >
+                                    {area.label}
+                                    <ChipCount>{configuration.loaded ? count(area.count) : <SkeletonBar className="w-4" />}</ChipCount>
+                                </FilterChip>
+                            ))}
                         </div>
                     )}
 
                     {configuration.chargeFilters.length > 0 && (
                         <div className="flex flex-wrap items-center gap-2">
                             <span>Lọc:</span>
-                            {configuration.chargeFilters.map((filter) => {
-                                const active = filters.chargeStatus === filter.key
-
-                                return (
-                                    <button
-                                        key={filter.key}
-                                        type="button"
-                                        aria-pressed={active}
-                                        title={active ? 'Bỏ lọc' : `Chỉ hiện các đơn ${filter.label.toLowerCase()}`}
-                                        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 transition ${
-                                            active
-                                                ? `${chipActive[filter.tone]} font-semibold`
-                                                : 'ring-gray-950/10 hover:bg-gray-50 dark:ring-white/10 dark:hover:bg-white/5'
-                                        }`}
-                                        onClick={() => run(() => page.toggleChargeStatus(filter.key))}
-                                    >
-                                        <span className={`h-3 w-3 rounded-sm ring-1 ${chipSwatches[filter.tone]}`} />
-                                        {filter.label}
-                                        <span className="font-mono text-[11px] opacity-70">{configuration.loaded ? count(filter.count) : <SkeletonBar className="w-4" />}</span>
-                                    </button>
-                                )
-                            })}
+                            {configuration.chargeFilters.map((filter) => (
+                                <FilterChip
+                                    key={filter.key}
+                                    active={filters.chargeStatus === filter.key}
+                                    activeClassName={chipActive[filter.tone]}
+                                    title={filters.chargeStatus === filter.key ? 'Bỏ lọc' : `Chỉ hiện các đơn ${filter.label.toLowerCase()}`}
+                                    onClick={() => run(() => page.toggleChargeStatus(filter.key))}
+                                >
+                                    <span className={`h-3 w-3 rounded-sm ring-1 ${chipSwatches[filter.tone]}`} />
+                                    {filter.label}
+                                    <ChipCount>{configuration.loaded ? count(filter.count) : <SkeletonBar className="w-4" />}</ChipCount>
+                                </FilterChip>
+                            ))}
                         </div>
                     )}
                 </div>
 
                 <div className="ms-auto flex flex-wrap items-center gap-3">
-                    <div className="fi-input-wrp w-64 max-w-xs">
-                        <div className="fi-input-wrp-prefix fi-input-wrp-prefix-has-content">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="fi-icon fi-size-md fi-color-gray" aria-hidden="true">
-                                <path d={ICONS.search} />
-                            </svg>
-                        </div>
-                        <div className="fi-input-wrp-content-ctn">
-                            <input
-                                type="search"
-                                className="fi-input"
-                                placeholder="Mã đơn, BSX, lái xe..."
-                                value={search}
-                                onFocus={() => {
-                                    isSearchFocusedRef.current = true
-                                }}
-                                onBlur={() => {
-                                    isSearchFocusedRef.current = false
-                                }}
-                                onChange={(event) => setSearch(event.target.value)}
-                            />
-                        </div>
-                    </div>
+                    <SearchInput
+                        value={search}
+                        onChange={setSearch}
+                        placeholder="Mã đơn, BSX, lái xe..."
+                        onFocus={() => {
+                            isSearchFocusedRef.current = true
+                        }}
+                        onBlur={() => {
+                            isSearchFocusedRef.current = false
+                        }}
+                    />
 
-                    <div className="fi-input-wrp w-48">
-                        <div className="fi-input-wrp-content-ctn">
-                            <select
-                                className="fi-select-input"
-                                aria-label="Khách hàng"
-                                value={filters.customerId ?? ''}
-                                onChange={(event) => run(() => page.$set('customerId', event.target.value === '' ? null : Number(event.target.value), true))}
-                            >
-                                <option value="">Tất cả khách hàng</option>
-                                {Object.entries(configuration.customers).map(([id, code]) => (
-                                    <option key={id} value={id}>
-                                        {code}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                                
+                    <SelectInput
+                        label="Khách hàng"
+                        className="w-48"
+                        value={filters.customerId ?? ''}
+                        onChange={(value) => run(() => page.$set('customerId', value === '' ? null : Number(value), true))}
+                    >
+                        <option value="">Tất cả khách hàng</option>
+                        {Object.entries(configuration.customers).map(([id, code]) => (
+                            <option key={id} value={id}>
+                                {code}
+                            </option>
+                        ))}
+                    </SelectInput>
+
                     <JourneyFilterPopover
                         options={configuration.journeyOptions ?? []}
                         selected={filters.journeys ?? []}
@@ -1230,20 +1188,15 @@ function TripStatistics({ configuration, wire }: { configuration: Snapshot<Confi
                         onSort={(direction) => run(() => page.setSort('journey', direction))}
                     />
 
-                    <div className="fi-input-wrp w-40">
-                        <div className="fi-input-wrp-content-ctn">
-                            <select
-                                className="fi-select-input"
-                                aria-label="Quản lý xe"
-                                value={filters.vehicleOwner}
-                                onChange={(event) => run(() => page.$set('vehicleOwner', event.target.value, true))}
-                            >
-                                <option value="all">Tất cả xe</option>
-                                <option value="company">Xe công ty</option>
-                                <option value="rent">Xe thuê</option>
-                            </select>
-                        </div>
-                    </div>
+                    <SelectInput
+                        label="Quản lý xe"
+                        value={filters.vehicleOwner}
+                        onChange={(value) => run(() => page.$set('vehicleOwner', value, true))}
+                    >
+                        <option value="all">Tất cả xe</option>
+                        <option value="company">Xe công ty</option>
+                        <option value="rent">Xe thuê</option>
+                    </SelectInput>
 
                     <div className="relative">
                         <button

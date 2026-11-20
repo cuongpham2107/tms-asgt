@@ -8,6 +8,7 @@ import type {
     Snapshot,
 } from "@filament/widgets/js-widget";
 import { requestDataOnce, SkeletonRows } from "./table-skeleton";
+import { SearchInput, SelectInput } from "./filter-controls";
 
 interface TripOrderItem {
     id: number;
@@ -1314,162 +1315,107 @@ function DispatchTable({
     return (
         <div className="w-full space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-                <div className="fi-input-wrp w-72 max-w-xs">
-                    <div className="fi-input-wrp-prefix fi-input-wrp-prefix-has-content">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={1.5}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="fi-icon fi-size-md fi-color-gray"
-                            aria-hidden="true"
-                        >
-                            <path d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607z" />
-                        </svg>
-                    </div>
-                    <div className="fi-input-wrp-content-ctn">
-                        <input
-                            type="search"
-                            className="fi-input"
-                            placeholder="Tìm BSX, lái xe, KH, điểm..."
-                            value={search}
-                            onChange={(event) => setSearch(event.target.value)}
-                        />
-                    </div>
-                </div>
+                <SearchInput
+                    value={search}
+                    onChange={setSearch}
+                    placeholder="Tìm BSX, lái xe, KH, điểm..."
+                    className="w-72 max-w-xs"
+                />
 
                 {filterOptions.groups.length > 1 && (
-                    <div className="fi-input-wrp w-40">
-                        <div className="fi-input-wrp-content-ctn">
-                            <select
-                                className="fi-select-input"
-                                aria-label="Địa điểm"
-                                value={filterGroup}
-                                onChange={(event) =>
-                                    setFilterGroup(event.target.value)
-                                }
-                            >
-                                <option value="">Tất cả địa điểm</option>
-                                {filterOptions.groups.map((g) => (
-                                    <option key={g.code} value={g.code}>
-                                        {g.title}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                    <SelectInput
+                        label="Địa điểm"
+                        className="w-40"
+                        value={filterGroup}
+                        onChange={setFilterGroup}
+                    >
+                        <option value="">Tất cả địa điểm</option>
+                        {filterOptions.groups.map((g) => (
+                            <option key={g.code} value={g.code}>
+                                {g.title}
+                            </option>
+                        ))}
+                    </SelectInput>
                 )}
 
                 {filterOptions.orderTypes.length > 0 && (
-                    <div className="fi-input-wrp w-36">
-                        <div className="fi-input-wrp-content-ctn">
-                            <select
-                                className="fi-select-input"
-                                aria-label="Loại đơn"
-                                value={filterOrderType}
-                                onChange={(event) =>
-                                    setFilterOrderType(event.target.value)
-                                }
-                            >
-                                <option value="">Tất cả loại đơn</option>
-                                {filterOptions.orderTypes.map((type) => (
-                                    <option key={type} value={type}>
-                                        {type}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                    <SelectInput
+                        label="Loại đơn"
+                        className="w-36"
+                        value={filterOrderType}
+                        onChange={setFilterOrderType}
+                    >
+                        <option value="">Tất cả loại đơn</option>
+                        {filterOptions.orderTypes.map((type) => (
+                            <option key={type} value={type}>
+                                {type}
+                            </option>
+                        ))}
+                    </SelectInput>
                 )}
 
                 {filterOptions.statuses.length > 0 && (
-                    <div className="fi-input-wrp w-40">
-                        <div className="fi-input-wrp-content-ctn">
-                            <select
-                                className="fi-select-input"
-                                aria-label="Trạng thái"
-                                value={filterStatus}
-                                onChange={(event) =>
-                                    setFilterStatus(event.target.value)
-                                }
-                            >
-                                <option value="">Tất cả trạng thái</option>
-                                {filterOptions.statuses.map((status) => (
-                                    <option key={status} value={status}>
-                                        {status}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                    <SelectInput
+                        label="Trạng thái"
+                        className="w-40"
+                        value={filterStatus}
+                        onChange={setFilterStatus}
+                    >
+                        <option value="">Tất cả trạng thái</option>
+                        {filterOptions.statuses.map((status) => (
+                            <option key={status} value={status}>
+                                {status}
+                            </option>
+                        ))}
+                    </SelectInput>
                 )}
 
                 {filterOptions.customers.length > 0 && (
-                    <div className="fi-input-wrp w-40">
-                        <div className="fi-input-wrp-content-ctn">
-                            <select
-                                className="fi-select-input"
-                                aria-label="Khách hàng"
-                                value={filterCustomer}
-                                onChange={(event) =>
-                                    setFilterCustomer(event.target.value)
-                                }
-                            >
-                                <option value="">Tất cả khách hàng</option>
-                                {filterOptions.customers.map((customer) => (
-                                    <option key={customer} value={customer}>
-                                        {customer}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                    <SelectInput
+                        label="Khách hàng"
+                        className="w-40"
+                        value={filterCustomer}
+                        onChange={setFilterCustomer}
+                    >
+                        <option value="">Tất cả khách hàng</option>
+                        {filterOptions.customers.map((customer) => (
+                            <option key={customer} value={customer}>
+                                {customer}
+                            </option>
+                        ))}
+                    </SelectInput>
                 )}
 
                 {isRent && filterOptions.plannedDates.length > 0 && (
-                    <div className="fi-input-wrp w-36">
-                        <div className="fi-input-wrp-content-ctn">
-                            <select
-                                className="fi-select-input"
-                                aria-label="Ngày dự kiến đóng"
-                                value={filterPlannedDate}
-                                onChange={(event) =>
-                                    setFilterPlannedDate(event.target.value)
-                                }
-                            >
-                                <option value="">Tất cả ngày</option>
-                                {filterOptions.plannedDates.map((date) => (
-                                    <option key={date} value={date}>
-                                        {date}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                    <SelectInput
+                        label="Ngày dự kiến đóng"
+                        className="w-36"
+                        value={filterPlannedDate}
+                        onChange={setFilterPlannedDate}
+                    >
+                        <option value="">Tất cả ngày</option>
+                        {filterOptions.plannedDates.map((date) => (
+                            <option key={date} value={date}>
+                                {date}
+                            </option>
+                        ))}
+                    </SelectInput>
                 )}
 
                 {!isRent && filterOptions.stations.length > 0 && (
-                    <div className="fi-input-wrp w-32">
-                        <div className="fi-input-wrp-content-ctn">
-                            <select
-                                className="fi-select-input"
-                                aria-label="Trực"
-                                value={filterStation}
-                                onChange={(event) =>
-                                    setFilterStation(event.target.value)
-                                }
-                            >
-                                <option value="">Tất cả trực</option>
-                                {filterOptions.stations.map((station) => (
-                                    <option key={station} value={station}>
-                                        Trực {station}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                    <SelectInput
+                        label="Trực"
+                        className="w-32"
+                        value={filterStation}
+                        onChange={setFilterStation}
+                    >
+                        <option value="">Tất cả trực</option>
+                        {filterOptions.stations.map((station) => (
+                            <option key={station} value={station}>
+                                Trực {station}
+                            </option>
+                        ))}
+                    </SelectInput>
                 )}
 
                 {hasActiveClientControls && (

@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { JsWidgetRenderer, JsWidgetUtilities } from '@filament/widgets/js-widget'
+import { ACTIVE_BUTTON_CLASS, SearchInput, SegmentedTabs } from './filter-controls'
 
 interface Driver {
     id: number
@@ -984,8 +985,6 @@ const PERIODS: { key: Period; label: string }[] = [
     { key: 'month', label: 'Tháng này' },
 ]
 
-const PRIMARY_BTN = 'fi-color fi-color-primary fi-bg-color-400 hover:fi-bg-color-300 dark:fi-bg-color-600 dark:hover:fi-bg-color-500 fi-text-color-900 hover:fi-text-color-800 dark:fi-text-color-950 dark:hover:fi-text-color-950'
-
 const pad = (value: number): string => String(value).padStart(2, '0')
 const isoDate = (date: Date): string => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 const today = (): string => {
@@ -1075,7 +1074,7 @@ const MonthPicker = ({ current, onPick }: { current: string; onPick: (date: stri
 const PeriodBar = ({ report, onChange }: { report: Configuration; onChange: (period: Period, date: string) => void }) => (
     <div className="flex flex-wrap items-center gap-2">
         {PERIODS.map(({ key, label }) => (
-            <button key={key} type="button" className={`fi-btn fi-size-md ${report.period === key && report.isCurrent ? PRIMARY_BTN : ''}`} onClick={() => onChange(key, today())}>
+            <button key={key} type="button" className={`fi-btn fi-size-md ${report.period === key && report.isCurrent ? ACTIVE_BUTTON_CLASS : ''}`} onClick={() => onChange(key, today())}>
                 {label}
             </button>
         ))}
@@ -1186,21 +1185,6 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
     }
     const isLoading = pending !== null
 
-    const tabButton = (key: Tab, label: string, icon: string) => (
-        <button
-            type="button"
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                tab === key ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5'
-            }`}
-        >
-            <Icon path={icon} />
-            {label}
-        </button>
-    )
-
     return (
         <div className="w-full space-y-3">
             {isLoading && <div className="fixed inset-x-0 top-0 z-50 h-0.5 animate-pulse bg-primary-500" />}
@@ -1213,23 +1197,18 @@ const DriverReport = ({ configuration, wire }: { configuration: Configuration; w
                 <PeriodBar report={report} onChange={changePeriod} />
             </div>
 
-            <div className="relative w-full max-w-xs">
-                <span className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-gray-400">
-                    <Icon path={ICONS.search} />
-                </span>
-                <input
-                    type="search"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Tìm tên hoặc mã NV lái xe..."
-                    className="block w-full rounded-lg border-none bg-white py-1.5 pe-3 ps-9 text-sm text-gray-950 shadow-xs ring-1 ring-gray-950/10 placeholder:text-gray-400 focus:ring-2 focus:ring-primary-600 dark:bg-white/5 dark:text-white dark:ring-white/20"
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <SegmentedTabs<Tab>
+                    label="Kiểu xem báo cáo"
+                    active={tab}
+                    onChange={setTab}
+                    items={[
+                        { key: 'summary', label: 'Tổng hợp km', icon: <Icon path={ICONS.chart} /> },
+                        { key: 'statement', label: 'Bảng kê chuyến', icon: <Icon path={ICONS.document} /> },
+                        { key: 'evaluation', label: 'Đánh giá', icon: <Icon path={ICONS.clock} /> },
+                    ]}
                 />
-            </div>
-
-            <div role="tablist" className="flex gap-1 rounded-xl bg-white p-1 shadow-xs ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
-                {tabButton('summary', 'Tổng hợp km', ICONS.chart)}
-                {tabButton('statement', 'Bảng kê chuyến', ICONS.document)}
-                {tabButton('evaluation', 'Đánh giá', ICONS.clock)}
+                <SearchInput value={search} onChange={setSearch} placeholder="Tìm tên hoặc mã NV lái xe..." className="ms-auto w-64 max-w-xs" />
             </div>
 
             <div className="space-y-3" aria-busy={isLoading || details.loading}>
