@@ -112,11 +112,18 @@ export default function ProfileScreen() {
   const doEnd = async () => {
     setEnding(true); showLoading();
     try {
-      // Đồng bộ lại ca từ server trước khi kết thúc: ca có thể đã bị auto-end (08:00/20:00),
-      // admin kết thúc, hoặc chuyến vừa hoàn thành mà state local chưa kịp đồng bộ.
-      const fresh = await api.shifts.current(token!).catch(() => undefined);
-      const liveShift = fresh === undefined ? shift : (fresh?.shift ?? null);
+      // Luôn lấy ca mới nhất từ server (ca có thể đã auto-end 08:00/20:00, admin kết thúc, hoặc điều hành vừa sửa chuyến).
+      // Việc còn chuyến chưa xong hay không do server quyết định (end-vehicle / shifts/end trả 422 kèm active_trip_id):
+      // không tự chặn bằng dữ liệu trong máy vì có thể đã cũ.
+      let fresh: { shift: any } | undefined;
+      try {
+        fresh = await api.shifts.current(token!);
+      } catch {
+        showAlert("Không kết nối được máy chủ", "Vui lòng kiểm tra mạng (4G/Wi-Fi) rồi bấm Kết thúc ca lại.");
+        return;
+      }
 
+      const liveShift = fresh?.shift ?? null;
       if (!liveShift) {
         setShift(null);
         showAlert("Thông báo", "Ca làm việc đã kết thúc trước đó.");
@@ -125,56 +132,6 @@ export default function ProfileScreen() {
 
       setShift(liveShift);
       if (liveShift?.driver) setLocalDriver(liveShift.driver);
-
-      const liveActiveTrips = getActiveTrips(liveShift.trips || []);
-      if (liveActiveTrips.length > 0) {
-        const plate =
-          Array.from(
-            new Set(
-              liveActiveTrips
-                .map((t: any) => t.vehicle?.plate_number)
-                .filter(Boolean)
-            )
-          ).join(", ") ||
-          liveShift?.vehicle?.plate_number ||
-          shift?.vehicle?.plate_number ||
-          "—";
-
-        const orderCodes =
-          Array.from(
-            new Set(
-              liveActiveTrips
-                .flatMap((t: any) =>
-                  Array.isArray(t.orders) && t.orders.length > 0
-                    ? t.orders.map((o: any) => o.order_code).filter(Boolean)
-                    : [t.trip_code]
-                )
-                .filter(Boolean)
-            )
-          ).join(", ") || "—";
-
-        const driverName =
-          liveShift?.driver?.name ||
-          driver?.name ||
-          shift?.driver?.name ||
-          liveActiveTrips[0]?.driver?.name ||
-          "lái xe";
-
-        const targetTrip = liveActiveTrips[0];
-        showAlert(
-          "Không thể kết thúc ca",
-          `Xe ${plate}, mã đơn ${orderCodes}, lái xe ${driverName} chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi kết thúc ca.`,
-          () => {
-            if (targetTrip?.id) {
-              router.push({
-                pathname: "/trip-detail",
-                params: { id: String(targetTrip.id) },
-              });
-            }
-          }
-        );
-        return;
-      }
 
       const kmToUse = liveShift.vehicle?.current_mileage ?? shift?.vehicle?.current_mileage;
       if (kmToUse != null) {
@@ -197,7 +154,7 @@ export default function ProfileScreen() {
       }
 
       const title = msg.includes("chưa hoàn thiện chuyến") ? "Không thể kết thúc ca" : "Lỗi";
-      const targetId = e.active_trip_id || activeTrips[0]?.id;
+      const targetId = e.active_trip_id;
       showAlert(title, msg, () => {
         if (targetId && msg.includes("chưa hoàn thiện chuyến")) {
           router.push({

@@ -64,6 +64,16 @@ function withAndroidConfig(config) {
       application.$["android:networkSecurityConfig"] = "@xml/network_security_config";
     }
 
+    // App khoá màn hình dọc ("orientation": "portrait") khiến Google Play coi android.hardware.screen.portrait là bắt buộc
+    // và chặn cài trên tablet / Chromebook / XR. Khai báo không bắt buộc: app vẫn chạy dọc, chỉ không giới hạn thiết bị.
+    const features = (manifest.manifest["uses-feature"] ??= []);
+    const portrait = features.find((feature) => feature.$?.["android:name"] === "android.hardware.screen.portrait");
+    if (portrait) {
+      portrait.$["android:required"] = "false";
+    } else {
+      features.push({ $: { "android:name": "android.hardware.screen.portrait", "android:required": "false" } });
+    }
+
     return config;
   });
 }
