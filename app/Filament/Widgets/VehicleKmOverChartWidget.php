@@ -22,7 +22,7 @@ class VehicleKmOverChartWidget extends Widget
 
     protected string $view = 'filament.widgets.vehicle-km-over-chart';
 
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = ['default' => 'full', 'lg' => 1];
 
     /**
      * @return array{rows: list<array{plate: string, owner: string, capacity: ?string, km: float, level: ?string}>, totalKm: float, overCost: float, coefficient: float, scale: float, limit: int}

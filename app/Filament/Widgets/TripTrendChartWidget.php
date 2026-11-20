@@ -18,11 +18,6 @@ class TripTrendChartWidget extends ChartWidget
 
     protected ?string $maxHeight = '320px';
 
-    protected int|string|array $columnSpan = [
-        'default' => 'full',
-        'lg' => 2,
-    ];
-
     public ?string $filter = '7days';
 
     protected function getFilters(): ?array
