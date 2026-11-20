@@ -530,7 +530,8 @@ class TripForm
                                     ->afterStateUpdated(function ($state, $set, $get) {
                                         $raw = $get('checkpoint_type');
                                         $type = $raw instanceof CheckpointType ? $raw : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
-                                        if (($type === CheckpointType::Completed || $type === CheckpointType::End) && filled($state)) {
+                                        // Chỉ mốc Kết thúc mới đóng chuyến; mốc Hoàn thành chỉ là giao xong một điểm.
+                                        if ($type === CheckpointType::End && filled($state)) {
                                             $set('../../end_km', $state);
                                             $set('../../status', TripStatus::Completed);
                                         } elseif ($type === CheckpointType::Started && filled($state)) {

@@ -170,20 +170,31 @@ class DeliveryProgressSyncService
             return;
         }
 
-        if ($order->status === OrderStatus::Completed) {
-            $targetStatus = match (true) {
-                $hasArrivedOrLeft => OrderStatus::InTransit,
-                $hasArrivedPickup || $order->sent_at !== null => OrderStatus::Sent,
-                default => OrderStatus::Assigned,
-            };
-
-            $updates = ['status' => $targetStatus];
-            if (! $hasCompletedCheckpoint) {
-                $updates['loaded_km'] = null;
-            }
-
-            $order->update($updates);
+        // Trạng thái đơn đi theo mốc giống App tài xế: App chỉ hiện "Đến lấy hàng" khi đơn Đã gửi
+        // và "Đến giao hàng" khi đơn Đang vận chuyển, nên điều hành thêm / xoá mốc thì đơn phải chuyển theo.
+        if (! in_array($order->status, [OrderStatus::Assigned, OrderStatus::Sent, OrderStatus::InTransit, OrderStatus::Completed], true)) {
+            return;
         }
+
+        $targetStatus = match (true) {
+            $hasArrivedOrLeft => OrderStatus::InTransit,
+            $hasArrivedPickup || $order->sent_at !== null => OrderStatus::Sent,
+            default => OrderStatus::Assigned,
+        };
+
+        if ($order->status === $targetStatus) {
+            return;
+        }
+
+        $updates = ['status' => $targetStatus];
+        if ($order->status === OrderStatus::Completed && ! $hasCompletedCheckpoint) {
+            $updates['loaded_km'] = null;
+        }
+        if ($targetStatus !== OrderStatus::Assigned && $order->sent_at === null) {
+            $updates['sent_at'] = now();
+        }
+
+        $order->update($updates);
     }
 
     private function reopenTripIfNeeded(Trip $trip, bool $recalculateFromCheckpoints = false): void

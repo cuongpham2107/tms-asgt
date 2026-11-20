@@ -75,8 +75,9 @@ class EditTripAction
                 /** @var Trip $trip */
                 $trip->loadMissing(['vehicle', 'orders']);
 
-                // Thời gian bắt đầu/kết thúc tự đồng bộ từ mốc Started/End; không cho form sửa trực tiếp hoặc tự đóng chuyến qua completed_at.
-                unset($data['started_at'], $data['completed_at']);
+                // Thời gian, km kết thúc và trạng thái do mốc quyết định (Started/End/Completed), không lấy từ form:
+                // form tự gán status/end_km khi gõ km mốc nên có thể đóng nhầm chuyến còn điểm chưa giao.
+                unset($data['started_at'], $data['completed_at'], $data['status'], $data['end_km']);
 
                 $startedCheckpoint = $trip->checkpoints()
                     ->where('checkpoint_type', CheckpointType::Started->value)
@@ -320,6 +321,20 @@ class EditTripAction
                         app(DriverNotificationService::class)->sendTripKmUpdated($trip);
                     } catch (\Throwable) {
                     }
+                }
+
+                // Xoá hết mốc: chuyến quay về chờ chạy như lúc mới gán xe, không giữ giờ / km bắt đầu cũ.
+                $trip->refresh();
+                if ($trip->isPending() && $trip->checkpoints()->doesntExist()) {
+                    $trip->update([
+                        'started_at' => null,
+                        'completed_at' => null,
+                        'start_km' => null,
+                        'end_km' => null,
+                        'total_km' => null,
+                        'total_km_loaded' => null,
+                        'total_km_empty' => null,
+                    ]);
                 }
 
                 if ($livewire instanceof VehicleDispatchBoard) {
