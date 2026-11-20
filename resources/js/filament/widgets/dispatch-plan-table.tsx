@@ -251,10 +251,10 @@ const PlanRowView = memo(function PlanRowView({
                 </button>
             </td>
 
-            <td className={`relative w-24 ${CELL} ps-3 text-center`}>
+            <td className={`relative w-24 whitespace-nowrap ${CELL} ps-3 text-center`}>
                 <span aria-hidden="true" className={`absolute inset-y-2 start-0 w-1 rounded-e-full ${styles.rail}`} />
                 <div className={`font-mono text-sm font-semibold leading-none tabular-nums ${styles.time}`}>{row.time}</div>
-                <span className={`mt-1 inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${styles.chip}`}>
+                <span className={`mt-1 inline-flex whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${styles.chip}`}>
                     {formatCountdown(row.minutesLeft)}
                 </span>
             </td>
