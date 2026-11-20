@@ -1172,3 +1172,108 @@ test('driver cannot submit a km report equal to the system km', function () {
     expect(TripKmReport::count())->toBe(0)
         ->and($this->trip->fresh()->is_paused)->toBeFalsy();
 });
+
+/**
+ * Chuyến trước của xe ghi km cuối sai (108100) nên chuyến mới bắt đầu theo km sai; lái xe báo km taplo 108000 ở mốc bắt đầu.
+ *
+ * @return array{0: Trip, 1: TripCheckpoint, 2: TripCheckpoint, 3: TripCheckpoint, 4: TripKmReport}
+ */
+function kmReportOnStartWithWrongPreviousTrip(): array
+{
+    $previousTrip = Trip::create([
+        'trip_code' => 'CD-PREVIOUS-01',
+        'vehicle_id' => test()->vehicle->id,
+        'driver_id' => test()->driver->id,
+        'shift_id' => test()->shift->id,
+        'status' => TripStatus::Completed,
+        'start_km' => 107800,
+        'end_km' => 108100,
+        'started_at' => now()->subHours(3),
+        'completed_at' => now()->subHours(2),
+    ]);
+
+    $previousStart = TripCheckpoint::create([
+        'trip_id' => $previousTrip->id,
+        'driver_id' => test()->driver->id,
+        'shift_id' => test()->shift->id,
+        'checkpoint_type' => CheckpointType::Started,
+        'km_reading' => 107800,
+        'occurred_at' => now()->subHours(3),
+    ]);
+
+    $previousEnd = TripCheckpoint::create([
+        'trip_id' => $previousTrip->id,
+        'driver_id' => test()->driver->id,
+        'shift_id' => test()->shift->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'km_reading' => 108100,
+        'occurred_at' => now()->subHours(2),
+    ]);
+
+    $currentStart = test()->trip->checkpoints()->first();
+    $currentStart->update(['km_reading' => 108100]);
+    test()->trip->update(['start_km' => 108100]);
+
+    $report = TripKmReport::create([
+        'trip_id' => test()->trip->id,
+        'checkpoint_id' => $currentStart->id,
+        'driver_id' => test()->driver->id,
+        'vehicle_id' => test()->vehicle->id,
+        'reported_km' => 108000,
+        'system_km' => 108100,
+        'status' => TripKmReportStatus::Pending,
+    ]);
+
+    foreach (['ViewAny:Trip', 'View:Trip', 'Update:Trip'] as $permission) {
+        test()->admin->givePermissionTo(Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']));
+    }
+    test()->actingAs(test()->admin);
+
+    return [$previousTrip, $previousStart, $previousEnd, $currentStart, $report];
+}
+
+test('báo sai km ở mốc bắt đầu chuyến thì sửa được km mốc chuyến trước của xe', function () {
+    [$previousTrip, $previousStart, $previousEnd, $currentStart, $report] = kmReportOnStartWithWrongPreviousTrip();
+
+    $rows = kmReportCheckpointRows($previousStart, $previousEnd);
+    $rows[1]['km_reading'] = 107950;
+
+    resolveKmReportOnTable()
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 108000])
+        ->assertFormFieldVisible('previous_checkpoints')
+        ->fillForm(['previous_checkpoints' => $rows])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Resolved)
+        ->and((float) $currentStart->fresh()->km_reading)->toBe(108000.0)
+        ->and((float) $this->trip->fresh()->start_km)->toBe(108000.0)
+        ->and((float) $previousEnd->fresh()->km_reading)->toBe(107950.0)
+        ->and((float) $previousStart->fresh()->km_reading)->toBe(107800.0)
+        ->and((float) $previousTrip->fresh()->end_km)->toBe(107950.0);
+});
+
+test('km cuối chuyến trước lớn hơn km bắt đầu chuyến này thì bị chặn', function () {
+    [$previousTrip, $previousStart, $previousEnd, $currentStart, $report] = kmReportOnStartWithWrongPreviousTrip();
+
+    resolveKmReportOnTable()
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 108000])
+        ->fillForm(['previous_checkpoints' => kmReportCheckpointRows($previousStart, $previousEnd)])
+        ->callMountedTableAction()
+        ->assertHasTableActionErrors(['previous_checkpoints']);
+
+    expect($report->fresh()->status)->toBe(TripKmReportStatus::Pending)
+        ->and((float) $previousEnd->fresh()->km_reading)->toBe(108100.0);
+});
+
+test('báo sai km ở mốc giữa chuyến thì không hiện mốc chuyến trước', function () {
+    kmReportOnStartWithWrongPreviousTrip();
+    kmReportScenario([
+        [CheckpointType::Started, 108000, 90],
+        [CheckpointType::ArrivedPickup, 108050, 60],
+    ], 1, 108060, TripStatus::ArrivedPickup);
+
+    resolveKmReportOnTable()
+        ->fillForm(['decision' => 'ok', 'corrected_km' => 108060])
+        ->assertFormFieldHidden('previous_checkpoints');
+});

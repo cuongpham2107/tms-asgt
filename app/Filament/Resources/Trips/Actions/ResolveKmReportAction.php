@@ -314,6 +314,54 @@ class ResolveKmReportAction
                     ->compact()
                     ->rules([fn (): \Closure => TripForm::checkpointKmIncreasingRule()]),
 
+                Hidden::make('previous_trip_id')
+                    ->default(fn (?Model $record, $livewire = null, ?Action $action = null): ?int => static::previousTripForStartReport(static::resolveRecord($record, $livewire, $action))?->id),
+
+                Repeater::make('previous_checkpoints')
+                    ->label(fn (?Model $record, $livewire = null, ?Action $action = null): string => 'Km các mốc chuyến trước của xe — '
+                        .(static::previousTripForStartReport(static::resolveRecord($record, $livewire, $action))?->trip_code ?? ''))
+                    ->helperText('Lái xe báo sai km lúc bắt đầu chuyến: có thể km cuối chuyến trước bị sai. Km mốc cuối chuyến trước không được lớn hơn km bắt đầu chuyến này.')
+                    ->visible(fn (Get $get, ?Model $record, $livewire = null, ?Action $action = null): bool => $get('decision') === 'ok'
+                        && static::previousTripForStartReport(static::resolveRecord($record, $livewire, $action)) !== null)
+                    ->default(fn (?Model $record, $livewire = null, ?Action $action = null): array => static::checkpointRows(
+                        static::previousTripForStartReport(static::resolveRecord($record, $livewire, $action)),
+                    ))
+                    ->table([
+                        TableColumn::make('Mốc'),
+                        TableColumn::make('Km')->width('200px'),
+                    ])
+                    ->schema([
+                        Hidden::make('id'),
+                        Hidden::make('occurred_at'),
+                        TextInput::make('label')
+                            ->hiddenLabel()
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('km_reading')
+                            ->hiddenLabel()
+                            ->numeric()
+                            ->required(),
+                    ])
+                    ->addable(false)
+                    ->deletable(false)
+                    ->reorderable(false)
+                    ->compact()
+                    ->rules([
+                        fn (): \Closure => TripForm::checkpointKmIncreasingRule(),
+                        fn (Get $get): \Closure => function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
+                            $startKm = $get('corrected_km');
+                            $lastKm = collect(is_array($value) ? $value : [])->pluck('km_reading')->filter(fn ($km): bool => is_numeric($km))->max();
+
+                            if (is_numeric($startKm) && $lastKm !== null && (float) $lastKm > (float) $startKm) {
+                                $fail(sprintf(
+                                    'Km cuối chuyến trước (%s km) lớn hơn km bắt đầu chuyến này (%s km). Sửa lại km các mốc chuyến trước.',
+                                    number_format((float) $lastKm, 1, ',', '.'),
+                                    number_format((float) $startKm, 1, ',', '.'),
+                                ));
+                            }
+                        },
+                    ]),
+
                 Textarea::make('admin_note')
                     ->label(fn (Get $get) => $get('decision') === 'reject' ? 'Lý do từ chối *' : 'Ghi chú xử lý')
                     ->required(fn (Get $get) => $get('decision') === 'reject')
@@ -373,6 +421,19 @@ class ResolveKmReportAction
                             Auth::id(),
                             $otherCheckpointKms,
                         );
+
+                        $previousTrip = ! empty($data['previous_trip_id'])
+                            ? Trip::where('vehicle_id', $trip->vehicle_id)->find((int) $data['previous_trip_id'])
+                            : null;
+
+                        if ($previousTrip !== null && ! empty($data['previous_checkpoints'])) {
+                            app(TripKmAdjustmentService::class)->updatePreviousTripKms(
+                                $previousTrip,
+                                collect($data['previous_checkpoints'])
+                                    ->mapWithKeys(fn (array $row): array => [(int) $row['id'] => (float) $row['km_reading']])
+                                    ->all(),
+                            );
+                        }
                     }
 
                     return true;
@@ -431,6 +492,24 @@ class ResolveKmReportAction
 
         return ($boundaries['min_km'] !== null && $km < $boundaries['min_km'])
             || ($boundaries['max_km'] !== null && $km > $boundaries['max_km']);
+    }
+
+    /**
+     * Chuyến trước của xe, chỉ khi báo cáo nhắm vào mốc bắt đầu chuyến (km cuối chuyến trước có thể là nguồn sai).
+     */
+    protected static function previousTripForStartReport(?Trip $trip): ?Trip
+    {
+        if ($trip === null) {
+            return null;
+        }
+
+        $service = app(TripKmAdjustmentService::class);
+
+        if (! $service->reportTargetsTripStart($trip, $trip->latestPendingKmReport)) {
+            return null;
+        }
+
+        return $service->previousVehicleTrip($trip);
     }
 
     /**

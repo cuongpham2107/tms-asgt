@@ -241,6 +241,57 @@ class TripKmAdjustmentService
     }
 
     /**
+     * Chuyến gần nhất của cùng xe đã bắt đầu trước chuyến này (km cuối của nó là km xuất phát của chuyến này).
+     */
+    public function previousVehicleTrip(Trip $trip): ?Trip
+    {
+        if ($trip->vehicle_id === null) {
+            return null;
+        }
+
+        return Trip::where('vehicle_id', $trip->vehicle_id)
+            ->whereKeyNot($trip->getKey())
+            ->whereNotNull('started_at')
+            ->where('started_at', '<=', $trip->started_at ?? now())
+            ->orderByDesc('started_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Báo sai km ở mốc đầu tiên của chuyến (hoặc km bắt đầu khi chưa có mốc) thì nguyên nhân có thể nằm ở km cuối chuyến trước.
+     */
+    public function reportTargetsTripStart(Trip $trip, ?TripKmReport $report): bool
+    {
+        $boundaries = $this->getKmBoundaries($trip, $report?->checkpoint_id, $report);
+
+        return $boundaries['target_checkpoint'] === null || $boundaries['prev_checkpoint'] === null;
+    }
+
+    /**
+     * Sửa km các mốc của chuyến trước rồi tính lại km chuyến đó và các ca liên quan.
+     *
+     * @param  array<int, float>  $checkpointKms  checkpoint id => km mới
+     */
+    public function updatePreviousTripKms(Trip $previousTrip, array $checkpointKms): void
+    {
+        $changed = false;
+
+        foreach ($checkpointKms as $checkpointId => $km) {
+            $checkpoint = TripCheckpoint::where('trip_id', $previousTrip->id)->find($checkpointId);
+
+            if ($checkpoint !== null && (float) $checkpoint->km_reading !== (float) $km) {
+                $checkpoint->update(['km_reading' => $km]);
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $this->recalculateAfterEdit($previousTrip);
+        }
+    }
+
+    /**
      * Từ chối báo cáo sai km.
      */
     public function rejectReport(TripKmReport $report, ?string $adminNote, ?int $adminId = null): void
