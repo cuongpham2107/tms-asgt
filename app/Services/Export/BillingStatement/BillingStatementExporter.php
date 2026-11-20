@@ -228,7 +228,7 @@ class BillingStatementExporter
             'total' => $charge === null ? null : (float) $charge->total,
             'note' => $notes,
             '_unmapped' => $unmapped,
-            '_free_minutes' => (int) ($waits['tier']['free_minutes'] ?? 0),
+            '_free_minutes' => (int) ($waits['free_unloading'] ?? 0),
         ];
     }
 

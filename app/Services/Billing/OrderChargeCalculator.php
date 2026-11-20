@@ -270,8 +270,7 @@ class OrderChargeCalculator
     /**
      * Thời gian chờ = (đến điểm lấy hàng → rời điểm lấy hàng) + (đến điểm trả → hoàn thành).
      * Phí chỉ tính trên phần vượt thời gian miễn phí của từng chặng.
-     * Lấy một dòng phí giờ chờ theo khách hàng + loại hình tính phụ phí, ưu tiên kiểu chờ thường.
-     * ponytail: chưa tách giá nổ máy / không nổ máy theo chặng — làm khi có quy tắc chốt.
+     * Lấy dòng phí giờ chờ theo khách hàng + loại hình tính phụ phí (xem previewWaiting).
      *
      * @return array{minutes: int, fee: float, loading: int, unloading: int, rate: ?WaitingFeeRate, tier: ?array{tonnage: mixed, fee: mixed, free_minutes: mixed}, billable: int}
      */
@@ -285,7 +284,7 @@ class OrderChargeCalculator
      * Với đơn nhiều điểm trả (hàng rớt điểm): miễn phí được trừ riêng cho từng điểm hạ hàng.
      * "minutes" trả về là tổng thời gian chờ tính tiền (đã trừ thời gian miễn phí từng chặng).
      *
-     * @return array{minutes: int, fee: float, loading: int, unloading: int, unloading_legs: list<int>, billable_loading: int, billable_unloading: int, rate: ?WaitingFeeRate, tier: ?array{tonnage: mixed, fee: mixed, free_minutes: mixed}, billable: int}
+     * @return array{minutes: int, fee: float, loading: int, unloading: int, unloading_legs: list<int>, billable_loading: int, billable_unloading: int, free_loading: int, free_unloading: int, rate: ?WaitingFeeRate, tier: ?array{tonnage: mixed, fee: mixed, free_minutes: mixed}, billable: int}
      */
     public function previewWaiting(
         Order $order,
@@ -296,18 +295,27 @@ class OrderChargeCalculator
     ): array {
         $date ??= $order->planned_loading_at ?? $order->created_at ?? now();
 
-        $rate = WaitingFeeRate::query()
+        $rates = WaitingFeeRate::query()
             ->where('customer_id', $charge->customer_id)
             ->where('surcharge_type', $charge->surcharge_type)
             ->where(fn (Builder $q) => $q->whereNull('effective_from')->orWhereDate('effective_from', '<=', $date->toDateString()))
             ->where(fn (Builder $q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date->toDateString()))
             ->get()
+            ->filter(fn (WaitingFeeRate $rate): bool => $rate->tierFor($charge->chargeable_tonnage) !== null)
             ->sortBy(fn (WaitingFeeRate $rate): array => [
                 $rate->waiting_mode !== WaitingFeeRate::MODE_NORMAL,
                 $rate->id,
             ])
-            ->first(fn (WaitingFeeRate $rate): bool => $rate->tierFor($charge->chargeable_tonnage) !== null);
+            ->values();
+        $rate = $rates->first();
         $tier = $rate?->tierFor($charge->chargeable_tonnage);
+
+        // Khách có dòng "Không nổ máy (đóng hàng)" / "Nổ máy (hạ hàng)" (vd. CLC/SDV: miễn phí ở SDV khác ở NBA)
+        // thì mỗi đầu trừ miễn phí theo dòng của nó; không có thì dùng chung dòng phí chính.
+        $loadingTier = $rates->firstWhere('waiting_mode', WaitingFeeRate::MODE_ENGINE_OFF)?->tierFor($charge->chargeable_tonnage) ?? $tier;
+        $unloadingTier = $rates->firstWhere('waiting_mode', WaitingFeeRate::MODE_ENGINE_ON)?->tierFor($charge->chargeable_tonnage) ?? $tier;
+        $freeLoadingMinutes = (int) ($loadingTier['free_minutes'] ?? 0);
+        $freeUnloadingMinutes = (int) ($unloadingTier['free_minutes'] ?? 0);
 
         $order->loadMissing(['deliveryPoints', 'tripCheckpoints', 'trip.checkpoints']);
 
@@ -321,14 +329,12 @@ class OrderChargeCalculator
             $loadingMinutes = (int) ($row['time_loading'] ?? 0);
         }
 
-        $freeMinutes = (int) ($tier['free_minutes'] ?? 0);
-
         if (is_array($unloadingMinutes)) {
             $unloadingLegs = $unloadingMinutes;
             $unloadingMinutes = array_sum($unloadingLegs);
             $billableUnloading = 0;
             foreach ($unloadingLegs as $dur) {
-                $billableUnloading += max(0, $dur - $freeMinutes);
+                $billableUnloading += max(0, $dur - $freeUnloadingMinutes);
             }
         } elseif ($isMultiPoint && $unloadingMinutes === null) {
             $checkpoints = $order->tripCheckpoints->isNotEmpty()
@@ -350,7 +356,7 @@ class OrderChargeCalculator
             $unloadingMinutes = array_sum($unloadingLegs);
             $billableUnloading = 0;
             foreach ($unloadingLegs as $dur) {
-                $billableUnloading += max(0, $dur - $freeMinutes);
+                $billableUnloading += max(0, $dur - $freeUnloadingMinutes);
             }
         } else {
             if ($unloadingMinutes === null) {
@@ -360,10 +366,10 @@ class OrderChargeCalculator
                 $unloadingMinutes = (int) ($row['time_unloading'] ?? 0);
             }
             $unloadingLegs = [$unloadingMinutes];
-            $billableUnloading = max(0, $unloadingMinutes - $freeMinutes);
+            $billableUnloading = max(0, $unloadingMinutes - $freeUnloadingMinutes);
         }
 
-        $billableLoading = max(0, $loadingMinutes - $freeMinutes);
+        $billableLoading = max(0, $loadingMinutes - $freeLoadingMinutes);
         $billableMinutes = $billableLoading + $billableUnloading;
 
         return [
@@ -374,6 +380,8 @@ class OrderChargeCalculator
             'unloading_legs' => $unloadingLegs,
             'billable_loading' => $billableLoading,
             'billable_unloading' => $billableUnloading,
+            'free_loading' => $freeLoadingMinutes,
+            'free_unloading' => $freeUnloadingMinutes,
             'rate' => $rate,
             'tier' => $tier,
             'billable' => $billableMinutes,
@@ -391,13 +399,14 @@ class OrderChargeCalculator
     ): string {
         $waiting = $this->previewWaiting($order, $charge, $loadingMinutes, $unloadingMinutes, $order->planned_loading_at ?? $order->created_at ?? now());
 
-        $free = (int) ($waiting['tier']['free_minutes'] ?? 0);
+        $freeLoading = $waiting['free_loading'];
+        $freeUnloading = $waiting['free_unloading'];
 
         if (count($waiting['unloading_legs']) > 1) {
             $legParts = ["Đóng hàng {$waiting['loading']}' (tính {$waiting['billable_loading']}')"];
             foreach ($waiting['unloading_legs'] as $idx => $dur) {
                 $pt = $idx + 1;
-                $billablePt = max(0, $dur - $free);
+                $billablePt = max(0, $dur - $freeUnloading);
                 $legParts[] = "Điểm {$pt}: {$dur}' (tính {$billablePt}')";
             }
             $legs = implode(' + ', $legParts);
@@ -414,7 +423,11 @@ class OrderChargeCalculator
         $blocks = intdiv($waiting['billable'], max(1, $rate->fee_block_minutes))
             + ($rate->grace_minutes < $waiting['billable'] % max(1, $rate->fee_block_minutes) ? 1 : 0);
 
-        return "{$legs} · miễn {$free}'/chặng → tính {$waiting['billable']}'"
+        $freeText = $freeLoading === $freeUnloading
+            ? "miễn {$freeLoading}'/chặng"
+            : "miễn đóng hàng {$freeLoading}', hạ hàng {$freeUnloading}'/điểm";
+
+        return "{$legs} · {$freeText} → tính {$waiting['billable']}'"
             ." = {$blocks} × ".number_format((float) $waiting['tier']['fee'], 0, ',', '.')." đ (block {$rate->fee_block_minutes}', lẻ quá {$rate->grace_minutes}' tính thêm 1 block)";
     }
 

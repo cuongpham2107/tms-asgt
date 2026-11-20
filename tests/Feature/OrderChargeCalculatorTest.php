@@ -265,6 +265,44 @@ test('waiting minutes come from loading and unloading checkpoints', function (ar
     'chỉ có dòng nổ máy' => [['waiting_mode' => WaitingFeeRate::MODE_ENGINE_ON]],
 ]);
 
+test('loading and unloading deduct their own free minutes when both waiting rows exist', function () {
+    // CLC/SDV: miễn phí đóng hàng ở SDV 4 giờ, hạ hàng ở NBA 2 giờ
+    foreach ([[WaitingFeeRate::MODE_ENGINE_OFF, 240], [WaitingFeeRate::MODE_ENGINE_ON, 120]] as [$mode, $free]) {
+        WaitingFeeRate::create([
+            'customer_id' => $this->customer->id,
+            'surcharge_type' => '',
+            'waiting_mode' => $mode,
+            'fee_block_minutes' => 60,
+            'grace_minutes' => 19,
+            'tiers' => [['tonnage' => 1.25, 'fee' => 50_000, 'free_minutes' => $free], ['tonnage' => 5, 'fee' => 50_000, 'free_minutes' => $free]],
+        ]);
+    }
+
+    $order = ($this->makeOrder)();
+
+    foreach ([
+        [CheckpointType::ArrivedPickup, '2026-10-21 08:00'],
+        [CheckpointType::LeftPickup, '2026-10-21 13:00'],
+        [CheckpointType::ArrivedDelivery, '2026-10-21 14:00'],
+        [CheckpointType::Completed, '2026-10-21 16:30'],
+    ] as [$type, $at]) {
+        TripCheckpoint::create([
+            'trip_id' => $this->trip->id,
+            'order_id' => $order->id,
+            'checkpoint_type' => $type,
+            'occurred_at' => Carbon::parse($at),
+        ]);
+    }
+
+    $charge = app(OrderChargeCalculator::class)->calculate($order);
+
+    // Đóng 300' − 240' = 60'; hạ 150' − 120' = 30' ⇒ 90' = 1 giờ + 30' (> 19') ⇒ 2 giờ
+    expect($charge->waiting_minutes)->toBe(90)
+        ->and((float) $charge->waiting_fee)->toBe(100_000.0)
+        ->and(app(OrderChargeCalculator::class)->explainWaiting($order, $charge))
+        ->toContain("miễn đóng hàng 240', hạ hàng 120'/điểm → tính 90' = 2 × 50.000 đ");
+});
+
 test('multi-point order deducts free minutes per delivery point for waiting time', function () {
     WaitingFeeRate::create([
         'customer_id' => $this->customer->id,
