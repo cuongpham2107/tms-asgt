@@ -301,7 +301,9 @@ test('scenario 4: driver swap mid-trip with KM split correctly', function () {
     fwPostCheckpoint($driverA, $trip, CheckpointType::Started->value);
     fwPostCheckpoint($driverA, $trip, CheckpointType::ArrivedPickup->value, kmReading: 80010);
     fwPostCheckpoint($driverA, $trip, CheckpointType::LeftPickup->value);
-    fwEndShift($driverA, 80030); // Driver A ends, trip becomes DriverSwap
+    // Còn chuyến dở thì phải bàn giao (kết thúc chuyến khi đơn chưa xong → Đảo lái) rồi mới kết thúc ca
+    fwCompleteTrip($driverA, $trip, 80030);
+    fwEndShift($driverA, 80030);
 
     $trip->refresh();
     $order->refresh();

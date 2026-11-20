@@ -268,35 +268,37 @@ test('end shift without end checkpoint is rejected', function () {
     $response->assertJsonPath('message', 'Cần nhập km kết thúc trước khi kết thúc ca.');
 });
 
-// === TEST 6: Rời xe khi đang có trip chưa hoàn thành → driver_swap ===
-test('end vehicle with active incomplete trip triggers driver swap', function () {
+// === TEST 6: Rời xe khi còn chuyến chưa xong → báo lỗi, đưa về chi tiết chuyến để bàn giao hoặc làm nốt ===
+test('end vehicle is rejected while a trip is unfinished and leaves the trip untouched', function (TripStatus $status) {
     $shift = endMakeShift($this->driver);
     $shift->start_km = 10000;
     $shift->save();
 
     $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
+    $trip->update(['status' => $status]);
     $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
 
     endMakeCheckpoint($trip, $order, CheckpointType::ArrivedPickup->value, 10010, $shift, $this->vehicle);
 
     $this->postJson("/api/driver/shifts/{$shift->id}/end-vehicle", [
         'km_reading' => 10060,
-    ])->assertSuccessful();
+    ])->assertUnprocessable()
+        ->assertJsonPath('active_trip_id', $trip->id)
+        ->assertJsonFragment(['message' => sprintf(
+            'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi kết thúc ca.',
+            $this->vehicle->plate_number,
+            $order->order_code,
+            $this->driver->name,
+        )]);
 
-    $trip->refresh();
-    expect($trip->status)->toBe(TripStatus::DriverSwap);
-    // shift_id is cleared during end() cleanup, not in EndHandler
-    expect((float) $trip->end_km)->toBe(10060.0);
-    expect((float) $trip->total_km_loaded)->toBeGreaterThan(0);
-
-    // Verify checkpoint type is DriverSwap, not End
-    $checkpoint = TripCheckpoint::where('trip_id', $trip->id)
-        ->where('checkpoint_type', CheckpointType::DriverSwap->value)
-        ->first();
-    expect($checkpoint)->not->toBeNull();
-    expect((float) $checkpoint->km_reading)->toBe(10060.0);
-    expect($checkpoint->order_id)->not->toBeNull();
-});
+    expect($trip->fresh()->status)->toBe($status)
+        ->and($trip->fresh()->end_km)->toBeNull()
+        ->and(TripCheckpoint::where('shift_id', $shift->id)->whereIn('checkpoint_type', [CheckpointType::End->value, CheckpointType::DriverSwap->value])->exists())->toBeFalse()
+        ->and((float) $this->vehicle->fresh()->current_mileage)->toBe(10000.0);
+})->with([
+    'đang giao' => TripStatus::Delivering,
+    'đã giao, chưa kết thúc đơn' => TripStatus::Delivered,
+]);
 
 // === TEST 7: Nhập km_reading nhỏ hơn vehicle.current_mileage → reject ===
 test('end vehicle with km less than current mileage is rejected', function () {

@@ -272,7 +272,9 @@ test('driver swap mid-delivery correctly splits KM between two drivers', functio
 
     expect($order->fresh()->trip->status)->toBe(TripStatus::Delivering);
 
-    // Driver A ends shift mid-delivery → auto driver_swap
+    // Driver A bàn giao chuyến dở (kết thúc chuyến khi đơn chưa xong → Đảo lái) rồi mới kết thúc ca
+    $this->postJson("/api/driver/trips/{$trip->id}/complete", ['end_km' => 10060])->assertSuccessful();
+
     $this->postJson("/api/driver/shifts/{$shiftA->id}/end-vehicle", [
         'km_reading' => 10060,
     ])->assertSuccessful();
@@ -513,7 +515,9 @@ test('driver with 2 orders runs out of shift time triggers swap via trip DriverS
     ])->assertSuccessful();
     expect($order2->fresh()->trip->status)->toBe(TripStatus::Delivering);
 
-    // Driver A hết ca → end shift → auto DriverSwap on Trip 2
+    // Driver A hết ca → bàn giao Trip 2 (Đảo lái) rồi mới kết thúc ca
+    $this->postJson("/api/driver/trips/{$trip2->id}/complete", ['end_km' => 10060])->assertSuccessful();
+
     $this->postJson("/api/driver/shifts/{$shiftA->id}/end-vehicle", [
         'km_reading' => 10060,
     ])->assertSuccessful();

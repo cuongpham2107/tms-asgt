@@ -15,6 +15,7 @@ use App\Models\DriverShift;
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\Handlers\EndHandler;
@@ -146,6 +147,12 @@ class DriverShiftController extends Controller
             ]);
         }
 
+        // Còn chuyến chưa xong thì không cho rời xe: trả lỗi kèm active_trip_id để App mở chi tiết chuyến
+        // (bàn giao bằng Đảo lái hoặc làm nốt), thay vì tự chuyển chuyến sang Đảo lái.
+        if ($blocked = $this->unfinishedTripsResponse($user)) {
+            return $blocked;
+        }
+
         if ($vehicle === null) {
             return response()->json(['message' => 'Không tìm thấy xe đang hoạt động trong ca này'], 404);
         }
@@ -226,65 +233,8 @@ class DriverShiftController extends Controller
         }
 
         // Gate: không cho kết thúc ca nếu còn trip đang chạy chưa kết thúc chuyến (kể cả đã giao hàng xong nhưng chưa chốt Kết thúc đơn hàng)
-        $incompleteTrips = Trip::where('driver_id', $user->id)
-            ->where(function ($query) {
-                $query->whereHas('orders', function ($q) {
-                    $q->whereIn('status', [
-                        OrderStatus::Sent->value,
-                        OrderStatus::InTransit->value,
-                        OrderStatus::Completed->value,
-                    ]);
-                })->orWhere(function ($q) {
-                    $q->where('is_empty_run', true)
-                        ->whereIn('status', [
-                            TripStatus::Started,
-                            TripStatus::ArrivedPickup,
-                            TripStatus::Delivering,
-                            TripStatus::ArrivedDelivery,
-                            TripStatus::Delivered,
-                            TripStatus::ReturnTrip,
-                        ]);
-                });
-            })
-            ->whereIn('status', [
-                TripStatus::Started,
-                TripStatus::ArrivedPickup,
-                TripStatus::Delivering,
-                TripStatus::ArrivedDelivery,
-                TripStatus::Delivered,
-                TripStatus::ReturnTrip,
-            ])
-            ->with(['vehicle', 'orders'])
-            ->get();
-
-        if ($incompleteTrips->isNotEmpty()) {
-            $plates = $incompleteTrips->map(fn (Trip $t) => $t->vehicle?->plate_number)
-                ->filter()
-                ->unique()
-                ->implode(', ');
-            if (empty($plates)) {
-                $plates = $user->vehiclesAsDriver()->first()?->plate_number ?? ('#'.$incompleteTrips->first()->id);
-            }
-
-            $orderCodes = $incompleteTrips->flatMap(fn (Trip $t) => $t->orders->pluck('order_code'))
-                ->filter()
-                ->unique()
-                ->implode(', ');
-            if (empty($orderCodes)) {
-                $orderCodes = $incompleteTrips->pluck('trip_code')->filter()->implode(', ');
-            }
-
-            $driverName = $user->name ?? 'Không xác định';
-
-            return response()->json([
-                'message' => sprintf(
-                    'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi kết thúc ca.',
-                    $plates,
-                    $orderCodes,
-                    $driverName
-                ),
-                'active_trip_id' => $incompleteTrips->first()->id,
-            ], 422);
+        if ($blocked = $this->unfinishedTripsResponse($user)) {
+            return $blocked;
         }
 
         // Use km_reading from the 'end' checkpoint (NOT from payload — avoids double entry drift)
@@ -419,5 +369,75 @@ class DriverShiftController extends Controller
 
             return response()->json(['message' => 'Không thể chuyển xe', 'error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Lỗi 422 khi tài xế còn chuyến chưa xong (kể cả đã giao hàng nhưng chưa bấm Kết thúc đơn hàng),
+     * dùng chung cho Rời xe và Kết thúc ca. Trả null khi được phép kết thúc ca.
+     */
+    private function unfinishedTripsResponse(User $user): ?JsonResponse
+    {
+        $incompleteTrips = Trip::where('driver_id', $user->id)
+            ->where(function ($query) {
+                $query->whereHas('orders', function ($q) {
+                    $q->whereIn('status', [
+                        OrderStatus::Sent->value,
+                        OrderStatus::InTransit->value,
+                        OrderStatus::Completed->value,
+                    ]);
+                })->orWhere(function ($q) {
+                    $q->where('is_empty_run', true)
+                        ->whereIn('status', [
+                            TripStatus::Started,
+                            TripStatus::ArrivedPickup,
+                            TripStatus::Delivering,
+                            TripStatus::ArrivedDelivery,
+                            TripStatus::Delivered,
+                            TripStatus::ReturnTrip,
+                        ]);
+                });
+            })
+            ->whereIn('status', [
+                TripStatus::Started,
+                TripStatus::ArrivedPickup,
+                TripStatus::Delivering,
+                TripStatus::ArrivedDelivery,
+                TripStatus::Delivered,
+                TripStatus::ReturnTrip,
+            ])
+            ->with(['vehicle', 'orders'])
+            ->get();
+
+        if ($incompleteTrips->isEmpty()) {
+            return null;
+        }
+
+        $plates = $incompleteTrips->map(fn (Trip $t) => $t->vehicle?->plate_number)
+            ->filter()
+            ->unique()
+            ->implode(', ');
+        if (empty($plates)) {
+            $plates = $user->vehiclesAsDriver()->first()?->plate_number ?? ('#'.$incompleteTrips->first()->id);
+        }
+
+        $orderCodes = $incompleteTrips->flatMap(fn (Trip $t) => $t->orders->pluck('order_code'))
+            ->filter()
+            ->unique()
+            ->implode(', ');
+        if (empty($orderCodes)) {
+            $orderCodes = $incompleteTrips->pluck('trip_code')->filter()->implode(', ');
+        }
+
+        $driverName = $user->name ?? 'Không xác định';
+
+        return response()->json([
+            'message' => sprintf(
+                'Xe %s, mã đơn %s, lái xe %s chưa hoàn thiện chuyến, yêu cầu lái xe hoàn thành trước khi kết thúc ca.',
+                $plates,
+                $orderCodes,
+                $driverName
+            ),
+            'active_trip_id' => $incompleteTrips->first()->id,
+        ], 422);
     }
 }
