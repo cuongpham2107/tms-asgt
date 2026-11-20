@@ -7,11 +7,11 @@ use App\Filament\Widgets\DispatchActionRequiredWidget;
 use App\Filament\Widgets\FleetComplianceAlertWidget;
 use App\Filament\Widgets\OperationsStatsWidget;
 use App\Filament\Widgets\OrderAreaChartWidget;
-use App\Filament\Widgets\OrderStatusChartWidget;
 use App\Filament\Widgets\OrderTypeChartWidget;
 use App\Filament\Widgets\TopCustomerBillingWidget;
 use App\Filament\Widgets\TripTrendChartWidget;
 use App\Filament\Widgets\VehicleKmOverChartWidget;
+use App\Filament\Widgets\VehicleStatusChartWidget;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Grid;
@@ -32,7 +32,7 @@ class Dashboard extends BaseDashboard
 
     private const CHART_WIDGETS = [
         TripTrendChartWidget::class,
-        OrderStatusChartWidget::class,
+        VehicleStatusChartWidget::class,
         OrderAreaChartWidget::class,
         OrderTypeChartWidget::class,
     ];

@@ -167,6 +167,7 @@ class RolePermissionMatrixSeeder extends Seeder
             'View:OperationsStatsWidget',
             'View:TripTrendChartWidget',
             'View:OrderStatusChartWidget',
+            'View:VehicleStatusChartWidget',
             'View:OrderAreaChartWidget',
             'View:OrderTypeChartWidget',
             'View:GoogleMapTracking',

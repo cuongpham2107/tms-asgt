@@ -2,6 +2,7 @@
 
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
+use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Filament\Widgets\BillingOverviewStatsWidget;
@@ -14,11 +15,13 @@ use App\Filament\Widgets\OrderTypeChartWidget;
 use App\Filament\Widgets\TopCustomerBillingWidget;
 use App\Filament\Widgets\TripTrendChartWidget;
 use App\Filament\Widgets\VehicleKmOverChartWidget;
+use App\Filament\Widgets\VehicleStatusChartWidget;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
 use App\Models\Order;
 use App\Models\OrderCharge;
+use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use Database\Seeders\RolePermissionMatrixSeeder;
@@ -206,4 +209,35 @@ test('vehicle km over chart ranks tracked company vehicles and totals the over-l
         ->assertSee('99H-HIGH')
         ->assertSee('2.000.000 đ')
         ->assertDontSee('29H-ASGT');
+});
+
+test('vehicle status chart counts company vehicles by live trip state', function () {
+    $vehicle = fn (string $plate, VehicleStatus $status = VehicleStatus::On) => Vehicle::factory()->create([
+        'plate_number' => $plate,
+        'type' => VehicleOwnerType::Company,
+        'status' => $status,
+        'is_active' => true,
+    ]);
+    $trip = fn (Vehicle $v, TripStatus $status, array $attributes = []) => Trip::factory()->create([
+        'vehicle_id' => $v->id,
+        'status' => $status,
+        'started_at' => now()->subHour(),
+        ...$attributes,
+    ]);
+
+    $trip($vehicle('29H-RUN'), TripStatus::Delivering);
+    $trip($vehicle('29H-DELIVERED'), TripStatus::Delivered);
+    $trip($vehicle('29H-DONE'), TripStatus::Completed, ['completed_at' => now()->subMinutes(10)]);
+    $trip($vehicle('29H-WAIT'), TripStatus::Pending, ['started_at' => null]);
+    $vehicle('29H-IDLE');
+    $vehicle('29H-OFF', VehicleStatus::Off);
+
+    $component = Livewire::test(VehicleStatusChartWidget::class)->assertSuccessful();
+    $totals = (fn (): array => $this->getData())->call($component->instance())['datasets'][0]['data'];
+
+    expect($totals)->toBe([1, 2, 1, 1]);
+
+    $component->set('filter', 'area')->assertSuccessful();
+    expect(collect((fn (): array => $this->getData())->call($component->instance())['datasets'])->pluck('label')->all())
+        ->toBe(['Chưa xong', 'Sẵn sàng', 'Chờ chạy', 'Chưa chạy']);
 });
