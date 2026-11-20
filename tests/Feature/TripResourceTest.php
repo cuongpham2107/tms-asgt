@@ -1014,3 +1014,47 @@ test('ListTrips showMineOnly button filters trips with orders or empty runs crea
         ->and($instance->getExportTripsQuery(['show_mine_only' => true])->pluck('trips.id')->all())
         ->toEqualCanonicalizing([$myEmptyTrip->id, $myOrderTrip->id]);
 });
+
+test('cột điểm đến theo thứ tự mốc giao thực tế khi lái xe giao khác thứ tự dự kiến', function () {
+    $area = Area::create(['code' => 'ORD-SEQ', 'name' => 'Khu thứ tự']);
+    $customer = Customer::create(['code' => 'CUST-SEQ', 'name' => 'Khách thứ tự']);
+    $user = User::factory()->create();
+    $sdv = Location::create(['code' => 'SDV', 'name' => 'SDV', 'address' => 'A', 'lat' => 21, 'lng' => 105, 'loc_type' => 'delivery']);
+    $clc = Location::create(['code' => 'CLC', 'name' => 'CLC', 'address' => 'B', 'lat' => 21, 'lng' => 105, 'loc_type' => 'delivery']);
+    $vehicle = Vehicle::create([
+        'plate_number' => '29E-36355',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+    $trip = Trip::create(['trip_code' => 'TRIP-SEQ', 'vehicle_id' => $vehicle->id, 'status' => TripStatus::Started, 'started_at' => now()->subHours(3)]);
+    $order = Order::create([
+        'order_code' => 'ASG-940-T',
+        'trip_id' => $trip->id,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'created_by' => $user->id,
+        'status' => OrderStatus::Sent,
+    ]);
+    $sdvPoint = $order->deliveryPoints()->create(['location_id' => $sdv->id, 'sequence' => 1]);
+    $order->deliveryPoints()->create(['location_id' => $clc->id, 'sequence' => 2]);
+    $later = Location::create(['code' => 'LATER', 'name' => 'Chưa giao', 'address' => 'C', 'lat' => 21, 'lng' => 105, 'loc_type' => 'delivery']);
+    $order->deliveryPoints()->create(['location_id' => $later->id, 'sequence' => 3]);
+    $clcPoint = $order->deliveryPoints()->where('location_id', $clc->id)->first();
+
+    foreach ([[$clcPoint, 60], [$sdvPoint, 30]] as [$point, $minutesAgo]) {
+        TripCheckpoint::create([
+            'trip_id' => $trip->id,
+            'order_id' => $order->id,
+            'delivery_point_id' => $point->id,
+            'checkpoint_type' => CheckpointType::ArrivedDelivery,
+            'occurred_at' => now()->subMinutes($minutesAgo),
+        ]);
+    }
+
+    $trip->load(['orders.deliveryPoints.location', 'checkpoints.deliveryPoint.location', 'endLocation']);
+
+    expect(TripsTable::getDeliveryDestination($trip))->toBe('CLC → SDV → LATER');
+});

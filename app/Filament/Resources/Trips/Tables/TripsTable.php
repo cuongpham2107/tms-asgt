@@ -447,9 +447,29 @@ class TripsTable extends BaseTable
             return $record->endLocation?->code ?? '—';
         }
 
+        // Điểm xe đã thực sự giao theo thứ tự mốc hành trình, để lộ trình đúng khi lái xe giao khác thứ tự dự kiến.
+        $visitedDeliveryPointIds = [];
         $destinations = [];
+        foreach ($record->checkpoints as $cp) {
+            if ($cp->deliveryPoint === null
+                || ! in_array($cp->checkpoint_type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed, CheckpointType::End], true)) {
+                continue;
+            }
+
+            $visitedDeliveryPointIds[] = $cp->delivery_point_id;
+            $code = $cp->deliveryPoint->location?->code ?? $cp->deliveryPoint->address;
+            if ($code) {
+                $destinations[] = $code;
+            }
+        }
+
+        // Điểm chưa giao (chuyến đang chạy) nối tiếp theo thứ tự dự kiến.
         foreach ($orders as $order) {
             foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
+                if (in_array($dp->id, $visitedDeliveryPointIds, true)) {
+                    continue;
+                }
+
                 $code = $dp->location?->code ?? $dp->address;
                 if ($code) {
                     $destinations[] = $code;
@@ -461,20 +481,6 @@ class TripsTable extends BaseTable
         foreach ($destinations as $d) {
             if (empty($deduped) || end($deduped) !== $d) {
                 $deduped[] = $d;
-            }
-        }
-
-        if (empty($deduped)) {
-            $checkpointDestinations = $record->checkpoints
-                ->filter(fn ($cp): bool => $cp->deliveryPoint !== null
-                    && in_array($cp->checkpoint_type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed, CheckpointType::End], true))
-                ->map(fn ($cp): ?string => $cp->deliveryPoint?->location?->code ?? $cp->deliveryPoint?->address)
-                ->filter();
-
-            foreach ($checkpointDestinations as $d) {
-                if (empty($deduped) || end($deduped) !== $d) {
-                    $deduped[] = $d;
-                }
             }
         }
 
