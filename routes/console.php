@@ -3,7 +3,7 @@
 use App\Http\Middleware\LogDriverApiErrors;
 use App\Models\DatabaseNotification;
 use App\Models\VehicleGpsLog;
-use App\Services\EupGpsService;
+use App\Services\Gps\EupGpsService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;

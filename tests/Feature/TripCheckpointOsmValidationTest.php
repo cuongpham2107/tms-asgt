@@ -3,8 +3,8 @@
 use App\Enums\CheckpointType;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
-use App\Services\OsrmService;
-use App\Services\Trip\TripCheckpointOsmValidationService;
+use App\Services\Gps\OsrmService;
+use App\Services\Gps\TripCheckpointOsmValidationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);

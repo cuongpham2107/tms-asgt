@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Trip\Handlers;
+namespace App\Services\Shift;
 
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
@@ -9,12 +9,12 @@ use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
-use App\Services\ShiftKmCalculatorService;
+use App\Services\Km\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
-use App\Services\TripKmCalculatorService;
+use App\Services\Km\TripKmCalculatorService;
 use Illuminate\Support\Facades\DB;
 
-class EndHandler implements CheckpointHandlerInterface
+class LeaveVehicleService
 {
     public function handle(DriverShift $shift, Vehicle $vehicle, float $kmReading): TripCheckpoint
     {

@@ -14,7 +14,7 @@ use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripPhoto;
-use App\Services\ShiftKmCalculatorService;
+use App\Services\Km\ShiftKmCalculatorService;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;

@@ -17,7 +17,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\HandoverKmResolver;
+use App\Services\Km\HandoverKmService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 
@@ -185,17 +185,17 @@ test('resolve returns correct handover km when multiple swaps from same shift', 
 
     $trip->update(['end_km' => 100690]);
 
-    // Verify HandoverKmResolver returns correct values
+    // Verify HandoverKmService returns correct values
     // Swap 1 (driver A → driver B, from shift A): km = 100,640 (first driver_swap of shift A)
-    $km1 = HandoverKmResolver::resolve($trip, $swap1);
+    $km1 = HandoverKmService::resolve($trip, $swap1);
     expect($km1)->toBe(100640.0);
 
     // Swap 2 (driver B → driver A, from shift B): km = 100,650
-    $km2 = HandoverKmResolver::resolve($trip, $swap2);
+    $km2 = HandoverKmService::resolve($trip, $swap2);
     expect($km2)->toBe(100650.0);
 
     // Swap 3 (driver A internal, from shift A): km = 100,660 (second driver_swap of shift A)
-    $km3 = HandoverKmResolver::resolve($trip, $swap3);
+    $km3 = HandoverKmService::resolve($trip, $swap3);
     expect($km3)->toBe(100660.0);
 });
 
@@ -223,7 +223,7 @@ test('resolve returns correct handover km when swap has direct handover_km value
     ]);
 
     // Direct handover_km value should be used without fallback
-    $km = HandoverKmResolver::resolve($trip, $swap);
+    $km = HandoverKmService::resolve($trip, $swap);
     expect($km)->toBe(50500.0);
 });
 
@@ -250,6 +250,6 @@ test('resolve returns 0 when no handover_km and no matching checkpoints', functi
     ]);
 
     // No handover_km, no driver_swap checkpoints → should return 0
-    $km = HandoverKmResolver::resolve($trip, $swap);
+    $km = HandoverKmService::resolve($trip, $swap);
     expect($km)->toBe(0.0);
 });

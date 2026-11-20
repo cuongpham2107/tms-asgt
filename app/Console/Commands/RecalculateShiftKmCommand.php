@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\DriverShift;
-use App\Services\ShiftKmCalculatorService;
+use App\Services\Km\ShiftKmCalculatorService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 

@@ -295,7 +295,7 @@
     {{-- Modal xem danh sách chuyến xe trong ngày --}}
     <x-filament::modal id="vehicle-trip-modal" width="6xl">
         <x-slot name="heading">
-            Danh sách chuyến xe trong ca — {{ $tripVehicle?->plate_number }} ({{ \App\Services\ShiftScheduleService::getShiftDate()->format('d/m/Y') }})
+            Danh sách chuyến xe trong ca — {{ $tripVehicle?->plate_number }} ({{ \App\Services\Shift\ShiftScheduleService::getShiftDate()->format('d/m/Y') }})
         </x-slot>
 
         @if ($tripVehicle)

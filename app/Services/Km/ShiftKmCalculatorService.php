@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Km;
 
 use App\Models\DriverShift;
 use App\Models\Order;

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Km;
 
 use App\Enums\CheckpointType;
 use App\Models\DriverSwap;
@@ -93,7 +93,7 @@ class TripKmSplitService
         }
 
         foreach ($swaps->whereNotIn('id', $usedSwapIds) as $swap) {
-            $km = (float) ($swap->handover_km ?: HandoverKmResolver::resolve($trip, $swap));
+            $km = (float) ($swap->handover_km ?: HandoverKmService::resolve($trip, $swap));
 
             if ($km <= 0) {
                 continue;

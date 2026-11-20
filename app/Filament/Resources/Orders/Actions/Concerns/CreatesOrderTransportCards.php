@@ -20,7 +20,7 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;

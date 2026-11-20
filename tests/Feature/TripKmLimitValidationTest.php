@@ -18,7 +18,7 @@ use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\Trip\TripKmLimitService;
+use App\Services\Km\TripKmLimitService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;

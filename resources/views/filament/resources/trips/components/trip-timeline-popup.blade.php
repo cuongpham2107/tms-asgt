@@ -1,6 +1,6 @@
 @php
     use App\Models\Trip;
-    use App\Services\Trip\TripCheckpointOsmValidationService;
+    use App\Services\Gps\TripCheckpointOsmValidationService;
     use Illuminate\Support\Facades\Blade;
     use Illuminate\Support\Facades\Storage;
 

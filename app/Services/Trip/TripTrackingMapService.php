@@ -5,7 +5,7 @@ namespace App\Services\Trip;
 use App\Enums\TripStatus;
 use App\Models\Order;
 use App\Models\Trip;
-use App\Services\OsrmService;
+use App\Services\Gps\OsrmService;
 use Carbon\CarbonInterface;
 
 /**

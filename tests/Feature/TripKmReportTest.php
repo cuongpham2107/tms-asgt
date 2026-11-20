@@ -22,7 +22,7 @@ use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Observers\TripObserver;
-use App\Services\TripKmAdjustmentService;
+use App\Services\Km\TripKmAdjustmentService;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Cancel;
 use Illuminate\Foundation\Testing\RefreshDatabase;

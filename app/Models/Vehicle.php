@@ -11,7 +11,7 @@ use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Concerns\LogsChanges;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use Carbon\CarbonInterface;
 use Database\Factories\VehicleFactory;
 use Illuminate\Database\Eloquent\Builder;

@@ -25,7 +25,7 @@ use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\EupGpsService;
+use App\Services\Gps\EupGpsService;
 use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;

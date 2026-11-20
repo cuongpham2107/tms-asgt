@@ -4,7 +4,7 @@ use App\Events\VehiclesSynced;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Models\Vehicle;
 use App\Models\VehicleGpsLog;
-use App\Services\EupGpsService;
+use App\Services\Gps\EupGpsService;
 use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;

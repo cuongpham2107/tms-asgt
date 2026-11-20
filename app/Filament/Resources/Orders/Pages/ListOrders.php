@@ -13,7 +13,7 @@ use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Area;
 use App\Models\Order;
 use App\Services\Export\TripExcelExportService;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;

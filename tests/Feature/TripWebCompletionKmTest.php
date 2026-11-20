@@ -18,7 +18,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\TripKmAdjustmentService;
+use App\Services\Km\TripKmAdjustmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
@@ -316,7 +316,7 @@ test('Scenario 2: Driver swap mid-trip, completed on web, both drivers get their
 });
 
 test('Scenario 3: Driver swap checkpoint exists without DriverSwap row, recalculateKm detects and attributes km to both drivers', function () {
-    // Trip like #378: mobile EndHandler created driver_swap checkpoint, but no DriverSwap row was in DB
+    // Trip like #378: mobile LeaveVehicleService created driver_swap checkpoint, but no DriverSwap row was in DB
     $trip = Trip::create([
         'trip_code' => 'TRIP-NO-SWAP-ROW-01',
         'vehicle_id' => $this->vehicle->id,

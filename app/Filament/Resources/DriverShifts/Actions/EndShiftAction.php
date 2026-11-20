@@ -8,8 +8,8 @@ use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\TripKmCalculatorService;
+use App\Services\Km\ShiftKmCalculatorService;
+use App\Services\Km\TripKmCalculatorService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
@@ -107,7 +107,7 @@ class EndShiftAction
 
                     app(ShiftKmCalculatorService::class)->calculate($record);
 
-                    // Clean up trips that were driver_swapped via EndHandler
+                    // Clean up trips that were driver_swapped via LeaveVehicleService
                     $driverSwappedTrips = Trip::where('driver_id', $record->driver_id)
                         ->where('shift_id', $record->id)
                         ->where('status', TripStatus::DriverSwap)

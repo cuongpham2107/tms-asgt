@@ -16,8 +16,8 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\Trip\Handlers\EndHandler;
+use App\Services\Km\ShiftKmCalculatorService;
+use App\Services\Shift\LeaveVehicleService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
@@ -164,7 +164,7 @@ class DriverShiftController extends Controller
             ], 422);
         }
 
-        $checkpoint = app(EndHandler::class)->handle($shift, $vehicle, $kmReading);
+        $checkpoint = app(LeaveVehicleService::class)->handle($shift, $vehicle, $kmReading);
 
         return response()->json([
             'checkpoint' => $checkpoint->toArray(),
@@ -249,7 +249,7 @@ class DriverShiftController extends Controller
 
             app(ShiftKmCalculatorService::class)->calculate($shift);
 
-            // Clean up trips that were driver_swapped via EndHandler
+            // Clean up trips that were driver_swapped via LeaveVehicleService
             // (status=DriverSwap but still linked to this shift)
             $driverSwappedTrips = Trip::where('driver_id', $user->id)
                 ->where('shift_id', $shift->id)

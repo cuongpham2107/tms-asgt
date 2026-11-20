@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Shift;
+
+use App\Services\Km\ShiftKmCalculatorService;
 
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;

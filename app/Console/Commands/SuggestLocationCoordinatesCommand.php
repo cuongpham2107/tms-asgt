@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Enums\CheckpointType;
 use App\Models\Location;
 use App\Models\TripCheckpoint;
-use App\Services\Trip\TripCheckpointOsmValidationService;
+use App\Services\Gps\TripCheckpointOsmValidationService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;

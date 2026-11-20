@@ -23,7 +23,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\TripKmCalculatorService;
+use App\Services\Km\TripKmCalculatorService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Role;

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Gps;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Pool;

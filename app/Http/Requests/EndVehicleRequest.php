@@ -7,7 +7,7 @@ use App\Enums\TripStatus;
 use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\DriverShift;
 use App\Models\Trip;
-use App\Services\Trip\TripKmLimitService;
+use App\Services\Km\TripKmLimitService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 

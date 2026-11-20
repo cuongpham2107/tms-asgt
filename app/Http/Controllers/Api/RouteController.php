@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\OsrmService;
+use App\Services\Gps\OsrmService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

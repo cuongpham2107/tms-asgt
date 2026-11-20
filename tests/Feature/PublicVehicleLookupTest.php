@@ -14,7 +14,7 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use Illuminate\Support\Facades\URL;
 
 it('rejects requests without valid X-Api-Key', function (): void {
