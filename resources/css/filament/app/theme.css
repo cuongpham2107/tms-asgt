@@ -708,3 +708,11 @@ html.dark .trk-order-item { background: #0f172a; }
 .fi-js-widget-bare .fi-wi-js > .fi-section > .fi-section-content-ctn > .fi-section-content {
     padding: 0 !important;
 }
+
+/* Dashboard: thẻ biểu đồ cao bằng nhau trong cùng hàng, khung vẽ cố định để các biểu đồ đồng đều. */
+.fi-wi-chart > .fi-section {
+    height: 100%;
+}
+.fi-wi-chart .fi-wi-chart-canvas-ctn {
+    height: 260px;
+}

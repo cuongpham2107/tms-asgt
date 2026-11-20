@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Pages\DriverMonthlyKmReport;
+use App\Filament\Widgets\Concerns\StylesDashboardChart;
 use App\Models\Order;
 use App\Services\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
@@ -11,12 +12,11 @@ use Filament\Widgets\ChartWidget;
 class OrderAreaChartWidget extends ChartWidget
 {
     use HasWidgetShield;
+    use StylesDashboardChart;
 
     protected ?string $heading = 'Sản lượng Vận tải theo Tuyến / Khu vực';
 
     protected ?string $description = 'Số lượng đơn hàng được phân bổ tới từng trung tâm logistics và khu vực';
-
-    protected ?string $maxHeight = '320px';
 
     public ?string $filter = 'month';
 
@@ -50,28 +50,16 @@ class OrderAreaChartWidget extends ChartWidget
 
         $labels = [];
         $values = [];
-        $colors = [
-            '#3b82f6', // NBA / Blue
-            '#10b981', // BN / Emerald
-            '#f59e0b', // TN / Amber
-            '#8b5cf6', // NBO / Violet
-            '#06b6d4', // ASG / Cyan
-            '#ec4899', // PROVINCE / Pink
-            '#64748b', // Other
-        ];
-        $backgroundColors = [];
 
-        foreach ($data as $index => $row) {
+        foreach ($data as $row) {
             $name = $row->area_name ?: $row->area_code;
-            $labels[] = "{$row->area_code} ({$name})";
+            $labels[] = $name !== $row->area_code ? [$row->area_code, $name] : $row->area_code;
             $values[] = (int) $row->count;
-            $backgroundColors[] = $colors[$index % count($colors)];
         }
 
         if (empty($values)) {
             $labels = ['Chưa có dữ liệu'];
             $values = [0];
-            $backgroundColors = ['#94a3b8'];
         }
 
         return [
@@ -79,10 +67,10 @@ class OrderAreaChartWidget extends ChartWidget
                 [
                     'label' => 'Số lượng đơn hàng',
                     'data' => $values,
-                    'backgroundColor' => $backgroundColors,
-                    'borderRadius' => 8,
-                    'borderSkipped' => false,
-                    'maxBarThickness' => 36,
+                    'backgroundColor' => '#0284c7',
+                    'hoverBackgroundColor' => '#0369a1',
+                    'borderRadius' => 4,
+                    'maxBarThickness' => 22,
                 ],
             ],
             'labels' => $labels,
@@ -91,41 +79,14 @@ class OrderAreaChartWidget extends ChartWidget
 
     protected function getOptions(): array
     {
-        return [
-            'plugins' => [
-                'legend' => [
-                    'display' => false,
-                ],
-                'tooltip' => [
-                    'padding' => 12,
-                    'cornerRadius' => 8,
-                ],
-            ],
+        return $this->dashboardChartOptions([
+            'indexAxis' => 'y',
+            'plugins' => ['legend' => ['display' => false]],
             'scales' => [
-                'y' => [
-                    'beginAtZero' => true,
-                    'grid' => [
-                        'color' => 'rgba(156, 163, 175, 0.12)',
-                        'borderDash' => [4, 4],
-                    ],
-                    'ticks' => [
-                        'precision' => 0,
-                        'padding' => 8,
-                    ],
-                ],
-                'x' => [
-                    'grid' => [
-                        'display' => false,
-                    ],
-                    'ticks' => [
-                        'padding' => 8,
-                        'font' => [
-                            'size' => 11,
-                        ],
-                    ],
-                ],
+                'x' => ['grid' => ['display' => true, 'color' => 'rgba(148, 163, 184, 0.15)'], 'beginAtZero' => true],
+                'y' => ['grid' => ['display' => false]],
             ],
-        ];
+        ]);
     }
 
     protected function getType(): string

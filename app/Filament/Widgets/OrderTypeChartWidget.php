@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Pages\DriverMonthlyKmReport;
+use App\Filament\Widgets\Concerns\StylesDashboardChart;
 use App\Models\Order;
 use App\Services\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
@@ -11,12 +12,11 @@ use Filament\Widgets\ChartWidget;
 class OrderTypeChartWidget extends ChartWidget
 {
     use HasWidgetShield;
+    use StylesDashboardChart;
 
     protected ?string $heading = 'Cơ cấu Loại Hàng hoá';
 
     protected ?string $description = 'Tỷ lệ giữa Hàng không (HHHK) và Hàng ngoài';
-
-    protected ?string $maxHeight = '320px';
 
     public ?string $filter = 'month';
 
@@ -62,7 +62,7 @@ class OrderTypeChartWidget extends ChartWidget
                     'backgroundColor' => ['#0284c7', '#10b981'],
                     'borderWidth' => 2,
                     'borderColor' => '#ffffff',
-                    'hoverOffset' => 6,
+                    'hoverOffset' => 4,
                 ],
             ],
             'labels' => [
@@ -74,28 +74,10 @@ class OrderTypeChartWidget extends ChartWidget
 
     protected function getOptions(): array
     {
-        return [
-            'plugins' => [
-                'legend' => [
-                    'display' => true,
-                    'position' => 'bottom',
-                    'labels' => [
-                        'usePointStyle' => true,
-                        'boxWidth' => 8,
-                        'padding' => 14,
-                        'font' => [
-                            'size' => 11,
-                            'weight' => '500',
-                        ],
-                    ],
-                ],
-                'tooltip' => [
-                    'padding' => 12,
-                    'cornerRadius' => 8,
-                ],
-            ],
-            'cutout' => '72%',
-        ];
+        return $this->dashboardChartOptions([
+            'cutout' => '68%',
+            'scales' => ['x' => ['display' => false], 'y' => ['display' => false]],
+        ]);
     }
 
     protected function getType(): string

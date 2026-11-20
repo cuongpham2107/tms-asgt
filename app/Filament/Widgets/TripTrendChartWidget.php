@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\StylesDashboardChart;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Services\ShiftScheduleService;
@@ -11,12 +12,11 @@ use Filament\Widgets\ChartWidget;
 class TripTrendChartWidget extends ChartWidget
 {
     use HasWidgetShield;
+    use StylesDashboardChart;
 
     protected ?string $heading = 'Xu hướng Vận tải & Điều phối Chuyến xe';
 
     protected ?string $description = 'Theo dõi khối lượng chuyến xe và tiến độ hoàn thành đơn hàng';
-
-    protected ?string $maxHeight = '320px';
 
     public ?string $filter = '7days';
 
@@ -95,29 +95,29 @@ class TripTrendChartWidget extends ChartWidget
                     'label' => 'Chuyến xe phát sinh',
                     'data' => $tripCounts,
                     'borderColor' => '#0ea5e9',
-                    'backgroundColor' => 'rgba(14, 165, 233, 0.15)',
+                    'backgroundColor' => 'rgba(14, 165, 233, 0.10)',
                     'fill' => true,
-                    'tension' => 0.4,
-                    'borderWidth' => 2.5,
+                    'tension' => 0.35,
+                    'borderWidth' => 2,
                     'pointBackgroundColor' => '#0ea5e9',
                     'pointBorderColor' => '#ffffff',
-                    'pointBorderWidth' => 2,
-                    'pointRadius' => 4,
-                    'pointHoverRadius' => 6,
+                    'pointBorderWidth' => 1.5,
+                    'pointRadius' => 2.5,
+                    'pointHoverRadius' => 5,
                 ],
                 [
                     'label' => 'Đơn hoàn thành',
                     'data' => $orderCompletedCounts,
                     'borderColor' => '#10b981',
-                    'backgroundColor' => 'rgba(16, 185, 129, 0.08)',
+                    'backgroundColor' => 'rgba(16, 185, 129, 0.06)',
                     'fill' => true,
-                    'tension' => 0.4,
-                    'borderWidth' => 2.5,
+                    'tension' => 0.35,
+                    'borderWidth' => 2,
                     'pointBackgroundColor' => '#10b981',
                     'pointBorderColor' => '#ffffff',
-                    'pointBorderWidth' => 2,
-                    'pointRadius' => 4,
-                    'pointHoverRadius' => 6,
+                    'pointBorderWidth' => 1.5,
+                    'pointRadius' => 2.5,
+                    'pointHoverRadius' => 5,
                 ],
             ],
             'labels' => $labels,
@@ -126,56 +126,10 @@ class TripTrendChartWidget extends ChartWidget
 
     protected function getOptions(): array
     {
-        return [
-            'plugins' => [
-                'legend' => [
-                    'display' => true,
-                    'position' => 'top',
-                    'align' => 'end',
-                    'labels' => [
-                        'usePointStyle' => true,
-                        'boxWidth' => 8,
-                        'padding' => 16,
-                        'font' => [
-                            'size' => 12,
-                            'weight' => '500',
-                        ],
-                    ],
-                ],
-                'tooltip' => [
-                    'mode' => 'index',
-                    'intersect' => false,
-                    'padding' => 12,
-                    'cornerRadius' => 8,
-                ],
-            ],
-            'interaction' => [
-                'mode' => 'nearest',
-                'axis' => 'x',
-                'intersect' => false,
-            ],
-            'scales' => [
-                'y' => [
-                    'beginAtZero' => true,
-                    'grid' => [
-                        'color' => 'rgba(156, 163, 175, 0.12)',
-                        'borderDash' => [4, 4],
-                    ],
-                    'ticks' => [
-                        'precision' => 0,
-                        'padding' => 8,
-                    ],
-                ],
-                'x' => [
-                    'grid' => [
-                        'display' => false,
-                    ],
-                    'ticks' => [
-                        'padding' => 8,
-                    ],
-                ],
-            ],
-        ];
+        return $this->dashboardChartOptions([
+            'plugins' => ['tooltip' => ['mode' => 'index', 'intersect' => false]],
+            'interaction' => ['mode' => 'index', 'intersect' => false],
+        ]);
     }
 
     protected function getType(): string

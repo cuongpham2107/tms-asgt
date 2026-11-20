@@ -233,7 +233,8 @@ test('vehicle status chart counts company vehicles by live trip state', function
     $vehicle('29H-OFF', VehicleStatus::Off);
 
     $component = Livewire::test(VehicleStatusChartWidget::class)->assertSuccessful();
-    $totals = (fn (): array => $this->getData())->call($component->instance())['datasets'][0]['data'];
+    $totals = collect((fn (): array => $this->getData())->call($component->instance())['datasets'])
+        ->map(fn (array $dataset): int => (int) collect($dataset['data'])->filter()->sum())->all();
 
     expect($totals)->toBe([1, 2, 1, 1]);
 
