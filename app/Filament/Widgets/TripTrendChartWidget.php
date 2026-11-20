@@ -8,15 +8,15 @@ use App\Models\Trip;
 use App\Services\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\ChartWidget;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 
 class TripTrendChartWidget extends ChartWidget
 {
     use HasWidgetShield;
     use StylesDashboardChart;
 
-    protected ?string $heading = 'Xu hướng Vận tải & Điều phối Chuyến xe';
-
-    protected ?string $description = 'Theo dõi khối lượng chuyến xe và tiến độ hoàn thành đơn hàng';
+    protected ?string $heading = 'Xu hướng vận tải';
 
     public ?string $filter = '7days';
 
@@ -27,6 +27,26 @@ class TripTrendChartWidget extends ChartWidget
             '30days' => '30 ngày qua',
             'month' => 'Tháng này',
         ];
+    }
+
+    /**
+     * Số hôm nay (ca hiện tại) của từng đường, kèm chênh lệch so với hôm qua.
+     */
+    public function getDescription(): string|Htmlable|null
+    {
+        $parts = collect($this->getCachedData()['datasets'])->map(function (array $dataset): string {
+            $today = (int) (end($dataset['data']) ?: 0);
+            $yesterday = (int) (prev($dataset['data']) ?: 0);
+            $delta = $today - $yesterday;
+            $deltaClass = $delta > 0 ? 'text-emerald-600' : ($delta < 0 ? 'text-rose-600' : 'text-gray-400');
+            $deltaText = $delta === 0 ? '±0' : sprintf('%+d', $delta);
+
+            return '<span class="mr-3 inline-flex items-baseline gap-1" title="Hôm nay so với hôm qua"><span class="size-2 self-center rounded-full" style="background: '.e($dataset['borderColor']).'"></span>'
+                .e($dataset['label']).' hôm nay <b class="text-sm font-bold tabular-nums text-gray-950 dark:text-white">'.$today.'</b>'
+                .'<span class="text-xs tabular-nums '.$deltaClass.'">'.$deltaText.'</span></span>';
+        });
+
+        return new HtmlString($parts->implode(''));
     }
 
     protected function getData(): array
@@ -92,7 +112,7 @@ class TripTrendChartWidget extends ChartWidget
         return [
             'datasets' => [
                 [
-                    'label' => 'Chuyến xe phát sinh',
+                    'label' => 'Chuyến xe',
                     'data' => $tripCounts,
                     'borderColor' => '#0ea5e9',
                     'backgroundColor' => 'rgba(14, 165, 233, 0.10)',

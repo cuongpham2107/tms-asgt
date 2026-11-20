@@ -232,13 +232,13 @@ test('vehicle status chart counts company vehicles by live trip state', function
     $vehicle('29H-IDLE');
     $vehicle('29H-OFF', VehicleStatus::Off);
 
-    $component = Livewire::test(VehicleStatusChartWidget::class)->assertSuccessful();
-    $totals = collect((fn (): array => $this->getData())->call($component->instance())['datasets'])
-        ->map(fn (array $dataset): int => (int) collect($dataset['data'])->filter()->sum())->all();
+    $data = (fn (): array => $this->getViewData())->call(new VehicleStatusChartWidget);
 
-    expect($totals)->toBe([1, 2, 1, 1]);
+    expect($data['totals'])->toBe(['running' => 1, 'ready' => 2, 'pending' => 1, 'idle' => 1])
+        ->and($data['total'])->toBe(5);
 
-    $component->set('filter', 'area')->assertSuccessful();
-    expect(collect((fn (): array => $this->getData())->call($component->instance())['datasets'])->pluck('label')->all())
-        ->toBe(['Chưa xong', 'Sẵn sàng', 'Chờ chạy', 'Chưa chạy']);
+    Livewire::test(VehicleStatusChartWidget::class)
+        ->assertSuccessful()
+        ->assertSee('Chưa xong')
+        ->assertSee('Theo khu vực');
 });

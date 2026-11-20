@@ -2,95 +2,38 @@
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Pages\DriverMonthlyKmReport;
-use App\Filament\Widgets\Concerns\StylesDashboardChart;
-use App\Models\Order;
-use App\Services\ShiftScheduleService;
+use App\Filament\Widgets\Concerns\FiltersOrdersByPeriod;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
-use Filament\Widgets\ChartWidget;
+use Filament\Widgets\Widget;
 
-class OrderAreaChartWidget extends ChartWidget
+/**
+ * Xếp hạng số đơn theo khu vực trong kỳ chọn.
+ */
+class OrderAreaChartWidget extends Widget
 {
+    use FiltersOrdersByPeriod;
     use HasWidgetShield;
-    use StylesDashboardChart;
 
-    protected ?string $heading = 'Sản lượng Vận tải theo Tuyến / Khu vực';
+    protected string $view = 'filament.widgets.order-area-chart';
 
-    protected ?string $description = 'Số lượng đơn hàng được phân bổ tới từng trung tâm logistics và khu vực';
-
-    public ?string $filter = 'month';
-
-    protected function getFilters(): ?array
+    /**
+     * @return array{rows: list<array{code: string, name: string, count: int}>, total: int, max: int, filters: array<string, string>}
+     */
+    protected function getViewData(): array
     {
-        return [
-            'month' => 'Tháng này',
-            'week' => 'Tuần này',
-            'today' => 'Hôm nay',
-            'all' => 'Toàn bộ thời gian',
-        ];
-    }
-
-    protected function getData(): array
-    {
-        $activeFilter = $this->filter ?: 'month';
-
-        $query = Order::query();
-        $shiftDate = ShiftScheduleService::getShiftWindow()[0]->toDateString();
-
-        if ($activeFilter !== 'all') {
-            [$from, $to] = DriverMonthlyKmReport::rangeFor($activeFilter, $shiftDate);
-            $query->whereBetween('orders.planned_loading_at', [$from, $to]);
-        }
-
-        $data = $query->join('areas', 'orders.area_id', '=', 'areas.id')
-            ->selectRaw('areas.name as area_name, areas.code as area_code, count(orders.id) as count')
-            ->groupBy('areas.name', 'areas.code')
+        $rows = $this->ordersInPeriod()
+            ->join('areas', 'orders.area_id', '=', 'areas.id')
+            ->selectRaw('areas.code as code, areas.name as name, count(orders.id) as count')
+            ->groupBy('areas.code', 'areas.name')
             ->orderByDesc('count')
-            ->get();
-
-        $labels = [];
-        $values = [];
-
-        foreach ($data as $row) {
-            $name = $row->area_name ?: $row->area_code;
-            $labels[] = $name !== $row->area_code ? [$row->area_code, $name] : $row->area_code;
-            $values[] = (int) $row->count;
-        }
-
-        if (empty($values)) {
-            $labels = ['Chưa có dữ liệu'];
-            $values = [0];
-        }
+            ->get()
+            ->map(fn ($row): array => ['code' => (string) $row->code, 'name' => (string) ($row->name ?: $row->code), 'count' => (int) $row->count]);
 
         return [
-            'datasets' => [
-                [
-                    'label' => 'Số lượng đơn hàng',
-                    'data' => $values,
-                    'backgroundColor' => '#0284c7',
-                    'hoverBackgroundColor' => '#0369a1',
-                    'borderRadius' => 4,
-                    'maxBarThickness' => 22,
-                ],
-            ],
-            'labels' => $labels,
+            'rows' => $rows->all(),
+            'total' => (int) $rows->sum('count'),
+            'max' => (int) $rows->max('count'),
+            'filters' => $this->getFilters(),
         ];
-    }
-
-    protected function getOptions(): array
-    {
-        return $this->dashboardChartOptions([
-            'indexAxis' => 'y',
-            'plugins' => ['legend' => ['display' => false]],
-            'scales' => [
-                'x' => ['grid' => ['display' => true, 'color' => 'rgba(148, 163, 184, 0.15)'], 'beginAtZero' => true],
-                'y' => ['grid' => ['display' => false]],
-            ],
-        ]);
-    }
-
-    protected function getType(): string
-    {
-        return 'bar';
     }
 }
