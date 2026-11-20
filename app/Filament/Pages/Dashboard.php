@@ -11,6 +11,7 @@ use App\Filament\Widgets\OrderStatusChartWidget;
 use App\Filament\Widgets\OrderTypeChartWidget;
 use App\Filament\Widgets\TopCustomerBillingWidget;
 use App\Filament\Widgets\TripTrendChartWidget;
+use App\Filament\Widgets\VehicleKmOverChartWidget;
 use Filament\Pages\Dashboard as BaseDashboard;
 use UnitEnum;
 
@@ -41,6 +42,7 @@ class Dashboard extends BaseDashboard
             OrderStatusChartWidget::class,
             OrderAreaChartWidget::class,
             OrderTypeChartWidget::class,
+            VehicleKmOverChartWidget::class,
             TopCustomerBillingWidget::class,
         ];
     }

@@ -13,6 +13,7 @@ use App\Filament\Widgets\OrderStatusChartWidget;
 use App\Filament\Widgets\OrderTypeChartWidget;
 use App\Filament\Widgets\TopCustomerBillingWidget;
 use App\Filament\Widgets\TripTrendChartWidget;
+use App\Filament\Widgets\VehicleKmOverChartWidget;
 use App\Models\Area;
 use App\Models\Customer;
 use App\Models\DriverShift;
@@ -175,4 +176,34 @@ test('new role-focused dashboard widgets render real data cleanly including empt
     Livewire::test(TopCustomerBillingWidget::class)
         ->assertStatus(200)
         ->assertCanSeeTableRecords([$customer]);
+});
+
+test('vehicle km over chart ranks tracked company vehicles and totals the over-limit cost', function () {
+    $tracked = fn (string $plate, int $km, string $owner = 'CLC') => Vehicle::factory()->create([
+        'plate_number' => $plate,
+        'type' => VehicleOwnerType::Company,
+        'owner' => $owner,
+        'is_active' => true,
+        'monthly_start_km' => 100000,
+        'current_mileage' => 100000 + $km,
+    ]);
+    $tracked('29H-LOW', 1500);
+    $tracked('99H-HIGH', 3200, 'TTA');
+    $tracked('29C-MID', 2900, 'CLS');
+    $tracked('29H-ASGT', 5000, 'ASGT');
+    Vehicle::factory()->create(['plate_number' => '29H-RENT', 'type' => VehicleOwnerType::Rent, 'is_active' => true]);
+
+    $data = (fn (): array => $this->getViewData())->call(new VehicleKmOverChartWidget);
+
+    expect(collect($data['rows'])->pluck('plate')->all())->toBe(['99H-HIGH', '29C-MID', '29H-LOW'])
+        ->and(collect($data['rows'])->pluck('level')->all())->toBe(['red', 'orange', null])
+        ->and($data['totalKm'])->toBe(7600.0)
+        ->and($data['overCost'])->toBe(2000000.0)
+        ->and(round($data['coefficient'], 4))->toBe(round(7600 / 9000, 4));
+
+    Livewire::test(VehicleKmOverChartWidget::class)
+        ->assertSuccessful()
+        ->assertSee('99H-HIGH')
+        ->assertSee('2.000.000 đ')
+        ->assertDontSee('29H-ASGT');
 });

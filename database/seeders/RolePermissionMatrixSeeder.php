@@ -188,6 +188,7 @@ class RolePermissionMatrixSeeder extends Seeder
                 'View:VehicleDispatchTable',
                 'View:DriverMonthlyKmReport',
                 'View:DriverMonthlyKmTable',
+                'View:VehicleKmOverChartWidget',
                 'View:DriverDutyReport',
                 'View:DriverDutySummaryWidget',
             ],
