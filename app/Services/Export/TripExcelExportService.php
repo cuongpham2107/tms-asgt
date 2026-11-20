@@ -457,6 +457,8 @@ class TripExcelExportService
 
             // Với các chuyến có đơn hàng
             foreach ($orders as $order) {
+                // Gắn sẵn chuyến (đã eager load) để loadMissing('trip.*') bên dưới không truy vấn lại cho từng đơn.
+                $order->setRelation('trip', $trip);
                 $checkpoints = $order->tripCheckpoints->isNotEmpty() ? $order->tripCheckpoints : $trip->checkpoints;
 
                 // Các mốc thời gian A, B, C, D (ưu tiên adjusted_at nếu đã hiệu chỉnh)
