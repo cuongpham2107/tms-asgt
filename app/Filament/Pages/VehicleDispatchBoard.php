@@ -155,6 +155,31 @@ class VehicleDispatchBoard extends Page implements HasTable
         $this->dispatch('open-modal', id: 'vehicle-timeline-modal');
     }
 
+    public function openEditTripModal(int $tripId): void
+    {
+        if (! (auth()->user()?->can('Update:Trip') ?? false)) {
+            Notification::make()
+                ->danger()
+                ->title('Không có quyền thao tác')
+                ->body('Bạn không có quyền chỉnh sửa chuyến xe.')
+                ->send();
+
+            return;
+        }
+
+        if (! Trip::whereKey($tripId)->exists()) {
+            Notification::make()
+                ->warning()
+                ->title('Không tìm thấy chuyến')
+                ->body('Chuyến xe không tồn tại.')
+                ->send();
+
+            return;
+        }
+
+        $this->mountAction('edit_trip', ['trip' => $tripId]);
+    }
+
     public function openDriverSwapModal(int $vehicleId): void
     {
         if (! (auth()->user()?->can('Update:Trip') ?? false)) {
@@ -536,6 +561,17 @@ class VehicleDispatchBoard extends Page implements HasTable
 
                 if ($pA !== $pB) {
                     return $pA <=> $pB;
+                }
+
+                if ($a->status === TripStatus::Completed && $b->status === TripStatus::Completed) {
+                    $completedA = $a->completed_at ?? $a->started_at ?? $a->created_at;
+                    $completedB = $b->completed_at ?? $b->started_at ?? $b->created_at;
+
+                    if ($completedA && $completedB && ! $completedA->equalTo($completedB)) {
+                        return $completedB->lessThan($completedA) ? -1 : 1;
+                    }
+
+                    return $b->id <=> $a->id;
                 }
 
                 $timeA = $a->started_at ?? $a->created_at;

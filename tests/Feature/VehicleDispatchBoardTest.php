@@ -2074,6 +2074,16 @@ test('VehicleDispatchTable renderer configuration includes sorted shiftTrips pay
         'total_km' => 18.5,
     ]);
 
+    $latestCompletedTrip = Trip::factory()->create([
+        'trip_code' => 'TRIP-TREE-DONE-LATEST',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subMinutes(50),
+        'completed_at' => now()->subMinutes(25),
+        'total_km' => 24.0,
+    ]);
+
     $activeTrip = Trip::factory()->create([
         'trip_code' => 'TRIP-TREE-RUN',
         'vehicle_id' => $vehicle->id,
@@ -2113,13 +2123,15 @@ test('VehicleDispatchTable renderer configuration includes sorted shiftTrips pay
 
     expect($row)->not->toBeNull()
         ->and($config['shiftDate'])->not->toBeEmpty()
-        ->and($row['shiftTrips'])->toHaveCount(2)
+        ->and($row['shiftTrips'])->toHaveCount(3)
         ->and($row['shiftTrips'][0]['tripCode'])->toBe('TRIP-TREE-RUN')
         ->and($row['shiftTrips'][0]['isActive'])->toBeTrue()
         ->and($row['shiftTrips'][0]['ordersCount'])->toBe(1)
         ->and($row['shiftTrips'][0]['orders'][0]['orderCode'])->toBe('ORD-TREE-1')
         ->and($row['shiftTrips'][0]['orders'][0]['customerCode'])->toBe('CUST-TREE')
-        ->and($row['shiftTrips'][1]['tripCode'])->toBe('TRIP-TREE-DONE')
+        ->and($row['shiftTrips'][1]['tripCode'])->toBe('TRIP-TREE-DONE-LATEST')
         ->and($row['shiftTrips'][1]['isCompleted'])->toBeTrue()
-        ->and($row['shiftTrips'][1]['totalKm'])->toBe('18.5 km');
+        ->and($row['shiftTrips'][2]['tripCode'])->toBe('TRIP-TREE-DONE')
+        ->and($row['shiftTrips'][2]['isCompleted'])->toBeTrue()
+        ->and($row['shiftTrips'][2]['totalKm'])->toBe('18.5 km');
 });

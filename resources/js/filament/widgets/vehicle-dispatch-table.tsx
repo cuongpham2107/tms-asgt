@@ -146,6 +146,7 @@ interface PageApi {
     openTripModal(vehicleId: number): Promise<unknown>;
     openGpsModal(vehicleId: number): Promise<unknown>;
     openTimelineModal(tripId: number): Promise<unknown>;
+    openEditTripModal?(tripId: number): Promise<unknown>;
     openDriverSwapModal(vehicleId: number): Promise<unknown>;
     openStatusAction?(name: string, vehicleId: number): Promise<unknown>;
     mountTableAction(name: string, record: number | string): Promise<unknown>;
@@ -427,11 +428,39 @@ interface DispatchRowProps {
     groupCount: number;
     isRent: boolean;
     isActionLoading: boolean;
+    loadingTripAction: { tripId: number; type: "edit" | "timeline" } | null;
     onToggleGroup: (code: string) => void;
     onToggleExpand: (vehicleId: number) => void;
     onOpenTimeline: (tripId: number) => void;
+    onEditTrip: (tripId: number) => void;
     onOpenGps: (vehicleId: number) => void;
     onCallStatusAction: (row: Snapshot<Row>) => void;
+}
+
+function SpinnerIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+    return (
+        <svg
+            className={`animate-spin text-current ${className}`}
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+        >
+            <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+            />
+            <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+        </svg>
+    );
 }
 
 const DispatchRow = memo(function DispatchRow({
@@ -448,9 +477,11 @@ const DispatchRow = memo(function DispatchRow({
     groupCount,
     isRent,
     isActionLoading,
+    loadingTripAction,
     onToggleGroup,
     onToggleExpand,
     onOpenTimeline,
+    onEditTrip,
     onOpenGps,
     onCallStatusAction,
 }: DispatchRowProps) {
@@ -494,29 +525,38 @@ const DispatchRow = memo(function DispatchRow({
                 {row.tripId ? (
                     <button
                         type="button"
-                        className="rounded-md p-1 text-primary-600 transition hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-500/10"
+                        disabled={
+                            loadingTripAction?.tripId === row.tripId &&
+                            loadingTripAction?.type === "timeline"
+                        }
+                        className="cursor-pointer rounded-md p-1 text-primary-600 transition hover:bg-primary-50 disabled:cursor-wait dark:text-primary-400 dark:hover:bg-primary-500/10"
                         title="Xem hành trình chuyến hiện tại"
                         onClick={() => onOpenTimeline(row.tripId as number)}
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={1.6}
-                            className="mx-auto h-4 w-4"
-                            aria-hidden="true"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-                            />
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"
-                            />
-                        </svg>
+                        {loadingTripAction?.tripId === row.tripId &&
+                        loadingTripAction?.type === "timeline" ? (
+                            <SpinnerIcon className="mx-auto h-4 w-4" />
+                        ) : (
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={1.6}
+                                className="mx-auto h-4 w-4"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                                />
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"
+                                />
+                            </svg>
+                        )}
                     </button>
                 ) : (
                     <span className="text-gray-400">—</span>
@@ -749,9 +789,9 @@ const DispatchRow = memo(function DispatchRow({
         {isExpanded &&
             (shiftTrips.length === 0 ? (
                 <tr
-                    className={`dispatch-row bg-slate-50/90 text-[11px] text-gray-500 italic dark:bg-white/[0.03] dark:text-gray-400 ${isLastInGroup ? "dispatch-group-end" : ""}`}
+                    className={`dispatch-row bg-sky-100/60 text-[11px] text-gray-600 italic dark:bg-sky-950/40 dark:text-gray-300 ${isLastInGroup ? "dispatch-group-end" : ""}`}
                 >
-                    <td className={`${cellClass} px-2`} />
+                    <td className={`${cellClass} px-2 shadow-[inset_3px_0_0_rgb(14,165,233)]`} />
                     <td colSpan={colCount - 1} className="px-3 py-2">
                         <span className="inline-flex items-center gap-1.5 pl-3">
                             <span className="font-mono text-gray-400">└─</span>
@@ -777,40 +817,61 @@ const DispatchRow = memo(function DispatchRow({
                         ),
                     ).join(", ");
                     const timeSummary = `${trip.startedAt} → ${trip.completedAt}`;
+                    const isEditingTrip =
+                        loadingTripAction?.tripId === trip.id &&
+                        loadingTripAction?.type === "edit";
+                    const isOpeningTimeline =
+                        loadingTripAction?.tripId === trip.id &&
+                        loadingTripAction?.type === "timeline";
+                    const isTripBusy = isEditingTrip || isOpeningTimeline;
 
                     return (
                         <tr
                             key={`${groupCode}-${row.id}-trip-${trip.id}`}
-                            className={`dispatch-row bg-slate-50/90 text-[11px] dark:bg-white/[0.03] ${isLastChild ? "dispatch-group-end" : ""}`}
+                            className={`dispatch-row dispatch-child-row ${isTripBusy ? "cursor-wait opacity-75" : "cursor-pointer"} bg-sky-100/60 text-[11px] dark:bg-sky-950/40 ${isLastChild ? "dispatch-group-end" : ""}`}
+                            title={
+                                isEditingTrip
+                                    ? "Đang mở sửa chuyến..."
+                                    : `Bấm để sửa chuyến — ${trip.tripCode}`
+                            }
+                            onClick={() => onEditTrip(trip.id)}
                         >
-                            <td className={`${cellClass} px-2`} />
+                            <td className={`${cellClass} px-2 shadow-[inset_3px_0_0_rgb(14,165,233)]`} />
 
                             <td className={`${cellClass} px-1 text-center`}>
                                 <button
                                     type="button"
-                                    className="rounded-md p-1 text-primary-600 transition hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-500/10"
+                                    disabled={isTripBusy}
+                                    className="cursor-pointer rounded-md p-1 text-primary-600 transition hover:bg-primary-50 disabled:cursor-wait dark:text-primary-400 dark:hover:bg-primary-500/10"
                                     title={`Xem hành trình ${trip.tripCode}`}
-                                    onClick={() => onOpenTimeline(trip.id)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenTimeline(trip.id);
+                                    }}
                                 >
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={1.6}
-                                        className="mx-auto h-3.5 w-3.5"
-                                        aria-hidden="true"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-                                        />
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"
-                                        />
-                                    </svg>
+                                    {isOpeningTimeline ? (
+                                        <SpinnerIcon className="mx-auto h-3.5 w-3.5" />
+                                    ) : (
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth={1.6}
+                                            className="mx-auto h-3.5 w-3.5"
+                                            aria-hidden="true"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                                            />
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"
+                                            />
+                                        </svg>
+                                    )}
                                 </button>
                             </td>
 
@@ -831,11 +892,14 @@ const DispatchRow = memo(function DispatchRow({
                                                 ? "success"
                                                 : "gray",
                                     )}
-                                    <span className="font-mono font-semibold">
-                                        {trip.tripCode}
-                                    </span>
                                     {trip.isEmptyRun &&
                                         badge("Chạy rỗng", "info")}
+                                    {isEditingTrip && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary-600 dark:text-primary-400">
+                                            <SpinnerIcon className="h-3 w-3" />
+                                            <span>Đang tải...</span>
+                                        </span>
+                                    )}
                                 </span>
                             </td>
 
@@ -904,14 +968,14 @@ const DispatchRow = memo(function DispatchRow({
                             {!isRent && (
                                 <>
                                     <td
-                                        className={`${cellClass} px-2 text-center font-mono text-[11px] text-gray-600 dark:text-gray-300`}
+                                        className={`${cellClass} px-2 text-left font-mono text-[11px] text-gray-600 dark:text-gray-300`}
                                     >
-                                        {trip.startKm ? `Đầu: ${trip.startKm}` : "—"}
+                                        {trip.startKm ? `KM đầu: ${trip.startKm}` : "—"}
                                     </td>
                                     <td
                                         className={`${cellClass} px-1 text-center font-mono text-[11px] text-gray-600 dark:text-gray-300`}
                                     >
-                                        {trip.endKm ? `Cuối: ${trip.endKm}` : "—"}
+                                        {trip.endKm ? `KM cuối: ${trip.endKm}` : "—"}
                                     </td>
                                     <td
                                         className={`${cellClass} px-2 text-center text-gray-400`}
@@ -946,15 +1010,26 @@ const DispatchRow = memo(function DispatchRow({
                             >
                                 <span className="inline-flex items-center gap-2">
                                     <span>{trip.driverName}</span>
-                                    {isRent && trip.timelineUrl && (
-                                        <a
-                                            href={trip.timelineUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="font-medium text-primary-600 hover:underline dark:text-primary-400"
+                                    {isRent && (
+                                        <button
+                                            type="button"
+                                            disabled={isTripBusy}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onOpenTimeline(trip.id);
+                                            }}
+                                            className="inline-flex cursor-pointer items-center gap-1 font-medium text-primary-600 hover:underline disabled:cursor-wait dark:text-primary-400"
+                                            title={`Xem hành trình ${trip.tripCode}`}
                                         >
-                                            Hành trình ↗
-                                        </a>
+                                            {isOpeningTimeline ? (
+                                                <>
+                                                    <SpinnerIcon className="h-3 w-3" />
+                                                    <span>Đang tải...</span>
+                                                </>
+                                            ) : (
+                                                "Hành trình ↗"
+                                            )}
+                                        </button>
                                     )}
                                 </span>
                             </td>
@@ -964,18 +1039,25 @@ const DispatchRow = memo(function DispatchRow({
                                     colSpan={2}
                                     className="px-2 py-1.5 text-center align-middle whitespace-nowrap"
                                 >
-                                    {trip.timelineUrl ? (
-                                        <a
-                                            href={trip.timelineUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="font-medium text-primary-600 hover:underline dark:text-primary-400"
-                                        >
-                                            Hành trình ↗
-                                        </a>
-                                    ) : (
-                                        <span className="text-gray-400">—</span>
-                                    )}
+                                    <button
+                                        type="button"
+                                        disabled={isTripBusy}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onOpenTimeline(trip.id);
+                                        }}
+                                        className="inline-flex cursor-pointer items-center justify-center gap-1 font-medium text-primary-600 hover:underline disabled:cursor-wait dark:text-primary-400"
+                                        title={`Xem hành trình ${trip.tripCode}`}
+                                    >
+                                        {isOpeningTimeline ? (
+                                            <>
+                                                <SpinnerIcon className="h-3 w-3" />
+                                                <span>Đang tải...</span>
+                                            </>
+                                        ) : (
+                                            "Hành trình ↗"
+                                        )}
+                                    </button>
                                 </td>
                             )}
                         </tr>
@@ -999,6 +1081,14 @@ function DispatchTable({
         null,
     );
     const loadingActionRowIdRef = useRef<number | null>(null);
+    const [loadingTripAction, setLoadingTripAction] = useState<{
+        tripId: number;
+        type: "edit" | "timeline";
+    } | null>(null);
+    const loadingTripActionRef = useRef<{
+        tripId: number;
+        type: "edit" | "timeline";
+    } | null>(null);
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
     const [expandedVehicles, setExpandedVehicles] = useState<
         Record<number, boolean>
@@ -1042,8 +1132,55 @@ function DispatchTable({
     );
 
     const openTimelineModal = useCallback(
-        (tripId: number) => {
-            void page.openTimelineModal(tripId);
+        async (tripId: number) => {
+            if (loadingTripActionRef.current !== null) {
+                return;
+            }
+
+            const next = { tripId, type: "timeline" as const };
+            loadingTripActionRef.current = next;
+            setLoadingTripAction(next);
+            try {
+                await page.openTimelineModal(tripId);
+            } catch (error: any) {
+                console.error(
+                    "[VehicleDispatchTable] openTimelineModal failed:",
+                    error,
+                );
+                if (error?.status === 419) {
+                    window.location.reload();
+                }
+            } finally {
+                loadingTripActionRef.current = null;
+                setLoadingTripAction(null);
+            }
+        },
+        [page],
+    );
+
+    const openEditTripModal = useCallback(
+        async (tripId: number) => {
+            if (loadingTripActionRef.current !== null) {
+                return;
+            }
+
+            const next = { tripId, type: "edit" as const };
+            loadingTripActionRef.current = next;
+            setLoadingTripAction(next);
+            try {
+                await page.openEditTripModal?.(tripId);
+            } catch (error: any) {
+                console.error(
+                    "[VehicleDispatchTable] openEditTripModal failed:",
+                    error,
+                );
+                if (error?.status === 419) {
+                    window.location.reload();
+                }
+            } finally {
+                loadingTripActionRef.current = null;
+                setLoadingTripAction(null);
+            }
         },
         [page],
     );
@@ -1546,9 +1683,22 @@ function DispatchTable({
                                         isActionLoading={
                                             loadingActionRowId === row.id
                                         }
+                                        loadingTripAction={
+                                            loadingTripAction &&
+                                            (row.tripId ===
+                                                loadingTripAction.tripId ||
+                                                row.shiftTrips?.some(
+                                                    (t) =>
+                                                        t.id ===
+                                                        loadingTripAction.tripId,
+                                                ))
+                                                ? loadingTripAction
+                                                : null
+                                        }
                                         onToggleGroup={toggleGroup}
                                         onToggleExpand={toggleVehicleExpand}
                                         onOpenTimeline={openTimelineModal}
+                                        onEditTrip={openEditTripModal}
                                         onOpenGps={openGpsModal}
                                         onCallStatusAction={callStatusAction}
                                     />

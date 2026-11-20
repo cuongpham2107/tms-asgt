@@ -17,6 +17,24 @@
     .dispatch-row:hover td:first-child {
         box-shadow: inset 4px 0 0 rgb(37 99 235);
     }
+    /* Hover riêng cho dòng chuyến con khi mở rộng từ biển số xe */
+    .dispatch-row.dispatch-child-row:hover td:not(.status-cell):not(.km-over-cell):not(.alert-cell) {
+        background-color: rgb(254 243 199 / 0.9) !important;
+    }
+    .dispatch-row.dispatch-child-row:hover td {
+        border-top-color: rgb(245 158 11 / 0.85) !important;
+        border-bottom-color: rgb(245 158 11 / 0.85) !important;
+    }
+    .dispatch-row.dispatch-child-row:hover td:first-child {
+        box-shadow: inset 4px 0 0 rgb(217 119 6) !important;
+    }
+    .dark .dispatch-row.dispatch-child-row:hover td:not(.status-cell):not(.km-over-cell):not(.alert-cell) {
+        background-color: rgb(120 53 15 / 0.45) !important;
+    }
+    .dark .dispatch-row.dispatch-child-row:hover td {
+        border-top-color: rgb(245 158 11 / 0.65) !important;
+        border-bottom-color: rgb(245 158 11 / 0.65) !important;
+    }
     /* Border phân biệt rõ ràng ở cuối mỗi nhóm địa điểm */
     .dispatch-row.dispatch-group-end td,
     .dispatch-row.dispatch-group-end:hover td {
