@@ -35,10 +35,10 @@ interface PlanRow {
     isReturnTrip: boolean;
     createdBy: string | null;
     createdById: number | null;
-    dayKey: string;
-    dayLabel: string;
-    time: string;
-    minutesLeft: number;
+    /** false: giờ đóng là giờ form tự điền lúc tạo đơn (không sau giờ tạo), ô Giờ đóng để trống. */
+    hasPlannedTime: boolean;
+    time: string | null;
+    minutesLeft: number | null;
     /** Giờ đóng hàng thuộc ngày trước hôm nay mà vẫn chưa gán: tô vàng cảnh báo. */
     isPastDay: boolean;
 }
@@ -129,7 +129,11 @@ function formatCountdown(minutes: number): string {
 
 /** Giờ đóng hàng dự kiến còn ở tương lai: đơn đang là kế hoạch. */
 function isPlanned(row: Snapshot<PlanRow>): boolean {
-    return row.minutesLeft > 0;
+    return row.minutesLeft !== null && row.minutesLeft > 0;
+}
+
+function isOverdue(row: Snapshot<PlanRow>): boolean {
+    return row.minutesLeft !== null && row.minutesLeft <= 0;
 }
 
 type SortKey = "time" | "order" | "status" | "area" | "customer" | "route" | "load";
@@ -152,11 +156,11 @@ const collator = new Intl.Collator("vi", { numeric: true, sensitivity: "base" })
 function sortValue(row: Snapshot<PlanRow>, key: SortKey): string | number {
     switch (key) {
         case "time":
-            return row.minutesLeft;
+            return row.minutesLeft ?? Number.MAX_SAFE_INTEGER;
         case "order":
             return row.orderCode;
         case "status":
-            return isPlanned(row) ? 1 : 0;
+            return isOverdue(row) ? 0 : isPlanned(row) ? 2 : 1;
         case "area":
             return row.areaCode ?? "";
         case "customer":
@@ -179,6 +183,10 @@ function compareRows(a: Snapshot<PlanRow>, b: Snapshot<PlanRow>, key: SortKey, d
 type Urgency = "overdue" | "soon" | "normal";
 
 function urgencyOf(row: Snapshot<PlanRow>, soonMinutes: number): Urgency {
+    if (row.minutesLeft === null) {
+        return "normal";
+    }
+
     if (row.minutesLeft < 0) {
         return "overdue";
     }
@@ -253,10 +261,14 @@ const PlanRowView = memo(function PlanRowView({
 
             <td className={`relative w-24 whitespace-nowrap ${CELL} ps-3 text-center`}>
                 <span aria-hidden="true" className={`absolute inset-y-2 start-0 w-1 rounded-e-full ${styles.rail}`} />
-                <div className={`font-mono text-sm font-semibold leading-none tabular-nums ${styles.time}`}>{row.time}</div>
-                <span className={`mt-1 inline-flex whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${styles.chip}`}>
-                    {formatCountdown(row.minutesLeft)}
-                </span>
+                {row.minutesLeft !== null && (
+                    <>
+                        <div className={`font-mono text-sm font-semibold leading-none tabular-nums ${styles.time}`}>{row.time}</div>
+                        <span className={`mt-1 inline-flex whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${styles.chip}`}>
+                            {formatCountdown(row.minutesLeft)}
+                        </span>
+                    </>
+                )}
             </td>
 
             <td className={CELL}>
@@ -282,13 +294,14 @@ const PlanRowView = memo(function PlanRowView({
             </td>
 
             <td className={`${CELL} text-center`}>
-                {isPlanned(row) ? (
+                {isPlanned(row) && (
                     <span className="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-inset ring-sky-600/20 dark:bg-sky-500/15 dark:text-sky-300">
                         Kế hoạch
                     </span>
-                ) : (
-                    <span className="inline-flex rounded-md bg-rose-50 px-1.5 py-0.5 text-[11px] font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300">
-                        Quá giờ
+                )}
+                {isOverdue(row) && (
+                    <span className="inline-flex whitespace-nowrap rounded-md bg-rose-50 px-1.5 py-0.5 text-[11px] font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300">
+                        Quá giờ cấp xe
                     </span>
                 )}
             </td>
@@ -459,26 +472,14 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
         });
     }, [scopedRows, selectedAreas, search, plannedOnly]);
 
-    const days = useMemo(() => {
-        const groups: { key: string; label: string; isPastDay: boolean; rows: Snapshot<PlanRow>[] }[] = [];
-        visibleRows.forEach((row) => {
-            const last = groups[groups.length - 1];
-            if (last && last.key === row.dayKey) {
-                last.rows.push(row);
-            } else {
-                groups.push({ key: row.dayKey, label: row.dayLabel, isPastDay: row.isPastDay, rows: [row] });
-            }
-        });
-        if (sort !== null) {
-            groups.forEach((group) => group.rows.sort((a, b) => compareRows(a, b, sort.key, sort.direction)));
-        }
+    const sortedRows = useMemo(
+        () => (sort === null ? visibleRows : [...visibleRows].sort((a, b) => compareRows(a, b, sort.key, sort.direction))),
+        [visibleRows, sort],
+    );
 
-        return groups;
-    }, [visibleRows, sort]);
-
-    const overdueCount = useMemo(() => visibleRows.filter((row) => row.minutesLeft < 0).length, [visibleRows]);
+    const overdueCount = useMemo(() => visibleRows.filter(isOverdue).length, [visibleRows]);
     const soonCount = useMemo(
-        () => visibleRows.filter((row) => row.minutesLeft >= 0 && row.minutesLeft <= configuration.soonMinutes).length,
+        () => visibleRows.filter((row) => row.minutesLeft !== null && row.minutesLeft > 0 && row.minutesLeft <= configuration.soonMinutes).length,
         [visibleRows, configuration.soonMinutes],
     );
 
@@ -576,7 +577,7 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                         </tbody>
                     )}
 
-                    {configuration.loaded && days.length === 0 && (
+                    {configuration.loaded && sortedRows.length === 0 && (
                         <tbody>
                             <tr>
                                 <td colSpan={COLUMN_COUNT} className="px-5 py-12 text-center">
@@ -593,23 +594,9 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                         </tbody>
                     )}
 
-                    {days.map((day) => (
-                        <tbody key={day.key} className="divide-y divide-gray-100 dark:divide-white/5">
-                            <tr>
-                                <th
-                                    scope="colgroup"
-                                    colSpan={COLUMN_COUNT}
-                                    className={`px-3 py-1.5 text-left font-bold ${
-                                        day.isPastDay
-                                            ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
-                                            : "bg-gray-50/80 text-gray-900 dark:bg-white/5 dark:text-gray-100"
-                                    }`}
-                                >
-                                    {day.label}
-                                    <span className="ms-2 font-medium text-gray-500 dark:text-gray-400">· {day.rows.length} đơn</span>
-                                </th>
-                            </tr>
-                            {day.rows.map((row) => (
+                    {sortedRows.length > 0 && (
+                        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                            {sortedRows.map((row) => (
                                 <PlanRowView
                                     key={row.id}
                                     row={row}
@@ -620,7 +607,7 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                                 />
                             ))}
                         </tbody>
-                    ))}
+                    )}
                 </table>
             </div>
         </div>

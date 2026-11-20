@@ -40,21 +40,23 @@ function planOrder(string $code, OrderStatus $status, mixed $plannedLoadingAt): 
     ]);
 }
 
-test('tab kế hoạch hiện đơn nháp có giờ đóng hàng, kể cả ngày trước chưa gán, sớm nhất lên đầu', function () {
+test('tab kế hoạch hiện mọi đơn nháp, đơn đã hẹn giờ lên trước theo giờ đóng', function () {
     planOrder('ASG-LATER', OrderStatus::Draft, now()->addDays(2));
     planOrder('ASG-SOON', OrderStatus::Draft, now()->addHours(3));
     planOrder('ASG-ASSIGNED', OrderStatus::Sent, now()->addHours(5));
-    planOrder('ASG-PAST', OrderStatus::Draft, now()->subDays(2));
-    planOrder('ASG-NOTIME', OrderStatus::Draft, null);
+    planOrder('ASG-AUTO', OrderStatus::Draft, now()->subMinute());
+    $late = planOrder('ASG-LATE', OrderStatus::Draft, now()->subDay());
+    $late->forceFill(['created_at' => now()->subDays(3)])->saveQuietly();
 
     $rows = (new DispatchPlanTable)->rows();
 
-    expect(array_column($rows, 'orderCode'))->toBe(['ASG-PAST', 'ASG-SOON', 'ASG-LATER'])
-        ->and(array_column($rows, 'isPastDay'))->toBe([true, false, false])
-        ->and($rows[0]['dayLabel'])->toStartWith('Ngày trước')
+    expect(array_column($rows, 'orderCode'))->toBe(['ASG-LATE', 'ASG-SOON', 'ASG-LATER', 'ASG-AUTO'])
+        ->and(array_column($rows, 'hasPlannedTime'))->toBe([true, true, true, false])
+        ->and(array_column($rows, 'isPastDay'))->toBe([true, false, false, false])
+        ->and($rows[0]['minutesLeft'])->toBeLessThan(0)
         ->and($rows[1]['areaCode'])->toBe('NBA')
-        ->and($rows[1]['dayLabel'])->toStartWith('Hôm nay')
-        ->and($rows[2]['dayLabel'])->not->toStartWith('Hôm nay');
+        ->and($rows[3]['time'])->toBeNull()
+        ->and($rows[3]['minutesLeft'])->toBeNull();
 });
 
 test('cấu hình chỉ gửi đơn khi React đã sẵn sàng', function () {

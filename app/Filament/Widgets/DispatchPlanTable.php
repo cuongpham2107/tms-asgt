@@ -70,12 +70,24 @@ class DispatchPlanTable extends Widget
         return Order::query()
             ->with(['area', 'customer', 'pickupLocation', 'deliveryPoints.location', 'createdBy'])
             ->where('status', OrderStatus::Draft)
-            ->whereNotNull('planned_loading_at')
             ->orderBy('planned_loading_at')
             ->orderBy('id')
             ->get()
+            // Đơn đã hẹn giờ lên trước theo giờ đóng; đơn chưa hẹn giờ xuống cuối.
+            ->sortBy(fn (Order $order): int => self::hasPlannedTime($order) ? 0 : 1)
             ->map(fn (Order $order): array => $this->rowPayload($order, $now))
+            ->values()
             ->all();
+    }
+
+    /**
+     * Giờ đóng do người điều phối nhập theo hẹn của khách. Giờ không sau thời điểm tạo đơn
+     * là giờ form tự điền lúc tạo, coi như chưa hẹn giờ.
+     */
+    public static function hasPlannedTime(Order $order): bool
+    {
+        return $order->planned_loading_at !== null
+            && ($order->created_at === null || $order->planned_loading_at->gt($order->created_at));
     }
 
     /**
@@ -83,8 +95,7 @@ class DispatchPlanTable extends Widget
      */
     private function rowPayload(Order $order, Carbon $now): array
     {
-        $plannedAt = $order->planned_loading_at;
-        $minutesLeft = (int) floor($now->diffInMinutes($plannedAt, false));
+        $plannedAt = self::hasPlannedTime($order) ? $order->planned_loading_at : null;
 
         return [
             'id' => $order->id,
@@ -110,25 +121,10 @@ class DispatchPlanTable extends Widget
             'isReturnTrip' => (bool) $order->is_return_trip,
             'createdBy' => $order->createdBy?->name,
             'createdById' => $order->created_by,
-            'dayKey' => $plannedAt->format('Y-m-d'),
-            'dayLabel' => $this->dayLabel($plannedAt, $now),
-            'time' => $plannedAt->format('H:i'),
-            'minutesLeft' => $minutesLeft,
-            'isPastDay' => $plannedAt->lt($now->copy()->startOfDay()),
+            'hasPlannedTime' => $plannedAt !== null,
+            'time' => $plannedAt?->format('H:i d/m'),
+            'minutesLeft' => $plannedAt !== null ? (int) floor($now->diffInMinutes($plannedAt, false)) : null,
+            'isPastDay' => $plannedAt?->lt($now->copy()->startOfDay()) ?? false,
         ];
-    }
-
-    private function dayLabel(Carbon $date, Carbon $now): string
-    {
-        $weekday = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'][$date->dayOfWeek];
-
-        $prefix = match (true) {
-            $date->lt($now->copy()->startOfDay()) => 'Ngày trước, chưa gán · '.$weekday,
-            $date->isSameDay($now) => 'Hôm nay',
-            $date->isSameDay($now->copy()->addDay()) => 'Ngày mai',
-            default => $weekday,
-        };
-
-        return $prefix.' · '.$date->format('d/m');
     }
 }
