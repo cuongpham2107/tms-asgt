@@ -237,13 +237,14 @@ class DriverMonthlyKmTable extends Widget
 
         return $rows
             ->map(function (array $row) use ($time, $duration): array {
+                $isEmptyRun = ($row['service_type'] ?? null) === 'Xe không hàng' || ($row['order_id'] ?? null) === null;
                 $start = filled($row['trip_started_at'] ?? null)
                     ? Carbon::parse($row['trip_started_at'])
                     : (filled($row['time_a'] ?? null) ? Carbon::parse($row['time_a']) : null);
                 $delivery = filled($row['time_d'] ?? null)
                     ? Carbon::parse($row['time_d'])
                     : (filled($row['trip_ended_at'] ?? null) ? Carbon::parse($row['trip_ended_at']) : null);
-                $operatingMinutes = ($start && $delivery && $delivery->gte($start))
+                $operatingMinutes = (! $isEmptyRun && $start && $delivery && $delivery->gte($start))
                     ? (int) $start->diffInMinutes($delivery)
                     : null;
 
@@ -252,7 +253,7 @@ class DriverMonthlyKmTable extends Widget
                     'tripId' => $row['trip_id'],
                     'driverId' => $row['driver_id'],
                     'driver' => $row['driver_name'],
-                    'operatingTime' => $duration($operatingMinutes),
+                    'operatingTime' => $isEmptyRun ? '' : $duration($operatingMinutes),
                     'date' => filled($row['date']) ? Carbon::parse($row['date'])->format('d/m/Y') : null,
                     'code' => $row['code'],
                     'type' => $row['service_type'],

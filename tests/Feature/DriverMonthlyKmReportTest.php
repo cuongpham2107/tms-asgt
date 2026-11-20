@@ -334,6 +334,7 @@ test('report widget loads the read-only statement of the period on demand', func
 
     $rows = collect(monthlyKmWidget()->instance()->loadDetails('month', '2026-10-15')['statement']);
     $row = $rows->firstWhere('code', 'ORD-MON');
+    $emptyRow = $rows->firstWhere('type', 'Xe không hàng');
 
     // Cả kỳ trả về một lần, phân trang do React lo.
     expect($rows)->toHaveCount(27)
@@ -343,6 +344,7 @@ test('report widget loads the read-only statement of the period on demand', func
             'started' => '08:00 15/10',
             'ended' => '09:40 15/10',
         ])
+        ->and($emptyRow['operatingTime'])->toBe('')
         ->and(array_keys($row))->not->toContain('charge', 'total', 'base_price');
 });
 
