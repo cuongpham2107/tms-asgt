@@ -11,10 +11,10 @@ use App\Enums\VehicleStatus;
 use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
-use App\Filament\Resources\Orders\Actions\CancelOrderAction;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
+use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
@@ -234,9 +234,8 @@ class OrdersTable extends BaseTable
                         // Thêm / bớt điểm trả cho đơn đã giao xong: mở lại đơn và chuyến để app tài xế hiện bước cho điểm mới.
                         ->after(fn (Order $record) => app(DeliveryProgressSyncService::class)->syncOrderProgress($record->refresh())),
 
-                    // UnsendOrderAction::make(),
+                    UnsendOrderAction::make(),
                     // CreateReturnTripAction::make(),
-                    CancelOrderAction::make(),
                     DeleteAction::make()
                         ->hidden(fn (Order $record): bool => ! $record->status->canDelete())
                         ->requiresConfirmation()

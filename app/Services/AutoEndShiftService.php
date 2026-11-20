@@ -233,6 +233,13 @@ class AutoEndShiftService
                 $trip->save();
             }
 
+            // Gỡ shift_id cho các chuyến chờ chạy của ca này để ca sau nhận lại (giống tài xế tự kết thúc ca trên App)
+            Trip::query()
+                ->where('driver_id', $shift->driver_id)
+                ->where('shift_id', $shift->id)
+                ->where('status', TripStatus::Pending)
+                ->update(['shift_id' => null]);
+
             // 5. Cập nhật current_mileage cho xe nếu có
             if ($vehicle && $endKm > 0 && (float) ($vehicle->current_mileage ?? 0) < $endKm) {
                 $vehicle->update(['current_mileage' => $endKm]);
