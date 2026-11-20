@@ -516,7 +516,15 @@ class ListOrders extends ListRecords
                 'pickupLocation',
                 'trip.vehicle',
                 'trip.driver',
-            ])
+            ]);
+
+        $search = trim((string) ($this->orderSearch ?? ''));
+
+        if ($search !== '') {
+            return $this->applyOrderSearchFilter($query, $search);
+        }
+
+        $query
             ->when($this->showMineOnly, fn (Builder $query): Builder => $query->where('orders.created_by', Auth::id()))
             ->when(
                 $this->activeOrderTypeFilter !== 'all',
@@ -534,11 +542,6 @@ class ListOrders extends ListRecords
                     fn (Builder $categoryQuery): Builder => $categoryQuery->where('code', $this->activePlaceFilter),
                 ),
             )
-            ->when(
-                filled($this->orderSearch),
-                fn (Builder $query): Builder => $this->applyOrderSearchFilter($query, (string) $this->orderSearch),
-            )
-
             ->when(
                 filled($this->startDate) || filled($this->endDate),
                 fn (Builder $query): Builder => $this->applyDateRangeFilter($query, $this->startDate, $this->endDate),

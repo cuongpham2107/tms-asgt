@@ -73,7 +73,6 @@ beforeEach(function () {
 test('list orders searches case-insensitively by order code, customer code, and plate number', function () {
     foreach (['asg-450', 'ASG-450', 'alsb', '29e25824'] as $keyword) {
         Livewire::test(ListOrders::class, [
-            'activeStatusFilter' => 'completed',
             'orderSearch' => $keyword,
         ])
             ->assertCanSeeTableRecords([$this->order]);
@@ -83,9 +82,50 @@ test('list orders searches case-insensitively by order code, customer code, and 
 test('list trips searches case-insensitively by order code, trip code, plate number, and driver', function () {
     foreach (['asg-450', 'cd-2026-11-18-450', '29e25824', 'nguyễn văn admin'] as $keyword) {
         Livewire::test(ListTrips::class, [
-            'activeStatusFilter' => 'completed',
             'tripSearch' => $keyword,
         ])
             ->assertCanSeeTableRecords([$this->trip]);
     }
+});
+
+test('list orders and list trips search bypasses default status, type, area, mine-only, and date filters', function () {
+    $otherUser = User::factory()->create(['name' => 'Người Tạo Khác']);
+    $otherArea = Area::create([
+        'type' => 'external',
+        'code' => 'HPH',
+        'name' => 'Hải Phòng',
+        'is_active' => true,
+        'sort_order' => 2,
+    ]);
+
+    $oldTrip = Trip::create([
+        'trip_code' => 'CD-2025-01-10-999',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $otherUser->id,
+        'status' => TripStatus::Completed,
+        'started_at' => now()->subMonths(3),
+        'completed_at' => now()->subMonths(3)->addHour(),
+        'created_by' => $otherUser->id,
+    ]);
+
+    $oldOrder = Order::create([
+        'order_code' => 'EXT-999',
+        'type' => OrderType::External,
+        'area_id' => $otherArea->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $oldTrip->id,
+        'status' => OrderStatus::Completed,
+        'planned_loading_at' => now()->subMonths(3),
+        'created_by' => $otherUser->id,
+    ]);
+
+    Livewire::test(ListOrders::class, [
+        'orderSearch' => 'ext-999',
+    ])
+        ->assertCanSeeTableRecords([$oldOrder]);
+
+    Livewire::test(ListTrips::class, [
+        'tripSearch' => 'cd-2025-01-10-999',
+    ])
+        ->assertCanSeeTableRecords([$oldTrip]);
 });

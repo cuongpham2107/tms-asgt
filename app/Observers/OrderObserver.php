@@ -28,6 +28,10 @@ class OrderObserver
             $this->invalidateTransportCardsCache();
         }
 
+        if ($order->wasChanged('pickup_location_id')) {
+            $this->syncTripStartLocation($order);
+        }
+
         if ($order->wasChanged('status')
             && $order->status === OrderStatus::Completed
             && $order->type === OrderType::External) {
@@ -73,6 +77,28 @@ class OrderObserver
     public function deleted(Order $order): void
     {
         $this->invalidateTransportCardsCache();
+    }
+
+    private function syncTripStartLocation(Order $order): void
+    {
+        if ($order->trip_id === null || $order->pickup_location_id === null) {
+            return;
+        }
+
+        $trip = $order->trip;
+        if ($trip === null) {
+            return;
+        }
+
+        $oldPickupLocationId = $order->getOriginal('pickup_location_id');
+        $matchesPreviousPickup = $oldPickupLocationId !== null
+            && (int) $trip->start_location_id === (int) $oldPickupLocationId;
+
+        if ($trip->start_location_id === null || $matchesPreviousPickup) {
+            $trip->update([
+                'start_location_id' => $order->pickup_location_id,
+            ]);
+        }
     }
 
     private function invalidateTransportCardsCache(): void

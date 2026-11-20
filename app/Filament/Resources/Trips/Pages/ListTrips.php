@@ -658,7 +658,7 @@ class ListTrips extends ListRecords
 
         $actionRecordId = $this->deepLinkTripId;
 
-        return TripResource::getEloquentQuery()
+        $query = TripResource::getEloquentQuery()
             ->orderByRaw($caseSql)
             ->orderBy('trips.updated_at', 'desc')
             ->with([
@@ -668,7 +668,15 @@ class ListTrips extends ListRecords
                 'orders.area',
                 'orders.pickupLocation',
                 'orders.deliveryPoints.location',
-            ])
+            ]);
+
+        $search = trim((string) ($this->tripSearch ?? ''));
+
+        if ($search !== '') {
+            return $this->applyTripSearchFilter($query, $search, $actionRecordId);
+        }
+
+        return $query
             ->when(
                 $this->activeStatusFilter !== 'all',
                 function (Builder $query) use ($actionRecordId): Builder {
@@ -748,10 +756,6 @@ class ListTrips extends ListRecords
             ->when(
                 $this->showMineOnly,
                 fn (Builder $query): Builder => $this->applyMineOnlyFilter($query, $actionRecordId ? (int) $actionRecordId : null),
-            )
-            ->when(
-                filled($this->tripSearch),
-                fn (Builder $query): Builder => $this->applyTripSearchFilter($query, (string) $this->tripSearch, $actionRecordId),
             );
     }
 
