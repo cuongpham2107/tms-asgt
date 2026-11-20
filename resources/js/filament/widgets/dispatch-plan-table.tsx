@@ -71,7 +71,9 @@ const COLUMN_COUNT = 9;
 const MINUTES_PER_DAY = 1440;
 /** Cùng màu tiêu đề bảng ở tab Kiểm soát xe. */
 const HEADER_BG = "rgb(30 58 95)";
-const HEADER_CELL = "border-r border-b border-white/10 px-2 py-2 text-center whitespace-nowrap";
+/** Safari không vẽ border của ô sticky trong bảng border-collapse, nên kẻ ô header bằng box-shadow (giống bảng Kiểm soát xe). */
+const HEADER_LINE = "shadow-[inset_-1px_-1px_0_rgb(255_255_255/0.25)]";
+const HEADER_CELL = `px-2 py-2 text-center whitespace-nowrap ${HEADER_LINE}`;
 const CELL = "border-r border-gray-100 px-2 py-1.5 align-middle dark:border-white/5";
 
 const numberFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
@@ -538,7 +540,7 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                         <tr className="dark:bg-slate-950" style={{ backgroundColor: HEADER_BG }}>
                             <th
                                 colSpan={COLUMN_COUNT}
-                                className="border-b border-white/10 px-4 py-2.5 text-center text-sm font-bold uppercase tracking-wider text-white sm:text-base dark:bg-slate-950"
+                                className={`px-4 py-2.5 text-center text-sm font-bold uppercase tracking-wider text-white sm:text-base dark:bg-slate-950 ${HEADER_LINE}`}
                                 style={{ backgroundColor: HEADER_BG }}
                             >
                                 Kế hoạch đơn nháp chờ gán lái, xe
