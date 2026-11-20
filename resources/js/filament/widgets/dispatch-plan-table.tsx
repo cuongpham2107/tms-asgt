@@ -67,7 +67,7 @@ type Wire = JsWidgetUtilities<WidgetMethods>["$wire"];
 const REFRESH_MS = 60_000;
 const AREA_STORAGE_KEY = "tms.dispatchPlan.areas";
 const MINE_STORAGE_KEY = "tms.dispatchPlan.mineOnly";
-const COLUMN_COUNT = 8;
+const COLUMN_COUNT = 9;
 const MINUTES_PER_DAY = 1440;
 /** Cùng màu tiêu đề bảng ở tab Kiểm soát xe. */
 const HEADER_BG = "rgb(30 58 95)";
@@ -127,6 +127,55 @@ function formatCountdown(minutes: number): string {
     return minutes < 0 ? `Quá ${text}` : `Còn ${text}`;
 }
 
+/** Giờ đóng hàng dự kiến còn ở tương lai: đơn đang là kế hoạch. */
+function isPlanned(row: Snapshot<PlanRow>): boolean {
+    return row.minutesLeft > 0;
+}
+
+type SortKey = "time" | "order" | "status" | "area" | "customer" | "route" | "load";
+type SortDirection = "asc" | "desc";
+
+const COLUMNS: { label: string; sortKey?: SortKey }[] = [
+    { label: "Thao tác" },
+    { label: "Giờ đóng", sortKey: "time" },
+    { label: "Đơn hàng", sortKey: "order" },
+    { label: "Trạng thái", sortKey: "status" },
+    { label: "KV", sortKey: "area" },
+    { label: "Khách hàng", sortKey: "customer" },
+    { label: "Hành trình", sortKey: "route" },
+    { label: "Kiện / Tải", sortKey: "load" },
+    { label: "Ghi chú" },
+];
+
+const collator = new Intl.Collator("vi", { numeric: true, sensitivity: "base" });
+
+function sortValue(row: Snapshot<PlanRow>, key: SortKey): string | number {
+    switch (key) {
+        case "time":
+            return row.minutesLeft;
+        case "order":
+            return row.orderCode;
+        case "status":
+            return isPlanned(row) ? 1 : 0;
+        case "area":
+            return row.areaCode ?? "";
+        case "customer":
+            return row.customerCode ?? "";
+        case "route":
+            return [row.pickup ?? "", ...row.destinations].join(" ");
+        case "load":
+            return row.packages ?? -1;
+    }
+}
+
+function compareRows(a: Snapshot<PlanRow>, b: Snapshot<PlanRow>, key: SortKey, direction: SortDirection): number {
+    const left = sortValue(a, key);
+    const right = sortValue(b, key);
+    const result = typeof left === "number" && typeof right === "number" ? left - right : collator.compare(String(left), String(right));
+
+    return direction === "asc" ? result : -result;
+}
+
 type Urgency = "overdue" | "soon" | "normal";
 
 function urgencyOf(row: Snapshot<PlanRow>, soonMinutes: number): Urgency {
@@ -180,6 +229,28 @@ const PlanRowView = memo(function PlanRowView({
                     : "bg-white hover:bg-primary-50/40 dark:bg-gray-900 dark:hover:bg-white/[0.03]"
             }`}
         >
+            <td className={`${CELL} text-center`}>
+                <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => onAssign(row.id)}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:bg-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 active:translate-y-px disabled:cursor-wait disabled:opacity-60"
+                >
+                    {isLoading ? (
+                        <svg aria-hidden="true" className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z" />
+                        </svg>
+                    ) : (
+                        <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                            <path d="M6.5 3c-1.051 0-2.093.04-3.125.117A1.49 1.49 0 0 0 2 4.607V10.5h9V4.606c0-.771-.59-1.43-1.375-1.489A41.568 41.568 0 0 0 6.5 3ZM2 12v2.5A1.5 1.5 0 0 0 3.5 16h.041a3 3 0 0 1 5.918 0h.791a.75.75 0 0 0 .75-.75V12H2Z" />
+                            <path d="M6.5 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM13.25 5a.75.75 0 0 0-.75.75v8.514a3.001 3.001 0 0 1 4.893 1.44c.37-.275.607-.714.607-1.204V9.5a.75.75 0 0 0-.164-.468L15.36 5.282A.75.75 0 0 0 14.775 5H13.25ZM14.5 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+                        </svg>
+                    )}
+                    Gán lái, xe
+                </button>
+            </td>
+
             <td className={`relative w-24 ${CELL} ps-3 text-center`}>
                 <span aria-hidden="true" className={`absolute inset-y-2 start-0 w-1 rounded-e-full ${styles.rail}`} />
                 <div className={`font-mono text-sm font-semibold leading-none tabular-nums ${styles.time}`}>{row.time}</div>
@@ -208,6 +279,18 @@ const PlanRowView = memo(function PlanRowView({
                         </span>
                     )}
                 </div>
+            </td>
+
+            <td className={`${CELL} text-center`}>
+                {isPlanned(row) ? (
+                    <span className="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-inset ring-sky-600/20 dark:bg-sky-500/15 dark:text-sky-300">
+                        Kế hoạch
+                    </span>
+                ) : (
+                    <span className="inline-flex rounded-md bg-rose-50 px-1.5 py-0.5 text-[11px] font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300">
+                        Quá giờ
+                    </span>
+                )}
             </td>
 
             <td className={CELL}>
@@ -260,27 +343,6 @@ const PlanRowView = memo(function PlanRowView({
                 {row.createdBy && <div className="mt-1 text-[11px] text-gray-400">Tạo bởi {row.createdBy}</div>}
             </td>
 
-            <td className="px-2 py-1.5 text-center align-middle">
-                <button
-                    type="button"
-                    disabled={isBusy}
-                    onClick={() => onAssign(row.id)}
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:bg-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 active:translate-y-px disabled:cursor-wait disabled:opacity-60"
-                >
-                    {isLoading ? (
-                        <svg aria-hidden="true" className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z" />
-                        </svg>
-                    ) : (
-                        <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
-                            <path d="M6.5 3c-1.051 0-2.093.04-3.125.117A1.49 1.49 0 0 0 2 4.607V10.5h9V4.606c0-.771-.59-1.43-1.375-1.489A41.568 41.568 0 0 0 6.5 3ZM2 12v2.5A1.5 1.5 0 0 0 3.5 16h.041a3 3 0 0 1 5.918 0h.791a.75.75 0 0 0 .75-.75V12H2Z" />
-                            <path d="M6.5 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM13.25 5a.75.75 0 0 0-.75.75v8.514a3.001 3.001 0 0 1 4.893 1.44c.37-.275.607-.714.607-1.204V9.5a.75.75 0 0 0-.164-.468L15.36 5.282A.75.75 0 0 0 14.775 5H13.25ZM14.5 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
-                        </svg>
-                    )}
-                    Gán lái, xe
-                </button>
-            </td>
         </tr>
     );
 });
@@ -290,6 +352,19 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
     const [selectedAreas, setSelectedAreas] = useState<number[]>(readStoredAreas);
     const [search, setSearch] = useState("");
     const [mineOnly, setMineOnly] = useState<boolean>(readStoredMineOnly);
+    const [plannedOnly, setPlannedOnly] = useState(false);
+    const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
+
+    /** Bấm cột: tăng → giảm → bỏ sắp xếp (về thứ tự giờ đóng). */
+    const toggleSort = useCallback((key: SortKey) => {
+        setSort((current) => {
+            if (current?.key !== key) {
+                return { key, direction: "asc" };
+            }
+
+            return current.direction === "asc" ? { key, direction: "desc" } : null;
+        });
+    }, []);
 
     const toggleMineOnly = useCallback(() => {
         setMineOnly((current) => {
@@ -346,6 +421,8 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
         [configuration.rows, configuration.currentUserId, mineOnly],
     );
 
+    const plannedCount = useMemo(() => scopedRows.filter(isPlanned).length, [scopedRows]);
+
     const countsByArea = useMemo(() => {
         const counts = new Map<number, number>();
         scopedRows.forEach((row) => {
@@ -360,6 +437,10 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
         const keyword = normalize(search.trim());
 
         return scopedRows.filter((row) => {
+            if (plannedOnly && !isPlanned(row)) {
+                return false;
+            }
+
             if (selectedAreas.length > 0 && (row.areaId === null || !selectedAreas.includes(row.areaId))) {
                 return false;
             }
@@ -376,7 +457,7 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
 
             return haystack.includes(keyword);
         });
-    }, [scopedRows, selectedAreas, search]);
+    }, [scopedRows, selectedAreas, search, plannedOnly]);
 
     const days = useMemo(() => {
         const groups: { key: string; label: string; isPastDay: boolean; rows: Snapshot<PlanRow>[] }[] = [];
@@ -388,8 +469,12 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                 groups.push({ key: row.dayKey, label: row.dayLabel, isPastDay: row.isPastDay, rows: [row] });
             }
         });
+        if (sort !== null) {
+            groups.forEach((group) => group.rows.sort((a, b) => compareRows(a, b, sort.key, sort.direction)));
+        }
+
         return groups;
-    }, [visibleRows]);
+    }, [visibleRows, sort]);
 
     const overdueCount = useMemo(() => visibleRows.filter((row) => row.minutesLeft < 0).length, [visibleRows]);
     const soonCount = useMemo(
@@ -415,6 +500,15 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                 <FilterChip active={selectedAreas.length === 0} onClick={clearAreas}>
                     Tất cả KV
                     <ChipCount>{configuration.loaded ? scopedRows.length : <SkeletonBar className="w-4" />}</ChipCount>
+                </FilterChip>
+                <FilterChip
+                    active={plannedOnly}
+                    onClick={() => setPlannedOnly((current) => !current)}
+                    title="Chỉ hiện đơn có giờ đóng hàng dự kiến sau thời điểm hiện tại"
+                    activeClassName="bg-sky-100 ring-sky-500 text-sky-900 dark:bg-sky-950 dark:text-sky-200"
+                >
+                    Kế hoạch
+                    <ChipCount>{configuration.loaded ? plannedCount : <SkeletonBar className="w-4" />}</ChipCount>
                 </FilterChip>
                 {configuration.areas.map((area) => (
                     <FilterChip key={area.id} active={selectedAreas.includes(area.id)} title={area.name} onClick={() => toggleArea(area.id)}>
@@ -450,11 +544,29 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                             </th>
                         </tr>
                         <tr className="text-[11px] font-bold uppercase tracking-wide text-white dark:bg-slate-950" style={{ backgroundColor: HEADER_BG }}>
-                            {["Giờ đóng", "Đơn hàng", "KV", "Khách hàng", "Hành trình", "Kiện / Tải", "Ghi chú", "Thao tác"].map((label) => (
-                                <th key={label} scope="col" className={HEADER_CELL}>
-                                    {label}
-                                </th>
-                            ))}
+                            {COLUMNS.map(({ label, sortKey }) =>
+                                sortKey === undefined ? (
+                                    <th key={label} scope="col" className={HEADER_CELL}>
+                                        {label}
+                                    </th>
+                                ) : (
+                                    <th
+                                        key={label}
+                                        scope="col"
+                                        aria-sort={sort?.key === sortKey ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
+                                        className={`${HEADER_CELL} cursor-pointer select-none transition hover:bg-white/10`}
+                                        title={`Bấm để sắp xếp theo ${label} (tăng → giảm → mặc định)`}
+                                        onClick={() => toggleSort(sortKey)}
+                                    >
+                                        <span className="inline-flex items-center justify-center gap-1">
+                                            {label}
+                                            <span className={`text-[10px] ${sort?.key === sortKey ? "text-white" : "text-white/40"}`}>
+                                                {sort?.key === sortKey ? (sort.direction === "asc" ? "▲" : "▼") : "⇅"}
+                                            </span>
+                                        </span>
+                                    </th>
+                                ),
+                            )}
                         </tr>
                     </thead>
 
@@ -474,7 +586,7 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                         {configuration.rows.length === 0
                                             ? "Đơn nháp có giờ đóng hàng dự kiến sẽ hiện ở đây."
-                                            : "Thử bỏ lọc Đơn của tôi, bớt khu vực hoặc đổi từ khoá tìm kiếm."}
+                                            : "Thử bỏ lọc Đơn của tôi, Kế hoạch, bớt khu vực hoặc đổi từ khoá tìm kiếm."}
                                     </p>
                                 </td>
                             </tr>
