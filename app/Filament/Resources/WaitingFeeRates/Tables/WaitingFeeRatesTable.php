@@ -27,11 +27,7 @@ class WaitingFeeRatesTable extends BaseTable
                     ->searchable(),
                 TextColumn::make('waiting_mode')
                     ->label('Kiểu chờ')
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
-                        WaitingFeeRate::MODE_ENGINE_ON => 'Nổ máy',
-                        WaitingFeeRate::MODE_ENGINE_OFF => 'Không nổ máy',
-                        default => 'Thường',
-                    }),
+                    ->formatStateUsing(fn (string $state): string => WaitingFeeRate::MODE_LABELS[$state] ?? 'Thường'),
                 TextColumn::make('tiers')
                     ->label('Phí theo trọng tải (phí / miễn phí)')
                     ->state(fn (WaitingFeeRate $record): array => collect($record->tiers)

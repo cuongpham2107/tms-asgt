@@ -79,6 +79,36 @@ test('waiting fee and fee type lists render their records', function () {
     Livewire::test(ListFeeTypes::class)->loadTable()->assertCanSeeTableRecords(FeeType::orderBy('sort')->limit(10)->get());
 });
 
+test('waiting fee list creates and renders distinct loading and unloading modes', function () {
+    Livewire::test(ListWaitingFeeRates::class)
+        ->loadTable()
+        ->callAction('create', data: [
+            'customer_id' => $this->customer->id,
+            'waiting_mode' => WaitingFeeRate::MODE_LOADING,
+            'fee_block_minutes' => 60,
+            'grace_minutes' => 29,
+            'tiers' => [['tonnage' => 5, 'fee' => 50_000, 'free_minutes' => 180]],
+        ])
+        ->assertHasNoActionErrors()
+        ->callAction('create', data: [
+            'customer_id' => $this->customer->id,
+            'waiting_mode' => WaitingFeeRate::MODE_UNLOADING,
+            'fee_block_minutes' => 60,
+            'grace_minutes' => 29,
+            'tiers' => [['tonnage' => 5, 'fee' => 50_000, 'free_minutes' => 9999]],
+        ])
+        ->assertHasNoActionErrors()
+        ->assertSee(['Đóng hàng', 'Hạ hàng']);
+
+    expect(WaitingFeeRate::MODE_LABELS)->toBe([
+        WaitingFeeRate::MODE_NORMAL => 'Thường',
+        WaitingFeeRate::MODE_LOADING => 'Đóng hàng',
+        WaitingFeeRate::MODE_UNLOADING => 'Hạ hàng',
+        WaitingFeeRate::MODE_ENGINE_ON => 'Nổ máy',
+        WaitingFeeRate::MODE_ENGINE_OFF => 'Không nổ máy',
+    ]);
+});
+
 test('billing zone form creates a zone and moves locations into it', function () {
     $oldZone = BillingZone::create(['code' => 'CŨ', 'name' => 'Cũ']);
     $this->origin->update(['billing_zone_id' => $oldZone->id]);

@@ -310,10 +310,14 @@ class OrderChargeCalculator
         $rate = $rates->first();
         $tier = $rate?->tierFor($charge->chargeable_tonnage);
 
-        // Khách có dòng "Không nổ máy (đóng hàng)" / "Nổ máy (hạ hàng)" (vd. CLC/SDV: miễn phí ở SDV khác ở NBA)
+        // Khách có dòng riêng "Đóng hàng" / "Hạ hàng" (hoặc dữ liệu cũ "Không nổ máy" / "Nổ máy")
         // thì mỗi đầu trừ miễn phí theo dòng của nó; không có thì dùng chung dòng phí chính.
-        $loadingTier = $rates->firstWhere('waiting_mode', WaitingFeeRate::MODE_ENGINE_OFF)?->tierFor($charge->chargeable_tonnage) ?? $tier;
-        $unloadingTier = $rates->firstWhere('waiting_mode', WaitingFeeRate::MODE_ENGINE_ON)?->tierFor($charge->chargeable_tonnage) ?? $tier;
+        $loadingTier = ($rates->firstWhere('waiting_mode', WaitingFeeRate::MODE_LOADING)
+            ?? $rates->firstWhere('waiting_mode', WaitingFeeRate::MODE_ENGINE_OFF))
+            ?->tierFor($charge->chargeable_tonnage) ?? $tier;
+        $unloadingTier = ($rates->firstWhere('waiting_mode', WaitingFeeRate::MODE_UNLOADING)
+            ?? $rates->firstWhere('waiting_mode', WaitingFeeRate::MODE_ENGINE_ON))
+            ?->tierFor($charge->chargeable_tonnage) ?? $tier;
         $freeLoadingMinutes = (int) ($loadingTier['free_minutes'] ?? 0);
         $freeUnloadingMinutes = (int) ($unloadingTier['free_minutes'] ?? 0);
 

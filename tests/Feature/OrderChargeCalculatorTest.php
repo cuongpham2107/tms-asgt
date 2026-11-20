@@ -317,7 +317,7 @@ test('loading and unloading deduct their own free minutes when both waiting rows
 
 test('fully free unloading side still bills loading time at the shared fee', function () {
     // CLC/SDV NBA: hạ hàng ở NBA miễn hết (9999'), đóng hàng vẫn miễn 120' và tính phí
-    foreach ([[WaitingFeeRate::MODE_ENGINE_OFF, 120], [WaitingFeeRate::MODE_ENGINE_ON, 9999]] as [$mode, $free]) {
+    foreach ([[WaitingFeeRate::MODE_LOADING, 120], [WaitingFeeRate::MODE_UNLOADING, 9999]] as [$mode, $free]) {
         WaitingFeeRate::create([
             'customer_id' => $this->customer->id,
             'surcharge_type' => SurchargeType::ClcSdvNba->value,
@@ -350,9 +350,41 @@ test('fully free unloading side still bills loading time at the shared fee', fun
     $waiting = app(OrderChargeCalculator::class)->previewWaiting($order, $charge);
 
     // Đóng 180' − 120' = 60' ⇒ 1 block; hạ 300' miễn hết ⇒ 0'
-    expect($waiting['billable_loading'])->toBe(60)
+    expect($waiting['free_loading'])->toBe(120)
+        ->and($waiting['free_unloading'])->toBe(9999)
+        ->and($waiting['billable_loading'])->toBe(60)
         ->and($waiting['billable_unloading'])->toBe(0)
         ->and($waiting['fee'])->toBe(50_000.0);
+});
+
+test('explicit loading and unloading waiting modes override legacy engine modes', function () {
+    foreach ([
+        [WaitingFeeRate::MODE_ENGINE_OFF, 60],
+        [WaitingFeeRate::MODE_ENGINE_ON, 60],
+        [WaitingFeeRate::MODE_LOADING, 240],
+        [WaitingFeeRate::MODE_UNLOADING, 120],
+    ] as [$mode, $free]) {
+        WaitingFeeRate::create([
+            'customer_id' => $this->customer->id,
+            'surcharge_type' => '',
+            'waiting_mode' => $mode,
+            'fee_block_minutes' => 60,
+            'grace_minutes' => 19,
+            'tiers' => [['tonnage' => 5, 'fee' => 50_000, 'free_minutes' => $free]],
+        ]);
+    }
+
+    $order = ($this->makeOrder)();
+    $charge = OrderCharge::firstOrNew(['order_id' => $order->id]);
+    $charge->fill(['customer_id' => $this->customer->id, 'surcharge_type' => '', 'chargeable_tonnage' => 5]);
+
+    $waiting = app(OrderChargeCalculator::class)->previewWaiting($order, $charge, 300, 150);
+
+    expect($waiting['free_loading'])->toBe(240)
+        ->and($waiting['free_unloading'])->toBe(120)
+        ->and($waiting['billable_loading'])->toBe(60)
+        ->and($waiting['billable_unloading'])->toBe(30)
+        ->and($waiting['fee'])->toBe(100_000.0);
 });
 
 test('multi-point order deducts free minutes per delivery point for waiting time', function () {

@@ -33,11 +33,7 @@ class WaitingFeeRateForm
                             ->label('Loại hình tính phụ phí'),
                         Select::make('waiting_mode')
                             ->label('Kiểu chờ')
-                            ->options([
-                                WaitingFeeRate::MODE_NORMAL => 'Thường',
-                                WaitingFeeRate::MODE_ENGINE_ON => 'Nổ máy (hạ hàng)',
-                                WaitingFeeRate::MODE_ENGINE_OFF => 'Không nổ máy (đóng hàng)',
-                            ])
+                            ->options(WaitingFeeRate::MODE_LABELS)
                             ->default(WaitingFeeRate::MODE_NORMAL)
                             ->required(),
                         TextInput::make('fee_block_minutes')

@@ -10,9 +10,22 @@ class WaitingFeeRate extends Model
 {
     public const MODE_NORMAL = 'normal';
 
+    public const MODE_LOADING = 'loading';
+
+    public const MODE_UNLOADING = 'unloading';
+
     public const MODE_ENGINE_ON = 'engine_on';
 
     public const MODE_ENGINE_OFF = 'engine_off';
+
+    /** @var array<string, string> */
+    public const MODE_LABELS = [
+        self::MODE_NORMAL => 'Thường',
+        self::MODE_LOADING => 'Đóng hàng',
+        self::MODE_UNLOADING => 'Hạ hàng',
+        self::MODE_ENGINE_ON => 'Nổ máy',
+        self::MODE_ENGINE_OFF => 'Không nổ máy',
+    ];
 
     protected $fillable = [
         'customer_id',
