@@ -65,6 +65,7 @@ class CompletedHandler implements CheckpointHandlerInterface
                         ->where('order_id', $orderId)
                         ->whereIn('checkpoint_type', ['arrived_pickup', 'completed'])
                         ->whereNotNull('km_reading')
+                        ->orderBy('id')
                         ->get(['checkpoint_type', 'order_id', 'km_reading']))[(int) $orderId] ?? null;
 
                     if ($loadedKm !== null) {

@@ -16,7 +16,7 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\AutoEndShiftService;
+use App\Services\Shift\AutoEndShiftService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;

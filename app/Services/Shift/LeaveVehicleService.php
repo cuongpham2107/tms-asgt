@@ -2,20 +2,14 @@
 
 namespace App\Services\Shift;
 
-use App\Services\Trip\DriverSwapService;
-
-use App\Services\Km\TripKmService;
-
 use App\Enums\CheckpointType;
-use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
-use App\Services\Km\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
-use App\Services\Km\TripKmCalculatorService;
+use App\Services\Trip\DriverSwapService;
 use Illuminate\Support\Facades\DB;
 
 class LeaveVehicleService
@@ -39,7 +33,7 @@ class LeaveVehicleService
 
             if ($activeTrip !== null) {
                 // Trip chưa hoàn thành — driver_swap giữa chừng
-                app(DriverSwapService::class)->handOver($activeTrip, $kmReading);
+                app(DriverSwapService::class)->handOverWithKm($activeTrip, $kmReading);
 
                 $activeTripId = $activeTrip->id;
             }

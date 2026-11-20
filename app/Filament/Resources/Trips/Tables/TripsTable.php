@@ -21,6 +21,7 @@ use App\Filament\Tables\Columns\UniqueMapColumn;
 use App\Models\Trip;
 use App\Services\Gps\OsrmService;
 use App\Services\Gps\TripCheckpointOsmValidationService;
+use App\Services\Trip\DeliveryProgressSyncService;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\Polyline;
@@ -360,7 +361,7 @@ class TripsTable extends BaseTable
      */
     public static function applyCompletedCheckpoints(Trip $record): bool
     {
-        return EditTripAction::applyCompletedCheckpoints($record);
+        return app(DeliveryProgressSyncService::class)->applyCompletedCheckpoints($record);
     }
 
     private static function renderBsx(Trip $record): string

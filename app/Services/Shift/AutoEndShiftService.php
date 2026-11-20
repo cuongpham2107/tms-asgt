@@ -3,9 +3,7 @@
 namespace App\Services\Shift;
 
 use App\Enums\CheckpointType;
-use App\Enums\OrderStatus;
 use App\Enums\ShiftType;
-use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -188,15 +186,8 @@ class AutoEndShiftService
                 ? Carbon::parse($latestActivity)
                 : $deadline;
 
-            // 3–4. Đóng hồ sơ ca: tính lại km ca, gỡ ca khỏi chuyến đảo lái / chờ chạy
+            // 3–4. Đóng hồ sơ ca: tính lại km ca, gỡ ca khỏi chuyến đảo lái và chuyến chờ chạy
             app(ShiftEndService::class)->close($shift, $recordedEndTime, $endKm);
-
-            // Gỡ shift_id cho các chuyến chờ chạy của ca này để ca sau nhận lại (giống tài xế tự kết thúc ca trên App)
-            Trip::query()
-                ->where('driver_id', $shift->driver_id)
-                ->where('shift_id', $shift->id)
-                ->where('status', TripStatus::Pending)
-                ->update(['shift_id' => null]);
 
             // 5. Cập nhật current_mileage cho xe nếu có
             if ($vehicle && $endKm > 0 && (float) ($vehicle->current_mileage ?? 0) < $endKm) {

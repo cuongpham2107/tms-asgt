@@ -117,7 +117,7 @@ class DriverSwapController extends Controller
                 }
             }
 
-            app(DriverSwapService::class)->handOver($trip, toDriverId: $user->id, detachShift: true);
+            app(DriverSwapService::class)->handOverToDriver($trip, $user->id);
 
             DB::commit();
 

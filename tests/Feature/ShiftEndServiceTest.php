@@ -14,7 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-test('closing a shift records the end and releases handed-over and waiting trips for the next shift', function () {
+test('closing a shift records the end and releases handed-over and waiting trips', function () {
     $driver = User::factory()->create();
     $vehicle = Vehicle::create(['plate_number' => '29C-END', 'vehicle_type' => VehicleType::Normal, 'owner' => 'CLC', 'is_active' => true, 'status' => VehicleStatus::On, 'type' => VehicleOwnerType::Company, 'current_mileage' => 1000]);
     $shift = DriverShift::create(['driver_id' => $driver->id, 'shift_type' => ShiftType::Full, 'start_time' => now()->subHours(8), 'start_km' => 1000]);

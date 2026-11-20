@@ -10,7 +10,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Đóng hồ sơ ca: một chỗ duy nhất cho App tài xế, điều hành và tự đóng ca (08:00 / 20:00).
+ * Đóng hồ sơ ca: dùng chung cho App tài xế, điều hành và tự đóng ca (08:00 / 20:00).
  * Nơi gọi tự quyết định km / giờ kết thúc, chặn hoặc bàn giao chuyến dở và cập nhật km xe.
  */
 class ShiftEndService
@@ -18,8 +18,7 @@ class ShiftEndService
     public function __construct(private readonly ShiftKmCalculatorService $shiftKm) {}
 
     /**
-     * Ghi giờ / km / GPS kết thúc, tính lại km ca và gỡ ca khỏi các chuyến đã đảo lái hoặc còn chờ chạy
-     * (để ca sau của tài xế nhận lại).
+     * Ghi giờ / km / GPS kết thúc, tính lại km ca, gỡ ca khỏi các chuyến đã đảo lái và chuyến chờ chạy (để ca sau nhận lại).
      *
      * @param  array{end_gps_lat?: string|float|null, end_gps_lng?: string|float|null}  $gps
      */
@@ -41,9 +40,15 @@ class ShiftEndService
             Trip::query()
                 ->where('driver_id', $shift->driver_id)
                 ->where('shift_id', $shift->id)
-                ->whereIn('status', [TripStatus::DriverSwap->value, TripStatus::Pending->value])
+                ->where('status', TripStatus::DriverSwap)
                 ->get()
                 ->each->update(['shift_id' => null]);
+
+            Trip::query()
+                ->where('driver_id', $shift->driver_id)
+                ->where('shift_id', $shift->id)
+                ->where('status', TripStatus::Pending)
+                ->update(['shift_id' => null]);
 
             return $shift;
         });

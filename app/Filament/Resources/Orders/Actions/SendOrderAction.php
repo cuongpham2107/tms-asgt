@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
-use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Order\OrderDispatchService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Throwable;
@@ -36,12 +36,7 @@ class SendOrderAction
                         return;
                     }
 
-                    // Cập nhật trên bản đọc mới để có Nhật ký mà $record (dùng gửi thông báo) vẫn giữ dữ liệu cũ.
-
-                    Order::query()->findOrFail($record->id)->update([
-                        'status' => OrderStatus::Sent->value,
-                        'sent_at' => now(),
-                    ]);
+                    app(OrderDispatchService::class)->send($record);
 
                     try {
                         app(DriverNotificationService::class)->sendOrderAssigned($record);

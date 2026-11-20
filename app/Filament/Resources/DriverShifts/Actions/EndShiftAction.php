@@ -78,7 +78,7 @@ class EndShiftAction
                         ->get();
 
                     foreach ($incompleteTrips as $trip) {
-                        app(DriverSwapService::class)->handOver($trip, $endKm > 0 ? (float) $endKm : null, detachShift: true);
+                        app(DriverSwapService::class)->handOverOnShiftEnd($trip, (float) $endKm);
 
                         TripCheckpoint::create([
                             'trip_id' => $trip->id,
@@ -91,13 +91,6 @@ class EndShiftAction
                     }
 
                     app(ShiftEndService::class)->close($record, now(), $endKm);
-
-                    // Gỡ shift_id cho các chuyến chờ chạy của ca này để ca sau nhận lại (giống tài xế tự kết thúc ca trên App)
-                    Trip::query()
-                        ->where('driver_id', $record->driver_id)
-                        ->where('shift_id', $record->id)
-                        ->where('status', TripStatus::Pending)
-                        ->update(['shift_id' => null]);
 
                     DB::commit();
                 } catch (\Throwable $e) {

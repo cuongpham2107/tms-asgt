@@ -7,53 +7,78 @@ use App\Enums\TripStatus;
 use App\Models\Trip;
 use App\Services\Km\ShiftKmCalculatorService;
 use App\Services\Km\TripKmCalculatorService;
+use App\Services\Km\TripKmService;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Đảo lái: một chỗ duy nhất đổi trạng thái chuyến / đơn khi bàn giao giữa chừng và khi nhận lại chuyến.
- * Nơi gọi (App tài xế, điều hành, kết thúc ca, rời xe) tự lo phần riêng: mốc bàn giao, bản ghi DriverSwap, ảnh, km xe, thông báo.
+ * Đảo lái: các bước đổi trạng thái chuyến / đơn khi bàn giao giữa chừng và khi nhận lại chuyến.
+ * Mỗi tình huống một method, giữ đúng thứ tự các bước như trước khi gom về đây.
+ * Nơi gọi tự lo phần riêng: mốc bàn giao, bản ghi DriverSwap, ảnh, km xe, thông báo.
  */
 class DriverSwapService
 {
-    /** Đơn còn đang chạy thì chuyển sang chờ tài xế nhận tiếp. */
-    private const HANDOVER_ORDER_STATUSES = [OrderStatus::Assigned, OrderStatus::Sent, OrderStatus::InTransit];
-
     public function __construct(
+        private readonly TripKmService $tripKmService,
         private readonly TripKmCalculatorService $tripKm,
         private readonly ShiftKmCalculatorService $shiftKm,
     ) {}
 
     /**
-     * Bàn giao chuyến đang chạy.
+     * Tài xế kết thúc chuyến khi đơn chưa xong (API) hoặc rời xe giữa chuyến: chốt km dở dang rồi chuyển sang Đảo lái.
      *
-     * @param  float|null  $closingKm  km chốt phần đã chạy (tính km dở dang, ghi end_km); null = không chốt km
-     * @param  int|null  $toDriverId  tài xế nhận chuyến (null = chưa có, điều hành gán sau)
-     * @param  bool  $detachShift  gỡ chuyến khỏi ca của tài xế cũ
+     * @param  bool  $includeAssignedOrders  API kết thúc chuyến chuyển cả đơn Đã gán; rời xe thì không
      */
-    public function handOver(Trip $trip, ?float $closingKm = null, ?int $toDriverId = null, bool $detachShift = false): void
+    public function handOverWithKm(Trip $trip, float $km, bool $includeAssignedOrders = false): void
     {
-        DB::transaction(function () use ($trip, $closingKm, $toDriverId, $detachShift): void {
-            if ($closingKm !== null && $closingKm > 0) {
-                $this->tripKm->calculate($trip, endKm: $closingKm);
+        DB::transaction(function () use ($trip, $km, $includeAssignedOrders): void {
+            $this->tripKmService->recalculate($trip, $km);
+
+            $trip->end_km = $km;
+            $trip->status = TripStatus::DriverSwap;
+            $trip->save();
+
+            $statuses = [OrderStatus::Sent, OrderStatus::InTransit];
+            if ($includeAssignedOrders) {
+                $statuses[] = OrderStatus::Assigned;
+            }
+
+            $this->parkOrders($trip, $statuses);
+        });
+    }
+
+    /**
+     * Tài xế khác nhận chuyến (từ App hoặc điều hành): đổi tài xế, gỡ ca cũ, rồi tính lại km ca.
+     */
+    public function handOverToDriver(Trip $trip, int $toDriverId): void
+    {
+        DB::transaction(function () use ($trip, $toDriverId): void {
+            $trip->driver_id = $toDriverId;
+            $trip->status = TripStatus::DriverSwap;
+            $trip->shift_id = null;
+            $trip->save();
+
+            $this->parkOrders($trip, [OrderStatus::Sent, OrderStatus::InTransit]);
+
+            $this->shiftKm->calculateForTrip($trip);
+        });
+    }
+
+    /**
+     * Điều hành kết thúc ca khi tài xế còn chuyến dở: chốt km chuyến (nếu có km), gỡ ca. Km ca do bước đóng ca tính.
+     */
+    public function handOverOnShiftEnd(Trip $trip, ?float $km): void
+    {
+        DB::transaction(function () use ($trip, $km): void {
+            if ($km !== null && $km > 0) {
+                $this->tripKm->calculate($trip, endKm: $km);
                 $trip->refresh();
-                $trip->end_km = $closingKm;
             }
 
             $trip->status = TripStatus::DriverSwap;
-            if ($toDriverId !== null) {
-                $trip->driver_id = $toDriverId;
-            }
-            if ($detachShift) {
-                $trip->shift_id = null;
-            }
+            $trip->shift_id = null;
             $trip->save();
 
-            $trip->orders()
-                ->whereIn('status', array_map(fn (OrderStatus $status): string => $status->value, self::HANDOVER_ORDER_STATUSES))
-                ->get()
-                ->each->update(['status' => OrderStatus::DriverSwap]);
-
-            $this->shiftKm->calculateForTrip($trip);
+            $this->parkOrders($trip, [OrderStatus::Sent, OrderStatus::InTransit]);
         });
     }
 
@@ -70,5 +95,16 @@ class DriverSwapService
             ->where('status', OrderStatus::DriverSwap->value)
             ->get()
             ->each->update(['status' => $restored]);
+    }
+
+    /**
+     * @param  list<OrderStatus>  $statuses
+     */
+    private function parkOrders(Trip $trip, array $statuses): void
+    {
+        $trip->orders()
+            ->whereIn('status', array_map(fn (OrderStatus $status): string => $status->value, $statuses))
+            ->get()
+            ->each->update(['status' => OrderStatus::DriverSwap]);
     }
 }

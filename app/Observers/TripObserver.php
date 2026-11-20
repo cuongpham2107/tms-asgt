@@ -2,17 +2,16 @@
 
 namespace App\Observers;
 
-use App\Enums\OrderStatus;
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Events\TripUpdated;
 use App\Filament\Resources\Trips\TripResource;
-use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Trip\TripCompletionService;
 use App\Services\Vehicle\TransportCardsCache;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -62,15 +61,7 @@ class TripObserver
         $this->broadcastTripChange($trip, 'updated');
 
         if ($trip->wasChanged('status') && $trip->status === TripStatus::Completed) {
-            $trip->orders()
-                ->whereNotIn('status', [
-                    OrderStatus::Cancelled->value,
-                    OrderStatus::Completed->value,
-                ])
-                ->get()
-                ->each(fn (Order $order) => $order->update(['status' => OrderStatus::Completed]));
-
-            Vehicle::syncIdleStatus($trip->vehicle_id, $trip->id);
+            app(TripCompletionService::class)->completeOrders($trip);
         }
 
         if ($trip->wasChanged(['status', 'vehicle_id', 'driver_id', 'is_paused', 'end_km'])) {

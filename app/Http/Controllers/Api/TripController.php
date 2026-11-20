@@ -344,7 +344,7 @@ class TripController extends Controller
         } else {
             // Còn orders chưa xong → driver_swap, tính partial km
             DB::transaction(function () use ($trip, $endKm, $completedAt) {
-                app(DriverSwapService::class)->handOver($trip, $endKm);
+                app(DriverSwapService::class)->handOverWithKm($trip, $endKm, includeAssignedOrders: true);
 
                 // Cập nhật km hiện tại của xe
                 if ($endKm > 0 && $trip->vehicle) {

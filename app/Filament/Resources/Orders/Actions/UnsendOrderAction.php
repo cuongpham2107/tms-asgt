@@ -2,10 +2,9 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
-use App\Enums\OrderStatus;
 use App\Models\Order;
-use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Order\OrderDispatchService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Throwable;
@@ -37,21 +36,9 @@ class UnsendOrderAction
                         return;
                     }
 
-                    $trip = $record->trip;
-
-                    // Cập nhật trên bản đọc mới để có Nhật ký mà $record (dùng gửi thông báo) vẫn giữ dữ liệu cũ.
-
-                    Order::query()->findOrFail($record->id)->update([
-                        'status' => OrderStatus::Draft->value,
-                        'trip_id' => null,
-                        'sent_at' => null,
-                    ]);
-
-                    if ($trip && $trip->orders()->count() === 0) {
-                        $trip->delete();
-                        // Xe không còn đơn / chuyến nào đang chạy thì về sẵn sàng.
-                        Vehicle::syncIdleStatus($trip->vehicle_id);
-                    }
+                    // Nạp sẵn chuyến / tài xế trước khi chuyến bị xoá để thông báo đúng tài xế; service cập nhật trên bản đọc mới.
+                    $record->loadMissing('trip.driver');
+                    app(OrderDispatchService::class)->unsend($record);
 
                     try {
                         app(DriverNotificationService::class)->sendOrderRecalled($record);

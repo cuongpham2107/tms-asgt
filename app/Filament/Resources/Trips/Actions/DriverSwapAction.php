@@ -163,7 +163,7 @@ class DriverSwapAction
                 $oldDriver = $record->driver ?? User::query()->find($record->driver_id);
                 $newDriver = User::query()->find($toDriverId);
 
-                app(DriverSwapService::class)->handOver($record, toDriverId: (int) $toDriverId, detachShift: true);
+                app(DriverSwapService::class)->handOverToDriver($record, (int) $toDriverId);
 
                 if ($newDriver !== null) {
                     try {
