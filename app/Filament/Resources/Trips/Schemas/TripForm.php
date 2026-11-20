@@ -355,12 +355,12 @@ class TripForm
                                             if (filled($occurredAt)) {
                                                 $set('../../started_at', $occurredAt);
                                             }
-                                            } elseif ($type !== null) {
-                                                $tripStatus = $type->toTripStatus();
-                                                if ($tripStatus !== null) {
-                                                    $set('../../status', $tripStatus);
-                                                }
+                                        } elseif ($type !== null) {
+                                            $tripStatus = $type->toTripStatus();
+                                            if ($tripStatus !== null) {
+                                                $set('../../status', $tripStatus);
                                             }
+                                        }
                                         self::syncDeliveryPointOnTypeChange($type, $set, $get, 'checkpoints_rent');
                                     })
                                     ->default(fn ($get) => self::getNextCheckpointType($get, 'checkpoints_rent')),
@@ -577,6 +577,7 @@ class TripForm
                             ->rules([
                                 fn (): Closure => self::checkpointKmIncreasingRule(),
                                 fn (): Closure => self::checkpointTimeOrderRule(),
+                                fn (): Closure => self::newDeliveryCheckpointNeedsPointRule(),
                             ])
                             ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
                             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get))
@@ -624,6 +625,32 @@ class TripForm
     /**
      * Thời gian mốc kết thúc xe (end) không được trước mốc bắt đầu chuyến (started).
      */
+    /**
+     * Mốc Đến giao hàng / Hoàn thành mới thêm cho đơn đã có điểm giao phải chọn Điểm:
+     * để trống thì không biết mốc thuộc điểm nào, đơn và chuyến không mở lại và App tài xế nhảy thẳng tới Kết thúc.
+     * Mốc đã lưu (key `record-*`) không kiểm tra lại để vẫn sửa được chuyến cũ.
+     */
+    public static function newDeliveryCheckpointNeedsPointRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            $missingPoint = collect(is_array($value) ? $value : [])
+                ->filter(fn ($row, $key): bool => is_array($row) && ! str_starts_with((string) $key, 'record-'))
+                ->first(function (array $row): bool {
+                    $raw = $row['checkpoint_type'] ?? null;
+                    $type = $raw instanceof CheckpointType ? $raw : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
+
+                    return in_array($type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed], true)
+                        && blank($row['delivery_point_id'] ?? null)
+                        && filled($row['order_id'] ?? null)
+                        && OrderDeliveryPoint::query()->where('order_id', $row['order_id'])->exists();
+                });
+
+            if ($missingPoint !== null) {
+                $fail('Mốc "Đến giao hàng" / "Hoàn thành" mới phải chọn Điểm giao để đơn và App tài xế chuyển đúng bước.');
+            }
+        };
+    }
+
     public static function checkpointTimeOrderRule(): Closure
     {
         return function (string $attribute, mixed $value, Closure $fail): void {

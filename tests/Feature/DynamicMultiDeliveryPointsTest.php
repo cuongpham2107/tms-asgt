@@ -489,3 +489,115 @@ test('adding a delivery point in the order list edit modal reopens a delivered o
         ->and($order->fresh()->status)->toBe(OrderStatus::InTransit)
         ->and($trip->fresh()->status)->toBe(TripStatus::Delivering);
 });
+
+test('adding only an arrived delivery checkpoint at a new point on a delivered trip reopens it at that point', function (string $pointSource) {
+    $this->actingAs($this->admin);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-ARRIVE-ONLY',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'status' => TripStatus::Delivered,
+        'start_km' => 1000.0,
+        'started_at' => now()->subHours(2),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-ARRIVE',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $trip->id,
+        'pickup_location_id' => $this->pickup->id,
+        'cargo_type' => 'GCR',
+        'chargeable_weight' => 5,
+        'planned_loading_at' => now()->subHours(2),
+        'status' => OrderStatus::Completed,
+        'created_by' => $this->admin->id,
+    ]);
+
+    $delivered = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->dpLoc1->id,
+        'sequence' => 1,
+        'status' => OrderDeliveryPointStatus::Delivered,
+        'arrived_at' => now()->subHour(),
+        'delivered_at' => now()->subMinutes(30),
+    ]);
+
+    foreach ([CheckpointType::Started, CheckpointType::ArrivedPickup, CheckpointType::LeftPickup, CheckpointType::ArrivedDelivery, CheckpointType::Completed] as $index => $type) {
+        TripCheckpoint::create([
+            'trip_id' => $trip->id,
+            'order_id' => $order->id,
+            'delivery_point_id' => in_array($type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed], true) ? $delivered->id : null,
+            'driver_id' => $this->driver->id,
+            'checkpoint_type' => $type->value,
+            'km_reading' => 1000.0 + $index * 5,
+            'occurred_at' => now()->subMinutes(120 - $index * 20),
+        ]);
+    }
+
+    // Điểm mới: điểm của chính đơn do điều hành vừa thêm, hoặc điểm cùng kho của đơn khác trong dropdown.
+    $nextPoint = match ($pointSource) {
+        'blank' => null,
+        'own' => OrderDeliveryPoint::create(['order_id' => $order->id, 'location_id' => $this->dpLoc2->id, 'sequence' => 2, 'status' => OrderDeliveryPointStatus::Pending]),
+        default => OrderDeliveryPoint::create([
+            'order_id' => Order::create([
+                'order_code' => 'ASG-OTHER',
+                'type' => OrderType::External,
+                'area_id' => $this->area->id,
+                'customer_id' => $this->customer->id,
+                'pickup_location_id' => $this->pickup->id,
+                'status' => OrderStatus::Draft,
+                'created_by' => $this->admin->id,
+            ])->id,
+            'location_id' => $this->dpLoc2->id,
+            'sequence' => 1,
+            'status' => OrderDeliveryPointStatus::Pending,
+        ]),
+    };
+
+    $rows = $trip->checkpoints()->get()->mapWithKeys(fn (TripCheckpoint $cp): array => [
+        'record-'.$cp->id => [
+            'checkpoint_type' => $cp->checkpoint_type->value,
+            'order_id' => $cp->order_id,
+            'delivery_point_id' => $cp->delivery_point_id,
+            'driver_id' => $cp->driver_id,
+            'km_reading' => $cp->km_reading,
+            'occurred_at' => $cp->occurred_at->format('Y-m-d H:i'),
+        ],
+    ])->all();
+    $rows['new-arrived'] = [
+        'checkpoint_type' => CheckpointType::ArrivedDelivery->value,
+        'order_id' => $order->id,
+        'delivery_point_id' => $nextPoint?->id,
+        'driver_id' => $this->driver->id,
+        'km_reading' => 1030.0,
+        'occurred_at' => now()->subMinutes(5)->format('Y-m-d H:i'),
+    ];
+
+    $component = Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+        ->loadTable()
+        ->mountTableAction('edit', $trip->fresh())
+        ->set('mountedActions.0.data.checkpoints', $rows)
+        ->callMountedTableAction();
+
+    if ($nextPoint === null) {
+        // Để trống Điểm: form báo lỗi, không lưu, chuyến giữ nguyên Đã giao.
+        $component->assertHasTableActionErrors(['checkpoints']);
+        expect($trip->fresh()->status)->toBe(TripStatus::Delivered)
+            ->and($trip->fresh()->checkpoints()->count())->toBe(5);
+
+        return;
+    }
+
+    $component->assertHasNoTableActionErrors();
+
+    $newPoint = $order->deliveryPoints()->orderBy('sequence')->get()->last();
+    expect($newPoint->location_id)->toBe($this->dpLoc2->id)
+        ->and($newPoint->status)->toBe(OrderDeliveryPointStatus::Arrived);
+
+    expect($order->fresh()->status)->toBe(OrderStatus::InTransit)
+        ->and($trip->fresh()->status)->toBe(TripStatus::ArrivedDelivery);
+})->with(['own', 'shared', 'blank']);
