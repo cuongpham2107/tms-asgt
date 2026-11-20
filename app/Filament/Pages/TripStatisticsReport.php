@@ -758,22 +758,24 @@ class TripStatisticsReport extends Page
                 $formatTime = fn (mixed $value): ?string => $value instanceof Carbon ? $value->format('Y-m-d H:i:s') : ($value ? Carbon::parse($value)->format('Y-m-d H:i:s') : null);
 
                 $deliveryPoints = $order?->deliveryPoints->sortBy('sequence')->values() ?? collect();
-                $checkpoints = $order?->tripCheckpoints->isNotEmpty()
-                    ? $order->tripCheckpoints
-                    : ($order?->trip?->checkpoints ?? collect());
-
                 $deliveryPointsData = [];
-                foreach ($deliveryPoints as $dp) {
-                    $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
-                    $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
-                    $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
-                    $tC = $cpC?->effectiveOccurredAt() ?? $dp->arrived_at;
-                    $tD = $cpD?->effectiveOccurredAt() ?? $dp->delivered_at;
+                if ($deliveryPoints->count() > 1) {
+                    $checkpoints = $order->tripCheckpoints->isNotEmpty()
+                        ? $order->tripCheckpoints
+                        : ($order->trip?->checkpoints ?? collect());
 
-                    $deliveryPointsData[$dp->id] = [
-                        'arrived_at' => $formatTime($tC),
-                        'delivered_at' => $formatTime($tD),
-                    ];
+                    foreach ($deliveryPoints as $dp) {
+                        $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
+                        $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+                        $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+                        $tC = $cpC?->effectiveOccurredAt() ?? $dp->arrived_at;
+                        $tD = $cpD?->effectiveOccurredAt() ?? $dp->delivered_at;
+
+                        $deliveryPointsData[$dp->id] = [
+                            'arrived_at' => $formatTime($tC),
+                            'delivered_at' => $formatTime($tD),
+                        ];
+                    }
                 }
 
                 $data = [
@@ -1625,11 +1627,8 @@ class TripStatisticsReport extends Page
                 }
                 $unloading = $unloadingLegs;
             } else {
-                $singleDp = $deliveryPoints->first();
-                $tC = ($singleDp ? $get("delivery_points.{$singleDp->id}.arrived_at") : null) ?? $get('summary_arrived_at');
-                $tD = ($singleDp ? $get("delivery_points.{$singleDp->id}.delivered_at") : null) ?? $get('summary_unloaded_at');
-                $tC = $tC ? Carbon::parse($tC) : null;
-                $tD = $tD ? Carbon::parse($tD) : null;
+                $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at'))->second(0) : null;
+                $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at'))->second(0) : null;
                 $unloading = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : 0;
             }
 
@@ -1951,11 +1950,8 @@ class TripStatisticsReport extends Page
                 }
                 $unloading = $unloadingLegs;
             } else {
-                $singleDp = $deliveryPoints->first();
-                $tC = ($singleDp ? $get("delivery_points.{$singleDp->id}.arrived_at") : null) ?? $get('summary_arrived_at');
-                $tD = ($singleDp ? $get("delivery_points.{$singleDp->id}.delivered_at") : null) ?? $get('summary_unloaded_at');
-                $tC = $tC ? Carbon::parse($tC) : null;
-                $tD = $tD ? Carbon::parse($tD) : null;
+                $tC = $get('summary_arrived_at') ? Carbon::parse($get('summary_arrived_at'))->second(0) : null;
+                $tD = $get('summary_unloaded_at') ? Carbon::parse($get('summary_unloaded_at'))->second(0) : null;
                 $unloading = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null;
             }
 
@@ -2389,8 +2385,10 @@ class TripStatisticsReport extends Page
             $this->syncTripCheckpoint($order, $trip, CheckpointType::LeftPickup, $timeB);
         }
 
+        $isMultiPoint = $order->deliveryPoints->count() > 1;
+
         // 3. Các mốc checkpoint C, D cho từng điểm trả hàng
-        if (! empty($data['delivery_points']) && is_array($data['delivery_points'])) {
+        if ($isMultiPoint && ! empty($data['delivery_points']) && is_array($data['delivery_points'])) {
             foreach ($data['delivery_points'] as $dpId => $pointTimes) {
                 $dp = $order->deliveryPoints->firstWhere('id', (int) $dpId);
                 if ($dp === null) {
@@ -2435,7 +2433,7 @@ class TripStatisticsReport extends Page
             $timeB = filled($data['summary_departed_at'] ?? null) ? Carbon::parse($data['summary_departed_at']) : null;
 
             $lastDeliveryTime = null;
-            if (! empty($data['delivery_points']) && is_array($data['delivery_points'])) {
+            if ($isMultiPoint && ! empty($data['delivery_points']) && is_array($data['delivery_points'])) {
                 $lastDp = $order->deliveryPoints->sortBy('sequence')->last();
                 if ($lastDp && filled($data['delivery_points'][$lastDp->id]['delivered_at'] ?? null)) {
                     $lastDeliveryTime = Carbon::parse($data['delivery_points'][$lastDp->id]['delivered_at']);

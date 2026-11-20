@@ -14,6 +14,8 @@ enum SurchargeType: string implements HasLabel
     case Standard = '';
     case AsglTienSon = 'ASGL TIÊN SƠN';
     case ClcSdv = 'CLC/SDV';
+    case ClcSdvNba = 'CLC/SDV NBA';
+    case ClcSdvSdv = 'CLC/SDV SDV';
     case OldTripOrAsglHaiPhong = 'Chuyến cũ or ASGL HẢI PHÒNG';
     case Cold = 'Hàng lạnh';
     case IndustrialZoneNewTrip = 'KCN và chuyến mới phát sinh';

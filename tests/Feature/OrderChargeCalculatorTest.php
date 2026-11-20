@@ -5,6 +5,7 @@ use App\Enums\CheckpointType;
 use App\Enums\FreightPricingMethod;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
+use App\Enums\SurchargeType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
@@ -312,6 +313,46 @@ test('loading and unloading deduct their own free minutes when both waiting rows
     expect($values['wait_loading'])->toBe(60)
         ->and($values['wait_unloading'])->toBe(30)
         ->and($values['wait_total'])->toBe(90);
+});
+
+test('fully free unloading side still bills loading time at the shared fee', function () {
+    // CLC/SDV NBA: hạ hàng ở NBA miễn hết (9999'), đóng hàng vẫn miễn 120' và tính phí
+    foreach ([[WaitingFeeRate::MODE_ENGINE_OFF, 120], [WaitingFeeRate::MODE_ENGINE_ON, 9999]] as [$mode, $free]) {
+        WaitingFeeRate::create([
+            'customer_id' => $this->customer->id,
+            'surcharge_type' => SurchargeType::ClcSdvNba->value,
+            'waiting_mode' => $mode,
+            'fee_block_minutes' => 60,
+            'grace_minutes' => 29,
+            'tiers' => [['tonnage' => 1.25, 'fee' => 50_000, 'free_minutes' => $free], ['tonnage' => 5, 'fee' => 50_000, 'free_minutes' => $free]],
+        ]);
+    }
+
+    $order = ($this->makeOrder)();
+
+    foreach ([
+        [CheckpointType::ArrivedPickup, '2026-10-21 08:00'],
+        [CheckpointType::LeftPickup, '2026-10-21 11:00'],
+        [CheckpointType::ArrivedDelivery, '2026-10-21 12:00'],
+        [CheckpointType::Completed, '2026-10-21 17:00'],
+    ] as [$type, $at]) {
+        TripCheckpoint::create([
+            'trip_id' => $this->trip->id,
+            'order_id' => $order->id,
+            'checkpoint_type' => $type,
+            'occurred_at' => Carbon::parse($at),
+        ]);
+    }
+
+    $charge = OrderCharge::firstOrNew(['order_id' => $order->id]);
+    $charge->fill(['customer_id' => $this->customer->id, 'surcharge_type' => SurchargeType::ClcSdvNba->value, 'chargeable_tonnage' => 5]);
+
+    $waiting = app(OrderChargeCalculator::class)->previewWaiting($order, $charge);
+
+    // Đóng 180' − 120' = 60' ⇒ 1 block; hạ 300' miễn hết ⇒ 0'
+    expect($waiting['billable_loading'])->toBe(60)
+        ->and($waiting['billable_unloading'])->toBe(0)
+        ->and($waiting['fee'])->toBe(50_000.0);
 });
 
 test('multi-point order deducts free minutes per delivery point for waiting time', function () {

@@ -9,11 +9,9 @@ use App\Enums\OrderType;
 use App\Enums\Priority;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
-use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Area;
-use App\Models\Customer;
 use App\Models\FreightRate;
 use App\Models\Order;
 use Filament\Forms\Components\DateTimePicker;
@@ -33,7 +31,6 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Support\RawJs;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 
 class OrderForm extends CreatesOrderTransportCards
 {
@@ -111,77 +108,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->live()
                                     ->columnSpanFull(),
 
-                                Select::make('customer_id')
-                                    ->label('Khách hàng')
-                                    ->relationship('customer', 'name')
-                                    ->options(fn (): array => Customer::query()
-                                        ->select(['id', 'code', 'name'])
-                                        ->where('is_active', true)
-                                        ->orderBy('code', 'asc')
-                                        ->get()
-                                        ->mapWithKeys(fn (Customer $customer): array => [
-                                            $customer->id => "{$customer->code} - {$customer->name}",
-                                        ])
-                                        ->toArray()
-                                    )
-                                    ->native(false)
-                                    ->required()
-                                    ->searchable()
-                                    ->columnSpanFull()
-                                    ->live()
-                                    ->afterStateUpdated(function ($state, Set $set, Get $get): void {
-                                        if (blank($state)) {
-                                            $set('pickup_location_id', null);
-
-                                            return;
-                                        }
-
-                                        $customer = Customer::query()->with('location')->find($state);
-                                        if (! $customer) {
-                                            $set('pickup_location_id', null);
-
-                                            return;
-                                        }
-
-                                        $currentAreaId = $get('area_id');
-                                        $firstLocation = null;
-
-                                        // 1. Ưu tiên địa điểm mặc định trực tiếp của khách hàng (ví dụ ALSB -> ALSB)
-                                        if ($customer->location && $customer->location->is_active) {
-                                            $firstLocation = $customer->location;
-                                        }
-
-                                        // 2. Nếu khách hàng không có địa điểm trực tiếp, tìm trong bảng pivot customer_location
-                                        if (! $firstLocation) {
-                                            $query = DB::table('customer_location')
-                                                ->join('locations', 'customer_location.location_id', '=', 'locations.id')
-                                                ->where('customer_location.customer_id', $state)
-                                                ->where('locations.is_active', true);
-
-                                            if (filled($currentAreaId)) {
-                                                $firstLocation = (clone $query)
-                                                    ->where(function ($q) use ($currentAreaId) {
-                                                        $q->whereExists(function ($sq) use ($currentAreaId) {
-                                                            $sq->select(DB::raw(1))
-                                                                ->from('area_location')
-                                                                ->whereColumn('area_location.location_id', 'locations.id')
-                                                                ->where('area_location.area_id', $currentAreaId);
-                                                        })->orWhere('locations.area_id', $currentAreaId);
-                                                    })
-                                                    ->select(['locations.id', 'locations.area_id'])
-                                                    ->first();
-                                            }
-
-                                            $firstLocation ??= $query->select(['locations.id', 'locations.area_id'])->first();
-                                        }
-
-                                        if ($firstLocation) {
-                                            $set('pickup_location_id', $firstLocation->id);
-                                        } else {
-                                            $set('pickup_location_id', null);
-                                        }
-                                    })
-                                    ->createOptionForm(fn (Schema $schema): array => CustomerForm::configure($schema)->getComponents()),
+                                self::getCustomerIdFormField(false),
 
                                 // Select::make('priority')
                                 //     ->label('Mức ưu tiên')
@@ -230,7 +157,7 @@ class OrderForm extends CreatesOrderTransportCards
                                         titleAttribute: 'code',
                                         modifyQueryUsing: fn (Builder $query) => $query->where('is_active', true)
                                     )
-                                    ->searchable()
+                                    ->searchable(['code', 'name'])
                                     ->preload()
                                     ->native(false)
                                     ->required(fn (Get $get): bool => self::isHhhkOrder($get))
@@ -320,7 +247,7 @@ class OrderForm extends CreatesOrderTransportCards
                                                             })
                                                             ->when($get('location_id'), fn ($q, $id) => $q->orWhere('id', $id))
                                                     )
-                                                    ->searchable()
+                                                    ->searchable(['code', 'name'])
                                                     ->preload()
                                                     ->prefixIcon(Heroicon::OutlinedMapPin)
                                                     ->native(false)

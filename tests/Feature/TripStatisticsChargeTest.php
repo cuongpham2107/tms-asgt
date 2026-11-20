@@ -557,3 +557,36 @@ test('customer info can be edited from inside the charge modal', function () {
         ->and((float) $customer->fuel_adjustment_percent)->toBe(16.68)
         ->and((float) $customer->cancel_trip_percent)->toBe(70.0);
 });
+
+test('editing summary unloading time on a single-point order updates waiting preview and breakdown', function () {
+    WaitingFeeRate::create([
+        'customer_id' => $this->customer->id,
+        'surcharge_type' => '',
+        'waiting_mode' => WaitingFeeRate::MODE_NORMAL,
+        'fee_block_minutes' => 60,
+        'grace_minutes' => 29,
+        'tiers' => [
+            ['tonnage' => 5, 'fee' => 50_000, 'free_minutes' => 180],
+        ],
+    ]);
+
+    foreach ([
+        [CheckpointType::ArrivedPickup, '2026-10-21 08:00:00'],
+        [CheckpointType::LeftPickup, '2026-10-21 09:00:00'],
+        [CheckpointType::ArrivedDelivery, '2026-10-21 10:00:00'],
+        [CheckpointType::Completed, '2026-10-21 11:30:00'],
+    ] as [$type, $at]) {
+        TripCheckpoint::create([
+            'trip_id' => $this->trip->id,
+            'order_id' => $this->order->id,
+            'delivery_point_id' => $type->isDeliveryScoped() ? $this->order->deliveryPoints()->value('id') : null,
+            'checkpoint_type' => $type,
+            'occurred_at' => Carbon::parse($at),
+        ]);
+    }
+
+    ($this->page)()
+        ->mountAction('editCharge', arguments: ['orderId' => $this->order->id])
+        ->fillForm(['summary_unloaded_at' => '2026-10-21 15:30:00'])
+        ->assertMountedActionModalSee(['Đóng hàng 60\' + hạ hàng 330\'', 'tính 150\' = 3 × 50.000 đ']);
+});

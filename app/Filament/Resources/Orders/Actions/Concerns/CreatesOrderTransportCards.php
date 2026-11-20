@@ -851,9 +851,15 @@ abstract class CreatesOrderTransportCards
     {
         return Select::make('customer_id')
             ->label('Khách hàng')
-            ->options(fn (): array => Customer::query()
+            ->options(fn (Get $get): array => Customer::query()
                 ->select(['id', 'code', 'name'])
-                ->where('is_active', true)
+                ->where(function ($query) use ($get): void {
+                    $query->where('is_active', true);
+
+                    if (filled($selectedId = $get('customer_id'))) {
+                        $query->orWhere('id', $selectedId);
+                    }
+                })
                 ->orderBy('code', 'asc')
                 ->get()
                 ->mapWithKeys(fn (Customer $customer): array => [
