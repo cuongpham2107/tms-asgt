@@ -4,15 +4,13 @@ namespace App\Filament\Resources\Trips\Actions;
 
 use App\Enums\CheckpointType;
 use App\Enums\DriverSwapReason;
-use App\Enums\OrderStatus;
-use App\Enums\TripStatus;
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\User;
-use App\Services\Km\ShiftKmCalculatorService;
 use App\Services\Km\TripKmLimitService;
 use App\Services\Notification\DriverNotificationService;
 use App\Services\Trip\CheckpointFactory;
+use App\Services\Trip\DriverSwapService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -165,17 +163,7 @@ class DriverSwapAction
                 $oldDriver = $record->driver ?? User::query()->find($record->driver_id);
                 $newDriver = User::query()->find($toDriverId);
 
-                $record->update([
-                    'driver_id' => $toDriverId,
-                    'shift_id' => null,
-                    'status' => TripStatus::DriverSwap,
-                ]);
-
-                $record->orders()
-                    ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
-                    ->get()->each->update(['status' => OrderStatus::DriverSwap]);
-
-                app(ShiftKmCalculatorService::class)->calculateForTrip($record);
+                app(DriverSwapService::class)->handOver($record, toDriverId: (int) $toDriverId, detachShift: true);
 
                 if ($newDriver !== null) {
                     try {

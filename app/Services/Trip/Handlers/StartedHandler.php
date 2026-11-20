@@ -5,6 +5,7 @@ namespace App\Services\Trip\Handlers;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Models\Trip;
+use App\Services\Trip\DriverSwapService;
 
 class StartedHandler implements CheckpointHandlerInterface
 {
@@ -41,10 +42,7 @@ class StartedHandler implements CheckpointHandlerInterface
         }
 
         // Khi trip được restart sau DriverSwap, khôi phục orders về Sent
-        foreach ($trip->orders()->where('status', OrderStatus::DriverSwap)->get() as $order) {
-            $order->status = OrderStatus::Sent;
-            $order->save();
-        }
+        app(DriverSwapService::class)->resume($trip, TripStatus::Started);
 
         // Set sent_at cho orders đã Sent nhưng chưa có sent_at
         foreach ($trip->orders()->where('status', OrderStatus::Sent)->whereNull('sent_at')->get() as $order) {

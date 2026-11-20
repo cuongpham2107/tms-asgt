@@ -6,8 +6,7 @@ use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
-use App\Services\Km\ShiftKmCalculatorService;
-use App\Services\Km\TripKmCalculatorService;
+use App\Services\Km\TripKmService;
 use App\Services\Trip\Handlers\ArrivedDeliveryHandler;
 use App\Services\Trip\Handlers\ArrivedPickupHandler;
 use App\Services\Trip\Handlers\CheckpointEndHandler;
@@ -115,9 +114,7 @@ class TripCheckpointService
 
             // Recalculate trip & shift km so dashboard shows up-to-date totals
             // including in-progress trips using latest checkpoint km
-            $trip->refresh();
-            app(TripKmCalculatorService::class)->calculate($trip);
-            app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
+            app(TripKmService::class)->recalculate($trip);
 
             $checkpoints->each->load('photos');
             $startedCheckpoints->each->load('photos');

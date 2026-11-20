@@ -9,12 +9,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\TripResource;
 use App\Models\Trip;
 use App\Services\Km\DriverMonthlyKmReportService;
-use App\Services\Km\ShiftKmCalculatorService;
-use App\Services\Km\TripKmCalculatorService;
 use App\Services\Km\TripKmLimitService;
 use App\Services\Km\TripKmSplitService;
 use App\Services\Trip\CheckpointFactory;
 use App\Services\Trip\CheckpointGeofenceService;
+use App\Services\Trip\DriverSwapService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
@@ -345,21 +344,7 @@ class TripController extends Controller
         } else {
             // Còn orders chưa xong → driver_swap, tính partial km
             DB::transaction(function () use ($trip, $endKm, $completedAt) {
-                app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
-                $trip->refresh();
-                app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
-
-                $trip->end_km = $endKm;
-                $trip->status = TripStatus::DriverSwap;
-                $trip->save();
-
-                $trip->orders()
-                    ->whereIn('status', [
-                        OrderStatus::Sent->value,
-                        OrderStatus::InTransit->value,
-                        OrderStatus::Assigned->value,
-                    ])
-                    ->get()->each->update(['status' => OrderStatus::DriverSwap]);
+                app(DriverSwapService::class)->handOver($trip, $endKm);
 
                 // Cập nhật km hiện tại của xe
                 if ($endKm > 0 && $trip->vehicle) {

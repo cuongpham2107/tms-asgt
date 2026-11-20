@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
 use App\Services\Shift\ShiftScheduleService;
+use App\Services\Vehicle\TransportCardsCache;
 use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -89,8 +90,7 @@ abstract class CreatesOrderTransportCards
 
     public static function clearTransportCardsCache(): void
     {
-        Cache::forget('resolve-vehicle-cards-base');
-        Cache::forget('resolve-driver-cards');
+        TransportCardsCache::clear();
     }
 
     /**
@@ -117,7 +117,7 @@ abstract class CreatesOrderTransportCards
      */
     protected static function resolveDriverCards(): array
     {
-        return Cache::remember('resolve-driver-cards', now()->addMinutes(15), function (): array {
+        return Cache::remember(TransportCardsCache::DRIVER_KEY, now()->addMinutes(15), function (): array {
             $todayShift = ShiftScheduleService::determineShift();
 
             $drivers = User::query()
@@ -265,7 +265,7 @@ abstract class CreatesOrderTransportCards
      */
     private static function resolveVehicleCardsBase(?int $selectedVehicleId = null): array
     {
-        $cacheKey = 'resolve-vehicle-cards-base';
+        $cacheKey = TransportCardsCache::VEHICLE_KEY;
 
         $cards = Cache::remember($cacheKey, now()->addMinutes(15), function (): array {
             $vehicles = Vehicle::query()

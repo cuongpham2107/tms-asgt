@@ -382,15 +382,7 @@ class VehicleDispatchBoard extends Page implements HasTable
      */
     public static function runningTripStatuses(): array
     {
-        return [
-            TripStatus::Started,
-            TripStatus::ArrivedPickup,
-            TripStatus::Delivering,
-            TripStatus::ArrivedDelivery,
-            TripStatus::Delivered,
-            TripStatus::DriverSwap,
-            TripStatus::ReturnTrip,
-        ];
+        return TripStatus::runningStatuses();
     }
 
     /**

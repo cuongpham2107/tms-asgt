@@ -54,6 +54,34 @@ enum TripStatus: string implements HasColor, HasLabel
         ];
     }
 
+    /**
+     * Chuyến đang chạy trên bảng điều phối: đã bắt đầu đến trước khi hoàn thành, gồm cả chuyến đã đảo lái.
+     *
+     * @return list<self>
+     */
+    public static function runningStatuses(): array
+    {
+        return [
+            self::Started,
+            self::ArrivedPickup,
+            self::Delivering,
+            self::ArrivedDelivery,
+            self::Delivered,
+            self::DriverSwap,
+            self::ReturnTrip,
+        ];
+    }
+
+    /**
+     * Chuyến tài xế còn phải làm tiếp (kể cả đã giao hàng nhưng chưa bấm Kết thúc đơn hàng) — chặn Rời xe / Kết thúc ca.
+     *
+     * @return list<self>
+     */
+    public static function unfinishedStatuses(): array
+    {
+        return array_values(array_filter(self::runningStatuses(), fn (self $status): bool => $status !== self::DriverSwap));
+    }
+
     /** Alias của getLabel() — dùng trong message lỗi API. */
     public function label(): string
     {

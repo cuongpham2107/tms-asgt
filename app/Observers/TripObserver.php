@@ -6,7 +6,6 @@ use App\Enums\OrderStatus;
 use App\Enums\TripKmReportStatus;
 use App\Enums\TripStatus;
 use App\Events\TripUpdated;
-use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Filament\Resources\Trips\TripResource;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
@@ -14,6 +13,7 @@ use App\Models\Trip;
 use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Vehicle\TransportCardsCache;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
@@ -101,12 +101,12 @@ class TripObserver
     private function invalidateTransportCardsCache(): void
     {
         if (app()->runningUnitTests() || DB::transactionLevel() === 0) {
-            CreatesOrderTransportCards::clearTransportCardsCache();
+            TransportCardsCache::clear();
 
             return;
         }
 
-        DB::afterCommit(static fn () => CreatesOrderTransportCards::clearTransportCardsCache());
+        DB::afterCommit(static fn () => TransportCardsCache::clear());
     }
 
     /**

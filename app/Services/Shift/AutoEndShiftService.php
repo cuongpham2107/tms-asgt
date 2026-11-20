@@ -2,8 +2,6 @@
 
 namespace App\Services\Shift;
 
-use App\Services\Km\ShiftKmCalculatorService;
-
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\ShiftType;
@@ -11,6 +9,7 @@ use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Services\Km\ShiftKmCalculatorService;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -84,35 +83,7 @@ class AutoEndShiftService
      */
     public function hasIncompleteOrders(DriverShift $shift): bool
     {
-        return Trip::where('driver_id', $shift->driver_id)
-            ->where(function ($query) {
-                $query->whereHas('orders', function ($q) {
-                    $q->whereIn('status', [
-                        OrderStatus::Sent->value,
-                        OrderStatus::InTransit->value,
-                        OrderStatus::Completed->value,
-                    ]);
-                })->orWhere(function ($q) {
-                    $q->where('is_empty_run', true)
-                        ->whereIn('status', [
-                            TripStatus::Started,
-                            TripStatus::ArrivedPickup,
-                            TripStatus::Delivering,
-                            TripStatus::ArrivedDelivery,
-                            TripStatus::Delivered,
-                            TripStatus::ReturnTrip,
-                        ]);
-                });
-            })
-            ->whereIn('status', [
-                TripStatus::Started,
-                TripStatus::ArrivedPickup,
-                TripStatus::Delivering,
-                TripStatus::ArrivedDelivery,
-                TripStatus::Delivered,
-                TripStatus::ReturnTrip,
-            ])
-            ->exists();
+        return Trip::query()->unfinishedForDriver($shift->driver_id)->exists();
     }
 
     /**
@@ -217,23 +188,8 @@ class AutoEndShiftService
                 ? Carbon::parse($latestActivity)
                 : $deadline;
 
-            $shift->end_time = $recordedEndTime;
-            $shift->end_km = $endKm;
-            $shift->save();
-
-            // 3. Tính toán lại toàn bộ KM ca
-            $this->shiftKmCalculatorService->calculate($shift);
-
-            // 4. Dọn dẹp liên kết shift_id cho các chuyến driver_swap (nếu có)
-            $driverSwappedTrips = Trip::where('driver_id', $shift->driver_id)
-                ->where('shift_id', $shift->id)
-                ->where('status', TripStatus::DriverSwap)
-                ->get();
-
-            foreach ($driverSwappedTrips as $trip) {
-                $trip->shift_id = null;
-                $trip->save();
-            }
+            // 3–4. Đóng hồ sơ ca: tính lại km ca, gỡ ca khỏi chuyến đảo lái / chờ chạy
+            app(ShiftEndService::class)->close($shift, $recordedEndTime, $endKm);
 
             // Gỡ shift_id cho các chuyến chờ chạy của ca này để ca sau nhận lại (giống tài xế tự kết thúc ca trên App)
             Trip::query()

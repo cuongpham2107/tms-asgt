@@ -5,8 +5,7 @@ namespace App\Models;
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
-use App\Services\Km\ShiftKmCalculatorService;
-use App\Services\Km\TripKmCalculatorService;
+use App\Services\Km\TripKmService;
 use App\Services\Trip\CheckpointGeofenceService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,14 +32,7 @@ class Trip extends Model
      */
     public function scopeUnfinishedForDriver(Builder $query, int $driverId): void
     {
-        $running = [
-            TripStatus::Started,
-            TripStatus::ArrivedPickup,
-            TripStatus::Delivering,
-            TripStatus::ArrivedDelivery,
-            TripStatus::Delivered,
-            TripStatus::ReturnTrip,
-        ];
+        $running = TripStatus::unfinishedStatuses();
 
         $query->where('driver_id', $driverId)
             ->where(function (Builder $query) use ($running): void {
@@ -337,8 +329,7 @@ class Trip extends Model
                 $this->vehicle->save();
             }
 
-            app(TripKmCalculatorService::class)->calculate($this);
-            app(ShiftKmCalculatorService::class)->calculateForTrip($this);
+            app(TripKmService::class)->recalculate($this);
 
             $this->orders()
                 ->whereNotIn('status', [

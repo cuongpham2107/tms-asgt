@@ -2,6 +2,10 @@
 
 namespace App\Services\Shift;
 
+use App\Services\Trip\DriverSwapService;
+
+use App\Services\Km\TripKmService;
+
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
@@ -35,18 +39,7 @@ class LeaveVehicleService
 
             if ($activeTrip !== null) {
                 // Trip chưa hoàn thành — driver_swap giữa chừng
-                app(TripKmCalculatorService::class)->calculate($activeTrip, endKm: $kmReading);
-                $activeTrip->refresh();
-                app(ShiftKmCalculatorService::class)->calculateForTrip($activeTrip);
-
-                $activeTrip->end_km = $kmReading;
-                $activeTrip->status = TripStatus::DriverSwap;
-                $activeTrip->save();
-
-                foreach ($activeTrip->orders()->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])->get() as $order) {
-                    $order->status = OrderStatus::DriverSwap;
-                    $order->save();
-                }
+                app(DriverSwapService::class)->handOver($activeTrip, $kmReading);
 
                 $activeTripId = $activeTrip->id;
             }

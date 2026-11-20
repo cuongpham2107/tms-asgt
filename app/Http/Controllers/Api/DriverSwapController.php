@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\CheckpointType;
-use App\Enums\OrderStatus;
-use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DriverSwapRequest;
 use App\Http\Resources\DriverSwapResource;
@@ -14,7 +12,7 @@ use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripPhoto;
-use App\Services\Km\ShiftKmCalculatorService;
+use App\Services\Trip\DriverSwapService;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
@@ -119,16 +117,7 @@ class DriverSwapController extends Controller
                 }
             }
 
-            $trip->driver_id = $user->id;
-            $trip->status = TripStatus::DriverSwap;
-            $trip->shift_id = null;
-            $trip->save();
-
-            $trip->orders()
-                ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
-                ->get()->each->update(['status' => OrderStatus::DriverSwap]);
-
-            app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
+            app(DriverSwapService::class)->handOver($trip, toDriverId: $user->id, detachShift: true);
 
             DB::commit();
 
