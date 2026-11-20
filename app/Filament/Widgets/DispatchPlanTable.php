@@ -56,6 +56,7 @@ class DispatchPlanTable extends Widget
                 ->all(),
             'rows' => $this->isReady ? $this->rows() : [],
             'soonMinutes' => self::SOON_MINUTES,
+            'currentUserId' => auth()->id(),
         ];
     }
 
@@ -69,7 +70,7 @@ class DispatchPlanTable extends Widget
         return Order::query()
             ->with(['area', 'customer', 'pickupLocation', 'deliveryPoints.location', 'createdBy'])
             ->where('status', OrderStatus::Draft)
-            ->where('planned_loading_at', '>=', today())
+            ->whereNotNull('planned_loading_at')
             ->orderBy('planned_loading_at')
             ->orderBy('id')
             ->get()
@@ -108,10 +109,12 @@ class DispatchPlanTable extends Widget
             'notes' => $order->notes,
             'isReturnTrip' => (bool) $order->is_return_trip,
             'createdBy' => $order->createdBy?->name,
+            'createdById' => $order->created_by,
             'dayKey' => $plannedAt->format('Y-m-d'),
             'dayLabel' => $this->dayLabel($plannedAt, $now),
             'time' => $plannedAt->format('H:i'),
             'minutesLeft' => $minutesLeft,
+            'isPastDay' => $plannedAt->lt($now->copy()->startOfDay()),
         ];
     }
 
@@ -120,6 +123,7 @@ class DispatchPlanTable extends Widget
         $weekday = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'][$date->dayOfWeek];
 
         $prefix = match (true) {
+            $date->lt($now->copy()->startOfDay()) => 'Ngày trước, chưa gán · '.$weekday,
             $date->isSameDay($now) => 'Hôm nay',
             $date->isSameDay($now->copy()->addDay()) => 'Ngày mai',
             default => $weekday,

@@ -40,7 +40,7 @@ function planOrder(string $code, OrderStatus $status, mixed $plannedLoadingAt): 
     ]);
 }
 
-test('tab kế hoạch chỉ hiện đơn nháp có giờ đóng hàng từ hôm nay, sớm nhất lên đầu', function () {
+test('tab kế hoạch hiện đơn nháp có giờ đóng hàng, kể cả ngày trước chưa gán, sớm nhất lên đầu', function () {
     planOrder('ASG-LATER', OrderStatus::Draft, now()->addDays(2));
     planOrder('ASG-SOON', OrderStatus::Draft, now()->addHours(3));
     planOrder('ASG-ASSIGNED', OrderStatus::Sent, now()->addHours(5));
@@ -49,10 +49,12 @@ test('tab kế hoạch chỉ hiện đơn nháp có giờ đóng hàng từ hôm
 
     $rows = (new DispatchPlanTable)->rows();
 
-    expect(array_column($rows, 'orderCode'))->toBe(['ASG-SOON', 'ASG-LATER'])
-        ->and($rows[0]['areaCode'])->toBe('NBA')
-        ->and($rows[0]['dayLabel'])->toStartWith('Hôm nay')
-        ->and($rows[1]['dayLabel'])->not->toStartWith('Hôm nay');
+    expect(array_column($rows, 'orderCode'))->toBe(['ASG-PAST', 'ASG-SOON', 'ASG-LATER'])
+        ->and(array_column($rows, 'isPastDay'))->toBe([true, false, false])
+        ->and($rows[0]['dayLabel'])->toStartWith('Ngày trước')
+        ->and($rows[1]['areaCode'])->toBe('NBA')
+        ->and($rows[1]['dayLabel'])->toStartWith('Hôm nay')
+        ->and($rows[2]['dayLabel'])->not->toStartWith('Hôm nay');
 });
 
 test('cấu hình chỉ gửi đơn khi React đã sẵn sàng', function () {
@@ -63,7 +65,9 @@ test('cấu hình chỉ gửi đơn khi React đã sẵn sàng', function () {
 
     $widget->isReady = true;
     expect($widget->getRendererConfiguration()['rows'])->toHaveCount(1)
-        ->and(array_column($widget->getRendererConfiguration()['areas'], 'code'))->toBe(['NBA']);
+        ->and(array_column($widget->getRendererConfiguration()['areas'], 'code'))->toBe(['NBA'])
+        ->and($widget->getRendererConfiguration()['currentUserId'])->toBe($this->user->id)
+        ->and($widget->getRendererConfiguration()['rows'][0]['createdById'])->toBe($this->user->id);
 });
 
 test('bấm Gán lái, xe trên tab kế hoạch mở modal gán xe của đơn', function () {

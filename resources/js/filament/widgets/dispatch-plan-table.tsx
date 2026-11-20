@@ -34,10 +34,13 @@ interface PlanRow {
     notes: string | null;
     isReturnTrip: boolean;
     createdBy: string | null;
+    createdById: number | null;
     dayKey: string;
     dayLabel: string;
     time: string;
     minutesLeft: number;
+    /** Giờ đóng hàng thuộc ngày trước hôm nay mà vẫn chưa gán: tô vàng cảnh báo. */
+    isPastDay: boolean;
 }
 
 interface Configuration {
@@ -46,6 +49,7 @@ interface Configuration {
     areas: Area[];
     rows: PlanRow[];
     soonMinutes: number;
+    currentUserId: number | null;
 }
 
 interface PageApi {
@@ -62,7 +66,9 @@ type Wire = JsWidgetUtilities<WidgetMethods>["$wire"];
 /** Tự tải lại để "còn X phút" và đơn mới tạo luôn đúng khi điều hành để màn hình mở. */
 const REFRESH_MS = 60_000;
 const AREA_STORAGE_KEY = "tms.dispatchPlan.areas";
+const MINE_STORAGE_KEY = "tms.dispatchPlan.mineOnly";
 const COLUMN_COUNT = 8;
+const MINUTES_PER_DAY = 1440;
 /** Cùng màu tiêu đề bảng ở tab Kiểm soát xe. */
 const HEADER_BG = "rgb(30 58 95)";
 const HEADER_CELL = "border-r border-b border-white/10 px-2 py-2 text-center whitespace-nowrap";
@@ -87,12 +93,33 @@ function storeAreas(ids: number[]): void {
     }
 }
 
+function readStoredMineOnly(): boolean {
+    try {
+        return window.localStorage.getItem(MINE_STORAGE_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
+function storeMineOnly(value: boolean): void {
+    try {
+        window.localStorage.setItem(MINE_STORAGE_KEY, value ? "1" : "0");
+    } catch {
+        // Trình duyệt chặn localStorage: bộ lọc chỉ mất khi tải lại trang.
+    }
+}
+
 function normalize(text: string): string {
     return text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 }
 
 function formatCountdown(minutes: number): string {
     const abs = Math.abs(minutes);
+    if (abs >= MINUTES_PER_DAY) {
+        const days = Math.floor(abs / MINUTES_PER_DAY);
+        return minutes < 0 ? `Quá ${days} ngày` : `Còn ${days} ngày`;
+    }
+
     const hours = Math.floor(abs / 60);
     const rest = abs % 60;
     const text = hours > 0 ? `${hours}g${rest > 0 ? String(rest).padStart(2, "0") : ""}` : `${rest}p`;
@@ -146,7 +173,13 @@ const PlanRowView = memo(function PlanRowView({
     const destinations = row.destinations.length > 0 ? row.destinations.join(", ") : "Lái xe chọn";
 
     return (
-        <tr className="group bg-white transition-colors hover:bg-primary-50/40 dark:bg-gray-900 dark:hover:bg-white/[0.03]">
+        <tr
+            className={`group transition-colors ${
+                row.isPastDay
+                    ? "bg-amber-50 hover:bg-amber-100/70 dark:bg-amber-500/10 dark:hover:bg-amber-500/15"
+                    : "bg-white hover:bg-primary-50/40 dark:bg-gray-900 dark:hover:bg-white/[0.03]"
+            }`}
+        >
             <td className={`relative w-24 ${CELL} ps-3 text-center`}>
                 <span aria-hidden="true" className={`absolute inset-y-2 start-0 w-1 rounded-e-full ${styles.rail}`} />
                 <div className={`font-mono text-sm font-semibold leading-none tabular-nums ${styles.time}`}>{row.time}</div>
@@ -256,6 +289,14 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
     const page = wire.$parent;
     const [selectedAreas, setSelectedAreas] = useState<number[]>(readStoredAreas);
     const [search, setSearch] = useState("");
+    const [mineOnly, setMineOnly] = useState<boolean>(readStoredMineOnly);
+
+    const toggleMineOnly = useCallback(() => {
+        setMineOnly((current) => {
+            storeMineOnly(!current);
+            return !current;
+        });
+    }, []);
     const [loadingId, setLoadingId] = useState<number | null>(null);
     const loadingRef = useRef<number | null>(null);
 
@@ -295,20 +336,30 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
         [page],
     );
 
+    const mineCount = useMemo(
+        () => configuration.rows.filter((row) => row.createdById !== null && row.createdById === configuration.currentUserId).length,
+        [configuration.rows, configuration.currentUserId],
+    );
+
+    const scopedRows = useMemo(
+        () => (mineOnly ? configuration.rows.filter((row) => row.createdById !== null && row.createdById === configuration.currentUserId) : configuration.rows),
+        [configuration.rows, configuration.currentUserId, mineOnly],
+    );
+
     const countsByArea = useMemo(() => {
         const counts = new Map<number, number>();
-        configuration.rows.forEach((row) => {
+        scopedRows.forEach((row) => {
             if (row.areaId !== null) {
                 counts.set(row.areaId, (counts.get(row.areaId) ?? 0) + 1);
             }
         });
         return counts;
-    }, [configuration.rows]);
+    }, [scopedRows]);
 
     const visibleRows = useMemo(() => {
         const keyword = normalize(search.trim());
 
-        return configuration.rows.filter((row) => {
+        return scopedRows.filter((row) => {
             if (selectedAreas.length > 0 && (row.areaId === null || !selectedAreas.includes(row.areaId))) {
                 return false;
             }
@@ -325,16 +376,16 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
 
             return haystack.includes(keyword);
         });
-    }, [configuration.rows, selectedAreas, search]);
+    }, [scopedRows, selectedAreas, search]);
 
     const days = useMemo(() => {
-        const groups: { key: string; label: string; rows: Snapshot<PlanRow>[] }[] = [];
+        const groups: { key: string; label: string; isPastDay: boolean; rows: Snapshot<PlanRow>[] }[] = [];
         visibleRows.forEach((row) => {
             const last = groups[groups.length - 1];
             if (last && last.key === row.dayKey) {
                 last.rows.push(row);
             } else {
-                groups.push({ key: row.dayKey, label: row.dayLabel, rows: [row] });
+                groups.push({ key: row.dayKey, label: row.dayLabel, isPastDay: row.isPastDay, rows: [row] });
             }
         });
         return groups;
@@ -351,9 +402,19 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
             <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <SearchInput value={search} onChange={setSearch} placeholder="Tìm mã đơn, KH, điểm..." className="w-72 max-w-xs" />
 
+                <FilterChip active={mineOnly} onClick={toggleMineOnly} title="Chỉ hiện đơn do bạn tạo">
+                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                        <path d="M10 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3.465 14.493a1.23 1.23 0 0 0 .41 1.412A9.957 9.957 0 0 0 10 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 0 0-13.074.003Z" />
+                    </svg>
+                    Đơn của tôi
+                    <ChipCount>{configuration.loaded ? mineCount : <SkeletonBar className="w-4" />}</ChipCount>
+                </FilterChip>
+
+                <span aria-hidden="true" className="mx-1 h-5 w-px bg-gray-200 dark:bg-white/10" />
+
                 <FilterChip active={selectedAreas.length === 0} onClick={clearAreas}>
                     Tất cả KV
-                    <ChipCount>{configuration.loaded ? configuration.rows.length : <SkeletonBar className="w-4" />}</ChipCount>
+                    <ChipCount>{configuration.loaded ? scopedRows.length : <SkeletonBar className="w-4" />}</ChipCount>
                 </FilterChip>
                 {configuration.areas.map((area) => (
                     <FilterChip key={area.id} active={selectedAreas.includes(area.id)} title={area.name} onClick={() => toggleArea(area.id)}>
@@ -412,8 +473,8 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                                     </p>
                                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                         {configuration.rows.length === 0
-                                            ? "Đơn nháp có giờ đóng hàng từ hôm nay sẽ hiện ở đây."
-                                            : "Thử bỏ bớt khu vực hoặc đổi từ khoá tìm kiếm."}
+                                            ? "Đơn nháp có giờ đóng hàng dự kiến sẽ hiện ở đây."
+                                            : "Thử bỏ lọc Đơn của tôi, bớt khu vực hoặc đổi từ khoá tìm kiếm."}
                                     </p>
                                 </td>
                             </tr>
@@ -426,7 +487,11 @@ function DispatchPlan({ configuration, wire }: { configuration: Snapshot<Configu
                                 <th
                                     scope="colgroup"
                                     colSpan={COLUMN_COUNT}
-                                    className="bg-gray-50/80 px-3 py-1.5 text-left font-bold text-gray-900 dark:bg-white/5 dark:text-gray-100"
+                                    className={`px-3 py-1.5 text-left font-bold ${
+                                        day.isPastDay
+                                            ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
+                                            : "bg-gray-50/80 text-gray-900 dark:bg-white/5 dark:text-gray-100"
+                                    }`}
                                 >
                                     {day.label}
                                     <span className="ms-2 font-medium text-gray-500 dark:text-gray-400">· {day.rows.length} đơn</span>
