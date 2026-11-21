@@ -83,7 +83,7 @@ test('delivery points repeater location_id options are dynamic and include creat
         'name' => 'SHINSUNG',
         'address' => 'Địa chỉ Shinsung',
         'area_id' => $this->area->id,
-    ], new Get($locationSelect));
+    ], Schema::make(Livewire\Livewire::new(ListOrders::class)), new Get($locationSelect));
 
     expect($newLocationId)->toBeInt();
 

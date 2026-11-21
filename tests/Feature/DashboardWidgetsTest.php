@@ -24,6 +24,7 @@ use App\Models\OrderCharge;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
+use Carbon\Carbon;
 use Database\Seeders\RolePermissionMatrixSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -139,6 +140,7 @@ test('new role-focused dashboard widgets render real data cleanly including empt
         'customer_id' => $customer->id,
         'status' => OrderStatus::Draft,
         'planned_loading_at' => now(),
+        'created_by' => auth()->id(),
     ]);
 
     $extOrder = Order::create([
@@ -148,6 +150,7 @@ test('new role-focused dashboard widgets render real data cleanly including empt
         'customer_id' => $customer->id,
         'status' => OrderStatus::Completed,
         'planned_loading_at' => now(),
+        'created_by' => auth()->id(),
     ]);
 
     OrderCharge::create([
@@ -178,6 +181,7 @@ test('new role-focused dashboard widgets render real data cleanly including empt
 
     Livewire::test(TopCustomerBillingWidget::class)
         ->assertStatus(200)
+        ->loadTable()
         ->assertCanSeeTableRecords([$customer]);
 });
 
@@ -212,6 +216,7 @@ test('vehicle km over chart ranks tracked company vehicles and totals the over-l
 });
 
 test('vehicle status chart counts company vehicles by live trip state', function () {
+    $this->travelTo(Carbon::parse('2026-10-23 14:00:00'));
     $vehicle = fn (string $plate, VehicleStatus $status = VehicleStatus::On) => Vehicle::factory()->create([
         'plate_number' => $plate,
         'type' => VehicleOwnerType::Company,

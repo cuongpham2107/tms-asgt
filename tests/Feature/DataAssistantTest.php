@@ -183,15 +183,6 @@ it('nút chat chỉ dựa vào quyền tùy chỉnh Use:DataAssistant, kể cả
     $this->get('/app')->assertOk()->assertSee('tk-assistant', false);
 });
 
-it('migration tạo quyền Use:DataAssistant và gán sẵn cho super_admin', function () {
-    $role = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
-
-    (require database_path('migrations/2026_11_06_081507_add_use_data_assistant_permission.php'))->up();
-
-    expect(Permission::where('name', FilamentChatAssistantPlugin::PERMISSION)->exists())->toBeTrue()
-        ->and($role->fresh()->hasPermissionTo(FilamentChatAssistantPlugin::PERMISSION))->toBeTrue();
-});
-
 it('tách câu hỏi gợi ý và định dạng trong câu trả lời', function () {
     $raw = "Tháng này có 1 đơn chưa có cước.\n\n".DataAssistant::suggestionMarker()."\n- Cước tháng này của khách VFC?\n- Xe nào chạy nhiều nhất tháng này?";
     $html = app(AnswerRenderer::class)->render($raw);

@@ -492,7 +492,8 @@ test('cannot auto-start trip via arrived_pickup when driver has active trip', fu
     expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
 });
 
-test('cannot start new trip when vehicle has previous trip in driver_swap status', function () {
+test('can start new trip when vehicle has previous trip in driver_swap status', function () {
+    // Chuyến đã đảo lái không chặn xe: tài xế cũ không cần quan tâm chuyến đó nữa (44fa7c81).
     $this->trip->update([
         'status' => TripStatus::DriverSwap,
     ]);
@@ -534,16 +535,12 @@ test('cannot start new trip when vehicle has previous trip in driver_swap status
         'checkpoint_type' => 'started',
         'km_reading' => 50050,
         'occurred_at' => now()->toIso8601String(),
-    ])->assertStatus(422)
-        ->assertJsonPath('errors.checkpoint_type.0', function ($msg) {
-            return str_contains($msg, 'Xe biển số TEST-001')
-                && str_contains($msg, 'Đảo lái');
-        });
+    ])->assertSuccessful();
 
-    expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
+    expect($otherTrip->fresh()->status)->not->toBe(TripStatus::Pending);
 });
 
-test('cannot auto-start new trip via arrived_pickup when vehicle has previous trip in driver_swap status', function () {
+test('can auto-start new trip via arrived_pickup when vehicle has previous trip in driver_swap status', function () {
     $this->trip->update([
         'status' => TripStatus::DriverSwap,
     ]);
@@ -585,13 +582,9 @@ test('cannot auto-start new trip via arrived_pickup when vehicle has previous tr
         'checkpoint_type' => 'arrived_pickup',
         'km_reading' => 50050,
         'occurred_at' => now()->toIso8601String(),
-    ])->assertStatus(422)
-        ->assertJsonPath('errors.checkpoint_type.0', function ($msg) {
-            return str_contains($msg, 'Xe biển số TEST-001')
-                && str_contains($msg, 'Đảo lái');
-        });
+    ])->assertSuccessful();
 
-    expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
+    expect($otherTrip->fresh()->status)->not->toBe(TripStatus::Pending);
 });
 
 test('arrived_delivery and completed handle order with repeated locations in route (A -> B -> A)', function () {
@@ -815,8 +808,8 @@ test('adding a new checkpoint in trip form pre-fills values from previous checkp
         ->and($flat['order_id']->getState())->toBe($order->id)
         ->and($flat['driver_id']->getState())->toBe($this->driver->id)
         ->and((float) $flat['km_reading']->getState())->toBe(50010.5)
-        ->and($flat['occurred_at']->getState())->toBe('2026-10-19 09:00')
-        ->and($flat['delivery_point_id']->getState())->toBe($dp->id);
+        ->and($flat['occurred_at']->getState())->toBe('2026-10-19 09:01')
+        ->and($flat['delivery_point_id']->getState())->toBeNull();
 });
 
 test('adding a new checkpoint advances checkpoint_type correctly and skips driver_swap', function () {

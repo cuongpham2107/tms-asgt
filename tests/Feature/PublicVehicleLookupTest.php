@@ -15,7 +15,10 @@ use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\ShiftScheduleService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\URL;
+
+uses(RefreshDatabase::class);
 
 it('rejects requests without valid X-Api-Key', function (): void {
     $this->getJson('/api/public/vehicles/search?search=3238')
@@ -44,6 +47,7 @@ it('validates minimum search length and matches normalized plate numbers', funct
         'plate_number' => '20C13238',
         'vehicle_type' => VehicleType::Normal,
         'type' => VehicleOwnerType::Company,
+        'owner' => 'ASGT',
         'status' => VehicleStatus::On,
         'is_active' => true,
         'load_capacity' => 14.10,
@@ -113,6 +117,7 @@ it('prefers nearest active order driver over scheduled even/odd driver', functio
         'plate_number' => '29E99988',
         'vehicle_type' => VehicleType::Normal,
         'type' => VehicleOwnerType::Company,
+        'owner' => 'ASGT',
         'status' => VehicleStatus::On,
         'is_active' => true,
         'load_capacity' => 5.25,
@@ -141,6 +146,7 @@ it('prefers nearest active order driver over scheduled even/odd driver', functio
         'planned_loading_at' => now()->addHour(),
         'trip_id' => $trip->id,
         'status' => OrderStatus::InTransit,
+        'created_by' => User::factory()->create()->id,
     ]);
 
     $this->withHeader('X-Api-Key', $apiKey)
@@ -157,6 +163,7 @@ it('serves signed public vehicle GPS tracking page and rejects unsigned requests
         'plate_number' => '29H11223',
         'vehicle_type' => VehicleType::Normal,
         'type' => VehicleOwnerType::Company,
+        'owner' => 'ASGT',
         'status' => VehicleStatus::On,
         'is_active' => true,
         'load_capacity' => 8.5,

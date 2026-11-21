@@ -20,7 +20,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->area = Area::create([
-        'type' => 'airport',
+        'type' => 'HHHK',
         'code' => 'NBA',
         'name' => 'Khu Vực Nội Bài',
         'is_active' => true,

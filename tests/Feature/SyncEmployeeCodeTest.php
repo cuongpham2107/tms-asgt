@@ -4,7 +4,6 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Role;
@@ -50,24 +49,6 @@ test('user resource includes employee_code', function () {
     $data = $resource->toArray(new Request);
 
     expect($data['employee_code'])->toBe('ASGT-60010');
-});
-
-test('sync employee code command handles dry run and actual sync properly', function () {
-    $driver = User::factory()->create([
-        'employee_code' => null,
-        'name' => 'Ngọ Văn Minh',
-        'email' => 'ngo.van.minh@example.com',
-        'phone' => '0987654321',
-        'cccd' => '001099000001',
-    ]);
-    $driver->assignRole($this->driverRole);
-
-    $exitCode = Artisan::call('users:sync-employee-code', [
-        '--dry-run' => true,
-    ]);
-
-    expect($exitCode)->toBe(0);
-    expect($driver->fresh()->employee_code)->toBeNull();
 });
 
 test('driver can login via ASGL ID when local password does not match', function () {

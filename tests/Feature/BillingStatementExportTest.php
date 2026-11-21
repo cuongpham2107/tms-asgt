@@ -33,6 +33,10 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     Gate::before(fn () => true);
 
+    // Global fee types used to be inserted by the fee_types migration; since 3eb25894 they live in the seed data only.
+    $feeTypes = json_decode(file_get_contents(database_path('seeders/data/pricing_and_fees.json')), true)['fee_types'];
+    FeeType::insert(collect($feeTypes)->whereNull('customer_id')->values()->all());
+
     $this->user = User::factory()->create();
     $this->actingAs($this->user);
 
@@ -351,6 +355,6 @@ test('billing statement prefers location statement_address over map address', fu
     $rows = ($this->page)()->instance()->getAllRows();
     $sheet = app(BillingStatementExporter::class)->build($rows, $this->customer, 'ALSB')['spreadsheet']->getActiveSheet();
 
-    expect((string) $sheet->getCell('E13')->getValue())->toContain('Kho ASGL Nội Bài (Bảng kê)')
-        ->and((string) $sheet->getCell('F13')->getValue())->toContain('SEVT Thái Nguyên (Bảng kê)');
+    expect((string) $sheet->getCell('D13')->getValue())->toContain('Kho ASGL Nội Bài (Bảng kê)')
+        ->and((string) $sheet->getCell('E13')->getValue())->toContain('SEVT Thái Nguyên (Bảng kê)');
 });

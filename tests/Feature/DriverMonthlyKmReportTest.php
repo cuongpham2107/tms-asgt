@@ -340,7 +340,8 @@ test('report widget loads the read-only statement of the period on demand', func
     expect($rows)->toHaveCount(27)
         ->and($row)->toMatchArray([
             'driverId' => $trip->driver_id,
-            'operatingTime' => '1h 20p',
+            // Thời lượng hiển thị bằng số phút (commit e586ffa1).
+            'operatingTime' => '80',
             'started' => '08:00 15/10',
             'ended' => '09:40 15/10',
         ])
@@ -358,6 +359,8 @@ function monthlyKmWidget(): Testable
 }
 
 test('report widget loads another period without re-rendering and falls back on bad input', function () {
+    // Trước 08:00 vẫn thuộc ca của ngày hôm trước: ngày không hợp lệ rơi về ngày bắt đầu ca hiện tại.
+    $this->travelTo(Carbon::parse('2026-11-21 01:30:00'));
     monthlyTrip($this, $this->driverA, '2026-10-02 08:00', 123, 100);
     $widget = monthlyKmWidget()->instance();
 
@@ -368,7 +371,7 @@ test('report widget loads another period without re-rendering and falls back on 
     expect($day)->toMatchArray(['periodLabel' => 'Ngày 02/10/2026'])
         ->and($day['totals']['trips'])->toBe(1)
         ->and($other['totals']['trips'])->toBe(0)
-        ->and($invalid)->toMatchArray(['period' => 'month', 'date' => now()->toDateString(), 'isCurrent' => true, 'hasNext' => false]);
+        ->and($invalid)->toMatchArray(['period' => 'month', 'date' => '2026-11-20', 'isCurrent' => true, 'hasNext' => false]);
 });
 
 test('evaluation compares each driver with the route median and skips implausible trips', function () {

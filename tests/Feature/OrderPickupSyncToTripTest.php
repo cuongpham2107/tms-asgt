@@ -41,7 +41,7 @@ beforeEach(function () {
         'owner' => 'RENTED',
         'is_active' => true,
         'status' => VehicleStatus::On,
-        'type' => VehicleOwnerType::External,
+        'type' => VehicleOwnerType::Rent,
     ]);
 
     $this->ncts = Location::create([

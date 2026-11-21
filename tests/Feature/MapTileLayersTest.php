@@ -13,11 +13,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
     Gate::before(fn () => true);
+    // Trang Kiểm soát xe nhúng tab Tổng hợp ca trực, truy vấn User::role('driver').
+    Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
     $this->actingAs(User::factory()->create());
 });
 

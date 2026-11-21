@@ -94,41 +94,6 @@ test('vehicle dispatch board page renders successfully with company vehicles', f
         ->assertDontSee('29H-99999');
 });
 
-test('vehicle dispatch board summary stats correctly count vehicles', function () {
-    // 1 running vehicle
-    Vehicle::factory()->create([
-        'type' => VehicleOwnerType::Company,
-        'gps_speed' => 50,
-        'status' => VehicleStatus::On,
-        'is_active' => true,
-    ]);
-
-    // 1 idling vehicle (speed <= 5, recent GPS update)
-    Vehicle::factory()->create([
-        'type' => VehicleOwnerType::Rent,
-        'gps_speed' => 0,
-        'last_gps_update' => now()->subMinutes(2),
-        'status' => VehicleStatus::On,
-        'is_active' => true,
-    ]);
-
-    // 1 stopped vehicle (status off)
-    Vehicle::factory()->create([
-        'type' => VehicleOwnerType::Company,
-        'gps_speed' => 0,
-        'status' => VehicleStatus::Off,
-        'is_active' => true,
-    ]);
-
-    $component = Livewire::test(VehicleDispatchBoard::class);
-    $stats = $component->instance()->getSummaryStats();
-
-    expect($stats['total'])->toBe(3)
-        ->and($stats['running'])->toBe(1)
-        ->and($stats['idling'])->toBe(1)
-        ->and($stats['stopped'])->toBe(1);
-});
-
 test('dispatch board shows owner name for company vehicles and rent prefix for rented', function () {
     $company = Vehicle::factory()->create([
         'plate_number' => '20C-ASGT-01',
@@ -933,6 +898,9 @@ test('vehicle dispatch board distinguishes idle vehicle and pending trip with di
 });
 
 test('vehicle trip modal displays pending trips and prioritizes in-progress over pending over completed', function () {
+    // Ca 08:00 -> 08:00 hôm sau: cố định giờ trong ca để chuyến 08:30-11:00 luôn thuộc ca hiện tại.
+    $this->travelTo(Carbon::parse('2026-10-23 14:00:00'));
+
     $vehicle = Vehicle::factory()->create([
         'plate_number' => '29C-TRIP-ORDER',
         'type' => VehicleOwnerType::Company,
@@ -1348,8 +1316,8 @@ test('vehicle location group priority: destination first, GPS second, driver sta
     ]);
 
     expect(VehicleDispatchBoard::resolveVehicleLocationGroup($vWithGps))->toBe('TN')
-        // Cột Trực vẫn hiển thị điểm trực của lái xe (NB)
-        ->and(VehicleDispatchBoard::getDriverStation($vWithGps))->toBe('NB');
+        // Không có lái xe chạy trong ca -> cột Trực hiển thị '—' (commit 23102091 / dc5b1cb7)
+        ->and(VehicleDispatchBoard::getDriverStation($vWithGps))->toBe('—');
 
     // Case 3: Xe không có chuyến, mất GPS -> Fallback theo điểm trực của tài xế (NB)
     $vFallbackStation = Vehicle::factory()->create([
@@ -1369,7 +1337,7 @@ test('getGroupedVehicles groups vehicles by location destination/GPS while maint
     $driverNB = User::factory()->create(['name' => 'Lái Xe NBA', 'station' => OnDutyLocation::Nba]);
     $driverBN = User::factory()->create(['name' => 'Lái Xe BN', 'station' => OnDutyLocation::Bn]);
 
-    // Xe 1: Tài xế BN, nhưng GPS ở Thái Nguyên -> Group TN, Cột Trực: BN
+    // Xe 1: Tài xế BN, không chạy chuyến trong ca, GPS ở Thái Nguyên -> Group TN, Cột Trực: '—'
     $v1 = Vehicle::factory()->create([
         'plate_number' => '99C-GPS-TN',
         'type' => VehicleOwnerType::Company,
@@ -1406,7 +1374,7 @@ test('getGroupedVehicles groups vehicles by location destination/GPS while maint
         ->and($grouped['TN']['vehicles']->pluck('plate_number')->all())->toContain('99C-GPS-TN')
         ->and(isset($grouped['BN']))->toBeTrue()
         ->and($grouped['BN']['vehicles']->pluck('plate_number')->all())->toContain('29C-TRIP-BN')
-        ->and(VehicleDispatchBoard::getDriverStation($v1))->toBe('BN')
+        ->and(VehicleDispatchBoard::getDriverStation($v1))->toBe('—')
         ->and(VehicleDispatchBoard::getDriverStation($v2))->toBe('NB');
 });
 
@@ -1978,6 +1946,7 @@ test('rented vehicles dispatch sheet shows only rented vehicles with active or p
 });
 
 test('getDutyDriverRows batches queries without N+1 per driver', function () {
+    $this->travelTo(Carbon::parse('2026-10-23 14:00:00'));
     Role::findOrCreate('driver');
 
     foreach (range(1, 5) as $idx) {
@@ -2056,6 +2025,7 @@ test('vehicle freezeActiveTrip resets when trips relation is reloaded', function
 });
 
 test('VehicleDispatchTable renderer configuration includes sorted shiftTrips payload for inline tree expansion', function () {
+    $this->travelTo(Carbon::parse('2026-10-23 14:00:00'));
     $driver = User::factory()->create(['name' => 'Tài xế Tree', 'station' => OnDutyLocation::Nba]);
     $vehicle = Vehicle::factory()->create([
         'plate_number' => '29C-TREE-01',

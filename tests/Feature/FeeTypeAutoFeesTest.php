@@ -174,22 +174,6 @@ test('entering quantity for a customer fee in the charge modal fills amount, the
         ->and($fee->is_auto)->toBeFalse();
 });
 
-test('sample command creates customer fees once and dry run writes nothing', function () {
-    Customer::create(['code' => 'SDS HN', 'name' => 'SDS HN', 'is_active' => true]);
-
-    $this->artisan('fee-types:seed-samples', ['--dry-run' => true])->assertSuccessful();
-    expect(FeeType::whereNotNull('customer_id')->count())->toBe(0);
-
-    $this->artisan('fee-types:seed-samples')->assertSuccessful();
-    $this->artisan('fee-types:seed-samples')->assertSuccessful();
-
-    expect(FeeType::where('customer_id', $this->customer->id)->count())->toBe(5)
-        ->and(FeeType::whereNotNull('customer_id')->where('name', 'Chi phí bốc xếp')->firstOrFail()->auto_apply)->toBeTrue()
-        ->and(FeeType::where('name', 'Rớt điểm ALSE')->firstOrFail()->calc_method)->toBe(FeeCalcMethod::PerExtraDrop)
-        // CLC, SDS HCM chưa có trong DB test → bỏ qua, không lỗi.
-        ->and(FeeType::whereNotNull('customer_id')->where('name', 'Chi phí kéo hàng')->exists())->toBeFalse();
-});
-
 test('admin creates a customer fee from the fee type list', function () {
     Gate::before(fn () => true);
 

@@ -37,6 +37,10 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     Gate::before(fn () => true);
 
+    // Global fee types used to be inserted by the fee_types migration; since 3eb25894 they live in the seed data only.
+    $feeTypes = json_decode(file_get_contents(database_path('seeders/data/pricing_and_fees.json')), true)['fee_types'];
+    FeeType::insert(collect($feeTypes)->whereNull('customer_id')->values()->all());
+
     $this->user = User::factory()->create();
     $this->actingAs($this->user);
 
@@ -579,7 +583,7 @@ test('editing summary unloading time on a single-point order updates waiting pre
         TripCheckpoint::create([
             'trip_id' => $this->trip->id,
             'order_id' => $this->order->id,
-            'delivery_point_id' => $type->isDeliveryScoped() ? $this->order->deliveryPoints()->value('id') : null,
+            'delivery_point_id' => in_array($type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed], true) ? $this->order->deliveryPoints()->value('id') : null,
             'checkpoint_type' => $type,
             'occurred_at' => Carbon::parse($at),
         ]);

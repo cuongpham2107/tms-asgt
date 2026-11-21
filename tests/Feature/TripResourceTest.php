@@ -11,6 +11,7 @@ use App\Enums\VehicleType;
 use App\Filament\Resources\Trips\Actions\EditTripAction;
 use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Filament\Resources\Trips\Pages\ViewTripTimeline;
+use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Filament\Resources\Trips\Tables\TripsTable;
 use App\Filament\Resources\Trips\Widgets\TripStatsOverviewWidget;
 use App\Http\Resources\TripResource;
@@ -677,6 +678,7 @@ test('trip destination falls back to checkpoint delivery point when order has no
         'order_code' => 'ORD-OTHER-DP',
         'customer_id' => $customer->id,
         'area_id' => $area->id,
+        'created_by' => auth()->id(),
         'status' => OrderStatus::Completed,
         'pickup_location_id' => $pickupLoc->id,
     ]);
@@ -698,6 +700,7 @@ test('trip destination falls back to checkpoint delivery point when order has no
         'order_code' => 'ASG-436-FB',
         'customer_id' => $customer->id,
         'area_id' => $area->id,
+        'created_by' => auth()->id(),
         'trip_id' => $trip->id,
         'type' => OrderType::Hhhk,
         'status' => OrderStatus::Completed,
@@ -741,6 +744,7 @@ test('trip form deduplicates delivery point options by location and auto-fills o
         'order_code' => 'ORD-OTHER-ASGL',
         'customer_id' => $customer->id,
         'area_id' => $area->id,
+        'created_by' => auth()->id(),
         'status' => OrderStatus::Completed,
     ]);
     $otherOrder->deliveryPoints()->create([
@@ -753,7 +757,8 @@ test('trip form deduplicates delivery point options by location and auto-fills o
         'order_code' => 'ORD-CURR-ASGL',
         'customer_id' => $customer->id,
         'area_id' => $area->id,
-        'status' => OrderStatus::InProgress,
+        'created_by' => auth()->id(),
+        'status' => OrderStatus::InTransit,
     ]);
     $ownDp = $order->deliveryPoints()->create([
         'location_id' => $asglLoc->id,
@@ -771,11 +776,11 @@ test('trip form deduplicates delivery point options by location and auto-fills o
         default => null,
     };
 
-    $optionsMethod = new ReflectionMethod(App\Filament\Resources\Trips\Schemas\TripForm::class, 'deliveryPointOptionsForCheckpoint');
+    $optionsMethod = new ReflectionMethod(TripForm::class, 'deliveryPointOptionsForCheckpoint');
     $optionsMethod->setAccessible(true);
     $options = $optionsMethod->invoke(null, $get);
 
-    $defaultMethod = new ReflectionMethod(App\Filament\Resources\Trips\Schemas\TripForm::class, 'defaultDeliveryPointId');
+    $defaultMethod = new ReflectionMethod(TripForm::class, 'defaultDeliveryPointId');
     $defaultMethod->setAccessible(true);
     $defaultId = $defaultMethod->invoke(null, $get, 'checkpoints');
 
@@ -793,14 +798,15 @@ test('trip form advances delivery point sequentially for multi-point orders', fu
         'order_code' => 'ORD-2DP',
         'customer_id' => $customer->id,
         'area_id' => $area->id,
-        'status' => OrderStatus::InProgress,
+        'created_by' => auth()->id(),
+        'status' => OrderStatus::InTransit,
     ]);
     $dp1 = $order->deliveryPoints()->create(['location_id' => $locAlsc->id, 'sequence' => 1, 'status' => 'pending']);
     $dp2 = $order->deliveryPoints()->create(['location_id' => $locSdv->id, 'sequence' => 2, 'status' => 'pending']);
 
-    $nextMethod = new ReflectionMethod(App\Filament\Resources\Trips\Schemas\TripForm::class, 'getNextCheckpointType');
+    $nextMethod = new ReflectionMethod(TripForm::class, 'getNextCheckpointType');
     $nextMethod->setAccessible(true);
-    $defaultMethod = new ReflectionMethod(App\Filament\Resources\Trips\Schemas\TripForm::class, 'defaultDeliveryPointId');
+    $defaultMethod = new ReflectionMethod(TripForm::class, 'defaultDeliveryPointId');
     $defaultMethod->setAccessible(true);
 
     $afterDp1Completed = [
@@ -850,6 +856,7 @@ test('editing trip checkpoint delivery point updates order delivery point and re
         'order_code' => 'ORD-FOREIGN-ACSV',
         'customer_id' => $customer->id,
         'area_id' => $area->id,
+        'created_by' => auth()->id(),
         'status' => OrderStatus::Completed,
     ]);
     $foreignDpAcsv = $otherOrder->deliveryPoints()->create([
@@ -867,6 +874,7 @@ test('editing trip checkpoint delivery point updates order delivery point and re
         'order_code' => 'ASG-596-TEST',
         'customer_id' => $customer->id,
         'area_id' => $area->id,
+        'created_by' => auth()->id(),
         'trip_id' => $trip->id,
         'status' => OrderStatus::Completed,
     ]);

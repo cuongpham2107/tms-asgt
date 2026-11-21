@@ -599,6 +599,9 @@ test('ResolveKmReportAction prevents concurrent submission if report was already
 });
 
 test('resolve_km_report action visibility reflects pending status', function () {
+    $this->admin->givePermissionTo(Permission::firstOrCreate(['name' => 'Update:Trip', 'guard_name' => 'web']));
+    $this->actingAs($this->admin);
+
     $action = ResolveKmReportAction::make();
     expect($action->record($this->trip)->isVisible())->toBeFalse();
 
