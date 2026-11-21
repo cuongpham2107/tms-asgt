@@ -14,6 +14,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 
@@ -46,9 +47,16 @@ class UserForm
                             ->dehydrateStateUsing(fn (string $state): string => Hash::make($state))
                             ->saved(fn (?string $state): bool => filled($state))
                             ->required(fn (string $operation): bool => $operation === 'create'),
+                        // Form này quản lý lái xe: chỉ super_admin được gán vai trò khác "driver".
+                        // Filament kiểm tra giá trị gửi lên theo đúng query này, nên chặn được cả phía server.
                         Select::make('roles')
                             ->label('Vai trò')
-                            ->relationship('roles', 'name')
+                            ->relationship(
+                                name: 'roles',
+                                titleAttribute: 'name',
+                                modifyQueryUsing: fn (Builder $query): Builder => $query
+                                    ->when(! auth()->user()?->hasRole('super_admin'), fn (Builder $q): Builder => $q->where('name', 'driver'))
+                            )
                             ->multiple()
                             ->default(fn () => Role::where('name', 'driver')->pluck('id')->all())
                             ->preload()
