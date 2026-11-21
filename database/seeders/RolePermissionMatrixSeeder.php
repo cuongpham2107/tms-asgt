@@ -58,7 +58,8 @@ class RolePermissionMatrixSeeder extends Seeder
                 'billing' => 'X',
                 'management' => 'Y',
                 'activity' => 'Y',
-                'config' => 'Y',
+                // Chỉ xem: ai sửa được vai trò thì tự nâng quyền cho vai trò của mình được.
+                'config' => 'X',
                 'maintenance' => 'Y',
             ],
             self::ROLE_DISPATCH_STAFF => [
@@ -114,6 +115,12 @@ class RolePermissionMatrixSeeder extends Seeder
 
             if (in_array($roleName, [self::ROLE_DEPUTY_DIRECTOR, self::ROLE_DISPATCH_LEAD, self::ROLE_DISPATCH_STAFF], true)) {
                 $permissions[] = 'View:DispatchActionRequiredWidget';
+            }
+
+            // Điều phối xoá được đơn tạo nhầm; OrderPolicy::delete chỉ cho xoá đơn Nháp.
+            if (in_array($roleName, [self::ROLE_DISPATCH_LEAD, self::ROLE_DISPATCH_STAFF], true)) {
+                $permissions[] = 'Delete:Order';
+                $permissions[] = 'DeleteAny:Order';
             }
 
             $role->syncPermissions(array_values(array_unique($permissions)));

@@ -174,7 +174,12 @@ test('dispatch staff role grants operations, management, activity, maintenance a
     expect($staff->can('create', Order::class))->toBeTrue()
         ->and($staff->can('update', $order))->toBeTrue()
         ->and($staff->can('cancel', $order))->toBeTrue()
-        ->and($staff->can('delete', $order))->toBeFalse();
+        // Điều phối được xoá đơn Nháp tạo nhầm; đơn đã gửi thì không.
+        ->and($staff->can('delete', $order))->toBeTrue();
+
+    $order->update(['status' => OrderStatus::Sent]);
+
+    expect($staff->can('delete', $order->fresh()))->toBeFalse();
 });
 
 test('billing staff role grants operations, billing, management (Y) and blocks activity, config, maintenance, and delete', function () {
@@ -207,7 +212,7 @@ test('billing staff role grants operations, billing, management (Y) and blocks a
         ->and($staff->can('delete', $rate))->toBeFalse();
 });
 
-test('dispatch lead role has view-only access in billing and cannot mutate charges or edit super_admin role', function () {
+test('dispatch lead role has view-only access in billing and config and cannot mutate charges, roles or staff accounts', function () {
     $lead = makeStaffWithRole(RolePermissionMatrixSeeder::ROLE_DISPATCH_LEAD);
     $this->actingAs($lead);
 
@@ -222,8 +227,12 @@ test('dispatch lead role has view-only access in billing and cannot mutate charg
     $dispatchStaffRole = Role::where('name', RolePermissionMatrixSeeder::ROLE_DISPATCH_STAFF)->firstOrFail();
     expect($lead->can('update', $superAdminRole))->toBeFalse()
         ->and($lead->can('delete', $superAdminRole))->toBeFalse()
-        ->and($lead->can('update', $dispatchStaffRole))->toBeTrue()
-        ->and($lead->can('delete', $dispatchStaffRole))->toBeFalse();
+        ->and($lead->can('update', $dispatchStaffRole))->toBeFalse()
+        ->and($lead->can('delete', $dispatchStaffRole))->toBeFalse()
+        ->and($lead->can('create', Role::class))->toBeFalse()
+        ->and($lead->can('Manage:StaffAccounts'))->toBeFalse()
+        ->and(ActivityLogResource::canViewAny())->toBeTrue()
+        ->and($lead->can('Use:DataAssistant'))->toBeTrue();
 
     $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true]);
     $customer = Customer::create(['code' => 'C3', 'name' => 'C3', 'is_active' => true]);
