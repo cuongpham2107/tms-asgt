@@ -2122,7 +2122,7 @@ test('dispatch board shows a delivered trip awaiting end as a red ready vehicle 
     $row = dispatchWidgetRowFor('20C-DELIVERED');
 
     expect($row['statusLabel'])->toBe('Sẵn sàng')
-        ->and($row['statusClass'])->toContain('text-rose-600')
+        ->and($row['statusClass'])->toContain('bg-rose-100')
         ->and($row['statusPriority'])->toBe(3)
         ->and($row['statusAction']['name'])->toBe('edit_trip');
 });

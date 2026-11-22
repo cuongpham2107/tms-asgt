@@ -813,7 +813,7 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         if (! $activeTrip->isPaused() && self::isDeliveredAwaitingEnd($activeTrip)) {
-            return 'text-rose-600 dark:text-rose-400 font-bold';
+            return 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300 font-bold';
         }
 
         return self::resolveTripStatusBadgeClass($activeTrip);
