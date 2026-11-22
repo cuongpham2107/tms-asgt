@@ -83,6 +83,8 @@ it('lists the latest cycle for km over vehicles and exports it', function (): vo
     Livewire::test(VehicleKmCycleReport::class)
         ->loadTable()
         ->assertSee('Tháng 11/2026')
+        ->assertSee('12:00 23/10/2026 → 12:00 23/11/2026')
+        ->assertDontSee('số tạm tính')
         ->assertSee('1 xe vượt')
         ->assertSee('5.000.000')
         ->assertCanSeeTableRecords([$leasedCycle])
@@ -102,6 +104,11 @@ it('stores the km over currently on the vehicles as this cycle without resetting
     expect(VehicleKmCycle::count())->toBe(0);
 
     $this->artisan('vehicles:record-km-cycle')->assertSuccessful();
+
+    Gate::before(fn () => true);
+    $this->actingAs(User::factory()->create());
+    Livewire::test(VehicleKmCycleReport::class)
+        ->assertSee('12:00 23/10/2026 → 12:00 23/11/2026 (số tạm tính đến 15:30 22/11/2026, chốt chính thức lúc 12:00 23/11/2026)');
 
     $leased = VehicleKmCycle::firstWhere('vehicle_id', $this->leased->id);
     expect($leased)

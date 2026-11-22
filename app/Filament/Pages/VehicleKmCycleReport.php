@@ -139,7 +139,7 @@ class VehicleKmCycleReport extends Page implements HasTable
             ->selectRaw('count(*) as vehicles, sum(case when over_km > 0 then 1 else 0 end) as over_vehicles, coalesce(sum(over_km), 0) as over_km, coalesce(sum(over_fee), 0) as over_fee')
             ->first();
 
-        return $this->cycleOptions()[$this->selectedMonth()]['short'].' · kỳ '.$cycle->cycle_start->format('H:i d/m/Y').' → '.$cycle->cycle_end->format('H:i d/m/Y')
+        return $this->cycleOptions()[$this->selectedMonth()]['short'].' · kỳ '.$this->periodText($cycle)
             .' · '.(int) $totals->vehicles.' xe tính KM over, '.(int) $totals->over_vehicles.' xe vượt '
             .self::km((float) $totals->over_km).' km · tiền vượt '.number_format((int) $totals->over_fee, 0, ',', '.').' đ';
     }
@@ -162,7 +162,7 @@ class VehicleKmCycleReport extends Page implements HasTable
             $this->differenceFor($record),
         ]);
 
-        $period = $cycle ? $cycle->cycle_start->format('H:i d/m/Y').' - '.$cycle->cycle_end->format('H:i d/m/Y') : '';
+        $period = $cycle ? $this->periodText($cycle) : '';
 
         return app(SimpleTableExcelExporter::class)->download(
             title: 'Chốt KM over '.mb_strtolower((string) ($this->selectedMonth() ? $this->cycleOptions()[$this->selectedMonth()]['short'] : '')).' (kỳ '.$period.')',
@@ -220,6 +220,19 @@ class VehicleKmCycleReport extends Page implements HasTable
         $start = $this->selectedCycleStart();
 
         return $start === null ? null : VehicleKmCycle::query()->where('cycle_start', $start)->orderByDesc('cycle_end')->first();
+    }
+
+    /**
+     * Kỳ đầy đủ 12:00 ngày 23 → 12:00 ngày 23 tháng sau; nếu chưa tới mốc chốt (bản lưu tạm) thì ghi số tạm tính đến lúc nào.
+     */
+    private function periodText(VehicleKmCycle $cycle): string
+    {
+        $nominalEnd = $cycle->cycle_start->copy()->addMonthNoOverflow();
+        $text = $cycle->cycle_start->format('H:i d/m/Y').' → '.$nominalEnd->format('H:i d/m/Y');
+
+        return $cycle->cycle_end->lt($nominalEnd)
+            ? $text.' (số tạm tính đến '.$cycle->cycle_end->format('H:i d/m/Y').', chốt chính thức lúc '.$nominalEnd->format('H:i d/m/Y').')'
+            : $text;
     }
 
     private function checkpointKmFor(VehicleKmCycle $record): ?float
