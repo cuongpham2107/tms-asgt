@@ -89,14 +89,17 @@ class VehicleKmReport extends Page implements HasTable
                     ->weight('bold'),
                 TextColumn::make('type')
                     ->label('Quản lý xe')
+                    ->sortable()
                     ->badge(),
                 TextColumn::make('vehicle_type')
                     ->label('Kiểu xe')
+                    ->sortable()
                     ->badge()
                     ->toggleable(),
                 TextColumn::make('start_km')
                     ->label('Km đầu kỳ')
                     ->alignEnd()
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $this->orderBySummary($query, 'start_km', $direction))
                     ->state(fn (Vehicle $record): ?float => $this->summaryFor($record)['start_km'])
                     ->formatStateUsing(fn (?float $state): string => self::formatKm($state))
                     ->description(fn (Vehicle $record): ?string => $this->startDescription($record))
@@ -104,6 +107,7 @@ class VehicleKmReport extends Page implements HasTable
                 TextColumn::make('end_km')
                     ->label('Km cuối kỳ')
                     ->alignEnd()
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $this->orderBySummary($query, 'end_km', $direction))
                     ->state(fn (Vehicle $record): ?float => $this->summaryFor($record)['end_km'])
                     ->formatStateUsing(fn (?float $state): string => self::formatKm($state))
                     ->description(fn (Vehicle $record): ?string => $this->summaryFor($record)['end_at']?->format('H:i d/m/Y'))
@@ -111,6 +115,7 @@ class VehicleKmReport extends Page implements HasTable
                 TextColumn::make('km_run')
                     ->label('Km đã chạy')
                     ->alignEnd()
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $this->orderBySummary($query, 'km_run', $direction))
                     ->weight('bold')
                     ->color(fn (?float $state): string => ($state ?? 0) < 0 ? 'danger' : 'primary')
                     ->state(fn (Vehicle $record): ?float => $this->summaryFor($record)['km_run'])
@@ -119,6 +124,7 @@ class VehicleKmReport extends Page implements HasTable
                 TextColumn::make('trip_count')
                     ->label('Số chuyến')
                     ->alignCenter()
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $this->orderBySummary($query, 'trip_count', $direction))
                     ->state(fn (Vehicle $record): int => $this->summaryFor($record)['trip_count']),
                 TextColumn::make('current_mileage')
                     ->label('Số km hiện tại')
@@ -284,13 +290,7 @@ class VehicleKmReport extends Page implements HasTable
      */
     private function summaryFor(Vehicle $vehicle): array
     {
-        if ($this->kmSummary === null) {
-            [$from, $to] = $this->period();
-            $vehicleIds = $this->getFilteredTableQuery()->pluck('vehicles.id')->map(fn ($id): int => (int) $id)->all();
-            $this->kmSummary = app(VehicleKmReportService::class)->summarize($vehicleIds, $from, $to);
-        }
-
-        return $this->kmSummary[$vehicle->id] ?? [
+        return $this->allSummaries()[$vehicle->id] ?? [
             'start_km' => null,
             'start_at' => null,
             'start_in_range' => false,
@@ -299,6 +299,41 @@ class VehicleKmReport extends Page implements HasTable
             'km_run' => null,
             'trip_count' => 0,
         ];
+    }
+
+    /**
+     * Km của mọi xe theo bộ lọc hiện tại, tính một lần mỗi request.
+     *
+     * @return array<int, array{start_km: ?float, start_at: ?Carbon, start_in_range: bool, end_km: ?float, end_at: ?Carbon, km_run: ?float, trip_count: int}>
+     */
+    private function allSummaries(): array
+    {
+        if ($this->kmSummary === null) {
+            [$from, $to] = $this->period();
+            $vehicleIds = $this->getFilteredTableQuery()->pluck('vehicles.id')->map(fn ($id): int => (int) $id)->all();
+            $this->kmSummary = app(VehicleKmReportService::class)->summarize($vehicleIds, $from, $to);
+        }
+
+        return $this->kmSummary;
+    }
+
+    /**
+     * Sắp xe theo một giá trị km đã tính (không có cột trong DB): xếp theo thứ tự giá trị, xe chưa có số luôn ở cuối.
+     */
+    private function orderBySummary(Builder $query, string $field, string $direction): Builder
+    {
+        $values = collect($this->allSummaries())
+            ->map(fn (array $summary): int|float|null => $summary[$field])
+            ->filter(fn (int|float|null $value): bool => $value !== null);
+
+        if ($values->isEmpty()) {
+            return $query;
+        }
+
+        $ranked = ($direction === 'desc' ? $values->sortDesc() : $values->sort())->keys();
+        $cases = $ranked->map(fn (int $vehicleId, int $rank): string => 'WHEN '.$vehicleId.' THEN '.$rank)->implode(' ');
+
+        return $query->orderByRaw("CASE vehicles.id {$cases} ELSE ".$ranked->count().' END');
     }
 
     private function startDescription(Vehicle $vehicle): ?string

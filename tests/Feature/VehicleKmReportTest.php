@@ -172,3 +172,17 @@ it('writes title, headers and rows into the spreadsheet', function (): void {
         ->and((float) $sheet->getCell('B3')->getValue())->toBe(1180.0)
         ->and($sheet->getCell('A4')->getValue())->toBe('29C-222.22');
 });
+
+it('sorts vehicles by computed km columns with vehicles without readings last', function (): void {
+    Livewire::test(VehicleKmReport::class)
+        ->set('datePreset', null)
+        ->set('from', '2026-11-15 00:00')
+        ->set('to', '2026-11-22 23:59')
+        ->loadTable()
+        ->sortTable('km_run', 'desc')
+        ->assertCanSeeTableRecords([$this->vehicleA, $this->vehicleB, $this->idleVehicle], inOrder: true)
+        ->sortTable('km_run', 'asc')
+        ->assertCanSeeTableRecords([$this->vehicleB, $this->vehicleA, $this->idleVehicle], inOrder: true)
+        ->sortTable('start_km', 'asc')
+        ->assertCanSeeTableRecords([$this->vehicleB, $this->vehicleA, $this->idleVehicle], inOrder: true);
+});
