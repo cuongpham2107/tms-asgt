@@ -14,7 +14,9 @@ use App\Services\Km\VehicleKmReportService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 uses(RefreshDatabase::class);
 
@@ -81,17 +83,63 @@ it('takes the start km from the latest reading before the period and ignores can
         ->trip_count->toBe(0);
 });
 
+/**
+ * Đọc file Excel mà component Livewire vừa trả về để tải xuống.
+ *
+ * @return list<list<mixed>>
+ */
+function downloadedRows(Testable $component): array
+{
+    $path = tempnam(sys_get_temp_dir(), 'xlsx');
+    file_put_contents($path, base64_decode($component->effects['download']['content']));
+
+    try {
+        return IOFactory::load($path)->getActiveSheet()->toArray();
+    } finally {
+        unlink($path);
+    }
+}
+
 it('shows company vehicles with km run for the chosen period', function (): void {
     Livewire::test(VehicleKmReport::class)
+        ->set('from', '2026-11-15 00:00')
+        ->set('to', '2026-11-22 23:59')
         ->loadTable()
-        ->set('tableFilters.period.from', '2026-11-15 00:00')
-        ->set('tableFilters.period.to', '2026-11-22 23:59')
+        ->assertSee('Từ 00:00 15/11/2026 đến 23:59 22/11/2026')
         ->assertCanSeeTableRecords([$this->vehicleA, $this->vehicleB, $this->idleVehicle])
         ->assertCanNotSeeTableRecords([$this->rentVehicle])
         ->assertTableColumnStateSet('km_run', 180.0, $this->vehicleA)
-        ->assertTableColumnStateSet('km_run', 120.0, $this->vehicleB)
-        ->callTableAction('exportExcel')
-        ->assertFileDownloaded();
+        ->assertTableColumnStateSet('km_run', 120.0, $this->vehicleB);
+});
+
+it('exports only the vehicles and period currently filtered', function (): void {
+    $component = Livewire::test(VehicleKmReport::class)
+        ->set('from', '2026-11-15 00:00')
+        ->set('to', '2026-11-22 23:59')
+        ->loadTable()
+        ->searchTable('111')
+        ->callAction('exportExcel')
+        ->assertFileDownloaded('Bao-cao-km-xe-20261115-0000_20261122-2359.xlsx');
+
+    $rows = downloadedRows($component);
+
+    expect($rows[0][0])->toContain('từ 00:00 15/11/2026 đến 23:59 22/11/2026')
+        ->and(array_slice($rows, 2))->toHaveCount(1)
+        ->and($rows[2][1])->toBe('29C-111.11')
+        ->and((float) $rows[2][8])->toBe(180.0);
+});
+
+it('sets the period from a quick preset', function (): void {
+    $this->travelTo(Carbon::parse('2026-11-22 15:30'));
+
+    Livewire::test(VehicleKmReport::class)
+        ->callAction('preset_lastMonth')
+        ->assertSet('from', '2026-10-01 00:00')
+        ->assertSet('to', '2026-10-31 23:59')
+        ->assertSet('datePreset', 'lastMonth')
+        ->callAction('pickRange', ['from' => '2026-11-15 00:00', 'to' => '2026-11-22 23:59'])
+        ->assertSet('from', '2026-11-15 00:00')
+        ->assertSet('datePreset', null);
 });
 
 it('exports the filtered vehicle list to excel', function (): void {

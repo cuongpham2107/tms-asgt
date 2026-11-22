@@ -12,14 +12,15 @@ use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Pages\Page;
+use Filament\Support\Enums\Width;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Enums\FiltersLayout;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Url;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use UnitEnum;
 
@@ -42,6 +43,25 @@ class VehicleKmReport extends Page implements HasTable
     protected static ?int $navigationSort = 0;
 
     protected string $view = 'filament.pages.vehicle-km-report';
+
+    private const DATE_PRESETS = [
+        'today' => 'Hôm nay',
+        'yesterday' => 'Hôm qua',
+        'last7days' => '7 ngày qua',
+        'thisMonth' => 'Tháng này',
+        'lastMonth' => 'Tháng trước',
+    ];
+
+    /** Đầu khoảng lọc, dạng Y-m-d H:i. */
+    #[Url]
+    public ?string $from = null;
+
+    /** Cuối khoảng lọc, dạng Y-m-d H:i. */
+    #[Url]
+    public ?string $to = null;
+
+    #[Url]
+    public ?string $datePreset = 'thisMonth';
 
     /** @var array<int, array{start_km: ?float, start_at: ?Carbon, start_in_range: bool, end_km: ?float, end_at: ?Carbon, km_run: ?float, trip_count: int}>|null */
     protected ?array $kmSummary = null;
@@ -104,47 +124,100 @@ class VehicleKmReport extends Page implements HasTable
                     ->toggleable(),
             ])
             ->filters([
-                Filter::make('period')
-                    ->schema([
-                        DateTimePicker::make('from')
-                            ->label('Từ')
-                            ->seconds(false)
-                            ->default(now()->startOfMonth()),
-                        DateTimePicker::make('to')
-                            ->label('Đến')
-                            ->seconds(false)
-                            ->default(now()->startOfMinute()),
-                    ])
-                    ->columns(2)
-                    ->query(fn (Builder $query): Builder => $query)
-                    ->indicateUsing(fn (): string => $this->periodLabel()),
                 SelectFilter::make('type')
                     ->label('Quản lý xe')
                     ->options(VehicleOwnerType::class)
                     ->default(VehicleOwnerType::Company->value),
-            ], layout: FiltersLayout::AboveContent)
-            ->filtersFormColumns(3)
-            ->deferFilters(false)
-            ->headerActions([
-                Action::make('exportExcel')
-                    ->label('Xuất Excel')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('success')
-                    ->action(fn (): StreamedResponse => $this->exportExcel()),
             ])
             ->emptyStateHeading('Không có xe phù hợp bộ lọc');
     }
 
+    public function mount(): void
+    {
+        if (blank($this->from) || blank($this->to)) {
+            $this->datePreset = array_key_exists((string) $this->datePreset, self::DATE_PRESETS) ? $this->datePreset : 'thisMonth';
+            [$from, $to] = self::presetRange($this->datePreset);
+            $this->from = $from->format('Y-m-d H:i');
+            $this->to = $to->format('Y-m-d H:i');
+        }
+    }
+
+    public function getSubheading(): string
+    {
+        return $this->periodLabel();
+    }
+
+    protected function getHeaderActions(): array
+    {
+        $presetActions = collect(self::DATE_PRESETS)->map(fn (string $label, string $preset): Action => Action::make('preset_'.$preset)
+            ->label($label)
+            ->color(fn (): string => $this->datePreset === $preset ? 'primary' : 'gray')
+            ->action(fn () => $this->applyPreset($preset)));
+
+        return [
+            ...$presetActions->values()->all(),
+            Action::make('pickRange')
+                ->label('Chọn ngày giờ')
+                ->icon(Heroicon::OutlinedCalendarDays)
+                ->color(fn (): string => $this->datePreset === null ? 'primary' : 'gray')
+                ->modalWidth(Width::Medium)
+                ->modalSubmitActionLabel('Xem')
+                ->fillForm(fn (): array => ['from' => $this->from, 'to' => $this->to])
+                ->schema([
+                    DateTimePicker::make('from')->label('Từ')->native(false)->seconds(false)->displayFormat('H:i d/m/Y')->required(),
+                    DateTimePicker::make('to')->label('Đến')->native(false)->seconds(false)->displayFormat('H:i d/m/Y')->afterOrEqual('from')->required(),
+                ])
+                ->action(fn (array $data) => $this->setPeriod(Carbon::parse($data['from']), Carbon::parse($data['to']), preset: null)),
+            Action::make('exportExcel')
+                ->label('Xuất Excel')
+                ->icon('heroicon-m-arrow-down-tray')
+                ->color('success')
+                ->action(fn (): StreamedResponse => $this->exportExcel()),
+        ];
+    }
+
+    public function applyPreset(string $preset): void
+    {
+        $preset = array_key_exists($preset, self::DATE_PRESETS) ? $preset : 'thisMonth';
+        [$from, $to] = self::presetRange($preset);
+
+        $this->setPeriod($from, $to, $preset);
+    }
+
     /**
-     * Khoảng thời gian đang lọc; đảo lại nếu người dùng chọn ngược.
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private static function presetRange(string $preset): array
+    {
+        $now = now();
+
+        return match ($preset) {
+            'today' => [$now->copy()->startOfDay(), $now],
+            'yesterday' => [$now->copy()->subDay()->startOfDay(), $now->copy()->subDay()->endOfDay()],
+            'last7days' => [$now->copy()->subDays(6)->startOfDay(), $now],
+            'lastMonth' => [$now->copy()->subMonthNoOverflow()->startOfMonth(), $now->copy()->subMonthNoOverflow()->endOfMonth()],
+            default => [$now->copy()->startOfMonth(), $now],
+        };
+    }
+
+    private function setPeriod(Carbon $from, Carbon $to, ?string $preset): void
+    {
+        $this->from = $from->format('Y-m-d H:i');
+        $this->to = $to->format('Y-m-d H:i');
+        $this->datePreset = $preset;
+        $this->kmSummary = null;
+        $this->resetPage();
+    }
+
+    /**
+     * Khoảng thời gian đang lọc (tính cả phút cuối); đảo lại nếu đầu lớn hơn cuối.
      *
      * @return array{0: Carbon, 1: Carbon}
      */
     public function period(): array
     {
-        $state = $this->tableFilters['period'] ?? [];
-        $from = filled($state['from'] ?? null) ? Carbon::parse($state['from'])->startOfMinute() : now()->startOfMonth();
-        $to = filled($state['to'] ?? null) ? Carbon::parse($state['to'])->endOfMinute() : now();
+        $from = filled($this->from) ? Carbon::parse($this->from)->startOfMinute() : now()->startOfMonth();
+        $to = filled($this->to) ? Carbon::parse($this->to)->endOfMinute() : now();
 
         return $from->lte($to) ? [$from, $to] : [$to->copy()->startOfMinute(), $from->copy()->endOfMinute()];
     }
