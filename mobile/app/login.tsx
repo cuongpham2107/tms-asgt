@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../src/lib/auth";
 import { useLoading } from "../src/lib/loading";
 import { login } from "../src/lib/api";
+import { getPushTokenWithTimeout } from "../src/lib/notifications";
 import { logUiEvent } from "../src/lib/ui-debug";
 import UiDebugPanel from "../src/components/UiDebugPanel";
 
@@ -123,7 +124,8 @@ export default function LoginScreen() {
     showLoading();
 
     try {
-      const res = await login(email.trim(), password);
+      const fcmToken = await getPushTokenWithTimeout();
+      const res = await login(email.trim(), password, fcmToken);
       if (!res.token) return setError("Sai tài khoản hoặc mật khẩu");
 
       // Xử lý lưu hoặc xóa thông tin đăng nhập

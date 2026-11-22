@@ -67,10 +67,18 @@ async function fetchApi<T>(path: string, token?: string, options?: RequestInit):
 
 // ─── Auth ────────────────────────────────────────────────────────────
 
-export function login(account: string, password: string) {
+export function login(account: string, password: string, fcmToken?: string | null) {
     return fetchApi<{ token: string; shift?: any; app_version?: AppVersionInfo }>("/login", undefined, {
         method: "POST",
-        body: JSON.stringify({ email: account, login: account, phone: account, employee_code: account, password }),
+        body: JSON.stringify({
+            email: account,
+            login: account,
+            phone: account,
+            employee_code: account,
+            password,
+            // Gửi kèm push token để server gắn thông báo vào đúng tài khoản ngay lúc đăng nhập
+            ...(fcmToken ? { fcm_token: fcmToken } : {}),
+        }),
     });
 }
 

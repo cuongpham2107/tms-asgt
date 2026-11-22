@@ -30,10 +30,19 @@ export async function clearNotificationBadge(): Promise<void> {
     }
 }
 
+/** Thông báo mà chuyến/đơn không còn thuộc về tài xế: bấm vào thì mở danh sách chuyến, không mở chi tiết (sẽ bị chặn 403). */
+const NO_DETAIL_NOTIFICATION_TYPES = new Set(["trip_unassigned", "trip_cancelled", "order_cancelled", "order_recalled"]);
+
+/** Gửi lại token khi app quay về foreground, không dày hơn mức này. */
+const TOKEN_RESYNC_INTERVAL_MS = 60_000;
+
 /**
  * Đăng ký quyền và lấy Push Token của thiết bị (hỗ trợ cả máy thật & Simulator).
+ * requestPermission = false: chỉ lấy token khi đã được cấp quyền, không hiện hộp xin quyền.
  */
-export async function registerForPushNotificationsAsync(): Promise<string | null> {
+export async function registerForPushNotificationsAsync(
+    { requestPermission = true }: { requestPermission?: boolean } = {},
+): Promise<string | null> {
     if (Platform.OS === "web") {
         return null;
     }
@@ -62,6 +71,9 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     let finalStatus = existingStatus;
 
     if (existingStatus !== "granted") {
+        if (!requestPermission) {
+            return null;
+        }
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
     }
@@ -125,13 +137,28 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 }
 
 /**
+ * Lấy push token của thiết bị (chỉ khi đã có quyền) nhưng không chờ quá `timeoutMs`, để gửi kèm lúc đăng nhập.
+ * Lỗi hoặc quá thời gian thì trả về null; hook usePushNotifications sẽ gửi lại sau khi đăng nhập.
+ */
+export async function getPushTokenWithTimeout(timeoutMs = 3000): Promise<string | null> {
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+
+    try {
+        return await Promise.race([registerForPushNotificationsAsync({ requestPermission: false }), timeout]);
+    } catch (error) {
+        console.log("[PushNotifications] Could not get push token before login:", error);
+        return null;
+    }
+}
+
+/**
  * Hook lắng nghe thông báo và xử lý điều hướng khi bấm vào thông báo.
  */
 export function usePushNotifications(authToken: string | null) {
     const router = useRouter();
     const notificationListener = useRef<Notifications.Subscription | null>(null);
     const responseListener = useRef<Notifications.Subscription | null>(null);
-    const hasSyncedTokenRef = useRef(false);
+    const lastSyncedAtRef = useRef(0);
 
     // Xóa số thông báo (badge) trên icon khi mở app hoặc khi quay lại từ background
     useEffect(() => {
@@ -153,15 +180,14 @@ export function usePushNotifications(authToken: string | null) {
     useEffect(() => {
         if (!authToken || Platform.OS === "web") return;
 
-        hasSyncedTokenRef.current = false;
+        lastSyncedAtRef.current = 0;
 
-        const syncToken = async () => {
-            if (hasSyncedTokenRef.current) return;
+        const syncToken = async (requestPermission: boolean) => {
             try {
-                const fcmToken = await registerForPushNotificationsAsync();
+                const fcmToken = await registerForPushNotificationsAsync({ requestPermission });
                 if (fcmToken) {
                     await api.updateFcmToken(fcmToken, authToken);
-                    hasSyncedTokenRef.current = true;
+                    lastSyncedAtRef.current = Date.now();
                     console.log("[PushNotifications] Successfully synced push token to server!");
                 }
             } catch (err) {
@@ -169,13 +195,14 @@ export function usePushNotifications(authToken: string | null) {
             }
         };
 
-        // Đồng bộ ngay khi có token đăng nhập
-        syncToken();
+        // Đồng bộ ngay khi có token đăng nhập (xin quyền nếu chưa có)
+        syncToken(true);
 
-        // Tự động thử lại khi app quay về foreground nếu lần trước chưa sync thành công
+        // Mỗi lần app quay về foreground gửi lại token (cách nhau tối thiểu 1 phút): lần trước lỗi mạng sẽ được bù,
+        // và nếu tài khoản khác từng đăng nhập trên máy này thì token được trả về đúng tài khoản đang dùng.
         const appStateSub = AppState.addEventListener("change", (nextAppState) => {
-            if (nextAppState === "active" && !hasSyncedTokenRef.current) {
-                syncToken();
+            if (nextAppState === "active" && Date.now() - lastSyncedAtRef.current >= TOKEN_RESYNC_INTERVAL_MS) {
+                syncToken(false);
             }
         });
 
@@ -198,7 +225,9 @@ export function usePushNotifications(authToken: string | null) {
             if (!data) return;
 
             const tripId = data.trip_id || data.tripId;
-            if (tripId) {
+            if (NO_DETAIL_NOTIFICATION_TYPES.has(String(data.type ?? ""))) {
+                router.push("/(tabs)/trips");
+            } else if (tripId) {
                 router.push({
                     pathname: "/trip-detail",
                     params: { id: String(tripId) },
