@@ -80,3 +80,40 @@ it('lists the latest cycle for km over vehicles and exports it', function (): vo
         ->callTableAction('exportExcel')
         ->assertFileDownloaded('Chot-KM-over-20261123.xlsx');
 });
+
+it('stores the km over currently on the vehicles as this cycle without resetting the start km', function (): void {
+    $this->travelTo(Carbon::parse('2026-11-22 15:30:00'));
+
+    $this->artisan('vehicles:record-km-cycle', ['--dry-run' => true])->assertSuccessful();
+    expect(VehicleKmCycle::count())->toBe(0);
+
+    $this->artisan('vehicles:record-km-cycle')->assertSuccessful();
+
+    $leased = VehicleKmCycle::firstWhere('vehicle_id', $this->leased->id);
+    expect($leased)
+        ->start_km->toEqual(10000.0)
+        ->end_km->toEqual(13500.0)
+        ->km_run->toEqual(3500.0)
+        ->over_fee->toBe(5_000_000)
+        ->and($leased->cycle_start->toDateTimeString())->toBe('2026-10-23 12:00:00')
+        ->and($leased->cycle_end->toDateTimeString())->toBe('2026-11-22 15:30:00')
+        ->and($this->leased->fresh()->monthly_start_km)->toEqual(10000.0)
+        // Lệnh lấy đúng KM over trong xe, kể cả xe đang chạy chuyến
+        ->and(VehicleKmCycle::firstWhere('vehicle_id', $this->running->id)->end_km)->toEqual(52800.0);
+});
+
+it('replaces the stored cycle with the final numbers when the 23rd snapshot runs', function (): void {
+    $this->travelTo(Carbon::parse('2026-11-22 15:30:00'));
+    $this->artisan('vehicles:record-km-cycle')->assertSuccessful();
+
+    $this->leased->update(['current_mileage' => 13800]);
+    $this->travelTo(Carbon::parse('2026-11-23 12:00:00'));
+    $this->artisan('vehicles:snapshot-monthly-km')->assertSuccessful();
+
+    expect(VehicleKmCycle::where('vehicle_id', $this->leased->id)->count())->toBe(1)
+        ->and(VehicleKmCycle::firstWhere('vehicle_id', $this->leased->id))
+        ->end_km->toEqual(13800.0)
+        ->km_run->toEqual(3800.0)
+        ->over_km->toEqual(800.0)
+        ->cycle_end->toDateTimeString()->toBe('2026-11-23 12:00:00');
+});

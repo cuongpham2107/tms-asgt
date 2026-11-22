@@ -3,14 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Enums\TripStatus;
-use App\Filament\Widgets\VehicleKmOverChartWidget;
 use App\Models\Trip;
 use App\Models\Vehicle;
-use App\Models\VehicleKmCycle;
+use App\Services\Km\VehicleKmCycleRecorder;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -18,26 +16,27 @@ use Illuminate\Support\Facades\Log;
 #[Description('Chốt số Km đầu chu kỳ tháng lúc 12:00 ngày 23 hàng tháng (các chuyến đang chạy lấy start_km để tính sang tháng sau) và lưu km của kỳ vừa kết thúc')]
 class SnapshotMonthlyVehicleKmCommand extends Command
 {
-    public function handle(): int
+    public function handle(VehicleKmCycleRecorder $recorder): int
     {
         $this->info('Đang bắt đầu chốt Km bắt đầu chu kỳ tháng (12:00 ngày 23) cho các xe...');
 
         $cycleEnd = now()->startOfMinute();
-        $cycleStart = $cycleEnd->copy()->subMonthNoOverflow();
+        // Kỳ vừa kết thúc ở mốc 12:00 ngày 23 gần nhất (chạy lại trong ngày vẫn là kỳ đó).
+        $cycleStart = VehicleKmCycleRecorder::cycleStartFor($cycleEnd)->subMonthNoOverflow();
         $newStartKm = $this->newStartKmByVehicle();
 
         $recorded = 0;
         $deferredCount = 0;
         $regularCount = 0;
 
-        DB::transaction(function () use ($newStartKm, $cycleStart, $cycleEnd, &$recorded, &$deferredCount, &$regularCount): void {
+        DB::transaction(function () use ($recorder, $newStartKm, $cycleStart, $cycleEnd, &$recorded, &$deferredCount, &$regularCount): void {
             $vehicles = Vehicle::query()->whereIn('id', array_keys($newStartKm['all']))->get();
 
             foreach ($vehicles as $vehicle) {
                 $endKm = $newStartKm['all'][$vehicle->id];
 
                 // Lưu kỳ vừa kết thúc trước khi ghi đè km đầu kỳ (cùng công thức cột KM over trên bảng điều xe).
-                if ($this->recordCycle($vehicle, $endKm, $cycleStart, $cycleEnd)) {
+                if ($recorder->record($vehicle, $endKm, $cycleStart, $cycleEnd)) {
                     $recorded++;
                 }
 
@@ -104,46 +103,5 @@ class SnapshotMonthlyVehicleKmCommand extends Command
         }
 
         return ['all' => $all, 'deferred' => $deferred];
-    }
-
-    /**
-     * Ghi km của kỳ vừa kết thúc; bỏ qua xe chưa có km đầu kỳ hoặc đã ghi cho cùng thời điểm chốt (chạy lại lệnh).
-     */
-    private function recordCycle(Vehicle $vehicle, float $endKm, Carbon $cycleStart, Carbon $cycleEnd): bool
-    {
-        if ($vehicle->monthly_start_km === null) {
-            return false;
-        }
-
-        $alreadyRecorded = VehicleKmCycle::query()
-            ->where('vehicle_id', $vehicle->id)
-            ->where('cycle_end', '>=', $cycleEnd->copy()->startOfDay())
-            ->exists();
-
-        if ($alreadyRecorded) {
-            return false;
-        }
-
-        $startKm = (float) $vehicle->monthly_start_km;
-        $kmRun = max(0.0, $endKm - $startKm);
-        $tracksKmOver = $vehicle->tracksKmOver();
-        $overKm = $tracksKmOver ? max(0.0, $kmRun - VehicleKmOverChartWidget::KM_LIMIT) : 0.0;
-
-        VehicleKmCycle::create([
-            'vehicle_id' => $vehicle->id,
-            'cycle_start' => $cycleStart,
-            'cycle_end' => $cycleEnd,
-            'start_km' => $startKm,
-            'end_km' => $endKm,
-            'km_run' => $kmRun,
-            'tracks_km_over' => $tracksKmOver,
-            'km_limit' => VehicleKmOverChartWidget::KM_LIMIT,
-            'over_km' => $overKm,
-            'over_fee_per_km' => VehicleKmOverChartWidget::OVER_FEE_PER_KM,
-            'over_fee' => (int) round($overKm * VehicleKmOverChartWidget::OVER_FEE_PER_KM),
-            'vehicle_owner' => $vehicle->owner,
-        ]);
-
-        return true;
     }
 }
