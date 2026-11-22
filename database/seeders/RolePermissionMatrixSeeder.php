@@ -282,6 +282,7 @@ class RolePermissionMatrixSeeder extends Seeder
             ], $level),
             [
                 'View:FleetComplianceAlertWidget',
+                'View:VehicleKmReport',
             ],
         );
     }

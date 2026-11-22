@@ -5,10 +5,15 @@ namespace App\Filament\Resources\Vehicles\Pages;
 use App\Filament\Forms\Components\PillFilter;
 use App\Filament\Resources\Vehicles\VehicleResource;
 use App\Models\Area;
+use App\Models\Vehicle;
+use App\Services\Export\SimpleTableExcelExporter;
+use App\Services\Km\VehicleKmReportService;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ListVehicles extends ListRecords
 {
@@ -27,6 +32,11 @@ class ListVehicles extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('exportExcel')
+                ->label('Xuất Excel')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('success')
+                ->action(fn (): StreamedResponse => $this->exportVehiclesExcel()),
             CreateAction::make()
                 ->label('Thêm xe')
                 ->icon('heroicon-o-plus')
@@ -38,6 +48,46 @@ class ListVehicles extends ListRecords
                     'class' => 'text-white font-bold [&_.fi-icon]:text-white! bg-[#008fd5] cursor-pointer hover:bg-[#0077b3] transition-colors',
                 ]),
         ];
+    }
+
+    /**
+     * Xuất danh sách xe theo bộ lọc, tìm kiếm và sắp xếp đang chọn trên bảng.
+     */
+    public function exportVehiclesExcel(): StreamedResponse
+    {
+        $vehicles = $this->getFilteredSortedTableQuery()->with('driver')->get();
+        $latestKm = app(VehicleKmReportService::class)->latestReadings($vehicles->modelKeys(), now());
+
+        $rows = $vehicles->values()->map(fn (Vehicle $vehicle, int $index): array => [
+            $index + 1,
+            $vehicle->plate_number,
+            $vehicle->type?->getLabel(),
+            $vehicle->vehicle_type?->getLabel(),
+            $vehicle->owner,
+            $vehicle->make,
+            $vehicle->model_year,
+            $vehicle->load_capacity !== null ? (float) $vehicle->load_capacity : null,
+            $vehicle->cargo_volume !== null ? (float) $vehicle->cargo_volume : null,
+            $vehicle->door_count,
+            $vehicle->status?->getLabel(),
+            $vehicle->isRent() && filled($vehicle->external_driver_name) ? $vehicle->external_driver_name : $vehicle->driver?->name,
+            $vehicle->current_mileage !== null ? (float) $vehicle->current_mileage : null,
+            $vehicle->monthly_start_km !== null ? (float) $vehicle->monthly_start_km : null,
+            $latestKm[$vehicle->id]['km'] ?? null,
+            isset($latestKm[$vehicle->id]) ? $latestKm[$vehicle->id]['at']->format('d/m/Y H:i') : null,
+            $vehicle->dangerous_goods_permit_expiry_date?->format('d/m/Y'),
+        ]);
+
+        return app(SimpleTableExcelExporter::class)->download(
+            title: 'Danh sách phương tiện - xuất lúc '.now()->format('H:i d/m/Y'),
+            headers: [
+                'STT', 'Biển số', 'Quản lý xe', 'Kiểu xe', 'Chủ xe', 'Hiệu xe', 'Năm SX', 'Tải trọng (tấn)', 'Số khối (m³)',
+                'Số cửa', 'Trạng thái', 'Tài xế', 'Số km hiện tại', 'Km đầu chu kỳ (23 hàng tháng)',
+                'Km mốc chuyến gần nhất', 'Thời điểm mốc km gần nhất', 'Hạn GP hàng nguy hiểm',
+            ],
+            rows: $rows,
+            filename: 'Danh-sach-phuong-tien-'.now()->format('Ymd-His').'.xlsx',
+        );
     }
 
     public array $vehicleStatusFilters = [

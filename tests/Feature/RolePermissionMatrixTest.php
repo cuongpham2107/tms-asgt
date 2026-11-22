@@ -10,6 +10,7 @@ use App\Filament\Pages\GoogleMapTracking;
 use App\Filament\Pages\StaffAccounts;
 use App\Filament\Pages\TripStatisticsReport;
 use App\Filament\Pages\VehicleDispatchBoard;
+use App\Filament\Pages\VehicleKmReport;
 use App\Filament\Resources\ActivityLogs\ActivityLogResource;
 use App\Filament\Resources\Customers\CustomerResource;
 use App\Filament\Resources\DriverShifts\DriverShiftResource;
@@ -148,6 +149,7 @@ test('dispatch staff role grants operations, management, activity, maintenance a
         ->and(CustomerResource::canViewAny())->toBeTrue()
         ->and(DriverShiftResource::canViewAny())->toBeTrue()
         ->and(VehicleMaintenanceJobResource::canViewAny())->toBeTrue()
+        ->and(VehicleKmReport::canAccess())->toBeTrue()
         ->and(GoogleMapTracking::canAccess())->toBeTrue()
         ->and($staff->can('Use:DataAssistant'))->toBeTrue()
         ->and(TripStatisticsReport::canAccess())->toBeFalse()
@@ -195,6 +197,7 @@ test('billing staff role grants operations, billing, management (Y) and blocks a
         ->and(StaffAccounts::canAccess())->toBeFalse()
         ->and(RoleResource::canViewAny())->toBeFalse()
         ->and(VehicleMaintenanceJobResource::canViewAny())->toBeFalse()
+        ->and(VehicleKmReport::canAccess())->toBeFalse()
         ->and(ActivityLogResource::canViewAny())->toBeFalse();
 
     $z1 = BillingZone::create(['code' => 'Z1', 'name' => 'Zone 1']);
