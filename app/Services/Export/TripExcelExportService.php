@@ -41,6 +41,16 @@ class TripExcelExportService
     /** @var array<int, string> */
     private const ALLOWED_SUMMARY_WAREHOUSES = ['ACSV', 'ALSC', 'NCTS'];
 
+    /** Quan hệ của đơn mà buildJourneyString đọc. */
+    private const JOURNEY_RELATIONS = [
+        'pickupLocation',
+        'deliveryPoints.location',
+        'tripCheckpoints.deliveryPoint.location',
+        'trip.startLocation',
+        'trip.endLocation',
+        'trip.checkpoints.deliveryPoint.location',
+    ];
+
     /**
      * @param  Builder|Collection<int, Trip|Order>  $queryOrCollection
      */
@@ -403,6 +413,7 @@ class TripExcelExportService
         }
 
         $driverSplitsByTripId = $this->resolveTripDriverSplitsByTripId($trips);
+        $this->preloadJourneyRelations($trips);
         $rows = collect();
 
         foreach ($trips as $trip) {
@@ -458,8 +469,6 @@ class TripExcelExportService
 
             // Với các chuyến có đơn hàng
             foreach ($orders as $order) {
-                // Gắn sẵn chuyến (đã eager load) để loadMissing('trip.*') bên dưới không truy vấn lại cho từng đơn.
-                $order->setRelation('trip', $trip);
                 $checkpoints = $order->tripCheckpoints->isNotEmpty() ? $order->tripCheckpoints : $trip->checkpoints;
 
                 // Các mốc thời gian A, B, C, D (ưu tiên adjusted_at nếu đã hiệu chỉnh)
@@ -483,7 +492,7 @@ class TripExcelExportService
                     ?? $trip->completed_at;
 
                 // Hành trình viết tắt
-                $journey = $this->buildJourneyString($order, $trip);
+                $journey = $this->buildJourneyString($order, $trip, relationsLoaded: true);
 
                 // Kho đóng trả hàng
                 $checkpointDeliveryLocation = $checkpoints
@@ -1551,16 +1560,34 @@ class TripExcelExportService
         return $currentRow;
     }
 
-    public function buildJourneyString(Order $order, ?Trip $trip = null): string
+    /**
+     * Gắn chuyến vào đơn và nạp một lần cho mọi đơn các quan hệ mà buildJourneyString cần,
+     * thay vì loadMissing riêng từng đơn trong vòng lặp.
+     *
+     * @param  Collection<int, Trip>  $trips
+     */
+    private function preloadJourneyRelations(Collection $trips): void
     {
-        $order->loadMissing([
-            'pickupLocation',
-            'deliveryPoints.location',
-            'tripCheckpoints.deliveryPoint.location',
-            'trip.startLocation',
-            'trip.endLocation',
-            'trip.checkpoints.deliveryPoint.location',
-        ]);
+        $orders = new EloquentCollection;
+
+        foreach ($trips as $trip) {
+            foreach ($trip->orders as $order) {
+                $order->setRelation('trip', $trip);
+                $orders->push($order);
+            }
+        }
+
+        $orders->loadMissing(self::JOURNEY_RELATIONS);
+    }
+
+    /**
+     * @param  bool  $relationsLoaded  true khi nơi gọi đã nạp sẵn JOURNEY_RELATIONS cho đơn
+     */
+    public function buildJourneyString(Order $order, ?Trip $trip = null, bool $relationsLoaded = false): string
+    {
+        if (! $relationsLoaded) {
+            $order->loadMissing(self::JOURNEY_RELATIONS);
+        }
         $effectiveTrip = $trip ?? $order->trip;
 
         $pickupCode = $order->pickupLocation?->code;

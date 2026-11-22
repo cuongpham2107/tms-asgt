@@ -15,6 +15,9 @@ use Illuminate\Support\Collection;
  */
 final class TripKmData
 {
+    /** @var array<string, mixed> Kết quả lọc đã tính, dùng lại trong cùng đối tượng. */
+    private array $memo = [];
+
     /**
      * @param  Collection<int, TripCheckpoint>  $checkpoints  sắp theo id
      * @param  Collection<int, DriverSwap>  $swaps  sắp theo id
@@ -59,7 +62,7 @@ final class TripKmData
      */
     public function firstCheckpointWithDriver(): ?TripCheckpoint
     {
-        return $this->byOccurredAt($this->checkpoints->filter(fn (TripCheckpoint $cp): bool => $cp->driver_id !== null))->first();
+        return $this->memo[__FUNCTION__] ??= $this->byOccurredAt($this->checkpoints->filter(fn (TripCheckpoint $cp): bool => $cp->driver_id !== null))->first();
     }
 
     /**
@@ -69,7 +72,7 @@ final class TripKmData
      */
     public function swapCheckpointsWithKm(): Collection
     {
-        return $this->byOccurredAt($this->checkpoints->filter(
+        return $this->memo[__FUNCTION__] ??= $this->byOccurredAt($this->checkpoints->filter(
             fn (TripCheckpoint $cp): bool => self::type($cp) === CheckpointType::DriverSwap->value && $cp->km_reading !== null,
         ));
     }
@@ -92,11 +95,15 @@ final class TripKmData
      */
     public function latestKmReading(): ?string
     {
+        if (array_key_exists(__FUNCTION__, $this->memo)) {
+            return $this->memo[__FUNCTION__];
+        }
+
         $withKm = $this->checkpoints->filter(fn (TripCheckpoint $cp): bool => $cp->km_reading !== null)->all();
 
         usort($withKm, fn (TripCheckpoint $a, TripCheckpoint $b): int => self::compareNullsLast($b->occurred_at, $a->occurred_at) ?: $a->id <=> $b->id);
 
-        return $withKm[0]->km_reading ?? null;
+        return $this->memo[__FUNCTION__] = $withKm[0]->km_reading ?? null;
     }
 
     /**
@@ -106,6 +113,10 @@ final class TripKmData
      */
     public function loadedEvents(): Collection
     {
+        if (isset($this->memo[__FUNCTION__])) {
+            return $this->memo[__FUNCTION__];
+        }
+
         $events = $this->checkpoints->filter(
             fn (TripCheckpoint $cp): bool => in_array(self::type($cp), ['arrived_pickup', 'completed'], true)
                 && $cp->order_id !== null
@@ -114,7 +125,7 @@ final class TripKmData
 
         usort($events, fn (TripCheckpoint $a, TripCheckpoint $b): int => ((float) $a->km_reading <=> (float) $b->km_reading) ?: $a->id <=> $b->id);
 
-        return collect($events);
+        return $this->memo[__FUNCTION__] = collect($events);
     }
 
     /**
