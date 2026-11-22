@@ -353,6 +353,14 @@ class Vehicle extends Model
     }
 
     /**
+     * Xe có tính KM over (định mức km/kỳ): xe công ty không thuộc ASGT; xe ASGT và xe thuê ngoài không theo dõi.
+     */
+    public function tracksKmOver(): bool
+    {
+        return $this->isCompany() && mb_strtoupper(trim((string) $this->owner)) !== 'ASGT';
+    }
+
+    /**
      * Đóng băng kết quả active_trip trên instance hiện tại để tránh tính lại nhiều lần trong một chu kỳ render.
      */
     public function freezeActiveTrip(): void

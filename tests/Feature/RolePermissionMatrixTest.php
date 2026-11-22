@@ -11,6 +11,7 @@ use App\Filament\Pages\GoogleMapTracking;
 use App\Filament\Pages\StaffAccounts;
 use App\Filament\Pages\TripStatisticsReport;
 use App\Filament\Pages\VehicleDispatchBoard;
+use App\Filament\Pages\VehicleKmCycleReport;
 use App\Filament\Pages\VehicleKmReport;
 use App\Filament\Resources\ActivityLogs\ActivityLogResource;
 use App\Filament\Resources\Customers\CustomerResource;
@@ -152,6 +153,7 @@ test('dispatch staff role grants operations, management, activity, maintenance a
         ->and(DriverShiftResource::canViewAny())->toBeTrue()
         ->and(VehicleMaintenanceJobResource::canViewAny())->toBeTrue()
         ->and(VehicleKmReport::canAccess())->toBeTrue()
+        ->and(VehicleKmCycleReport::canAccess())->toBeTrue()
         ->and(GoogleMapTracking::canAccess())->toBeTrue()
         ->and($staff->can('Use:DataAssistant'))->toBeTrue()
         ->and(TripStatisticsReport::canAccess())->toBeFalse()

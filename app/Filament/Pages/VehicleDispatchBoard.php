@@ -1549,7 +1549,7 @@ class VehicleDispatchBoard extends Page implements HasTable
     public static function getKmOverData(Vehicle $record): array
     {
         // Chỉ kiểm soát KM của xe công ty không phải ASGT; xe thuê ngoài không theo dõi.
-        if (! $record->isCompany() || mb_strtoupper(trim((string) $record->owner)) === 'ASGT') {
+        if (! $record->tracksKmOver()) {
             return [
                 'text' => '—',
                 'delta' => null,
