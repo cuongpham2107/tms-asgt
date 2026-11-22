@@ -11,7 +11,7 @@ class HandoverKmService
     /**
      * Lấy km handover của một swap, fallback về driver_swap checkpoint của shift bàn giao.
      */
-    public static function resolve(Trip $trip, DriverSwap $swap, bool $useTripFallback = false): float
+    public static function resolve(Trip $trip, DriverSwap $swap, bool $useTripFallback = false, ?TripKmData $data = null): float
     {
         $handoverKm = (float) ($swap->handover_km ?? 0);
 
@@ -19,16 +19,11 @@ class HandoverKmService
             // Lấy tất cả driver_swap checkpoint của shift này, sắp xếp theo thời gian.
             // Khi có nhiều swap từ cùng 1 shift, mỗi swap tương ứng với 1 checkpoint
             // theo đúng thứ tự thời gian. Dùng ordinal position để match chính xác.
-            $shiftCheckpoints = TripCheckpoint::where('trip_id', $trip->id)
-                ->where('checkpoint_type', 'driver_swap')
-                ->where('shift_id', $swap->from_shift_id)
-                ->whereNotNull('km_reading')
-                ->orderBy('occurred_at')
-                ->pluck('km_reading');
+            $data ??= TripKmData::forTrip($trip);
+            $shiftCheckpoints = $data->swapKmReadingsForShift((int) $swap->from_shift_id);
 
-            $swapIndex = DriverSwap::where('trip_id', $trip->id)
-                ->where('from_shift_id', $swap->from_shift_id)
-                ->where('id', '<', $swap->id)
+            $swapIndex = $data->swaps
+                ->filter(fn (DriverSwap $other): bool => (int) $other->from_shift_id === (int) $swap->from_shift_id && $other->id < $swap->id)
                 ->count();
 
             if (isset($shiftCheckpoints[$swapIndex])) {

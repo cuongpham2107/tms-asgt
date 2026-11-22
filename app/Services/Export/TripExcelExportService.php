@@ -20,6 +20,7 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Billing\OrderChargeCalculator;
+use App\Services\Km\TripKmData;
 use App\Services\Km\TripKmSplitService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -850,13 +851,14 @@ class TripExcelExportService
         /** @var array<int, list<int>> $orderedDriversByTrip */
         $orderedDriversByTrip = [];
         $allDriverIds = [];
+        $kmDataByTrip = TripKmData::forTrips($trips->filter(fn (Trip $trip): bool => $trip->id !== null && $swapTripIds->has($trip->id)));
 
         foreach ($trips as $trip) {
             if ($trip->id === null || ! $swapTripIds->has($trip->id)) {
                 continue;
             }
 
-            $segments = TripKmSplitService::segments($trip);
+            $segments = TripKmSplitService::segments($trip, $kmDataByTrip[$trip->id]);
             if ($segments === []) {
                 continue;
             }
@@ -894,7 +896,7 @@ class TripExcelExportService
 
             $splits = [];
             foreach ($driverIds as $driverId) {
-                $km = TripKmSplitService::driverKm($trip, $driverId);
+                $km = TripKmSplitService::driverKm($trip, $driverId, $kmDataByTrip[$tripId]);
                 $splits[] = [
                     'driver_name' => trim((string) ($driverNames->get($driverId) ?? '')),
                     'km_loaded' => round((float) $km['total_km_loaded'], 1),

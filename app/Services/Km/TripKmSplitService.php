@@ -2,7 +2,6 @@
 
 namespace App\Services\Km;
 
-use App\Enums\CheckpointType;
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
@@ -17,22 +16,19 @@ class TripKmSplitService
      *
      * @return list<array{0: float, 1: float, 2: ?int, 3: ?int}> [startKm, endKm, shiftId, driverId]
      */
-    public static function segments(Trip $trip): array
+    public static function segments(Trip $trip, ?TripKmData $data = null): array
     {
-        $points = self::handoverPoints($trip);
+        $data ??= TripKmData::forTrip($trip);
+        $points = self::handoverPoints($trip, $data);
 
         if ($points === []) {
             return [];
         }
 
         $startKm = (float) ($trip->start_km ?? 0);
-        $tripEndKm = self::effectiveEndKm($trip, $startKm);
+        $tripEndKm = self::effectiveEndKm($trip, $startKm, $data);
 
-        $firstCheckpoint = TripCheckpoint::where('trip_id', $trip->id)
-            ->whereNotNull('driver_id')
-            ->orderBy('occurred_at')
-            ->orderBy('id')
-            ->first();
+        $firstCheckpoint = $data->firstCheckpointWithDriver();
 
         $activeDriverId = $points[0]['from_driver_id'] ?? $firstCheckpoint?->driver_id ?? $trip->driver_id;
         $activeShiftId = $points[0]['from_shift_id'] ?? $firstCheckpoint?->shift_id ?? $trip->shift_id;
@@ -56,12 +52,12 @@ class TripKmSplitService
      *
      * @return list<array{km: float, at: Carbon, from_driver_id: ?int, to_driver_id: ?int, from_shift_id: ?int, to_shift_id: ?int}>
      */
-    private static function handoverPoints(Trip $trip): array
+    private static function handoverPoints(Trip $trip, TripKmData $data): array
     {
-        $swaps = DriverSwap::where('trip_id', $trip->id)->orderBy('id')->get();
-        $matched = self::matchUnlinkedSwaps($trip);
+        $swaps = $data->swaps;
+        $matched = self::matchUnlinkedSwaps($trip, $data);
 
-        $groups = self::swapCheckpointGroups($trip);
+        $groups = self::swapCheckpointGroups($data);
 
         $points = [];
         $usedSwapIds = [];
@@ -74,13 +70,7 @@ class TripKmSplitService
             $anchor = $swap ? $group->firstWhere('id', $swap->checkpoint_id ?? $matched[$swap->id]) : $group->first();
             $usedSwapIds = [...$usedSwapIds, ...$inGroup->pluck('id')->all()];
 
-            $next = ($swap || ! $anchor->occurred_at) ? null : TripCheckpoint::where('trip_id', $trip->id)
-                ->where('checkpoint_type', '!=', CheckpointType::DriverSwap)
-                ->where('occurred_at', '>', $anchor->occurred_at)
-                ->whereNotNull('driver_id')
-                ->orderBy('occurred_at')
-                ->orderBy('id')
-                ->first();
+            $next = ($swap || ! $anchor->occurred_at) ? null : $data->nextNonSwapCheckpointAfter($anchor->occurred_at);
 
             $points[] = [
                 'km' => (float) $anchor->km_reading,
@@ -93,7 +83,7 @@ class TripKmSplitService
         }
 
         foreach ($swaps->whereNotIn('id', $usedSwapIds) as $swap) {
-            $km = (float) ($swap->handover_km ?: HandoverKmService::resolve($trip, $swap));
+            $km = (float) ($swap->handover_km ?: HandoverKmService::resolve($trip, $swap, data: $data));
 
             if ($km <= 0) {
                 continue;
@@ -127,14 +117,9 @@ class TripKmSplitService
      *
      * @return Collection<string, Collection<int, TripCheckpoint>>
      */
-    private static function swapCheckpointGroups(Trip $trip): Collection
+    private static function swapCheckpointGroups(TripKmData $data): Collection
     {
-        return TripCheckpoint::where('trip_id', $trip->id)
-            ->where('checkpoint_type', CheckpointType::DriverSwap)
-            ->whereNotNull('km_reading')
-            ->orderBy('occurred_at')
-            ->orderBy('id')
-            ->get()
+        return $data->swapCheckpointsWithKm()
             ->groupBy(fn (TripCheckpoint $cp): string => $cp->occurred_at?->format('Y-m-d H:i:s') ?? '');
     }
 
@@ -143,18 +128,19 @@ class TripKmSplitService
      *
      * @return array<int, int> driver_swap_id => checkpoint_id
      */
-    public static function matchUnlinkedSwaps(Trip $trip): array
+    public static function matchUnlinkedSwaps(Trip $trip, ?TripKmData $data = null): array
     {
-        $linkedIds = DriverSwap::where('trip_id', $trip->id)->whereNotNull('checkpoint_id')->pluck('checkpoint_id')->all();
+        $data ??= TripKmData::forTrip($trip);
+        $linkedIds = $data->swaps->whereNotNull('checkpoint_id')->pluck('checkpoint_id')->all();
 
-        $freeAnchors = self::swapCheckpointGroups($trip)
+        $freeAnchors = self::swapCheckpointGroups($data)
             ->reject(fn ($group): bool => $group->pluck('id')->intersect($linkedIds)->isNotEmpty())
             ->map(fn ($group): TripCheckpoint => $group->first())
             ->values();
 
         $matches = [];
 
-        foreach (DriverSwap::where('trip_id', $trip->id)->whereNull('checkpoint_id')->orderBy('id')->get() as $swap) {
+        foreach ($data->swaps->whereNull('checkpoint_id') as $swap) {
             $index = $freeAnchors->search(fn (TripCheckpoint $cp): bool => abs((float) $cp->km_reading - (float) $swap->handover_km) <= 0.05);
 
             if ($index === false) {
@@ -173,18 +159,14 @@ class TripKmSplitService
      *
      * @return list<array{0: float, 1: float}>
      */
-    public static function loadedRanges(Trip $trip): array
+    public static function loadedRanges(Trip $trip, ?TripKmData $data = null): array
     {
+        $data ??= TripKmData::forTrip($trip);
         $startKm = (float) ($trip->start_km ?? 0);
 
-        $tripEndKm = self::effectiveEndKm($trip, $startKm);
+        $tripEndKm = self::effectiveEndKm($trip, $startKm, $data);
 
-        $events = TripCheckpoint::where('trip_id', $trip->id)
-            ->whereIn('checkpoint_type', ['arrived_pickup', 'completed'])
-            ->whereNotNull('order_id')
-            ->whereNotNull('km_reading')
-            ->orderBy('km_reading')
-            ->get(['checkpoint_type', 'order_id', 'km_reading']);
+        $events = $data->loadedEvents();
 
         $arrivedOrderIds = $events->where('checkpoint_type', 'arrived_pickup')->pluck('order_id');
         $preloadedIds = $events->where('checkpoint_type', 'completed')
@@ -238,9 +220,10 @@ class TripKmSplitService
      *
      * @return array{total_km: float, total_km_loaded: float, total_km_empty: float}
      */
-    public static function driverKm(Trip $trip, int $driverId): array
+    public static function driverKm(Trip $trip, int $driverId, ?TripKmData $data = null): array
     {
-        $segments = self::segments($trip);
+        $data ??= TripKmData::forTrip($trip);
+        $segments = self::segments($trip, $data);
 
         if (empty($segments)) {
             if ((int) $trip->driver_id !== $driverId || $trip->total_km === null) {
@@ -261,7 +244,7 @@ class TripKmSplitService
             ];
         }
 
-        $loadedRanges = self::loadedRanges($trip);
+        $loadedRanges = self::loadedRanges($trip, $data);
         $totalKm = 0.0;
         $loadedKm = 0.0;
 
@@ -289,13 +272,10 @@ class TripKmSplitService
      * km_reading của checkpoint cuối để end_km lỗi thời (chưa gửi checkpoint
      * 'end') không làm mất km của tài xế cuối.
      */
-    private static function effectiveEndKm(Trip $trip, float $startKm): float
+    private static function effectiveEndKm(Trip $trip, float $startKm, TripKmData $data): float
     {
         $endKm = (float) ($trip->end_km ?? 0);
-        $lastCheckpointKm = (float) (TripCheckpoint::where('trip_id', $trip->id)
-            ->whereNotNull('km_reading')
-            ->orderByDesc('occurred_at')
-            ->value('km_reading') ?? 0);
+        $lastCheckpointKm = (float) ($data->latestKmReading() ?? 0);
 
         return max($startKm, $endKm, $lastCheckpointKm);
     }
