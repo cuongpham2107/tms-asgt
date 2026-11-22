@@ -32,8 +32,8 @@ class VehicleDispatchTable extends Widget
 
     /** @var array<int, string> */
     private const COLUMNS = [
-        'Địa điểm', 'HT', 'BSX', 'Phân loại', 'Loại đơn', 'Trạng thái', 'Điểm đi', 'Điểm đến',
-        'Xe chờ', 'Khách hàng', 'Vị trí thực tế trên GPS', 'Tốc độ', 'Status', 'Chuyến', 'Đơn chờ', 'KM over',
+        'Địa điểm', 'HT', 'BSX', 'Trạng thái', 'Điểm đi', 'Điểm đến',
+        'Xe chờ', 'Khách hàng', 'Phân loại', 'Loại đơn', 'Vị trí thực tế trên GPS', 'Tốc độ', 'Status', 'Chuyến', 'Đơn chờ', 'KM over',
         'Tên lái xe', 'Trực', 'Ca',
     ];
 
@@ -44,8 +44,8 @@ class VehicleDispatchTable extends Widget
      * @var array<int, string>
      */
     private const RENT_COLUMNS = [
-        'Địa điểm', 'HT', 'BSX', 'Phân loại', 'Loại đơn', 'Trạng thái', 'Điểm đi', 'Điểm đến',
-        'Thời gian dự kiến đóng', 'Xe chờ', 'Khách hàng', 'Chuyến', 'Đơn chờ', 'Tên lái xe',
+        'Địa điểm', 'HT', 'BSX', 'Trạng thái', 'Điểm đi', 'Điểm đến',
+        'Thời gian dự kiến đóng', 'Xe chờ', 'Khách hàng', 'Phân loại', 'Loại đơn', 'Chuyến', 'Đơn chờ', 'Tên lái xe',
     ];
 
     protected ?string $heading = 'Bảng kiểm soát tình trạng xe';

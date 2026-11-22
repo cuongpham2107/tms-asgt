@@ -580,21 +580,6 @@ const DispatchRow = memo(function DispatchRow({
                 </button>
             </td>
 
-            <td className={`${cellClass} px-2 text-center`}>
-                {badge(
-                    row.ownerCategory,
-                    row.ownerCategory.startsWith("Thuê+") ? "warning" : "info",
-                )}
-            </td>
-
-            <td className={`${cellClass} px-1 text-center`}>
-                {row.orderType ? (
-                    badge(row.orderType, row.orderTypeColor)
-                ) : (
-                    <span className="text-gray-400">—</span>
-                )}
-            </td>
-
             <td
                 className={`status-cell ${cellClass} px-2 text-center text-[11px] select-none ${row.statusClass} ${row.statusAction ? (isActionLoading ? "cursor-wait opacity-75" : "cursor-pointer hover:opacity-85") : ""}`}
                 title={
@@ -678,6 +663,21 @@ const DispatchRow = memo(function DispatchRow({
                     <span className="text-gray-400 font-normal">—</span>
                 ) : (
                     row.customer
+                )}
+            </td>
+
+            <td className={`${cellClass} px-2 text-center`}>
+                {badge(
+                    row.ownerCategory,
+                    row.ownerCategory.startsWith("Thuê+") ? "warning" : "info",
+                )}
+            </td>
+
+            <td className={`${cellClass} px-1 text-center`}>
+                {row.orderType ? (
+                    badge(row.orderType, row.orderTypeColor)
+                ) : (
+                    <span className="text-gray-400">—</span>
                 )}
             </td>
 
@@ -903,20 +903,6 @@ const DispatchRow = memo(function DispatchRow({
                                 </span>
                             </td>
 
-                            <td
-                                className={`${cellClass} px-2 text-center font-mono text-[11px] text-gray-600 dark:text-gray-300`}
-                            >
-                                {timeSummary}
-                            </td>
-
-                            <td className={`${cellClass} px-1 text-center`}>
-                                {trip.orderType ? (
-                                    badge(trip.orderType, trip.orderTypeColor)
-                                ) : (
-                                    <span className="text-gray-400">—</span>
-                                )}
-                            </td>
-
                             <td className={`${cellClass} px-2 text-center`}>
                                 <span
                                     className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ring-black/5 dark:ring-white/10 ${badgeTones[trip.statusColor] ?? badgeTones.gray}`}
@@ -963,6 +949,20 @@ const DispatchRow = memo(function DispatchRow({
                                 className={`${cellClass} px-2 text-center font-medium text-gray-700 dark:text-gray-300`}
                             >
                                 {customerSummary || "—"}
+                            </td>
+
+                            <td
+                                className={`${cellClass} px-2 text-center font-mono text-[11px] text-gray-600 dark:text-gray-300`}
+                            >
+                                {timeSummary}
+                            </td>
+
+                            <td className={`${cellClass} px-1 text-center`}>
+                                {trip.orderType ? (
+                                    badge(trip.orderType, trip.orderTypeColor)
+                                ) : (
+                                    <span className="text-gray-400">—</span>
+                                )}
                             </td>
 
                             {!isRent && (

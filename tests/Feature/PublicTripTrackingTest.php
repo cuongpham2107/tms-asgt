@@ -139,7 +139,7 @@ test('link hợp lệ hiển thị thông tin chuyến và các điểm dừng',
         ->assertSee('Nguyễn Văn Tài')
         ->assertSee('Kho Lấy Hàng')
         ->assertSee('Kho Giao Hàng')
-        ->assertSee('Đang giao')
+        ->assertSee('Đi giao hàng')
         ->assertSee('<title>Theo dõi xe 29C-12345 — ASG Vận Tải</title>', escape: false);
 });
 
@@ -224,7 +224,7 @@ test('endpoint vị trí trả json đúng hợp đồng và không cache', func
         ->assertOk()
         ->assertJsonPath('has_position', true)
         ->assertJsonPath('is_finished', false)
-        ->assertJsonPath('status_label', 'Đang giao')
+        ->assertJsonPath('status_label', 'Đi giao hàng')
         ->assertJsonPath('position.latitude', 21.0285)
         ->assertJsonPath('position.longitude', 105.8542)
         ->assertJsonPath('position.speed_kmh', 45.5)

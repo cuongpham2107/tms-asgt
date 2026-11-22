@@ -2032,7 +2032,7 @@ test('trip excel export includes trip status column when includeStatusColumn is 
     expect($withStatus->getCell('AF4')->getValue())->toBe('Trạng thái chuyến')
         ->and($withStatus->getCell('AF5')->getValue())->toBe('Hoàn thành')
         ->and($withStatus->getCell('AF6')->getValue())->toBe('Đã huỷ')
-        ->and($withStatus->getCell('AF7')->getValue())->toBe('Chưa hoàn thành (Đang giao)');
+        ->and($withStatus->getCell('AF7')->getValue())->toBe('Chưa hoàn thành (Đi giao hàng)');
 
     // Mặc định (Bảng kê) không có cột Trạng thái chuyến
     $withoutStatus = app(TripExcelExportService::class)->buildSpreadsheet($trips)->getSheet(0);

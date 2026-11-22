@@ -74,7 +74,7 @@ class ExportTripsExcelAction
                             'running' => 'Đang chạy',
                             'started' => 'Đã bắt đầu',
                             'arrived_pickup' => 'Đến lấy hàng',
-                            'delivering' => 'Đang giao',
+                            'delivering' => 'Đi giao hàng',
                             'arrived_delivery' => 'Đến giao hàng',
                             'delivered' => 'Đã giao',
                             'completed' => 'Hoàn thành',

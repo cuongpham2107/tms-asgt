@@ -24,7 +24,7 @@ enum TripStatus: string implements HasColor, HasLabel
             self::Pending => 'Chờ chạy',
             self::Started => 'Đã bắt đầu',
             self::ArrivedPickup => 'Đến lấy hàng',
-            self::Delivering => 'Đang giao',
+            self::Delivering => 'Đi giao hàng',
             self::ArrivedDelivery => 'Đến giao hàng',
             self::Delivered => 'Đã giao',
             self::Completed => 'Hoàn thành',

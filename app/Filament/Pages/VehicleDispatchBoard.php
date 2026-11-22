@@ -728,6 +728,11 @@ class VehicleDispatchBoard extends Page implements HasTable
             return 'Tạm dừng (Sửa Km)';
         }
 
+        // Đã giao xong nhưng tài xế chưa bấm Kết thúc: điều phối coi xe đã rảnh (chữ đỏ để nhắc kết thúc chuyến).
+        if (self::isDeliveredAwaitingEnd($activeTrip)) {
+            return 'Sẵn sàng';
+        }
+
         if ($activeTrip->status instanceof TripStatus) {
             return $activeTrip->status->getLabel();
         }
@@ -754,7 +759,7 @@ class VehicleDispatchBoard extends Page implements HasTable
             'Chờ chạy' => 4,
             'Đã bắt đầu' => 5,
             'Đến lấy hàng' => 6,
-            'Đang giao' => 7,
+            'Đi giao hàng' => 7,
             'Đến giao hàng' => 8,
             'Đã giao' => 9,
             'Chuyến không hàng' => 10,
@@ -807,7 +812,19 @@ class VehicleDispatchBoard extends Page implements HasTable
             return 'bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 font-normal';
         }
 
+        if (! $activeTrip->isPaused() && self::isDeliveredAwaitingEnd($activeTrip)) {
+            return 'text-rose-600 dark:text-rose-400 font-bold';
+        }
+
         return self::resolveTripStatusBadgeClass($activeTrip);
+    }
+
+    /**
+     * Chuyến đã giao hết hàng nhưng tài xế chưa bấm Kết thúc.
+     */
+    public static function isDeliveredAwaitingEnd(Trip $trip): bool
+    {
+        return ($trip->status instanceof TripStatus ? $trip->status : TripStatus::tryFrom((string) $trip->status)) === TripStatus::Delivered;
     }
 
     public static function resolveTripStatusBadgeClass(Trip $trip): string
@@ -1046,6 +1063,51 @@ class VehicleDispatchBoard extends Page implements HasTable
      *
      * @return array{text: string, tooltip: string, minutes: int, isAlert: bool, isWarning: bool}
      */
+    /**
+     * Xe đã cấp chuyến nhưng chưa chạy: chờ tính từ mốc muộn nhất trong (hạ xong chuyến trước, giờ dự kiến đóng hàng, lúc cấp xe).
+     * Chưa tới giờ dự kiến đóng hàng thì chưa tính là chờ.
+     *
+     * @return array{text: string, tooltip: string, minutes: int, isAlert: bool, isWarning: bool}
+     */
+    private static function pendingTripWaitData(Vehicle $record, Trip $trip): array
+    {
+        $plannedLoadingAt = self::earliestPlannedLoadingAt($record);
+        $plannedLoadingAt = $plannedLoadingAt !== null ? Carbon::parse($plannedLoadingAt) : null;
+
+        if ($plannedLoadingAt?->isFuture()) {
+            return [
+                'text' => 'Chờ đến '.$plannedLoadingAt->format('H:i'),
+                'tooltip' => "Chuyến {$trip->trip_code} dự kiến đóng hàng lúc {$plannedLoadingAt->format('H:i d/m')}",
+                'minutes' => 0,
+                'isAlert' => false,
+                'isWarning' => false,
+            ];
+        }
+
+        $previousTrip = self::getLatestCompletedTripInShift($record);
+        $anchors = collect([
+            'Hạ xong chuyến trước' => $previousTrip?->completed_at,
+            'Giờ dự kiến đóng hàng' => $plannedLoadingAt,
+            'Cấp xe' => $trip->created_at,
+        ])->filter();
+
+        if ($anchors->isEmpty()) {
+            return ['text' => '—', 'tooltip' => "Chuyến {$trip->trip_code}", 'minutes' => 0, 'isAlert' => false, 'isWarning' => false];
+        }
+
+        $since = $anchors->max();
+        $reason = $anchors->search(fn ($time): bool => $time->equalTo($since));
+        $diff = $since->isFuture() ? 0 : (int) $since->diffInMinutes(now());
+
+        return [
+            'text' => self::formatDurationMinutes($diff),
+            'tooltip' => "Chờ chạy từ {$since->format('H:i d/m')} ({$reason}, chuyến {$trip->trip_code}) — Đã chờ {$diff} phút",
+            'minutes' => $diff,
+            'isAlert' => $diff >= 120,
+            'isWarning' => $diff >= 60 && $diff < 120,
+        ];
+    }
+
     public static function getXeChoData(Vehicle $record): array
     {
         if ($record->status === VehicleStatus::Off) {
@@ -1084,7 +1146,11 @@ class VehicleDispatchBoard extends Page implements HasTable
                 ];
             }
 
-            // Nếu chuyến chưa có checkpoint nào (vừa bắt đầu hoặc đang pending)
+            if ($activeTrip->isPending()) {
+                return self::pendingTripWaitData($record, $activeTrip);
+            }
+
+            // Chuyến đã bắt đầu nhưng chưa có checkpoint nào
             $startTime = $activeTrip->started_at ?? $activeTrip->created_at;
             if ($startTime) {
                 $diff = $startTime->isFuture() ? 0 : (int) $startTime->diffInMinutes(now());

@@ -196,7 +196,7 @@ test('vehicle helpers format BSX, status and driver information correctly', func
 
     expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Nguyễn Văn Test')
         ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('BN')
-        ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đang giao')
+        ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đi giao hàng')
         ->and(VehicleDispatchBoard::getStatusBadgeColor($vehicle))->toBe('warning');
 
     // Test EUP movement statuses:
@@ -539,7 +539,7 @@ test('vehicle active_trip and dispatch board prioritizes in-progress trip over n
     // Khi load relation trips (như trên VehicleDispatchBoard)
     $vehicle->load('trips.checkpoints');
     expect($vehicle->active_trip?->id)->toBe($runningTrip->id)
-        ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đang giao');
+        ->and(VehicleDispatchBoard::getTripStatusLabel($vehicle))->toBe('Đi giao hàng');
 
     // Chuyển chuyến 1 sang Completed nhưng chưa có checkpoint end (chưa hạ xe/kết ca)
     $runningTrip->update(['status' => TripStatus::Completed]);
@@ -2104,4 +2104,74 @@ test('VehicleDispatchTable renderer configuration includes sorted shiftTrips pay
         ->and($row['shiftTrips'][2]['tripCode'])->toBe('TRIP-TREE-DONE')
         ->and($row['shiftTrips'][2]['isCompleted'])->toBeTrue()
         ->and($row['shiftTrips'][2]['totalKm'])->toBe('18.5 km');
+});
+
+test('dispatch board shows a delivered trip awaiting end as a red ready vehicle grouped with ready vehicles', function () {
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '20C-DELIVERED',
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::Running,
+        'is_active' => true,
+    ]);
+    Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Delivered,
+        'started_at' => now()->subHours(2),
+    ]);
+
+    $row = dispatchWidgetRowFor('20C-DELIVERED');
+
+    expect($row['statusLabel'])->toBe('Sẵn sàng')
+        ->and($row['statusClass'])->toContain('text-rose-600')
+        ->and($row['statusPriority'])->toBe(3)
+        ->and($row['statusAction']['name'])->toBe('edit_trip');
+});
+
+test('dispatch board counts a pending trip wait from the latest of previous drop-off, planned loading and assignment', function () {
+    Carbon::setTestNow(Carbon::create(2026, 11, 22, 11, 30));
+
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '20C-PENDING-WAIT',
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::Running,
+        'is_active' => true,
+    ]);
+    Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::create(2026, 11, 22, 8, 30),
+        'completed_at' => Carbon::create(2026, 11, 22, 9, 0),
+        'start_km' => 1000,
+        'end_km' => 1040,
+    ]);
+    // Cấp xe lúc 08:15 khi xe còn đang chạy chuyến trước: trước đây bị tính chờ từ 08:15.
+    $pending = Trip::factory()->create([
+        'vehicle_id' => $vehicle->id,
+        'status' => TripStatus::Pending,
+        'started_at' => null,
+        'created_at' => Carbon::create(2026, 11, 22, 8, 15),
+    ]);
+    $order = Order::create([
+        'order_code' => 'ORD-PENDING-WAIT',
+        'type' => OrderType::Hhhk,
+        'area_id' => Area::create(['code' => 'NBW', 'name' => 'Nội Bài', 'is_active' => true, 'sort_order' => 1])->id,
+        'customer_id' => Customer::create(['code' => 'CUS-WAIT', 'name' => 'Khách chờ'])->id,
+        'created_by' => User::factory()->create()->id,
+        'trip_id' => $pending->id,
+        'cargo_type' => CargoType::Gcr,
+        'status' => OrderStatus::Sent,
+        'planned_loading_at' => Carbon::create(2026, 11, 22, 10, 0),
+    ]);
+
+    expect(dispatchWidgetRowFor('20C-PENDING-WAIT')['xeCho'])->toBe('1h 30p');
+
+    // Chưa tới giờ dự kiến đóng hàng thì chưa tính chờ.
+    $order->update(['planned_loading_at' => Carbon::create(2026, 11, 22, 14, 0)]);
+
+    $row = dispatchWidgetRowFor('20C-PENDING-WAIT');
+
+    expect($row['xeCho'])->toBe('Chờ đến 14:00')
+        ->and($row['xeChoMinutes'])->toBe(0);
+
+    Carbon::setTestNow();
 });
