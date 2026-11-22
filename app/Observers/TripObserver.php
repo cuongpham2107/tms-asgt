@@ -22,6 +22,13 @@ use Throwable;
 
 class TripObserver
 {
+    /** Quyền nhận thông báo trên web; tên cố định, gán cho vai trò trong màn Vai trò. */
+    public const RECEIVE_DELIVERED = 'Receive:TripDeliveredNotification';
+
+    public const RECEIVE_DRIVER_SWAP = 'Receive:DriverSwapNotification';
+
+    public const RECEIVE_KM_REPORT = 'Receive:TripKmReportNotification';
+
     public function creating(Trip $trip): void
     {
         if ($trip->created_by === null && Auth::id() !== null) {
@@ -117,11 +124,11 @@ class TripObserver
     }
 
     /**
-     * 1. Gửi thông báo đến toàn bộ user khi chuyến chuyển sang trạng thái đã giao.
+     * 1. Báo người có quyền nhận khi chuyến chuyển sang trạng thái đã giao.
      */
     public function notifyUsersTripDelivered(Trip $trip): void
     {
-        $this->sendTripNotification($trip, function (Trip $trip): array {
+        $this->sendTripNotification($trip, self::RECEIVE_DELIVERED, function (Trip $trip): array {
             $driverName = $trip->driver?->name ?? 'Chưa gán tài xế';
             $plateNumber = $trip->vehicle?->plate_number;
 
@@ -139,11 +146,11 @@ class TripObserver
     }
 
     /**
-     * 2. Gửi thông báo đến toàn bộ user khi xe báo sai lệch số Km.
+     * 2. Báo người có quyền nhận khi xe báo sai lệch số Km.
      */
     public function notifyUsersTripKmReported(Trip $trip, ?TripKmReport $report = null): void
     {
-        $this->sendTripNotification($trip, function (Trip $trip) use ($report): array {
+        $this->sendTripNotification($trip, self::RECEIVE_KM_REPORT, function (Trip $trip) use ($report): array {
             $report = $report ?? $trip->latestPendingKmReport;
             $report?->loadMissing(['driver', 'vehicle']);
 
@@ -316,11 +323,11 @@ class TripObserver
     }
 
     /**
-     * 3. Gửi thông báo đến toàn bộ user khi xe báo đảo lái.
+     * 3. Báo người có quyền nhận khi xe báo đảo lái.
      */
     public function notifyUsersDriverSwap(Trip $trip): void
     {
-        $this->sendTripNotification($trip, function (Trip $trip): array {
+        $this->sendTripNotification($trip, self::RECEIVE_DRIVER_SWAP, function (Trip $trip): array {
             $latestSwap = $trip->driverSwaps()->latest('id')->first();
             $fromDriver = $latestSwap?->fromDriver;
             $driverName = $fromDriver?->name ?? $trip->driver?->name ?? 'Chưa gán tài xế';
@@ -340,18 +347,16 @@ class TripObserver
     }
 
     /**
-     * Gửi notification chung tới toàn bộ user kèm timeline action.
+     * Gửi notification tới các tài khoản đang hoạt động có quyền nhận, kèm timeline action.
      *
      * @param  callable(Trip): array{title: string, body: string, icon: string, status: string, actions?: array, viewData?: array}  $contentResolver
      */
-    protected function sendTripNotification(Trip $trip, callable $contentResolver): void
+    protected function sendTripNotification(Trip $trip, string $recipientPermission, callable $contentResolver): void
     {
-        $send = function () use ($trip, $contentResolver): void {
+        $send = function () use ($trip, $recipientPermission, $contentResolver): void {
             $trip->loadMissing(['driver', 'vehicle']);
 
-            $users = User::query()
-                ->whereDoesntHave('roles', fn ($query) => $query->where('name', 'driver'))
-                ->get();
+            $users = User::query()->activeWithPermission($recipientPermission)->get();
 
             if ($users->isEmpty()) {
                 return;

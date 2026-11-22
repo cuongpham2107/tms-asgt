@@ -42,6 +42,7 @@ beforeEach(function () {
     $this->driver->assignRole($this->role);
 
     $this->admin = User::factory()->create();
+    $this->admin->givePermissionTo(Permission::findOrCreate(TripObserver::RECEIVE_KM_REPORT, 'web'));
 
     $this->vehicle = Vehicle::create([
         'plate_number' => '29C-12345',
@@ -629,13 +630,18 @@ test('resolve_km_report action visibility reflects pending status', function () 
     expect($action->record($this->trip)->isVisible())->toBeFalse();
 });
 
-test('trip notifications go to every user except drivers', function () {
-    $dispatcher = User::factory()->create();
+test('km report notifications go only to active users with the receive permission', function () {
+    $roleHolder = User::factory()->create();
+    Role::create(['name' => 'Điều phối đổi tên', 'guard_name' => 'web'])->givePermissionTo(TripObserver::RECEIVE_KM_REPORT);
+    $roleHolder->assignRole('Điều phối đổi tên');
+    $withoutPermission = User::factory()->create();
+    $inactive = User::factory()->create(['is_active' => false]);
+    $inactive->givePermissionTo(TripObserver::RECEIVE_KM_REPORT);
 
     app(TripObserver::class)->notifyUsersTripKmReported($this->trip);
 
-    expect(DB::table('notifications')->where('notifiable_id', $dispatcher->id)->count())->toBe(1)
-        ->and(DB::table('notifications')->whereIn('notifiable_id', User::role('driver')->pluck('id'))->count())->toBe(0);
+    expect(DB::table('notifications')->pluck('notifiable_id')->sort()->values()->all())->toBe(collect([$this->admin->id, $roleHolder->id])->sort()->values()->all())
+        ->and(DB::table('notifications')->whereIn('notifiable_id', [$withoutPermission->id, $inactive->id, $this->driver->id])->count())->toBe(0);
 });
 
 test('resolving a report only clears notifications of that report', function () {

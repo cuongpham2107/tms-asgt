@@ -7,6 +7,7 @@ use App\Models\Vehicle;
 use Carbon\Carbon;
 use Database\Seeders\RolePermissionMatrixSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -18,7 +19,9 @@ beforeEach(function () {
     Carbon::setTestNow('2026-11-19 23:30:00');
 
     foreach (['driver', RolePermissionMatrixSeeder::ROLE_DISPATCH_LEAD, RolePermissionMatrixSeeder::ROLE_DEPUTY_DIRECTOR, RolePermissionMatrixSeeder::ROLE_DISPATCH_STAFF] as $role) {
-        Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
+        $permissions = collect(RolePermissionMatrixSeeder::notificationPermissions($role))
+            ->map(fn (string $name): Permission => Permission::findOrCreate($name, 'web'));
+        Role::firstOrCreate(['name' => $role, 'guard_name' => 'web'])->givePermissionTo($permissions);
     }
 
     $this->lead = User::factory()->create(['is_active' => true]);

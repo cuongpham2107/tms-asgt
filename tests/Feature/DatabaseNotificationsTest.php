@@ -13,6 +13,7 @@ use App\Models\Trip;
 use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Observers\TripObserver;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Console\Scheduling\Schedule;
@@ -20,6 +21,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -27,6 +29,8 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
     $this->admin = User::factory()->create();
+    $this->admin->givePermissionTo(collect([TripObserver::RECEIVE_DELIVERED, TripObserver::RECEIVE_KM_REPORT])
+        ->map(fn (string $name): Permission => Permission::findOrCreate($name, 'web')));
 });
 
 test('trip view notification action marks as read and closes modal without deleting the notification', function () {

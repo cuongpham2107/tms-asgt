@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\AuditTripKmCommand;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\TripStatus;
@@ -34,6 +35,7 @@ use App\Models\OrderCharge;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Observers\TripObserver;
 use Database\Seeders\RolePermissionMatrixSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -351,4 +353,15 @@ test('dashboard widgets are tailored per role via Shield widget permissions', fu
         ->and(FleetComplianceAlertWidget::canView())->toBeTrue()
         ->and(BillingOverviewStatsWidget::canView())->toBeFalse()
         ->and(TopCustomerBillingWidget::canView())->toBeFalse();
+});
+
+test('operational notifications go to dispatch roles and the deputy, never to super admin by default', function () {
+    $hasPermission = fn (string $role, string $permission): bool => Role::findByName($role, 'web')->hasPermissionTo($permission);
+
+    expect($hasPermission(RolePermissionMatrixSeeder::ROLE_DISPATCH_STAFF, TripObserver::RECEIVE_DELIVERED))->toBeTrue()
+        ->and($hasPermission(RolePermissionMatrixSeeder::ROLE_DISPATCH_LEAD, AuditTripKmCommand::RECEIVE_PERMISSION))->toBeTrue()
+        ->and($hasPermission(RolePermissionMatrixSeeder::ROLE_DEPUTY_DIRECTOR, TripObserver::RECEIVE_KM_REPORT))->toBeTrue()
+        ->and($hasPermission(RolePermissionMatrixSeeder::ROLE_DEPUTY_DIRECTOR, TripObserver::RECEIVE_DELIVERED))->toBeFalse()
+        ->and($hasPermission(RolePermissionMatrixSeeder::ROLE_BILLING_STAFF, TripObserver::RECEIVE_DELIVERED))->toBeFalse()
+        ->and(Role::findByName('super_admin', 'web')->permissions->pluck('name')->filter(fn (string $name): bool => str_starts_with($name, 'Receive:')))->toBeEmpty();
 });

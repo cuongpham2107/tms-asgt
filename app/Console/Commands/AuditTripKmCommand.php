@@ -6,7 +6,6 @@ use App\Filament\Resources\Trips\TripResource;
 use App\Models\Trip;
 use App\Models\User;
 use App\Services\Trip\TripKmAuditService;
-use Database\Seeders\RolePermissionMatrixSeeder;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Console\Attributes\Description;
@@ -17,14 +16,11 @@ use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 #[Signature('trips:audit-km {--days=2 : Số ngày gần nhất cần rà (tính cả hôm nay)} {--dry-run : Chỉ in danh sách, không gửi thông báo}')]
-#[Description('Rà km chuyến nhập sai và gửi thông báo có nút "Sửa chuyến" cho Quản lý điều phối và Phó TP Vận Tải')]
+#[Description('Rà km chuyến nhập sai và gửi thông báo có nút "Sửa chuyến" cho tài khoản có quyền nhận cảnh báo km')]
 class AuditTripKmCommand extends Command
 {
-    /** Vai trò nhận thông báo. */
-    public const RECIPIENT_ROLES = [
-        RolePermissionMatrixSeeder::ROLE_DISPATCH_LEAD,
-        RolePermissionMatrixSeeder::ROLE_DEPUTY_DIRECTOR,
-    ];
+    /** Quyền nhận thông báo; tên cố định, gán cho vai trò trong màn Vai trò. */
+    public const RECEIVE_PERMISSION = 'Receive:TripKmAuditNotification';
 
     /** Mỗi lần chạy gửi tối đa chừng này thông báo, tránh ngập hộp thông báo. */
     public const MAX_NOTIFICATIONS = 30;
@@ -58,10 +54,10 @@ class AuditTripKmCommand extends Command
             return self::SUCCESS;
         }
 
-        $recipients = User::role(self::RECIPIENT_ROLES)->where('is_active', true)->get();
+        $recipients = User::query()->activeWithPermission(self::RECEIVE_PERMISSION)->get();
 
         if ($recipients->isEmpty()) {
-            $this->warn('Không có tài khoản Quản lý điều phối / Phó TP Vận Tải nào đang hoạt động để nhận thông báo.');
+            $this->warn('Không có tài khoản đang hoạt động nào có quyền nhận cảnh báo km.');
 
             return self::SUCCESS;
         }

@@ -18,10 +18,12 @@ use App\Models\Trip;
 use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Observers\TripObserver;
 use App\Services\Trip\TripCheckpointService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Spatie\Permission\Models\Permission;
 
 uses(RefreshDatabase::class);
 
@@ -35,6 +37,11 @@ beforeEach(function () {
     $this->manager = User::factory()->create([
         'name' => 'Quản lý Điều hành',
     ]);
+    $this->manager->givePermissionTo(collect([
+        TripObserver::RECEIVE_DELIVERED,
+        TripObserver::RECEIVE_DRIVER_SWAP,
+        TripObserver::RECEIVE_KM_REPORT,
+    ])->map(fn (string $name): Permission => Permission::findOrCreate($name, 'web')));
 
     $this->vehicle = Vehicle::create([
         'plate_number' => '29C-123.45',
@@ -46,7 +53,7 @@ beforeEach(function () {
     ]);
 });
 
-it('sends database notification to all users when trip status transitions to delivered', function () {
+it('sends database notification to users allowed to receive it when trip status transitions to delivered', function () {
     $trip = Trip::create([
         'trip_code' => 'CD-2026-09-28-1',
         'vehicle_id' => $this->vehicle->id,
@@ -59,9 +66,9 @@ it('sends database notification to all users when trip status transitions to del
     $trip->status = TripStatus::Delivered;
     $trip->save();
 
-    // 2 users created in beforeEach: driver & manager
+    // Chỉ quản lý có quyền nhận; tài xế không nhận
     $notifications = DB::table('notifications')->get();
-    expect($notifications)->toHaveCount(2);
+    expect($notifications)->toHaveCount(1);
 
     $userNotification = DB::table('notifications')
         ->where('notifiable_id', $this->manager->id)
@@ -102,17 +109,17 @@ it('does not send duplicate notifications when trip is already delivered and oth
     ]);
 
     // Initial creation with Delivered sent notifications
-    expect(DB::table('notifications')->count())->toBe(2);
+    expect(DB::table('notifications')->count())->toBe(1);
 
     // Update another attribute without changing status
     $trip->note = 'Cập nhật ghi chú mới';
     $trip->save();
 
     // Should remain 2, no duplicates
-    expect(DB::table('notifications')->count())->toBe(2);
+    expect(DB::table('notifications')->count())->toBe(1);
 });
 
-it('sends database notification to all users when trip is completed via checkpoint service', function () {
+it('sends database notification to users allowed to receive it when trip is completed via checkpoint service', function () {
     $area = Area::create([
         'type' => 'HHHK',
         'code' => 'NBA',
@@ -175,7 +182,7 @@ it('sends database notification to all users when trip is completed via checkpoi
 
     $trip->refresh();
     expect($trip->status)->toBe(TripStatus::Delivered);
-    expect(DB::table('notifications')->count())->toBe(2);
+    expect(DB::table('notifications')->count())->toBe(1);
 });
 
 it('formats notification title using vehicle plate number', function () {
@@ -208,7 +215,7 @@ it('formats notification title using vehicle plate number', function () {
         ->and($data['title'])->not->toContain('CD-CUSTOM-PLATE');
 });
 
-it('sends database notification to all users when trip status transitions to driver swap', function () {
+it('sends database notification to users allowed to receive it when trip status transitions to driver swap', function () {
     $trip = Trip::create([
         'trip_code' => 'CD-SWAP-01',
         'vehicle_id' => $this->vehicle->id,
@@ -222,7 +229,7 @@ it('sends database notification to all users when trip status transitions to dri
     $trip->save();
 
     $notifications = DB::table('notifications')->get();
-    expect($notifications)->toHaveCount(2);
+    expect($notifications)->toHaveCount(1);
 
     $userNotification = DB::table('notifications')
         ->where('notifiable_id', $this->manager->id)
@@ -239,7 +246,7 @@ it('sends database notification to all users when trip status transitions to dri
         ->and($data['actions'][0]['url'])->toContain(TripResource::getUrl('timeline', ['record' => $trip]));
 });
 
-it('sends database notification to all users when trip is created with driver swap status', function () {
+it('sends database notification to users allowed to receive it when trip is created with driver swap status', function () {
     expect(DB::table('notifications')->count())->toBe(0);
 
     Trip::create([
@@ -249,10 +256,10 @@ it('sends database notification to all users when trip is created with driver sw
         'status' => TripStatus::DriverSwap,
     ]);
 
-    expect(DB::table('notifications')->count())->toBe(2);
+    expect(DB::table('notifications')->count())->toBe(1);
 });
 
-it('sends database notification to all users when driver reports km discrepancy', function () {
+it('sends database notification to users allowed to receive it when driver reports km discrepancy', function () {
     $trip = Trip::create([
         'trip_code' => 'CD-KM-01',
         'vehicle_id' => $this->vehicle->id,
@@ -273,7 +280,7 @@ it('sends database notification to all users when driver reports km discrepancy'
     ]);
 
     $notifications = DB::table('notifications')->get();
-    expect($notifications)->toHaveCount(2);
+    expect($notifications)->toHaveCount(1);
 
     $userNotification = DB::table('notifications')
         ->where('notifiable_id', $this->manager->id)
@@ -289,4 +296,22 @@ it('sends database notification to all users when driver reports km discrepancy'
         ->and($data['actions'][0]['name'])->toBe('resolve_km_report')
         ->and($data['actions'][1]['name'])->toBe('view')
         ->and($data['actions'][1]['url'])->toContain(TripResource::getUrl('timeline', ['record' => $trip]));
+});
+
+it('skips admins without the receive permission and inactive accounts', function () {
+    $admin = User::factory()->create(['name' => 'Admin']);
+    $inactive = User::factory()->create(['is_active' => false]);
+    $inactive->givePermissionTo(TripObserver::RECEIVE_DELIVERED);
+
+    $trip = Trip::create([
+        'trip_code' => 'CD-2026-09-28-99',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Started,
+    ]);
+
+    $trip->update(['status' => TripStatus::Delivered]);
+
+    expect(DB::table('notifications')->pluck('notifiable_id')->all())->toBe([$this->manager->id])
+        ->and(DB::table('notifications')->whereIn('notifiable_id', [$admin->id, $inactive->id])->count())->toBe(0);
 });

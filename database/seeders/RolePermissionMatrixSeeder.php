@@ -2,7 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Console\Commands\AuditTripKmCommand;
 use App\Models\User;
+use App\Observers\TripObserver;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Permission;
@@ -103,7 +105,10 @@ class RolePermissionMatrixSeeder extends Seeder
             'name' => 'super_admin',
             'guard_name' => 'web',
         ]);
-        $superAdmin->syncPermissions(Permission::where('guard_name', 'web')->pluck('name')->all());
+        // super_admin không tự nhận thông báo vận hành; muốn nhận thì gán quyền Receive:* trong màn Vai trò.
+        $superAdmin->syncPermissions(
+            Permission::where('guard_name', 'web')->pluck('name')->reject(fn (string $name): bool => str_starts_with($name, 'Receive:'))->values()->all()
+        );
 
         foreach (static::roleMatrix() as $roleName => $menus) {
             $role = Role::firstOrCreate([
@@ -123,8 +128,37 @@ class RolePermissionMatrixSeeder extends Seeder
                 $permissions[] = 'DeleteAny:Order';
             }
 
+            $permissions = [...$permissions, ...static::notificationPermissions($roleName)];
+
             $role->syncPermissions(array_values(array_unique($permissions)));
         }
+    }
+
+    /**
+     * Quyền nhận thông báo vận hành trên web theo vai trò.
+     *
+     * @return list<string>
+     */
+    public static function notificationPermissions(string $roleName): array
+    {
+        return match ($roleName) {
+            self::ROLE_DISPATCH_LEAD => [
+                TripObserver::RECEIVE_DELIVERED,
+                TripObserver::RECEIVE_DRIVER_SWAP,
+                TripObserver::RECEIVE_KM_REPORT,
+                AuditTripKmCommand::RECEIVE_PERMISSION,
+            ],
+            self::ROLE_DISPATCH_STAFF => [
+                TripObserver::RECEIVE_DELIVERED,
+                TripObserver::RECEIVE_DRIVER_SWAP,
+                TripObserver::RECEIVE_KM_REPORT,
+            ],
+            self::ROLE_DEPUTY_DIRECTOR => [
+                TripObserver::RECEIVE_KM_REPORT,
+                AuditTripKmCommand::RECEIVE_PERMISSION,
+            ],
+            default => [],
+        };
     }
 
     /**
@@ -338,6 +372,7 @@ class RolePermissionMatrixSeeder extends Seeder
             static::configPermissions('Z'),
             static::maintenancePermissions('Z'),
             static::resourcePermissions(['Activity', 'DriverSwap', 'OrderDeliveryPoint', 'TripCheckpoint', 'TripPhoto'], 'Z'),
+            static::notificationPermissions(self::ROLE_DISPATCH_LEAD),
         );
     }
 

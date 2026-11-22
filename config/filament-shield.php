@@ -244,6 +244,10 @@ return [
         'Use:DataAssistant' => 'Dùng trợ lý dữ liệu (chat AI)',
         'Update:TripCharge' => 'Chỉnh sửa cước & bảng kê (tính lại, khoá/mở khoá, import cân kiện)',
         'Manage:StaffAccounts' => 'Tạo và sửa tài khoản nhân viên',
+        'Receive:TripDeliveredNotification' => 'Nhận thông báo chuyến đã giao hàng',
+        'Receive:DriverSwapNotification' => 'Nhận thông báo tài xế đảo lái',
+        'Receive:TripKmReportNotification' => 'Nhận thông báo tài xế báo sai km (có nút xử lý)',
+        'Receive:TripKmAuditNotification' => 'Nhận cảnh báo km chuyến bất thường (rà hằng đêm)',
     ],
 
     /*

@@ -347,6 +347,18 @@ class User extends Authenticatable implements FilamentUser
         return $query->where('is_active', true);
     }
 
+    /**
+     * Tài khoản đang hoạt động có quyền này (gán trực tiếp hoặc qua vai trò).
+     * Không lỗi khi quyền chưa được tạo, chỉ trả về rỗng.
+     */
+    public function scopeActiveWithPermission(Builder $query, string $permission): Builder
+    {
+        return $query->where('is_active', true)
+            ->where(fn (Builder $q): Builder => $q
+                ->whereHas('permissions', fn (Builder $p): Builder => $p->where('name', $permission))
+                ->orWhereHas('roles.permissions', fn (Builder $p): Builder => $p->where('name', $permission)));
+    }
+
     public function scopeDrivers(Builder $query): Builder
     {
         return $query->role('driver');
