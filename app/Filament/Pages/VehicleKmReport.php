@@ -44,6 +44,10 @@ class VehicleKmReport extends Page implements HasTable
 
     protected string $view = 'filament.pages.vehicle-km-report';
 
+    private const KM_CYCLE_DAY = 23;
+
+    private const KM_CYCLE_HOUR = 12;
+
     private const DATE_PRESETS = [
         'today' => 'Hôm nay',
         'yesterday' => 'Hôm qua',
@@ -152,6 +156,7 @@ class VehicleKmReport extends Page implements HasTable
         $presetActions = collect(self::DATE_PRESETS)->map(fn (string $label, string $preset): Action => Action::make('preset_'.$preset)
             ->label($label)
             ->color(fn (): string => $this->datePreset === $preset ? 'primary' : 'gray')
+            ->tooltip(in_array($preset, ['thisMonth', 'lastMonth'], true) ? 'Theo chu kỳ chốt km: 12:00 ngày 23 đến 12:00 ngày 23 tháng sau' : null)
             ->action(fn () => $this->applyPreset($preset)));
 
         return [
@@ -195,9 +200,19 @@ class VehicleKmReport extends Page implements HasTable
             'today' => [$now->copy()->startOfDay(), $now],
             'yesterday' => [$now->copy()->subDay()->startOfDay(), $now->copy()->subDay()->endOfDay()],
             'last7days' => [$now->copy()->subDays(6)->startOfDay(), $now],
-            'lastMonth' => [$now->copy()->subMonthNoOverflow()->startOfMonth(), $now->copy()->subMonthNoOverflow()->endOfMonth()],
-            default => [$now->copy()->startOfMonth(), $now],
+            'lastMonth' => [self::kmCycleStart($now)->subMonthNoOverflow(), self::kmCycleStart($now)->subMinute()],
+            default => [self::kmCycleStart($now), $now],
         };
+    }
+
+    /**
+     * Đầu chu kỳ km đang chạy: 12:00 ngày 23, trùng giờ job vehicles:snapshot-monthly-km chốt Km đầu kỳ.
+     */
+    private static function kmCycleStart(Carbon $at): Carbon
+    {
+        $start = $at->copy()->setDay(self::KM_CYCLE_DAY)->setTime(self::KM_CYCLE_HOUR, 0);
+
+        return $at->lt($start) ? $start->subMonthNoOverflow() : $start;
     }
 
     private function setPeriod(Carbon $from, Carbon $to, ?string $preset): void

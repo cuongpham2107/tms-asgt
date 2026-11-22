@@ -129,17 +129,29 @@ it('exports only the vehicles and period currently filtered', function (): void 
         ->and((float) $rows[2][8])->toBe(180.0);
 });
 
-it('sets the period from a quick preset', function (): void {
+it('uses the 23rd noon km cycle for this month and last month presets', function (): void {
     $this->travelTo(Carbon::parse('2026-11-22 15:30'));
 
     Livewire::test(VehicleKmReport::class)
+        ->assertSet('from', '2026-10-23 12:00')
+        ->assertSet('to', '2026-11-22 15:30')
         ->callAction('preset_lastMonth')
-        ->assertSet('from', '2026-10-01 00:00')
-        ->assertSet('to', '2026-10-31 23:59')
+        ->assertSet('from', '2026-09-23 12:00')
+        ->assertSet('to', '2026-10-23 11:59')
         ->assertSet('datePreset', 'lastMonth')
         ->callAction('pickRange', ['from' => '2026-11-15 00:00', 'to' => '2026-11-22 23:59'])
         ->assertSet('from', '2026-11-15 00:00')
         ->assertSet('datePreset', null);
+});
+
+it('starts this month at the 23rd noon km snapshot once it has passed', function (): void {
+    $this->travelTo(Carbon::parse('2026-11-23 12:05'));
+
+    Livewire::test(VehicleKmReport::class)
+        ->assertSet('from', '2026-11-23 12:00')
+        ->callAction('preset_lastMonth')
+        ->assertSet('from', '2026-10-23 12:00')
+        ->assertSet('to', '2026-11-23 11:59');
 });
 
 it('exports the filtered vehicle list to excel', function (): void {
