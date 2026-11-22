@@ -71,14 +71,28 @@ it('lists the latest cycle for km over vehicles and exports it', function (): vo
     $leasedCycle = VehicleKmCycle::firstWhere('vehicle_id', $this->leased->id);
     $asgtCycle = VehicleKmCycle::firstWhere('vehicle_id', $this->asgt->id);
 
+    $octoberCycle = VehicleKmCycle::factory()->create([
+        'vehicle_id' => $this->leased->id,
+        'cycle_start' => '2026-09-23 12:00:00',
+        'cycle_end' => '2026-10-23 12:00:00',
+        'km_run' => 2900,
+        'over_km' => 0,
+        'over_fee' => 0,
+    ]);
+
     Livewire::test(VehicleKmCycleReport::class)
         ->loadTable()
+        ->assertSee('Tháng 11/2026')
         ->assertSee('1 xe vượt')
         ->assertSee('5.000.000')
         ->assertCanSeeTableRecords([$leasedCycle])
-        ->assertCanNotSeeTableRecords([$asgtCycle])
+        ->assertCanNotSeeTableRecords([$asgtCycle, $octoberCycle])
         ->callTableAction('exportExcel')
-        ->assertFileDownloaded('Chot-KM-over-20261123.xlsx');
+        ->assertFileDownloaded('Chot-KM-over-thang-11-2026.xlsx')
+        ->callAction('month_2026_10')
+        ->assertSet('month', '2026-10')
+        ->assertCanSeeTableRecords([$octoberCycle])
+        ->assertCanNotSeeTableRecords([$leasedCycle]);
 });
 
 it('stores the km over currently on the vehicles as this cycle without resetting the start km', function (): void {

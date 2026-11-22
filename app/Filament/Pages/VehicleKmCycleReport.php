@@ -9,14 +9,15 @@ use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Url;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use UnitEnum;
 
@@ -40,13 +41,22 @@ class VehicleKmCycleReport extends Page implements HasTable
 
     protected string $view = 'filament.pages.vehicle-km-cycle-report';
 
+    /** @var array<string, array{start: string, short: string, label: string}>|null */
+    protected ?array $cycleOptionsCache = null;
+
+    /** Tháng KM over đang xem (Y-m, tháng của mốc chốt cuối kỳ); trống thì lấy kỳ mới nhất. */
+    #[Url]
+    public ?string $month = null;
+
     /** @var array<int, array{km_run: ?float}>|null km tính từ mốc chuyến trong kỳ đang chọn, theo vehicle_id */
     protected ?array $checkpointKm = null;
 
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => VehicleKmCycle::query()->with('vehicle'))
+            ->query(fn (): Builder => VehicleKmCycle::query()
+                ->with('vehicle')
+                ->where('cycle_start', $this->selectedCycleStart() ?? '1970-01-01 00:00:00'))
             ->defaultSort('km_run', 'desc')
             ->paginated([25, 50, 100, 'all'])
             ->defaultPaginationPageOption(50)
@@ -76,14 +86,6 @@ class VehicleKmCycleReport extends Page implements HasTable
                     ->placeholder('—'),
             ])
             ->filters([
-                SelectFilter::make('cycle')
-                    ->label('Kỳ chốt')
-                    ->options(fn (): array => self::cycleOptions())
-                    ->default(fn (): ?string => array_key_first(self::cycleOptions()))
-                    ->selectablePlaceholder(false)
-                    ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
-                        ? $query->where('cycle_end', $data['value'])
-                        : $query),
                 TernaryFilter::make('tracks_km_over')
                     ->label('Xe tính KM over')
                     ->trueLabel('Chỉ xe tính KM over')
@@ -101,6 +103,28 @@ class VehicleKmCycleReport extends Page implements HasTable
             ->emptyStateDescription('Km của mỗi kỳ được lưu lúc job chốt km chạy (12:00 ngày 23 hằng tháng).');
     }
 
+    protected function getHeaderActions(): array
+    {
+        $options = $this->cycleOptions();
+        $selected = $this->selectedMonth();
+
+        return [
+            ActionGroup::make(collect($options)->map(fn (array $option, string $month): Action => Action::make('month_'.str_replace('-', '_', $month))
+                ->label($option['label'])
+                ->color($month === $selected ? 'primary' : 'gray')
+                ->icon($month === $selected ? 'heroicon-m-check' : null)
+                ->action(function () use ($month): void {
+                    $this->month = $month;
+                    $this->checkpointKm = null;
+                    $this->resetPage();
+                }))->values()->all())
+                ->label($selected !== null ? $options[$selected]['short'] : 'Chưa có kỳ chốt')
+                ->icon('heroicon-o-calendar-days')
+                ->color('primary')
+                ->button(),
+        ];
+    }
+
     public function getSubheading(): ?string
     {
         $cycle = $this->selectedCycle();
@@ -110,12 +134,12 @@ class VehicleKmCycleReport extends Page implements HasTable
         }
 
         $totals = VehicleKmCycle::query()
-            ->where('cycle_end', $cycle->cycle_end)
+            ->where('cycle_start', $cycle->cycle_start)
             ->where('tracks_km_over', true)
             ->selectRaw('count(*) as vehicles, sum(case when over_km > 0 then 1 else 0 end) as over_vehicles, coalesce(sum(over_km), 0) as over_km, coalesce(sum(over_fee), 0) as over_fee')
             ->first();
 
-        return 'Kỳ '.$cycle->cycle_start->format('H:i d/m/Y').' → '.$cycle->cycle_end->format('H:i d/m/Y')
+        return $this->cycleOptions()[$this->selectedMonth()]['short'].' · kỳ '.$cycle->cycle_start->format('H:i d/m/Y').' → '.$cycle->cycle_end->format('H:i d/m/Y')
             .' · '.(int) $totals->vehicles.' xe tính KM over, '.(int) $totals->over_vehicles.' xe vượt '
             .self::km((float) $totals->over_km).' km · tiền vượt '.number_format((int) $totals->over_fee, 0, ',', '.').' đ';
     }
@@ -141,35 +165,61 @@ class VehicleKmCycleReport extends Page implements HasTable
         $period = $cycle ? $cycle->cycle_start->format('H:i d/m/Y').' - '.$cycle->cycle_end->format('H:i d/m/Y') : '';
 
         return app(SimpleTableExcelExporter::class)->download(
-            title: 'Chốt KM over kỳ '.$period,
+            title: 'Chốt KM over '.mb_strtolower((string) ($this->selectedMonth() ? $this->cycleOptions()[$this->selectedMonth()]['short'] : '')).' (kỳ '.$period.')',
             headers: ['STT', 'Biển số', 'Chủ xe', 'Km đầu kỳ', 'Km cuối kỳ', 'Km đã chạy', 'Km vượt', 'Tiền vượt (đ)', 'Km theo mốc chuyến', 'Chênh lệch'],
             rows: $rows,
-            filename: 'Chot-KM-over-'.($cycle?->cycle_end->format('Ymd') ?? now()->format('Ymd')).'.xlsx',
+            filename: 'Chot-KM-over-thang-'.($cycle?->cycle_start->copy()->addMonthNoOverflow()->format('m-Y') ?? now()->format('m-Y')).'.xlsx',
         );
     }
 
     /**
-     * @return array<string, string> cycle_end => nhãn kỳ, kỳ mới nhất trước
+     * Các tháng đã có kỳ chốt, mới nhất trước. Tháng của kỳ là tháng của mốc 12:00 ngày 23 kết thúc kỳ
+     * (kỳ 23/10 → 23/11 là tháng 11).
+     *
+     * @return array<string, array{start: string, short: string, label: string}>
      */
-    private static function cycleOptions(): array
+    private function cycleOptions(): array
     {
-        return VehicleKmCycle::query()
-            ->select(['cycle_start', 'cycle_end'])
+        return $this->cycleOptionsCache ??= VehicleKmCycle::query()
+            ->select('cycle_start')
             ->distinct()
-            ->orderByDesc('cycle_end')
-            ->get()
-            ->unique(fn (VehicleKmCycle $cycle): string => $cycle->cycle_end->toDateTimeString())
-            ->mapWithKeys(fn (VehicleKmCycle $cycle): array => [
-                $cycle->cycle_end->toDateTimeString() => $cycle->cycle_start->format('d/m/Y').' → '.$cycle->cycle_end->format('d/m/Y'),
-            ])
+            ->orderByDesc('cycle_start')
+            ->pluck('cycle_start')
+            ->map(fn ($start): Carbon => Carbon::parse($start))
+            ->mapWithKeys(function (Carbon $start): array {
+                $end = $start->copy()->addMonthNoOverflow();
+
+                return [$end->format('Y-m') => [
+                    'start' => $start->toDateTimeString(),
+                    'short' => 'Tháng '.$end->format('m/Y'),
+                    'label' => 'Tháng '.$end->format('m/Y').' ('.$start->format('d/m').' → '.$end->format('d/m').')',
+                ]];
+            })
             ->all();
     }
 
+    private function selectedMonth(): ?string
+    {
+        $options = $this->cycleOptions();
+
+        return array_key_exists((string) $this->month, $options) ? $this->month : array_key_first($options);
+    }
+
+    private function selectedCycleStart(): ?string
+    {
+        $month = $this->selectedMonth();
+
+        return $month === null ? null : $this->cycleOptions()[$month]['start'];
+    }
+
+    /**
+     * Một dòng đại diện của kỳ đang xem; cycle_end lấy mốc chốt muộn nhất trong kỳ.
+     */
     private function selectedCycle(): ?VehicleKmCycle
     {
-        $cycleEnd = $this->tableFilters['cycle']['value'] ?? array_key_first(self::cycleOptions());
+        $start = $this->selectedCycleStart();
 
-        return $cycleEnd === null ? null : VehicleKmCycle::query()->where('cycle_end', $cycleEnd)->first();
+        return $start === null ? null : VehicleKmCycle::query()->where('cycle_start', $start)->orderByDesc('cycle_end')->first();
     }
 
     private function checkpointKmFor(VehicleKmCycle $record): ?float
@@ -177,7 +227,7 @@ class VehicleKmCycleReport extends Page implements HasTable
         if ($this->checkpointKm === null) {
             $cycle = $this->selectedCycle();
             $this->checkpointKm = $cycle === null ? [] : app(VehicleKmReportService::class)->summarize(
-                VehicleKmCycle::query()->where('cycle_end', $cycle->cycle_end)->pluck('vehicle_id')->map(fn ($id): int => (int) $id)->all(),
+                VehicleKmCycle::query()->where('cycle_start', $cycle->cycle_start)->pluck('vehicle_id')->map(fn ($id): int => (int) $id)->all(),
                 Carbon::parse($cycle->cycle_start),
                 Carbon::parse($cycle->cycle_end)->subSecond(),
             );
