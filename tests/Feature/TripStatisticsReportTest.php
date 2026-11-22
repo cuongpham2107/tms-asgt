@@ -24,6 +24,7 @@ use App\Models\Vehicle;
 use App\Services\Export\TripExcelExportService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -2037,4 +2038,26 @@ test('trip excel export includes trip status column when includeStatusColumn is 
     // Mặc định (Bảng kê) không có cột Trạng thái chuyến
     $withoutStatus = app(TripExcelExportService::class)->buildSpreadsheet($trips)->getSheet(0);
     expect($withoutStatus->getCell('AF4')->getValue())->toBeNull();
+});
+
+test('switching date presets reuses the shared rows cache instead of clearing it', function () {
+    Carbon::setTestNow('2026-11-22 15:00:00');
+    $this->artisan('trip-stats:warm-cache')->assertSuccessful();
+
+    [$start, $end] = TripStatisticsReport::presetDates('last7days');
+    $key = 'trip_stats_rows_'.md5(json_encode([$start, $end, null, 'all', null]));
+    expect(Cache::has($key))->toBeTrue();
+
+    // Người dùng khác bấm nút ngày: cache dùng chung vẫn còn, không bị xoá
+    $this->actingAs(User::factory()->create());
+    Livewire::test(TripStatisticsReport::class)->call('setDatePreset', 'last7days');
+
+    expect(Cache::has($key))->toBeTrue();
+
+    foreach (array_keys(TripStatisticsReport::DATE_PRESETS) as $preset) {
+        [$presetStart, $presetEnd] = TripStatisticsReport::presetDates($preset);
+        expect(Cache::has('trip_stats_rows_'.md5(json_encode([$presetStart, $presetEnd, null, 'all', null]))))->toBeTrue();
+    }
+
+    Carbon::setTestNow();
 });

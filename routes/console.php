@@ -31,6 +31,13 @@ Schedule::command('shifts:auto-end')
     ->name('auto-end-driver-shifts-evening');
 
 // Cuối ngày rà km nhập sai, báo Quản lý điều phối và Phó TP Vận Tải (mỗi lỗi một thông báo có nút "Sửa chuyến").
+// Tính sẵn Bảng thống kê chuyến cho các nút ngày; cache sống 3 phút nên luôn có sẵn khi bấm.
+Schedule::command('trip-stats:warm-cache')
+    ->everyTwoMinutes()
+    ->name('warm-trip-statistics-cache')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 Schedule::command('trips:audit-km')
     ->dailyAt('23:30')
     ->name('audit-trip-km')

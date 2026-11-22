@@ -16,7 +16,6 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginator
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -28,9 +27,14 @@ trait HasTripStatistics
 {
     protected ?Collection $cachedBaseRows = null;
 
+    /** Giây giữ dòng thống kê trong cache; job trip-stats:warm-cache làm mới các khoảng ngày mặc định 2 phút một lần. */
+    public const BASE_ROWS_CACHE_SECONDS = 180;
+
+    /**
+     * Key cache theo bộ lọc (không theo người xem: dữ liệu như nhau với mọi người).
+     */
     protected function getBaseRowsCacheKey(): string
     {
-        $userId = Auth::id() ?? 'guest';
         $filterHash = md5(json_encode([
             $this->startDate,
             $this->endDate,
@@ -39,13 +43,32 @@ trait HasTripStatistics
             $this->search,
         ]));
 
-        return "trip_stats_rows_{$userId}_{$filterHash}";
+        return "trip_stats_rows_{$filterHash}";
     }
 
+    /**
+     * Xoá cache của bộ lọc hiện tại: gọi sau khi sửa dữ liệu (cước, cân kiện, mốc...). Đổi bộ lọc thì không cần,
+     * key đã khác; chỉ cần bỏ dòng đã nạp trong request bằng forgetLoadedRows().
+     */
     public function clearBaseRowsCache(): void
     {
         $this->cachedBaseRows = null;
         Cache::forget($this->getBaseRowsCacheKey());
+    }
+
+    public function forgetLoadedRows(): void
+    {
+        $this->cachedBaseRows = null;
+    }
+
+    /**
+     * Tính lại dòng của bộ lọc hiện tại và ghi đè cache (job làm nóng cache dùng).
+     */
+    public function refreshBaseRowsCache(): void
+    {
+        $rows = $this->buildBaseRows();
+        Cache::put($this->getBaseRowsCacheKey(), $rows->all(), self::BASE_ROWS_CACHE_SECONDS);
+        $this->cachedBaseRows = $rows;
     }
 
     /**
@@ -266,6 +289,19 @@ trait HasTripStatistics
             return $this->cachedBaseRows = collect($cached);
         }
 
+        $rows = $this->buildBaseRows();
+        Cache::put($cacheKey, $rows->all(), self::BASE_ROWS_CACHE_SECONDS);
+
+        return $this->cachedBaseRows = $rows;
+    }
+
+    /**
+     * Dựng dòng thống kê theo bộ lọc hiện tại (không đọc / ghi cache), ngày giờ đã chuyển sang chuỗi để lưu cache.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function buildBaseRows(): Collection
+    {
         $trips = $this->getFilteredTrips();
 
         /** @var TripExcelExportService $exportService */
@@ -343,9 +379,7 @@ trait HasTripStatistics
             return $row;
         });
 
-        Cache::put($cacheKey, $serializedRows->all(), 120);
-
-        return $this->cachedBaseRows = $serializedRows;
+        return $serializedRows;
     }
 
     /**

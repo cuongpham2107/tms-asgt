@@ -180,21 +180,21 @@ class TripStatisticsReport extends Page
 
     public function updatedSearch(): void
     {
-        $this->clearBaseRowsCache();
+        $this->forgetLoadedRows();
         $this->page = 1;
     }
 
     public function updatedStartDate(): void
     {
         $this->syncDatePreset();
-        $this->clearBaseRowsCache();
+        $this->forgetLoadedRows();
         $this->page = 1;
     }
 
     public function updatedEndDate(): void
     {
         $this->syncDatePreset();
-        $this->clearBaseRowsCache();
+        $this->forgetLoadedRows();
         $this->page = 1;
     }
 
@@ -207,7 +207,7 @@ class TripStatisticsReport extends Page
 
     public function updatedCustomerId(): void
     {
-        $this->clearBaseRowsCache();
+        $this->forgetLoadedRows();
         $this->page = 1;
     }
 
@@ -262,7 +262,7 @@ class TripStatisticsReport extends Page
 
     public function updatedVehicleOwner(): void
     {
-        $this->clearBaseRowsCache();
+        $this->forgetLoadedRows();
         $this->page = 1;
     }
 
@@ -292,34 +292,35 @@ class TripStatisticsReport extends Page
     public function setDatePreset(string $preset): void
     {
         $this->datePreset = $preset;
+
+        if (($dates = self::presetDates($preset)) !== null) {
+            [$this->startDate, $this->endDate] = $dates;
+        }
+
+        $this->forgetLoadedRows();
+        $this->page = 1;
+    }
+
+    /**
+     * Khoảng ngày (Y-m-d) của nút chọn nhanh; job trip-stats:warm-cache tính sẵn đúng các khoảng này.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    public static function presetDates(string $preset): ?array
+    {
         $now = now();
 
-        match ($preset) {
-            'today' => [
-                $this->startDate = $now->format('Y-m-d'),
-                $this->endDate = $now->format('Y-m-d'),
-            ],
-            'yesterday' => [
-                $this->startDate = $now->copy()->subDay()->format('Y-m-d'),
-                $this->endDate = $now->copy()->subDay()->format('Y-m-d'),
-            ],
-            'last7days' => [
-                $this->startDate = $now->copy()->subDays(6)->format('Y-m-d'),
-                $this->endDate = $now->format('Y-m-d'),
-            ],
-            'thisMonth' => [
-                $this->startDate = $now->copy()->startOfMonth()->format('Y-m-d'),
-                $this->endDate = $now->format('Y-m-d'),
-            ],
+        return match ($preset) {
+            'today' => [$now->format('Y-m-d'), $now->format('Y-m-d')],
+            'yesterday' => [$now->copy()->subDay()->format('Y-m-d'), $now->copy()->subDay()->format('Y-m-d')],
+            'last7days' => [$now->copy()->subDays(6)->format('Y-m-d'), $now->format('Y-m-d')],
+            'thisMonth' => [$now->copy()->startOfMonth()->format('Y-m-d'), $now->format('Y-m-d')],
             'lastMonth' => [
-                $this->startDate = $now->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d'),
-                $this->endDate = $now->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
+                $now->copy()->subMonthNoOverflow()->startOfMonth()->format('Y-m-d'),
+                $now->copy()->subMonthNoOverflow()->endOfMonth()->format('Y-m-d'),
             ],
             default => null,
         };
-
-        $this->clearBaseRowsCache();
-        $this->page = 1;
     }
 
     public function syncDatePreset(): void
@@ -363,7 +364,7 @@ class TripStatisticsReport extends Page
         return $this->datePreset === $preset;
     }
 
-    private const DATE_PRESETS = [
+    public const DATE_PRESETS = [
         'today' => 'Hôm nay',
         'yesterday' => 'Hôm qua',
         'last7days' => '7 ngày qua',
@@ -406,7 +407,7 @@ class TripStatisticsReport extends Page
                     $this->startDate = Carbon::parse($data['startDate'])->format('Y-m-d');
                     $this->endDate = Carbon::parse($data['endDate'])->format('Y-m-d');
                     $this->syncDatePreset();
-                    $this->clearBaseRowsCache();
+                    $this->forgetLoadedRows();
                     $this->page = 1;
                 }),
             $this->importPackagesAction(),
@@ -543,7 +544,7 @@ class TripStatisticsReport extends Page
         $this->vehicleOwner = 'all';
         $this->search = null;
         $this->chargeStatus = null;
-        $this->clearBaseRowsCache();
+        $this->forgetLoadedRows();
         $this->page = 1;
     }
 
