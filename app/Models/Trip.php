@@ -5,9 +5,7 @@ namespace App\Models;
 use App\Enums\CheckpointType;
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\Trip\CheckpointGeofenceService;
-use App\Services\TripKmCalculatorService;
+use App\Services\Trip\TripCompletionService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,7 +14,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
@@ -33,14 +30,7 @@ class Trip extends Model
      */
     public function scopeUnfinishedForDriver(Builder $query, int $driverId): void
     {
-        $running = [
-            TripStatus::Started,
-            TripStatus::ArrivedPickup,
-            TripStatus::Delivering,
-            TripStatus::ArrivedDelivery,
-            TripStatus::Delivered,
-            TripStatus::ReturnTrip,
-        ];
+        $running = TripStatus::unfinishedStatuses();
 
         $query->where('driver_id', $driverId)
             ->where(function (Builder $query) use ($running): void {
@@ -320,124 +310,7 @@ class Trip extends Model
      */
     public function complete(?float $endKm = null, ?string $completedAt = null, array $checkpointAttributes = []): void
     {
-        DB::transaction(function () use ($endKm, $completedAt, $checkpointAttributes) {
-            $this->status = TripStatus::Completed;
-            $this->completed_at = $completedAt ?? now();
-            $this->end_km = $endKm ?? $this->end_km;
-
-            $startKm = (float) ($this->start_km ?? 0);
-            $endKmValue = (float) ($this->end_km ?? 0);
-            $this->total_km = max(0, $endKmValue - $startKm);
-
-            $this->save();
-
-            // Cập nhật km xe theo km kết thúc chuyến
-            if ($endKmValue > 0 && $this->vehicle) {
-                $this->vehicle->current_mileage = $endKmValue;
-                $this->vehicle->save();
-            }
-
-            app(TripKmCalculatorService::class)->calculate($this);
-            app(ShiftKmCalculatorService::class)->calculateForTrip($this);
-
-            $this->orders()
-                ->whereNotIn('status', [
-                    OrderStatus::Cancelled->value,
-                    OrderStatus::Completed->value,
-                ])
-                ->get()
-                ->each(fn (Order $order) => $order->update(['status' => OrderStatus::Completed]));
-
-            $this->createMissingEndCheckpoints($endKmValue, (string) $this->completed_at, $checkpointAttributes);
-
-            $this->syncPendingEmptyRunsStartKm($endKmValue);
-
-            Vehicle::syncIdleStatus($this->vehicle_id, $this->id);
-        });
-    }
-
-    /**
-     * Đồng bộ lại start_km (và checkpoint started) cho các chuyến không hàng đang chờ
-     * trên cùng xe nếu được điều hành tạo trước khi chuyến có hàng này kết thúc.
-     */
-    private function syncPendingEmptyRunsStartKm(float $endKm): void
-    {
-        if ($this->is_empty_run || $this->vehicle_id === null || $endKm <= 0) {
-            return;
-        }
-
-        $pendingEmptyRuns = self::query()
-            ->where('vehicle_id', $this->vehicle_id)
-            ->where('id', '!=', $this->id)
-            ->where('is_empty_run', true)
-            ->where('status', TripStatus::ReturnTrip)
-            ->where(function ($query) use ($endKm): void {
-                $query->whereNull('start_km')
-                    ->orWhere('start_km', '<', $endKm);
-            })
-            ->get();
-
-        foreach ($pendingEmptyRuns as $emptyRun) {
-            $emptyRun->start_km = $endKm;
-            $emptyRun->save();
-
-            TripCheckpoint::query()
-                ->where('trip_id', $emptyRun->id)
-                ->where('checkpoint_type', CheckpointType::Started->value)
-                ->where(function ($query) use ($endKm): void {
-                    $query->whereNull('km_reading')
-                        ->orWhere('km_reading', '<', $endKm);
-                })
-                ->get()->each->update(['km_reading' => $endKm]);
-        }
-    }
-
-    /**
-     * Tự động tạo end checkpoint cho các order đã completed nhưng chưa có end.
-     * Chạy bên trong DB transaction của complete().
-     *
-     * @param  array<string, mixed>  $checkpointAttributes
-     */
-    private function createMissingEndCheckpoints(float $endKm, string $occurredAt, array $checkpointAttributes = []): void
-    {
-        $completedOrderIds = $this->orders()
-            ->where('status', OrderStatus::Completed->value)
-            ->pluck('id');
-
-        if ($completedOrderIds->isEmpty()) {
-            return;
-        }
-
-        $existingEndOrderIds = TripCheckpoint::whereIn('order_id', $completedOrderIds)
-            ->where('checkpoint_type', CheckpointType::End->value)
-            ->pluck('order_id');
-
-        $missingOrderIds = $completedOrderIds->diff($existingEndOrderIds);
-
-        if ($missingOrderIds->isEmpty()) {
-            return;
-        }
-
-        if (! isset($checkpointAttributes['vehicle_geo_status'])) {
-            $geofenceAttrs = app(CheckpointGeofenceService::class)
-                ->check($this, CheckpointType::End, $checkpointAttributes)
-                ->toCheckpointAttributes();
-            $checkpointAttributes = [...$checkpointAttributes, ...$geofenceAttrs];
-        }
-
-        foreach ($missingOrderIds as $orderId) {
-            TripCheckpoint::create([
-                'checkpoint_type' => CheckpointType::End->value,
-                'trip_id' => $this->id,
-                'order_id' => $orderId,
-                'km_reading' => $endKm,
-                'occurred_at' => $occurredAt,
-                'driver_id' => $this->driver_id,
-                'shift_id' => $this->shift_id,
-                'vehicle_id' => $this->vehicle_id,
-                ...$checkpointAttributes,
-            ]);
-        }
+        app(TripCompletionService::class)->complete($this, $endKm, $completedAt, $checkpointAttributes);
     }
 
     /**

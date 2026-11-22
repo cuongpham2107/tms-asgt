@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Km;
 
 use App\Enums\TripStatus;
 use App\Models\Order;
@@ -96,25 +96,7 @@ class TripKmCalculatorService
             $totalLoadedKm += $endKmValue - $prevKm;
         }
 
-        // Record per-order loaded_km
-        $orderIds = $events->pluck('order_id')->unique();
-        foreach ($orderIds as $orderId) {
-            $pickup = $events
-                ->where('order_id', $orderId)
-                ->where('checkpoint_type', 'arrived_pickup')
-                ->first();
-
-            $complete = $events
-                ->where('order_id', $orderId)
-                ->where('checkpoint_type', 'completed')
-                ->sortByDesc('km_reading')
-                ->first();
-
-            if ($pickup && $complete) {
-                $orderLoadedKm = max(0, (float) $complete->km_reading - (float) $pickup->km_reading);
-                Order::where('id', $orderId)->update(['loaded_km' => $orderLoadedKm]);
-            }
-        }
+        OrderLoadedKm::record($events);
 
         $trip->total_km = $totalKm;
         $trip->total_km_loaded = $totalLoadedKm;

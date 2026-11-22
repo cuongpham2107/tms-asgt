@@ -5,7 +5,7 @@ namespace App\Filament\Widgets;
 use App\Filament\Widgets\Concerns\StylesDashboardChart;
 use App\Models\Order;
 use App\Models\Trip;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\ChartWidget;
 use Illuminate\Contracts\Support\Htmlable;

@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources\Orders\Actions;
 
-use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Order\OrderDispatchService;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
@@ -38,10 +38,7 @@ class BulkSendOrderAction
                 }
 
                 try {
-                    Order::query()->whereIn('id', $assignOrders->pluck('id'))->get()->each->update([
-                        'status' => OrderStatus::Sent->value,
-                        'sent_at' => now(),
-                    ]);
+                    app(OrderDispatchService::class)->send($assignOrders);
 
                     foreach ($assignOrders as $order) {
                         try {

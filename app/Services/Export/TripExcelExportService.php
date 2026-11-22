@@ -20,7 +20,7 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Billing\OrderChargeCalculator;
-use App\Services\TripKmSplitService;
+use App\Services\Km\TripKmSplitService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;

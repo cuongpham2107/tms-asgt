@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Trips\Actions;
 
 use App\Enums\CheckpointType;
 use App\Enums\DriverSwapReason;
-use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\DriverShift;
@@ -14,8 +13,9 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Km\TripKmSplitService;
 use App\Services\Notification\DriverNotificationService;
-use App\Services\TripKmSplitService;
+use App\Services\Trip\DriverSwapService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Placeholder;
@@ -362,15 +362,7 @@ class ReassignDriverAction
             'started_at' => $trip->started_at ?? now(),
         ]);
 
-        $restoredStatus = in_array($status, [
-            TripStatus::Delivering,
-            TripStatus::ArrivedDelivery,
-            TripStatus::Delivered,
-        ]) ? OrderStatus::InTransit : OrderStatus::Sent;
-
-        $trip->orders()
-            ->where('status', OrderStatus::DriverSwap->value)
-            ->get()->each->update(['status' => $restoredStatus]);
+        app(DriverSwapService::class)->resume($trip, $status);
 
         if ($newDriver !== null) {
             try {

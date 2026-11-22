@@ -6,7 +6,7 @@ use App\Enums\CheckpointType;
 use App\Enums\GeoCheckStatus;
 use App\Models\Location;
 use App\Models\TripCheckpoint;
-use App\Services\Trip\TripCheckpointOsmValidationService;
+use App\Services\Gps\TripCheckpointOsmValidationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;

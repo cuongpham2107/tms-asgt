@@ -8,8 +8,8 @@ use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\TripKmCalculatorService;
+use App\Services\Shift\ShiftEndService;
+use App\Services\Trip\DriverSwapService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
@@ -50,10 +50,6 @@ class EndShiftAction
 
                 DB::beginTransaction();
                 try {
-                    $record->end_time = now();
-                    $record->end_km = $endKm;
-                    $record->save();
-
                     // Auto driver_swap: chuyển trip đang active có đơn hàng chưa hoàn thành sang driver_swap
                     $incompleteTrips = Trip::where('driver_id', $record->driver_id)
                         ->where(function ($query) {
@@ -82,18 +78,7 @@ class EndShiftAction
                         ->get();
 
                     foreach ($incompleteTrips as $trip) {
-                        if ($endKm > 0) {
-                            app(TripKmCalculatorService::class)->calculate($trip, endKm: $endKm);
-                            $trip->refresh();
-                        }
-
-                        $trip->status = TripStatus::DriverSwap;
-                        $trip->shift_id = null;
-                        $trip->save();
-
-                        $trip->orders()
-                            ->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])
-                            ->get()->each->update(['status' => OrderStatus::DriverSwap]);
+                        app(DriverSwapService::class)->handOverOnShiftEnd($trip, (float) $endKm);
 
                         TripCheckpoint::create([
                             'trip_id' => $trip->id,
@@ -105,25 +90,7 @@ class EndShiftAction
                         ]);
                     }
 
-                    app(ShiftKmCalculatorService::class)->calculate($record);
-
-                    // Clean up trips that were driver_swapped via EndHandler
-                    $driverSwappedTrips = Trip::where('driver_id', $record->driver_id)
-                        ->where('shift_id', $record->id)
-                        ->where('status', TripStatus::DriverSwap)
-                        ->get();
-
-                    foreach ($driverSwappedTrips as $trip) {
-                        $trip->shift_id = null;
-                        $trip->save();
-                    }
-
-                    // Gỡ shift_id cho các chuyến chờ chạy của ca này để ca sau nhận lại (giống tài xế tự kết thúc ca trên App)
-                    Trip::query()
-                        ->where('driver_id', $record->driver_id)
-                        ->where('shift_id', $record->id)
-                        ->where('status', TripStatus::Pending)
-                        ->update(['shift_id' => null]);
+                    app(ShiftEndService::class)->close($record, now(), $endKm);
 
                     DB::commit();
                 } catch (\Throwable $e) {

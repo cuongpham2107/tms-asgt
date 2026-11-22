@@ -8,7 +8,6 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
-use App\Filament\Resources\Trips\Actions\EditTripAction;
 use App\Filament\Resources\Trips\Pages\ListTrips;
 use App\Filament\Resources\Trips\Pages\ViewTripTimeline;
 use App\Filament\Resources\Trips\Schemas\TripForm;
@@ -25,6 +24,7 @@ use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Export\TripExcelExportService;
+use App\Services\Trip\DeliveryProgressSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -899,7 +899,7 @@ test('editing trip checkpoint delivery point updates order delivery point and re
         'occurred_at' => now(),
     ]);
 
-    EditTripAction::syncOrderDeliveryPointsFromCheckpoints($trip);
+    app(DeliveryProgressSyncService::class)->syncOrderDeliveryPointsFromCheckpoints($trip);
 
     $ownWrongDp->refresh();
     $cpArrived->refresh();

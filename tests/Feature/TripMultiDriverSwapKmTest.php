@@ -18,8 +18,8 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\TripKmSplitService;
+use App\Services\Km\ShiftKmCalculatorService;
+use App\Services\Km\TripKmSplitService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 

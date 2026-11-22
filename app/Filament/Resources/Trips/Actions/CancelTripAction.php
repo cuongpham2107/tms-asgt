@@ -2,19 +2,14 @@
 
 namespace App\Filament\Resources\Trips\Actions;
 
-use App\Enums\CheckpointType;
-use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
-use App\Enums\VehicleStatus;
 use App\Models\Trip;
 use App\Services\Notification\DriverNotificationService;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\TripKmCalculatorService;
+use App\Services\Trip\TripCancellationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class CancelTripAction
@@ -77,50 +72,7 @@ class CancelTripAction
                         return;
                     }
 
-                    DB::transaction(function () use ($record, $kmReading, $data) {
-                        // Tính partial KM
-                        app(TripKmCalculatorService::class)->calculate($record, endKm: $kmReading);
-                        $record->refresh();
-
-                        // Cập nhật trip
-                        $record->end_km = $kmReading;
-                        $record->status = TripStatus::Cancelled;
-                        $record->cancelled_at = now();
-                        $record->save();
-
-                        // Cập nhật km xe và đưa xe về trạng thái sẵn sàng
-                        if ($record->vehicle) {
-                            $record->vehicle->current_mileage = $kmReading;
-                            $record->vehicle->status = VehicleStatus::On;
-                            $record->vehicle->save();
-                        }
-
-                        // Huỷ tất cả orders chưa đóng
-                        $record->orders()
-                            ->whereNotIn('status', [
-                                OrderStatus::Completed->value,
-                                OrderStatus::Cancelled->value,
-                            ])
-                            ->get()->each->update([
-                                'status' => OrderStatus::Cancelled,
-                                'cancelled_at' => now(),
-                                'cancel_reason' => $data['cancel_reason'] ?? '',
-                            ]);
-
-                        // Tạo checkpoint huỷ chuyến
-                        $record->checkpoints()->create([
-                            'checkpoint_type' => CheckpointType::Cancelled->value,
-                            'km_reading' => $kmReading,
-                            'occurred_at' => now(),
-                            'driver_id' => $record->driver_id,
-                            'shift_id' => $record->shift_id,
-                        ]);
-
-                        // Tính lại km ca
-                        if ($record->shift_id) {
-                            app(ShiftKmCalculatorService::class)->calculate($record->shift);
-                        }
-                    });
+                    app(TripCancellationService::class)->cancelTrip($record, $kmReading, $data['cancel_reason'] ?? '');
 
                     try {
                         app(DriverNotificationService::class)->sendTripCancelled($record, $data['cancel_reason'] ?? null);

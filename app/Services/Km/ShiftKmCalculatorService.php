@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Km;
 
 use App\Models\DriverShift;
 use App\Models\Order;
@@ -226,24 +226,6 @@ class ShiftKmCalculatorService
             ->orderBy('km_reading')
             ->get(['checkpoint_type', 'order_id', 'km_reading']);
 
-        $orderIds = $checkpoints->pluck('order_id')->unique();
-
-        foreach ($orderIds as $orderId) {
-            $pickup = $checkpoints
-                ->where('order_id', $orderId)
-                ->where('checkpoint_type', 'arrived_pickup')
-                ->first();
-
-            $complete = $checkpoints
-                ->where('order_id', $orderId)
-                ->where('checkpoint_type', 'completed')
-                ->sortByDesc('km_reading')
-                ->first();
-
-            if ($pickup && $complete) {
-                $loadedKm = max(0, (float) $complete->km_reading - (float) $pickup->km_reading);
-                Order::where('id', $orderId)->update(['loaded_km' => $loadedKm]);
-            }
-        }
+        OrderLoadedKm::record($checkpoints);
     }
 }

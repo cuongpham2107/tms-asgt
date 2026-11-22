@@ -4,10 +4,10 @@ namespace App\Observers;
 
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
-use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Jobs\CalculateOrderCharge;
 use App\Models\Order;
 use App\Models\OrderEditLog;
+use App\Services\Vehicle\TransportCardsCache;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -104,11 +104,11 @@ class OrderObserver
     private function invalidateTransportCardsCache(): void
     {
         if (app()->runningUnitTests() || DB::transactionLevel() === 0) {
-            CreatesOrderTransportCards::clearTransportCardsCache();
+            TransportCardsCache::clear();
 
             return;
         }
 
-        DB::afterCommit(static fn () => CreatesOrderTransportCards::clearTransportCardsCache());
+        DB::afterCommit(static fn () => TransportCardsCache::clear());
     }
 }

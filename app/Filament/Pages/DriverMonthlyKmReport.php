@@ -3,7 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\Trip;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\Carbon;

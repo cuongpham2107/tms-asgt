@@ -23,7 +23,7 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Carbon\CarbonInterface;
@@ -382,15 +382,7 @@ class VehicleDispatchBoard extends Page implements HasTable
      */
     public static function runningTripStatuses(): array
     {
-        return [
-            TripStatus::Started,
-            TripStatus::ArrivedPickup,
-            TripStatus::Delivering,
-            TripStatus::ArrivedDelivery,
-            TripStatus::Delivered,
-            TripStatus::DriverSwap,
-            TripStatus::ReturnTrip,
-        ];
+        return TripStatus::runningStatuses();
     }
 
     /**

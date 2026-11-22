@@ -8,7 +8,6 @@ use App\Enums\LocationType;
 use App\Enums\OrderStatus;
 use App\Enums\Priority;
 use App\Enums\TripStatus;
-use App\Enums\VehicleStatus;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\Locations\Schemas\LocationForm;
 use App\Models\Area;
@@ -20,7 +19,9 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
-use App\Services\ShiftScheduleService;
+use App\Services\Order\OrderDispatchService;
+use App\Services\Shift\ShiftScheduleService;
+use App\Services\Vehicle\TransportCardsCache;
 use Closure;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -89,8 +90,7 @@ abstract class CreatesOrderTransportCards
 
     public static function clearTransportCardsCache(): void
     {
-        Cache::forget('resolve-vehicle-cards-base');
-        Cache::forget('resolve-driver-cards');
+        TransportCardsCache::clear();
     }
 
     /**
@@ -117,7 +117,7 @@ abstract class CreatesOrderTransportCards
      */
     protected static function resolveDriverCards(): array
     {
-        return Cache::remember('resolve-driver-cards', now()->addMinutes(15), function (): array {
+        return Cache::remember(TransportCardsCache::DRIVER_KEY, now()->addMinutes(15), function (): array {
             $todayShift = ShiftScheduleService::determineShift();
 
             $drivers = User::query()
@@ -265,7 +265,7 @@ abstract class CreatesOrderTransportCards
      */
     private static function resolveVehicleCardsBase(?int $selectedVehicleId = null): array
     {
-        $cacheKey = 'resolve-vehicle-cards-base';
+        $cacheKey = TransportCardsCache::VEHICLE_KEY;
 
         $cards = Cache::remember($cacheKey, now()->addMinutes(15), function (): array {
             $vehicles = Vehicle::query()
@@ -1127,28 +1127,12 @@ abstract class CreatesOrderTransportCards
                     throw new \InvalidArgumentException('Vui lòng chọn lái xe cho phương tiện công ty.');
                 }
 
-                $trip = Trip::create([
-                    'trip_code' => Trip::generateTripCode(),
-                    'vehicle_id' => $data['vehicle_id'],
-                    'driver_id' => $data['driver_id'] ?? null,
-                    'status' => TripStatus::Pending,
-                    'start_location_id' => $order->pickup_location_id,
-                    'end_location_id' => $order->deliveryPoints()
-                        ->orderBy('sequence', 'desc')
-                        ->first()?->location_id,
-                ]);
-
-                $orderUpdates = [
-                    'trip_id' => $trip->id,
-                    'status' => OrderStatus::Sent->value,
-                    'sent_at' => now(),
-                ];
-
-                $updated = $order->update($orderUpdates);
-
-                if (! $updated) {
-                    throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
-                }
+                $trip = app(OrderDispatchService::class)->assign(
+                    $order,
+                    (int) $data['vehicle_id'],
+                    filled($data['driver_id'] ?? null) ? (int) $data['driver_id'] : null,
+                );
+                $order->refresh();
 
                 // Tạm thời ẩn tự tạo checkpoint cho xe thuê ngoài để điều hành tự thêm khi chỉnh sửa chuyến.
                 // static::createCheckpointsForExternalVehicle($trip, collect([$order]));
@@ -1159,9 +1143,6 @@ abstract class CreatesOrderTransportCards
                     Log::warning('Lỗi gửi push notification khi tạo đơn: '.$e->getMessage(), ['exception' => $e]);
                 }
 
-                if ($vehicle !== null) {
-                    $vehicle->update(['status' => VehicleStatus::Running]);
-                }
             }
         });
 

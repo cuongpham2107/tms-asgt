@@ -12,7 +12,7 @@ use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\TripKmAdjustmentService;
+use App\Services\Km\TripKmAdjustmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;

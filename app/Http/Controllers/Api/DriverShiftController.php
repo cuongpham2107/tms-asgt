@@ -16,8 +16,9 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\ShiftKmCalculatorService;
-use App\Services\Trip\Handlers\EndHandler;
+use App\Services\Km\ShiftKmCalculatorService;
+use App\Services\Shift\LeaveVehicleService;
+use App\Services\Shift\ShiftEndService;
 use Carbon\Carbon;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Illuminate\Http\JsonResponse;
@@ -164,7 +165,7 @@ class DriverShiftController extends Controller
             ], 422);
         }
 
-        $checkpoint = app(EndHandler::class)->handle($shift, $vehicle, $kmReading);
+        $checkpoint = app(LeaveVehicleService::class)->handle($shift, $vehicle, $kmReading);
 
         return response()->json([
             'checkpoint' => $checkpoint->toArray(),
@@ -241,32 +242,10 @@ class DriverShiftController extends Controller
 
         DB::beginTransaction();
         try {
-            $shift->end_time = now();
-            $shift->end_km = $endKm;
-            $shift->end_gps_lat = $payload['end_gps_lat'] ?? null;
-            $shift->end_gps_lng = $payload['end_gps_lng'] ?? null;
-            $shift->save();
-
-            app(ShiftKmCalculatorService::class)->calculate($shift);
-
-            // Clean up trips that were driver_swapped via EndHandler
-            // (status=DriverSwap but still linked to this shift)
-            $driverSwappedTrips = Trip::where('driver_id', $user->id)
-                ->where('shift_id', $shift->id)
-                ->where('status', TripStatus::DriverSwap)
-                ->get();
-
-            foreach ($driverSwappedTrips as $trip) {
-                $trip->shift_id = null;
-                $trip->save();
-            }
-
-            // Gỡ shift_id cho các chuyến 'pending' của ca này để ca sau nhận lại
-            Trip::query()
-                ->where('driver_id', $user->id)
-                ->where('shift_id', $shift->id)
-                ->where('status', TripStatus::Pending)
-                ->update(['shift_id' => null]);
+            app(ShiftEndService::class)->close($shift, now(), $endKm === null ? null : (float) $endKm, [
+                'end_gps_lat' => $payload['end_gps_lat'] ?? null,
+                'end_gps_lng' => $payload['end_gps_lng'] ?? null,
+            ]);
 
             // Update vehicle mileage from the 'end' checkpoint's km_reading
             if ($endCheckpoint?->vehicle_id) {

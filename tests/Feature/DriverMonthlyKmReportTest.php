@@ -21,7 +21,7 @@ use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleGpsLog;
-use App\Services\DriverMonthlyKmReportService;
+use App\Services\Km\DriverMonthlyKmReportService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;

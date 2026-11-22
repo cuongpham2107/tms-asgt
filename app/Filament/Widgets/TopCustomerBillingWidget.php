@@ -6,7 +6,7 @@ use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Filament\Pages\TripStatisticsReport;
 use App\Models\Customer;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;

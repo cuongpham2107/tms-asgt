@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\Vehicle;
+use App\Services\Gps\TripCheckpointOsmValidationService;
 use Carbon\CarbonInterface;
 
 /**

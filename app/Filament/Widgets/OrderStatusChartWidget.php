@@ -5,7 +5,7 @@ namespace App\Filament\Widgets;
 use App\Enums\OrderStatus;
 use App\Filament\Pages\DriverMonthlyKmReport;
 use App\Models\Order;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\ChartWidget;
 

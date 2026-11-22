@@ -3,10 +3,9 @@
 namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
-use App\Enums\TripStatus;
 use App\Models\Order;
-use App\Models\Trip;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Trip\TripCancellationService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -45,20 +44,8 @@ class CancelOrderAction
                         return;
                     }
 
-                    // Cập nhật trên bản đọc mới để có Nhật ký mà $record (dùng gửi thông báo) vẫn giữ dữ liệu cũ.
-
-                    Order::query()->findOrFail($record->id)->update([
-                        'status' => OrderStatus::Cancelled->value,
-                        'cancelled_at' => now(),
-                        'cancel_reason' => $data['cancel_reason'] ?? null,
-                    ]);
-
-                    // Mỗi chuyến chỉ có 1 đơn: huỷ đơn là huỷ luôn chuyến.
-                    if ($record->trip_id !== null) {
-                        Trip::query()->whereKey($record->trip_id)->get()->each->update([
-                            'status' => TripStatus::Cancelled,
-                        ]);
-                    }
+                    // $record giữ dữ liệu cũ để gửi thông báo; service cập nhật trên bản đọc mới.
+                    app(TripCancellationService::class)->cancelOrder($record, $data['cancel_reason'] ?? null);
 
                     try {
                         app(DriverNotificationService::class)->sendOrderCancelled($record, $data['cancel_reason'] ?? null);

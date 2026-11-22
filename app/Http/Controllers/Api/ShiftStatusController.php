@@ -6,7 +6,7 @@ use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
-use App\Services\ShiftKmCalculatorService;
+use App\Services\Km\ShiftKmCalculatorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

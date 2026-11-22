@@ -8,7 +8,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\TripKmReport;
 use App\Models\Vehicle;
-use App\Services\TripKmAdjustmentService;
+use App\Services\Km\TripKmAdjustmentService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;

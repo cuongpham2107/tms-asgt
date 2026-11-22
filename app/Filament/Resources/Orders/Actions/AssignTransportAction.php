@@ -4,15 +4,12 @@ namespace App\Filament\Resources\Orders\Actions;
 
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
-use App\Enums\TripStatus;
-use App\Enums\VehicleStatus;
 use App\Filament\Forms\Components\DriverPicker;
 use App\Filament\Forms\Components\VehiclePicker;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Order;
-use App\Models\Trip;
-use App\Models\Vehicle;
 use App\Services\Notification\DriverNotificationService;
+use App\Services\Order\OrderDispatchService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
@@ -108,35 +105,18 @@ class AssignTransportAction extends CreatesOrderTransportCards
 
         try {
             DB::transaction(function () use ($record, $data, $orderStatus) {
-                $trip = Trip::create([
-                    'trip_code' => Trip::generateTripCode(),
-                    'vehicle_id' => $data['vehicle_id'],
-                    'driver_id' => $data['driver_id'] ?? null,
-                    'status' => TripStatus::Pending,
-                    'start_location_id' => $record->pickup_location_id,
-                    'end_location_id' => $record->deliveryPoints()
-                        ->orderBy('sequence', 'desc')
-                        ->first()?->location_id,
-                ]);
+                $extraUpdates = $record->type === OrderType::External && filled($data['chargeable_weight'] ?? null)
+                    ? ['chargeable_weight' => $data['chargeable_weight']]
+                    : [];
 
-                $orderUpdates = [
-                    'trip_id' => $trip->id,
-                    'status' => $orderStatus,
-                ];
-
-                if ($orderStatus === OrderStatus::Sent) {
-                    $orderUpdates['sent_at'] = now();
-                }
-
-                if ($record->type === OrderType::External && isset($data['chargeable_weight']) && filled($data['chargeable_weight'])) {
-                    $orderUpdates['chargeable_weight'] = $data['chargeable_weight'];
-                }
-
-                $updated = $record->update($orderUpdates);
-
-                if (! $updated) {
-                    throw new \RuntimeException('Không thể gán đơn hàng vào chuyến.');
-                }
+                $trip = app(OrderDispatchService::class)->assign(
+                    $record,
+                    (int) $data['vehicle_id'],
+                    filled($data['driver_id'] ?? null) ? (int) $data['driver_id'] : null,
+                    $orderStatus,
+                    $extraUpdates,
+                );
+                $record->refresh();
 
                 // Tạm thời ẩn tự tạo checkpoint cho xe thuê ngoài để điều hành tự thêm khi chỉnh sửa chuyến.
                 // static::createCheckpointsForExternalVehicle($trip, collect([$record]));
@@ -149,14 +129,6 @@ class AssignTransportAction extends CreatesOrderTransportCards
                     }
                 }
 
-                if (filled($data['vehicle_id'] ?? null)) {
-                    $vehicle = Vehicle::query()->find($data['vehicle_id']);
-
-                    if ($vehicle !== null) {
-                        $vehicle->status = VehicleStatus::Running;
-                        $vehicle->save();
-                    }
-                }
             });
 
             $label = $orderStatus === OrderStatus::Sent ? 'Tạo và gửi chuyến' : 'Tạo chuyến';

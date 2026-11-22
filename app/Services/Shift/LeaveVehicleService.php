@@ -1,20 +1,18 @@
 <?php
 
-namespace App\Services\Trip\Handlers;
+namespace App\Services\Shift;
 
 use App\Enums\CheckpointType;
-use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
-use App\Services\ShiftKmCalculatorService;
 use App\Services\Trip\CheckpointFactory;
-use App\Services\TripKmCalculatorService;
+use App\Services\Trip\DriverSwapService;
 use Illuminate\Support\Facades\DB;
 
-class EndHandler implements CheckpointHandlerInterface
+class LeaveVehicleService
 {
     public function handle(DriverShift $shift, Vehicle $vehicle, float $kmReading): TripCheckpoint
     {
@@ -35,18 +33,7 @@ class EndHandler implements CheckpointHandlerInterface
 
             if ($activeTrip !== null) {
                 // Trip chưa hoàn thành — driver_swap giữa chừng
-                app(TripKmCalculatorService::class)->calculate($activeTrip, endKm: $kmReading);
-                $activeTrip->refresh();
-                app(ShiftKmCalculatorService::class)->calculateForTrip($activeTrip);
-
-                $activeTrip->end_km = $kmReading;
-                $activeTrip->status = TripStatus::DriverSwap;
-                $activeTrip->save();
-
-                foreach ($activeTrip->orders()->whereIn('status', [OrderStatus::Sent->value, OrderStatus::InTransit->value])->get() as $order) {
-                    $order->status = OrderStatus::DriverSwap;
-                    $order->save();
-                }
+                app(DriverSwapService::class)->handOverWithKm($activeTrip, $kmReading);
 
                 $activeTripId = $activeTrip->id;
             }

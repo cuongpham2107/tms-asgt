@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Km;
 
 use App\Enums\CheckpointType;
 use App\Enums\TripKmReportStatus;
@@ -375,10 +375,7 @@ class TripKmAdjustmentService
         DB::transaction(function () use ($trip) {
             $this->syncBoundariesFromCheckpoints($trip);
 
-            app(TripKmCalculatorService::class)->calculate($trip);
-            $trip->refresh();
-
-            app(ShiftKmCalculatorService::class)->calculateForTrip($trip);
+            app(TripKmService::class)->recalculate($trip);
 
             $this->syncVehicleMileageIfLatest($trip);
             $this->lowerMonthlyStartKmIfAboveReadings($trip);

@@ -3,7 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Trip;
-use App\Services\TripKmSplitService;
+use App\Services\Km\TripKmSplitService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 

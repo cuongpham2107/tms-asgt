@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Km;
 
 use App\Models\DriverSwap;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 
-class HandoverKmResolver
+class HandoverKmService
 {
     /**
      * Lấy km handover của một swap, fallback về driver_swap checkpoint của shift bàn giao.

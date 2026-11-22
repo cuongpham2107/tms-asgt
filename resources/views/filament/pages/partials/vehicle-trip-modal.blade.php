@@ -20,7 +20,7 @@
             </span>
             <span class="text-gray-300 dark:text-gray-600">|</span>
             <span class="text-gray-600 dark:text-gray-400">
-                Ca trực: <strong class="text-gray-900 dark:text-white font-semibold">{{ \App\Services\ShiftScheduleService::getShiftDate()->format('d/m/Y') }} (08:00 - 08:00)</strong>
+                Ca trực: <strong class="text-gray-900 dark:text-white font-semibold">{{ \App\Services\Shift\ShiftScheduleService::getShiftDate()->format('d/m/Y') }} (08:00 - 08:00)</strong>
             </span>
         </div>
 
@@ -68,7 +68,7 @@
                 Không có chuyến xe nào trong ngày hôm nay
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Xe {{ $vehicle->plate_number }} chưa thực hiện chuyến xe nào vào ngày {{ \App\Services\ShiftScheduleService::getShiftDate()->format('d/m/Y') }}.
+                Xe {{ $vehicle->plate_number }} chưa thực hiện chuyến xe nào vào ngày {{ \App\Services\Shift\ShiftScheduleService::getShiftDate()->format('d/m/Y') }}.
             </p>
         </div>
     @else

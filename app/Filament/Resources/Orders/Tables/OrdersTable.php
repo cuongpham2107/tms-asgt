@@ -5,9 +5,7 @@ namespace App\Filament\Resources\Orders\Tables;
 use App\Enums\MapTile;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
-use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
-use App\Enums\VehicleStatus;
 use App\Filament\Actions\ActivityLogTimelineTableAction;
 use App\Filament\BaseTable;
 use App\Filament\Resources\Orders\Actions\AssignTransportAction;
@@ -16,10 +14,9 @@ use App\Filament\Resources\Orders\Actions\CopyTransportInfoAction;
 use App\Filament\Resources\Orders\Actions\CreateReturnTripAction;
 use App\Filament\Resources\Orders\Actions\UnsendOrderAction;
 use App\Models\Order;
-use App\Models\Trip;
-use App\Models\Vehicle;
+use App\Services\Gps\OsrmService;
 use App\Services\Notification\DriverNotificationService;
-use App\Services\OsrmService;
+use App\Services\Order\OrderDispatchService;
 use App\Services\Trip\DeliveryProgressSyncService;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Marker;
 use EduardoRibeiroDev\FilamentLeaflet\Layers\Shapes\CircleMarker;
@@ -197,22 +194,8 @@ class OrdersTable extends BaseTable
                             $record->update($data);
 
                             if (filled($vehicleId) && ! $record->trip) {
-                                $trip = Trip::create([
-                                    'trip_code' => Trip::generateTripCode(),
-                                    'vehicle_id' => $vehicleId,
-                                    'driver_id' => $driverId,
-                                    'status' => TripStatus::Pending,
-                                    'start_location_id' => $record->pickup_location_id,
-                                    'end_location_id' => $record->deliveryPoints()
-                                        ->orderBy('sequence', 'desc')
-                                        ->first()?->location_id,
-                                ]);
-
-                                $record->update([
-                                    'trip_id' => $trip->id,
-                                    'status' => OrderStatus::Sent,
-                                    'sent_at' => now(),
-                                ]);
+                                $trip = app(OrderDispatchService::class)->assign($record, (int) $vehicleId, filled($driverId) ? (int) $driverId : null);
+                                $record->refresh();
 
                                 // Tạm thời ẩn tự tạo checkpoint cho xe thuê ngoài để điều hành tự thêm khi chỉnh sửa chuyến.
                                 // CreatesOrderTransportCards::createCheckpointsForExternalVehicle($trip, collect([$record]));
@@ -222,11 +205,6 @@ class OrdersTable extends BaseTable
                                 } catch (\Throwable) {
                                 }
 
-                                $vehicle = Vehicle::query()->find($vehicleId);
-                                if ($vehicle !== null) {
-                                    $vehicle->status = VehicleStatus::Running;
-                                    $vehicle->save();
-                                }
                             }
 
                             return $record;

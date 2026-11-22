@@ -5,7 +5,7 @@ declare(strict_types=1);
 use App\Enums\DriverWorkShift;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 

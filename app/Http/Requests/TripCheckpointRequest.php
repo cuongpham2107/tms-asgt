@@ -8,7 +8,7 @@ use App\Http\Requests\Concerns\NormalizesDecimalInput;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
-use App\Services\Trip\TripKmLimitService;
+use App\Services\Km\TripKmLimitService;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;

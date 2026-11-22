@@ -4,7 +4,7 @@ namespace App\Filament\Widgets\Concerns;
 
 use App\Filament\Pages\DriverMonthlyKmReport;
 use App\Models\Order;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use Illuminate\Database\Eloquent\Builder;
 
 /**

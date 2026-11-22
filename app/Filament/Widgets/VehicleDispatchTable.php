@@ -9,7 +9,7 @@ use App\Filament\Traits\HasVehicleDispatchRows;
 use App\Models\Order;
 use App\Models\Trip;
 use App\Models\Vehicle;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\Concerns\HasJsRenderer;
 use Filament\Widgets\Widget;

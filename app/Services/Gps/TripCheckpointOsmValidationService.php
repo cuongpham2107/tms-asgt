@@ -1,10 +1,9 @@
 <?php
 
-namespace App\Services\Trip;
+namespace App\Services\Gps;
 
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
-use App\Services\OsrmService;
 use Illuminate\Support\Collection;
 
 class TripCheckpointOsmValidationService

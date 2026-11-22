@@ -15,7 +15,7 @@ use App\Models\Order;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Carbon\Carbon;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;

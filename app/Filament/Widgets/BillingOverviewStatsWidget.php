@@ -7,7 +7,7 @@ use App\Enums\OrderType;
 use App\Filament\Pages\TripStatisticsReport;
 use App\Models\Order;
 use App\Models\OrderCharge;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;

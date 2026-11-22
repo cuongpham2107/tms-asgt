@@ -10,6 +10,7 @@ use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\Vehicle;
+use App\Services\Km\OrderLoadedKm;
 use App\Services\Trip\DeliveryPointStatusUpdater;
 use Illuminate\Support\Collection;
 
@@ -60,20 +61,14 @@ class CompletedHandler implements CheckpointHandlerInterface
                 if ($order) {
                     $order->status = OrderStatus::Completed;
 
-                    // Record per-order loaded_km
-                    $pickupCheckpoint = TripCheckpoint::where('order_id', $orderId)
-                        ->where('checkpoint_type', 'arrived_pickup')
+                    $loadedKm = OrderLoadedKm::fromCheckpoints(TripCheckpoint::query()
+                        ->where('order_id', $orderId)
+                        ->whereIn('checkpoint_type', ['arrived_pickup', 'completed'])
                         ->whereNotNull('km_reading')
-                        ->first();
+                        ->orderBy('id')
+                        ->get(['checkpoint_type', 'order_id', 'km_reading']))[(int) $orderId] ?? null;
 
-                    $completeCheckpoint = TripCheckpoint::where('order_id', $orderId)
-                        ->where('checkpoint_type', 'completed')
-                        ->whereNotNull('km_reading')
-                        ->orderBy('km_reading', 'desc')
-                        ->first();
-
-                    if ($pickupCheckpoint && $completeCheckpoint) {
-                        $loadedKm = max(0, (float) $completeCheckpoint->km_reading - (float) $pickupCheckpoint->km_reading);
+                    if ($loadedKm !== null) {
                         $order->loaded_km = $loadedKm;
                     }
 

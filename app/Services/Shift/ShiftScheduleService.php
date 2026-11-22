@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Shift;
 
 use App\Enums\DriverWorkShift;
 use Carbon\CarbonInterface;

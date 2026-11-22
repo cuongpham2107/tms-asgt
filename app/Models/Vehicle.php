@@ -9,9 +9,9 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
-use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\Concerns\LogsChanges;
-use App\Services\ShiftScheduleService;
+use App\Services\Shift\ShiftScheduleService;
+use App\Services\Vehicle\TransportCardsCache;
 use Carbon\CarbonInterface;
 use Database\Factories\VehicleFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -84,7 +84,7 @@ class Vehicle extends Model
                 'dangerous_goods_permit_number',
                 'dangerous_goods_permit_expiry_date',
             ])) {
-                CreatesOrderTransportCards::clearTransportCardsCache();
+                TransportCardsCache::clear();
             }
         });
     }
@@ -134,7 +134,7 @@ class Vehicle extends Model
                 ->update(['status' => VehicleStatus::On->value]);
 
             if ($updated > 0) {
-                CreatesOrderTransportCards::clearTransportCardsCache();
+                TransportCardsCache::clear();
             }
         }
     }

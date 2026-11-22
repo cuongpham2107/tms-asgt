@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Trip;
+namespace App\Services\Km;
 
 use App\Enums\CheckpointType;
 use App\Models\Trip;

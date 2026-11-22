@@ -1,12 +1,11 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Gps;
 
 use App\Enums\EupCarStatus;
 use App\Events\VehiclesSynced;
 use App\Models\Vehicle;
 use App\Models\VehicleGpsLog;
-use App\Services\Trip\TripCheckpointOsmValidationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
