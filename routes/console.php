@@ -30,6 +30,12 @@ Schedule::command('shifts:auto-end')
     ->dailyAt('20:05')
     ->name('auto-end-driver-shifts-evening');
 
+// Cuối ngày rà km nhập sai, báo Quản lý điều phối và Phó TP Vận Tải (mỗi lỗi một thông báo có nút "Sửa chuyến").
+Schedule::command('trips:audit-km')
+    ->dailyAt('23:30')
+    ->name('audit-trip-km')
+    ->withoutOverlapping();
+
 Schedule::command('model:prune', ['--model' => [VehicleGpsLog::class]])
     ->daily()
     ->name('prune-vehicle-gps-logs');

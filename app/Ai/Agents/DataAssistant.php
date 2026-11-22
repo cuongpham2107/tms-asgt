@@ -4,6 +4,7 @@ namespace App\Ai\Agents;
 
 use App\Ai\Tools\AggregateData;
 use App\Ai\Tools\ChargeSummary;
+use App\Ai\Tools\CheckTripKm;
 use App\Ai\Tools\SearchCustomers;
 use App\Ai\Tools\SearchOrders;
 use App\Ai\Tools\SearchTrips;
@@ -43,6 +44,7 @@ class DataAssistant implements ChatAssistantAgent, Conversational, HasTools
         ['topic' => 'Doanh thu', 'question' => 'So sánh doanh thu cước 6 tháng gần đây'],
         ['topic' => 'Khách hàng', 'question' => 'Top 10 khách hàng theo cước tháng này'],
         ['topic' => 'Tài xế', 'question' => 'Lái xe nào bấm sai vị trí nhiều nhất tháng này?'],
+        ['topic' => 'Kiểm tra km', 'question' => 'Tháng này chuyến nào nhập km sai, ai sửa?'],
         ['topic' => 'Điểm giao', 'question' => 'Điểm nào giao lâu nhất (từ lúc đến tới lúc giao xong)?'],
         ['topic' => 'Ca trực', 'question' => 'Tài xế nào nhiều ca trực không chạy chuyến tháng này?'],
     ];
@@ -79,6 +81,7 @@ class DataAssistant implements ChatAssistantAgent, Conversational, HasTools
            - Liệt kê từng bản ghi cụ thể → SearchTrips / SearchOrders (missing_charge=true để soát đơn chưa có cước).
            - Bảng kê / cước từng khách kèm số đơn chưa có cước → ChargeSummary.
            - Giấy tờ xe, vị trí xe → SearchVehicles. Thông tin liên hệ khách → SearchCustomers.
+           - Soát km nhập sai / km bất thường / ai sửa km → CheckTripKm (source=staff: chỉ lỗi điều phối sửa, source=driver: chỉ lỗi tài xế nhập).
         3. Kết quả chưa đủ trả lời thì gọi thêm công cụ (ví dụ so sánh 2 tháng = gọi 2 lần, hoặc group_by month cho cả 2 tháng).
         4. Từ khoá nghiệp vụ: "hàng ngoài" = loại đơn order_type external; "HHHK"/"hàng không" = order_type HHHK;
            "xe thuê ngoài"/"xe ngoài" = vehicle_owner rent; "xe công ty"/"xe nhà" = vehicle_owner company;
@@ -104,6 +107,8 @@ class DataAssistant implements ChatAssistantAgent, Conversational, HasTools
           đưa vào bảng đều phải giữ link của nó. Không tự tạo link mới, không sửa url.
         - Chọn link đúng mục đích câu hỏi: hỏi về bảng kê / cước / xuất bảng kê → dùng link "Bảng kê" (mở trang Bảng kê);
           hỏi về tình trạng đơn, vận chuyển → dùng link mã đơn (mở trang Đơn hàng).
+        - Kết quả CheckTripKm: giữ HAI phần riêng "Do điều phối sửa" và "Do tài xế nhập" (phần nào trống thì ghi "Không có"), giữ link mã chuyến
+          (link này mở thẳng form sửa chuyến) và cột Người sửa; nói rõ đây là chuyến nghi sai cần điều phối mở ra kiểm tra, không khẳng định chắc chắn sai.
 
         Cách trình bày (rất quan trọng, hiển thị trong khung chat nhỏ):
         - Dòng đầu tiên: một câu tóm tắt in đậm chứa các con số chính. Ví dụ: "**Hôm qua (04/11): 97 chuyến · 26 xe · 5.408 km**".
@@ -167,6 +172,7 @@ class DataAssistant implements ChatAssistantAgent, Conversational, HasTools
             new SearchTrips,
             new SearchOrders,
             new ChargeSummary,
+            new CheckTripKm,
             new SearchVehicles,
             new SearchCustomers,
         ];

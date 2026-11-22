@@ -99,4 +99,16 @@ class TripResource extends BaseResource
             'timeline' => Pages\ViewTripTimeline::route('/{record}/timeline'),
         ];
     }
+
+    /**
+     * Link mở trang Chuyến, tìm đúng chuyến (tìm kiếm bỏ qua bộ lọc) và tự mở form Sửa chuyến.
+     */
+    public static function getEditTripUrl(Trip $trip): string
+    {
+        return static::getUrl('index', [
+            'tripSearch' => $trip->trip_code,
+            'tableAction' => 'edit',
+            'tableActionRecord' => $trip->getKey(),
+        ]);
+    }
 }
