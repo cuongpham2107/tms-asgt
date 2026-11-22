@@ -133,7 +133,7 @@ class TripController extends Controller
             || $trip->driverSwaps()->where('from_driver_id', $user->id)->exists();
 
         if (! $belongsToDriver) {
-            return response()->json(['message' => 'This trip is not assigned to you'], 403);
+            return response()->json(['message' => 'Chuyến này đã được điều phối cho tài xế khác hoặc không còn thuộc về bạn.'], 403);
         }
 
         $trip->load([

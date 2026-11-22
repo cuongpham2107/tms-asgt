@@ -60,13 +60,13 @@ class OrderController extends Controller
         $order->load('trip');
         if ($order->trip?->driver_id !== $user->id) {
             /** @status 403 */
-            return response()->json(['message' => 'This order is not assigned to you'], 403);
+            return response()->json(['message' => 'Đơn hàng này đã được điều phối cho tài xế khác hoặc không còn thuộc về bạn.'], 403);
         }
 
         // Driver only sees orders that have been sent
         if (in_array($order->status, [OrderStatus::Draft, OrderStatus::Assigned])) {
             /** @status 403 */
-            return response()->json(['message' => 'Order has not been sent yet'], 403);
+            return response()->json(['message' => 'Đơn hàng chưa được gửi cho tài xế.'], 403);
         }
 
         $order->load([
@@ -96,12 +96,12 @@ class OrderController extends Controller
         $order->load('trip');
         if ($order->trip?->driver_id !== $user->id) {
             /** @status 403 */
-            return response()->json(['message' => 'This order is not assigned to you'], 403);
+            return response()->json(['message' => 'Đơn hàng này đã được điều phối cho tài xế khác hoặc không còn thuộc về bạn.'], 403);
         }
 
         if (in_array($order->status, [OrderStatus::Draft, OrderStatus::Assigned])) {
             /** @status 403 */
-            return response()->json(['message' => 'Order has not been sent yet'], 403);
+            return response()->json(['message' => 'Đơn hàng chưa được gửi cho tài xế.'], 403);
         }
 
         $points = $order->deliveryPoints()
