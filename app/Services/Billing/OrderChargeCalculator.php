@@ -73,6 +73,31 @@ class OrderChargeCalculator
     }
 
     /**
+     * Tính lại riêng phần giờ chờ theo bảng phí hiện tại (giữ nguyên đơn giá cước và các phí khác).
+     * Trả về true nếu số phút hoặc phí giờ chờ thay đổi.
+     */
+    public function refreshWaiting(Order $order, OrderCharge $charge): bool
+    {
+        if ($charge->isLocked()) {
+            return false;
+        }
+
+        $order->loadMissing(['pickupLocation', 'deliveryPoints.location', 'trip.vehicle']);
+        $waiting = $this->waiting($order, $charge, $order->planned_loading_at ?? $order->created_at ?? now());
+
+        $charge->waiting_minutes = $waiting['minutes'];
+        $charge->waiting_fee = $waiting['fee'];
+
+        if (! $charge->isDirty(['waiting_minutes', 'waiting_fee'])) {
+            return false;
+        }
+
+        $charge->recalculateTotals()->save();
+
+        return true;
+    }
+
+    /**
      * Thêm các phí riêng của khách bật "Tự cộng cho mọi đơn" (VD: bốc xếp theo thùng).
      * Chỉ thay các dòng phí tự động; loại phí kế toán đã chọn/nhập tay thì giữ nguyên, không cộng thêm.
      */

@@ -622,3 +622,54 @@ test('cancelled trip is charged at the customer cancel percent', function () {
     expect((float) $charge->base_price)->toBe(446_250.0)
         ->and((float) $charge->adjusted_price)->toBe(447_000.0);
 });
+
+test('adding a waiting fee rate later fills the waiting fee of unlocked charges left at zero', function () {
+    $orderWithWaiting = function (): Order {
+        $order = ($this->makeOrder)();
+        foreach ([
+            [CheckpointType::ArrivedPickup, '2026-10-21 10:00'],
+            [CheckpointType::LeftPickup, '2026-10-21 12:30'],
+            [CheckpointType::ArrivedDelivery, '2026-10-21 14:00'],
+            [CheckpointType::Completed, '2026-10-21 14:30'],
+        ] as [$type, $at]) {
+            TripCheckpoint::create(['trip_id' => $order->trip_id, 'order_id' => $order->id, 'checkpoint_type' => $type, 'occurred_at' => Carbon::parse($at)]);
+        }
+
+        return $order;
+    };
+
+    $calculator = app(OrderChargeCalculator::class);
+    $open = $calculator->calculate($orderWithWaiting());
+
+    // Kế toán "Lưu cước" sau khi bảng giá đổi: giữ nguyên số đã sửa tay
+    $editedLater = $calculator->calculate($orderWithWaiting());
+    $editedLater->update(['manually_updated_at' => now()->addHour()]);
+
+    $locked = $calculator->calculate($orderWithWaiting());
+    $locked->update(['exported_at' => now()]);
+
+    expect((float) $open->waiting_fee)->toBe(0.0);
+
+    WaitingFeeRate::create([
+        'customer_id' => $this->customer->id,
+        'tiers' => [['tonnage' => 5, 'fee' => 50_000, 'free_minutes' => 60]],
+        'fee_block_minutes' => 60,
+        'grace_minutes' => 19,
+    ]);
+
+    // Đóng 150' − 60' miễn = 90' ⇒ 2 block × 50.000
+    expect((float) $open->fresh()->waiting_fee)->toBe(100_000.0)
+        ->and((float) $open->fresh()->total)->toBe(1_275_000.0 + 100_000.0)
+        ->and((float) $editedLater->fresh()->waiting_fee)->toBe(0.0)
+        ->and((float) $locked->fresh()->waiting_fee)->toBe(0.0);
+});
+
+test('adding a freight price later prices unlocked charges that had no price', function () {
+    $order = ($this->makeOrder)(['chargeable_weight' => 8]);
+    $charge = app(OrderChargeCalculator::class)->calculate($order);
+    expect($charge->base_price)->toBeNull();
+
+    $this->rate->update(['prices' => ['1.25' => 750_000, '5' => 1_275_000, '8' => 1_600_000]]);
+
+    expect((float) $charge->fresh()->base_price)->toBe(1_600_000.0);
+});
