@@ -7,6 +7,7 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleType;
 use App\Filament\Pages\TripStatisticsReport;
+use App\Filament\Resources\Orders\Pages\CreateOrder;
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Models\Area;
 use App\Models\BillingZone;
@@ -26,6 +27,7 @@ use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
@@ -325,4 +327,47 @@ test('external order chargeable_weight 5.00 is normalized to 5 when editing and 
         ->assertHasNoActionErrors();
 
     expect($order->fresh()->notes)->toBe('Sửa từ bảng kê vẫn hợp lệ');
+});
+
+test('changing the customer while editing an order keeps the pickup location, creating still suggests it', function () {
+    Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']);
+    $alsb = Location::create(['code' => 'ALSB', 'name' => 'ALS Bắc Ninh', 'loc_type' => 'pickup', 'is_active' => true]);
+    $alsbCustomer = Customer::create(['code' => 'ALSB', 'name' => 'ALS Bắc Ninh', 'is_active' => true, 'location_id' => $alsb->id]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-PICKUP-01',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $this->trip->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'planned_loading_at' => Carbon::parse('2026-10-21 10:30:00'),
+        'status' => OrderStatus::Completed,
+        'created_by' => $this->user->id,
+    ]);
+
+    // Sửa đơn trong Bảng thống kê: đổi khách hàng không được đổi điểm đóng
+    Livewire::test(TripStatisticsReport::class, ['startDate' => '2026-10-01', 'endDate' => '2026-10-31'])
+        ->mountAction([
+            TestAction::make('editCharge')->arguments(['orderId' => $order->id]),
+            TestAction::make('editOrder')->schemaComponent('summary_order_code'),
+        ])
+        ->fillForm(['customer_id' => $alsbCustomer->id])
+        ->assertSchemaStateSet(['pickup_location_id' => $this->pickupLocation->id])
+        ->callMountedAction()
+        ->assertHasNoActionErrors();
+
+    expect($order->refresh())
+        ->customer_id->toBe($alsbCustomer->id)
+        ->pickup_location_id->toBe($this->pickupLocation->id);
+
+    // Sửa đơn ở màn Đơn hàng: cũng giữ nguyên
+    Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()])
+        ->fillForm(['customer_id' => $this->customer->id])
+        ->assertSchemaStateSet(['pickup_location_id' => $this->pickupLocation->id]);
+
+    // Tạo đơn mới: vẫn gợi ý điểm đóng theo khách hàng
+    Livewire::test(CreateOrder::class)
+        ->fillForm(['customer_id' => $alsbCustomer->id])
+        ->assertSchemaStateSet(['pickup_location_id' => $alsb->id]);
 });

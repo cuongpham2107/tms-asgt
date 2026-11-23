@@ -32,6 +32,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -873,7 +874,12 @@ abstract class CreatesOrderTransportCards
             ->preload()
             ->columnSpanFull()
             ->live()
-            ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+            ->afterStateUpdated(function ($state, Set $set, Get $get, ?Model $record = null): void {
+                // Chỉ gợi ý điểm nhận hàng khi tạo đơn mới; sửa đơn đã có thì đổi khách hàng không được ghi đè điểm đã nhập.
+                if ($record instanceof Order && $record->exists) {
+                    return;
+                }
+
                 if (blank($state)) {
                     $set('pickup_location_id', null);
 
