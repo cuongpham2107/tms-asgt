@@ -128,7 +128,10 @@ class Vehicle extends Model
             ])
             ->exists();
 
-        if (! $hasActiveOrders && ! $hasActiveEmptyRun) {
+        // Chuyến đã đảo lái còn đơn chưa giao xong: hàng vẫn trên xe, xe chưa rảnh.
+        $hasPendingHandover = Trip::getPendingHandoverTripForVehicle($vehicleId, $excludeTripId) !== null;
+
+        if (! $hasActiveOrders && ! $hasActiveEmptyRun && ! $hasPendingHandover) {
             $updated = self::where('id', $vehicleId)
                 ->where('status', VehicleStatus::Running->value)
                 ->update(['status' => VehicleStatus::On->value]);

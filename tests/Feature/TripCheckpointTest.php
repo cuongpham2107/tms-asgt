@@ -492,8 +492,8 @@ test('cannot auto-start trip via arrived_pickup when driver has active trip', fu
     expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
 });
 
-test('can start new trip when vehicle has previous trip in driver_swap status', function () {
-    // Chuyến đã đảo lái không chặn xe: tài xế cũ không cần quan tâm chuyến đó nữa (44fa7c81).
+test('cannot start another trip on a vehicle whose handed-over trip still has undelivered orders', function () {
+    // Tài xế cũ đã bàn giao thì rảnh, nhưng hàng của chuyến đảo lái còn trên xe nên xe chưa được chạy chuyến khác.
     $this->trip->update([
         'status' => TripStatus::DriverSwap,
     ]);
@@ -535,12 +535,13 @@ test('can start new trip when vehicle has previous trip in driver_swap status', 
         'checkpoint_type' => 'started',
         'km_reading' => 50050,
         'occurred_at' => now()->toIso8601String(),
-    ])->assertSuccessful();
+    ])->assertStatus(422)
+        ->assertJsonPath('errors.checkpoint_type.0', fn ($msg) => str_contains($msg, 'TRIP-TEST-001') && str_contains($msg, 'liên hệ điều phối'));
 
-    expect($otherTrip->fresh()->status)->not->toBe(TripStatus::Pending);
+    expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
 });
 
-test('can auto-start new trip via arrived_pickup when vehicle has previous trip in driver_swap status', function () {
+test('cannot auto-start another trip via arrived_pickup on a vehicle whose handed-over trip still has undelivered orders', function () {
     $this->trip->update([
         'status' => TripStatus::DriverSwap,
     ]);
@@ -582,9 +583,10 @@ test('can auto-start new trip via arrived_pickup when vehicle has previous trip 
         'checkpoint_type' => 'arrived_pickup',
         'km_reading' => 50050,
         'occurred_at' => now()->toIso8601String(),
-    ])->assertSuccessful();
+    ])->assertStatus(422)
+        ->assertJsonPath('errors.checkpoint_type.0', fn ($msg) => str_contains($msg, 'TRIP-TEST-001') && str_contains($msg, 'chưa giao xong hàng'));
 
-    expect($otherTrip->fresh()->status)->not->toBe(TripStatus::Pending);
+    expect($otherTrip->fresh()->status)->toBe(TripStatus::Pending);
 });
 
 test('arrived_delivery and completed handle order with repeated locations in route (A -> B -> A)', function () {
@@ -1154,4 +1156,47 @@ test('trip checkpoints are ordered chronologically by occurred_at then logical t
     expect($checkpoints[1]->checkpoint_type)->toBe(CheckpointType::ArrivedPickup);
     expect($checkpoints[2]->id)->toBe($left->id);
     expect($checkpoints[2]->checkpoint_type)->toBe(CheckpointType::LeftPickup);
+});
+
+test('a vehicle still carrying a handed-over trip stays busy and warns the driver who tries to start another trip', function () {
+    $previousDriver = User::factory()->create(['name' => 'Lái trước']);
+    $handover = Trip::create([
+        'trip_code' => 'TRIP-HANDOVER',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $previousDriver->id,
+        'status' => TripStatus::DriverSwap,
+    ]);
+    $handoverOrder = Order::create([
+        'order_code' => 'ORD-HANDOVER',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $handover->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'status' => OrderStatus::DriverSwap,
+        'created_by' => $this->driver->id,
+    ]);
+    $this->vehicle->update(['status' => VehicleStatus::Running]);
+
+    // Xe chưa rảnh vì còn hàng của chuyến đảo lái
+    Vehicle::syncIdleStatus($this->vehicle->id);
+    expect($this->vehicle->fresh()->status)->toBe(VehicleStatus::Running);
+
+    // App vẫn thấy chuyến đã gán trước; bấm bắt đầu thì được báo để gọi điều phối
+    expect(collect($this->getJson('/api/driver/trips/active')->json('data'))->pluck('id'))->toContain($this->trip->id)
+        ->and(collect($this->getJson('/api/driver/orders')->json('data'))->pluck('id'))->toContain($this->order1->id);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertStatus(422)
+        ->assertJsonPath('errors.checkpoint_type.0', fn ($msg) => str_contains($msg, 'TRIP-HANDOVER') && str_contains($msg, 'chưa giao xong hàng'));
+
+    // Giao xong hàng của chuyến đảo lái: xe rảnh, bắt đầu được
+    $handoverOrder->update(['status' => OrderStatus::Completed]);
+
+    $this->postJson("/api/driver/trips/{$this->trip->id}/checkpoints", [
+        'checkpoint_type' => 'started',
+        'occurred_at' => now()->toIso8601String(),
+    ])->assertSuccessful();
 });

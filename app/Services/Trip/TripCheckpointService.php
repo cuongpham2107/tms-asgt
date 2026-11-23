@@ -223,6 +223,8 @@ class TripCheckpointService
         $activeTrip = $activeTripQuery->with(['vehicle', 'driver'])->first();
 
         if ($activeTrip === null) {
+            $this->validateVehicleHasNoPendingHandover($trip);
+
             return;
         }
 
@@ -243,6 +245,29 @@ class TripCheckpointService
                 $activeTrip->vehicle?->plate_number ?? ('#'.$activeTrip->id),
                 $activeTrip->driver?->name ?? 'Chưa gán tài xế',
                 $activeTrip->status->label(),
+            ),
+        ]);
+    }
+
+    /**
+     * Xe còn chuyến đã đảo lái chưa giao xong hàng (chưa ai nhận) thì chưa được chạy chuyến khác.
+     *
+     * @throws ValidationException
+     */
+    private function validateVehicleHasNoPendingHandover(Trip $trip): void
+    {
+        $pending = Trip::getPendingHandoverTripForVehicle($trip->vehicle_id, $trip->id);
+
+        if ($pending === null) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'checkpoint_type' => sprintf(
+                'Xe biển số %s còn chuyến %s (mã đơn %s) đã đảo lái nhưng chưa giao xong hàng. Vui lòng liên hệ điều phối gán lại tài xế cho chuyến đó trước khi bắt đầu chuyến mới.',
+                $pending->vehicle?->plate_number ?? ('#'.$pending->vehicle_id),
+                $pending->trip_code,
+                $pending->orders()->pluck('order_code')->filter()->join(', '),
             ),
         ]);
     }

@@ -298,6 +298,21 @@ class Trip extends Model
             ->first();
     }
 
+    /**
+     * Chuyến đã đảo lái (tài xế cũ đã bàn giao) nhưng còn đơn chưa giao xong và chưa ai nhận: hàng vẫn trên xe,
+     * nên xe chưa rảnh dù tài xế cũ đã rảnh.
+     */
+    public static function getPendingHandoverTripForVehicle(int $vehicleId, ?int $excludeTripId = null): ?self
+    {
+        return self::query()
+            ->with(['vehicle', 'driver'])
+            ->where('vehicle_id', $vehicleId)
+            ->when($excludeTripId, fn ($q) => $q->where('id', '!=', $excludeTripId))
+            ->where('status', TripStatus::DriverSwap)
+            ->whereHas('orders', fn ($orders) => $orders->whereNotIn('status', [OrderStatus::Completed->value, OrderStatus::Cancelled->value]))
+            ->first();
+    }
+
     public static function generateTripCode(): string
     {
         $nextId = (self::max('id') ?? 0) + 1;
