@@ -656,9 +656,9 @@ class TripForm
     {
         return function (string $attribute, mixed $value, Closure $fail): void {
             $rows = collect(is_array($value) ? $value : [])
-                ->filter(fn ($row): bool => is_array($row) && filled($row['occurred_at'] ?? null) && filled($row['checkpoint_type'] ?? null))
+                ->filter(fn ($row): bool => is_array($row) && filled($row['occurred_at'] ?? null))
                 ->map(function (array $row): array {
-                    $raw = $row['checkpoint_type'];
+                    $raw = $row['checkpoint_type'] ?? null;
                     $type = $raw instanceof CheckpointType
                         ? $raw
                         : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
@@ -668,6 +668,21 @@ class TripForm
                         'at' => Carbon::parse($row['occurred_at']),
                     ];
                 });
+
+            $now = now();
+            foreach ($rows as $row) {
+                if ($row['at']->gt($now)) {
+                    $typeLabel = $row['type']?->getLabel() ?? 'Mốc hành trình';
+                    $fail(sprintf(
+                        'Thời gian mốc "%s" (%s) không được lớn hơn thời gian hiện tại (%s).',
+                        $typeLabel,
+                        $row['at']->format('H:i d/m/Y'),
+                        $now->format('H:i d/m/Y'),
+                    ));
+
+                    return;
+                }
+            }
 
             $startedAt = $rows
                 ->where('type', CheckpointType::Started)
@@ -771,7 +786,10 @@ class TripForm
             $prev = collect($checkpoints)->reverse()->first(fn ($item): bool => is_array($item) && filled($item['occurred_at'] ?? null));
             if ($prev && filled($prev['occurred_at'] ?? null)) {
                 try {
-                    return $parseFormatted($prev['occurred_at'])->copy()->addMinute()->format('Y-m-d H:i');
+                    $suggested = $parseFormatted($prev['occurred_at'])->copy()->addMinute();
+                    $now = now($tz);
+
+                    return ($suggested->gt($now) ? $now : $suggested)->format('Y-m-d H:i');
                 } catch (\Throwable) {
                     // Fallback to trip start time or now() when intermediate value is invalid.
                 }

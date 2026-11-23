@@ -601,3 +601,45 @@ test('adding only an arrived delivery checkpoint at a new point on a delivered t
     expect($order->fresh()->status)->toBe(OrderStatus::InTransit)
         ->and($trip->fresh()->status)->toBe(TripStatus::ArrivedDelivery);
 })->with(['own', 'shared', 'blank']);
+
+test('trip edit rejects any checkpoint with occurred_at in the future', function () {
+    $this->actingAs($this->admin);
+
+    $trip = Trip::create([
+        'trip_code' => 'CD-2026-11-21-1010',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'status' => TripStatus::Started,
+        'start_km' => 1000.0,
+        'started_at' => now()->subHour(),
+    ]);
+
+    $cp = TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $this->driver->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'km_reading' => 1000.0,
+        'occurred_at' => now()->subHour(),
+    ]);
+
+    $futureTime = now()->addMinutes(30);
+
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+        ->loadTable()
+        ->mountTableAction('edit', $trip->fresh())
+        ->set('mountedActions.0.data.checkpoints', [
+            'record-'.$cp->id => [
+                'checkpoint_type' => CheckpointType::Started->value,
+                'order_id' => null,
+                'delivery_point_id' => null,
+                'driver_id' => $this->driver->id,
+                'km_reading' => 1000.0,
+                'occurred_at' => $futureTime->format('Y-m-d H:i'),
+            ],
+        ])
+        ->callMountedTableAction()
+        ->assertHasTableActionErrors(['checkpoints']);
+
+    expect($cp->fresh()->occurred_at->format('Y-m-d H:i'))->not->toBe($futureTime->format('Y-m-d H:i'));
+});

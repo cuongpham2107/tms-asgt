@@ -658,10 +658,12 @@ class ListTrips extends ListRecords
 
         $actionRecordId = $this->deepLinkTripId;
         $hasSearch = filled(trim((string) $this->tripSearch));
+        $sentAtSql = 'COALESCE((SELECT MIN(orders.sent_at) FROM orders WHERE orders.trip_id = trips.id), trips.created_at)';
 
         $query = TripResource::getEloquentQuery()
             ->orderByRaw($caseSql)
-            ->orderBy('trips.updated_at', 'desc')
+            ->orderByRaw("{$sentAtSql} DESC")
+            ->orderByDesc('trips.id')
             ->with([
                 'vehicle',
                 'driver',

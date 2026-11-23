@@ -65,6 +65,13 @@ class TripsTable extends BaseTable
                 ->withCount('photos')
             )
             ->columns([
+                TextColumn::make('sent_at')
+                    ->label('Giờ gửi lệnh')
+                    ->state(fn (Trip $record) => $record->sent_at)
+                    ->dateTime('H:i d/m/Y')
+                    ->weight(FontWeight::Bold)
+                    ->placeholder('—'),
+
                 TextColumn::make('vehicle.plate_number')
                     ->label('BSX')
                     ->html()

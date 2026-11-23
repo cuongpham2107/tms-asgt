@@ -150,3 +150,70 @@ test('list orders and list trips search globally across all statuses, areas, typ
         ->set('tripSearch', 'cd-old-999')
         ->assertCanSeeTableRecords([$oldTrip]);
 });
+
+test('list trips orders by status priority first and then by sent_at instead of updated_at', function () {
+    $earlierSentTrip = Trip::create([
+        'trip_code' => 'CD-2026-11-23-101',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->user->id,
+        'status' => TripStatus::Pending,
+        'created_at' => now()->subHours(3),
+        'updated_at' => now(),
+    ]);
+    Order::create([
+        'order_code' => 'ASG-101',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $earlierSentTrip->id,
+        'status' => OrderStatus::Sent,
+        'sent_at' => now()->subHours(3),
+        'planned_loading_at' => now()->subHours(3),
+        'created_by' => $this->user->id,
+    ]);
+
+    $laterSentTrip = Trip::create([
+        'trip_code' => 'CD-2026-11-23-102',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->user->id,
+        'status' => TripStatus::Pending,
+        'created_at' => now()->subHour(),
+        'updated_at' => now()->subHours(2),
+    ]);
+    Order::create([
+        'order_code' => 'ASG-102',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $laterSentTrip->id,
+        'status' => OrderStatus::Sent,
+        'sent_at' => now()->subHour(),
+        'planned_loading_at' => now()->subHour(),
+        'created_by' => $this->user->id,
+    ]);
+
+    $runningTrip = Trip::create([
+        'trip_code' => 'CD-2026-11-23-103',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->user->id,
+        'status' => TripStatus::Started,
+        'started_at' => now()->subMinutes(30),
+        'created_at' => now()->subMinutes(30),
+        'updated_at' => now()->addMinute(),
+    ]);
+    Order::create([
+        'order_code' => 'ASG-103',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $runningTrip->id,
+        'status' => OrderStatus::InTransit,
+        'sent_at' => now()->subMinutes(30),
+        'planned_loading_at' => now()->subMinutes(30),
+        'created_by' => $this->user->id,
+    ]);
+
+    Livewire::test(ListTrips::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$laterSentTrip, $earlierSentTrip, $runningTrip], inOrder: true);
+});
