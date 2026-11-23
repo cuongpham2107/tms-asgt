@@ -643,3 +643,51 @@ test('trip edit rejects any checkpoint with occurred_at in the future', function
 
     expect($cp->fresh()->occurred_at->format('Y-m-d H:i'))->not->toBe($futureTime->format('Y-m-d H:i'));
 });
+
+test('trip edit rejects checkpoint km jump exceeding max allowed delta', function () {
+    $this->actingAs($this->admin);
+
+    $trip = Trip::create([
+        'trip_code' => 'CD-2026-11-21-1010-KM',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'status' => TripStatus::Started,
+        'start_km' => 405591.0,
+        'started_at' => now()->subHours(2),
+    ]);
+
+    $cpStarted = TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $this->driver->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'km_reading' => 405591.0,
+        'occurred_at' => now()->subHours(2),
+    ]);
+
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+        ->loadTable()
+        ->mountTableAction('edit', $trip->fresh())
+        ->set('mountedActions.0.data.checkpoints', [
+            'record-'.$cpStarted->id => [
+                'checkpoint_type' => CheckpointType::Started->value,
+                'order_id' => null,
+                'delivery_point_id' => null,
+                'driver_id' => $this->driver->id,
+                'km_reading' => 405591.0,
+                'occurred_at' => now()->subHours(2)->format('Y-m-d H:i'),
+            ],
+            'new-end' => [
+                'checkpoint_type' => CheckpointType::End->value,
+                'order_id' => null,
+                'delivery_point_id' => null,
+                'driver_id' => $this->driver->id,
+                'km_reading' => 4055603.0,
+                'occurred_at' => now()->subHour()->format('Y-m-d H:i'),
+            ],
+        ])
+        ->callMountedTableAction()
+        ->assertHasTableActionErrors(['checkpoints']);
+
+    expect((float) $trip->fresh()->end_km)->not->toBe(4055603.0);
+});

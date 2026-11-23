@@ -12,6 +12,7 @@ use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
+use App\Services\Km\TripKmLimitService;
 use Carbon\Carbon;
 use Closure;
 use DateTimeInterface;
@@ -576,7 +577,7 @@ class TripForm
                             ->deletable()
                             ->addActionLabel('Thêm mốc hành trình')
                             ->rules([
-                                fn (): Closure => self::checkpointKmIncreasingRule(),
+                                fn (?Model $record): Closure => self::checkpointKmIncreasingRule($record),
                                 fn (): Closure => self::checkpointTimeOrderRule(),
                                 fn (): Closure => self::newDeliveryCheckpointNeedsPointRule(),
                             ])
@@ -588,20 +589,68 @@ class TripForm
     }
 
     /**
-     * Km các mốc phải tăng dần theo thời gian; các mốc cùng thời điểm được phép lệch nhau.
+     * Km các mốc phải tăng dần theo thời gian (các mốc cùng thời điểm được phép lệch nhau)
+     * và bước nhảy giữa hai mốc liên tiếp không vượt quá trần của TripKmLimitService (+100 km / +600 km).
      */
-    public static function checkpointKmIncreasingRule(): Closure
+    public static function checkpointKmIncreasingRule(?Model $record = null): Closure
     {
-        return function (string $attribute, mixed $value, Closure $fail): void {
+        return function (string $attribute, mixed $value, Closure $fail) use ($record): void {
+            $limitService = app(TripKmLimitService::class);
+            $index = 0;
+
             $rows = collect(is_array($value) ? $value : [])
                 ->filter(fn ($row): bool => is_array($row) && filled($row['km_reading'] ?? null) && filled($row['occurred_at'] ?? null))
-                ->map(fn (array $row): array => [
-                    'km' => (float) str_replace(',', '', (string) $row['km_reading']),
-                    'at' => Carbon::parse($row['occurred_at']),
-                ])
-                ->sortBy(fn (array $row): int => $row['at']->getTimestamp());
+                ->map(function (array $row) use (&$index): array {
+                    $rawType = $row['checkpoint_type'] ?? null;
+                    $type = $rawType instanceof CheckpointType
+                        ? $rawType
+                        : (is_string($rawType) ? CheckpointType::tryFrom($rawType) : null);
+
+                    return [
+                        'index' => $index++,
+                        'type' => $type,
+                        'km' => (float) str_replace(',', '', (string) $row['km_reading']),
+                        'at' => Carbon::parse($row['occurred_at']),
+                    ];
+                })
+                ->sortBy(fn (array $row): array => [$row['at']->getTimestamp(), $row['index']])
+                ->values();
+
+            if ($rows->isEmpty()) {
+                return;
+            }
+
+            if ($record instanceof Trip) {
+                $baselineKm = ($record->start_km !== null && (float) $record->start_km > 0)
+                    ? (float) $record->start_km
+                    : (($record->vehicle?->current_mileage !== null && (float) $record->vehicle->current_mileage > 0)
+                        ? (float) $record->vehicle->current_mileage
+                        : null);
+                $baselineLabel = ($record->start_km !== null && (float) $record->start_km > 0)
+                    ? 'Km bắt đầu chuyến'
+                    : 'Km hiện tại của xe';
+                $firstRow = $rows->first();
+
+                if ($baselineKm !== null && ($firstRow['km'] - $baselineKm) > TripKmLimitService::DELTA_LONG) {
+                    $maxAllowed = $baselineKm + TripKmLimitService::DELTA_LONG;
+                    $firstLabel = $firstRow['type']?->getLabel() ?? 'Mốc đầu tiên';
+                    $fail(sprintf(
+                        'Km mốc "%s" lúc %s (%s km) vượt quá giới hạn cho phép (+%.0f km) so với %s (%s km). Tối đa cho phép: %s km.',
+                        $firstLabel,
+                        $firstRow['at']->format('H:i d/m'),
+                        number_format($firstRow['km'], 1, ',', '.'),
+                        TripKmLimitService::DELTA_LONG,
+                        $baselineLabel,
+                        number_format($baselineKm, 1, ',', '.'),
+                        number_format($maxAllowed, 1, ',', '.'),
+                    ));
+
+                    return;
+                }
+            }
 
             $highest = null;
+            $previous = null;
 
             foreach ($rows as $row) {
                 if ($highest !== null && $row['at']->gt($highest['at']) && $row['km'] < $highest['km']) {
@@ -616,9 +665,35 @@ class TripForm
                     return;
                 }
 
+                if ($previous !== null) {
+                    $maxDelta = ($previous['type'] !== null && $row['type'] !== null)
+                        ? $limitService->getMaxAllowedDelta($previous['type'], $row['type'])
+                        : TripKmLimitService::DELTA_LONG;
+
+                    if (($row['km'] - $previous['km']) > $maxDelta) {
+                        $maxAllowed = $previous['km'] + $maxDelta;
+                        $currLabel = $row['type']?->getLabel() ?? 'Mốc sau';
+                        $prevLabel = $previous['type']?->getLabel() ?? 'Mốc trước';
+                        $fail(sprintf(
+                            'Km mốc "%s" lúc %s (%s km) vượt quá giới hạn cho phép (+%.0f km) so với mốc "%s" lúc %s (%s km). Tối đa cho phép: %s km.',
+                            $currLabel,
+                            $row['at']->format('H:i d/m'),
+                            number_format($row['km'], 1, ',', '.'),
+                            $maxDelta,
+                            $prevLabel,
+                            $previous['at']->format('H:i d/m'),
+                            number_format($previous['km'], 1, ',', '.'),
+                            number_format($maxAllowed, 1, ',', '.'),
+                        ));
+
+                        return;
+                    }
+                }
+
                 if ($highest === null || $row['km'] >= $highest['km']) {
                     $highest = $row;
                 }
+                $previous = $row;
             }
         };
     }
