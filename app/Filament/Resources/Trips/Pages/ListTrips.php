@@ -82,7 +82,7 @@ class ListTrips extends ListRecords
     public string $orderType = 'HHHK';
 
     #[Url]
-    public ?string $activePlaceFilter = 'NBA';
+    public ?string $activePlaceFilter = 'all';
 
     #[Url]
     public bool $showMineOnly = false;
