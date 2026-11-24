@@ -22,6 +22,13 @@ Schedule::command('vehicles:snapshot-monthly-km')
     ->monthlyOn(23, '12:00')
     ->name('snapshot-monthly-vehicle-km');
 
+// Cập nhật bản tạm tính của kỳ KM over đang chạy mỗi ngày, để trang "Chốt KM over" luôn có kỳ hiện tại
+// (job chốt 12:00 ngày 23 chỉ ghi kỳ vừa kết thúc nên kỳ mới sẽ trống). Bản tạm bị job chốt ghi đè khi hết kỳ.
+Schedule::command('vehicles:record-km-cycle')
+    ->dailyAt('12:10')
+    ->name('record-vehicle-km-cycle')
+    ->withoutOverlapping();
+
 Schedule::command('shifts:auto-end')
     ->dailyAt('08:05')
     ->name('auto-end-driver-shifts-morning');

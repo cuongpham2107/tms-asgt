@@ -1082,6 +1082,13 @@ test('snapshot monthly vehicle km is scheduled at 12:00 on the 23rd', function (
     expect($event?->expression)->toBe('0 12 23 * *');
 });
 
+test('current km cycle is recorded daily after the closing job', function () {
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn ($event) => str_contains($event->command ?? '', 'vehicles:record-km-cycle'));
+
+    expect($event?->expression)->toBe('10 12 * * *');
+});
+
 test('snapshot monthly vehicle km command copies current mileage to monthly_start_km and defers active trips to next month', function () {
     $vehicle1 = Vehicle::factory()->create([
         'plate_number' => '29C-SNAP-1',
