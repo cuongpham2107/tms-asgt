@@ -8,7 +8,6 @@ use App\Filament\Pages\VehicleDispatchBoard;
 use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Models\DriverShift;
 use App\Models\Order;
-use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -16,7 +15,6 @@ use App\Services\Km\TripKmAdjustmentService;
 use App\Services\Notification\DriverNotificationService;
 use App\Services\Trip\DeliveryProgressSyncService;
 use App\Services\Trip\TripCompletionService;
-use App\Services\Trip\TripOrderInlineEditService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Schemas\Schema;
@@ -32,6 +30,8 @@ class EditTripAction
         $checkpointsSignatureBeforeEdit = null;
         // Có đơn hàng nào trong tab "Đơn hàng" bị sửa không.
         $inlineOrdersChanged = false;
+        // Chữ ký điểm giao của đơn trước khi lưu (relationship được lưu trong lúc validate).
+        $orderSignatureBeforeEdit = null;
 
         return EditAction::make($name ?? 'edit')
             ->stickyModalFooter()
@@ -63,17 +63,27 @@ class EditTripAction
                 }
 
                 if ($trip) {
-                    $data['orders_data'] = static::orderEditState($trip);
+                    $trip->loadMissing('orders.deliveryPoints');
+                    $order = $trip->orders->first();
+
+                    if ($order !== null) {
+                        $data['order_form'] = $order->attributesToArray();
+                    }
                 }
 
                 return $data;
             })
-            ->schema(fn (Schema $schema): Schema => TripForm::configure($schema))
-            ->beforeFormValidated(function (?Model $record = null, $livewire = null) use (&$checkpointsSignatureBeforeEdit): void {
+            ->schema(function (Schema $schema, ?Model $record = null, $livewire = null): Schema {
+                $trip = static::resolveTrip($record, $livewire);
+
+                return TripForm::configure($schema, $trip?->orders()->first());
+            })
+            ->beforeFormValidated(function (?Model $record = null, $livewire = null) use (&$checkpointsSignatureBeforeEdit, &$orderSignatureBeforeEdit): void {
                 $trip = static::resolveTrip($record, $livewire);
 
                 if ($trip !== null) {
                     $checkpointsSignatureBeforeEdit = $trip->checkpointsSignature();
+                    $orderSignatureBeforeEdit = $trip->orders()->first()?->deliveryPointsSignature();
                 }
             })
             ->before(function (?Model $record = null) use (&$kmSnapshotBeforeEdit): void {
@@ -82,13 +92,13 @@ class EditTripAction
                     $kmSnapshotBeforeEdit = app(TripKmAdjustmentService::class)->kmSnapshot($trip);
                 }
             })
-            ->using(function (?Model $record, array $data) use (&$inlineOrdersChanged): Trip {
+            ->using(function (?Model $record, array $data) use (&$inlineOrdersChanged, &$orderSignatureBeforeEdit): Trip {
                 $trip = static::resolveTrip($record) ?? $record;
                 /** @var Trip $trip */
                 $trip->loadMissing(['vehicle', 'orders']);
 
-                $ordersData = $data['orders_data'] ?? [];
-                unset($data['orders_data']);
+                $orderFormData = $data['order_form'] ?? [];
+                unset($data['order_form']);
 
                 // Thời gian, km kết thúc và trạng thái do mốc quyết định (Started/End/Completed), không lấy từ form:
                 // form tự gán status/end_km khi gõ km mốc nên có thể đóng nhầm chuyến còn điểm chưa giao.
@@ -160,8 +170,17 @@ class EditTripAction
 
                 $trip->update($data);
 
-                $inlineOrdersChanged = app(TripOrderInlineEditService::class)
-                    ->apply($trip, is_array($ordersData) ? $ordersData : []) !== [];
+                $order = $trip->orders()->first();
+                if ($order instanceof Order && is_array($orderFormData)) {
+                    $order->fill($orderFormData);
+
+                    if ($order->isDirty()) {
+                        $order->save();
+                    }
+
+                    $inlineOrdersChanged = $order->wasChanged()
+                        || ($orderSignatureBeforeEdit !== $order->refresh()->deliveryPointsSignature());
+                }
 
                 // Chuyến hoàn thành -> toàn bộ đơn chưa huỷ cũng hoàn thành.
                 if ($isEnding) {
@@ -204,6 +223,15 @@ class EditTripAction
                 $checkpointsChanged = $signatureBefore !== null
                     && $signatureBefore !== $trip->refresh()->checkpointsSignature();
 
+                if ($ordersChanged) {
+                    $order = $trip->orders()->first();
+
+                    if ($order instanceof Order) {
+                        app(DeliveryProgressSyncService::class)->syncOrderProgress($order->refresh());
+                        $trip->refresh();
+                    }
+                }
+
                 if ($checkpointsChanged || $ordersChanged) {
                     try {
                         app(DriverNotificationService::class)->sendTripUpdated($trip);
@@ -216,45 +244,6 @@ class EditTripAction
                     $livewire->dataVersion++;
                 }
             });
-    }
-
-    /**
-     * Dữ liệu ban đầu cho tab "Đơn hàng" trong form Sửa chuyến.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private static function orderEditState(Trip $trip): array
-    {
-        $trip->loadMissing(['orders.customer', 'orders.area', 'orders.deliveryPoints']);
-
-        return $trip->orders->mapWithKeys(fn (Order $order): array => [
-            $order->id => [
-                'order_code' => $order->order_code,
-                'customer_name' => $order->customer?->name,
-                'area_code' => $order->area?->code,
-                'cargo_name' => $order->cargo_name,
-                'total_packages' => $order->total_packages,
-                'total_weight' => $order->total_weight,
-                'chargeable_weight' => $order->chargeable_weight,
-                'pickup_location_id' => $order->pickup_location_id,
-                'planned_loading_at' => $order->planned_loading_at?->format('Y-m-d H:i'),
-                'notes' => $order->notes,
-                'deliveryPoints' => $order->deliveryPoints
-                    ->sortBy(fn (OrderDeliveryPoint $point): array => [(int) $point->sequence, (int) $point->id])
-                    ->mapWithKeys(fn (OrderDeliveryPoint $point): array => [
-                        $point->id => [
-                            'id' => $point->id,
-                            'location_id' => $point->location_id,
-                            'address' => $point->address,
-                            'contact_person' => $point->contact_person,
-                            'contact_phone' => $point->contact_phone,
-                            'total_packages' => $point->total_packages,
-                            'total_weight' => $point->total_weight,
-                        ],
-                    ])
-                    ->all(),
-            ],
-        ])->all();
     }
 
     public static function resolveTrip(?Model $record = null, $livewire = null): ?Trip

@@ -65,7 +65,7 @@ class OrderForm extends CreatesOrderTransportCards
             });
     }
 
-    public static function configure(Schema $schema): Schema
+    public static function configure(Schema $schema, bool $requireSchedulingFields = true): Schema
     {
         return $schema
             ->components([
@@ -160,7 +160,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->searchable(['code', 'name'])
                                     ->preload()
                                     ->native(false)
-                                    ->required(fn (Get $get): bool => self::isHhhkOrder($get))
+                                    ->required(fn (Get $get): bool => $requireSchedulingFields && self::isHhhkOrder($get))
                                     ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
                                     ->columnSpan(['default' => 1, 'sm' => 2, 'md' => 2]),
 
@@ -169,7 +169,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->seconds(false)
                                     ->native(true)
                                     ->prefixIcon(Heroicon::OutlinedCalendarDays)
-                                    ->required()
+                                    ->required($requireSchedulingFields)
                                     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 
                                 Toggle::make('is_return_trip')

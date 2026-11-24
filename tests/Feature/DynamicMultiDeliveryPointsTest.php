@@ -765,9 +765,9 @@ test('editing order fields and delivery points in the trip edit modal updates th
         ->mountTableAction('edit', $trip);
 
     $component
-        ->set("mountedActions.0.data.orders_data.{$order->id}.cargo_name", 'Hàng mới')
-        ->set("mountedActions.0.data.orders_data.{$order->id}.total_packages", 25)
-        ->set("mountedActions.0.data.orders_data.{$order->id}.deliveryPoints", [
+        ->set('mountedActions.0.data.order_form.cargo_name', 'Hàng mới')
+        ->set('mountedActions.0.data.order_form.total_packages', 25)
+        ->set('mountedActions.0.data.order_form.deliveryPoints', [
             'record-'.$delivered->id => [
                 'id' => $delivered->id,
                 'location_id' => $this->dpLoc1->id,

@@ -7,7 +7,6 @@ use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Filament\Resources\Orders\Schemas\OrderForm;
 use App\Models\DriverShift;
-use App\Models\FreightRate;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\OrderDeliveryPoint;
@@ -19,11 +18,9 @@ use Carbon\Carbon;
 use Closure;
 use DateTimeInterface;
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -35,13 +32,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class TripForm
 {
-    public static function configure(Schema $schema): Schema
+    public static function configure(Schema $schema, ?Order $order = null): Schema
     {
         return $schema
             ->components([
                 Tabs::make('trip_edit_tabs')
                     ->columnSpanFull()
-                    ->tabs([
+                    ->tabs(array_filter([
                         Tab::make('Chuyến đi')
                             ->icon(Heroicon::OutlinedTruck)
                             ->schema([
@@ -329,11 +326,6 @@ class TripForm
                                             })
                                             ->columnSpan(['default' => 1, 'sm' => fn (?Model $record) => $record?->vehicle?->type === VehicleOwnerType::Rent ? 4 : 3]),
                                     ]),
-                            ]),
-                        Tab::make('Mốc hành trình')
-                            ->icon(Heroicon::OutlinedMapPin)
-                            ->visible(fn (?Model $record): bool => ! (bool) $record?->is_empty_run)
-                            ->schema([
                                 Section::make('Các mốc hành trình')
                                     ->columnSpanFull()
                                     ->hidden(fn (?Model $record) => (bool) $record?->is_empty_run)
@@ -603,15 +595,18 @@ class TripForm
                                             ->columnSpanFull(),
                                     ]),
                             ]),
-                        Tab::make('Đơn hàng')
-                            ->icon(Heroicon::OutlinedShoppingCart)
-                            ->visible(fn (?Model $record): bool => $record instanceof Trip && $record->orders()->exists())
-                            ->schema([
-                                Tabs::make('trip_order_tabs')
-                                    ->contained(false)
-                                    ->tabs(fn (?Trip $record): array => self::orderEditTabs($record)),
-                            ]),
-                    ]),
+                        $order instanceof Order
+                            ? Tab::make('Đơn hàng')
+                                ->icon(Heroicon::OutlinedShoppingCart)
+                                ->schema([
+                                    Section::make('Đơn hàng '.$order->order_code)
+                                        ->statePath('order_form')
+                                        ->model($order)
+                                        ->schema(fn (Schema $schema): array => OrderForm::configure($schema, requireSchedulingFields: false)->getComponents())
+                                        ->columnSpanFull(),
+                                ])
+                            : null,
+                    ])),
             ]);
     }
 
@@ -1176,174 +1171,5 @@ class TripForm
         $location = Order::with('pickupLocation:id,code,name')->find($get('order_id'))?->pickupLocation;
 
         return $location?->code ?? $location?->name;
-    }
-
-    /**
-     * Mỗi đơn hàng trong chuyến là một tab để điều hành sửa đơn ngay trong form Sửa chuyến.
-     *
-     * @return array<int, Tab>
-     */
-    private static function orderEditTabs(?Trip $record): array
-    {
-        if (! $record instanceof Trip) {
-            return [];
-        }
-
-        $record->loadMissing(['orders.customer', 'orders.area', 'orders.deliveryPoints.location']);
-
-        return $record->orders
-            ->sortBy('id')
-            ->map(fn (Order $order): Tab => self::orderEditTab($order))
-            ->values()
-            ->all();
-    }
-
-    private static function orderEditTab(Order $order): Tab
-    {
-        $path = "orders_data.{$order->id}";
-
-        return Tab::make($order->order_code)
-            ->badge($order->status?->getLabel())
-            ->schema([
-                Section::make('Thông tin đơn hàng')
-                    ->columns(['default' => 1, 'sm' => 12])
-                    ->schema([
-                        TextInput::make("order_{$order->id}_code")
-                            ->label('Mã đơn')
-                            ->statePath("{$path}.order_code")
-                            ->disabled()
-                            ->dehydrated(false)
-                            ->columnSpan(['default' => 1, 'sm' => 3]),
-                        TextInput::make("order_{$order->id}_customer")
-                            ->label('Khách hàng')
-                            ->statePath("{$path}.customer_name")
-                            ->disabled()
-                            ->dehydrated(false)
-                            ->columnSpan(['default' => 1, 'sm' => 3]),
-                        TextInput::make("order_{$order->id}_area")
-                            ->label('Khu vực')
-                            ->statePath("{$path}.area_code")
-                            ->disabled()
-                            ->dehydrated(false)
-                            ->columnSpan(['default' => 1, 'sm' => 3]),
-                        DateTimePicker::make("order_{$order->id}_planned_loading_at")
-                            ->label('Thời gian đóng hàng')
-                            ->statePath("{$path}.planned_loading_at")
-                            ->seconds(false)
-                            ->native(true)
-                            ->columnSpan(['default' => 1, 'sm' => 3]),
-                        TextInput::make("order_{$order->id}_cargo_name")
-                            ->label('Tên hàng hoá')
-                            ->statePath("{$path}.cargo_name")
-                            ->maxLength(255)
-                            ->columnSpan(['default' => 1, 'sm' => 4]),
-                        TextInput::make("order_{$order->id}_total_packages")
-                            ->label('Tổng số kiện')
-                            ->statePath("{$path}.total_packages")
-                            ->numeric()
-                            ->columnSpan(['default' => 1, 'sm' => 2]),
-                        TextInput::make("order_{$order->id}_total_weight")
-                            ->label('Tổng trọng lượng (kg)')
-                            ->statePath("{$path}.total_weight")
-                            ->numeric()
-                            ->columnSpan(['default' => 1, 'sm' => 2]),
-                        Select::make("order_{$order->id}_chargeable_weight")
-                            ->label('Tải trọng tính cước (tấn)')
-                            ->statePath("{$path}.chargeable_weight")
-                            ->options(OrderForm::CHARGEABLE_WEIGHT_OPTIONS)
-                            ->formatStateUsing(function (mixed $state): ?string {
-                                $key = FreightRate::tonnageKey($state);
-
-                                return $key !== '' ? $key : null;
-                            })
-                            ->native(false)
-                            ->visible(fn (): bool => $order->isExternal())
-                            ->columnSpan(['default' => 1, 'sm' => 2]),
-                        Select::make("order_{$order->id}_pickup_location_id")
-                            ->label('Điểm nhận hàng')
-                            ->statePath("{$path}.pickup_location_id")
-                            ->options(fn (): array => self::orderLocationOptions($order))
-                            ->searchable()
-                            ->native(false)
-                            ->columnSpan(['default' => 1, 'sm' => 2]),
-                        Textarea::make("order_{$order->id}_notes")
-                            ->label('Yêu cầu đặc biệt')
-                            ->statePath("{$path}.notes")
-                            ->rows(2)
-                            ->columnSpanFull(),
-                    ]),
-                Section::make('Điểm giao hàng')
-                    ->schema([
-                        Repeater::make("order_{$order->id}_delivery_points")
-                            ->statePath("{$path}.deliveryPoints")
-                            ->label('Danh sách điểm giao')
-                            ->table([
-                                TableColumn::make('Điểm giao')->width('180px'),
-                                TableColumn::make('Địa chỉ')->width('220px'),
-                                TableColumn::make('Người nhận')->width('160px'),
-                                TableColumn::make('SĐT')->width('140px'),
-                                TableColumn::make('Kiện')->width('90px'),
-                                TableColumn::make('KL (kg)')->width('110px'),
-                            ])
-                            ->compact()
-                            ->schema([
-                                Hidden::make('id'),
-                                Select::make('location_id')
-                                    ->label('Điểm giao')
-                                    ->options(fn (): array => self::orderLocationOptions($order))
-                                    ->searchable()
-                                    ->native(false)
-                                    ->required(),
-                                TextInput::make('address')
-                                    ->label('Địa chỉ')
-                                    ->maxLength(255),
-                                TextInput::make('contact_person')
-                                    ->label('Người nhận')
-                                    ->maxLength(255),
-                                TextInput::make('contact_phone')
-                                    ->label('SĐT')
-                                    ->maxLength(20),
-                                TextInput::make('total_packages')
-                                    ->label('Kiện')
-                                    ->numeric(),
-                                TextInput::make('total_weight')
-                                    ->label('KL (kg)')
-                                    ->numeric(),
-                            ])
-                            ->addActionLabel('Thêm điểm giao')
-                            ->reorderableWithDragAndDrop()
-                            ->defaultItems(0)
-                            ->columnSpanFull(),
-                    ]),
-            ]);
-    }
-
-    /**
-     * Địa điểm chọn được trong tab Đơn hàng: theo khu vực của đơn, luôn giữ địa điểm đang chọn.
-     *
-     * @return array<int, string>
-     */
-    private static function orderLocationOptions(Order $order): array
-    {
-        $referencedLocationIds = $order->deliveryPoints()
-            ->pluck('location_id')
-            ->filter()
-            ->all();
-
-        if ($order->pickup_location_id !== null) {
-            $referencedLocationIds[] = $order->pickup_location_id;
-        }
-
-        return Location::query()
-            ->where(function ($query) use ($referencedLocationIds): void {
-                $query->where('is_active', true);
-
-                if ($referencedLocationIds !== []) {
-                    $query->orWhereIn('locations.id', $referencedLocationIds);
-                }
-            })
-            ->orderBy('code')
-            ->pluck('code', 'id')
-            ->toArray();
     }
 }
