@@ -175,7 +175,7 @@ class ActivityLogsTable extends BaseTable
         }
 
         if ($subject instanceof TripCheckpoint) {
-            $typeLabel = $subject->checkpoint_type?->label();
+            $typeLabel = $subject->checkpoint_type?->getLabel();
 
             return 'Mốc hành trình #'.$record->subject_id.($typeLabel ? " ({$typeLabel})" : '');
         }
