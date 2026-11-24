@@ -2080,6 +2080,40 @@ test('getDutyDriverRows exposes selected shift vehicle separately from running v
         ->and($rows->get($driver->id)->shift_vehicle_plate)->toBe('29H-SHIFT-01');
 });
 
+test('getDriverName and getDriverStation fall back to open shift vehicle when vehicle has no trips today', function () {
+    $this->travelTo(Carbon::parse('2026-10-23 14:00:00'));
+
+    $driver = User::factory()->create([
+        'name' => 'Lái Xe Chọn Khi Vào Ca',
+        'station' => OnDutyLocation::Nba,
+        'is_active' => true,
+    ]);
+
+    $vehicle = Vehicle::factory()->create([
+        'plate_number' => '20C-04357',
+        'type' => VehicleOwnerType::Company,
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    DriverShift::create([
+        'driver_id' => $driver->id,
+        'vehicle_id' => $vehicle->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now()->subHour(),
+        'end_time' => null,
+    ]);
+
+    $vehicle->load([
+        'selectedShifts' => fn ($q) => $q->whereNull('end_time')->where('start_time', '<=', now())->with('driver.driverShifts'),
+        'trips',
+    ]);
+
+    expect(VehicleDispatchBoard::getDriverName($vehicle))->toBe('Lái Xe Chọn Khi Vào Ca')
+        ->and(VehicleDispatchBoard::getDriverStation($vehicle))->toBe('NB')
+        ->and(VehicleDispatchBoard::getShiftLabel($vehicle))->toBe('X');
+});
+
 test('vehicle freezeActiveTrip resets when trips relation is reloaded', function () {
     $vehicle = Vehicle::factory()->create(['is_active' => true]);
     $firstTrip = Trip::factory()->create([

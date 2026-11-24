@@ -34,6 +34,11 @@ trait HasVehicleDispatchRows
                 'evenDriver',
                 'oddDriver',
                 'drivers',
+                'selectedShifts' => fn ($q) => $q
+                    ->whereNull('end_time')
+                    ->where('start_time', '<=', now())
+                    ->latest('start_time')
+                    ->with(['driver.driverShifts' => fn ($sq) => $sq->whereNull('end_time')]),
                 'trips' => function ($q) use ($shiftStart, $shiftEnd, $runningValues, $isRent) {
                     $q->where(function ($sub) use ($shiftStart, $shiftEnd, $runningValues, $isRent) {
                         $sub->whereBetween('started_at', [$shiftStart, $shiftEnd])

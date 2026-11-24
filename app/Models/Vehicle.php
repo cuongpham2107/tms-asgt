@@ -274,6 +274,11 @@ class Vehicle extends Model
         return $this->hasManyThrough(DriverShift::class, Trip::class, 'vehicle_id', 'id', 'id', 'shift_id');
     }
 
+    public function selectedShifts(): HasMany
+    {
+        return $this->hasMany(DriverShift::class, 'vehicle_id');
+    }
+
     public function orders(): HasManyThrough
     {
         return $this->hasManyThrough(Order::class, Trip::class, 'vehicle_id', 'trip_id', 'id', 'id');

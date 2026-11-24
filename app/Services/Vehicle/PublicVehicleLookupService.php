@@ -19,7 +19,8 @@ use Illuminate\Support\Facades\URL;
  *
  * Quy tắc ưu tiên:
  * 1. Nếu xe có đơn hàng đang hoạt động (gán qua chuyến chưa hoàn thành/huỷ) -> lấy lái xe của chuyến/đơn gần nhất.
- * 2. Nếu xe chưa gán đơn -> lấy lái xe theo ca chẵn/lẻ đã khai báo trên phương tiện đúng lịch hôm nay.
+ * 2. Nếu có tài xế đang mở ca đã chọn xe này lúc vào ca (driver_shifts.vehicle_id) -> lấy tài xế đang trong ca đó.
+ * 3. Nếu chưa có -> lấy lái xe theo ca chẵn/lẻ đã khai báo trên phương tiện đúng lịch hôm nay, rồi fallback current_driver_id.
  */
 class PublicVehicleLookupService
 {
@@ -59,6 +60,7 @@ class PublicVehicleLookupService
                 'evenDriver.driverShifts' => fn ($q) => $q->whereNull('end_time')->latest('start_time'),
                 'oddDriver.driverShifts' => fn ($q) => $q->whereNull('end_time')->latest('start_time'),
                 'drivers.driverShifts' => fn ($q) => $q->whereNull('end_time')->latest('start_time'),
+                'selectedShifts' => fn ($q) => $q->whereNull('end_time')->with('driver')->latest('start_time'),
                 'trips' => function ($q): void {
                     $q->whereNotIn('status', [
                         TripStatus::Cancelled->value,
@@ -97,6 +99,7 @@ class PublicVehicleLookupService
         $driver = null;
         $driverName = null;
         $source = 'scheduled_shift';
+        $activeShiftForVehicle = null;
 
         if ($activeOrderTrip !== null) {
             $source = 'active_order';
@@ -108,23 +111,31 @@ class PublicVehicleLookupService
                 $driverName = $driver?->name;
             }
         } else {
-            $driver = $vehicle->getDriverForShift($todayShift);
+            $activeShiftForVehicle = $this->resolveOpenShiftForVehicle($vehicle);
 
-            if ($driver === null && $vehicle->driver && (bool) $vehicle->driver->is_active) {
-                $driver = $vehicle->driver;
-                $source = 'current_driver';
-            }
-
-            if ($driver !== null) {
+            if ($activeShiftForVehicle !== null) {
+                $source = 'active_shift';
+                $driver = $activeShiftForVehicle->driver;
                 $driverName = $driver->name;
-            } elseif ($vehicle->isRent() && filled($vehicle->external_driver_name)) {
-                $driverName = trim((string) $vehicle->external_driver_name);
             } else {
-                $source = 'none';
+                $driver = $vehicle->getDriverForShift($todayShift);
+
+                if ($driver === null && $vehicle->driver && (bool) $vehicle->driver->is_active) {
+                    $driver = $vehicle->driver;
+                    $source = 'current_driver';
+                }
+
+                if ($driver !== null) {
+                    $driverName = $driver->name;
+                } elseif ($vehicle->isRent() && filled($vehicle->external_driver_name)) {
+                    $driverName = trim((string) $vehicle->external_driver_name);
+                } else {
+                    $source = 'none';
+                }
             }
         }
 
-        $openShift = $this->resolveOpenShift($driver);
+        $openShift = $activeShiftForVehicle ?? $this->resolveOpenShift($driver);
         $shiftElapsedMinutes = $openShift?->start_time ? (int) $openShift->start_time->diffInMinutes(now()) : null;
 
         $relativeGpsUrl = URL::temporarySignedRoute(
@@ -285,6 +296,21 @@ class PublicVehicleLookupService
                 ];
             })
             ->first();
+    }
+
+    private function resolveOpenShiftForVehicle(Vehicle $vehicle): ?DriverShift
+    {
+        $shifts = $vehicle->relationLoaded('selectedShifts')
+            ? $vehicle->selectedShifts->whereNull('end_time')->sortByDesc('start_time')
+            : $vehicle->selectedShifts()
+                ->whereNull('end_time')
+                ->with('driver')
+                ->latest('start_time')
+                ->get();
+
+        return $shifts->first(
+            fn (DriverShift $shift): bool => $shift->driver !== null && (bool) $shift->driver->is_active
+        );
     }
 
     private function resolveOpenShift(?User $driver): ?DriverShift

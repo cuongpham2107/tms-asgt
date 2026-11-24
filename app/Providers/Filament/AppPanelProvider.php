@@ -118,7 +118,7 @@ class AppPanelProvider extends PanelProvider
                     ->editable(),
                 ActivitylogPlugin::make()
                     ->navigationGroup('Quản lý danh mục')
-                    ->navigationCountBadge(true)
+                    ->navigationCountBadge(false)
                     ->label('Nhật ký hoạt động')
                     ->pluralLabel('Nhật ký hoạt động')
                     ->translateSubject(fn ($label) => __('models.'.$label))

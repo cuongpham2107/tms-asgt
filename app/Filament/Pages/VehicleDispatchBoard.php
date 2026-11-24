@@ -1604,8 +1604,8 @@ class VehicleDispatchBoard extends Page implements HasTable
 
     /**
      * Lấy tài xế đang chạy xe trong khung ca 08:00 -> 08:00:
-     * ưu tiên chuyến đang chạy/chờ chạy (active_trip), sau đó đến chuyến đã hoàn thành trong ca.
-     * Nếu xe không có chuyến nào trong ca hôm nay thì trả về null.
+     * ưu tiên chuyến đang chạy/chờ chạy (active_trip), sau đó đến chuyến đã hoàn thành trong ca,
+     * rồi đến tài xế đang mở ca đã chọn xe này lúc vào ca.
      */
     public static function getShiftDriver(Vehicle $record): ?User
     {
@@ -1621,7 +1621,37 @@ class VehicleDispatchBoard extends Page implements HasTable
 
         $completedTrip = self::getLatestCompletedTripInShift($record);
 
-        return $completedTrip?->driver;
+        if ($completedTrip?->driver) {
+            return $completedTrip->driver;
+        }
+
+        return self::getSelectedShiftDriver($record);
+    }
+
+    private static function getSelectedShiftDriver(Vehicle $record): ?User
+    {
+        [$shiftStart, $shiftEnd] = self::getShiftWindow();
+
+        $shifts = $record->relationLoaded('selectedShifts')
+            ? $record->selectedShifts
+            : $record->selectedShifts()
+                ->whereNull('end_time')
+                ->where('start_time', '<=', now())
+                ->with(['driver.driverShifts' => fn ($q) => $q->whereNull('end_time')])
+                ->latest('start_time')
+                ->get();
+
+        $selectedShift = $shifts
+            ->filter(fn (DriverShift $shift): bool => $shift->end_time === null
+                && $shift->start_time !== null
+                && $shift->start_time->lte(now())
+                && ShiftScheduleService::isStartTimeInWindow($shift->start_time, $shiftStart, $shiftEnd)
+                && $shift->driver !== null
+                && (bool) $shift->driver->is_active)
+            ->sortByDesc('start_time')
+            ->first();
+
+        return $selectedShift?->driver;
     }
 
     public static function getDriverName(Vehicle $record): string

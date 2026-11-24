@@ -9,6 +9,7 @@ use App\Enums\VehicleStatus;
 use App\Enums\VehicleType;
 use App\Models\Area;
 use App\Models\Customer;
+use App\Models\DriverShift;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\Trip;
@@ -218,4 +219,49 @@ it('only returns company vehicles and excludes rented vehicles from public searc
         ->assertJsonPath('count', 1)
         ->assertJsonPath('data.0.id', $companyVehicle->id)
         ->assertJsonPath('data.0.plate_number', '29E55667');
+});
+
+it('falls back to active driver shift vehicle when no active order exists', function (): void {
+    $apiKey = (string) config('app.key');
+    $todayShift = ShiftScheduleService::determineShift();
+
+    $scheduledDriver = User::factory()->create([
+        'name' => 'Tài xế cố định',
+        'phone' => '0901111111',
+        'is_active' => true,
+    ]);
+
+    $shiftDriver = User::factory()->create([
+        'name' => 'Tài xế mới vào ca',
+        'phone' => '0902222222',
+        'is_active' => true,
+    ]);
+
+    $vehicle = Vehicle::create([
+        'plate_number' => '29H77889',
+        'vehicle_type' => VehicleType::Normal,
+        'type' => VehicleOwnerType::Company,
+        'owner' => 'ASGT',
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+        'even_driver_id' => $todayShift === DriverWorkShift::Even ? $scheduledDriver->id : null,
+        'odd_driver_id' => $todayShift === DriverWorkShift::Odd ? $scheduledDriver->id : null,
+    ]);
+
+    DriverShift::create([
+        'driver_id' => $shiftDriver->id,
+        'vehicle_id' => $vehicle->id,
+        'shift_type' => \App\Enums\ShiftType::Full,
+        'start_time' => now()->subMinutes(25),
+    ]);
+
+    $this->withHeader('X-Api-Key', $apiKey)
+        ->getJson('/api/public/vehicles/search?search=77889')
+        ->assertOk()
+        ->assertJsonPath('count', 1)
+        ->assertJsonPath('data.0.source', 'active_shift')
+        ->assertJsonPath('data.0.driver.id', $shiftDriver->id)
+        ->assertJsonPath('data.0.driver.name', 'Tài xế mới vào ca')
+        ->assertJsonPath('data.0.driver.phone', '0902222222')
+        ->assertJsonPath('data.0.driver.is_on_shift', true);
 });
