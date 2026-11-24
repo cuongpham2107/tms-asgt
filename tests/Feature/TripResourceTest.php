@@ -90,8 +90,13 @@ test('trip view timeline page renders successfully', function () {
         'start_km' => 100,
     ]);
 
+    $checkpointDriver = User::factory()->create([
+        'name' => 'Trần Văn Liệu',
+    ]);
+
     TripCheckpoint::create([
         'trip_id' => $trip->id,
+        'driver_id' => $checkpointDriver->id,
         'checkpoint_type' => CheckpointType::Completed,
         'km_reading' => 150.5,
         'occurred_at' => now(),
@@ -102,7 +107,8 @@ test('trip view timeline page renders successfully', function () {
     ])
         ->assertStatus(200)
         ->assertHasNoErrors()
-        ->assertSee('150,5 km');
+        ->assertSee('150,5 km')
+        ->assertSee('Trần Văn Liệu');
 });
 
 test('trip stats overview widget renders successfully', function () {

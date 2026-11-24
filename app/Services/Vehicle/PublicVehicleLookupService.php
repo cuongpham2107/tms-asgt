@@ -4,6 +4,7 @@ namespace App\Services\Vehicle;
 
 use App\Enums\OrderStatus;
 use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\User;
@@ -51,6 +52,7 @@ class PublicVehicleLookupService
 
         return Vehicle::query()
             ->where('is_active', true)
+            ->where('type', VehicleOwnerType::Company->value)
             ->whereRaw("{$normalizedColumn} LIKE ?", ["%{$normalized}%"])
             ->with([
                 'driver.driverShifts' => fn ($q) => $q->whereNull('end_time')->latest('start_time'),

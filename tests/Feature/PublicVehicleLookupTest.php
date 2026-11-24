@@ -190,3 +190,32 @@ it('serves signed public vehicle GPS tracking page and rejects unsigned requests
         ->assertJsonPath('position.latitude', 21.0285)
         ->assertJsonPath('position.longitude', 105.8542);
 });
+
+it('only returns company vehicles and excludes rented vehicles from public search', function (): void {
+    $apiKey = (string) config('app.key');
+
+    $companyVehicle = Vehicle::create([
+        'plate_number' => '29E55667',
+        'vehicle_type' => VehicleType::Normal,
+        'type' => VehicleOwnerType::Company,
+        'owner' => 'ASGT',
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    Vehicle::create([
+        'plate_number' => '29E55668',
+        'vehicle_type' => VehicleType::Normal,
+        'type' => VehicleOwnerType::Rent,
+        'owner' => 'RENTED',
+        'status' => VehicleStatus::On,
+        'is_active' => true,
+    ]);
+
+    $this->withHeader('X-Api-Key', $apiKey)
+        ->getJson('/api/public/vehicles/search?search=29E5566')
+        ->assertOk()
+        ->assertJsonPath('count', 1)
+        ->assertJsonPath('data.0.id', $companyVehicle->id)
+        ->assertJsonPath('data.0.plate_number', '29E55667');
+});
