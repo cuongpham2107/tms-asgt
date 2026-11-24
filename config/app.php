@@ -145,10 +145,11 @@ return [
     |--------------------------------------------------------------------------
     | Driver Delivery Point Configuration
     |--------------------------------------------------------------------------
-    | Cho phép lái xe tự chọn thêm điểm trả tiếp theo đối với đơn đã có sẵn
-    | điểm trả do điều hành tạo (is_driver_added = false).
-    | Nếu false: chỉ đơn để trống điểm trả khi tạo mới được lái xe tự chọn nhiều điểm.
+    | Cho phép lái xe tự chọn thêm điểm trả thứ 2 trở đi khi đơn đã có >= 1 điểm trả.
+    | Nếu false (mặc định):
+    | - Đơn để trống điểm trả (0 điểm): lái xe chỉ được chọn tối đa 1 điểm trả.
+    | - Đơn đã có sẵn điểm trả (>= 1 điểm): lái xe không được chọn thêm điểm khác.
     */
-    'allow_driver_append_predefined_delivery_points' => (bool) env('ALLOW_DRIVER_APPEND_PREDEFINED_DELIVERY_POINTS', true),
+    'allow_driver_append_predefined_delivery_points' => (bool) env('ALLOW_DRIVER_APPEND_PREDEFINED_DELIVERY_POINTS', false),
 
 ];

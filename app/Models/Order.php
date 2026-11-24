@@ -97,9 +97,10 @@ class Order extends Model implements HasTimeline
 
     /**
      * Đơn cho phép tài xế tự chọn thêm điểm trả hàng trên App khi đơn chưa bấm Kết thúc.
-     * - Đơn không có điểm trả do điều hành tạo sẵn (is_driver_added = false): luôn cho phép đến khi bấm Kết thúc.
-     * - Đơn đã có điểm trả do điều hành tạo sẵn: phụ thuộc cấu hình `app.allow_driver_append_predefined_delivery_points`
-     *   (điểm mới chỉ nối sau khi giao xong các điểm có sẵn — xem TripCheckpointRequest).
+     * - Khi `app.allow_driver_append_predefined_delivery_points = false` (mặc định):
+     *   chỉ đơn chưa có điểm trả nào (0 điểm) mới được chọn 1 điểm trả; khi đã có >= 1 điểm trả thì không cho chọn thêm.
+     * - Khi `app.allow_driver_append_predefined_delivery_points = true`:
+     *   cho phép chọn thêm điểm trả tiếp theo sau khi đã giao xong các điểm hiện có.
      */
     public function canDriverAddDeliveryPoint(): bool
     {
@@ -112,12 +113,12 @@ class Order extends Model implements HasTimeline
             return false;
         }
 
-        if (! config('app.allow_driver_append_predefined_delivery_points', true)) {
-            $hasPredefinedPoint = $this->relationLoaded('deliveryPoints')
-                ? $this->deliveryPoints->contains(fn (OrderDeliveryPoint $dp): bool => ! $dp->is_driver_added)
-                : $this->deliveryPoints()->where('is_driver_added', false)->exists();
+        if (! config('app.allow_driver_append_predefined_delivery_points', false)) {
+            $hasAnyDeliveryPoint = $this->relationLoaded('deliveryPoints')
+                ? $this->deliveryPoints->isNotEmpty()
+                : $this->deliveryPoints()->exists();
 
-            if ($hasPredefinedPoint) {
+            if ($hasAnyDeliveryPoint) {
                 return false;
             }
         }

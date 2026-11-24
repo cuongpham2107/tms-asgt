@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\Relation;
  */
 class DatabaseNotifications extends BaseDatabaseNotifications
 {
+    #[Locked]
+    public bool $isFilamentNotificationsComponent = true;
     #[Unexposed]
     public function getNotificationsQuery(): Builder|Relation
     {

@@ -155,7 +155,7 @@ test('driver can add multiple delivery points sequentially via API when order ha
         ->and($dp1->sequence)->toBe(1)
         ->and($dp1->status)->toBe(OrderDeliveryPointStatus::Arrived);
 
-    // Giao xong điểm 1
+    // Giao xong điểm 1: mặc định (allow_driver_append_predefined_delivery_points = false) không cho chọn thêm điểm 2
     $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
         'checkpoint_type' => 'completed',
         'order_id' => $order->id,
@@ -165,9 +165,21 @@ test('driver can add multiple delivery points sequentially via API when order ha
     ])->assertSuccessful();
 
     expect($order->fresh()->status)->toBe(OrderStatus::Completed)
-        ->and($order->fresh()->canDriverAddDeliveryPoint())->toBeTrue();
+        ->and($order->fresh()->canDriverAddDeliveryPoint())->toBeFalse();
 
-    // API vẫn trả can_add_delivery_point = true để App cho chọn thêm điểm 2
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_delivery',
+        'order_id' => $order->id,
+        'new_delivery_location_id' => $this->dpLoc2->id,
+        'km_reading' => 1030.0,
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('delivery_point_id');
+
+    // Khi bật cấu hình cho phép thêm điểm: API trả can_add_delivery_point = true để App cho chọn thêm điểm 2
+    config(['app.allow_driver_append_predefined_delivery_points' => true]);
+
+    expect($order->fresh()->canDriverAddDeliveryPoint())->toBeTrue();
+
     $this->getJson("/api/driver/orders/{$order->id}")
         ->assertSuccessful()
         ->assertJsonPath('data.can_add_delivery_point', true);
@@ -251,6 +263,12 @@ test('driver can append a delivery point after finishing the predefined ones but
         ->assertJsonValidationErrors('delivery_point_id');
 
     $fixedDp->update(['status' => OrderDeliveryPointStatus::Delivered]);
+
+    // Mặc định (allow_driver_append_predefined_delivery_points = false): đơn đã có điểm không được thêm điểm mới
+    expect($order->fresh()->canDriverAddDeliveryPoint())->toBeFalse();
+
+    // Khi bật cấu hình allow_driver_append_predefined_delivery_points = true: cho phép thêm điểm sau khi giao xong điểm có sẵn
+    config(['app.allow_driver_append_predefined_delivery_points' => true]);
 
     expect($order->fresh()->canDriverAddDeliveryPoint())->toBeTrue();
 

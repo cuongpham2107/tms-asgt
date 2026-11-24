@@ -4,14 +4,23 @@ namespace App\Filament\Resources\ActivityLogs\Tables;
 
 use App\Filament\BaseTable;
 use App\Filament\Resources\ActivityLogs\ActivityLogResource;
+use App\Filament\Resources\ActivityLogs\Filters\ListFilterActivityLogs;
+use App\Models\DriverShift;
+use App\Models\Order;
+use App\Models\OrderCharge;
+use App\Models\OrderChargeFee;
+use App\Models\OrderDeliveryPoint;
+use App\Models\Trip;
+use App\Models\TripCheckpoint;
+use App\Models\User;
+use App\Models\Vehicle;
 use Filament\Actions\Action;
-use Filament\Forms\Components\DatePicker;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Spatie\Activitylog\Models\Activity;
 
 class ActivityLogsTable extends BaseTable
@@ -19,7 +28,49 @@ class ActivityLogsTable extends BaseTable
     public static function configure(Table $table): Table
     {
         return parent::applyDefaults($table)
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('causer')->latest())
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->with([
+                    'causer',
+                    'subject' => function (MorphTo $morphTo): void {
+                        $morphTo->withoutGlobalScopes()->constrain([
+                            Order::class => fn (Builder $q) => $q->with([
+                                'trip' => fn ($tq) => $tq->withoutGlobalScopes(),
+                            ]),
+                            Trip::class => fn (Builder $q) => $q->with([
+                                'orders' => fn ($oq) => $oq->withoutGlobalScopes(),
+                                'vehicle' => fn ($vq) => $vq->withoutGlobalScopes(),
+                            ]),
+                            TripCheckpoint::class => fn (Builder $q) => $q->with([
+                                'trip' => fn ($tq) => $tq->withoutGlobalScopes()->with([
+                                    'orders' => fn ($oq) => $oq->withoutGlobalScopes(),
+                                ]),
+                                'order' => fn ($oq) => $oq->withoutGlobalScopes(),
+                            ]),
+                            OrderDeliveryPoint::class => fn (Builder $q) => $q->with([
+                                'order' => fn ($oq) => $oq->withoutGlobalScopes()->with([
+                                    'trip' => fn ($tq) => $tq->withoutGlobalScopes(),
+                                ]),
+                                'location' => fn ($lq) => $lq->withoutGlobalScopes(),
+                            ]),
+                            OrderCharge::class => fn (Builder $q) => $q->with([
+                                'order' => fn ($oq) => $oq->withoutGlobalScopes()->with([
+                                    'trip' => fn ($tq) => $tq->withoutGlobalScopes(),
+                                ]),
+                            ]),
+                            OrderChargeFee::class => fn (Builder $q) => $q->with([
+                                'orderCharge' => fn ($cq) => $cq->withoutGlobalScopes()->with([
+                                    'order' => fn ($oq) => $oq->withoutGlobalScopes()->with([
+                                        'trip' => fn ($tq) => $tq->withoutGlobalScopes(),
+                                    ]),
+                                ]),
+                            ]),
+                            DriverShift::class => fn (Builder $q) => $q->with([
+                                'driver' => fn ($dq) => $dq->withoutGlobalScopes(),
+                            ]),
+                        ]);
+                    },
+                ])
+                ->latest())
             ->columns([
                 TextColumn::make('event')
                     ->label('Sự kiện')
@@ -29,13 +80,15 @@ class ActivityLogsTable extends BaseTable
                         'updated' => 'Cập nhật',
                         'deleted' => 'Xóa',
                         'restored' => 'Khôi phục',
+                        'api_call' => 'Gọi API',
+                        'api_error' => 'Lỗi API',
                         default => $state ? ucfirst($state) : '—',
                     })
                     ->color(fn (?string $state): string => match ($state) {
                         'created' => 'success',
                         'updated' => 'warning',
-                        'deleted' => 'danger',
-                        'restored' => 'info',
+                        'deleted', 'api_error' => 'danger',
+                        'restored', 'api_call' => 'info',
                         default => 'gray',
                     })
                     ->icon(fn (?string $state): ?string => match ($state) {
@@ -43,41 +96,16 @@ class ActivityLogsTable extends BaseTable
                         'updated' => 'heroicon-m-pencil-square',
                         'deleted' => 'heroicon-m-trash',
                         'restored' => 'heroicon-m-arrow-path',
+                        'api_call' => 'heroicon-m-globe-alt',
+                        'api_error' => 'heroicon-m-exclamation-triangle',
                         default => null,
                     })
                     ->sortable(),
 
                 TextColumn::make('subject_type')
                     ->label('Đối tượng')
-                    ->formatStateUsing(function (Activity $record): string {
-                        if (! $record->subject_type) {
-                            return '—';
-                        }
-
-                        $className = class_basename($record->subject_type);
-                        $translateCallback = ActivityLogResource::getPlugin()?->getTranslateSubjectCallback();
-
-                        if ($translateCallback) {
-                            $translated = $translateCallback($className);
-                            if ($translated && $translated !== 'models.'.$className) {
-                                return $translated.' #'.$record->subject_id;
-                            }
-                        }
-
-                        $modelNames = [
-                            'Order' => 'Đơn hàng',
-                            'Trip' => 'Chuyến xe',
-                            'Vehicle' => 'Phương tiện',
-                            'User' => 'Tài khoản',
-                            'Customer' => 'Khách hàng',
-                            'Location' => 'Địa điểm',
-                            'DriverShift' => 'Ca làm việc',
-                        ];
-
-                        $label = $modelNames[$className] ?? $className;
-
-                        return $label.' #'.$record->subject_id;
-                    })
+                    ->formatStateUsing(fn (Activity $record): string => self::formatSubjectTitle($record))
+                    ->description(fn (Activity $record): ?string => self::formatSubjectSubtitle($record))
                     ->searchable(),
 
                 TextColumn::make('description')
@@ -98,6 +126,11 @@ class ActivityLogsTable extends BaseTable
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
+            ->filters([
+                ListFilterActivityLogs::make(),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns(1)
+            ->deferFilters(false)
             ->recordActions([
                 Action::make('view_details')
                     ->label('Chi tiết')
@@ -113,42 +146,155 @@ class ActivityLogsTable extends BaseTable
                             'activity' => $record,
                         ]);
                     }),
-            ])
-            ->filters([
-                SelectFilter::make('event')
-                    ->label('Sự kiện')
-                    ->options([
-                        'created' => 'Tạo mới',
-                        'updated' => 'Cập nhật',
-                        'deleted' => 'Xóa',
-                    ]),
-
-                SelectFilter::make('subject_type')
-                    ->label('Loại đối tượng')
-                    ->options([
-                        'App\Models\Order' => 'Đơn hàng',
-                        'App\Models\Trip' => 'Chuyến xe',
-                        'App\Models\Vehicle' => 'Phương tiện',
-                        'App\Models\User' => 'Tài khoản',
-                    ]),
-
-                Filter::make('created_at')
-                    ->label('Thời gian')
-                    ->form([
-                        DatePicker::make('created_from')->label('Từ ngày'),
-                        DatePicker::make('created_until')->label('Đến ngày'),
-                    ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when(
-                                $data['created_from'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date),
-                            )
-                            ->when(
-                                $data['created_until'],
-                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
-                            );
-                    }),
             ]);
+    }
+
+    public static function formatSubjectTitle(Activity $record): string
+    {
+        if (! $record->subject_type) {
+            return '—';
+        }
+
+        $subject = $record->subject;
+        $props = self::extractLoggedAttributes($record);
+
+        if ($subject instanceof Order) {
+            return "Đơn hàng: {$subject->order_code} (#{$record->subject_id})";
+        }
+
+        if ($record->subject_type === Order::class && ! empty($props['order_code'])) {
+            return "Đơn hàng: {$props['order_code']} (#{$record->subject_id})";
+        }
+
+        if ($subject instanceof Trip) {
+            return "Chuyến xe: {$subject->trip_code} (#{$record->subject_id})";
+        }
+
+        if ($record->subject_type === Trip::class && ! empty($props['trip_code'])) {
+            return "Chuyến xe: {$props['trip_code']} (#{$record->subject_id})";
+        }
+
+        if ($subject instanceof TripCheckpoint) {
+            $typeLabel = $subject->checkpoint_type?->label();
+
+            return 'Mốc hành trình #'.$record->subject_id.($typeLabel ? " ({$typeLabel})" : '');
+        }
+
+        if ($subject instanceof OrderDeliveryPoint) {
+            $locationLabel = $subject->location?->code ?: $subject->location?->name;
+
+            return 'Điểm giao hàng #'.$record->subject_id.($locationLabel ? " ({$locationLabel})" : '');
+        }
+
+        if ($subject instanceof Vehicle) {
+            return "Phương tiện: {$subject->plate_number} (#{$record->subject_id})";
+        }
+
+        if ($subject instanceof User) {
+            return "Tài khoản: {$subject->name} (#{$record->subject_id})";
+        }
+
+        if (isset(ListFilterActivityLogs::SUBJECT_TYPE_OPTIONS[$record->subject_type])) {
+            return ListFilterActivityLogs::SUBJECT_TYPE_OPTIONS[$record->subject_type].' #'.$record->subject_id;
+        }
+
+        $className = class_basename($record->subject_type);
+        $translateCallback = ActivityLogResource::getPlugin()?->getTranslateSubjectCallback();
+
+        if ($translateCallback) {
+            $translated = $translateCallback($className);
+            if ($translated && $translated !== 'models.'.$className) {
+                return $translated.' #'.$record->subject_id;
+            }
+        }
+
+        return $className.' #'.$record->subject_id;
+    }
+
+    public static function formatSubjectSubtitle(Activity $record): ?string
+    {
+        if (! $record->subject_type) {
+            return null;
+        }
+
+        $subject = $record->subject;
+
+        if ($subject instanceof Order) {
+            return $subject->trip?->trip_code
+                ? "Chuyến: {$subject->trip->trip_code}"
+                : 'Chưa gán chuyến';
+        }
+
+        if ($subject instanceof Trip) {
+            $parts = [];
+            $orderCodes = $subject->orders->pluck('order_code')->filter()->implode(', ');
+            if ($orderCodes !== '') {
+                $parts[] = "Đơn: {$orderCodes}";
+            }
+            if ($subject->vehicle?->plate_number) {
+                $parts[] = "Xe: {$subject->vehicle->plate_number}";
+            }
+
+            return $parts !== [] ? implode(' · ', $parts) : null;
+        }
+
+        if ($subject instanceof TripCheckpoint) {
+            $parts = [];
+            $orderCode = $subject->order?->order_code
+                ?: $subject->trip?->orders?->pluck('order_code')->filter()->implode(', ');
+
+            if ($orderCode) {
+                $parts[] = "Đơn: {$orderCode}";
+            }
+            if ($subject->trip?->trip_code) {
+                $parts[] = "Chuyến: {$subject->trip->trip_code}";
+            }
+
+            return $parts !== [] ? implode(' · ', $parts) : null;
+        }
+
+        if ($subject instanceof OrderDeliveryPoint || $subject instanceof OrderCharge) {
+            $parts = [];
+            if ($subject->order?->order_code) {
+                $parts[] = "Đơn: {$subject->order->order_code}";
+            }
+            if ($subject->order?->trip?->trip_code) {
+                $parts[] = "Chuyến: {$subject->order->trip->trip_code}";
+            }
+
+            return $parts !== [] ? implode(' · ', $parts) : null;
+        }
+
+        if ($subject instanceof OrderChargeFee) {
+            $order = $subject->orderCharge?->order;
+            $parts = [];
+            if ($order?->order_code) {
+                $parts[] = "Đơn: {$order->order_code}";
+            }
+            if ($order?->trip?->trip_code) {
+                $parts[] = "Chuyến: {$order->trip->trip_code}";
+            }
+
+            return $parts !== [] ? implode(' · ', $parts) : null;
+        }
+
+        if ($subject instanceof DriverShift && $subject->driver?->name) {
+            return "Tài xế: {$subject->driver->name}";
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function extractLoggedAttributes(Activity $record): array
+    {
+        $properties = $record->properties?->toArray() ?? [];
+
+        return array_merge(
+            is_array($properties['old'] ?? null) ? $properties['old'] : [],
+            is_array($properties['attributes'] ?? null) ? $properties['attributes'] : [],
+        );
     }
 }

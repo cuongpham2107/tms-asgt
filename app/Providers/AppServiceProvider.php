@@ -97,5 +97,17 @@ class AppServiceProvider extends ServiceProvider
         Table::configureUsing(function (Table $table): void {
             $table->deferLoading()->loadingSkeleton();
         });
+        
+
+        // Các tab trình duyệt mở từ trước khi nâng cấp Filament 5.12 / Livewire 4.4.9 thiếu memo context mới:
+        // trả về 419 (ReleaseTokenMismatch) thay vì 404 để Livewire dừng poll lặp và không bắn toast "Có lỗi khi tải trang".
+        \Livewire\Livewire::listen('checksum.verify', static function (string $checksum, array $snapshot): void {
+            if (
+                app(\Livewire\Mechanisms\HandleRequests\HandleRequests::class)->isLivewireRoute()
+                && (! array_key_exists('filamentPanel', $snapshot['memo'] ?? []) || ! array_key_exists('origin', $snapshot['memo'] ?? []))
+            ) {
+                throw new \Livewire\Exceptions\LivewireReleaseTokenMismatchException;
+            }
+        });
     }
 }

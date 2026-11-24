@@ -1,4 +1,5 @@
 @php
+    use App\Filament\Resources\ActivityLogs\Tables\ActivityLogsTable;
     use App\Services\ActivityLog\ActivityLogFormatter;
 
     $colorClasses = [
@@ -76,8 +77,13 @@
             <div>
                 <span class="text-zinc-500 dark:text-zinc-400">Đối tượng</span>
                 <p class="mt-1 font-medium text-zinc-900 dark:text-zinc-100">
-                    {{ class_basename($activity->subject_type ?? '') }} #{{ $activity->subject_id }}
+                    {{ ActivityLogsTable::formatSubjectTitle($activity) }}
                 </p>
+                @if ($subjectSubtitle = ActivityLogsTable::formatSubjectSubtitle($activity))
+                    <p class="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                        {{ $subjectSubtitle }}
+                    </p>
+                @endif
             </div>
             <div>
                 <span class="text-zinc-500 dark:text-zinc-400">Thời gian</span>
