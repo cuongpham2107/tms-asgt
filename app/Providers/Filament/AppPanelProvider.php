@@ -132,6 +132,13 @@ class AppPanelProvider extends PanelProvider
                 PanelsRenderHook::BODY_END,
                 fn (): string => view('filament.forms.components.location-geofence-script')->render(),
             )
+            // Tab mở từ trước khi deploy/nâng cấp có thể gọi endpoint Livewire cũ và nhận 404.
+            // Ẩn toast lỗi chung và để script bên dưới tự tải lại trang một lần.
+            ->hiddenErrorNotification(404)
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => view('filament.livewire-stale-tab-reload')->render(),
+            )
             ->authMiddleware([
                 Authenticate::class,
             ]);
