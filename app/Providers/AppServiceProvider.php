@@ -15,6 +15,7 @@ use App\Observers\RateChangeObserver;
 use App\Observers\TripCheckpointObserver;
 use App\Observers\TripKmReportObserver;
 use App\Observers\TripObserver;
+use App\Services\ActivityLog\DeletionContextRecorder;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
@@ -24,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use Spatie\Activitylog\Models\Activity;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -97,16 +99,11 @@ class AppServiceProvider extends ServiceProvider
         Table::configureUsing(function (Table $table): void {
             $table->deferLoading()->loadingSkeleton();
         });
-        
 
-        // Các tab trình duyệt mở từ trước khi nâng cấp Filament 5.12 / Livewire 4.4.9 thiếu memo context mới:
-        // trả về 419 (ReleaseTokenMismatch) thay vì 404 để Livewire dừng poll lặp và không bắn toast "Có lỗi khi tải trang".
-        \Livewire\Livewire::listen('checksum.verify', static function (string $checksum, array $snapshot): void {
-            if (
-                app(\Livewire\Mechanisms\HandleRequests\HandleRequests::class)->isLivewireRoute()
-                && (! array_key_exists('filamentPanel', $snapshot['memo'] ?? []) || ! array_key_exists('origin', $snapshot['memo'] ?? []))
-            ) {
-                throw new \Livewire\Exceptions\LivewireReleaseTokenMismatchException;
+        // Chỉ bổ sung ghi chú nguồn xóa (trang nào, dùng action/code gì) cho riêng sự kiện 'deleted'.
+        Activity::creating(function (Activity $activity): void {
+            if ($activity->event === 'deleted') {
+                DeletionContextRecorder::enrich($activity);
             }
         });
     }

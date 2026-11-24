@@ -70,7 +70,8 @@ class ActivityLogsTable extends BaseTable
                         ]);
                     },
                 ])
-                ->latest())
+                ->latest('created_at')
+                ->latest('id'))
             ->columns([
                 TextColumn::make('event')
                     ->label('Sự kiện')
@@ -110,7 +111,8 @@ class ActivityLogsTable extends BaseTable
 
                 TextColumn::make('description')
                     ->label('Mô tả')
-                    ->limit(40)
+                    ->limit(80)
+                    ->tooltip(fn (Activity $record): ?string => $record->description)
                     ->wrap()
                     ->searchable(),
 

@@ -6983,30 +6983,28 @@ ${expression ? 'Expression: "' + expression + '"\n\n' : ""}`, el);
     }
     return null;
   }
-  function replaceNoncesInHtml(html, nonces) {
+  function replaceNoncesInHtml(html) {
     let nonce2 = getNonce();
     if (!nonce2)
       return html;
-    for (let newNonce of nonces) {
-      if (newNonce === nonce2)
-        continue;
-      html = html.replaceAll(`nonce="${newNonce}"`, `nonce="${nonce2}"`);
-    }
-    return html;
-  }
-  function getNoncesFromCspHeaders(headers) {
-    let policies = [
-      headers.get("Content-Security-Policy"),
-      headers.get("Content-Security-Policy-Report-Only")
-    ].join(" ");
-    return Array.from(policies.matchAll(/'nonce-([^']+)'/g), (match) => match[1]);
+    let nonceMatch = html.match(/nonce="([^"]+)"/);
+    if (!nonceMatch)
+      return html;
+    let newNonce = nonceMatch[1];
+    if (newNonce === nonce2)
+      return html;
+    return html.replaceAll(`nonce="${newNonce}"`, `nonce="${nonce2}"`);
   }
   function cloneScriptTag(el) {
     let script = document.createElement("script");
     script.textContent = el.textContent;
     script.async = el.async;
     for (let attr of el.attributes) {
-      script.setAttribute(attr.name, attr.value);
+      if (attr.name === "nonce") {
+        script.nonce = getNonce() || el.nonce;
+      } else {
+        script.setAttribute(attr.name, attr.value);
+      }
     }
     return script;
   }
@@ -8824,7 +8822,7 @@ ${expression ? 'Expression: "' + expression + '"\n\n' : ""}`, el);
       let destination = getDestination(uri, response);
       let html = await response.text();
       let status = response.status;
-      callback(html, destination, status, response.headers);
+      callback(html, destination, status);
     } catch (error2) {
       errorCallback(error2);
       throw error2;
@@ -15993,10 +15991,7 @@ ${expression ? 'Expression: "' + expression + '"\n\n' : ""}`, el);
     }, errorCallback);
   }
   function performFetch(uri, callback, errorCallback) {
-    sendNavigateRequest(uri, (html, destination, status, headers) => {
-      html = replaceNoncesInHtml(html, getNoncesFromCspHeaders(headers));
-      callback(html, destination, status);
-    }, errorCallback).catch(() => {
+    sendNavigateRequest(uri, callback, errorCallback).catch(() => {
     });
   }
 
@@ -16526,8 +16521,8 @@ ${expression ? 'Expression: "' + expression + '"\n\n' : ""}`, el);
     "aria-hidden"
   ];
   function swapCurrentPageWithNewHtml(html, andThen) {
+    html = replaceNoncesInHtml(html);
     let newDocument = new DOMParser().parseFromString(html, "text/html");
-    newDocument.querySelectorAll("noscript").forEach((i) => i.textContent = i.innerHTML);
     let newHtml = newDocument.documentElement;
     let newBody = document.adoptNode(newDocument.body);
     let newHead = document.adoptNode(newDocument.head);
@@ -17996,9 +17991,7 @@ ${expression ? 'Expression: "' + expression + '"\n\n' : ""}`, el);
     await callback();
   }
   async function addAssetsToHeadTagOfPage(rawHtml) {
-    let nonceMatch = rawHtml.match(/nonce="([^"]+)"/);
-    if (nonceMatch)
-      rawHtml = replaceNoncesInHtml(rawHtml, [nonceMatch[1]]);
+    rawHtml = replaceNoncesInHtml(rawHtml);
     let newDocument = new DOMParser().parseFromString(rawHtml, "text/html");
     let newHead = document.adoptNode(newDocument.head);
     let children = [...newHead.children];

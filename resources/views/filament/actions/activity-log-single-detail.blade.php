@@ -28,6 +28,14 @@
 
     $badgeClass = $colorClasses[$color] ?? $colorClasses['info'];
 
+    $propertiesRaw = $activity->properties;
+    $propertiesArray = $propertiesRaw instanceof \Illuminate\Support\Collection
+        ? $propertiesRaw->toArray()
+        : (is_array($propertiesRaw) ? $propertiesRaw : []);
+    $deletionContext = is_array($propertiesArray['deletion_context'] ?? null)
+        ? $propertiesArray['deletion_context']
+        : null;
+
     $changes = $activity->attribute_changes;
     if (is_array($changes) && (isset($changes['attributes']) || isset($changes['old']))) {
         $attributes = $changes['attributes'] ?? [];
@@ -94,6 +102,70 @@
             </div>
         </div>
     </div>
+
+    @if ($deletionContext !== null)
+        @php
+            $decodedPageUrl = isset($deletionContext['page_url']) && is_string($deletionContext['page_url'])
+                ? urldecode($deletionContext['page_url'])
+                : ($deletionContext['request_path'] ?? '—');
+            $shortComponent = isset($deletionContext['livewire_component']) && is_string($deletionContext['livewire_component'])
+                ? class_basename(str_replace('.', '\\', $deletionContext['livewire_component']))
+                : null;
+            $deviceLabel = $deletionContext['device']
+                ?? \App\Services\ActivityLog\DeletionContextRecorder::summarizeUserAgent($deletionContext['user_agent'] ?? null);
+        @endphp
+        <div class="rounded-xl border border-zinc-200/80 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/60 space-y-3 text-xs">
+            <div class="flex items-center justify-between gap-2">
+                <h4 class="font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-400">
+                    Nguồn gốc thao tác xóa
+                </h4>
+                @if ($shortComponent)
+                    <span class="inline-flex items-center rounded-md border border-zinc-200/80 bg-white px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        {{ $shortComponent }}
+                    </span>
+                @endif
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="min-w-0">
+                    <span class="text-zinc-500 dark:text-zinc-400">Công cụ / Hành động</span>
+                    <p class="mt-1">
+                        <span class="inline-flex items-center rounded-md px-2 py-0.5 font-semibold ring-1 {{ $colorClasses['danger'] }}">
+                            {{ $deletionContext['trigger'] ?? '—' }}
+                        </span>
+                    </p>
+                </div>
+                <div class="min-w-0">
+                    <span class="text-zinc-500 dark:text-zinc-400">Xóa ở đâu</span>
+                    <p class="mt-1 font-medium text-zinc-900 dark:text-zinc-100" style="overflow-wrap: anywhere;">
+                        {{ $decodedPageUrl }}
+                    </p>
+                </div>
+                <div class="min-w-0">
+                    <span class="text-zinc-500 dark:text-zinc-400">IP / Thiết bị</span>
+                    <p class="mt-1 font-medium text-zinc-900 dark:text-zinc-100" style="overflow-wrap: anywhere;">
+                        {{ $deletionContext['ip'] ?? '—' }}
+                        @if ($deviceLabel)
+                            <span class="text-zinc-500 dark:text-zinc-400 font-normal" title="{{ $deletionContext['user_agent'] ?? '' }}">
+                                · {{ $deviceLabel }}
+                            </span>
+                        @endif
+                    </p>
+                </div>
+                @if (! empty($deletionContext['app_trace']))
+                    <div class="min-w-0">
+                        <span class="text-zinc-500 dark:text-zinc-400">Luồng code thực thi</span>
+                        <div class="mt-1 space-y-1">
+                            @foreach ($deletionContext['app_trace'] as $frame)
+                                <div class="rounded border border-zinc-200/80 bg-white px-2 py-1 font-mono text-[11px] text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" style="overflow-wrap: anywhere;">
+                                    {{ $frame }}
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
 
     @if (!empty($attributes))
         <div class="rounded-xl border border-zinc-200/80 bg-white p-4 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60 space-y-3">
