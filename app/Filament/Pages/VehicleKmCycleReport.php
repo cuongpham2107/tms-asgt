@@ -48,8 +48,8 @@ class VehicleKmCycleReport extends Page implements HasTable
     #[Url]
     public ?string $month = null;
 
-    /** @var array<int, array{km_run: ?float}>|null km tính từ mốc chuyến trong kỳ đang chọn, theo vehicle_id */
-    protected ?array $checkpointKm = null;
+    /** @var array<int, array{start_km: ?float, start_at: ?Carbon, start_in_range: bool, end_km: ?float, end_at: ?Carbon, km_run: ?float, trip_count: int}>|null km tính từ mốc chuyến trong kỳ đang chọn, theo vehicle_id */
+    protected ?array $checkpointSummary = null;
 
     public function table(Table $table): Table
     {
@@ -77,6 +77,7 @@ class VehicleKmCycleReport extends Page implements HasTable
                 TextColumn::make('checkpoint_km')->label('Km theo mốc chuyến')->alignEnd()
                     ->state(fn (VehicleKmCycle $record): ?float => $this->checkpointKmFor($record))
                     ->formatStateUsing(fn ($state): string => self::km($state))
+                    ->tooltip(fn (VehicleKmCycle $record): ?string => $this->checkpointCoverageTooltip($record))
                     ->placeholder('—'),
                 TextColumn::make('difference')->label('Chênh lệch')->alignEnd()
                     ->tooltip('Km đã chạy (chốt) trừ km tính từ mốc chuyến trong kỳ')
@@ -115,7 +116,7 @@ class VehicleKmCycleReport extends Page implements HasTable
                 ->icon($month === $selected ? 'heroicon-m-check' : null)
                 ->action(function () use ($month): void {
                     $this->month = $month;
-                    $this->checkpointKm = null;
+                    $this->checkpointSummary = null;
                     $this->resetPage();
                 }))->values()->all())
                 ->label($selected !== null ? $options[$selected]['short'] : 'Chưa có kỳ chốt')
@@ -237,16 +238,37 @@ class VehicleKmCycleReport extends Page implements HasTable
 
     private function checkpointKmFor(VehicleKmCycle $record): ?float
     {
-        if ($this->checkpointKm === null) {
+        if ($this->checkpointSummary === null) {
             $cycle = $this->selectedCycle();
-            $this->checkpointKm = $cycle === null ? [] : app(VehicleKmReportService::class)->summarize(
+            $this->checkpointSummary = $cycle === null ? [] : app(VehicleKmReportService::class)->summarize(
                 VehicleKmCycle::query()->where('cycle_start', $cycle->cycle_start)->pluck('vehicle_id')->map(fn ($id): int => (int) $id)->all(),
                 Carbon::parse($cycle->cycle_start),
                 Carbon::parse($cycle->cycle_end)->subSecond(),
             );
         }
 
-        return $this->checkpointKm[$record->vehicle_id]['km_run'] ?? null;
+        return $this->checkpointSummary[$record->vehicle_id]['km_run'] ?? null;
+    }
+
+    /**
+     * Cột "Km theo mốc chuyến" chỉ tính từ mốc km đầu tiên có trong kỳ; nếu mốc đó nằm giữa kỳ
+     * (kỳ đầu tiên áp dụng, hoặc xe mới có dữ liệu) thì phải nói rõ để không hiểu là km cả kỳ.
+     */
+    private function checkpointCoverageTooltip(VehicleKmCycle $record): ?string
+    {
+        $summary = $this->checkpointSummary[$record->vehicle_id] ?? null;
+
+        if ($summary === null || ! $summary['start_in_range'] || $summary['start_at'] === null) {
+            return null;
+        }
+
+        $startAt = Carbon::parse($summary['start_at']);
+        $missingDays = (int) $startAt->diffInDays($record->cycle_start);
+        $text = 'Chỉ có mốc km từ '.$startAt->format('H:i d/m/Y').' nên cột này chỉ tính từ đó';
+
+        return $missingDays > 0
+            ? $text.' (thiếu '.$missingDays.' ngày đầu kỳ chưa có mốc)'
+            : $text;
     }
 
     private function differenceFor(VehicleKmCycle $record): ?float
