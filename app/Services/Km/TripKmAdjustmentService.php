@@ -197,10 +197,6 @@ class TripKmAdjustmentService
             } else {
                 // Điều chỉnh mốc bắt đầu chuyến (start_km)
                 $trip->update(['start_km' => $correctedKm]);
-
-                if ($trip->shift && $trip->shift->trips()->orderBy('id')->first()?->id === $trip->id) {
-                    $trip->shift->update(['start_km' => $correctedKm]);
-                }
             }
 
             // 2. Tính lại km chuyến
@@ -340,10 +336,6 @@ class TripKmAdjustmentService
 
         if ($firstCp && $firstCp->id === $checkpoint->id) {
             $trip->update(['start_km' => $correctedKm]);
-
-            if ($trip->shift && $trip->shift->trips()->orderBy('id')->first()?->id === $trip->id) {
-                $trip->shift->update(['start_km' => $correctedKm]);
-            }
         }
 
         $lastCp = TripCheckpoint::where('trip_id', $trip->id)

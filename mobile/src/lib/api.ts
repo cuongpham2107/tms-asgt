@@ -336,8 +336,6 @@ export interface ShiftResource {
     shift_type: string;
     start_time: string;
     end_time: string | null;
-    start_km: string | null;
-    end_km: string | null;
     total_km: string | null;
     total_km_loaded: string | null;
     total_km_empty: string | null;

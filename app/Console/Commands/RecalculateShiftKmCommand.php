@@ -21,7 +21,6 @@ class RecalculateShiftKmCommand extends Command
         $dryRun = (bool) $this->option('dry-run');
 
         $query = DriverShift::query()
-            ->whereNotNull('start_km')
             ->when($this->option('open-only'), fn ($builder) => $builder->whereNull('end_time'))
             ->when($this->option('shift'), fn ($builder, array $ids) => $builder->whereIn('id', $ids))
             ->orderBy('id');

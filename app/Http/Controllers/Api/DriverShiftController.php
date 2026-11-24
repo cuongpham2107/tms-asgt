@@ -54,18 +54,12 @@ class DriverShiftController extends Controller
             return response()->json(['message' => 'Bạn đã có một ca làm việc đang hoạt động'], 409);
         }
 
-        // Lấy xe hiện tại của tài xế (qua current_driver_id)
-        $activeVehicle = $user->vehiclesAsDriver()->first();
-
         DB::beginTransaction();
         try {
-            $startKm = $activeVehicle?->current_mileage ?? 0;
-
             $shift = DriverShift::create([
                 'driver_id' => $user->id,
                 'shift_type' => $payload['shift_type'],
                 'start_time' => $startTime,
-                'start_km' => $startKm,
                 'start_gps_lat' => $payload['start_gps_lat'] ?? null,
                 'start_gps_lng' => $payload['start_gps_lng'] ?? null,
             ]);
@@ -74,21 +68,6 @@ class DriverShiftController extends Controller
             DriverSwap::where('to_driver_id', $user->id)
                 ->whereNull('to_shift_id')
                 ->update(['to_shift_id' => $shift->id]);
-
-            // Fallback start_km từ swap nếu không có vehicle
-            if ($startKm <= 0) {
-                $pendingSwap = DriverSwap::where('to_driver_id', $user->id)
-                    ->where('to_shift_id', $shift->id)
-                    ->first();
-
-                if ($pendingSwap) {
-                    $handoverKm = (float) ($pendingSwap->checkpoint?->km_reading ?? $pendingSwap->handover_km ?? 0);
-                    if ($handoverKm > 0) {
-                        $shift->start_km = $handoverKm;
-                        $shift->save();
-                    }
-                }
-            }
 
             DB::commit();
 
@@ -242,7 +221,7 @@ class DriverShiftController extends Controller
 
         DB::beginTransaction();
         try {
-            app(ShiftEndService::class)->close($shift, now(), $endKm === null ? null : (float) $endKm, [
+            app(ShiftEndService::class)->close($shift, now(), [
                 'end_gps_lat' => $payload['end_gps_lat'] ?? null,
                 'end_gps_lng' => $payload['end_gps_lng'] ?? null,
             ]);

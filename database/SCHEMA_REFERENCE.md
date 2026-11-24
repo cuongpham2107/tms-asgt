@@ -240,15 +240,14 @@
 | id            | int (PK)       | NO       | auto    |                                  |
 | driver_id     | int            | NO       |         | FK → users.id                   |
 | shift_type    | enum           | NO       |         | full, morning_half, night_half  |
+| is_overtime   | boolean        | NO       | false   | Ca tăng cường                   |
 | start_time    | datetime       | NO       |         | Thời gian vào ca                 |
-| start_km      | decimal(10,1)  | YES      |         | Km bắt đầu ca                    |
 | start_gps_lat | decimal(10,7)  | YES      |         |                                  |
 | start_gps_lng | decimal(10,7)  | YES      |         |                                  |
 | end_time      | datetime       | YES      |         | Thời gian kết thúc ca            |
-| end_km        | decimal(10,1)  | YES      |         | Km kết thúc ca                   |
 | end_gps_lat   | decimal(10,7)  | YES      |         |                                  |
 | end_gps_lng   | decimal(10,7)  | YES      |         |                                  |
-| total_km      | decimal(8,1)   | YES      |         | = end_km - start_km             |
+| total_km      | decimal(8,1)   | YES      |         | Cộng từ km các chuyến trong ca  |
 | total_km_loaded | decimal(8,1) | YES      |         | Km có hàng                       |
 | total_km_empty  | decimal(8,1) | YES      |         | Km không hàng                    |
 | created_at    | datetime       | YES      |         |                                  |

@@ -7,6 +7,7 @@ use App\Enums\ShiftType;
 use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
+use App\Models\Vehicle;
 use App\Services\Km\ShiftKmCalculatorService;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -136,15 +137,20 @@ class AutoEndShiftService
         return DB::transaction(function () use ($shift) {
             $deadline = $this->getShiftDeadline($shift);
 
-            // 1. Xác định end_km theo thứ tự ưu tiên:
-            // a. Checkpoint 'end' hoặc 'driver_swap' gần nhất của ca
+            // 1. Xác định km kết thúc theo thứ tự ưu tiên:
+            // a. Checkpoint 'end' hoặc 'driver_swap' gần nhất của ca (mang đúng vehicle_id)
             $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
                 ->whereIn('checkpoint_type', [CheckpointType::End->value, CheckpointType::DriverSwap->value])
                 ->whereNotNull('km_reading')
                 ->latest('id')
                 ->first();
 
-            $vehicle = $shift->trips()->latest('started_at')->first()?->vehicle
+            // Xe đang dùng lúc kết ca: ưu tiên xe của checkpoint cuối, nếu không có thì xe của chuyến gần nhất.
+            $vehicle = $endCheckpoint?->vehicle_id !== null
+                ? Vehicle::query()->find($endCheckpoint->vehicle_id)
+                : null;
+
+            $vehicle ??= $shift->trips()->latest('started_at')->first()?->vehicle
                 ?? $shift->driver?->vehiclesAsDriver()->first();
 
             if ($endCheckpoint !== null) {
@@ -159,25 +165,23 @@ class AutoEndShiftService
                     $endKm = (float) $latestTrip->end_km;
                 } elseif ($latestCp?->km_reading !== null) {
                     $endKm = (float) $latestCp->km_reading;
-                } elseif ($vehicle?->current_mileage !== null) {
-                    $endKm = (float) $vehicle->current_mileage;
                 } else {
-                    // d. Không có chuyến nào -> end_km = start_km
-                    $endKm = (float) ($shift->start_km ?? 0);
+                    // d. Không có dữ liệu nào -> lấy đồng hồ hiện tại của xe (nếu có)
+                    $endKm = (float) ($vehicle?->current_mileage ?? 0);
                 }
 
-                $endKm = max((float) ($shift->start_km ?? 0), $endKm);
-
-                // Tạo checkpoint End hệ thống
-                TripCheckpoint::create([
-                    'checkpoint_type' => CheckpointType::End->value,
-                    'trip_id' => null,
-                    'shift_id' => $shift->id,
-                    'driver_id' => $shift->driver_id,
-                    'vehicle_id' => $vehicle?->id,
-                    'km_reading' => $endKm,
-                    'occurred_at' => $deadline,
-                ]);
+                // Tạo checkpoint End hệ thống khi xác định được mốc km thực
+                if ($endKm > 0) {
+                    TripCheckpoint::create([
+                        'checkpoint_type' => CheckpointType::End->value,
+                        'trip_id' => null,
+                        'shift_id' => $shift->id,
+                        'driver_id' => $shift->driver_id,
+                        'vehicle_id' => $vehicle?->id,
+                        'km_reading' => $endKm,
+                        'occurred_at' => $deadline,
+                    ]);
+                }
             }
 
             // 2. Xác định end_time: chuẩn theo mốc deadline của ca, nhưng không nhỏ hơn checkpoint cuối
@@ -187,7 +191,7 @@ class AutoEndShiftService
                 : $deadline;
 
             // 3–4. Đóng hồ sơ ca: tính lại km ca, gỡ ca khỏi chuyến đảo lái và chuyến chờ chạy
-            app(ShiftEndService::class)->close($shift, $recordedEndTime, $endKm);
+            app(ShiftEndService::class)->close($shift, $recordedEndTime);
 
             // 5. Cập nhật current_mileage cho xe nếu có
             if ($vehicle && $endKm > 0 && (float) ($vehicle->current_mileage ?? 0) < $endKm) {

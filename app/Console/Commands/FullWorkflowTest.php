@@ -661,7 +661,7 @@ class FullWorkflowTest extends Command
         $shift = DriverShift::where('driver_id', $this->driverA->id)
             ->whereNull('end_time')
             ->first();
-        $this->cinfo('Shift started', "KM start = {$shift->start_km}");
+        $this->cinfo('Shift started', "Shift #{$shift->id}");
 
         $this->sendCheckpoint($this->tokenA, $trip, 'started', null);
         $this->sendCheckpoint($this->tokenA, $trip, 'arrived_pickup', $km + 20);
@@ -677,8 +677,6 @@ class FullWorkflowTest extends Command
         $this->newLine();
         $this->line('  <fg=bright-white>📊 SHIFT KM SUMMARY:</>');
         $this->line('  ┌──────────────────────────────────────┐');
-        $this->line(sprintf('  │  Start KM:  %8s km              │', number_format((float) $shift->start_km, 1)));
-        $this->line(sprintf('  │  End KM:    %8s km              │', number_format((float) $shift->end_km, 1)));
         $this->line(sprintf('  │  Total:     %8s km              │', number_format((float) $shift->total_km, 1)));
         $this->line(sprintf('  │  Loaded:    %8s km  (có hàng)   │', number_format((float) $shift->total_km_loaded, 1)));
         $this->line(sprintf('  │  Empty:     %8s km  (không hàng)│', number_format((float) $shift->total_km_empty, 1)));

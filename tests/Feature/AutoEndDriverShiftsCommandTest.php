@@ -98,7 +98,12 @@ test('it auto-ends MorningHalf shift (Ca X/2) after 20:05 when driver has no inc
     expect($shift->end_time)->not->toBeNull();
     // Ghi nhận đúng mốc 20:00:00
     expect($shift->end_time->format('Y-m-d H:i:s'))->toBe('2026-10-21 20:00:00');
-    expect((float) $shift->end_km)->toBe(1000.0);
+    // Mốc km cuối ca nằm ở checkpoint End (đồng hồ xe hiện tại), không lưu trên ca
+    $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
+        ->where('checkpoint_type', CheckpointType::End)
+        ->latest('id')
+        ->first();
+    expect((float) $endCheckpoint->km_reading)->toBe(1000.0);
     expect((float) $shift->total_km)->toBe(0.0);
 });
 
@@ -261,9 +266,50 @@ test('it auto-ends if driver active trip orders were driver-swapped (bàn giao �
     // Vẫn được tự out ca như thường vì đã bàn giao đảo lái
     $shift->refresh();
     expect($shift->end_time)->not->toBeNull();
-    expect((float) $shift->end_km)->toBe(1050.0);
+    expect((float) $this->vehicle->fresh()->current_mileage)->toBe(1050.0);
     // Link shift_id của trip DriverSwap được dọn dẹp về null
     expect($trip->fresh()->shift_id)->toBeNull();
+});
+
+test('auto-end uses the km of the vehicle currently in use, not the first vehicle odometer', function () {
+    Carbon::setTestNow('2026-10-21 08:00:00');
+
+    // Xe thứ hai có đồng hồ thấp hơn rất nhiều (xe mới)
+    $lowVehicle = Vehicle::create([
+        'plate_number' => '29C-999.99',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+        'current_mileage' => 50.0,
+    ]);
+
+    $shift = DriverShift::create([
+        'driver_id' => $this->driver->id,
+        'shift_type' => ShiftType::MorningHalf,
+        'start_time' => now(),
+    ]);
+
+    // Rời xe 1 ở 10.050 km rồi chuyển sang xe 2, rời xe 2 ở 60 km
+    foreach ([[$this->vehicle->id, 10050.0], [$lowVehicle->id, 60.0]] as [$vehicleId, $km]) {
+        TripCheckpoint::create([
+            'shift_id' => $shift->id,
+            'driver_id' => $this->driver->id,
+            'vehicle_id' => $vehicleId,
+            'checkpoint_type' => CheckpointType::End,
+            'km_reading' => $km,
+            'occurred_at' => now(),
+        ]);
+    }
+
+    Carbon::setTestNow('2026-10-21 20:10:00');
+    $this->artisan('shifts:auto-end')->assertSuccessful();
+
+    $shift->refresh();
+    expect($shift->end_time)->not->toBeNull()
+        ->and((float) $lowVehicle->fresh()->current_mileage)->toBe(60.0)
+        ->and((float) $this->vehicle->fresh()->current_mileage)->toBe(1000.0);
 });
 
 test('it resolves end_km prioritizing End checkpoint or completed trip km', function () {
@@ -310,8 +356,7 @@ test('it resolves end_km prioritizing End checkpoint or completed trip km', func
 
     $shift->refresh();
     expect($shift->end_time)->not->toBeNull();
-    // Lấy end_km từ chuyến hoàn thành cuối cùng (1080.0)
-    expect((float) $shift->end_km)->toBe(1080.0);
+    // Km cuối ca lấy từ chuyến hoàn thành cuối cùng (1080.0)
     expect((float) $shift->total_km)->toBe(80.0);
 
     // Hệ thống tự tạo checkpoint End
@@ -332,8 +377,6 @@ test('it does not modify shifts that driver already manually ended', function ()
         'shift_type' => ShiftType::MorningHalf,
         'start_time' => now(),
         'end_time' => $manualEndTime,
-        'start_km' => 1000.0,
-        'end_km' => 1040.0,
         'total_km' => 40.0,
     ]);
 
@@ -343,7 +386,7 @@ test('it does not modify shifts that driver already manually ended', function ()
     $shift->refresh();
     // Giữ nguyên giờ và km tài xế đã bấm
     expect($shift->end_time->format('Y-m-d H:i:s'))->toBe('2026-10-21 18:30:00');
-    expect((float) $shift->end_km)->toBe(1040.0);
+    expect((float) $shift->total_km)->toBe(40.0);
 });
 
 test('it does not persist changes when running in dry-run mode', function () {

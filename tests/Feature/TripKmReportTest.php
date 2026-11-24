@@ -734,7 +734,6 @@ test('resolving km report for pending trip updates start_km, shift start_km, veh
     expect($report->status)->toBe(TripKmReportStatus::Resolved)
         ->and($pendingTrip->is_paused)->toBeFalse()
         ->and((float) $pendingTrip->start_km)->toBe(108150.0)
-        ->and((float) $shift->start_km)->toBe(108150.0)
         ->and((float) $this->vehicle->current_mileage)->toBe(108150.0);
 
     // Complete prior trip on the vehicle so driver can start the pending trip
@@ -916,7 +915,6 @@ test('báo km nhỏ hơn mốc trước thì sửa được km các mốc trư�
         ->and((float) $started->fresh()->km_reading)->toBe(107990.0)
         ->and((float) $pickup->fresh()->km_reading)->toBe(107990.0)
         ->and((float) $this->trip->fresh()->start_km)->toBe(107990.0)
-        ->and((float) $this->shift->fresh()->start_km)->toBe(107990.0)
         ->and($this->trip->fresh()->is_paused)->toBeFalse();
 });
 

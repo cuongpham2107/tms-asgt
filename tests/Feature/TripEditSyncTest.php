@@ -34,7 +34,7 @@ beforeEach(function () {
     $this->actingAs(User::factory()->create());
 
     $vehicle = Vehicle::create(['plate_number' => '29C-SYNC', 'vehicle_type' => VehicleType::Normal, 'owner' => 'CLC', 'is_active' => true, 'status' => VehicleStatus::Running, 'type' => VehicleOwnerType::Company, 'current_mileage' => 1000]);
-    $shift = DriverShift::create(['driver_id' => $this->driver->id, 'shift_type' => ShiftType::Full, 'start_time' => now()->subHours(5), 'start_km' => 1000]);
+    $shift = DriverShift::create(['driver_id' => $this->driver->id, 'shift_type' => ShiftType::Full, 'start_time' => now()->subHours(5)]);
     $area = Area::create(['code' => 'NBA', 'name' => 'NBA', 'is_active' => true]);
     $pickup = Location::create(['code' => 'JUSDA', 'name' => 'JUSDA', 'lat' => 21.0, 'lng' => 105.7, 'loc_type' => 'pickup', 'is_active' => true]);
 

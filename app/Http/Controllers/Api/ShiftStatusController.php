@@ -6,6 +6,7 @@ use App\Enums\TripStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DriverShiftResource;
 use App\Models\DriverShift;
+use App\Models\TripCheckpoint;
 use App\Services\Km\ShiftKmCalculatorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ class ShiftStatusController extends Controller
      *
      * App mobile gọi khi mở lên để biết:
      * - Lái xe có đang trong ca không
-     * - Km kết thúc gần nhất (để pre-fill khi bắt đầu ca mới)
+     * - Km ghi nhận gần nhất của lái xe (mốc km thực trên đồng hồ xe, không lưu trên ca)
      * - Thông tin xe nếu đang trong ca
      *
      * @response array{active_shift: ?DriverShiftResource, last_km: ?float}
@@ -37,11 +38,12 @@ class ShiftStatusController extends Controller
             app(ShiftKmCalculatorService::class)->calculate($activeShift);
         }
 
-        $lastKm = DriverShift::query()
+        $lastKm = TripCheckpoint::query()
             ->where('driver_id', $user->id)
-            ->whereNotNull('end_km')
-            ->orderByDesc('end_time')
-            ->value('end_km');
+            ->whereNotNull('km_reading')
+            ->latest('occurred_at')
+            ->latest('id')
+            ->value('km_reading');
 
         return response()->json([
             'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])])) : null,

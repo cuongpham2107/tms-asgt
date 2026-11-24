@@ -23,7 +23,7 @@ beforeEach(function () {
     $this->driver = User::factory()->create();
     $this->nextDriver = User::factory()->create();
     $vehicle = Vehicle::create(['plate_number' => '29C-SWAP', 'vehicle_type' => VehicleType::Normal, 'owner' => 'CLC', 'is_active' => true, 'status' => VehicleStatus::Running, 'type' => VehicleOwnerType::Company, 'current_mileage' => 1000]);
-    $shift = DriverShift::create(['driver_id' => $this->driver->id, 'shift_type' => ShiftType::Full, 'start_time' => now()->subHours(3), 'start_km' => 1000]);
+    $shift = DriverShift::create(['driver_id' => $this->driver->id, 'shift_type' => ShiftType::Full, 'start_time' => now()->subHours(3)]);
     $this->trip = Trip::create(['trip_code' => 'TRIP-SWAP', 'vehicle_id' => $vehicle->id, 'driver_id' => $this->driver->id, 'shift_id' => $shift->id, 'status' => TripStatus::Delivering, 'started_at' => now()->subHours(2), 'start_km' => 1000]);
     $area = Area::create(['code' => 'NBA', 'name' => 'NBA']);
     $customer = Customer::create(['code' => 'C', 'name' => 'C']);

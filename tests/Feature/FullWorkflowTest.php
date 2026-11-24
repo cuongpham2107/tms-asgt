@@ -478,8 +478,12 @@ test('scenario 7: shift KM summary matches actual driven distance', function () 
     $order->refresh();
     $trip->refresh();
 
-    // Shift KM (end_km is set by endShift, total_km computed by calculator)
-    expect((float) $shift->end_km)->toBe(20090.0);
+    // Shift KM: mốc km cuối nằm ở checkpoint end của ca, total_km do calculator cộng từ chuyến
+    $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
+        ->where('checkpoint_type', CheckpointType::End->value)
+        ->latest('id')
+        ->first();
+    expect((float) $endCheckpoint->km_reading)->toBe(20090.0);
     expect((float) $shift->total_km)->toBeGreaterThan(0);
     expect((float) $shift->total_km_loaded)->toBeGreaterThan(0);
     expect((float) $shift->total_km_empty)->toBeGreaterThanOrEqual(0);

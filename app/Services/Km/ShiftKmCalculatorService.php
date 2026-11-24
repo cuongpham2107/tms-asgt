@@ -93,15 +93,6 @@ class ShiftKmCalculatorService
     {
         $shift->refresh();
 
-        if ($shift->start_km === null) {
-            $shift->total_km = null;
-            $shift->total_km_loaded = null;
-            $shift->total_km_empty = null;
-            $shift->save();
-
-            return;
-        }
-
         // Tổng hợp từ trip totals — gồm cả chuyến đang chạy (chưa có end_km)
         $allTrips = $shift->trips()->whereNotNull('start_km')->get();
 
@@ -154,17 +145,6 @@ class ShiftKmCalculatorService
 
             $totalKm += $tripKm;
             $totalLoaded += $tripLoaded;
-        }
-
-        // Thêm phần km lang thang sau trip cuối (nếu có) — chỉ khi ca đã kết thúc
-        $lastTrip = $allTrips->sortByDesc('completed_at')->first();
-        $shiftEndKm = (float) ($shift->end_km ?? 0);
-        if ($lastTrip && $shiftEndKm > 0) {
-            $lastTripEnd = (float) ($lastTrip->end_km ?? 0);
-            if ($shiftEndKm > $lastTripEnd) {
-                $wanderingKm = $shiftEndKm - $lastTripEnd;
-                $totalKm += $wanderingKm;
-            }
         }
 
         $shift->total_km = $totalKm;

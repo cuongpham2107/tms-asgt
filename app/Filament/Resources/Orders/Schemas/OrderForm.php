@@ -124,7 +124,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->columnSpan(['default' => 1, 'sm' => fn (Get $get): int => self::isExternalOrder($get) ? 1 : 2, 'md' => fn (Get $get): int => self::isExternalOrder($get) ? 2 : 4]),
 
                                 self::chargeableWeightSelect()
-                                    ->required()
+                                    ->required($requireSchedulingFields)
                                     ->visible(fn (Get $get): bool => self::isExternalOrder($get))
                                     ->columnSpan(['default' => 1, 'sm' => 1, 'md' => 1]),
 

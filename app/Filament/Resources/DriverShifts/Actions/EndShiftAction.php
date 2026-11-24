@@ -90,7 +90,7 @@ class EndShiftAction
                         ]);
                     }
 
-                    app(ShiftEndService::class)->close($record, now(), $endKm);
+                    app(ShiftEndService::class)->close($record, now());
 
                     DB::commit();
                 } catch (\Throwable $e) {

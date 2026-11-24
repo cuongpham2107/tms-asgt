@@ -22,7 +22,7 @@ beforeEach(function () {
     ]);
 });
 
-test('driver without vehicle starting shift without vehicle_id succeeds with zero km', function () {
+test('driver without vehicle starting shift without vehicle_id succeeds', function () {
     $driver = User::factory()->create();
     $driver->assignRole($this->driverRole);
     Sanctum::actingAs($driver);
@@ -36,7 +36,7 @@ test('driver without vehicle starting shift without vehicle_id succeeds with zer
 
     $shift = $driver->driverShifts()->whereNull('end_time')->first();
     expect($shift)->not->toBeNull();
-    expect((float) $shift->start_km)->toBe(0.0);
+    expect($shift->start_time)->not->toBeNull();
 });
 
 test('driver without vehicle starting shift with vehicle_id succeeds', function () {
@@ -94,7 +94,7 @@ test('driver with vehicle starting shift without vehicle_id succeeds using curre
     expect($shift)->not->toBeNull();
 });
 
-test('receiving driver start km comes from the linked handover checkpoint', function () {
+test('starting a shift links pending driver swaps to the new shift', function () {
     $receiver = User::factory()->create();
     $receiver->assignRole($this->driverRole);
     $giver = User::factory()->create();
@@ -115,7 +115,7 @@ test('receiving driver start km comes from the linked handover checkpoint', func
         'driver_id' => $giver->id,
         'vehicle_id' => $vehicle->id,
     ]);
-    DriverSwap::create([
+    $swap = DriverSwap::create([
         'trip_id' => $trip->id,
         'checkpoint_id' => $checkpoint->id,
         'from_driver_id' => $giver->id,
@@ -128,5 +128,8 @@ test('receiving driver start km comes from the linked handover checkpoint', func
 
     $this->postJson('/api/driver/shifts/start', ['shift_type' => ShiftType::Full->value])->assertSuccessful();
 
-    expect((float) $receiver->driverShifts()->first()->start_km)->toBe(1050.0);
+    $shift = $receiver->driverShifts()->first();
+    expect($swap->fresh()->to_shift_id)->toBe($shift->id);
+    // Km bàn giao vẫn nằm ở checkpoint của chuyến, không lưu trên ca
+    expect((float) $swap->fresh()->handover_km)->toBe(1040.0);
 });

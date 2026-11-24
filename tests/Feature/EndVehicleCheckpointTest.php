@@ -69,7 +69,6 @@ function endMakeShift(User $driver): DriverShift
         'driver_id' => $driver->id,
         'shift_type' => ShiftType::Full,
         'start_time' => now()->subHours(4),
-        'start_km' => 10000,
     ]);
 }
 
@@ -131,11 +130,9 @@ test('simple trip with one order calculates loaded and empty km correctly', func
     expect((float) $trip->total_km_empty)->toBe(10.0);
 });
 
-// === TEST 2: Bug 1 — km lang thang sau khi hoàn thành đơn cuối ===
-test('wandering km after last order goes to shift empty km', function () {
+// === TEST 2: km về bãi sau đơn cuối không còn cộng vào ca (đã có chuyến không hàng) ===
+test('km after last order is not added to shift totals', function () {
     $shift = endMakeShift($this->driver);
-    $shift->start_km = 10000;
-    $shift->save();
 
     $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
     $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
@@ -161,15 +158,15 @@ test('wandering km after last order goes to shift empty km', function () {
     ])->assertSuccessful();
 
     $shift->refresh();
-    expect((float) $shift->end_km)->toBe(10080.0);
-    expect((float) $shift->total_km_empty)->toBeGreaterThanOrEqual(30.0);
+    // Ca chỉ cộng km của chuyến; 30 km về bãi phải được ghi bằng chuyến không hàng
+    expect((float) $shift->total_km)->toBe(50.0);
+    expect((float) $shift->total_km_loaded)->toBe(40.0);
+    expect((float) $shift->total_km_empty)->toBe(10.0);
 });
 
-// === TEST 3: Ca tiếp theo nhận đúng start_km ===
-test('next shift starts at end checkpoint km', function () {
+// === TEST 3: Đồng hồ xe cập nhật theo km kết thúc xe ===
+test('vehicle mileage follows the end checkpoint km', function () {
     $shift1 = endMakeShift($this->driver);
-    $shift1->start_km = 10000;
-    $shift1->save();
 
     $trip = endMakeTrip($shift1, $this->vehicle, $this->driver, 10000);
     $order = endMakeOrder($trip, $this->driver, $this->area, $this->customer);
@@ -186,22 +183,11 @@ test('next shift starts at end checkpoint km', function () {
     $this->postJson('/api/driver/shifts/end', [])->assertSuccessful();
 
     expect((float) $this->vehicle->fresh()->current_mileage)->toBe(10080.0);
-
-    $shift2 = DriverShift::create([
-        'driver_id' => $this->driver->id,
-        'shift_type' => ShiftType::Full,
-        'start_time' => now(),
-        'start_km' => $this->vehicle->fresh()->current_mileage,
-    ]);
-
-    expect((float) $shift2->start_km)->toBe(10080.0);
 });
 
 // === TEST 4: Bug 2 — đổi xe giữa ca ===
 test('vehicle swap mid-shift calculates correct segmented km', function () {
     $shift = endMakeShift($this->driver);
-    $shift->start_km = 10000;
-    $shift->save();
 
     // Vehicle 1 segment
     $trip1 = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
@@ -249,7 +235,11 @@ test('vehicle swap mid-shift calculates correct segmented km', function () {
     $this->postJson('/api/driver/shifts/end', [])->assertSuccessful();
 
     $shift->refresh();
-    expect((float) $shift->end_km)->toBe(50100.0);
+    $lastEndCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
+        ->where('checkpoint_type', CheckpointType::End->value)
+        ->latest('id')
+        ->first();
+    expect((float) $lastEndCheckpoint->km_reading)->toBe(50100.0);
     expect((float) $shift->total_km)->toBeGreaterThan(0);
     expect((float) $shift->total_km)->toBeLessThan(1000000);
     expect((float) $shift->total_km_loaded)->toBeLessThan(1000000);
@@ -271,8 +261,6 @@ test('end shift without end checkpoint is rejected', function () {
 // === TEST 6: Rời xe khi còn chuyến chưa xong → báo lỗi, đưa về chi tiết chuyến để bàn giao hoặc làm nốt ===
 test('end vehicle is rejected while a trip is unfinished and leaves the trip untouched', function (TripStatus $status) {
     $shift = endMakeShift($this->driver);
-    $shift->start_km = 10000;
-    $shift->save();
 
     $trip = endMakeTrip($shift, $this->vehicle, $this->driver, 10000);
     $trip->update(['status' => $status]);
@@ -354,7 +342,11 @@ test('end shift succeeds when driver has pending trips with sent orders', functi
     $response->assertSuccessful();
     $shift->refresh();
     expect($shift->end_time)->not->toBeNull();
-    expect((float) $shift->end_km)->toBe(10050.0);
+    $endCheckpoint = TripCheckpoint::where('shift_id', $shift->id)
+        ->where('checkpoint_type', CheckpointType::End->value)
+        ->latest('id')
+        ->first();
+    expect((float) $endCheckpoint->km_reading)->toBe(10050.0);
     // Trip 2 should remain pending and not be touched
     expect($trip2->fresh()->status)->toBe(TripStatus::Pending);
 });

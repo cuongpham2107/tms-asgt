@@ -18,15 +18,17 @@ class ShiftEndService
     public function __construct(private readonly ShiftKmCalculatorService $shiftKm) {}
 
     /**
-     * Ghi giờ / km / GPS kết thúc, tính lại km ca, gỡ ca khỏi các chuyến đã đảo lái và chuyến chờ chạy (để ca sau nhận lại).
+     * Ghi giờ / GPS kết thúc, tính lại km ca, gỡ ca khỏi các chuyến đã đảo lái và chuyến chờ chạy (để ca sau nhận lại).
+     *
+     * Km kết thúc không lưu trên ca: mỗi ca có thể chạy nhiều xe nên mốc km nằm ở
+     * trip_checkpoints (vehicle_id + km_reading) của từng xe.
      *
      * @param  array{end_gps_lat?: string|float|null, end_gps_lng?: string|float|null}  $gps
      */
-    public function close(DriverShift $shift, CarbonInterface $endTime, ?float $endKm, array $gps = []): DriverShift
+    public function close(DriverShift $shift, CarbonInterface $endTime, array $gps = []): DriverShift
     {
-        return DB::transaction(function () use ($shift, $endTime, $endKm, $gps): DriverShift {
+        return DB::transaction(function () use ($shift, $endTime, $gps): DriverShift {
             $shift->end_time = $endTime;
-            $shift->end_km = $endKm;
             if (array_key_exists('end_gps_lat', $gps)) {
                 $shift->end_gps_lat = $gps['end_gps_lat'];
             }

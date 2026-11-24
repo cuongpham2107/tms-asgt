@@ -74,7 +74,7 @@ test('the order list offers recall and no longer offers cancel order', function 
 
 test('auto shift end releases waiting trips so the next shift can pick them up', function () {
     Carbon::setTestNow('2026-10-21 08:30:00');
-    $shift = DriverShift::create(['driver_id' => $this->driver->id, 'shift_type' => ShiftType::MorningHalf, 'start_time' => now(), 'start_km' => 1000]);
+    $shift = DriverShift::create(['driver_id' => $this->driver->id, 'shift_type' => ShiftType::MorningHalf, 'start_time' => now()]);
     $waiting = ($this->makeOrder)(TripStatus::Pending, $shift->id)->trip;
 
     app(AutoEndShiftService::class)->autoEndEligibleShifts(Carbon::parse('2026-10-21 20:05:00'));

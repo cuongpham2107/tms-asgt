@@ -23,7 +23,7 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     $driver = User::factory()->create();
     $this->vehicle = Vehicle::create(['plate_number' => '29C-CANCEL', 'vehicle_type' => VehicleType::Normal, 'owner' => 'CLC', 'is_active' => true, 'status' => VehicleStatus::Running, 'type' => VehicleOwnerType::Company, 'current_mileage' => 1000]);
-    $shift = DriverShift::create(['driver_id' => $driver->id, 'shift_type' => ShiftType::Full, 'start_time' => now()->subHours(3), 'start_km' => 1000]);
+    $shift = DriverShift::create(['driver_id' => $driver->id, 'shift_type' => ShiftType::Full, 'start_time' => now()->subHours(3)]);
     $this->trip = Trip::create(['trip_code' => 'TRIP-CANCEL', 'vehicle_id' => $this->vehicle->id, 'driver_id' => $driver->id, 'shift_id' => $shift->id, 'status' => TripStatus::Delivering, 'started_at' => now()->subHours(2), 'start_km' => 1000]);
     $this->order = Order::create(['order_code' => 'ASG-CANCEL', 'type' => OrderType::Hhhk, 'area_id' => Area::create(['code' => 'NBA', 'name' => 'NBA'])->id, 'customer_id' => Customer::create(['code' => 'C', 'name' => 'C'])->id, 'trip_id' => $this->trip->id, 'status' => OrderStatus::InTransit, 'created_by' => $driver->id]);
 });

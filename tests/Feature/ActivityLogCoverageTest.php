@@ -38,7 +38,7 @@ beforeEach(function () {
         'type' => VehicleOwnerType::Company,
         'current_mileage' => 10000,
     ]);
-    $this->shift = DriverShift::create(['driver_id' => $this->driver->id, 'shift_type' => ShiftType::Full, 'start_time' => now()->subHours(2), 'start_km' => 10000]);
+    $this->shift = DriverShift::create(['driver_id' => $this->driver->id, 'shift_type' => ShiftType::Full, 'start_time' => now()->subHours(2)]);
     $this->trip = Trip::create(['trip_code' => 'TRIP-LOG-01', 'vehicle_id' => $this->vehicle->id, 'driver_id' => $this->driver->id, 'shift_id' => $this->shift->id, 'status' => TripStatus::Delivering, 'started_at' => now()->subHour(), 'start_km' => 10000]);
     $this->order = Order::create([
         'order_code' => 'ASG-LOG-01',
@@ -65,13 +65,13 @@ test('checkpoints, delivery points and shifts record who changed what', function
     $point = OrderDeliveryPoint::create(['order_id' => $this->order->id, 'sequence' => 1, 'status' => OrderDeliveryPointStatus::Pending]);
     $point->update(['status' => OrderDeliveryPointStatus::Arrived]);
 
-    $this->shift->update(['end_km' => 10050]);
+    $this->shift->update(['total_km' => 50]);
 
     expect(lastActivityFor($checkpoint)->attribute_changes['attributes'])->toBe(['km_reading' => '10012.0'])
         ->and(lastActivityFor($checkpoint)->causer_id)->toBe($this->driver->id)
         ->and(Activity::where('subject_type', TripCheckpoint::class)->where('event', 'created')->first()->attribute_changes['attributes'])->not->toHaveKey('eup_lat')
         ->and(lastActivityFor($point)->attribute_changes['attributes']['status'])->toBe('arrived')
-        ->and(lastActivityFor($this->shift)->attribute_changes['attributes']['end_km'])->toBe('10050.0');
+        ->and(lastActivityFor($this->shift)->attribute_changes['attributes']['total_km'])->toBe('50.0');
 });
 
 test('vehicles log km and status but not gps, users never log passwords', function () {

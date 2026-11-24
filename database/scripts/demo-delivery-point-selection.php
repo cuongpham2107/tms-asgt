@@ -315,8 +315,6 @@ $shift = $endResult['body']['shift'];
 ok('End shift');
 
 echo "\n  📊 Kết quả KM TH1:\n";
-echo "    start_km  = {$shift['start_km']}\n";
-echo "    end_km    = {$shift['end_km']}\n";
 echo "    total_km       = {$shift['total_km']} km  (expect ≈100)\n";
 echo "    total_km_loaded = {$shift['total_km_loaded']} km  (expect ≈80)\n";
 echo "    total_km_empty  = {$shift['total_km_empty']} km  (expect ≈20)\n";
@@ -371,7 +369,6 @@ $end2Result = request('POST', "$baseUrl/api/driver/shifts/end", $token, ['end_ti
 $shift2 = $end2Result['body']['shift'];
 
 echo "\n  📊 Kết quả KM TH4 (DriverSwap giữa chừng):\n";
-echo "    end_km    = {$shift2['end_km']}\n";
 echo "    total_km       = {$shift2['total_km']} km\n";
 echo "    total_km_loaded = {$shift2['total_km_loaded']} km\n";
 echo "    total_km_empty  = {$shift2['total_km_empty']} km\n";
@@ -433,7 +430,6 @@ DB::table(\"vehicles\")->where(\"id\",{$vehicle2Id})->update([\"current_mileage\
     $shift3 = $end3Result['body']['shift'];
 
     echo "\n  📊 Kết quả KM TH2 (đổi xe giữa ca):\n";
-    echo "    end_km    = {$shift3['end_km']}\n";
     echo "    total_km       = {$shift3['total_km']} km  (2 segments riêng)\n";
     echo "    total_km_loaded = {$shift3['total_km_loaded']} km\n";
     echo "    total_km_empty  = {$shift3['total_km_empty']} km\n";
