@@ -1845,6 +1845,44 @@ test('dispatch board renames menu to Kiem soat and embeds Tong hop ca truc lai x
         ->assertDontSee('Tài xế Ca Trực BN');
 });
 
+test('drivers clocking in up to 2 hours early before 08:00 still count as today shift instead of stale shift', function () {
+    $this->travelTo(Carbon::parse('2026-11-24 21:25:00'));
+    Role::findOrCreate('driver');
+
+    $earlyDriver = User::factory()->create([
+        'name' => 'Nguyễn Mai Dậu Test',
+        'station' => OnDutyLocation::Nba,
+        'is_active' => true,
+    ]);
+    $earlyDriver->assignRole('driver');
+
+    $tooEarlyDriver = User::factory()->create([
+        'name' => 'Tài xế Vào Quá Sớm',
+        'station' => OnDutyLocation::Nba,
+        'is_active' => true,
+    ]);
+    $tooEarlyDriver->assignRole('driver');
+
+    DriverShift::create([
+        'driver_id' => $earlyDriver->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => Carbon::parse('2026-11-24 07:40:00'),
+        'end_time' => null,
+    ]);
+
+    DriverShift::create([
+        'driver_id' => $tooEarlyDriver->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => Carbon::parse('2026-11-24 05:30:00'),
+        'end_time' => null,
+    ]);
+
+    $rows = (new VehicleDispatchBoard)->getDutyDriverRows()->keyBy('id');
+
+    expect($rows[$earlyDriver->id]->is_stale_shift)->toBeFalse()
+        ->and($rows[$tooEarlyDriver->id]->is_stale_shift)->toBeTrue();
+});
+
 test('rented vehicles dispatch sheet shows only rented vehicles with active or pending trips, omits GPS/KM/Duty columns, and sorts HHHK before External', function () {
     $driver = User::factory()->create(['name' => 'Tài xế Xe Thuê']);
     $area = Area::create(['code' => 'NBA', 'name' => 'Nội Bài', 'is_active' => true, 'sort_order' => 1]);

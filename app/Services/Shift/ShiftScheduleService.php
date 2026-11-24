@@ -9,6 +9,11 @@ use Illuminate\Support\Carbon;
 class ShiftScheduleService
 {
     /**
+     * Số giờ du di cho phép tài xế vào ca sớm trước mốc 08:00 / 20:00 mà vẫn tính là ca hôm nay.
+     */
+    public const EARLY_CHECKIN_GRACE_HOURS = 2;
+
+    /**
      * Mốc ngày chuẩn để tính chu kỳ luân phiên ca trực.
      * Mốc: 01/10/2026 (Ngày 1/10/2026 là Ca Lẻ).
      * Cứ mỗi ngày trôi qua (+1 ngày) thì đổi ca một lần.
@@ -45,6 +50,39 @@ class ShiftScheduleService
         return $time->hour < 8
             ? $time->copy()->subDay()->startOfDay()
             : $time->copy()->startOfDay();
+    }
+
+    /**
+     * Lấy ngày ca làm việc dựa theo giờ vào ca thực tế, có du di vào sớm trước mốc 08:00.
+     * Ví dụ du di 2 giờ: tài xế bấm vào ca từ 06:00 → 07:59 sáng vẫn tính là ca của ngày hôm đó.
+     */
+    public static function getShiftDateForStart(CarbonInterface $startTime, int $earlyGraceHours = self::EARLY_CHECKIN_GRACE_HOURS): Carbon
+    {
+        $parsed = Carbon::parse($startTime);
+        $cutoff = $parsed->copy()->startOfDay()->setTime(8, 0, 0)->subHours($earlyGraceHours);
+
+        return $parsed->lt($cutoff)
+            ? $parsed->copy()->subDay()->startOfDay()
+            : $parsed->copy()->startOfDay();
+    }
+
+    /**
+     * Kiểm tra giờ bắt đầu ca có nằm trong khung ca [$shiftStart, $shiftEnd] hay không
+     * (tính thêm khoảng du di vào sớm trước $shiftStart).
+     */
+    public static function isStartTimeInWindow(
+        ?CarbonInterface $startTime,
+        CarbonInterface $shiftStart,
+        CarbonInterface $shiftEnd,
+        int $earlyGraceHours = self::EARLY_CHECKIN_GRACE_HOURS,
+    ): bool {
+        if ($startTime === null) {
+            return false;
+        }
+
+        $graceStart = Carbon::parse($shiftStart)->subHours($earlyGraceHours);
+
+        return Carbon::parse($startTime)->between($graceStart, $shiftEnd);
     }
 
     /**

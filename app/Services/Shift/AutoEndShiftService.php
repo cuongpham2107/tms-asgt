@@ -41,7 +41,7 @@ class AutoEndShiftService
     public function getShiftDeadline(DriverShift $shift): Carbon
     {
         $startTime = Carbon::parse($shift->start_time);
-        $shiftDate = ShiftScheduleService::getShiftDate($startTime);
+        $shiftDate = ShiftScheduleService::getShiftDateForStart($startTime);
 
         $deadline = match ($shift->shift_type) {
             ShiftType::MorningHalf => $shiftDate->copy()->setTime(20, 0, 0),

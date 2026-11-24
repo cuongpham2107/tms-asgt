@@ -10,6 +10,7 @@ use App\Models\DriverShift;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Shift\ShiftScheduleService;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Pages\Page;
@@ -271,7 +272,7 @@ class DriverDutyReport extends Page implements HasTable
                 ->orderByDesc('started_at')
                 ->get();
 
-            $isShiftInCurrentWindow = $shift?->start_time !== null && $shift->start_time->between($shiftStart, $shiftEnd);
+            $isShiftInCurrentWindow = ShiftScheduleService::isStartTimeInWindow($shift?->start_time, $shiftStart, $shiftEnd);
 
             $vehicle = Vehicle::where('current_driver_id', $driver->id)->first()
                 ?? $windowTrips->first()?->vehicle;

@@ -196,7 +196,7 @@
                                             <span class="text-gray-600 dark:text-gray-300">{{ $driver->end_time->format('H:i d/m/Y') }}</span>
                                         @elseif ($driver->is_stale_shift)
                                             <span
-                                                title="Ca bắt đầu lúc {{ $driver->start_time?->format('H:i d/m/Y') }} (ngoài khung 08:00 hôm nay → 08:00 hôm sau) chưa được thoát"
+                                                title="Ca bắt đầu lúc {{ $driver->start_time?->format('H:i d/m/Y') }} (trước khung ca hôm nay quá {{ \App\Services\Shift\ShiftScheduleService::EARLY_CHECKIN_GRACE_HOURS }} giờ) chưa được thoát"
                                                 class="inline-flex items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/20 dark:text-amber-300"
                                             >
                                                 Chưa thoát ca cũ

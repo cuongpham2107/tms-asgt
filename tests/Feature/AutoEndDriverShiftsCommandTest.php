@@ -475,3 +475,25 @@ test('it does not auto-end shift when trip is in delivered status awaiting end c
 
     expect($shift->fresh()->end_time)->toBeNull();
 });
+
+test('ca X/2 vào sớm trong 2 tiếng trước 08:00 (07:40) không bị auto-end lúc 08:05 cùng ngày mà kết thúc lúc 20:00', function () {
+    Carbon::setTestNow('2026-10-27 07:40:00');
+
+    $shift = DriverShift::create([
+        'driver_id' => $this->driver->id,
+        'shift_type' => ShiftType::MorningHalf,
+        'start_time' => now(),
+        'start_km' => 1000.0,
+    ]);
+
+    expect(app(AutoEndShiftService::class)->getShiftDeadline($shift)->format('Y-m-d H:i:s'))
+        ->toBe('2026-10-27 20:00:00');
+
+    Carbon::setTestNow('2026-10-27 08:06:00');
+    $this->artisan('shifts:auto-end')->assertSuccessful();
+    expect($shift->fresh()->end_time)->toBeNull();
+
+    Carbon::setTestNow('2026-10-27 20:06:00');
+    $this->artisan('shifts:auto-end')->assertSuccessful();
+    expect($shift->fresh()->end_time->format('Y-m-d H:i:s'))->toBe('2026-10-27 20:00:00');
+});

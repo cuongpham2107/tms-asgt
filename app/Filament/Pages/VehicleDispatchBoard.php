@@ -2077,7 +2077,7 @@ class VehicleDispatchBoard extends Page implements HasTable
             $shift = $shiftsByDriver->get($driver->id);
             $windowTrips = $tripsByDriver->get($driver->id, collect());
 
-            $isShiftInCurrentWindow = $shift?->start_time !== null && $shift->start_time->between($shiftStart, $shiftEnd);
+            $isShiftInCurrentWindow = ShiftScheduleService::isStartTimeInWindow($shift?->start_time, $shiftStart, $shiftEnd);
 
             $tripCount = $windowTrips->count();
             $kmLoaded = $windowTrips->isNotEmpty()
