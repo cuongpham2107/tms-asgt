@@ -510,7 +510,7 @@ class ListTrips extends ListRecords
                     ->activeValue(fn ($livewire) => $livewire->vehicleOwner)
                     ->clickAction('filterVehicleOwner'),
                 PillFilter::make('activePlaceFilter')
-                    ->options(fn (): array => $this->orderPlaceFilters + ['all' => 'Tất cả'])
+                    ->options(fn (): array => ['all' => 'Tất cả'] + $this->orderPlaceFilters)
                     ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
                     ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
                     ->clickAction('filterPlace'),
