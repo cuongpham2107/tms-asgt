@@ -28,6 +28,14 @@ class DriverShiftResource extends JsonResource
             'id' => $this->id,
             'driver_id' => $this->driver_id,
             'driver' => $this->whenLoaded('driver', fn () => UserResource::make($this->driver)),
+            'selected_vehicle_id' => $this->vehicle_id,
+            'selected_vehicle' => $this->vehicle ? [
+                'id' => $this->vehicle->id,
+                'plate_number' => $this->vehicle->plate_number,
+                'vehicle_type' => $this->vehicle->vehicle_type,
+                'vehicle_type_label' => $this->vehicle->getVehicleTypeLabel(),
+                'load_capacity' => $this->vehicle->load_capacity,
+            ] : null,
             'vehicle_id' => $displayTrip?->vehicle_id,
             'vehicle' => $displayTrip?->vehicle ? [
                 'id' => $displayTrip->vehicle->id,

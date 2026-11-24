@@ -2,10 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\DriverWorkShift;
+use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Http\Controllers\Controller;
+use App\Models\DriverShift;
+use App\Models\Trip;
+use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Shift\ShiftScheduleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class VehicleSearchController extends Controller
 {
@@ -33,6 +41,43 @@ class VehicleSearchController extends Controller
 
         return response()->json([
             'data' => $vehicles,
+        ]);
+    }
+
+    /**
+     * Danh sách xe công ty đang hoạt động để chọn khi vào ca, kèm xe gợi ý của tài xế.
+     *
+     * @queryParam q string Tìm theo biển số hoặc 4 số cuối. Example: 8678
+     *
+     * @response array{data: array<int, array{id: int, plate_number: string, vehicle_type: ?string, vehicle_type_label: string, load_capacity: ?float}>, suggested_vehicle_id: ?int}
+     */
+    public function shiftOptions(Request $request): JsonResponse
+    {
+        $q = trim((string) $request->query('q', ''));
+
+        $companyVehicles = Vehicle::query()
+            ->where('is_active', true)
+            ->where('type', VehicleOwnerType::Company->value)
+            ->orderBy('plate_number')
+            ->get(['id', 'plate_number', 'vehicle_type', 'load_capacity', 'current_driver_id', 'even_driver_id', 'odd_driver_id']);
+
+        $suggestedVehicleId = $request->user() instanceof User
+            ? $this->resolveSuggestedVehicleId($request->user(), $companyVehicles)
+            : null;
+
+        $filtered = $q !== ''
+            ? $companyVehicles->filter(fn (Vehicle $v): bool => str_contains(mb_strtolower((string) $v->plate_number), mb_strtolower($q)))->values()
+            : $companyVehicles;
+
+        return response()->json([
+            'data' => $filtered->map(fn (Vehicle $v): array => [
+                'id' => $v->id,
+                'plate_number' => $v->plate_number,
+                'vehicle_type' => $v->vehicle_type?->value,
+                'vehicle_type_label' => $v->getVehicleTypeLabel(),
+                'load_capacity' => $v->load_capacity !== null ? (float) $v->load_capacity : null,
+            ])->all(),
+            'suggested_vehicle_id' => $suggestedVehicleId,
         ]);
     }
 
@@ -83,5 +128,59 @@ class VehicleSearchController extends Controller
                 'notes' => $vehicle->notes,
             ],
         ]);
+    }
+
+    /**
+     * @param  Collection<int, Vehicle>  $companyVehicles
+     */
+    private function resolveSuggestedVehicleId(User $user, Collection $companyVehicles): ?int
+    {
+        if ($companyVehicles->isEmpty()) {
+            return null;
+        }
+
+        $activeIds = $companyVehicles->pluck('id')->flip();
+
+        $currentMatch = $companyVehicles->firstWhere('current_driver_id', $user->id);
+        if ($currentMatch) {
+            return $currentMatch->id;
+        }
+
+        $todayShift = ShiftScheduleService::determineShift();
+        $primaryColumn = $todayShift === DriverWorkShift::Even ? 'even_driver_id' : 'odd_driver_id';
+        $secondaryColumn = $todayShift === DriverWorkShift::Even ? 'odd_driver_id' : 'even_driver_id';
+
+        $shiftMatch = $companyVehicles->firstWhere($primaryColumn, $user->id)
+            ?? $companyVehicles->firstWhere($secondaryColumn, $user->id);
+        if ($shiftMatch) {
+            return $shiftMatch->id;
+        }
+
+        if ($user->vehicle_id && $activeIds->has((int) $user->vehicle_id)) {
+            return (int) $user->vehicle_id;
+        }
+
+        $lastShiftVehicleId = DriverShift::query()
+            ->where('driver_id', $user->id)
+            ->whereNotNull('vehicle_id')
+            ->latest('start_time')
+            ->value('vehicle_id');
+
+        if ($lastShiftVehicleId && $activeIds->has((int) $lastShiftVehicleId)) {
+            return (int) $lastShiftVehicleId;
+        }
+
+        $lastTripVehicleId = Trip::query()
+            ->where('driver_id', $user->id)
+            ->whereNotNull('vehicle_id')
+            ->where('status', '!=', TripStatus::Cancelled->value)
+            ->latest('id')
+            ->value('vehicle_id');
+
+        if ($lastTripVehicleId && $activeIds->has((int) $lastTripVehicleId)) {
+            return (int) $lastTripVehicleId;
+        }
+
+        return null;
     }
 }

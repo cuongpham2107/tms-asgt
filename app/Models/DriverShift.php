@@ -17,6 +17,7 @@ class DriverShift extends Model
 
     protected $fillable = [
         'driver_id',
+        'vehicle_id',
         'shift_type',
         'is_overtime',
         'start_time',
@@ -33,6 +34,7 @@ class DriverShift extends Model
     protected function casts(): array
     {
         return [
+            'vehicle_id' => 'integer',
             'start_time' => 'datetime',
             'end_time' => 'datetime',
             'start_gps_lat' => 'decimal:7',
@@ -67,6 +69,11 @@ class DriverShift extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'driver_id');
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class, 'vehicle_id');
     }
 
     public function trips(): HasMany

@@ -2065,14 +2065,24 @@ class VehicleDispatchBoard extends Page implements HasTable
             ->get()
             ->groupBy('driver_id');
 
-        $vehiclesByDriver = Vehicle::query()
-            ->whereIn('current_driver_id', $driverIds)
+        $shiftVehicleIds = $shiftsByDriver->pluck('vehicle_id')->filter()->unique()->values();
+
+        $allRelevantVehicles = Vehicle::query()
+            ->where(function (Builder $q) use ($driverIds, $shiftVehicleIds): void {
+                $q->whereIn('current_driver_id', $driverIds)
+                    ->when($shiftVehicleIds->isNotEmpty(), fn (Builder $vq) => $vq->orWhereIn('id', $shiftVehicleIds));
+            })
             ->orderBy('id')
-            ->get()
+            ->get();
+
+        $vehiclesByDriver = $allRelevantVehicles
+            ->whereIn('current_driver_id', $driverIds)
             ->unique('current_driver_id')
             ->keyBy('current_driver_id');
 
-        $rows = $drivers->map(function (User $driver) use ($shiftStart, $shiftEnd, $shiftsByDriver, $tripsByDriver, $vehiclesByDriver) {
+        $vehiclesById = $allRelevantVehicles->keyBy('id');
+
+        $rows = $drivers->map(function (User $driver) use ($shiftStart, $shiftEnd, $shiftsByDriver, $tripsByDriver, $vehiclesByDriver, $vehiclesById) {
             /** @var DriverShift|null $shift */
             $shift = $shiftsByDriver->get($driver->id);
             $windowTrips = $tripsByDriver->get($driver->id, collect());
@@ -2101,8 +2111,11 @@ class VehicleDispatchBoard extends Page implements HasTable
                 $plate .= ' (đảo lái)';
             }
 
+            $shiftVehicle = $shift?->vehicle_id ? $vehiclesById->get($shift->vehicle_id) : null;
+
             $driver->station_display = $driver->station?->getLabel() ?? '—';
             $driver->plate = $plate;
+            $driver->shift_vehicle_plate = $shiftVehicle?->plate_number ?: '—';
             $driver->shift_label = match ($shift?->shift_type) {
                 ShiftType::Full => 'X',
                 ShiftType::MorningHalf => 'X/2',

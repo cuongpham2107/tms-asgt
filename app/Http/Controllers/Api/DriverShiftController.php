@@ -33,6 +33,7 @@ class DriverShiftController extends Controller
      * @response array{shift: DriverShiftResource}
      */
     #[BodyParameter('shift_type', type: 'string', description: 'Loại ca làm việc.', required: true, example: 'morning_half')]
+    #[BodyParameter('vehicle_id', type: 'integer', description: 'ID xe tài xế chọn khi vào ca (tùy chọn).', example: 12)]
     #[BodyParameter('start_gps_lat', type: 'string', description: 'Vĩ độ GPS lúc bắt đầu ca.', example: '10,823099')]
     #[BodyParameter('start_gps_lng', type: 'string', description: 'Kinh độ GPS lúc bắt đầu ca.', example: '106,629662')]
     public function start(StartShiftRequest $request): JsonResponse
@@ -58,6 +59,7 @@ class DriverShiftController extends Controller
         try {
             $shift = DriverShift::create([
                 'driver_id' => $user->id,
+                'vehicle_id' => $payload['vehicle_id'] ?? null,
                 'shift_type' => $payload['shift_type'],
                 'start_time' => $startTime,
                 'start_gps_lat' => $payload['start_gps_lat'] ?? null,
@@ -71,7 +73,7 @@ class DriverShiftController extends Controller
 
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle', 'trips.orders']))]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle', 'trips.vehicle', 'trips.orders']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -187,7 +189,7 @@ class DriverShiftController extends Controller
 
             if ($lastShift) {
                 return response()->json([
-                    'shift' => DriverShiftResource::make($lastShift->load(['driver', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])])),
+                    'shift' => DriverShiftResource::make($lastShift->load(['driver', 'vehicle', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])])),
                     'already_ended' => true,
                 ]);
             }
@@ -240,7 +242,7 @@ class DriverShiftController extends Controller
 
             DB::commit();
 
-            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle', 'trips.orders']))]);
+            return response()->json(['shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle', 'trips.vehicle', 'trips.orders']))]);
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -269,7 +271,7 @@ class DriverShiftController extends Controller
             app(ShiftKmCalculatorService::class)->calculate($shift);
         }
 
-        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])])) : null]);
+        return response()->json(['shift' => $shift ? DriverShiftResource::make($shift->load(['driver', 'vehicle', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])])) : null]);
     }
 
     /**
@@ -319,7 +321,7 @@ class DriverShiftController extends Controller
             DB::commit();
 
             return response()->json([
-                'shift' => DriverShiftResource::make($shift->load(['driver', 'trips.vehicle', 'trips.orders'])),
+                'shift' => DriverShiftResource::make($shift->load(['driver', 'vehicle', 'trips.vehicle', 'trips.orders'])),
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();

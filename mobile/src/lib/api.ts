@@ -151,7 +151,7 @@ export const api = {
     // Shifts
     shifts: {
         current: (t: string) => fetchApi<{ shift: any }>("/shifts/current", t),
-        start: (body: { shift_type: string; start_gps_lat?: number; start_gps_lng?: number }, t: string) =>
+        start: (body: { shift_type: string; vehicle_id?: number | null; start_gps_lat?: number; start_gps_lng?: number }, t: string) =>
             fetchApi<{ shift: any }>("/shifts/start", t, { method: "POST", body: JSON.stringify(body) }),
         end: (t: string) =>
             fetchApi<{ shift: any }>("/shifts/end", t, { method: "POST", body: JSON.stringify({}) }),
@@ -264,6 +264,10 @@ export const api = {
     // Vehicles
     vehicles: {
         search: (query: string, t: string) => fetchApi<{ data: any[] }>(`/vehicles/search?q=${encodeURIComponent(query)}`, t),
+        shiftOptions: (t: string, query?: string) => {
+            const qs = query ? `?q=${encodeURIComponent(query)}` : "";
+            return fetchApi<{ data: ShiftVehicleOption[]; suggested_vehicle_id: number | null }>(`/vehicles/shift-options${qs}`, t);
+        },
         available: (t: string) => fetchApi<{ data: any[] }>("/vehicles/available", t),
         detail: (id: string, t: string) => fetchApi<{ data: any }>(`/vehicles/${id}`, t),
     },
@@ -331,9 +335,19 @@ export interface OvertimeRegistrationResource {
     created_at: string;
 }
 
+export interface ShiftVehicleOption {
+    id: number;
+    plate_number: string;
+    vehicle_type: string | null;
+    vehicle_type_label: string;
+    load_capacity: number | null;
+}
+
 export interface ShiftResource {
     id: number;
     shift_type: string;
+    selected_vehicle_id?: number | null;
+    selected_vehicle?: ShiftVehicleOption | null;
     start_time: string;
     end_time: string | null;
     total_km: string | null;

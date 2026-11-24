@@ -53,7 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         prev.total_km_loaded === next.total_km_loaded &&
         prev.total_km_empty === next.total_km_empty &&
         prev.vehicle?.id === next.vehicle?.id &&
-        prev.vehicle?.current_mileage === next.vehicle?.current_mileage
+        prev.vehicle?.current_mileage === next.vehicle?.current_mileage &&
+        prev.selected_vehicle_id === next.selected_vehicle_id
       ) {
         const prevTrips: any[] = Array.isArray(prev.trips) ? prev.trips : [];
         const nextTrips: any[] = Array.isArray(next.trips) ? next.trips : [];

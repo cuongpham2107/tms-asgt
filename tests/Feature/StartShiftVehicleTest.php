@@ -64,7 +64,62 @@ test('driver without vehicle starting shift with vehicle_id succeeds', function 
     // current_driver_id is intentionally not modified by the controller
     // Vehicle tracking is done via Trip.vehicle_id
     $shift = $driver->driverShifts()->whereNull('end_time')->first();
-    expect($shift)->not->toBeNull();
+    expect($shift)->not->toBeNull()
+        ->and($shift->vehicle_id)->toBe($vehicle->id)
+        ->and($vehicle->fresh()->current_driver_id)->toBeNull();
+
+    $response->assertJsonPath('shift.selected_vehicle_id', $vehicle->id)
+        ->assertJsonPath('shift.selected_vehicle.plate_number', '51C-777.77');
+});
+
+test('shift-options returns active company vehicles and suggested vehicle for driver', function () {
+    $driver = User::factory()->create();
+    $driver->assignRole($this->driverRole);
+    Sanctum::actingAs($driver);
+
+    $assignedVehicle = Vehicle::create([
+        'plate_number' => '29H-111.11',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+        'even_driver_id' => $driver->id,
+    ]);
+
+    $otherCompanyVehicle = Vehicle::create([
+        'plate_number' => '29H-222.22',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    Vehicle::create([
+        'plate_number' => '29H-RENT',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'Thuê ngoài',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Rent,
+    ]);
+
+    Vehicle::create([
+        'plate_number' => '29H-OFF',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => false,
+        'status' => VehicleStatus::Off,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $response = $this->getJson('/api/driver/vehicles/shift-options')
+        ->assertSuccessful()
+        ->assertJsonPath('suggested_vehicle_id', $assignedVehicle->id);
+
+    $returnedIds = collect($response->json('data'))->pluck('id')->all();
+    expect($returnedIds)->toEqualCanonicalizing([$assignedVehicle->id, $otherCompanyVehicle->id]);
 });
 
 test('driver with vehicle starting shift without vehicle_id succeeds using current vehicle', function () {

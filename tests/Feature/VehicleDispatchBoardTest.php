@@ -2044,6 +2044,42 @@ test('getDutyDriverRows batches queries without N+1 per driver', function () {
         ->and($rows->first()->total_km)->toBe(20.0);
 });
 
+test('getDutyDriverRows exposes selected shift vehicle separately from running vehicle', function () {
+    $this->travelTo(Carbon::parse('2026-10-23 14:00:00'));
+    Role::findOrCreate('driver');
+
+    $driver = User::factory()->create([
+        'name' => 'Tài xế Chọn Xe',
+        'station' => OnDutyLocation::Nba,
+        'is_active' => true,
+    ]);
+    $driver->assignRole('driver');
+
+    $shiftVehicle = Vehicle::factory()->create([
+        'plate_number' => '29H-SHIFT-01',
+        'is_active' => true,
+    ]);
+
+    $runningVehicle = Vehicle::factory()->create([
+        'plate_number' => '29H-RUN-02',
+        'current_driver_id' => $driver->id,
+        'is_active' => true,
+    ]);
+
+    DriverShift::create([
+        'driver_id' => $driver->id,
+        'vehicle_id' => $shiftVehicle->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now()->subHours(2),
+        'end_time' => null,
+    ]);
+
+    $rows = (new VehicleDispatchBoard)->getDutyDriverRows()->keyBy('id');
+
+    expect($rows->get($driver->id)->plate)->toBe('29H-RUN-02')
+        ->and($rows->get($driver->id)->shift_vehicle_plate)->toBe('29H-SHIFT-01');
+});
+
 test('vehicle freezeActiveTrip resets when trips relation is reloaded', function () {
     $vehicle = Vehicle::factory()->create(['is_active' => true]);
     $firstTrip = Trip::factory()->create([

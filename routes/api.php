@@ -40,6 +40,8 @@ Route::middleware(['auth:sanctum', EnsureRoleVehicle::class, LogDriverApiErrors:
 
     // Vehicle search (tìm xe theo 4 số cuối biển số)
     Route::get('/vehicles/search', [VehicleSearchController::class, 'search']);
+    // Danh sách xe công ty đang hoạt động + xe gợi ý khi vào ca
+    Route::get('/vehicles/shift-options', [VehicleSearchController::class, 'shiftOptions']);
     // Danh sách xe đang rảnh (chưa có lái)
     Route::get('/vehicles/available', [VehicleSearchController::class, 'available']);
     // Chi tiết thông tin 1 xe

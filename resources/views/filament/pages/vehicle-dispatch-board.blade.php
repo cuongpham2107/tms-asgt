@@ -138,6 +138,7 @@
                                 <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Điểm trực</th>
                                 <th class="border-r border-b border-white/10 py-2 px-3 text-left whitespace-nowrap">Lịch lái xe</th>
                                 <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Xe chạy</th>
+                                <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Xe vào ca</th>
                                 <th class="border-r border-b border-white/10 py-2 px-2 text-center whitespace-nowrap">Ca</th>
                                 @foreach ([
                                     'trip_count' => 'Số chuyến',
@@ -183,6 +184,7 @@
                                     </td>
                                     <td class="border-r border-gray-100 dark:border-white/5 px-3 font-semibold text-gray-900 dark:text-white">{{ $driver->name }}</td>
                                     <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-medium text-primary-600 dark:text-primary-400">{{ $driver->plate }}</td>
+                                    <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-medium {{ $driver->shift_vehicle_plate !== '—' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400' }}">{{ $driver->shift_vehicle_plate }}</td>
                                     <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-bold text-gray-800 dark:text-gray-200">{{ $driver->shift_label }}</td>
                                     <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-semibold">{{ $driver->trip_count }}</td>
                                     <td class="border-r border-gray-100 dark:border-white/5 px-2 text-center font-mono">{{ number_format($driver->km_loaded, 1) }}</td>
@@ -212,7 +214,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="11" class="py-8 text-center text-gray-500 italic">
+                                    <td colspan="12" class="py-8 text-center text-gray-500 italic">
                                         Không có lái xe nào đang trong ca trực.
                                     </td>
                                 </tr>

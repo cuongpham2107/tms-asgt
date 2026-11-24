@@ -46,7 +46,7 @@ class ShiftStatusController extends Controller
             ->value('km_reading');
 
         return response()->json([
-            'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])])) : null,
+            'active_shift' => $activeShift ? DriverShiftResource::make($activeShift->load(['driver', 'vehicle', 'trips' => fn ($q) => $q->whereNotIn('status', [TripStatus::Cancelled->value, TripStatus::Pending->value], 'and')->with(['vehicle', 'orders'])])) : null,
             'last_km' => $lastKm,
             'app_version' => [
                 'latest_version' => (string) config('app.mobile_latest_version', '1.1.0'),
