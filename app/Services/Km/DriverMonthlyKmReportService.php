@@ -111,9 +111,12 @@ class DriverMonthlyKmReportService
             ->get();
 
         $swapTripIds = DriverSwap::whereIn('trip_id', $trips->pluck('id'))->distinct()->pluck('trip_id')->flip();
+        $kmDataByTrip = TripKmData::forTrips(
+            $trips->filter(fn (Trip $trip): bool => $swapTripIds->has($trip->id))
+        );
 
         $pieces = $trips->flatMap(fn (Trip $trip): array => $swapTripIds->has($trip->id)
-            ? $this->swapPieces($trip)
+            ? $this->swapPieces($trip, $kmDataByTrip[$trip->id] ?? null)
             : [$this->wholeTripPiece($trip)]);
 
         return $pieces
@@ -201,10 +204,9 @@ class DriverMonthlyKmReportService
                 'orders.area',
                 'orders.pickupLocation',
                 'orders.deliveryPoints.location',
-                'orders.tripCheckpoints',
-                'checkpoints',
-                'startLocation',
-                'endLocation',
+                'checkpoints:id,trip_id,order_id,delivery_point_id,checkpoint_type,occurred_at,adjusted_at,gps_lat,gps_lng',
+                'startLocation.area',
+                'endLocation.area',
             ])
             ->where('status', TripStatus::Completed)
             ->when($driverId !== null, fn (Builder $q): Builder => $q->where('driver_id', $driverId))
@@ -212,15 +214,26 @@ class DriverMonthlyKmReportService
             ->orderByRaw('COALESCE(completed_at, started_at, created_at) asc')
             ->get();
 
+        $this->hydrateTripOrderCheckpointsInMemory($trips);
+
         $tripsById = $trips->keyBy('id');
         $stopsByVehicle = $this->extractVehicleStops($trips, $from, $to);
 
-        return app(TripExcelExportService::class)->getTripSummaryRows($trips)
+        return app(TripExcelExportService::class)->getTripSummaryRows($trips, withDriverSplits: false)
             ->map(function (array $row) use ($tripsById, $stopsByVehicle): array {
                 $trip = $tripsById[$row['trip_id']];
-                $checkpoints = $trip->checkpoints;
-                $tripStartedAt = $checkpoints->firstWhere('checkpoint_type', CheckpointType::Started)?->effectiveOccurredAt() ?? $trip->started_at;
-                $tripEndedAt = $checkpoints->where('checkpoint_type', CheckpointType::End)->last()?->effectiveOccurredAt() ?? $trip->completed_at;
+                $cpStarted = null;
+                $cpEnd = null;
+                foreach ($trip->checkpoints as $cp) {
+                    $type = $cp->getRawOriginal('checkpoint_type') ?? $cp->checkpoint_type?->value;
+                    if ($type === 'started') {
+                        $cpStarted ??= $cp;
+                    } elseif ($type === 'end') {
+                        $cpEnd = $cp;
+                    }
+                }
+                $tripStartedAt = $cpStarted?->effectiveOccurredAt() ?? $trip->started_at;
+                $tripEndedAt = $cpEnd?->effectiveOccurredAt() ?? $trip->completed_at;
                 $order = $row['order_id'] !== null ? $trip->orders->firstWhere('id', $row['order_id']) : null;
                 $vehicleStops = $trip->vehicle_id !== null ? ($stopsByVehicle[$trip->vehicle_id] ?? []) : [];
                 $gpsMetrics = $order !== null
@@ -406,16 +419,17 @@ class DriverMonthlyKmReportService
     /**
      * @return list<array{trip: Trip, driver_id: ?int, shift_id: ?int, km_total: float, km_loaded: float}>
      */
-    private function swapPieces(Trip $trip): array
+    private function swapPieces(Trip $trip, ?TripKmData $data = null): array
     {
-        $segments = TripKmSplitService::segments($trip);
+        $data ??= TripKmData::forTrip($trip);
+        $segments = TripKmSplitService::segments($trip, $data);
 
         // Chỉ có self-swap (cùng tài xế, cùng ca) → coi như chuyến không đảo lái
         if ($segments === []) {
             return [$this->wholeTripPiece($trip)];
         }
 
-        $loadedRanges = TripKmSplitService::loadedRanges($trip);
+        $loadedRanges = TripKmSplitService::loadedRanges($trip, $data);
 
         return array_map(function (array $segment) use ($trip, $loadedRanges): array {
             [$segStart, $segEnd, $segShiftId, $segDriverId] = $segment;
@@ -433,6 +447,46 @@ class DriverMonthlyKmReportService
                 'km_loaded' => $loaded,
             ];
         }, $segments);
+    }
+
+    /**
+     * Gắn quan hệ `tripCheckpoints` và `deliveryPoint` trực tiếp từ `trip.checkpoints` và `orders.deliveryPoints`
+     * đã nạp sẵn trong bộ nhớ, tránh truy vấn trùng ~10.000 dòng `trip_checkpoints` và `order_delivery_points`.
+     *
+     * @param  Collection<int, Trip>  $trips
+     */
+    private function hydrateTripOrderCheckpointsInMemory(Collection $trips): void
+    {
+        $deliveryPointsById = [];
+        foreach ($trips as $trip) {
+            foreach ($trip->orders as $order) {
+                foreach ($order->deliveryPoints as $dp) {
+                    $deliveryPointsById[$dp->id] = $dp;
+                }
+            }
+        }
+
+        foreach ($trips as $trip) {
+            $checkpointsByOrder = [];
+            foreach ($trip->checkpoints as $cp) {
+                $cp->setRelation(
+                    'deliveryPoint',
+                    $cp->delivery_point_id !== null ? ($deliveryPointsById[$cp->delivery_point_id] ?? null) : null
+                );
+
+                if ($cp->order_id !== null) {
+                    $checkpointsByOrder[$cp->order_id][] = $cp;
+                }
+            }
+
+            foreach ($trip->orders as $order) {
+                $order->setRelation('trip', $trip);
+                $order->setRelation(
+                    'tripCheckpoints',
+                    new \Illuminate\Database\Eloquent\Collection($checkpointsByOrder[$order->id] ?? [])
+                );
+            }
+        }
     }
 
     /**
@@ -548,8 +602,32 @@ class DriverMonthlyKmReportService
         }
 
         $checkpoints = $order->tripCheckpoints->isNotEmpty() ? $order->tripCheckpoints : $trip->checkpoints;
-        $cpA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup);
-        $cpB = $checkpoints->firstWhere('checkpoint_type', CheckpointType::LeftPickup);
+        $cpA = null;
+        $cpB = null;
+        $fallbackCpC = null;
+        $fallbackCpD = null;
+        $dpCpC = [];
+        $dpCpD = [];
+
+        foreach ($checkpoints as $cp) {
+            $type = $cp->getRawOriginal('checkpoint_type') ?? $cp->checkpoint_type?->value;
+            $dpId = $cp->delivery_point_id;
+            if ($type === 'arrived_pickup') {
+                $cpA ??= $cp;
+            } elseif ($type === 'left_pickup') {
+                $cpB ??= $cp;
+            } elseif ($type === 'arrived_delivery') {
+                $fallbackCpC ??= $cp;
+                if ($dpId !== null) {
+                    $dpCpC[$dpId] ??= $cp;
+                }
+            } elseif ($type === 'completed') {
+                $fallbackCpD = $cp;
+                if ($dpId !== null) {
+                    $dpCpD[$dpId] = $cp;
+                }
+            }
+        }
 
         $timeA = $row['time_a'] instanceof Carbon ? $row['time_a'] : ($row['time_a'] ? Carbon::parse($row['time_a']) : $tripStartedAt);
         $timeB = $row['time_b'] instanceof Carbon ? $row['time_b'] : ($row['time_b'] ? Carbon::parse($row['time_b']) : $timeA);
@@ -612,11 +690,8 @@ class DriverMonthlyKmReportService
 
         if ($deliveryPoints->isNotEmpty()) {
             foreach ($deliveryPoints as $dp) {
-                $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
-                $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery)
-                    ?? $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
-                $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last()
-                    ?? $checkpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+                $cpC = $dpCpC[$dp->id] ?? $fallbackCpC;
+                $cpD = $dpCpD[$dp->id] ?? $fallbackCpD;
 
                 $dpStartTs = ($cpC?->effectiveOccurredAt() ?? $dp->arrived_at ?? $timeC)?->getTimestamp();
                 $dpEndTs = ($cpD?->effectiveOccurredAt() ?? $dp->delivered_at ?? $timeD)?->getTimestamp();

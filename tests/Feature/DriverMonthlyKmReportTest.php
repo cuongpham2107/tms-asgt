@@ -371,7 +371,7 @@ test('report widget loads another period without re-rendering and falls back on 
     expect($day)->toMatchArray(['periodLabel' => 'Ngày 02/10/2026'])
         ->and($day['totals']['trips'])->toBe(1)
         ->and($other['totals']['trips'])->toBe(0)
-        ->and($invalid)->toMatchArray(['period' => 'month', 'date' => '2026-11-20', 'isCurrent' => true, 'hasNext' => false]);
+        ->and($invalid)->toMatchArray(['period' => 'today', 'date' => '2026-11-20', 'isCurrent' => true, 'hasNext' => false]);
 });
 
 test('evaluation compares each driver with the route median and skips implausible trips', function () {

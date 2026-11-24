@@ -393,7 +393,7 @@ class TripExcelExportService
      * @param  Builder|Collection<int, Trip>  $trips
      * @return Collection<int, array<string, mixed>>
      */
-    public function getTripSummaryRows(Builder|Collection $trips): Collection
+    public function getTripSummaryRows(Builder|Collection $trips, bool $withDriverSplits = true): Collection
     {
         if ($trips instanceof Builder) {
             $trips = $trips
@@ -412,7 +412,7 @@ class TripExcelExportService
                 ->get();
         }
 
-        $driverSplitsByTripId = $this->resolveTripDriverSplitsByTripId($trips);
+        $driverSplitsByTripId = $withDriverSplits ? $this->resolveTripDriverSplitsByTripId($trips) : [];
         $this->preloadJourneyRelations($trips);
         $rows = collect();
 
@@ -471,22 +471,47 @@ class TripExcelExportService
             foreach ($orders as $order) {
                 $checkpoints = $order->tripCheckpoints->isNotEmpty() ? $order->tripCheckpoints : $trip->checkpoints;
 
-                // Các mốc thời gian A, B, C, D (ưu tiên adjusted_at nếu đã hiệu chỉnh)
-                $cpA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup);
+                // Các mốc thời gian A, B, C, D (ưu tiên adjusted_at nếu đã hiệu chỉnh) — quét 1 vòng thay vì gọi firstWhere/where nhiều lần
+                $cpA = null;
+                $cpB = null;
+                $cpC = null;
+                $cpD = null;
+                $checkpointDeliveryLocation = null;
+
+                foreach ($checkpoints as $cp) {
+                    $type = $cp->getRawOriginal('checkpoint_type') ?? $cp->checkpoint_type?->value;
+                    if ($type === 'arrived_pickup') {
+                        $cpA ??= $cp;
+                    } elseif ($type === 'left_pickup') {
+                        $cpB ??= $cp;
+                    } elseif ($type === 'arrived_delivery') {
+                        $cpC ??= $cp;
+                        if ($checkpointDeliveryLocation === null && $cp->deliveryPoint !== null) {
+                            $checkpointDeliveryLocation = $cp->deliveryPoint->location?->code;
+                        }
+                    } elseif ($type === 'completed') {
+                        $cpD = $cp;
+                        if ($checkpointDeliveryLocation === null && $cp->deliveryPoint !== null) {
+                            $checkpointDeliveryLocation = $cp->deliveryPoint->location?->code;
+                        }
+                    } elseif ($type === 'end') {
+                        if ($checkpointDeliveryLocation === null && $cp->deliveryPoint !== null) {
+                            $checkpointDeliveryLocation = $cp->deliveryPoint->location?->code;
+                        }
+                    }
+                }
+
                 $tA = $cpA?->effectiveOccurredAt()
                     ?? $order->planned_loading_at
                     ?? $trip->started_at;
 
-                $cpB = $checkpoints->firstWhere('checkpoint_type', CheckpointType::LeftPickup);
                 $tB = $cpB?->effectiveOccurredAt()
                     ?? $trip->started_at
                     ?? $tA;
 
-                $cpC = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
                 $tC = $cpC?->effectiveOccurredAt()
                     ?? $order->deliveryPoints->first()?->arrived_at;
 
-                $cpD = $checkpoints->where('checkpoint_type', CheckpointType::Completed)->last();
                 $tD = $cpD?->effectiveOccurredAt()
                     ?? $order->deliveryPoints->last()?->delivered_at
                     ?? $trip->completed_at;
@@ -495,11 +520,6 @@ class TripExcelExportService
                 $journey = $this->buildJourneyString($order, $trip, relationsLoaded: true);
 
                 // Kho đóng trả hàng
-                $checkpointDeliveryLocation = $checkpoints
-                    ->first(fn ($cp): bool => $cp->deliveryPoint !== null
-                        && in_array($cp->checkpoint_type, [CheckpointType::ArrivedDelivery, CheckpointType::Completed, CheckpointType::End], true))
-                    ?->deliveryPoint?->location?->code;
-
                 $warehouse = $order->deliveryPoints->first()?->location?->code
                     ?? $checkpointDeliveryLocation
                     ?? $trip->endLocation?->code
@@ -1569,15 +1589,37 @@ class TripExcelExportService
     private function preloadJourneyRelations(Collection $trips): void
     {
         $orders = new EloquentCollection;
+        $allHydrated = true;
 
         foreach ($trips as $trip) {
+            $tripCheckpointsHydrated = $trip->relationLoaded('checkpoints')
+                && ($trip->checkpoints->isEmpty() || $trip->checkpoints->first()->relationLoaded('deliveryPoint'));
+
+            if (! $trip->relationLoaded('startLocation') || ! $trip->relationLoaded('endLocation') || ! $tripCheckpointsHydrated) {
+                $allHydrated = false;
+            }
+
             foreach ($trip->orders as $order) {
                 $order->setRelation('trip', $trip);
                 $orders->push($order);
+
+                if (
+                    $allHydrated
+                    && (
+                        ! $order->relationLoaded('pickupLocation')
+                        || ! $order->relationLoaded('deliveryPoints')
+                        || ! $order->relationLoaded('tripCheckpoints')
+                        || ($order->tripCheckpoints->isNotEmpty() && ! $order->tripCheckpoints->first()->relationLoaded('deliveryPoint'))
+                    )
+                ) {
+                    $allHydrated = false;
+                }
             }
         }
 
-        $orders->loadMissing(self::JOURNEY_RELATIONS);
+        if (! $allHydrated && $orders->isNotEmpty()) {
+            $orders->loadMissing(self::JOURNEY_RELATIONS);
+        }
     }
 
     /**

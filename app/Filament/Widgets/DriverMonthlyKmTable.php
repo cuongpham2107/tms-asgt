@@ -30,7 +30,7 @@ class DriverMonthlyKmTable extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
-    public string $period = 'month';
+    public string $period = 'today';
 
     public string $date = '';
 
@@ -86,7 +86,7 @@ class DriverMonthlyKmTable extends Widget
         $stationOrder = array_flip(array_map(fn (OnDutyLocation $station): string => $station->value, OnDutyLocation::cases()));
 
         $drivers = $service->summarize($lines)
-            ->sortBy(fn (array $row): int => $stationOrder[$row['station']?->value] ?? PHP_INT_MAX)
+            ->sortBy(fn (array $row): int => $stationOrder[$row['station']?->value ?? ''] ?? PHP_INT_MAX)
             ->map(fn (array $row): array => [
                 'id' => $row['driver_id'],
                 'name' => $row['driver_name'],

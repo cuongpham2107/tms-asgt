@@ -39,7 +39,7 @@ class DriverMonthlyKmReport extends Page
     ];
 
     #[Url]
-    public string $period = 'month';
+    public string $period = 'today';
 
     #[Url]
     public string $date = '';
@@ -79,7 +79,7 @@ class DriverMonthlyKmReport extends Page
 
     public static function normalizePeriod(string $period): string
     {
-        return array_key_exists($period, self::PERIODS) ? $period : 'month';
+        return array_key_exists($period, self::PERIODS) ? $period : 'today';
     }
 
     public static function normalizeDate(string $date): string
