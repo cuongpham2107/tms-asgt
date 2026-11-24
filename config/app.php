@@ -141,4 +141,14 @@ return [
     */
     'public_vehicle_api_key' => env('PUBLIC_VEHICLE_API_KEY') ?: env('APP_KEY'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Driver Delivery Point Configuration
+    |--------------------------------------------------------------------------
+    | Cho phép lái xe tự chọn thêm điểm trả tiếp theo đối với đơn đã có sẵn
+    | điểm trả do điều hành tạo (is_driver_added = false).
+    | Nếu false: chỉ đơn để trống điểm trả khi tạo mới được lái xe tự chọn nhiều điểm.
+    */
+    'allow_driver_append_predefined_delivery_points' => (bool) env('ALLOW_DRIVER_APPEND_PREDEFINED_DELIVERY_POINTS', true),
+
 ];

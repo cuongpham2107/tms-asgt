@@ -96,8 +96,10 @@ class Order extends Model implements HasTimeline
     }
 
     /**
-     * Đơn cho phép tài xế tự chọn thêm điểm trả hàng trên App khi đơn chưa bấm Kết thúc,
-     * kể cả đơn đã có điểm do điều hành nhập (điểm mới chỉ nối sau khi giao xong các điểm có sẵn — xem TripCheckpointRequest).
+     * Đơn cho phép tài xế tự chọn thêm điểm trả hàng trên App khi đơn chưa bấm Kết thúc.
+     * - Đơn không có điểm trả do điều hành tạo sẵn (is_driver_added = false): luôn cho phép đến khi bấm Kết thúc.
+     * - Đơn đã có điểm trả do điều hành tạo sẵn: phụ thuộc cấu hình `app.allow_driver_append_predefined_delivery_points`
+     *   (điểm mới chỉ nối sau khi giao xong các điểm có sẵn — xem TripCheckpointRequest).
      */
     public function canDriverAddDeliveryPoint(): bool
     {
@@ -108,6 +110,16 @@ class Order extends Model implements HasTimeline
         $trip = $this->trip;
         if ($trip !== null && in_array($trip->status, [TripStatus::Completed, TripStatus::Cancelled, TripStatus::DriverSwap], true)) {
             return false;
+        }
+
+        if (! config('app.allow_driver_append_predefined_delivery_points', true)) {
+            $hasPredefinedPoint = $this->relationLoaded('deliveryPoints')
+                ? $this->deliveryPoints->contains(fn (OrderDeliveryPoint $dp): bool => ! $dp->is_driver_added)
+                : $this->deliveryPoints()->where('is_driver_added', false)->exists();
+
+            if ($hasPredefinedPoint) {
+                return false;
+            }
         }
 
         $hasEndCheckpoint = $this->relationLoaded('tripCheckpoints')

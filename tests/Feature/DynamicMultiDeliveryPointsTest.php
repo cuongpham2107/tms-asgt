@@ -272,6 +272,21 @@ test('driver can append a delivery point after finishing the predefined ones but
         ->and($added->sequence)->toBe(2)
         ->and($added->location_id)->toBe($this->dpLoc2->id)
         ->and($order->fresh()->status)->toBe(OrderStatus::InTransit);
+
+    // Khi tắt biến cấu hình allow_driver_append_predefined_delivery_points:
+    // đơn có điểm điều hành tạo sẵn (is_driver_added = false) không được phép thêm điểm nữa.
+    config(['app.allow_driver_append_predefined_delivery_points' => false]);
+    $added->update(['status' => OrderDeliveryPointStatus::Delivered]);
+
+    expect($order->fresh()->canDriverAddDeliveryPoint())->toBeFalse();
+
+    $this->postJson("/api/driver/trips/{$trip->id}/checkpoints", [
+        'checkpoint_type' => 'arrived_delivery',
+        'order_id' => $order->id,
+        'new_delivery_location_id' => $this->dpLoc3->id,
+        'km_reading' => 1020.0,
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('delivery_point_id');
 });
 
 test('external order creation allows empty delivery points by default', function () {
