@@ -302,7 +302,7 @@ test('chuyến chờ chạy chưa có mốc vẫn hiển thị phần các mốc
     }
 
     // Section Các mốc hành trình không bị ẩn khi checkpoints rỗng
-    $sections = collect($form->getComponents())
+    $sections = collect($components)
         ->filter(fn ($comp) => $comp instanceof Section);
 
     $checkpointSection = $sections->first(fn ($s) => $s->getHeading() === 'Các mốc hành trình');

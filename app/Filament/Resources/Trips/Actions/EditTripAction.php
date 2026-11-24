@@ -7,6 +7,8 @@ use App\Enums\TripStatus;
 use App\Filament\Pages\VehicleDispatchBoard;
 use App\Filament\Resources\Trips\Schemas\TripForm;
 use App\Models\DriverShift;
+use App\Models\Order;
+use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -14,6 +16,7 @@ use App\Services\Km\TripKmAdjustmentService;
 use App\Services\Notification\DriverNotificationService;
 use App\Services\Trip\DeliveryProgressSyncService;
 use App\Services\Trip\TripCompletionService;
+use App\Services\Trip\TripOrderInlineEditService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Schemas\Schema;
@@ -27,6 +30,8 @@ class EditTripAction
         $kmSnapshotBeforeEdit = null;
         // Chữ ký mốc hành trình trước khi lưu, để biết điều hành có sửa gì ảnh hưởng app tài xế không.
         $checkpointsSignatureBeforeEdit = null;
+        // Có đơn hàng nào trong tab "Đơn hàng" bị sửa không.
+        $inlineOrdersChanged = false;
 
         return EditAction::make($name ?? 'edit')
             ->stickyModalFooter()
@@ -57,6 +62,10 @@ class EditTripAction
                     }
                 }
 
+                if ($trip) {
+                    $data['orders_data'] = static::orderEditState($trip);
+                }
+
                 return $data;
             })
             ->schema(fn (Schema $schema): Schema => TripForm::configure($schema))
@@ -73,10 +82,13 @@ class EditTripAction
                     $kmSnapshotBeforeEdit = app(TripKmAdjustmentService::class)->kmSnapshot($trip);
                 }
             })
-            ->using(function (?Model $record, array $data): Trip {
+            ->using(function (?Model $record, array $data) use (&$inlineOrdersChanged): Trip {
                 $trip = static::resolveTrip($record) ?? $record;
                 /** @var Trip $trip */
                 $trip->loadMissing(['vehicle', 'orders']);
+
+                $ordersData = $data['orders_data'] ?? [];
+                unset($data['orders_data']);
 
                 // Thời gian, km kết thúc và trạng thái do mốc quyết định (Started/End/Completed), không lấy từ form:
                 // form tự gán status/end_km khi gõ km mốc nên có thể đóng nhầm chuyến còn điểm chưa giao.
@@ -148,6 +160,9 @@ class EditTripAction
 
                 $trip->update($data);
 
+                $inlineOrdersChanged = app(TripOrderInlineEditService::class)
+                    ->apply($trip, is_array($ordersData) ? $ordersData : []) !== [];
+
                 // Chuyến hoàn thành -> toàn bộ đơn chưa huỷ cũng hoàn thành.
                 if ($isEnding) {
                     app(TripCompletionService::class)->markOrdersCompleted($trip);
@@ -176,15 +191,20 @@ class EditTripAction
 
                 return $trip;
             })
-            ->after(function (?Model $record = null, $livewire = null) use (&$kmSnapshotBeforeEdit, &$checkpointsSignatureBeforeEdit): void {
+            ->after(function (?Model $record = null, $livewire = null) use (&$kmSnapshotBeforeEdit, &$checkpointsSignatureBeforeEdit, &$inlineOrdersChanged): void {
                 $trip = static::resolveTrip($record, $livewire) ?? $record;
                 /** @var Trip $trip */
                 app(DeliveryProgressSyncService::class)->syncAfterTripEdit($trip, $kmSnapshotBeforeEdit);
 
                 $signatureBefore = $checkpointsSignatureBeforeEdit;
                 $checkpointsSignatureBeforeEdit = null;
+                $ordersChanged = $inlineOrdersChanged;
+                $inlineOrdersChanged = false;
 
-                if ($signatureBefore !== null && $signatureBefore !== $trip->refresh()->checkpointsSignature()) {
+                $checkpointsChanged = $signatureBefore !== null
+                    && $signatureBefore !== $trip->refresh()->checkpointsSignature();
+
+                if ($checkpointsChanged || $ordersChanged) {
                     try {
                         app(DriverNotificationService::class)->sendTripUpdated($trip);
                     } catch (\Throwable) {
@@ -196,6 +216,45 @@ class EditTripAction
                     $livewire->dataVersion++;
                 }
             });
+    }
+
+    /**
+     * Dữ liệu ban đầu cho tab "Đơn hàng" trong form Sửa chuyến.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function orderEditState(Trip $trip): array
+    {
+        $trip->loadMissing(['orders.customer', 'orders.area', 'orders.deliveryPoints']);
+
+        return $trip->orders->mapWithKeys(fn (Order $order): array => [
+            $order->id => [
+                'order_code' => $order->order_code,
+                'customer_name' => $order->customer?->name,
+                'area_code' => $order->area?->code,
+                'cargo_name' => $order->cargo_name,
+                'total_packages' => $order->total_packages,
+                'total_weight' => $order->total_weight,
+                'chargeable_weight' => $order->chargeable_weight,
+                'pickup_location_id' => $order->pickup_location_id,
+                'planned_loading_at' => $order->planned_loading_at?->format('Y-m-d H:i'),
+                'notes' => $order->notes,
+                'deliveryPoints' => $order->deliveryPoints
+                    ->sortBy(fn (OrderDeliveryPoint $point): array => [(int) $point->sequence, (int) $point->id])
+                    ->mapWithKeys(fn (OrderDeliveryPoint $point): array => [
+                        $point->id => [
+                            'id' => $point->id,
+                            'location_id' => $point->location_id,
+                            'address' => $point->address,
+                            'contact_person' => $point->contact_person,
+                            'contact_phone' => $point->contact_phone,
+                            'total_packages' => $point->total_packages,
+                            'total_weight' => $point->total_weight,
+                        ],
+                    ])
+                    ->all(),
+            ],
+        ])->all();
     }
 
     public static function resolveTrip(?Model $record = null, $livewire = null): ?Trip

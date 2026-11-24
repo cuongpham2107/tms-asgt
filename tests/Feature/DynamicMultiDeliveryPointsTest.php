@@ -708,6 +708,85 @@ test('editing trip checkpoints on web pushes a notification so the driver app re
     expect((float) $checkpoint->fresh()->km_reading)->toBe(1005.0);
 });
 
+test('editing order fields and delivery points in the trip edit modal updates the order and notifies the driver', function () {
+    $this->actingAs($this->admin);
+    $this->driver->update(['fcm_token' => 'driver_fcm_inline_order']);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-INLINE-ORDER',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'status' => TripStatus::Pending,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-3001',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $trip->id,
+        'pickup_location_id' => $this->pickup->id,
+        'cargo_name' => 'Hàng cũ',
+        'cargo_type' => 'GCR',
+        'chargeable_weight' => 5,
+        'total_packages' => 10,
+        'planned_loading_at' => now()->subHour(),
+        'status' => OrderStatus::Sent,
+        'created_by' => $this->admin->id,
+    ]);
+
+    $delivered = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->dpLoc1->id,
+        'sequence' => 1,
+        'status' => OrderDeliveryPointStatus::Pending,
+    ]);
+
+    $mockMessaging = Mockery::mock(Messaging::class);
+    $mockMessaging->shouldReceive('send')
+        ->once()
+        ->with(Mockery::on(function (CloudMessage $message) use ($trip): bool {
+            $array = $message->jsonSerialize();
+
+            expect($array['data']['type'])->toBe('trip_updated')
+                ->and($array['data']['trip_id'])->toBe((string) $trip->id);
+
+            return true;
+        }));
+    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
+
+    $component = Livewire::test(ListTrips::class, [
+        'orderType' => 'all',
+        'activePlaceFilter' => 'all',
+        'activeStatusFilter' => 'all',
+    ])
+        ->loadTable()
+        ->mountTableAction('edit', $trip);
+
+    $component
+        ->set("mountedActions.0.data.orders_data.{$order->id}.cargo_name", 'Hàng mới')
+        ->set("mountedActions.0.data.orders_data.{$order->id}.total_packages", 25)
+        ->set("mountedActions.0.data.orders_data.{$order->id}.deliveryPoints", [
+            'record-'.$delivered->id => [
+                'id' => $delivered->id,
+                'location_id' => $this->dpLoc1->id,
+            ],
+            'new-dp-2' => [
+                'location_id' => $this->dpLoc2->id,
+            ],
+        ])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($order->fresh()->cargo_name)->toBe('Hàng mới')
+        ->and($order->fresh()->total_packages)->toBe(25)
+        ->and($order->fresh()->deliveryPoints()->count())->toBe(2);
+
+    $newPoint = $order->fresh()->deliveryPoints()->orderBy('sequence')->get()->last();
+    expect($newPoint->location_id)->toBe($this->dpLoc2->id);
+});
+
 test('adding only an arrived delivery checkpoint at a new point on a delivered trip reopens it at that point', function (string $pointSource) {
     $this->actingAs($this->admin);
 
