@@ -25,9 +25,10 @@
 
             Livewire.interceptRequest(({ onError }) => {
                 onError(({ response, preventDefault }) => {
-                    // 404 trên endpoint Livewire: snapshot/tab cũ sau deploy hoặc APP_KEY đổi.
-                    // Tự tải lại trang (tối đa 1 lần / 10 giây) thay vì hiện toast lỗi.
-                    if (response && response.status === 404) {
+                    // 404/419 trên endpoint Livewire: snapshot của tab cũ sau deploy không còn hợp lệ.
+                    // preventDefault() chặn toast 404 và hộp thoại "This page has expired" của Livewire,
+                    // sau đó tự tải lại trang (tối đa 1 lần / 10 giây).
+                    if (response && (response.status === 404 || response.status === 419)) {
                         preventDefault();
                         reloadOnce();
                     }
