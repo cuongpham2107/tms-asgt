@@ -42,6 +42,9 @@ class OrdersTable extends BaseTable
 {
     public static function configure(Table $table, string $type = 'default'): Table
     {
+        // Chữ ký điểm giao trước khi mở modal sửa, để biết điều hành có thay đổi điểm giao không.
+        $deliveryPointsSignatureBeforeSave = null;
+
         return parent::applyDefaults($table)
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
                 'customer',
@@ -178,6 +181,9 @@ class OrdersTable extends BaseTable
                     EditAction::make()
                         ->stickyModalFooter()
                         ->modalWidth(Width::MaxContent)
+                        ->beforeFormValidated(function (Order $record) use (&$deliveryPointsSignatureBeforeSave): void {
+                            $deliveryPointsSignatureBeforeSave = $record->deliveryPointsSignature();
+                        })
                         ->modalDescription(fn (Order $record): string => 'Loại đơn hàng: '.($record->type?->getLabel() ?? 'Chưa xác định'))
                         ->mutateRecordDataUsing(function (array $data, Order $record): array {
                             $data['vehicle_id'] = $record->trip?->vehicle_id;
@@ -210,7 +216,23 @@ class OrdersTable extends BaseTable
                             return $record;
                         })
                         // Thêm / bớt điểm trả cho đơn đã giao xong: mở lại đơn và chuyến để app tài xế hiện bước cho điểm mới.
-                        ->after(fn (Order $record) => app(DeliveryProgressSyncService::class)->syncOrderProgress($record->refresh())),
+                        ->after(function (Order $record) use (&$deliveryPointsSignatureBeforeSave): void {
+                            $record->refresh();
+                            $signatureBefore = $deliveryPointsSignatureBeforeSave;
+                            $deliveryPointsSignatureBeforeSave = null;
+
+                            app(DeliveryProgressSyncService::class)->syncOrderProgress($record);
+
+                            if ($signatureBefore === null || $signatureBefore === $record->refresh()->deliveryPointsSignature()) {
+                                return;
+                            }
+
+                            // Điểm giao thay đổi: gửi push để app tài xế tải lại Chi tiết chuyến.
+                            try {
+                                app(DriverNotificationService::class)->sendOrderDeliveryPointsUpdated($record);
+                            } catch (\Throwable) {
+                            }
+                        }),
 
                     UnsendOrderAction::make(),
                     // CreateReturnTripAction::make(),

@@ -22,9 +22,12 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Notification\DriverNotificationService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Kreait\Firebase\Contract\Messaging;
+use Kreait\Firebase\Messaging\CloudMessage;
 use Laravel\Sanctum\Sanctum;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -521,6 +524,188 @@ test('adding a delivery point in the order list edit modal reopens a delivered o
     expect($order->fresh()->deliveryPoints()->count())->toBe(2)
         ->and($order->fresh()->status)->toBe(OrderStatus::InTransit)
         ->and($trip->fresh()->status)->toBe(TripStatus::Delivering);
+});
+
+test('adding a delivery point in the order list edit modal pushes a notification so the driver app reloads', function () {
+    $this->actingAs($this->admin);
+    $this->driver->update(['fcm_token' => 'driver_fcm_modal_dp']);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-NOTIFY-MODAL',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'status' => TripStatus::Delivering,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-2001',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $trip->id,
+        'pickup_location_id' => $this->pickup->id,
+        'cargo_type' => 'GCR',
+        'chargeable_weight' => 5,
+        'planned_loading_at' => now()->subHour(),
+        'status' => OrderStatus::InTransit,
+        'created_by' => $this->admin->id,
+    ]);
+
+    OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->dpLoc1->id,
+        'sequence' => 1,
+        'status' => OrderDeliveryPointStatus::Delivered,
+        'delivered_at' => now()->subMinutes(30),
+    ]);
+
+    $mockMessaging = Mockery::mock(Messaging::class);
+    $mockMessaging->shouldReceive('send')
+        ->once()
+        ->with(Mockery::on(function (CloudMessage $message) use ($trip): bool {
+            $array = $message->jsonSerialize();
+
+            expect($array['notification']['title'])->toContain('ASG-2001')
+                ->and($array['data']['type'])->toBe('order_updated')
+                ->and($array['data']['trip_id'])->toBe((string) $trip->id);
+
+            return true;
+        }));
+    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
+
+    Livewire::test(ListOrders::class, [
+        'showMineOnly' => false,
+        'activePlaceFilter' => 'all',
+        'activeOrderTypeFilter' => 'all',
+        'activeStatusFilter' => 'all',
+    ])
+        ->loadTable()
+        ->mountTableAction('edit', $order)
+        ->setTableActionData([
+            'deliveryPoints' => [
+                'new-dp-2' => ['location_id' => $this->dpLoc2->id],
+            ],
+        ])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($order->fresh()->deliveryPoints()->count())->toBe(2);
+});
+
+test('adding a delivery point on the order edit page pushes a notification so the driver app reloads', function () {
+    $this->actingAs($this->admin);
+    $this->driver->update(['fcm_token' => 'driver_fcm_page_dp']);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-NOTIFY-PAGE',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'status' => TripStatus::Delivering,
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-2002',
+        'type' => OrderType::External,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer->id,
+        'trip_id' => $trip->id,
+        'pickup_location_id' => $this->pickup->id,
+        'cargo_type' => 'GCR',
+        'chargeable_weight' => 5,
+        'planned_loading_at' => now()->subHour(),
+        'status' => OrderStatus::InTransit,
+        'created_by' => $this->admin->id,
+    ]);
+
+    $delivered = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->dpLoc1->id,
+        'sequence' => 1,
+        'status' => OrderDeliveryPointStatus::Delivered,
+        'delivered_at' => now()->subMinutes(30),
+    ]);
+
+    $mockMessaging = Mockery::mock(Messaging::class);
+    $mockMessaging->shouldReceive('send')
+        ->once()
+        ->with(Mockery::on(function (CloudMessage $message) use ($trip): bool {
+            $array = $message->jsonSerialize();
+
+            expect($array['notification']['title'])->toContain('ASG-2002')
+                ->and($array['data']['type'])->toBe('order_updated')
+                ->and($array['data']['trip_id'])->toBe((string) $trip->id);
+
+            return true;
+        }));
+    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
+
+    Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()])
+        ->set('data.deliveryPoints', [
+            'record-'.$delivered->id => ['location_id' => $this->dpLoc1->id],
+            'new-dp-2' => ['location_id' => $this->dpLoc2->id],
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($order->fresh()->deliveryPoints()->count())->toBe(2);
+});
+
+test('editing trip checkpoints on web pushes a notification so the driver app reloads', function () {
+    $this->actingAs($this->admin);
+    $this->driver->update(['fcm_token' => 'driver_fcm_trip_edit']);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-NOTIFY-EDIT',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'shift_id' => $this->shift->id,
+        'status' => TripStatus::Started,
+        'start_km' => 1000.0,
+        'started_at' => Carbon::parse('2026-11-16 08:00'),
+    ]);
+
+    $checkpoint = TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'driver_id' => $this->driver->id,
+        'checkpoint_type' => CheckpointType::Started->value,
+        'km_reading' => 1000.0,
+        'occurred_at' => Carbon::parse('2026-11-16 08:00'),
+    ]);
+
+    $mockMessaging = Mockery::mock(Messaging::class);
+    $mockMessaging->shouldReceive('send')
+        ->once()
+        ->with(Mockery::on(function (CloudMessage $message) use ($trip): bool {
+            $array = $message->jsonSerialize();
+
+            expect($array['data']['type'])->toBe('trip_updated')
+                ->and($array['data']['trip_id'])->toBe((string) $trip->id);
+
+            return true;
+        }));
+    app()->instance(DriverNotificationService::class, new DriverNotificationService($mockMessaging));
+
+    Livewire::test(ListTrips::class, [
+        'orderType' => 'all',
+        'activePlaceFilter' => 'all',
+        'activeStatusFilter' => 'all',
+    ])
+        ->loadTable()
+        ->mountTableAction('edit', $trip)
+        ->set('mountedActions.0.data.checkpoints', [
+            'record-'.$checkpoint->id => [
+                'checkpoint_type' => CheckpointType::Started->value,
+                'driver_id' => $this->driver->id,
+                'km_reading' => 1005.0,
+                'occurred_at' => '2026-11-16 08:00',
+            ],
+        ])
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect((float) $checkpoint->fresh()->km_reading)->toBe(1005.0);
 });
 
 test('adding only an arrived delivery checkpoint at a new point on a delivered trip reopens it at that point', function (string $pointSource) {

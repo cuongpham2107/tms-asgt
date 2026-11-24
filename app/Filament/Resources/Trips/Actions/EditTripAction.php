@@ -25,6 +25,8 @@ class EditTripAction
     public static function make(?string $name = null): EditAction
     {
         $kmSnapshotBeforeEdit = null;
+        // Chữ ký mốc hành trình trước khi lưu, để biết điều hành có sửa gì ảnh hưởng app tài xế không.
+        $checkpointsSignatureBeforeEdit = null;
 
         return EditAction::make($name ?? 'edit')
             ->stickyModalFooter()
@@ -58,6 +60,13 @@ class EditTripAction
                 return $data;
             })
             ->schema(fn (Schema $schema): Schema => TripForm::configure($schema))
+            ->beforeFormValidated(function (?Model $record = null, $livewire = null) use (&$checkpointsSignatureBeforeEdit): void {
+                $trip = static::resolveTrip($record, $livewire);
+
+                if ($trip !== null) {
+                    $checkpointsSignatureBeforeEdit = $trip->checkpointsSignature();
+                }
+            })
             ->before(function (?Model $record = null) use (&$kmSnapshotBeforeEdit): void {
                 $trip = static::resolveTrip($record);
                 if ($trip) {
@@ -167,10 +176,20 @@ class EditTripAction
 
                 return $trip;
             })
-            ->after(function (?Model $record = null, $livewire = null) use (&$kmSnapshotBeforeEdit): void {
+            ->after(function (?Model $record = null, $livewire = null) use (&$kmSnapshotBeforeEdit, &$checkpointsSignatureBeforeEdit): void {
                 $trip = static::resolveTrip($record, $livewire) ?? $record;
                 /** @var Trip $trip */
                 app(DeliveryProgressSyncService::class)->syncAfterTripEdit($trip, $kmSnapshotBeforeEdit);
+
+                $signatureBefore = $checkpointsSignatureBeforeEdit;
+                $checkpointsSignatureBeforeEdit = null;
+
+                if ($signatureBefore !== null && $signatureBefore !== $trip->refresh()->checkpointsSignature()) {
+                    try {
+                        app(DriverNotificationService::class)->sendTripUpdated($trip);
+                    } catch (\Throwable) {
+                    }
+                }
 
                 if ($livewire instanceof VehicleDispatchBoard) {
                     $livewire->flushCachedTableRecords();

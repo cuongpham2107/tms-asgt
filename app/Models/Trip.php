@@ -147,6 +147,26 @@ class Trip extends Model
         return $this->hasMany(TripCheckpoint::class)->chronological();
     }
 
+    /**
+     * Chữ ký mốc hành trình để phát hiện thay đổi do điều hành sửa chuyến từ web.
+     */
+    public function checkpointsSignature(): string
+    {
+        return $this->checkpoints()
+            ->reorder()
+            ->orderBy('id')
+            ->get([
+                'id',
+                'checkpoint_type',
+                'order_id',
+                'delivery_point_id',
+                'driver_id',
+                'km_reading',
+                'occurred_at',
+            ])
+            ->toJson();
+    }
+
     public function photos(): HasManyThrough
     {
         return $this->hasManyThrough(TripPhoto::class, TripCheckpoint::class, 'trip_id', 'trip_checkpoint_id');

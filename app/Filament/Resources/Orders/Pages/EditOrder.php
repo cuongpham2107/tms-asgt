@@ -6,6 +6,7 @@ use App\Enums\OrderDeliveryPointStatus;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\Location;
 use App\Models\OrderDeliveryPoint;
+use App\Services\Notification\DriverNotificationService;
 use App\Services\Trip\DeliveryProgressSyncService;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
@@ -15,6 +16,11 @@ use Filament\Resources\Pages\EditRecord;
 class EditOrder extends EditRecord
 {
     protected static string $resource = OrderResource::class;
+
+    /**
+     * Chữ ký điểm giao trước khi lưu, để biết điều hành có thêm / sửa / xoá điểm giao không.
+     */
+    private ?string $deliveryPointsSignatureBeforeSave = null;
 
     protected function getHeaderActions(): array
     {
@@ -67,6 +73,27 @@ class EditOrder extends EditRecord
 
     protected function afterSave(): void
     {
-        app(DeliveryProgressSyncService::class)->syncOrderProgress($this->record);
+        $record = $this->record->refresh();
+        $signatureBefore = $this->deliveryPointsSignatureBeforeSave;
+        $this->deliveryPointsSignatureBeforeSave = null;
+
+        app(DeliveryProgressSyncService::class)->syncOrderProgress($record);
+
+        if ($signatureBefore === null || $signatureBefore === $record->refresh()->deliveryPointsSignature()) {
+            return;
+        }
+
+        try {
+            app(DriverNotificationService::class)->sendOrderDeliveryPointsUpdated($record);
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * Chụp trạng thái điểm giao trước khi form lưu relationship (beforeValidate chạy trước saveRelationships).
+     */
+    protected function beforeValidate(): void
+    {
+        $this->deliveryPointsSignatureBeforeSave = $this->record->deliveryPointsSignature();
     }
 }

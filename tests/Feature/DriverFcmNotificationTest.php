@@ -166,6 +166,92 @@ test('driver notification service sends order assigned notification via firebase
     expect($result)->toBeTrue();
 });
 
+test('driver notification service sends order delivery points updated notification via firebase messaging', function () {
+    $driver = User::factory()->create(['fcm_token' => 'driver_order_token_updated']);
+    $vehicle = Vehicle::create([
+        'plate_number' => '29C-444.55',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-ORDER-003',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Delivering,
+    ]);
+
+    $area = Area::create(['code' => 'AREA-003', 'name' => 'Khu vực 3']);
+    $customer = Customer::create(['name' => 'Khách Hàng 3', 'code' => 'CUST-003', 'is_active' => true]);
+
+    $order = Order::create([
+        'order_code' => 'ASG-9997',
+        'status' => OrderStatus::Sent,
+        'area_id' => $area->id,
+        'customer_id' => $customer->id,
+        'created_by' => $driver->id,
+        'trip_id' => $trip->id,
+    ]);
+
+    $mockMessaging = Mockery::mock(Messaging::class);
+    $mockMessaging->shouldReceive('send')
+        ->once()
+        ->with(Mockery::on(function (CloudMessage $message) {
+            $array = $message->jsonSerialize();
+            expect($array['token'])->toBe('driver_order_token_updated')
+                ->and($array['notification']['title'])->toContain('ASG-9997')
+                ->and($array['data']['type'])->toBe('order_updated')
+                ->and($array['data']['order_code'])->toBe('ASG-9997')
+                ->and($array['data']['trip_id'])->not->toBe('');
+
+            return true;
+        }));
+
+    $service = new DriverNotificationService($mockMessaging);
+    $result = $service->sendOrderDeliveryPointsUpdated($order);
+
+    expect($result)->toBeTrue();
+});
+
+test('driver notification service sends trip updated notification via firebase messaging', function () {
+    $driver = User::factory()->create(['fcm_token' => 'driver_trip_token_updated']);
+    $vehicle = Vehicle::create([
+        'plate_number' => '29C-666.77',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::On,
+        'type' => VehicleOwnerType::Company,
+    ]);
+
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-UPDATED-001',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'status' => TripStatus::Delivering,
+    ]);
+
+    $mockMessaging = Mockery::mock(Messaging::class);
+    $mockMessaging->shouldReceive('send')
+        ->once()
+        ->with(Mockery::on(function (CloudMessage $message) {
+            $array = $message->jsonSerialize();
+            expect($array['token'])->toBe('driver_trip_token_updated')
+                ->and($array['data']['type'])->toBe('trip_updated')
+                ->and($array['data']['trip_code'])->toBe('TRIP-UPDATED-001');
+
+            return true;
+        }));
+
+    $service = new DriverNotificationService($mockMessaging);
+    $result = $service->sendTripUpdated($trip);
+
+    expect($result)->toBeTrue();
+});
+
 test('driver notification service returns false gracefully when driver has no token', function () {
     $driver = User::factory()->create(['fcm_token' => null]);
     $vehicle = Vehicle::create([

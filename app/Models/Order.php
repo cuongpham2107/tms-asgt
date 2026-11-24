@@ -160,6 +160,27 @@ class Order extends Model implements HasTimeline
         return $this->hasMany(OrderDeliveryPoint::class);
     }
 
+    /**
+     * Chữ ký danh sách điểm giao để phát hiện thay đổi do điều hành sửa đơn từ web.
+     */
+    public function deliveryPointsSignature(): string
+    {
+        return $this->deliveryPoints()
+            ->orderBy('id')
+            ->get([
+                'id',
+                'location_id',
+                'sequence',
+                'address',
+                'contact_person',
+                'contact_phone',
+                'total_packages',
+                'total_weight',
+                'status',
+            ])
+            ->toJson();
+    }
+
     public function tripCheckpoints(): HasMany
     {
         return $this->hasMany(TripCheckpoint::class)->orderBy('id');

@@ -151,6 +151,63 @@ class DriverNotificationService
     }
 
     /**
+     * Gửi push khi điều hành sửa danh sách điểm giao của đơn đang nằm trong chuyến,
+     * để app tài xế tải lại màn hình Chi tiết chuyến.
+     */
+    public function sendOrderDeliveryPointsUpdated(Order $order): bool
+    {
+        $trip = $order->trip ?? ($order->trip_id !== null ? Trip::query()->find($order->trip_id) : null);
+        $driver = $trip !== null ? $this->resolveDriverForTrip($trip) : null;
+
+        if ($driver === null) {
+            Log::info("DriverNotification: Đơn hàng {$order->order_code} chưa có lái xe để gửi thông báo cập nhật điểm giao.");
+
+            return false;
+        }
+
+        $summary = $this->formatOrderSummary($order, $trip);
+        $title = "Đơn hàng {$order->order_code} vừa cập nhật điểm giao";
+        $body = "Điểm giao của đơn ({$summary}) vừa thay đổi. Mở lại chuyến để xem chi tiết.";
+
+        $data = [
+            'type' => 'order_updated',
+            'order_id' => (string) $order->id,
+            'order_code' => (string) $order->order_code,
+            'trip_id' => (string) ($trip->id ?? ''),
+            'trip_code' => (string) ($trip->trip_code ?? ''),
+        ];
+
+        return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
+     * Gửi push khi điều hành sửa chuyến từ web (mốc hành trình, km, điểm giao theo mốc),
+     * để app tài xế tải lại màn hình Chi tiết chuyến.
+     */
+    public function sendTripUpdated(Trip $trip): bool
+    {
+        $driver = $this->resolveDriverForTrip($trip);
+
+        if ($driver === null) {
+            Log::info("DriverNotification: Chuyến #{$trip->trip_code} chưa có lái xe để gửi thông báo cập nhật chuyến.");
+
+            return false;
+        }
+
+        $summary = $this->formatTripSummary($trip);
+        $title = "Chuyến đi vừa cập nhật: {$summary}";
+        $body = "Chuyến ({$summary}) vừa được điều hành cập nhật. Mở lại chuyến để xem chi tiết.";
+
+        $data = [
+            'type' => 'trip_updated',
+            'trip_id' => (string) $trip->id,
+            'trip_code' => (string) $trip->trip_code,
+        ];
+
+        return $this->sendToDriver($driver, $title, $body, $data);
+    }
+
+    /**
      * Gửi push notification khi chuyến đi được bàn giao cho tài xế mới sau khi đảo lái (DriverSwapAction / ReassignDriverAction).
      */
     public function sendTripDriverSwapped(Trip $trip, User $newDriver, ?User $oldDriver = null, float $handoverKm = 0): bool
