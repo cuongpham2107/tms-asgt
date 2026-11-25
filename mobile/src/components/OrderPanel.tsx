@@ -22,7 +22,7 @@ import { useLoading } from "../lib/loading";
 import { api, type GeofenceError } from "../lib/api";
 import GeofenceBlockedModal from "./GeofenceBlockedModal";
 import CheckpointTimeline, { cpInfo } from "./CheckpointTimeline";
-import { showAlert } from "../lib/alert";
+import { showAlert, showConfirm } from "../lib/alert";
 import { useRefreshOnNotification } from "../lib/notifications";
 import { logUiEvent } from "../lib/ui-debug";
 import * as ImagePicker from "expo-image-picker";
@@ -556,6 +556,29 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
         if (!result.canceled && result.assets[0].uri) {
             setPhotos((prev) => [...prev, result.assets[0].uri]);
         }
+    }
+
+    function confirmSubmitCheckpoint(type: string, actionLabel?: string) {
+        suppressRefocus.current = true;
+        if (!tripId || !token || !d.id || loading) return;
+        if (
+            !km &&
+            ["arrived_pickup", "arrived_delivery", "completed", "end"].includes(
+                type,
+            )
+        ) {
+            showAlert("Thiếu", "Vui lòng nhập số Km");
+            return;
+        }
+        const label = actionLabel || cpInfo[type]?.label || type;
+        const kmLine = km ? `\nSố Km: ${formatKmInput(km)} km` : "";
+        showConfirm(
+            "Xác nhận chốt chặng",
+            `Bạn có chắc chắn muốn cập nhật trạng thái "${label}"?${kmLine}`,
+            () => {
+                submitCheckpoint(type);
+            },
+        );
     }
 
     async function submitCheckpoint(type: string) {
@@ -1406,8 +1429,9 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                                 },
                                             ]}
                                             onPress={() =>
-                                                submitCheckpoint(
+                                                confirmSubmitCheckpoint(
                                                     "arrived_pickup",
+                                                    "Đến lấy hàng",
                                                 )
                                             }
                                             disabled={loading}
@@ -1433,7 +1457,10 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                                 },
                                             ]}
                                             onPress={() =>
-                                                submitCheckpoint("left_pickup")
+                                                confirmSubmitCheckpoint(
+                                                    "left_pickup",
+                                                    "Bắt đầu đi giao hàng",
+                                                )
                                             }
                                             disabled={loading}
                                         >
@@ -1457,11 +1484,20 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                                             .color,
                                                 },
                                             ]}
-                                            onPress={() =>
-                                                submitCheckpoint(
+                                            onPress={() => {
+                                                const dpSuffix =
+                                                    isAddingExtraDp && selectedLoc
+                                                        ? ` (${selectedLoc.code || selectedLoc.name})`
+                                                        : activeDp
+                                                          ? ` (${getDpLabel(activeDp)})`
+                                                          : selectedLoc
+                                                            ? ` (${selectedLoc.code || selectedLoc.name})`
+                                                            : "";
+                                                confirmSubmitCheckpoint(
                                                     "arrived_delivery",
-                                                )
-                                            }
+                                                    `Đến giao hàng${dpSuffix}`,
+                                                );
+                                            }}
                                             disabled={loading}
                                         >
                                             <Ionicons
@@ -1488,7 +1524,10 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                                 { backgroundColor: "#10B981" },
                                             ]}
                                             onPress={() =>
-                                                submitCheckpoint("completed")
+                                                confirmSubmitCheckpoint(
+                                                    "completed",
+                                                    `Giao hàng xong${activeDp ? ` (${getDpLabel(activeDp)})` : ""}`,
+                                                )
                                             }
                                             disabled={loading}
                                         >
@@ -1515,7 +1554,10 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                                                 },
                                             ]}
                                             onPress={() =>
-                                                submitCheckpoint("end")
+                                                confirmSubmitCheckpoint(
+                                                    "end",
+                                                    cpInfo.end.label,
+                                                )
                                             }
                                             disabled={loading}
                                         >

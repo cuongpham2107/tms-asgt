@@ -22,7 +22,7 @@ import { api, type GeofenceError } from "../src/lib/api";
 import GeofenceBlockedModal from "../src/components/GeofenceBlockedModal";
 import CheckpointTimeline from "../src/components/CheckpointTimeline";
 import OrderPanel from "../src/components/OrderPanel";
-import { showAlert, showDestructiveConfirm } from "../src/lib/alert";
+import { showAlert, showConfirm, showDestructiveConfirm } from "../src/lib/alert";
 import { clearNotificationBadge, useRefreshOnNotification } from "../src/lib/notifications";
 import { formatKmInput, parseKmInput } from "../src/lib/format";
 import { Ionicons } from "@expo/vector-icons";
@@ -463,101 +463,114 @@ export default function TripDetailScreen() {
         }
     }, [vehicleKm]);
 
-    const handleStart = async () => {
-        if (!tripId || !token) return;
-        setStarting(true);
-        showLoading();
-        try {
-            const gpsRes = await getRequiredGpsCoordinates();
-            if (!gpsRes.ok) {
-                promptEnableGps(gpsRes.reason);
-                return;
-            }
-            const body: any = {
-                checkpoint_type: "started",
-                occurred_at: localISO(),
-            };
-            if (gpsRes.coords) {
-                body.gps_lat = gpsRes.coords.gps_lat;
-                body.gps_lng = gpsRes.coords.gps_lng;
-                if (gpsRes.coords.gps_accuracy != null) {
-                    body.gps_accuracy = gpsRes.coords.gps_accuracy;
-                }
-            }
-            await api.trips.checkpoint(String(tripId), body, token);
-            await Promise.all([
-                load(),
-                api.shifts
-                    .current(token)
-                    .then((res) => setShift(res?.shift ?? null))
-                    .catch(() => null),
-            ]);
-        } catch (e: any) {
-            const msg = e.message || "";
-            let targetTripId: string | number | undefined = e.active_trip_id;
-            if (
-                !targetTripId &&
-                (msg.includes("chưa hoàn thiện chuyến") ||
-                    msg.includes("đang có chuyến hàng") ||
-                    msg.includes("đang chạy chuyến"))
-            ) {
+    const handleStart = () => {
+        if (!tripId || !token || starting) return;
+        showConfirm(
+            "Xác nhận bắt đầu chuyến",
+            "Bạn có chắc chắn muốn bắt đầu chuyến đi này?",
+            async () => {
+                setStarting(true);
+                showLoading();
                 try {
-                    const activeRes = await api.trips.active(token!);
-                    const data: any = activeRes?.data;
-                    targetTripId = Array.isArray(data) ? data[0]?.id : data?.id;
-                } catch {}
-            }
-            if (!targetTripId) {
-                const match = msg.match(/#(\d+)/);
-                if (match) targetTripId = match[1];
-            }
-            showAlert("Không thể bắt đầu", msg, () => {
-                if (targetTripId) {
-                    router.push({
-                        pathname: "/trip-detail",
-                        params: { id: String(targetTripId) },
+                    const gpsRes = await getRequiredGpsCoordinates();
+                    if (!gpsRes.ok) {
+                        promptEnableGps(gpsRes.reason);
+                        return;
+                    }
+                    const body: any = {
+                        checkpoint_type: "started",
+                        occurred_at: localISO(),
+                    };
+                    if (gpsRes.coords) {
+                        body.gps_lat = gpsRes.coords.gps_lat;
+                        body.gps_lng = gpsRes.coords.gps_lng;
+                        if (gpsRes.coords.gps_accuracy != null) {
+                            body.gps_accuracy = gpsRes.coords.gps_accuracy;
+                        }
+                    }
+                    await api.trips.checkpoint(String(tripId), body, token);
+                    await Promise.all([
+                        load(),
+                        api.shifts
+                            .current(token)
+                            .then((res) => setShift(res?.shift ?? null))
+                            .catch(() => null),
+                    ]);
+                } catch (e: any) {
+                    const msg = e.message || "";
+                    let targetTripId: string | number | undefined = e.active_trip_id;
+                    if (
+                        !targetTripId &&
+                        (msg.includes("chưa hoàn thiện chuyến") ||
+                            msg.includes("đang có chuyến hàng") ||
+                            msg.includes("đang chạy chuyến"))
+                    ) {
+                        try {
+                            const activeRes = await api.trips.active(token!);
+                            const data: any = activeRes?.data;
+                            targetTripId = Array.isArray(data) ? data[0]?.id : data?.id;
+                        } catch {}
+                    }
+                    if (!targetTripId) {
+                        const match = msg.match(/#(\d+)/);
+                        if (match) targetTripId = match[1];
+                    }
+                    showAlert("Không thể bắt đầu", msg, () => {
+                        if (targetTripId) {
+                            router.push({
+                                pathname: "/trip-detail",
+                                params: { id: String(targetTripId) },
+                            });
+                        }
                     });
+                } finally {
+                    setStarting(false);
+                    hideLoading();
                 }
-            });
-        } finally {
-            setStarting(false);
-            hideLoading();
-        }
+            },
+        );
     };
 
-    const handleStartReturn = async () => {
+    const handleStartReturn = () => {
         const sKm = parseKmInput(startKmInput);
         if (!sKm) {
             showAlert("Thiếu", "Nhập Km bắt đầu");
             return;
         }
-        if (!tripId || !token) return;
-        setStarting(true);
-        try {
-            const cps = detail?.checkpoints || [];
-            const startedCp = cps.find(
-                (cp: any) => cp.checkpoint_type === "started",
-            );
-            if (startedCp) {
-                await api.trips.checkpoint(
-                    String(tripId),
-                    {
-                        checkpoint_type: "started",
-                        km_reading: sKm,
-                        occurred_at: startedCp.occurred_at,
-                    },
-                    token,
-                );
-            }
-            setReturnStarted(true);
-            showAlert("Thành công", "Đã ghi nhận Km bắt đầu");
-            await load();
-        } catch (e: any) {
-            showAlert("Lỗi", e.message);
-        } finally {
-            setStarting(false);
-            hideLoading();
-        }
+        if (!tripId || !token || starting) return;
+        showConfirm(
+            "Xác nhận bắt đầu chuyến",
+            `Bạn có chắc chắn muốn bắt đầu chuyến quay đầu?\nKm bắt đầu: ${formatKmInput(startKmInput)} km`,
+            async () => {
+                setStarting(true);
+                showLoading();
+                try {
+                    const cps = detail?.checkpoints || [];
+                    const startedCp = cps.find(
+                        (cp: any) => cp.checkpoint_type === "started",
+                    );
+                    if (startedCp) {
+                        await api.trips.checkpoint(
+                            String(tripId),
+                            {
+                                checkpoint_type: "started",
+                                km_reading: sKm,
+                                occurred_at: startedCp.occurred_at,
+                            },
+                            token,
+                        );
+                    }
+                    setReturnStarted(true);
+                    showAlert("Thành công", "Đã ghi nhận Km bắt đầu");
+                    await load();
+                } catch (e: any) {
+                    showAlert("Lỗi", e.message);
+                } finally {
+                    setStarting(false);
+                    hideLoading();
+                }
+            },
+        );
     };
 
     const handleCompleteReturn = async () => {
