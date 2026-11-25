@@ -37,13 +37,13 @@ class ListOrders extends ListRecords
     public ?string $activeStatusFilter = 'all';
 
     #[Url]
-    public ?string $activePlaceFilter = 'NBA';
+    public ?string $activePlaceFilter = 'all';
 
     #[Url]
     public ?string $orderSearch = null;
 
     #[Url]
-    public bool $showMineOnly = true;
+    public bool $showMineOnly = false;
 
     #[Url]
     public ?string $startDate = null;
@@ -298,7 +298,7 @@ class ListOrders extends ListRecords
 
                 PillFilter::make('activePlaceFilter')
                     // ->labelPrefix('Khu vực')
-                    ->options(fn (): array => $this->orderPlaceFilters + ['all' => 'Tất cả'])
+                    ->options(fn (): array => ['all' => 'Tất cả'] + $this->orderPlaceFilters)
                     ->countCallback(fn ($key) => $this->getOrderPlaceCount($key))
                     ->activeValue(fn ($livewire) => $livewire->activePlaceFilter)
                     ->clickAction('filterPlace'),
