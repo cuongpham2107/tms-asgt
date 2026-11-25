@@ -44,13 +44,13 @@ class TripsTable extends BaseTable
         $kmSnapshotBeforeEdit = null;
 
         return parent::applyDefaults($table)
+            ->deferLoading(false)
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with([
                     'vehicle',
                     'driver',
                     'driverSwaps.toDriver',
                     'driverSwaps.fromDriver',
-                    'driverSwapCheckpoints' => fn ($q) => $q->where('checkpoint_type', 'driver_swap'),
                     'shift',
                     'startLocation',
                     'endLocation',
@@ -518,6 +518,11 @@ class TripsTable extends BaseTable
     private static function hasDriverSwap(Trip $record): bool
     {
         if ($record->driverSwaps->isNotEmpty()) {
+            return true;
+        }
+
+        if ($record->relationLoaded('checkpoints')
+            && $record->checkpoints->contains(fn ($cp): bool => $cp->checkpoint_type === CheckpointType::DriverSwap)) {
             return true;
         }
 
