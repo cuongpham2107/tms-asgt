@@ -154,17 +154,31 @@ class EditTripAction
                 }
 
                 $effectiveDriverId = $isRentVehicle ? null : ($newDriverId ?: $trip->driver_id);
-                if ($effectiveDriverId && (empty($trip->shift_id) || ($newDriverId && (int) $oldDriverId !== (int) $newDriverId))) {
-                    $shiftId = DriverShift::where('driver_id', $effectiveDriverId)
+                $resultingStatus = $data['status'] ?? $trip->status;
+                $isPendingAfterEdit = $resultingStatus === TripStatus::Pending;
+                $driverChanged = $newDriverId && (int) $oldDriverId !== (int) $newDriverId;
+                $hasClosedShiftOnPending = $isPendingAfterEdit
+                    && $trip->shift_id !== null
+                    && DriverShift::whereKey($trip->shift_id)->whereNotNull('end_time')->exists();
+
+                if ($effectiveDriverId && (empty($trip->shift_id) || $driverChanged || $hasClosedShiftOnPending)) {
+                    $openShiftId = DriverShift::where('driver_id', $effectiveDriverId)
                         ->whereNull('end_time')
                         ->latest('start_time')
-                        ->value('id')
-                        ?? DriverShift::where('driver_id', $effectiveDriverId)
-                            ->latest('start_time')
-                            ->value('id');
+                        ->value('id');
 
-                    if ($shiftId) {
-                        $data['shift_id'] = $shiftId;
+                    if ($isPendingAfterEdit) {
+                        // Chuyến chờ chạy chỉ gắn ca đang mở; giữ null nếu tài xế chưa vào ca để tránh kẹt ca cũ trên app.
+                        $data['shift_id'] = $openShiftId;
+                    } else {
+                        $shiftId = $openShiftId
+                            ?? DriverShift::where('driver_id', $effectiveDriverId)
+                                ->latest('start_time')
+                                ->value('id');
+
+                        if ($shiftId) {
+                            $data['shift_id'] = $shiftId;
+                        }
                     }
                 }
 

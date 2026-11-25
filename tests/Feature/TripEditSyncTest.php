@@ -133,3 +133,42 @@ test('deleting every checkpoint returns the trip to waiting without start data',
         ->and($trip->end_km)->toBeNull()
         ->and($this->order->fresh()->status)->toBe(OrderStatus::Sent);
 });
+
+test('editing a pending trip before driver starts shift does not attach a closed shift', function () {
+    $driver = User::factory()->create();
+    $driver->assignRole(Role::firstOrCreate(['name' => 'driver', 'guard_name' => 'web']));
+
+    DriverShift::create([
+        'driver_id' => $driver->id,
+        'shift_type' => ShiftType::Full,
+        'start_time' => now()->subDays(2),
+        'end_time' => now()->subDay(),
+    ]);
+
+    $vehicle = Vehicle::create([
+        'plate_number' => '29H-72338',
+        'vehicle_type' => VehicleType::Normal,
+        'owner' => 'ASGT',
+        'is_active' => true,
+        'status' => VehicleStatus::Running,
+        'type' => VehicleOwnerType::Company,
+        'current_mileage' => 206279,
+    ]);
+
+    $pendingTrip = Trip::create([
+        'trip_code' => 'TRIP-PENDING-NO-SHIFT',
+        'vehicle_id' => $vehicle->id,
+        'driver_id' => $driver->id,
+        'shift_id' => null,
+        'status' => TripStatus::Pending,
+    ]);
+
+    Livewire::test(ListTrips::class, ['orderType' => 'all', 'activePlaceFilter' => 'all', 'activeStatusFilter' => 'all'])
+        ->loadTable()
+        ->mountTableAction('edit', $pendingTrip)
+        ->set('mountedActions.0.data.note', 'Thêm điểm trả')
+        ->callMountedTableAction()
+        ->assertHasNoTableActionErrors();
+
+    expect($pendingTrip->fresh()->shift_id)->toBeNull();
+});
