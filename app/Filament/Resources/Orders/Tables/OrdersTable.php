@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Tables;
 
 use App\Enums\MapTile;
+use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\VehicleOwnerType;
@@ -250,7 +251,8 @@ class OrdersTable extends BaseTable
                         ->excludeAttributes([
                             'order_code', 'created_by', 'planned_loading_at',
                             'sent_at', 'cancelled_at', 'cancel_reason',
-                            'parent_order_id',
+                            'loaded_km', 'is_return_trip', 'parent_order_id',
+                            'trip_id', 'trip_sequence', 'status',
                         ])
                         ->mutateRecordDataUsing(function (array $data): array {
                             $data['planned_loading_at'] = now();
@@ -270,10 +272,16 @@ class OrdersTable extends BaseTable
                             $replica->status = OrderStatus::Draft;
                             $replica->trip_id = null;
                             $replica->trip_sequence = null;
+                            $replica->sent_at = null;
+                            $replica->cancelled_at = null;
+                            $replica->cancel_reason = null;
+                            $replica->loaded_km = null;
+                            $replica->is_return_trip = false;
+                            $replica->parent_order_id = null;
                             $replica->created_by = auth()->id();
                         })
                         ->after(function ($replica, $record): void {
-                            foreach ($record->deliveryPoints as $dp) {
+                            foreach ($record->deliveryPoints()->orderBy('sequence')->orderBy('id')->get() as $dp) {
                                 $replica->deliveryPoints()->create([
                                     'location_id' => $dp->location_id,
                                     'sequence' => $dp->sequence,
@@ -282,7 +290,8 @@ class OrdersTable extends BaseTable
                                     'contact_phone' => $dp->contact_phone,
                                     'total_packages' => $dp->total_packages,
                                     'total_weight' => $dp->total_weight,
-                                    'status' => $dp->status,
+                                    'status' => OrderDeliveryPointStatus::Pending,
+                                    'is_driver_added' => false,
                                 ]);
                             }
                         })
