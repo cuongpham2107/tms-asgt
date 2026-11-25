@@ -834,7 +834,6 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                 {embedded ? (
                     <View style={s.infoStrip}>
                         {[
-                            ["Khách hàng", d.customer?.code || "-"],
                             ["Số kiện", String(d.total_packages || "-")],
                             ["Trọng lượng", d.total_weight ? `${d.total_weight} tấn` : "-"],
                         ].map(([label, value]) => (
@@ -849,11 +848,6 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
                 ) : (
                 <View style={s.infoGrid}>
                     {[
-                        {
-                            icon: "business",
-                            label: "Khách hàng",
-                            value: d.customer?.code || "-",
-                        },
                         {
                             icon: "file-tray-full",
                             label: "Số kiện",

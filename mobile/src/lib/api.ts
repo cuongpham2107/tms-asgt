@@ -378,7 +378,6 @@ export interface OrderResource {
     cargo_name: string | null;
     total_packages: number | null;
     total_weight: string | null;
-    customer?: { name: string };
     pickup_address: string | null;
     loaded_km: string | null;
 }

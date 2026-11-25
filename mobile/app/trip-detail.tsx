@@ -1440,12 +1440,6 @@ export default function TripDetailScreen() {
                                                     </Text>
                                                 </View>
                                                 <View style={s.pendingMetaRow}>
-                                                    <Text style={s.pendingMetaLabel}>Khách hàng</Text>
-                                                    <Text style={s.pendingMetaValue}>
-                                                        {o.customer?.code || o.customer?.name || "-"}
-                                                    </Text>
-                                                </View>
-                                                <View style={s.pendingMetaRow}>
                                                     <Text style={s.pendingMetaLabel}>Số kiện / Tải trọng</Text>
                                                     <Text style={s.pendingMetaValue}>
                                                         {o.total_packages != null
