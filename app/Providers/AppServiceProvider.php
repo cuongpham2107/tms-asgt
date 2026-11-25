@@ -15,6 +15,7 @@ use App\Observers\RateChangeObserver;
 use App\Observers\TripCheckpointObserver;
 use App\Observers\TripKmReportObserver;
 use App\Observers\TripObserver;
+use App\Services\ActivityLog\ActivityLogContextResolver;
 use App\Services\ActivityLog\DeletionContextRecorder;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
@@ -41,6 +42,8 @@ class AppServiceProvider extends ServiceProvider
         if (! class_exists('RmsRamos\Activitylog\Actions\ActivityLogTimelineTableAction', false)) {
             class_alias(ActivityLogTimelineTableAction::class, 'RmsRamos\Activitylog\Actions\ActivityLogTimelineTableAction');
         }
+
+        $this->app->scoped(ActivityLogContextResolver::class);
     }
 
     /**

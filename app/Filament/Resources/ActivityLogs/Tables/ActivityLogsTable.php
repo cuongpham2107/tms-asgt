@@ -14,6 +14,7 @@ use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\ActivityLog\ActivityLogContextResolver;
 use Filament\Actions\Action;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
@@ -34,7 +35,9 @@ class ActivityLogsTable extends BaseTable
                     'subject' => function (MorphTo $morphTo): void {
                         $morphTo->withoutGlobalScopes()->constrain([
                             Order::class => fn (Builder $q) => $q->with([
-                                'trip' => fn ($tq) => $tq->withoutGlobalScopes(),
+                                'trip' => fn ($tq) => $tq->withoutGlobalScopes()->with([
+                                    'vehicle' => fn ($vq) => $vq->withoutGlobalScopes(),
+                                ]),
                             ]),
                             Trip::class => fn (Builder $q) => $q->with([
                                 'orders' => fn ($oq) => $oq->withoutGlobalScopes(),
@@ -43,29 +46,41 @@ class ActivityLogsTable extends BaseTable
                             TripCheckpoint::class => fn (Builder $q) => $q->with([
                                 'trip' => fn ($tq) => $tq->withoutGlobalScopes()->with([
                                     'orders' => fn ($oq) => $oq->withoutGlobalScopes(),
+                                    'vehicle' => fn ($vq) => $vq->withoutGlobalScopes(),
                                 ]),
-                                'order' => fn ($oq) => $oq->withoutGlobalScopes(),
+                                'order' => fn ($oq) => $oq->withoutGlobalScopes()->with([
+                                    'trip' => fn ($tq) => $tq->withoutGlobalScopes()->with([
+                                        'vehicle' => fn ($vq) => $vq->withoutGlobalScopes(),
+                                    ]),
+                                ]),
                             ]),
                             OrderDeliveryPoint::class => fn (Builder $q) => $q->with([
                                 'order' => fn ($oq) => $oq->withoutGlobalScopes()->with([
-                                    'trip' => fn ($tq) => $tq->withoutGlobalScopes(),
+                                    'trip' => fn ($tq) => $tq->withoutGlobalScopes()->with([
+                                        'vehicle' => fn ($vq) => $vq->withoutGlobalScopes(),
+                                    ]),
                                 ]),
                                 'location' => fn ($lq) => $lq->withoutGlobalScopes(),
                             ]),
                             OrderCharge::class => fn (Builder $q) => $q->with([
                                 'order' => fn ($oq) => $oq->withoutGlobalScopes()->with([
-                                    'trip' => fn ($tq) => $tq->withoutGlobalScopes(),
+                                    'trip' => fn ($tq) => $tq->withoutGlobalScopes()->with([
+                                        'vehicle' => fn ($vq) => $vq->withoutGlobalScopes(),
+                                    ]),
                                 ]),
                             ]),
                             OrderChargeFee::class => fn (Builder $q) => $q->with([
                                 'orderCharge' => fn ($cq) => $cq->withoutGlobalScopes()->with([
                                     'order' => fn ($oq) => $oq->withoutGlobalScopes()->with([
-                                        'trip' => fn ($tq) => $tq->withoutGlobalScopes(),
+                                        'trip' => fn ($tq) => $tq->withoutGlobalScopes()->with([
+                                            'vehicle' => fn ($vq) => $vq->withoutGlobalScopes(),
+                                        ]),
                                     ]),
                                 ]),
                             ]),
                             DriverShift::class => fn (Builder $q) => $q->with([
                                 'driver' => fn ($dq) => $dq->withoutGlobalScopes(),
+                                'vehicle' => fn ($vq) => $vq->withoutGlobalScopes(),
                             ]),
                         ]);
                     },
@@ -102,6 +117,24 @@ class ActivityLogsTable extends BaseTable
                         default => null,
                     })
                     ->sortable(),
+
+                TextColumn::make('order_code')
+                    ->label('Mã đơn')
+                    ->badge()
+                    ->color('primary')
+                    ->placeholder('—')
+                    ->state(fn (Activity $record): ?string => self::resolveOrderCode($record))
+                    ->copyable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => self::applyOrderCodeSearch($query, $search)),
+
+                TextColumn::make('plate_number')
+                    ->label('Biển số xe')
+                    ->badge()
+                    ->color('info')
+                    ->placeholder('—')
+                    ->state(fn (Activity $record): ?string => self::resolvePlateNumber($record))
+                    ->copyable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => self::applyPlateNumberSearch($query, $search)),
 
                 TextColumn::make('subject_type')
                     ->label('Đối tượng')
@@ -192,8 +225,16 @@ class ActivityLogsTable extends BaseTable
             return "Phương tiện: {$subject->plate_number} (#{$record->subject_id})";
         }
 
+        if ($record->subject_type === Vehicle::class && ! empty($props['plate_number'])) {
+            return "Phương tiện: {$props['plate_number']} (#{$record->subject_id})";
+        }
+
         if ($subject instanceof User) {
             return "Tài khoản: {$subject->name} (#{$record->subject_id})";
+        }
+
+        if ($record->subject_type === User::class && ! empty($props['name'])) {
+            return "Tài khoản: {$props['name']} (#{$record->subject_id})";
         }
 
         if (isset(ListFilterActivityLogs::SUBJECT_TYPE_OPTIONS[$record->subject_type])) {
@@ -287,16 +328,62 @@ class ActivityLogsTable extends BaseTable
         return null;
     }
 
+    public static function resolveOrderCode(Activity $record): ?string
+    {
+        return ActivityLogContextResolver::current()->resolveOrderCode($record);
+    }
+
+    public static function resolvePlateNumber(Activity $record): ?string
+    {
+        return ActivityLogContextResolver::current()->resolvePlateNumber($record);
+    }
+
+    public static function applyOrderCodeSearch(Builder $query, string $rawSearch): Builder
+    {
+        $resolved = ActivityLogContextResolver::resolveOrderAndTripIdsForOrderSearch($rawSearch);
+        if ($resolved['trimmed'] === '') {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) use ($resolved): void {
+            ActivityLogContextResolver::applyOrderCodeConditions(
+                $q,
+                $resolved['trimmed'],
+                $resolved['orderIds'],
+                $resolved['tripIds'],
+            );
+        });
+    }
+
+    public static function applyPlateNumberSearch(Builder $query, string $rawSearch): Builder
+    {
+        $resolved = ActivityLogContextResolver::resolveEntityIdsForPlateSearch($rawSearch);
+        if ($resolved['trimmed'] === '') {
+            return $query;
+        }
+
+        if ($resolved['vehicleIds'] === []) {
+            return $query->where(function (Builder $q) use ($resolved): void {
+                $q->where('subject_type', Vehicle::class)
+                    ->whereLike('attribute_changes', "%{$resolved['trimmed']}%", caseSensitive: false);
+            });
+        }
+
+        return $query->where(function (Builder $q) use ($resolved): void {
+            ActivityLogContextResolver::applyPlateNumberConditions(
+                $q,
+                $resolved['vehicleIds'],
+                $resolved['tripIds'],
+                $resolved['orderIds'],
+            );
+        });
+    }
+
     /**
      * @return array<string, mixed>
      */
     private static function extractLoggedAttributes(Activity $record): array
     {
-        $properties = $record->properties?->toArray() ?? [];
-
-        return array_merge(
-            is_array($properties['old'] ?? null) ? $properties['old'] : [],
-            is_array($properties['attributes'] ?? null) ? $properties['attributes'] : [],
-        );
+        return ActivityLogContextResolver::extractLoggedAttributes($record);
     }
 }

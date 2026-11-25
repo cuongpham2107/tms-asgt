@@ -2,13 +2,9 @@
 
 namespace App\Filament\Resources\ActivityLogs\Filters;
 
-use App\Models\Order;
-use App\Models\OrderCharge;
-use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
-use App\Models\TripCheckpoint;
 use App\Models\User;
-use App\Models\Vehicle;
+use App\Services\ActivityLog\ActivityLogContextResolver;
 use Carbon\Carbon;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -64,7 +60,7 @@ class ListFilterActivityLogs extends Filter
             ->form([
                 TextInput::make('search')
                     ->label('Tìm kiếm')
-                    ->placeholder('Mã đơn (ASG-...), mã chuyến (CD-...), mô tả, ID...')
+                    ->placeholder('Mã đơn (ASG-...), biển số xe, mã chuyến (CD-...), mô tả, ID...')
                     ->live(debounce: 500),
                 Select::make('event')
                     ->label('Sự kiện')
@@ -112,37 +108,23 @@ class ListFilterActivityLogs extends Filter
                             $trimmed = trim($search);
                             $numericId = preg_match('/^#?(\d+)$/', $trimmed, $m) ? (int) $m[1] : null;
 
-                            $matchingOrderIds = Order::withoutGlobalScopes()
-                                ->where(function (Builder $oq) use ($trimmed): void {
-                                    $oq->whereLike('order_code', "%{$trimmed}%", caseSensitive: false)
-                                        ->orWhereIn(
-                                            'trip_id',
-                                            Trip::withoutGlobalScopes()
-                                                ->whereLike('trip_code', "%{$trimmed}%", caseSensitive: false)
-                                                ->select('id')
-                                        );
-                                })
+                            $orderSearch = ActivityLogContextResolver::resolveOrderAndTripIdsForOrderSearch($trimmed);
+                            $plateSearch = ActivityLogContextResolver::resolveEntityIdsForPlateSearch($trimmed);
+
+                            $tripCodeMatchedTripIds = Trip::withoutGlobalScopes()
+                                ->whereLike('trip_code', "%{$trimmed}%", caseSensitive: false)
                                 ->pluck('id')
+                                ->map(fn ($id): int => (int) $id)
                                 ->all();
 
-                            $matchingTripIds = Trip::withoutGlobalScopes()
-                                ->where(function (Builder $tq) use ($trimmed, $matchingOrderIds): void {
-                                    $tq->whereLike('trip_code', "%{$trimmed}%", caseSensitive: false);
-                                    if ($matchingOrderIds !== []) {
-                                        $tq->orWhereIn(
-                                            'id',
-                                            Order::withoutGlobalScopes()
-                                                ->whereIn('id', $matchingOrderIds)
-                                                ->whereNotNull('trip_id')
-                                                ->select('trip_id')
-                                        );
-                                    }
-                                })
-                                ->pluck('id')
-                                ->all();
+                            $combinedTripIds = array_values(array_unique([
+                                ...$orderSearch['tripIds'],
+                                ...$tripCodeMatchedTripIds,
+                            ]));
 
-                            return $query->where(function (Builder $q) use ($trimmed, $numericId, $matchingOrderIds, $matchingTripIds): void {
+                            return $query->where(function (Builder $q) use ($trimmed, $numericId, $orderSearch, $plateSearch, $combinedTripIds): void {
                                 $q->whereLike('description', "%{$trimmed}%", caseSensitive: false)
+                                    ->orWhereLike('attribute_changes', "%{$trimmed}%", caseSensitive: false)
                                     ->orWhereLike('properties', "%{$trimmed}%", caseSensitive: false)
                                     ->orWhereHasMorph(
                                         'causer',
@@ -150,64 +132,19 @@ class ListFilterActivityLogs extends Filter
                                         fn (Builder $uq) => $uq->whereLike('name', "%{$trimmed}%", caseSensitive: false)
                                     );
 
-                                if ($matchingOrderIds !== []) {
-                                    $q->orWhere(function (Builder $sq) use ($matchingOrderIds): void {
-                                        $sq->where('subject_type', Order::class)
-                                            ->whereIn('subject_id', $matchingOrderIds);
-                                    })->orWhere(function (Builder $sq) use ($matchingOrderIds): void {
-                                        $sq->where('subject_type', OrderDeliveryPoint::class)
-                                            ->whereIn(
-                                                'subject_id',
-                                                OrderDeliveryPoint::withoutGlobalScopes()
-                                                    ->whereIn('order_id', $matchingOrderIds)
-                                                    ->select('id')
-                                            );
-                                    })->orWhere(function (Builder $sq) use ($matchingOrderIds): void {
-                                        $sq->where('subject_type', OrderCharge::class)
-                                            ->whereIn(
-                                                'subject_id',
-                                                OrderCharge::withoutGlobalScopes()
-                                                    ->whereIn('order_id', $matchingOrderIds)
-                                                    ->select('id')
-                                            );
-                                    });
-                                }
+                                ActivityLogContextResolver::applyOrderCodeConditions(
+                                    $q,
+                                    $trimmed,
+                                    $orderSearch['orderIds'],
+                                    $combinedTripIds,
+                                );
 
-                                if ($matchingTripIds !== []) {
-                                    $q->orWhere(function (Builder $sq) use ($matchingTripIds): void {
-                                        $sq->where('subject_type', Trip::class)
-                                            ->whereIn('subject_id', $matchingTripIds);
-                                    });
-                                }
-
-                                if ($matchingOrderIds !== [] || $matchingTripIds !== []) {
-                                    $q->orWhere(function (Builder $sq) use ($matchingOrderIds, $matchingTripIds): void {
-                                        $sq->where('subject_type', TripCheckpoint::class)
-                                            ->whereIn(
-                                                'subject_id',
-                                                TripCheckpoint::withoutGlobalScopes()
-                                                    ->where(function (Builder $cq) use ($matchingOrderIds, $matchingTripIds): void {
-                                                        if ($matchingOrderIds !== []) {
-                                                            $cq->whereIn('order_id', $matchingOrderIds);
-                                                        }
-                                                        if ($matchingTripIds !== []) {
-                                                            $cq->orWhereIn('trip_id', $matchingTripIds);
-                                                        }
-                                                    })
-                                                    ->select('id')
-                                            );
-                                    });
-                                }
-
-                                $q->orWhere(function (Builder $sq) use ($trimmed): void {
-                                    $sq->where('subject_type', Vehicle::class)
-                                        ->whereIn(
-                                            'subject_id',
-                                            Vehicle::withoutGlobalScopes()
-                                                ->whereLike('plate_number', "%{$trimmed}%", caseSensitive: false)
-                                                ->select('id')
-                                        );
-                                });
+                                ActivityLogContextResolver::applyPlateNumberConditions(
+                                    $q,
+                                    $plateSearch['vehicleIds'],
+                                    $plateSearch['tripIds'],
+                                    $plateSearch['orderIds'],
+                                );
 
                                 if ($numericId !== null) {
                                     $q->orWhere('subject_id', $numericId)

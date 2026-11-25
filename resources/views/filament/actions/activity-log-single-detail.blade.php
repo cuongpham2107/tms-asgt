@@ -167,17 +167,22 @@
         </div>
     @endif
 
-    @if (!empty($attributes))
+    @if (!empty($attributes) || !empty($old))
+        @php
+            $onlyOld = empty($attributes) && !empty($old);
+        @endphp
         <div class="rounded-xl border border-zinc-200/80 bg-white p-4 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900/60 space-y-3">
             <h4 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                Chi tiết biến động dữ liệu
+                {{ $onlyOld ? 'Dữ liệu trước khi xóa' : 'Chi tiết biến động dữ liệu' }}
             </h4>
             <div class="overflow-hidden rounded-lg border border-zinc-100 dark:border-zinc-800/80">
                 <table class="w-full text-left text-xs divide-y divide-zinc-100 dark:divide-zinc-800/80">
                     <thead class="bg-zinc-50/70 dark:bg-zinc-800/40">
                         <tr class="text-zinc-500 dark:text-zinc-400">
                             <th class="px-3 py-2 font-medium w-1/3">Trường dữ liệu</th>
-                            @if (!empty($old))
+                            @if ($onlyOld)
+                                <th class="px-3 py-2 font-medium" colspan="2">Giá trị trước khi xóa</th>
+                            @elseif (!empty($old))
                                 <th class="px-3 py-2 font-medium w-1/3">Trước đó</th>
                                 <th class="px-3 py-2 font-medium w-1/3">Thay đổi thành</th>
                             @else
@@ -186,35 +191,52 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800/50 bg-white dark:bg-zinc-900/40">
-                        @foreach ($attributes as $key => $newVal)
-                            @php
-                                $oldVal = $old[$key] ?? null;
-                                $label = ActivityLogFormatter::getFieldLabel($key);
-                                $formattedOld = ActivityLogFormatter::formatValue($key, $oldVal, $activity->subject_type);
-                                $formattedNew = ActivityLogFormatter::formatValue($key, $newVal, $activity->subject_type);
-                            @endphp
-                            <tr class="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
-                                <td class="px-3 py-2 font-medium text-zinc-700 dark:text-zinc-300">{{ $label }}</td>
-                                @if (!empty($old))
-                                    <td class="px-3 py-2">
-                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 line-through">
+                        @if ($onlyOld)
+                            @foreach ($old as $key => $oldVal)
+                                @php
+                                    $label = ActivityLogFormatter::getFieldLabel($key);
+                                    $formattedOld = ActivityLogFormatter::formatValue($key, $oldVal, $activity->subject_type);
+                                @endphp
+                                <tr class="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                                    <td class="px-3 py-2 font-medium text-zinc-700 dark:text-zinc-300">{{ $label }}</td>
+                                    <td class="px-3 py-2" colspan="2">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
                                             {{ $formattedOld }}
                                         </span>
                                     </td>
-                                    <td class="px-3 py-2">
-                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 font-medium">
-                                            {{ $formattedNew }}
-                                        </span>
-                                    </td>
-                                @else
-                                    <td class="px-3 py-2 text-zinc-900 dark:text-zinc-100 font-medium" colspan="2">
-                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-                                            {{ $formattedNew }}
-                                        </span>
-                                    </td>
-                                @endif
-                            </tr>
-                        @endforeach
+                                </tr>
+                            @endforeach
+                        @else
+                            @foreach ($attributes as $key => $newVal)
+                                @php
+                                    $oldVal = $old[$key] ?? null;
+                                    $label = ActivityLogFormatter::getFieldLabel($key);
+                                    $formattedOld = ActivityLogFormatter::formatValue($key, $oldVal, $activity->subject_type);
+                                    $formattedNew = ActivityLogFormatter::formatValue($key, $newVal, $activity->subject_type);
+                                @endphp
+                                <tr class="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                                    <td class="px-3 py-2 font-medium text-zinc-700 dark:text-zinc-300">{{ $label }}</td>
+                                    @if (!empty($old))
+                                        <td class="px-3 py-2">
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 line-through">
+                                                {{ $formattedOld }}
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 font-medium">
+                                                {{ $formattedNew }}
+                                            </span>
+                                        </td>
+                                    @else
+                                        <td class="px-3 py-2 text-zinc-900 dark:text-zinc-100 font-medium" colspan="2">
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
+                                                {{ $formattedNew }}
+                                            </span>
+                                        </td>
+                                    @endif
+                                </tr>
+                            @endforeach
+                        @endif
                     </tbody>
                 </table>
             </div>
