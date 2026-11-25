@@ -1173,6 +1173,99 @@ test('trip statistics correctly calculates durations for multi-delivery point or
         ->and($row['time_total_trip'])->toBe(195);
 });
 
+test('multi-point order durations sort delivery points chronologically and avoid backward overlap', function () {
+    $trip = Trip::create([
+        'trip_code' => 'TRIP-MULTI-REV',
+        'vehicle_id' => $this->vehicle->id,
+        'driver_id' => $this->driver->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-11-23 17:29:00'),
+        'completed_at' => Carbon::parse('2026-11-23 22:37:00'),
+    ]);
+
+    $order = Order::create([
+        'order_code' => 'ORD-MULTI-REV',
+        'type' => OrderType::Hhhk,
+        'area_id' => $this->area->id,
+        'customer_id' => $this->customer2->id,
+        'created_by' => $this->driver->id,
+        'pickup_location_id' => $this->pickupLocation->id,
+        'planned_loading_at' => Carbon::parse('2026-11-23 17:26:00'),
+        'trip_id' => $trip->id,
+        'status' => OrderStatus::Completed,
+        'cargo_type' => CargoType::Gcr,
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'checkpoint_type' => CheckpointType::ArrivedPickup,
+        'occurred_at' => Carbon::parse('2026-11-23 17:39:39'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'checkpoint_type' => CheckpointType::LeftPickup,
+        'occurred_at' => Carbon::parse('2026-11-23 18:13:47'),
+    ]);
+
+    // DP sequence=1 visited second (22:36 -> 22:37)
+    $dp1 = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->deliveryLocation->id,
+        'sequence' => 1,
+        'arrived_at' => Carbon::parse('2026-11-23 22:36:33'),
+        'delivered_at' => Carbon::parse('2026-11-23 22:37:05'),
+    ]);
+    // DP sequence=2 visited first (20:48) and completed at 22:37
+    $dp2 = OrderDeliveryPoint::create([
+        'order_id' => $order->id,
+        'location_id' => $this->deliveryLocation->id,
+        'sequence' => 2,
+        'arrived_at' => Carbon::parse('2026-11-23 20:48:24'),
+        'delivered_at' => Carbon::parse('2026-11-23 22:37:18'),
+    ]);
+
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp2->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery,
+        'occurred_at' => Carbon::parse('2026-11-23 20:48:24'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp1->id,
+        'checkpoint_type' => CheckpointType::ArrivedDelivery,
+        'occurred_at' => Carbon::parse('2026-11-23 22:36:33'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp1->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'occurred_at' => Carbon::parse('2026-11-23 22:37:05'),
+    ]);
+    TripCheckpoint::create([
+        'trip_id' => $trip->id,
+        'order_id' => $order->id,
+        'delivery_point_id' => $dp2->id,
+        'checkpoint_type' => CheckpointType::Completed,
+        'occurred_at' => Carbon::parse('2026-11-23 22:37:18'),
+    ]);
+
+    $row = app(TripExcelExportService::class)
+        ->getTripSummaryRowsFromOrders(Order::query()->whereKey($order->id))
+        ->first();
+
+    expect($row['time_loading'])->toBe(34)
+        ->and($row['time_travel'])->toBe(155)
+        ->and($row['time_unloading'])->toBe(109)
+        ->and($row['time_waiting_22h'])->toBe(261)
+        ->and($row['time_total_trip'])->toBe(298);
+});
+
 test('adjusted_at takes precedence over occurred_at for checkpoints and excel export', function () {
     $cp = TripCheckpoint::create([
         'checkpoint_type' => CheckpointType::ArrivedPickup,

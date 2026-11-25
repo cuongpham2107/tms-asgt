@@ -592,38 +592,43 @@ class TripExcelExportService
             }
 
             if ($order->deliveryPoints->count() > 1) {
-                $deliveryPoints = $order->deliveryPoints->sortBy('sequence')->values();
                 $checkpoints = $order->relationLoaded('tripCheckpoints') && $order->tripCheckpoints->isNotEmpty()
                     ? $order->tripCheckpoints
                     : (($trip && $trip->relationLoaded('checkpoints')) ? $trip->checkpoints : collect());
+
+                $timelines = $this->extractChronologicalDeliveryPointTimelines($order, $checkpoints);
 
                 $totalTravel = 0;
                 $hasTravel = false;
                 $totalUnloading = 0;
                 $hasUnloading = false;
-                $prevDelivered = $mB;
+                $cursor = $mB;
                 $time4 = 0;
 
-                foreach ($deliveryPoints as $dp) {
-                    $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
-                    $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
-                    $rawC = $cpC?->effectiveOccurredAt() ?? $dp->arrived_at;
+                foreach ($timelines as $entry) {
+                    $dpC = $entry['arrived']?->copy()->second(0);
+                    $dpD = $entry['delivered']?->copy()->second(0);
 
-                    $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
-                    $rawD = $cpD?->effectiveOccurredAt() ?? $dp->delivered_at;
+                    // Chặng di chuyển tới điểm này (không tính ngược thời gian khi các điểm bị chồng lấn)
+                    if ($dpC) {
+                        if ($cursor) {
+                            if ($dpC->gt($cursor)) {
+                                $totalTravel += (int) $cursor->diffInMinutes($dpC);
+                            }
+                            $hasTravel = true;
+                        }
 
-                    $dpC = $rawC ? Carbon::parse($rawC)->second(0) : null;
-                    $dpD = $rawD ? Carbon::parse($rawD)->second(0) : null;
-
-                    // Chặng di chuyển tới điểm này
-                    if ($prevDelivered && $dpC) {
-                        $totalTravel += (int) abs($dpC->diffInMinutes($prevDelivered));
-                        $hasTravel = true;
+                        if ($cursor === null || $dpC->gt($cursor)) {
+                            $cursor = $dpC;
+                        }
                     }
 
-                    // Chặng hạ hàng tại điểm này
+                    // Chặng hạ hàng tại điểm này (không cộng trùng khoảng thời gian đã tính ở điểm trước)
                     if ($dpC && $dpD) {
-                        $unloadingHere = (int) abs($dpD->diffInMinutes($dpC));
+                        $unloadStart = ($cursor && $cursor->gt($dpC)) ? $cursor : $dpC;
+                        $unloadingHere = $dpD->gt($unloadStart)
+                            ? (int) $unloadStart->diffInMinutes($dpD)
+                            : 0;
                         $totalUnloading += $unloadingHere;
                         $hasUnloading = true;
 
@@ -633,13 +638,16 @@ class TripExcelExportService
                         $isUnloadingAfter22 = $dpD->gte($cutoff22) || $dpD->isAfter($dpC->copy()->endOfDay());
 
                         if ($isArrivalBefore22 && $isUnloadingAfter22 && $time4 === 0) {
-                            $waitTo22 = (int) abs($cutoff22->diffInMinutes($dpC));
+                            $waitStart = $unloadStart->gt($cutoff22) ? $cutoff22 : $unloadStart;
+                            $waitTo22 = (int) $waitStart->diffInMinutes($cutoff22);
                             $time4 = ($time1 ?? 0) + $totalTravel + ($totalUnloading - $unloadingHere) + $waitTo22;
                         }
-                    }
 
-                    if ($dpD) {
-                        $prevDelivered = $dpD;
+                        if ($dpD->gt($unloadStart)) {
+                            $cursor = $dpD;
+                        }
+                    } elseif ($dpD && ($cursor === null || $dpD->gt($cursor))) {
+                        $cursor = $dpD;
                     }
                 }
 
@@ -1509,16 +1517,16 @@ class TripExcelExportService
         $vehicle = $trip?->vehicle;
         $checkpoints = $order->tripCheckpoints->isNotEmpty() ? $order->tripCheckpoints : ($trip?->checkpoints ?? collect());
 
-        $deliveryPoints = $order->deliveryPoints->sortBy('sequence')->values();
+        $timelines = $this->extractChronologicalDeliveryPointTimelines($order, $checkpoints);
         $pickupText = $order->pickupLocation?->name ?: ($order->pickup_address ?: ($order->pickupLocation?->code ?? ''));
 
         $currentRow = $startRow;
-        $prevDelivered = null;
-        foreach ($deliveryPoints as $idx => $dp) {
+        $cursor = null;
+        $totalPoints = count($timelines);
+        foreach ($timelines as $idx => $entry) {
+            $dp = $entry['dp'];
             $isFirst = ($idx === 0);
-            $isLast = ($idx === $deliveryPoints->count() - 1);
-
-            $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
+            $isLast = ($idx === $totalPoints - 1);
 
             $tReq = $order->planned_loading_at;
             $cpA = $checkpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedPickup);
@@ -1531,20 +1539,25 @@ class TripExcelExportService
                 : null;
 
             if ($isFirst) {
-                $prevDelivered = $tB;
+                $cursor = $tB;
             }
 
-            $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
-            $tC = $cpC?->effectiveOccurredAt() ?? $dp->arrived_at;
-            $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
-            $tD = $cpD?->effectiveOccurredAt() ?? $dp->delivered_at;
+            $tC = $entry['arrived'];
+            $tD = $entry['delivered'];
 
             $durLoading = ($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : null;
-            $durTravel = ($prevDelivered && $tC) ? (int) abs($tC->diffInMinutes($prevDelivered)) : null;
-            $durUnloading = ($tC && $tD) ? (int) abs($tD->diffInMinutes($tC)) : null;
+            $durTravel = ($cursor && $tC)
+                ? ($tC->gt($cursor) ? (int) $cursor->diffInMinutes($tC) : 0)
+                : null;
+            $durUnloading = ($tC && $tD)
+                ? ($tD->gt($tC) ? (int) $tC->diffInMinutes($tD) : 0)
+                : null;
 
-            if ($tD) {
-                $prevDelivered = $tD;
+            if ($tC && ($cursor === null || $tC->gt($cursor))) {
+                $cursor = $tC;
+            }
+            if ($tD && ($cursor === null || $tD->gt($cursor))) {
+                $cursor = $tD;
             }
 
             $deliveryText = $dp->location?->name ?: ($dp->address ?: ($dp->location?->code ?? ''));
@@ -1578,6 +1591,53 @@ class TripExcelExportService
         }
 
         return $currentRow;
+    }
+
+    /**
+     * Sắp xếp các điểm trả hàng theo thứ tự thời gian đến/hoàn thành thực tế thay vì `sequence`.
+     *
+     * @param  Collection<int, TripCheckpoint>  $checkpoints
+     * @return list<array{dp: \App\Models\OrderDeliveryPoint, arrived: ?Carbon, delivered: ?Carbon}>
+     */
+    private function extractChronologicalDeliveryPointTimelines(Order $order, Collection $checkpoints): array
+    {
+        $entries = [];
+
+        foreach ($order->deliveryPoints->sortBy('sequence')->values() as $dp) {
+            $dpCheckpoints = $checkpoints->where('delivery_point_id', $dp->id);
+            $cpC = $dpCheckpoints->firstWhere('checkpoint_type', CheckpointType::ArrivedDelivery);
+            $rawC = $cpC?->effectiveOccurredAt() ?? $dp->arrived_at;
+
+            $cpD = $dpCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+            $rawD = $cpD?->effectiveOccurredAt() ?? $dp->delivered_at;
+
+            $arrived = $rawC ? ($rawC instanceof Carbon ? $rawC : Carbon::parse($rawC)) : null;
+            $delivered = $rawD ? ($rawD instanceof Carbon ? $rawD : Carbon::parse($rawD)) : null;
+
+            $entries[] = [
+                'dp' => $dp,
+                'arrived' => $arrived,
+                'delivered' => $delivered,
+            ];
+        }
+
+        usort($entries, function (array $a, array $b): int {
+            $aPrimary = ($a['arrived'] ?? $a['delivered'])?->getTimestamp() ?? PHP_INT_MAX;
+            $bPrimary = ($b['arrived'] ?? $b['delivered'])?->getTimestamp() ?? PHP_INT_MAX;
+            if ($aPrimary !== $bPrimary) {
+                return $aPrimary <=> $bPrimary;
+            }
+
+            $aSecondary = $a['delivered']?->getTimestamp() ?? PHP_INT_MAX;
+            $bSecondary = $b['delivered']?->getTimestamp() ?? PHP_INT_MAX;
+            if ($aSecondary !== $bSecondary) {
+                return $aSecondary <=> $bSecondary;
+            }
+
+            return ((int) ($a['dp']->sequence ?? 0)) <=> ((int) ($b['dp']->sequence ?? 0));
+        });
+
+        return $entries;
     }
 
     /**
