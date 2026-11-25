@@ -43,7 +43,7 @@ class ListOrders extends ListRecords
     public ?string $orderSearch = null;
 
     #[Url]
-    public bool $showMineOnly = false;
+    public bool $showMineOnly = true;
 
     #[Url]
     public ?string $startDate = null;
