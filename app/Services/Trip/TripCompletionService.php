@@ -102,6 +102,43 @@ class TripCompletionService
             ->pluck('id');
 
         if ($completedOrderIds->isEmpty()) {
+            if (! $trip->is_empty_run) {
+                return;
+            }
+
+            if (! isset($checkpointAttributes['vehicle_geo_status'])) {
+                $checkpointAttributes = [
+                    ...$checkpointAttributes,
+                    ...$this->geofence->check($trip, CheckpointType::End, $checkpointAttributes)->toCheckpointAttributes(),
+                ];
+            }
+
+            $existingEmptyEnd = TripCheckpoint::where('trip_id', $trip->id)
+                ->whereNull('order_id')
+                ->where('checkpoint_type', CheckpointType::End->value)
+                ->latest('id')
+                ->first();
+
+            if ($existingEmptyEnd !== null) {
+                $existingEmptyEnd->update([
+                    'km_reading' => $endKm,
+                    'occurred_at' => $occurredAt,
+                    ...$checkpointAttributes,
+                ]);
+            } else {
+                TripCheckpoint::create([
+                    'checkpoint_type' => CheckpointType::End->value,
+                    'trip_id' => $trip->id,
+                    'order_id' => null,
+                    'km_reading' => $endKm,
+                    'occurred_at' => $occurredAt,
+                    'driver_id' => $trip->driver_id,
+                    'shift_id' => $trip->shift_id,
+                    'vehicle_id' => $trip->vehicle_id,
+                    ...$checkpointAttributes,
+                ]);
+            }
+
             return;
         }
 

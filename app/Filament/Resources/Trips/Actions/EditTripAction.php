@@ -118,6 +118,7 @@ class EditTripAction
 
                 $endCheckpoint = $trip->checkpoints()
                     ->where('checkpoint_type', CheckpointType::End->value)
+                    ->when($trip->is_empty_run, fn ($q) => $q->whereNotNull('km_reading'))
                     ->reorder()
                     ->orderByDesc('occurred_at')
                     ->orderByDesc('id')

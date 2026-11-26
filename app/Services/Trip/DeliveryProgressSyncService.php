@@ -83,7 +83,10 @@ class DeliveryProgressSyncService
             return;
         }
 
-        $endCheckpoint = $trip->checkpoints->where('checkpoint_type', CheckpointType::End)->last();
+        $endCheckpoint = $trip->checkpoints
+            ->where('checkpoint_type', CheckpointType::End)
+            ->when($trip->is_empty_run, fn (Collection $col): Collection => $col->filter(fn (TripCheckpoint $cp): bool => $cp->km_reading !== null))
+            ->last();
         $hasEndCheckpoint = $endCheckpoint !== null;
 
         foreach ($trip->orders as $order) {
@@ -207,17 +210,16 @@ class DeliveryProgressSyncService
             return;
         }
 
-        $hasEndCheckpoint = $trip->checkpoints()->where('checkpoint_type', CheckpointType::End->value)->exists();
+        $hasEndCheckpoint = $trip->checkpoints()
+            ->where('checkpoint_type', CheckpointType::End->value)
+            ->when($trip->is_empty_run, fn ($q) => $q->whereNotNull('km_reading'))
+            ->exists();
 
         if ($hasEndCheckpoint) {
             return;
         }
 
-        $latestCheckpoint = $trip->checkpoints()
-            ->reorder()
-            ->orderByDesc('occurred_at')
-            ->orderByDesc('id')
-            ->first();
+        $latestCheckpoint = $this->latestEffectiveCheckpoint($trip);
 
         if ($recalculateFromCheckpoints && $latestCheckpoint?->checkpoint_type === CheckpointType::DriverSwap) {
             if ($trip->status !== TripStatus::DriverSwap || $trip->completed_at !== null) {
@@ -281,11 +283,7 @@ class DeliveryProgressSyncService
      */
     private function resolveInProgressTripStatus(Trip $trip, Collection $activeOrders): TripStatus
     {
-        $latestCheckpoint = $trip->checkpoints()
-            ->reorder()
-            ->orderByDesc('occurred_at')
-            ->orderByDesc('id')
-            ->first();
+        $latestCheckpoint = $this->latestEffectiveCheckpoint($trip);
 
         if ($latestCheckpoint === null) {
             return TripStatus::Pending;
@@ -303,12 +301,36 @@ class DeliveryProgressSyncService
             return TripStatus::ArrivedDelivery;
         }
 
+        // Chuyến không hàng đang mở (chưa có mốc kết thúc): giữ trạng thái ReturnTrip thay vì chuyển sang Started.
+        if ($trip->is_empty_run && $latestCheckpoint->checkpoint_type === CheckpointType::Started) {
+            return TripStatus::ReturnTrip;
+        }
+
         // Nếu vẫn còn điểm giao chưa xong mà checkpoint mới nhất là 'completed' (của điểm trước) → chuyến vẫn đang giao hàng
         if ($latestCheckpoint->checkpoint_type === CheckpointType::Completed) {
             return TripStatus::Delivering;
         }
 
         return $latestCheckpoint->checkpoint_type?->toTripStatus() ?? TripStatus::Started;
+    }
+
+    /**
+     * Lấy mốc mới nhất có hiệu lực (bỏ qua mốc End chưa có km_reading của chuyến không hàng cũ).
+     */
+    private function latestEffectiveCheckpoint(Trip $trip): ?TripCheckpoint
+    {
+        return $trip->checkpoints()
+            ->reorder()
+            ->when(
+                $trip->is_empty_run,
+                fn ($q) => $q->where(fn ($sub) => $sub
+                    ->where('checkpoint_type', '!=', CheckpointType::End->value)
+                    ->orWhereNotNull('km_reading')
+                )
+            )
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->first();
     }
 
     private function syncVehicleRunningStatus(Trip $trip, bool $hasPendingOrders): void
@@ -352,19 +374,17 @@ class DeliveryProgressSyncService
 
         $endCheckpoint = $trip->checkpoints()
             ->where('checkpoint_type', CheckpointType::End->value)
+            ->when($trip->is_empty_run, fn ($q) => $q->whereNotNull('km_reading'))
             ->reorder()
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
             ->first();
 
         $hadEndCheckpointBefore = collect($kmSnapshotBeforeEdit['checkpoints'] ?? [])
-            ->contains(fn (array $cp): bool => ($cp['checkpoint_type'] ?? null) === CheckpointType::End->value);
+            ->contains(fn (array $cp): bool => ($cp['checkpoint_type'] ?? null) === CheckpointType::End->value
+                && (! $trip->is_empty_run || ($cp['km_reading'] ?? null) !== null));
 
-        $latestCheckpoint = $trip->checkpoints()
-            ->reorder()
-            ->orderByDesc('occurred_at')
-            ->orderByDesc('id')
-            ->first();
+        $latestCheckpoint = $this->latestEffectiveCheckpoint($trip);
 
         $beforeCheckpoints = collect($kmSnapshotBeforeEdit['checkpoints'] ?? []);
         $currentCheckpoints = $trip->checkpoints;

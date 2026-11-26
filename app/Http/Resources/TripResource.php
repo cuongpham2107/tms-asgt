@@ -107,7 +107,15 @@ class TripResource extends JsonResource
                 return "{$from} → {$to}";
             }
 
-            return $from ?? $to;
+            if ($from || $to) {
+                return $from ?? $to;
+            }
+        }
+
+        if ($this->is_empty_run) {
+            $note = trim((string) ($this->note ?? ''));
+
+            return $note !== '' ? $note : 'Chuyến không hàng';
         }
 
         return null;

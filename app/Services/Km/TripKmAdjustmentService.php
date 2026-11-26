@@ -30,7 +30,7 @@ class TripKmAdjustmentService
 
         if ($report && $report->checkpoint_id) {
             $cp = $report->checkpoint ?? TripCheckpoint::where('trip_id', $trip->id)->where('id', $report->checkpoint_id)->first();
-            if ($cp) {
+            if ($cp && ! ($trip->is_empty_run && ! $trip->isCompleted() && $cp->checkpoint_type === CheckpointType::End && $cp->km_reading === null)) {
                 return $cp;
             }
         }

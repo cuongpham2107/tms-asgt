@@ -16,6 +16,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -45,6 +46,7 @@ class CreateEmptyRunAction
                 Select::make('driver_id')
                     ->label('Tài xế')
                     ->options(fn (): array => User::query()
+                        ->role('driver')
                         ->where('is_active', true)
                         ->with([
                             'vehiclesAsDriver' => fn ($q) => $q->select('id', 'plate_number', 'gps_lat', 'gps_lng'),
@@ -94,26 +96,31 @@ class CreateEmptyRunAction
                     ->label('Điểm đi')
                     ->options(fn (): array => Location::query()
                         ->where('is_active', true)
-                        ->select('id', 'code')
-                        ->get()
-                        ->mapWithKeys(fn ($loc) => [$loc->id => $loc->code])
+                        ->orderBy('code')
+                        ->pluck('code', 'id')
                         ->all())
+                    ->placeholder('Để trống nếu đi đổ dầu, bảo dưỡng, việc theo yêu cầu...')
                     ->searchable()
-                    ->required(),
+                    ->nullable()
+                    ->live(),
 
                 Select::make('end_location_id')
                     ->label('Điểm đến')
                     ->options(fn (): array => Location::query()
                         ->where('is_active', true)
-                        ->select('id', 'code')
-                        ->get()
-                        ->mapWithKeys(fn ($loc) => [$loc->id => $loc->code])
+                        ->orderBy('code')
+                        ->pluck('code', 'id')
                         ->all())
+                    ->placeholder('Để trống nếu không có điểm cố định...')
                     ->searchable()
-                    ->required(),
+                    ->nullable()
+                    ->live(),
 
                 Textarea::make('note')
-                    ->label('Ghi chú')
+                    ->label('Ghi chú / Mục đích chuyến')
+                    ->placeholder('VD: Đi đổ dầu, bảo dưỡng xe, đăng kiểm, chạy theo yêu cầu...')
+                    ->helperText('Bắt buộc nhập khi không chọn đủ Điểm đi và Điểm đến.')
+                    ->required(fn (Get $get): bool => blank($get('start_location_id')) || blank($get('end_location_id')))
                     ->rows(3),
             ])
             ->action(function (array $data): void {
@@ -134,9 +141,9 @@ class CreateEmptyRunAction
                     'shift_id' => $activeShift?->id,
                     'status' => TripStatus::ReturnTrip,
                     'is_empty_run' => true,
-                    'start_location_id' => $data['start_location_id'],
-                    'end_location_id' => $data['end_location_id'],
-                    'note' => $data['note'] ?? null,
+                    'start_location_id' => $data['start_location_id'] ?? null,
+                    'end_location_id' => $data['end_location_id'] ?? null,
+                    'note' => filled($data['note'] ?? null) ? trim((string) $data['note']) : null,
                     'started_at' => $now,
                     'start_km' => $vehicle?->current_mileage ?? 0,
                 ]);
@@ -146,19 +153,6 @@ class CreateEmptyRunAction
                     'checkpoint_type' => CheckpointType::Started->value,
                     'occurred_at' => $now,
                     'km_reading' => $vehicle?->current_mileage,
-                    'gps_lat' => $vehicle?->gps_lat,
-                    'gps_lng' => $vehicle?->gps_lng,
-                    'driver_id' => $data['driver_id'],
-                    'shift_id' => $activeShift?->id,
-                    'vehicle_id' => $data['vehicle_id'],
-                    'order_id' => null,
-                ]);
-
-                TripCheckpoint::create([
-                    'trip_id' => $trip->id,
-                    'checkpoint_type' => CheckpointType::End->value,
-                    'occurred_at' => $now->addSecond(),
-                    'km_reading' => null,
                     'gps_lat' => $vehicle?->gps_lat,
                     'gps_lng' => $vehicle?->gps_lng,
                     'driver_id' => $data['driver_id'],

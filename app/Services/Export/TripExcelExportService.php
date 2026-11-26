@@ -434,7 +434,9 @@ class TripExcelExportService
 
                 $startLoc = $trip->startLocation?->code ?? '';
                 $endLoc = $trip->endLocation?->code ?? '';
-                $journey = ($startLoc && $endLoc) ? "{$startLoc} -> {$endLoc}" : trim("{$startLoc}{$endLoc}");
+                $journey = ($startLoc && $endLoc)
+                    ? "{$startLoc} -> {$endLoc}"
+                    : (trim("{$startLoc}{$endLoc}") ?: trim((string) ($trip->note ?? '')));
 
                 $rows->push($this->formatTripSummaryRowData(
                     trip: $trip,

@@ -43,9 +43,20 @@ class TripKmReportController extends Controller
         if (! $checkpoint) {
             $checkpoint = $trip->checkpoints()
                 ->where('driver_id', $user->id)
+                ->whereNotNull('km_reading')
                 ->orderByDesc('occurred_at')
                 ->orderByDesc('id')
                 ->first()
+                ?? $trip->checkpoints()
+                    ->whereNotNull('km_reading')
+                    ->orderByDesc('occurred_at')
+                    ->orderByDesc('id')
+                    ->first()
+                ?? $trip->checkpoints()
+                    ->where('driver_id', $user->id)
+                    ->orderByDesc('occurred_at')
+                    ->orderByDesc('id')
+                    ->first()
                 ?? $trip->checkpoints()->orderByDesc('occurred_at')->orderByDesc('id')->first();
             $checkpointId = $checkpoint?->id;
         }

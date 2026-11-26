@@ -21,6 +21,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -100,13 +101,26 @@ class TripForm
                                             ->preload()
                                             ->searchable()
                                             ->native(false)
-                                            ->hidden(fn (?Model $record) => $record?->vehicle?->type !== VehicleOwnerType::Rent)
+                                            ->nullable()
+                                            ->live()
+                                            ->hidden(fn (?Model $record): bool => $record?->vehicle?->type !== VehicleOwnerType::Rent && ! (bool) $record?->is_empty_run)
                                             ->columnSpan(['default' => 1, 'sm' => 6]),
                                         Select::make('end_location_id')
                                             ->label('Điểm kết thúc')
                                             ->options(function (?Model $record): array {
-                                                if (! $record) {
+                                                if (! $record instanceof Trip) {
                                                     return [];
+                                                }
+
+                                                if ($record->is_empty_run) {
+                                                    return Location::query()
+                                                        ->where(function ($q) use ($record): void {
+                                                            $q->where('is_active', true)
+                                                                ->when($record->end_location_id, fn ($sq) => $sq->orWhere('id', $record->end_location_id));
+                                                        })
+                                                        ->orderBy('code')
+                                                        ->pluck('code', 'id')
+                                                        ->toArray();
                                                 }
 
                                                 $areaId = $record->orders()->first()?->area_id;
@@ -122,8 +136,18 @@ class TripForm
                                             ->preload()
                                             ->searchable()
                                             ->native(false)
-                                            ->hidden(fn (?Model $record) => $record?->vehicle?->type !== VehicleOwnerType::Rent)
+                                            ->nullable()
+                                            ->live()
+                                            ->hidden(fn (?Model $record): bool => $record?->vehicle?->type !== VehicleOwnerType::Rent && ! (bool) $record?->is_empty_run)
                                             ->columnSpan(['default' => 1, 'sm' => 6]),
+                                        Textarea::make('note')
+                                            ->label('Ghi chú / Mục đích chuyến')
+                                            ->placeholder('VD: Đi đổ dầu, bảo dưỡng xe, đăng kiểm, chạy theo yêu cầu...')
+                                            ->helperText('Bắt buộc nhập khi không chọn đủ Điểm bắt đầu và Điểm kết thúc.')
+                                            ->visible(fn (?Model $record): bool => (bool) $record?->is_empty_run)
+                                            ->required(fn ($get, ?Model $record): bool => (bool) $record?->is_empty_run && (blank($get('start_location_id')) || blank($get('end_location_id'))))
+                                            ->rows(2)
+                                            ->columnSpanFull(),
                                         TextInput::make('start_km')
                                             ->label('Km bắt đầu')
                                             ->disabled()
@@ -328,21 +352,25 @@ class TripForm
                                     ]),
                                 Section::make('Các mốc hành trình')
                                     ->columnSpanFull()
-                                    ->hidden(fn (?Model $record) => (bool) $record?->is_empty_run)
                                     ->schema([
-                                        // Repeater cho xe thuê ngoài (4 cột: Loại, Đơn hàng, Giờ, Điểm; luôn nhập tên lái xe ngoài)
+                                        // Repeater cho xe thuê ngoài (4 cột: Loại, Đơn hàng, Giờ, Điểm; chuyến không hàng ẩn Đơn hàng và Điểm)
                                         Repeater::make('checkpoints_rent')
                                             ->relationship('checkpoints', modifyQueryUsing: fn ($query) => $query->chronological())
                                             ->label('Danh sách mốc hành trình')
                                             ->visible(fn (?Model $record): bool => $record?->vehicle?->type === VehicleOwnerType::Rent)
-                                            ->table([
-                                                TableColumn::make('Loại')->width('220px'),
-                                                TableColumn::make('Đơn hàng')->width('180px'),
-                                                TableColumn::make('Giờ')->width('220px'),
-                                                TableColumn::make('Điểm')->width('110px'),
-                                            ])
+                                            ->table(fn (?Model $record): array => self::isEmptyRunRecord($record)
+                                                ? [
+                                                    TableColumn::make('Loại')->width('260px'),
+                                                    TableColumn::make('Giờ')->width('260px'),
+                                                ]
+                                                : [
+                                                    TableColumn::make('Loại')->width('220px'),
+                                                    TableColumn::make('Đơn hàng')->width('180px'),
+                                                    TableColumn::make('Giờ')->width('220px'),
+                                                    TableColumn::make('Điểm')->width('110px'),
+                                                ])
                                             ->compact()
-                                            ->schema([
+                                            ->schema(fn (?Model $record): array => array_values(array_filter([
                                                 Select::make('checkpoint_type')
                                                     ->label('Loại')
                                                     ->options(CheckpointType::class)
@@ -374,7 +402,7 @@ class TripForm
                                                         self::syncDeliveryPointOnTypeChange($type, $set, $get, 'checkpoints_rent');
                                                     })
                                                     ->default(fn ($get) => self::getNextCheckpointType($get, 'checkpoints_rent')),
-                                                Select::make('order_id')
+                                                self::isEmptyRunRecord($record) ? null : Select::make('order_id')
                                                     ->label('Đơn hàng')
                                                     ->options(function ($get, ?Model $record): array {
                                                         $tripId = $get('../../id')
@@ -415,7 +443,7 @@ class TripForm
                                                     })
                                                     ->native(true)
                                                     ->default(fn ($get, ?Model $record): string => self::defaultCheckpointOccurredAt($get, 'checkpoints_rent', $record)),
-                                                Select::make('delivery_point_id')
+                                                self::isEmptyRunRecord($record) ? null : Select::make('delivery_point_id')
                                                     ->label('Điểm giao')
                                                     ->options(fn ($get): array => self::deliveryPointOptionsForCheckpoint($get))
                                                     ->placeholder(fn ($get): string => self::pickupPointLabel($get) ?? 'Chọn điểm')
@@ -424,7 +452,7 @@ class TripForm
                                                     ->native(false)
                                                     ->nullable()
                                                     ->default(fn ($get, ?Model $record): ?int => self::defaultDeliveryPointId($get, 'checkpoints_rent', null, $record)),
-                                            ])
+                                            ])))
                                             ->addable()
                                             ->deletable()
                                             ->addActionLabel('Thêm mốc hành trình')
@@ -433,21 +461,28 @@ class TripForm
                                             ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, $get): array => self::fillCheckpointRelationshipData($data, $get, isRent: true))
                                             ->columnSpanFull(),
 
-                                        // Repeater cho xe công ty (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm)
+                                        // Repeater cho xe công ty (đầy đủ 6 cột: Loại, Đơn hàng, Tài xế, Km, Giờ, Điểm; chuyến không hàng ẩn Đơn hàng và Điểm)
                                         Repeater::make('checkpoints')
                                             ->relationship('checkpoints', modifyQueryUsing: fn ($query) => $query->chronological())
                                             ->label('Danh sách mốc hành trình')
                                             ->visible(fn (?Model $record): bool => $record?->vehicle?->type !== VehicleOwnerType::Rent)
-                                            ->table([
-                                                TableColumn::make('Loại')->width('160px'),
-                                                TableColumn::make('Đơn hàng')->width('110px'),
-                                                TableColumn::make('Tài xế')->width('160px'),
-                                                TableColumn::make('Km')->width('100px'),
-                                                TableColumn::make('Giờ')->width('160px'),
-                                                TableColumn::make('Điểm')->width('110px'),
-                                            ])
+                                            ->table(fn (?Model $record): array => self::isEmptyRunRecord($record)
+                                                ? [
+                                                    TableColumn::make('Loại')->width('180px'),
+                                                    TableColumn::make('Tài xế')->width('200px'),
+                                                    TableColumn::make('Km')->width('140px'),
+                                                    TableColumn::make('Giờ')->width('200px'),
+                                                ]
+                                                : [
+                                                    TableColumn::make('Loại')->width('160px'),
+                                                    TableColumn::make('Đơn hàng')->width('110px'),
+                                                    TableColumn::make('Tài xế')->width('160px'),
+                                                    TableColumn::make('Km')->width('100px'),
+                                                    TableColumn::make('Giờ')->width('160px'),
+                                                    TableColumn::make('Điểm')->width('110px'),
+                                                ])
                                             ->compact()
-                                            ->schema([
+                                            ->schema(fn (?Model $record): array => array_values(array_filter([
                                                 Select::make('checkpoint_type')
                                                     ->label('Loại')
                                                     ->options(CheckpointType::class)
@@ -489,7 +524,7 @@ class TripForm
                                                         self::syncDeliveryPointOnTypeChange($type, $set, $get, 'checkpoints');
                                                     })
                                                     ->default(fn ($get) => self::getNextCheckpointType($get, 'checkpoints')),
-                                                Select::make('order_id')
+                                                self::isEmptyRunRecord($record) ? null : Select::make('order_id')
                                                     ->label('Đơn hàng')
                                                     ->options(function ($get, ?Model $record): array {
                                                         $tripId = $get('../../id')
@@ -572,7 +607,7 @@ class TripForm
                                                     })
                                                     ->native(true)
                                                     ->default(fn ($get, ?Model $record): string => self::defaultCheckpointOccurredAt($get, 'checkpoints', $record)),
-                                                Select::make('delivery_point_id')
+                                                self::isEmptyRunRecord($record) ? null : Select::make('delivery_point_id')
                                                     ->label('Điểm giao')
                                                     ->options(fn ($get): array => self::deliveryPointOptionsForCheckpoint($get))
                                                     ->placeholder(fn ($get): string => self::pickupPointLabel($get) ?? 'Chọn điểm')
@@ -581,7 +616,7 @@ class TripForm
                                                     ->native(false)
                                                     ->nullable()
                                                     ->default(fn ($get, ?Model $record): ?int => self::defaultDeliveryPointId($get, 'checkpoints', null, $record)),
-                                            ])
+                                            ])))
                                             ->addable()
                                             ->deletable()
                                             ->addActionLabel('Thêm mốc hành trình')
@@ -608,6 +643,19 @@ class TripForm
                             : null,
                     ])),
             ]);
+    }
+
+    private static function isEmptyRunRecord(?Model $record): bool
+    {
+        if ($record instanceof Trip) {
+            return (bool) $record->is_empty_run;
+        }
+
+        if ($record instanceof TripCheckpoint) {
+            return (bool) $record->trip?->is_empty_run;
+        }
+
+        return false;
     }
 
     /**
