@@ -213,6 +213,32 @@ class DeliveryProgressSyncService
             return;
         }
 
+        $latestCheckpoint = $trip->checkpoints()
+            ->reorder()
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($recalculateFromCheckpoints && $latestCheckpoint?->checkpoint_type === CheckpointType::DriverSwap) {
+            if ($trip->status !== TripStatus::DriverSwap || $trip->completed_at !== null) {
+                $trip->update([
+                    'status' => TripStatus::DriverSwap,
+                    'completed_at' => null,
+                ]);
+            }
+
+            $trip->orders()
+                ->whereIn('status', [
+                    OrderStatus::Assigned->value,
+                    OrderStatus::Sent->value,
+                    OrderStatus::InTransit->value,
+                ])
+                ->get()
+                ->each->update(['status' => OrderStatus::DriverSwap]);
+
+            return;
+        }
+
         $activeOrders = $trip->orders()->whereNotIn('status', [OrderStatus::Cancelled->value, OrderStatus::Draft->value])->get();
         if ($activeOrders->isEmpty()) {
             if ($recalculateFromCheckpoints) {
@@ -255,14 +281,6 @@ class DeliveryProgressSyncService
      */
     private function resolveInProgressTripStatus(Trip $trip, Collection $activeOrders): TripStatus
     {
-        $hasActiveArrivedDp = $activeOrders->contains(
-            fn (Order $order): bool => $order->deliveryPoints()->where('status', OrderDeliveryPointStatus::Arrived->value)->exists()
-        );
-
-        if ($hasActiveArrivedDp) {
-            return TripStatus::ArrivedDelivery;
-        }
-
         $latestCheckpoint = $trip->checkpoints()
             ->reorder()
             ->orderByDesc('occurred_at')
@@ -271,6 +289,18 @@ class DeliveryProgressSyncService
 
         if ($latestCheckpoint === null) {
             return TripStatus::Pending;
+        }
+
+        if ($latestCheckpoint->checkpoint_type === CheckpointType::DriverSwap) {
+            return TripStatus::DriverSwap;
+        }
+
+        $hasActiveArrivedDp = $activeOrders->contains(
+            fn (Order $order): bool => $order->deliveryPoints()->where('status', OrderDeliveryPointStatus::Arrived->value)->exists()
+        );
+
+        if ($hasActiveArrivedDp) {
+            return TripStatus::ArrivedDelivery;
         }
 
         // Nếu vẫn còn điểm giao chưa xong mà checkpoint mới nhất là 'completed' (của điểm trước) → chuyến vẫn đang giao hàng

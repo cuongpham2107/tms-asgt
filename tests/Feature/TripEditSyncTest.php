@@ -172,3 +172,28 @@ test('editing a pending trip before driver starts shift does not attach a closed
 
     expect($pendingTrip->fresh()->shift_id)->toBeNull();
 });
+
+test('adding a driver_swap checkpoint after arrived_delivery transitions trip and order to driver_swap', function () {
+    ($this->checkpoint)(CheckpointType::ArrivedPickup, 1010, 80);
+    ($this->checkpoint)(CheckpointType::LeftPickup, 1010, 70);
+    ($this->checkpoint)(CheckpointType::ArrivedDelivery, 1040, 60, $this->points[0]->id);
+    $this->trip->update(['status' => TripStatus::ArrivedDelivery]);
+    $this->order->update(['status' => OrderStatus::InTransit]);
+    $this->points[0]->update(['status' => OrderDeliveryPointStatus::Arrived]);
+
+    $rows = syncRows($this->trip);
+    $rows['swap'] = [
+        'checkpoint_type' => CheckpointType::DriverSwap->value,
+        'order_id' => $this->order->id,
+        'delivery_point_id' => $this->points[0]->id,
+        'driver_id' => $this->driver->id,
+        'km_reading' => 1040,
+        'occurred_at' => now()->subMinutes(10)->format('Y-m-d H:i'),
+    ];
+
+    saveTripCheckpoints($this->trip, $rows);
+
+    expect($this->trip->fresh()->status)->toBe(TripStatus::DriverSwap)
+        ->and($this->order->fresh()->status)->toBe(OrderStatus::DriverSwap)
+        ->and($this->points[0]->fresh()->status)->toBe(OrderDeliveryPointStatus::Arrived);
+});
