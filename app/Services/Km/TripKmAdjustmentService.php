@@ -471,6 +471,7 @@ class TripKmAdjustmentService
 
         $endCheckpoint = TripCheckpoint::where('trip_id', $trip->id)
             ->where('checkpoint_type', CheckpointType::End->value)
+            ->when($trip->is_empty_run, fn ($q) => $q->whereNotNull('km_reading'))
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
             ->first();

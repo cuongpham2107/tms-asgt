@@ -691,31 +691,36 @@ class TripForm
             }
 
             if ($record instanceof Trip) {
-                $baselineKm = ($record->start_km !== null && (float) $record->start_km > 0)
-                    ? (float) $record->start_km
-                    : (($record->vehicle?->current_mileage !== null && (float) $record->vehicle->current_mileage > 0)
-                        ? (float) $record->vehicle->current_mileage
-                        : null);
-                $baselineLabel = ($record->start_km !== null && (float) $record->start_km > 0)
-                    ? 'Km bắt đầu chuyến'
-                    : 'Km hiện tại của xe';
                 $firstRow = $rows->first();
 
-                if ($baselineKm !== null && ($firstRow['km'] - $baselineKm) > TripKmLimitService::DELTA_LONG) {
-                    $maxAllowed = $baselineKm + TripKmLimitService::DELTA_LONG;
-                    $firstLabel = $firstRow['type']?->getLabel() ?? 'Mốc đầu tiên';
-                    $fail(sprintf(
-                        'Km mốc "%s" lúc %s (%s km) vượt quá giới hạn cho phép (+%.0f km) so với %s (%s km). Tối đa cho phép: %s km.',
-                        $firstLabel,
-                        $firstRow['at']->format('H:i d/m'),
-                        number_format($firstRow['km'], 1, ',', '.'),
-                        TripKmLimitService::DELTA_LONG,
-                        $baselineLabel,
-                        number_format($baselineKm, 1, ',', '.'),
-                        number_format($maxAllowed, 1, ',', '.'),
-                    ));
+                // Chỉ so với baseline cũ khi mốc đầu tiên không phải Started:
+                // khi điều hành đang sửa chính mốc Bắt đầu chuyến (Started) thì cho phép chỉnh lại start_km bị sai lệch lớn.
+                if ($firstRow['type'] !== CheckpointType::Started) {
+                    $baselineKm = ($record->start_km !== null && (float) $record->start_km > 0)
+                        ? (float) $record->start_km
+                        : (($record->vehicle?->current_mileage !== null && (float) $record->vehicle->current_mileage > 0)
+                            ? (float) $record->vehicle->current_mileage
+                            : null);
+                    $baselineLabel = ($record->start_km !== null && (float) $record->start_km > 0)
+                        ? 'Km bắt đầu chuyến'
+                        : 'Km hiện tại của xe';
 
-                    return;
+                    if ($baselineKm !== null && ($firstRow['km'] - $baselineKm) > TripKmLimitService::DELTA_LONG) {
+                        $maxAllowed = $baselineKm + TripKmLimitService::DELTA_LONG;
+                        $firstLabel = $firstRow['type']?->getLabel() ?? 'Mốc đầu tiên';
+                        $fail(sprintf(
+                            'Km mốc "%s" lúc %s (%s km) vượt quá giới hạn cho phép (+%.0f km) so với %s (%s km). Tối đa cho phép: %s km.',
+                            $firstLabel,
+                            $firstRow['at']->format('H:i d/m'),
+                            number_format($firstRow['km'], 1, ',', '.'),
+                            TripKmLimitService::DELTA_LONG,
+                            $baselineLabel,
+                            number_format($baselineKm, 1, ',', '.'),
+                            number_format($maxAllowed, 1, ',', '.'),
+                        ));
+
+                        return;
+                    }
                 }
             }
 

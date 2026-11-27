@@ -183,3 +183,41 @@ test('admin can edit start/end locations, note, and checkpoints of an empty run 
         ->and((float) $trip->start_km)->toBe(445080.0)
         ->and((float) $startedCp->fresh()->km_reading)->toBe(445080.0);
 });
+
+it('cho phép sửa mốc Bắt đầu chuyến khi start_km cũ sai lệch hơn 600 km nhưng vẫn chặn bước nhảy giữa các mốc', function (): void {
+    $trip = new Trip([
+        'start_km' => 10000,
+        'is_empty_run' => true,
+    ]);
+
+    $rule = \App\Filament\Resources\Trips\Schemas\TripForm::checkpointKmIncreasingRule($trip);
+
+    // 1. Sửa Started từ 10.000 -> 445.070 và End -> 445.080 (+10 km): hợp lệ
+    $error = null;
+    $rule('checkpoints', [
+        ['checkpoint_type' => CheckpointType::Started->value, 'km_reading' => '445,070', 'occurred_at' => '2026-11-26 17:46'],
+        ['checkpoint_type' => CheckpointType::End->value, 'km_reading' => '445,080', 'occurred_at' => '2026-11-26 17:46'],
+    ], function (string $message) use (&$error): void {
+        $error = $message;
+    });
+    expect($error)->toBeNull();
+
+    // 2. Bước nhảy Started -> End > 600 km: vẫn bị chặn
+    $jumpError = null;
+    $rule('checkpoints', [
+        ['checkpoint_type' => CheckpointType::Started->value, 'km_reading' => '445,070', 'occurred_at' => '2026-11-26 17:46'],
+        ['checkpoint_type' => CheckpointType::End->value, 'km_reading' => '445,800', 'occurred_at' => '2026-11-26 17:47'],
+    ], function (string $message) use (&$jumpError): void {
+        $jumpError = $message;
+    });
+    expect($jumpError)->toContain('vượt quá giới hạn cho phép (+600 km)');
+
+    // 3. Mốc đầu tiên KHÔNG phải Started vượt quá start_km + 600 km: vẫn bị chặn
+    $nonStartedError = null;
+    $rule('checkpoints', [
+        ['checkpoint_type' => CheckpointType::End->value, 'km_reading' => '11,000', 'occurred_at' => '2026-11-26 17:47'],
+    ], function (string $message) use (&$nonStartedError): void {
+        $nonStartedError = $message;
+    });
+    expect($nonStartedError)->toContain('vượt quá giới hạn cho phép (+600 km)');
+});
