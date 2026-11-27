@@ -210,7 +210,9 @@ class ActivityLogFormatter
         // 4. Resolve Datetime Fields
         if (in_array($field, ['planned_loading_at', 'started_at', 'completed_at', 'cancelled_at', 'sent_at', 'created_at', 'updated_at', 'occurred_at', 'adjusted_at', 'arrived_at', 'delivered_at', 'start_time', 'end_time'])) {
             try {
-                return Carbon::parse($value)->format('H:i d/m/Y');
+                $appTz = (string) config('app.timezone', 'Asia/Ho_Chi_Minh');
+
+                return Carbon::parse($value, $appTz)->setTimezone($appTz)->format('H:i:s d/m/Y');
             } catch (Throwable) {
                 return (string) $value;
             }
