@@ -131,6 +131,7 @@ export default function TripDetailScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [completeKm, setCompleteKm] = useState("");
+    const orderPanelKmRef = useRef("");
     const [completing, setCompleting] = useState(false);
     const [starting, setStarting] = useState(false);
     const [startKmInput, setStartKmInput] = useState("");
@@ -457,11 +458,15 @@ export default function TripDetailScreen() {
                 !prev || prev === lastSuggestedVehicleKmRef.current || isDifferent ? nextKm : prev,
             );
             setCompleteKm((prev) =>
-                !prev || prev === lastSuggestedVehicleKmRef.current || isDifferent ? nextKm : prev,
+                showCompleteModal
+                    ? prev
+                    : !prev || prev === lastSuggestedVehicleKmRef.current || isDifferent
+                      ? nextKm
+                      : prev,
             );
             lastSuggestedVehicleKmRef.current = nextKm;
         }
-    }, [vehicleKm]);
+    }, [vehicleKm, showCompleteModal]);
 
     const handleStart = () => {
         if (!tripId || !token || starting) return;
@@ -790,11 +795,14 @@ export default function TripDetailScreen() {
                     <TouchableOpacity
                         style={[s.actionBtnHandoff, s.actionRowBtn]}
                         onPress={() => {
-                            setCompleteKm(
+                            const baseKm =
                                 vehicleKm != null
                                     ? String(Math.round(Number(vehicleKm))).replace(/\D/g, "")
-                                    : "",
-                            );
+                                    : "";
+                            const typedKm = orderPanelKmRef.current.replace(/\D/g, "");
+                            // Lấy số Km tài xế vừa nhập ở khung bên ngoài (nếu khác Km xe hiện tại);
+                            // ngược lại để trống để tài xế chủ động nhập Km thực tế trên đồng hồ.
+                            setCompleteKm(typedKm && typedKm !== baseKm ? typedKm : "");
                             setShowCompleteModal(true);
                         }}
                         disabled={completing}
@@ -1507,6 +1515,9 @@ export default function TripDetailScreen() {
                                             }}
                                             reloadToken={orderReloadToken}
                                             onChanged={refreshAll}
+                                            onKmChange={(val) => {
+                                                orderPanelKmRef.current = val;
+                                            }}
                                         />
                                     )}
                                     {/* Chuyến đã đóng: hiện luôn các mốc, không cần vào chi tiết đơn */}
@@ -1577,11 +1588,12 @@ export default function TripDetailScreen() {
                                 },
                             ]}
                             onPress={() => {
-                                setCompleteKm(
+                                const baseKm =
                                     vehicleKm != null
                                         ? String(Math.round(Number(vehicleKm))).replace(/\D/g, "")
-                                        : "",
-                                );
+                                        : "";
+                                const typedKm = orderPanelKmRef.current.replace(/\D/g, "");
+                                setCompleteKm(typedKm && typedKm !== baseKm ? typedKm : baseKm);
                                 setShowCompleteModal(true);
                             }}
                             disabled={completing}
@@ -2037,12 +2049,34 @@ export default function TripDetailScreen() {
                                 );
                             })}
 
-                            <Text style={[s.modalSectionLabel, { marginTop: 16 }]}>
-                                Km đồng hồ
-                            </Text>
+                            <View
+                                style={{
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    marginTop: 16,
+                                    marginBottom: 6,
+                                }}
+                            >
+                                <Text style={[s.modalSectionLabel, { marginBottom: 0 }]}>
+                                    Km đồng hồ thực tế
+                                </Text>
+                                {vehicleKm != null && (
+                                    <Text style={{ fontSize: 12, color: "#6B7280" }}>
+                                        Km xe hiện tại:{" "}
+                                        <Text style={{ fontWeight: "700", color: "#4F46E5" }}>
+                                            {fmt(vehicleKm)}
+                                        </Text>
+                                    </Text>
+                                )}
+                            </View>
                             <TextInput
                                 style={s.modalKmInput}
-                                placeholder="Km hiện tại"
+                                placeholder={
+                                    hasIncompleteOrders
+                                        ? "Nhập Km thực tế trên đồng hồ"
+                                        : "Km hiện tại"
+                                }
                                 placeholderTextColor="#D1D5DB"
                                 keyboardType="number-pad"
                                 returnKeyType="done"
@@ -2142,9 +2176,9 @@ export default function TripDetailScreen() {
                                     },
                                 ]}
                                 onPress={() => {
-                                    const km = parseFloat(completeKm);
+                                    const km = parseKmInput(completeKm);
                                     if (!km) {
-                                        showAlert("Thiếu", "Vui lòng nhập Km");
+                                        showAlert("Thiếu", "Vui lòng nhập Km thực tế trên đồng hồ");
                                         return;
                                     }
                                     const startKm =

@@ -109,14 +109,22 @@ interface OrderPanelProps {
     onChanged?: () => void;
     /** Nội dung màn cha chèn ngay trên khung cập nhật chốt chặng (km, nút phụ) */
     beforeForm?: React.ReactNode;
+    /** Thông báo lại số Km tài xế đang nhập để màn cha đồng bộ khi mở popup bàn giao / kết thúc */
+    onKmChange?: (km: string) => void;
 }
 
 /** Thông tin đơn + các bước chốt mốc (lấy hàng → giao hàng → kết thúc) + lịch sử chốt chặng. */
-export default function OrderPanel({ order, embedded = false, reloadToken = 0, onChanged, beforeForm }: OrderPanelProps) {
+export default function OrderPanel({ order, embedded = false, reloadToken = 0, onChanged, beforeForm, onKmChange }: OrderPanelProps) {
     const { token, shift, setShift } = useAuth();
     const { showLoading, hideLoading } = useLoading();
     const isSwapped = order?.is_swapped || false;
     const [km, setKm] = useState("");
+    const onKmChangeRef = useRef(onKmChange);
+    onKmChangeRef.current = onKmChange;
+
+    useEffect(() => {
+        onKmChangeRef.current?.(km);
+    }, [km]);
     const [loading, setLoading] = useState(false);
     const [detail, setDetail] = useState<any>(null);
     const [refreshing, setRefreshing] = useState(false);

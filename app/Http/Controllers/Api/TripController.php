@@ -343,7 +343,7 @@ class TripController extends Controller
             $trip->complete(endKm: $endKm, completedAt: $completedAt, checkpointAttributes: $endCheckpointAttrs);
         } else {
             // Còn orders chưa xong → driver_swap, tính partial km
-            DB::transaction(function () use ($trip, $endKm, $completedAt) {
+            DB::transaction(function () use ($trip, $endKm, $completedAt, $validated) {
                 app(DriverSwapService::class)->handOverWithKm($trip, $endKm, includeAssignedOrders: true);
 
                 // Cập nhật km hiện tại của xe
@@ -360,6 +360,7 @@ class TripController extends Controller
                         'occurred_at' => $completedAt ? Carbon::parse($completedAt) : now(),
                         'gps_lat' => $validated['gps_lat'] ?? null,
                         'gps_lng' => $validated['gps_lng'] ?? null,
+                        'gps_accuracy' => $validated['gps_accuracy'] ?? null,
                     ],
                     CheckpointType::DriverSwap,
                 );
