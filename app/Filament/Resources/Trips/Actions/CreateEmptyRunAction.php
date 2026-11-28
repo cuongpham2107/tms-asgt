@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Trips\Actions;
 
 use App\Enums\CheckpointType;
 use App\Enums\TripStatus;
+use App\Enums\VehicleOwnerType;
 use App\Filament\Resources\Orders\Actions\Concerns\CreatesOrderTransportCards;
 use App\Models\DriverShift;
 use App\Models\Location;
@@ -36,6 +37,8 @@ class CreateEmptyRunAction
                     ->label('Xe')
                     ->options(fn (): array => Vehicle::query()
                         ->where('is_active', true)
+                        ->where('type', VehicleOwnerType::Company->value)
+                        ->orderBy('plate_number')
                         ->select('id', 'plate_number', 'status')
                         ->get()
                         ->mapWithKeys(fn (Vehicle $v) => [$v->id => "{$v->plate_number} - {$v->status->getLabel()}"])
