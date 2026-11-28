@@ -994,14 +994,14 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         $destinations = $activeTrip->orders
-            ->flatMap(fn (Order $o) => $o->deliveryPoints)
+            ->flatMap(fn (Order $o) => $o->deliveryPoints->sortBy(fn ($dp): array => [(int) ($dp->sequence ?? 0), (int) $dp->id]))
             ->map(fn ($dp) => $dp->location?->code ?? $dp->location?->name ?? $dp->address)
             ->filter()
             ->unique()
             ->values();
 
         if ($destinations->isNotEmpty()) {
-            return $destinations->join(', ');
+            return $destinations->join(' → ');
         }
 
         return $activeTrip->endLocation?->code
@@ -1018,7 +1018,7 @@ class VehicleDispatchBoard extends Page implements HasTable
         }
 
         $destinations = $activeTrip->orders
-            ->flatMap(fn (Order $o) => $o->deliveryPoints)
+            ->flatMap(fn (Order $o) => $o->deliveryPoints->sortBy(fn ($dp): array => [(int) ($dp->sequence ?? 0), (int) $dp->id]))
             ->map(fn ($dp) => $dp->location?->name ?? $dp->address)
             ->filter()
             ->unique()

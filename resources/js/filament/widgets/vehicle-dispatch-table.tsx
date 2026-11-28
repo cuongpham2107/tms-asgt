@@ -198,6 +198,18 @@ const stationTones: Record<string, string> = {
     OTHER: "gray",
 };
 
+const RUNNING_FILTER_LABEL = "Chưa xong";
+
+const RUNNING_STATUS_LABELS = new Set<string>([
+    "Đã bắt đầu",
+    "Đến lấy hàng",
+    "Đi giao hàng",
+    "Đến giao hàng",
+    "Đảo lái",
+    "Tạm dừng (Sửa Km)",
+    "Đã giao",
+]);
+
 const cellClass =
     "border-r border-gray-100 dark:border-white/5 py-1.5 align-middle whitespace-nowrap";
 
@@ -1254,7 +1266,11 @@ function DispatchTable({
                     orderTypes.add(row.orderType);
                 }
                 if (row.statusLabel && row.statusLabel !== "—") {
-                    statuses.add(row.statusLabel);
+                    statuses.add(
+                        RUNNING_STATUS_LABELS.has(row.statusLabel)
+                            ? RUNNING_FILTER_LABEL
+                            : row.statusLabel,
+                    );
                 }
                 if (row.customer && row.customer !== "—") {
                     row.customer
@@ -1335,8 +1351,14 @@ function DispatchTable({
                         return false;
                     }
 
-                    if (filterStatus && row.statusLabel !== filterStatus) {
-                        return false;
+                    if (filterStatus) {
+                        const matchesStatus =
+                            filterStatus === RUNNING_FILTER_LABEL
+                                ? RUNNING_STATUS_LABELS.has(row.statusLabel)
+                                : row.statusLabel === filterStatus;
+                        if (!matchesStatus) {
+                            return false;
+                        }
                     }
 
                     if (filterCustomer) {

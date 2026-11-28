@@ -215,11 +215,11 @@ class VehicleDispatchTable extends Widget
 
             $deliveryCodes = $trip->endLocation?->code
                 ?? $trip->orders
-                    ->flatMap(fn (Order $order) => $order->deliveryPoints)
+                    ->flatMap(fn (Order $order) => $order->deliveryPoints->sortBy(fn ($dp): array => [(int) ($dp->sequence ?? 0), (int) $dp->id]))
                     ->map(fn ($dp) => $dp->location?->code ?? $dp->address)
                     ->filter()
                     ->unique()
-                    ->join(', ');
+                    ->join(' → ');
 
             $plannedAt = $trip->orders
                 ->pluck('planned_loading_at')
@@ -252,9 +252,10 @@ class VehicleDispatchTable extends Widget
                     'customerCode' => $order->customer?->code,
                     'pickup' => $order->pickupLocation?->code ?? $order->pickup_address ?? '—',
                     'destination' => $order->deliveryPoints
+                        ->sortBy(fn ($dp): array => [(int) ($dp->sequence ?? 0), (int) $dp->id])
                         ->map(fn ($dp) => $dp->location?->code ?? $dp->address)
                         ->filter()
-                        ->join(', ') ?: '—',
+                        ->join(' → ') ?: '—',
                 ];
             })->values()->all();
 

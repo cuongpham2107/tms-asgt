@@ -87,7 +87,7 @@
                             : ($isCompleted ? 'border-s-4 border-s-emerald-500' : 'border-s-4 border-s-gray-300 dark:border-s-gray-600'));
                     
                     $pickupCode = $t->startLocation?->code ?? ($t->orders->first()?->pickupLocation?->code ?? $t->orders->first()?->pickup_address);
-                    $deliveryCodes = $t->endLocation?->code ?? $t->orders->flatMap->deliveryPoints->map(fn ($dp) => $dp->location?->code ?? $dp->address)->filter()->unique()->join(', ');
+                    $deliveryCodes = $t->endLocation?->code ?? $t->orders->flatMap(fn ($o) => $o->deliveryPoints->sortBy(fn ($dp) => [(int) ($dp->sequence ?? 0), (int) $dp->id]))->map(fn ($dp) => $dp->location?->code ?? $dp->address)->filter()->unique()->join(' → ');
                     $customerCodes = $t->orders->map(fn ($order) => $order->customer?->code)->filter()->unique();
                 @endphp
 
@@ -217,7 +217,7 @@
                                                 </span>
                                                 <span class="inline-flex items-baseline gap-1">
                                                     <span class="text-gray-400">Điểm đến:</span>
-                                                    <span class="font-mono font-medium text-gray-800 dark:text-gray-200">{{ $order->deliveryPoints->map(fn($dp) => $dp->location?->code ?? $dp->address)->filter()->join(', ') ?: '—' }}</span>
+                                                    <span class="font-mono font-medium text-gray-800 dark:text-gray-200">{{ $order->deliveryPoints->sortBy(fn ($dp) => [(int) ($dp->sequence ?? 0), (int) $dp->id])->map(fn($dp) => $dp->location?->code ?? $dp->address)->filter()->join(' → ') ?: '—' }}</span>
                                                 </span>
                                             </div>
                                         </div>

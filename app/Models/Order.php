@@ -157,7 +157,9 @@ class Order extends Model implements HasTimeline
 
     public function deliveryPoints(): HasMany
     {
-        return $this->hasMany(OrderDeliveryPoint::class);
+        return $this->hasMany(OrderDeliveryPoint::class)
+            ->orderBy('sequence')
+            ->orderBy('id');
     }
 
     /**
@@ -166,7 +168,7 @@ class Order extends Model implements HasTimeline
     public function deliveryPointsSignature(): string
     {
         return $this->deliveryPoints()
-            ->orderBy('id')
+            ->reorder('id')
             ->get([
                 'id',
                 'location_id',
