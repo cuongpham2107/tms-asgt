@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\TripStatus;
 use App\Models\Order;
+use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -106,10 +108,18 @@ class OrderResource extends JsonResource
             'pickup_phone' => $this->pickup_phone,
             /** Ghi chú cho đơn hàng. */
             'notes' => $this->notes,
-            // Delivery points (only when loaded)
+            // Delivery points (only when loaded): luôn đưa điểm đang ở trạng thái Arrived lên đầu
+            // để App tài xế (kể cả phiên bản cũ khi chọn điểm mặc định theo phần tử đầu chưa delivered)
+            // tự động khoá đúng điểm đang giao dở cho tới khi bấm "Giao hàng xong".
             /** Danh sách các điểm giao hàng (nếu được load). */
             'delivery_points' => OrderDeliveryPointResource::collection(
-                $this->whenLoaded('deliveryPoints', fn () => $this->deliveryPoints->sortBy([['sequence', 'asc'], ['id', 'asc']])->values())
+                $this->whenLoaded('deliveryPoints', fn () => $this->deliveryPoints
+                    ->sortBy(fn (OrderDeliveryPoint $dp): array => [
+                        $dp->status === OrderDeliveryPointStatus::Arrived ? 0 : 1,
+                        (int) ($dp->sequence ?? 0),
+                        (int) $dp->id,
+                    ])
+                    ->values())
             ),
             /** Cho phép tài xế tự chọn thêm điểm trả hàng trên App. */
             'can_add_delivery_point' => $this->canDriverAddDeliveryPoint(),

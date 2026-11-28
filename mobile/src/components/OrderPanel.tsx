@@ -401,16 +401,7 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
             lastSuggestedKmRef.current = nextKm;
         }
     }, [vehicleKm, detail, reloadToken, order?.is_paused]);
-    // Find next pending delivery point (for multi-DP orders)
     const deliveryPoints: any[] = d.delivery_points || [];
-    const nextPendingDp = deliveryPoints.find(
-        (dp: any) => dp.status !== "delivered" && dp.status !== "completed",
-    );
-    // Use selected DP, or fallback to next pending, or last DP (final destination)
-    const activeDpId =
-        selectedDpId ||
-        nextPendingDp?.id ||
-        deliveryPoints[deliveryPoints.length - 1]?.id;
     const checkpoints = d.trip_checkpoints || [];
 
     // Compute per-DP checkpoint status
@@ -435,8 +426,36 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
         return map;
     }, [deliveryPoints, checkpoints]);
 
-    // Auto-select only DP for single-DP orders; reset on complete
+    // Điểm đang giao dở (đã đến giao hàng nhưng chưa giao xong) phải luôn được chọn ưu tiên
+    const arrivedDp = deliveryPoints.find(
+        (dp: any) =>
+            dp.status !== "delivered" &&
+            dp.status !== "completed" &&
+            !dpStatusMap[dp.id]?.completed &&
+            (dp.status === "arrived" || dpStatusMap[dp.id]?.arrived),
+    );
+    // Find next pending delivery point (for multi-DP orders)
+    const nextPendingDp =
+        arrivedDp ||
+        deliveryPoints.find(
+            (dp: any) =>
+                dp.status !== "delivered" &&
+                dp.status !== "completed" &&
+                !dpStatusMap[dp.id]?.completed,
+        );
+    // Nếu có điểm đang giao dở (arrived) thì luôn khoá vào điểm đó cho đến khi bấm "Giao hàng xong"
+    const activeDpId =
+        arrivedDp?.id ||
+        selectedDpId ||
+        nextPendingDp?.id ||
+        deliveryPoints[deliveryPoints.length - 1]?.id;
+
+    // Auto-select arrived/only DP; reset on complete
     useEffect(() => {
+        if (arrivedDp && selectedDpId !== arrivedDp.id) {
+            setSelectedDpId(arrivedDp.id);
+            return;
+        }
         if (deliveryPoints.length === 1 && !selectedDpId) {
             const onlyDp = deliveryPoints[0];
             if (!dpStatusMap[onlyDp.id]?.completed) {
@@ -453,7 +472,7 @@ export default function OrderPanel({ order, embedded = false, reloadToken = 0, o
             );
             setSelectedDpId(next ? next.id : null);
         }
-    }, [deliveryPoints, selectedDpId, dpStatusMap]);
+    }, [deliveryPoints, selectedDpId, dpStatusMap, arrivedDp?.id]);
     const activeDp = deliveryPoints.find((dp: any) => dp.id === activeDpId);
     const getDpLabel = (dp: any, fallbackIdx?: number): string =>
         dp?.code ||

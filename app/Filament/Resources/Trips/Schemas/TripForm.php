@@ -998,8 +998,13 @@ class TripForm
         if ($type === CheckpointType::Completed && filled($lastCheckpoint['order_id'] ?? null)) {
             $orderId = (int) $lastCheckpoint['order_id'];
             $completedIds = self::completedDeliveryPointIdsForOrder($get, $repeaterName, $orderId);
-            if (self::resolveOrderDeliveryPointId($orderId, $completedIds) !== null) {
-                return CheckpointType::ArrivedDelivery;
+            $nextDpId = self::resolveOrderDeliveryPointId($orderId, $completedIds);
+            if ($nextDpId !== null) {
+                $arrivedIds = self::arrivedDeliveryPointIdsForOrder($get, $repeaterName, $orderId);
+
+                return in_array($nextDpId, $arrivedIds, true)
+                    ? CheckpointType::Completed
+                    : CheckpointType::ArrivedDelivery;
             }
         }
 
@@ -1177,12 +1182,34 @@ class TripForm
      */
     private static function completedDeliveryPointIdsForOrder(callable $get, string $repeaterName, int $orderId): array
     {
+        return self::deliveryPointIdsForOrderByType($get, $repeaterName, $orderId, CheckpointType::Completed);
+    }
+
+    /**
+     * Danh sách delivery_point_id của đơn hàng đã có mốc `arrived_delivery` ở các dòng phía trên.
+     *
+     * @return list<int>
+     */
+    private static function arrivedDeliveryPointIdsForOrder(callable $get, string $repeaterName, int $orderId): array
+    {
+        return self::deliveryPointIdsForOrderByType($get, $repeaterName, $orderId, CheckpointType::ArrivedDelivery);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function deliveryPointIdsForOrderByType(
+        callable $get,
+        string $repeaterName,
+        int $orderId,
+        CheckpointType $targetType,
+    ): array {
         $checkpoints = $get("../../{$repeaterName}");
         if (! is_array($checkpoints) || empty($checkpoints)) {
             return [];
         }
 
-        $completedIds = [];
+        $ids = [];
         foreach ($checkpoints as $item) {
             if (! is_array($item)) {
                 continue;
@@ -1196,12 +1223,12 @@ class TripForm
 
             $raw = $item['checkpoint_type'] ?? null;
             $type = $raw instanceof CheckpointType ? $raw : (is_string($raw) ? CheckpointType::tryFrom($raw) : null);
-            if ($type === CheckpointType::Completed) {
-                $completedIds[] = (int) $item['delivery_point_id'];
+            if ($type === $targetType) {
+                $ids[] = (int) $item['delivery_point_id'];
             }
         }
 
-        return array_values(array_unique($completedIds));
+        return array_values(array_unique($ids));
     }
 
     /**

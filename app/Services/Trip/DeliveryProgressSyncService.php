@@ -315,6 +315,48 @@ class DeliveryProgressSyncService
     }
 
     /**
+     * Đồng bộ trạng thái Delivered / thời gian giao của từng điểm giao theo các mốc Completed hiện có,
+     * kể cả khi điều hành thêm bổ sung mốc Completed vào chuyến đã kết thúc (có mốc End).
+     */
+    private function syncCompletedDeliveryPointsFromCheckpoints(Trip $trip): void
+    {
+        $trip->loadMissing(['orders.deliveryPoints', 'orders.tripCheckpoints']);
+
+        foreach ($trip->orders as $order) {
+            if (! $order instanceof Order || in_array($order->status, [OrderStatus::Draft, OrderStatus::Cancelled], true)) {
+                continue;
+            }
+
+            $checkpoints = $order->tripCheckpoints()->orderBy('occurred_at')->orderBy('id')->get();
+
+            foreach ($order->deliveryPoints as $point) {
+                $pointCheckpoints = $checkpoints->where('delivery_point_id', $point->id);
+                $completedCp = $pointCheckpoints->where('checkpoint_type', CheckpointType::Completed)->last();
+                $arrivedCp = $pointCheckpoints->where('checkpoint_type', CheckpointType::ArrivedDelivery)->last();
+
+                if ($completedCp === null) {
+                    continue;
+                }
+
+                $targetArrivedAt = $arrivedCp?->effectiveOccurredAt() ?? $point->arrived_at;
+                $targetDeliveredAt = $completedCp->effectiveOccurredAt() ?? $point->delivered_at ?? now();
+
+                if (
+                    $point->status !== OrderDeliveryPointStatus::Delivered
+                    || $point->delivered_at?->format('Y-m-d H:i') !== $targetDeliveredAt?->format('Y-m-d H:i')
+                    || ($targetArrivedAt !== null && $point->arrived_at?->format('Y-m-d H:i') !== $targetArrivedAt->format('Y-m-d H:i'))
+                ) {
+                    $point->update([
+                        'status' => OrderDeliveryPointStatus::Delivered,
+                        'arrived_at' => $targetArrivedAt,
+                        'delivered_at' => $targetDeliveredAt,
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
      * Lấy mốc mới nhất có hiệu lực (bỏ qua mốc End chưa có km_reading của chuyến không hàng cũ).
      */
     private function latestEffectiveCheckpoint(Trip $trip): ?TripCheckpoint
@@ -417,6 +459,7 @@ class DeliveryProgressSyncService
             }
 
             app(TripCompletionService::class)->markOrdersCompleted($trip);
+            $this->syncCompletedDeliveryPointsFromCheckpoints($trip);
         } elseif ($hadEndCheckpointBefore && ! in_array($trip->status, [TripStatus::Cancelled, TripStatus::DriverSwap], true)) {
             app(TripCompletionService::class)->reopen($trip);
         } elseif (! in_array($trip->status, [TripStatus::Completed, TripStatus::Cancelled, TripStatus::DriverSwap], true)) {

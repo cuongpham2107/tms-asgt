@@ -3,7 +3,9 @@
 namespace App\Services\Trip;
 
 use App\Enums\CheckpointType;
+use App\Enums\OrderDeliveryPointStatus;
 use App\Enums\TripStatus;
+use App\Models\OrderDeliveryPoint;
 use App\Models\Trip;
 use App\Models\TripCheckpoint;
 use App\Services\Km\TripKmService;
@@ -82,6 +84,7 @@ class TripCheckpointService
         }
 
         $this->validateOrderBelongsToTrip($trip, $payload, $checkpointType);
+        $this->validateNoOtherArrivedDeliveryPoint($trip, $payload, $checkpointType);
         $this->validateNoActiveTrip($trip, $checkpointType);
         $this->validateVehicleNotBusy($trip);
 
@@ -286,6 +289,64 @@ class TripCheckpointService
         $belongs = $trip->orders()->where('id', $orderId)->exists();
         if (! $belongs) {
             abort(422, 'Order không thuộc chuyến này');
+        }
+    }
+
+    /**
+     * Khi gửi "Đến giao hàng" cho một điểm mới, kiểm tra cùng đơn hàng không còn điểm giao nào khác
+     * đang ở trạng thái Arrived (đã đến nhưng chưa bấm "Giao hàng xong").
+     *
+     * @param  array<string, mixed>  $payload
+     *
+     * @throws ValidationException
+     */
+    private function validateNoOtherArrivedDeliveryPoint(Trip $trip, array $payload, CheckpointType $type): void
+    {
+        if ($type !== CheckpointType::ArrivedDelivery) {
+            return;
+        }
+
+        $targetDpId = isset($payload['delivery_point_id']) ? (int) $payload['delivery_point_id'] : null;
+        $orderId = isset($payload['order_id']) ? (int) $payload['order_id'] : null;
+
+        if ($orderId === null && $targetDpId !== null) {
+            $orderId = OrderDeliveryPoint::whereKey($targetDpId)->value('order_id');
+        }
+
+        if ($orderId === null) {
+            return;
+        }
+
+        $otherArrivedPoints = OrderDeliveryPoint::query()
+            ->where('order_id', $orderId)
+            ->where('status', OrderDeliveryPointStatus::Arrived->value)
+            ->when($targetDpId !== null, fn ($q) => $q->where('id', '!=', $targetDpId))
+            ->with('location:id,code,name')
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($otherArrivedPoints as $arrivedDp) {
+            $alreadyCompleted = TripCheckpoint::where('trip_id', $trip->id)
+                ->where('delivery_point_id', $arrivedDp->id)
+                ->where('checkpoint_type', CheckpointType::Completed->value)
+                ->exists();
+
+            if ($alreadyCompleted) {
+                continue;
+            }
+
+            $label = $arrivedDp->location?->code
+                ?? $arrivedDp->location?->name
+                ?? $arrivedDp->address
+                ?? ('Điểm #'.$arrivedDp->sequence);
+
+            throw ValidationException::withMessages([
+                'delivery_point_id' => sprintf(
+                    'Điểm giao "%s" đã đến nhưng chưa bấm "Giao hàng xong". Vui lòng hoàn thành điểm này trước khi chuyển sang điểm tiếp theo.',
+                    $label,
+                ),
+            ]);
         }
     }
 
