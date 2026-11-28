@@ -2,10 +2,11 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\TripStatus;
+use App\Filament\Widgets\Concerns\BuildsShiftTrendBuckets;
 use App\Filament\Widgets\Concerns\StylesDashboardChart;
 use App\Models\Order;
 use App\Models\Trip;
-use App\Services\Shift\ShiftScheduleService;
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 use Filament\Widgets\ChartWidget;
 use Illuminate\Contracts\Support\Htmlable;
@@ -13,36 +14,39 @@ use Illuminate\Support\HtmlString;
 
 class TripTrendChartWidget extends ChartWidget
 {
+    use BuildsShiftTrendBuckets;
     use HasWidgetShield;
     use StylesDashboardChart;
 
-    protected ?string $heading = 'Xu hướng vận tải';
+    protected ?string $heading = 'Xu hướng chuyến xe (ca 8h–8h+)';
 
     public ?string $filter = '7days';
 
     protected function getFilters(): ?array
     {
-        return [
-            '7days' => '7 ngày gần nhất',
-            '30days' => '30 ngày qua',
-            'month' => 'Tháng này',
-        ];
+        return $this->shiftTrendFilters();
     }
 
     /**
-     * Số hôm nay (ca hiện tại) của từng đường, kèm chênh lệch so với hôm qua.
+     * Số kỳ hiện tại (hôm nay / tuần này / tháng này) của từng đường, kèm chênh lệch so với kỳ liền trước.
      */
     public function getDescription(): string|Htmlable|null
     {
-        $parts = collect($this->getCachedData()['datasets'])->map(function (array $dataset): string {
-            $today = (int) (end($dataset['data']) ?: 0);
-            $yesterday = (int) (prev($dataset['data']) ?: 0);
+        $bucketMeta = $this->resolveShiftTrendBuckets($this->filter);
+        $periodLabel = $bucketMeta['periodLabel'];
+        $comparisonTitle = $bucketMeta['comparisonTitle'];
+
+        $parts = collect($this->getCachedData()['datasets'])->map(function (array $dataset) use ($periodLabel, $comparisonTitle): string {
+            $values = array_values($dataset['data']);
+            $count = count($values);
+            $today = $count > 0 ? (int) $values[$count - 1] : 0;
+            $yesterday = $count > 1 ? (int) $values[$count - 2] : 0;
             $delta = $today - $yesterday;
             $deltaClass = $delta > 0 ? 'text-emerald-600' : ($delta < 0 ? 'text-rose-600' : 'text-gray-400');
             $deltaText = $delta === 0 ? '±0' : sprintf('%+d', $delta);
 
-            return '<span class="mr-3 inline-flex items-baseline gap-1" title="Hôm nay so với hôm qua"><span class="size-2 self-center rounded-full" style="background: '.e($dataset['borderColor']).'"></span>'
-                .e($dataset['label']).' hôm nay <b class="text-sm font-bold tabular-nums text-gray-950 dark:text-white">'.$today.'</b>'
+            return '<span class="mr-3 inline-flex items-baseline gap-1" title="'.e($comparisonTitle).'"><span class="size-2 self-center rounded-full" style="background: '.e($dataset['borderColor']).'"></span>'
+                .e($dataset['label']).' '.e($periodLabel).' <b class="text-sm font-bold tabular-nums text-gray-950 dark:text-white">'.$today.'</b>'
                 .'<span class="text-xs tabular-nums '.$deltaClass.'">'.$deltaText.'</span></span>';
         });
 
@@ -51,94 +55,60 @@ class TripTrendChartWidget extends ChartWidget
 
     protected function getData(): array
     {
-        $activeFilter = $this->filter ?: '7days';
-
-        $shiftNow = ShiftScheduleService::getShiftWindow()[0];
-
-        $days = match ($activeFilter) {
-            '30days' => 30,
-            'month' => (int) $shiftNow->day,
-            default => 7,
-        };
-
-        $windowStart = $shiftNow->copy()->subDays($days - 1)->setTime(8, 0, 0);
-        $windowEnd = $shiftNow->copy()->addDay()->setTime(8, 0, 0);
+        ['windowStart' => $windowStart, 'windowEnd' => $windowEnd, 'buckets' => $buckets] = $this->resolveShiftTrendBuckets($this->filter);
 
         $trips = Trip::query()
-            ->where(function ($q) use ($windowStart, $windowEnd) {
-                $q->whereBetween('started_at', [$windowStart, $windowEnd])
-                    ->orWhereBetween('completed_at', [$windowStart, $windowEnd])
-                    ->orWhere(fn ($sq) => $sq->whereNull('started_at')->whereBetween('created_at', [$windowStart, $windowEnd]));
+            ->where('status', '!=', TripStatus::Cancelled->value)
+            ->where(function ($q) use ($windowStart, $windowEnd): void {
+                $q->where(fn ($sq) => $sq->where('completed_at', '>=', $windowStart)->where('completed_at', '<', $windowEnd))
+                    ->orWhere(fn ($sq) => $sq->where('started_at', '>=', $windowStart)->where('started_at', '<', $windowEnd))
+                    ->orWhere(fn ($sq) => $sq->whereNull('started_at')->where('created_at', '>=', $windowStart)->where('created_at', '<', $windowEnd));
             })
-            ->get(['started_at', 'completed_at', 'created_at']);
+            ->get(['status', 'started_at', 'completed_at', 'created_at']);
 
         $completedOrders = Order::query()
             ->where('status', 'completed')
-            ->whereBetween('planned_loading_at', [$windowStart, $windowEnd])
+            ->where('planned_loading_at', '>=', $windowStart)
+            ->where('planned_loading_at', '<', $windowEnd)
             ->get(['planned_loading_at']);
 
         $labels = [];
-        $tripCounts = [];
+        $completedTripCounts = [];
+        $totalTripCounts = [];
         $orderCompletedCounts = [];
 
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $date = $shiftNow->copy()->subDays($i);
-            $dayStart = $date->copy()->setTime(8, 0, 0);
-            $dayEnd = $date->copy()->addDay()->setTime(8, 0, 0);
-            $label = $days > 14 ? $date->format('d/m') : $date->format('D d/m');
+        foreach ($buckets as $bucket) {
+            $dayStart = $bucket['start'];
+            $dayEnd = $bucket['end'];
+            $labels[] = $bucket['label'];
 
-            $labels[] = $label;
+            $completedTripCounts[] = $trips->filter(
+                fn (Trip $trip): bool => $trip->status === TripStatus::Completed
+                    && $trip->completed_at !== null
+                    && $trip->completed_at->gte($dayStart)
+                    && $trip->completed_at->lt($dayEnd)
+            )->count();
 
-            $tripCounts[] = $trips->filter(function (Trip $trip) use ($dayStart, $dayEnd): bool {
-                if ($trip->started_at !== null && $trip->started_at->betweenIncluded($dayStart, $dayEnd)) {
-                    return true;
-                }
+            $totalTripCounts[] = $trips->filter(function (Trip $trip) use ($dayStart, $dayEnd): bool {
+                $effectiveAt = $trip->started_at ?? $trip->completed_at ?? $trip->created_at;
 
-                if ($trip->completed_at !== null && $trip->completed_at->betweenIncluded($dayStart, $dayEnd)) {
-                    return true;
-                }
-
-                return $trip->started_at === null
-                    && $trip->created_at !== null
-                    && $trip->created_at->betweenIncluded($dayStart, $dayEnd);
+                return $effectiveAt !== null
+                    && $effectiveAt->gte($dayStart)
+                    && $effectiveAt->lt($dayEnd);
             })->count();
 
             $orderCompletedCounts[] = $completedOrders->filter(
                 fn (Order $order): bool => $order->planned_loading_at !== null
-                    && $order->planned_loading_at->betweenIncluded($dayStart, $dayEnd)
+                    && $order->planned_loading_at->gte($dayStart)
+                    && $order->planned_loading_at->lt($dayEnd)
             )->count();
         }
 
         return [
             'datasets' => [
-                [
-                    'label' => 'Chuyến xe',
-                    'data' => $tripCounts,
-                    'borderColor' => '#0ea5e9',
-                    'backgroundColor' => 'rgba(14, 165, 233, 0.10)',
-                    'fill' => true,
-                    'tension' => 0.35,
-                    'borderWidth' => 2,
-                    'pointBackgroundColor' => '#0ea5e9',
-                    'pointBorderColor' => '#ffffff',
-                    'pointBorderWidth' => 1.5,
-                    'pointRadius' => 2.5,
-                    'pointHoverRadius' => 5,
-                ],
-                [
-                    'label' => 'Đơn hoàn thành',
-                    'data' => $orderCompletedCounts,
-                    'borderColor' => '#10b981',
-                    'backgroundColor' => 'rgba(16, 185, 129, 0.06)',
-                    'fill' => true,
-                    'tension' => 0.35,
-                    'borderWidth' => 2,
-                    'pointBackgroundColor' => '#10b981',
-                    'pointBorderColor' => '#ffffff',
-                    'pointBorderWidth' => 1.5,
-                    'pointRadius' => 2.5,
-                    'pointHoverRadius' => 5,
-                ],
+                $this->buildTrendLineDataset('Chuyến hoàn thành', $completedTripCounts, '#10b981', 'rgba(16, 185, 129, 0.10)', true),
+                $this->buildTrendLineDataset('Tổng chuyến', $totalTripCounts, '#0ea5e9', 'rgba(14, 165, 233, 0.06)', true),
+                $this->buildTrendLineDataset('Đơn hoàn thành', $orderCompletedCounts, '#8b5cf6', 'rgba(139, 92, 246, 0.04)', false),
             ],
             'labels' => $labels,
         ];

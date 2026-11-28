@@ -13,6 +13,7 @@ enum VehicleType: string implements HasColor, HasLabel
     case Container = 'container';
     case Flatbed = 'flatbed';
     case BatWing = 'bat_wing';
+    case AviationSecurity = 'aviation_security';
     case Other = 'other';
 
     public function getLabel(): string
@@ -24,6 +25,7 @@ enum VehicleType: string implements HasColor, HasLabel
             self::Container => 'Xe container',
             self::Flatbed => 'Xe fooc',
             self::BatWing => 'Cánh dơi',
+            self::AviationSecurity => 'Xe có chứng chỉ ANHK',
             self::Other => 'Khác',
         };
     }
@@ -37,6 +39,7 @@ enum VehicleType: string implements HasColor, HasLabel
             self::Container => 'primary',
             self::Flatbed => 'warning',
             self::BatWing => 'danger',
+            self::AviationSecurity => 'success',
             self::Other => 'gray',
         };
     }

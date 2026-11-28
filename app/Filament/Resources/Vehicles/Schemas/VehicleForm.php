@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Vehicles\Schemas;
 
 use App\Enums\DriverWorkShift;
+use App\Enums\VehicleType;
 use App\Models\Vehicle;
 use CodeWithDennis\FilamentAdvancedChoice\Filament\Forms\Components\RadioCard;
 use Filament\Forms\Components\DatePicker;
@@ -58,17 +59,9 @@ class VehicleForm
                             ->label('Loại xe')
                             ->prefixIcon(Heroicon::OutlinedSquare3Stack3d)
                             ->required()
-                            ->default('normal')
+                            ->default(VehicleType::Normal)
                             ->native(false)
-                            ->options([
-                                'normal' => 'Xe tải thường',
-                                'cold' => 'Xe tải lạnh',
-                                'anti_vibration' => 'Xe chống rung',
-                                'container' => 'Xe container',
-                                'flatbed' => 'Xe fooc',
-                                'bat_wing' => 'Cánh dơi',
-                                'other' => 'Khác',
-                            ]),
+                            ->options(VehicleType::class),
 
                         Select::make('make')
                             ->label('Hãng xe')

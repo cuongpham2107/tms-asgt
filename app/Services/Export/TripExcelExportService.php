@@ -781,7 +781,7 @@ class TripExcelExportService
             'normal', VehicleType::Normal->value => 'Xe thường',
             'cold', VehicleType::Cold->value => 'Xe lạnh',
             'container', VehicleType::Container->value => 'Container',
-            default => $vehicleType ?: 'Xe thường',
+            default => VehicleType::tryFrom((string) $vehicleType)?->getLabel() ?? ($vehicleType ?: 'Xe thường'),
         };
 
         $statusEnum = $trip->status instanceof TripStatus

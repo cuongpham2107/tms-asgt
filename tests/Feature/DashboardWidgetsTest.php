@@ -5,6 +5,7 @@ use App\Enums\OrderType;
 use App\Enums\TripStatus;
 use App\Enums\VehicleOwnerType;
 use App\Enums\VehicleStatus;
+use App\Enums\VehicleType;
 use App\Filament\Widgets\BillingOverviewStatsWidget;
 use App\Filament\Widgets\DispatchActionRequiredWidget;
 use App\Filament\Widgets\FleetComplianceAlertWidget;
@@ -12,7 +13,10 @@ use App\Filament\Widgets\OperationsStatsWidget;
 use App\Filament\Widgets\OrderAreaChartWidget;
 use App\Filament\Widgets\OrderStatusChartWidget;
 use App\Filament\Widgets\OrderTypeChartWidget;
+use App\Filament\Widgets\RentedVehicleTrendChartWidget;
 use App\Filament\Widgets\TopCustomerBillingWidget;
+use App\Filament\Widgets\TripKmTrendChartWidget;
+use App\Filament\Widgets\TripOperatingTimeChartWidget;
 use App\Filament\Widgets\TripTrendChartWidget;
 use App\Filament\Widgets\VehicleKmOverChartWidget;
 use App\Filament\Widgets\VehicleStatusChartWidget;
@@ -92,6 +96,125 @@ test('trip trend chart widget renders successfully and handles filters', functio
         ->assertStatus(200)
         ->assertHasNoErrors()
         ->set('filter', 'month')
+        ->assertStatus(200)
+        ->assertHasNoErrors()
+        ->set('filter', 'weekly')
+        ->assertStatus(200)
+        ->assertHasNoErrors()
+        ->set('filter', 'monthly')
+        ->assertStatus(200)
+        ->assertHasNoErrors();
+});
+
+test('trip km trend chart aggregates total, loaded, and empty km per 8h-8h+ shift bucket', function () {
+    $this->travelTo(Carbon::parse('2026-11-28 15:00:00'));
+
+    Trip::factory()->create([
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-11-28 09:00:00'),
+        'completed_at' => Carbon::parse('2026-11-28 11:30:00'),
+        'total_km' => 120.0,
+        'total_km_loaded' => 90.0,
+        'total_km_empty' => 30.0,
+    ]);
+
+    Trip::factory()->create([
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-11-27 10:00:00'),
+        'completed_at' => Carbon::parse('2026-11-27 14:00:00'),
+        'total_km' => 200.0,
+        'total_km_loaded' => 150.0,
+        'total_km_empty' => 50.0,
+    ]);
+
+    $widget = new TripKmTrendChartWidget;
+    $widget->filter = '7days';
+    $data = (fn (): array => $this->getData())->call($widget);
+
+    expect(end($data['datasets'][0]['data']))->toBe(120.0)
+        ->and(prev($data['datasets'][0]['data']))->toBe(200.0)
+        ->and(end($data['datasets'][1]['data']))->toBe(90.0)
+        ->and(end($data['datasets'][2]['data']))->toBe(30.0);
+
+    Livewire::test(TripKmTrendChartWidget::class)
+        ->assertStatus(200)
+        ->assertSee('120 km')
+        ->set('filter', 'weekly')
+        ->assertStatus(200)
+        ->set('filter', 'monthly')
+        ->assertStatus(200)
+        ->assertHasNoErrors();
+});
+
+test('trip operating time chart aggregates hours by vehicle ownership and computes efficiency', function () {
+    $this->travelTo(Carbon::parse('2026-11-28 15:00:00'));
+
+    $companyVehicle = Vehicle::factory()->create(['type' => VehicleOwnerType::Company]);
+    $rentVehicle = Vehicle::factory()->create(['type' => VehicleOwnerType::Rent]);
+
+    Trip::factory()->create([
+        'vehicle_id' => $companyVehicle->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-11-28 09:00:00'),
+        'completed_at' => Carbon::parse('2026-11-28 12:30:00'), // 3.5h
+    ]);
+
+    Trip::factory()->create([
+        'vehicle_id' => $rentVehicle->id,
+        'status' => TripStatus::Completed,
+        'started_at' => Carbon::parse('2026-11-28 10:00:00'),
+        'completed_at' => Carbon::parse('2026-11-28 11:30:00'), // 1.5h
+    ]);
+
+    $widget = new TripOperatingTimeChartWidget;
+    $widget->filter = '7days';
+    $data = (fn (): array => $this->getData())->call($widget);
+
+    expect(end($data['datasets'][0]['data']))->toBe(5.0)
+        ->and(end($data['datasets'][1]['data']))->toBe(3.5)
+        ->and(end($data['datasets'][2]['data']))->toBe(1.5);
+
+    Livewire::test(TripOperatingTimeChartWidget::class)
+        ->assertStatus(200)
+        ->assertSee('5,0 giờ')
+        ->assertSee('2 xe')
+        ->set('filter', 'weekly')
+        ->assertStatus(200)
+        ->set('filter', 'monthly')
+        ->assertStatus(200)
+        ->assertHasNoErrors();
+});
+
+test('rented vehicle trend chart splits normal and special rented vehicles per 8h-8h+ bucket', function () {
+    $this->travelTo(Carbon::parse('2026-11-28 15:00:00'));
+
+    $normalRent = Vehicle::factory()->create(['type' => VehicleOwnerType::Rent, 'vehicle_type' => VehicleType::Normal]);
+    $coldRent = Vehicle::factory()->create(['type' => VehicleOwnerType::Rent, 'vehicle_type' => VehicleType::Cold]);
+    $companyVehicle = Vehicle::factory()->create(['type' => VehicleOwnerType::Company, 'vehicle_type' => VehicleType::Normal]);
+
+    // 2 chuyến cùng 1 xe thuê thường -> tính 1 đầu xe thường, 2 lượt chuyến
+    Trip::factory()->create(['vehicle_id' => $normalRent->id, 'status' => TripStatus::Completed, 'started_at' => Carbon::parse('2026-11-28 09:00:00'), 'completed_at' => Carbon::parse('2026-11-28 10:00:00')]);
+    Trip::factory()->create(['vehicle_id' => $normalRent->id, 'status' => TripStatus::Completed, 'started_at' => Carbon::parse('2026-11-28 11:00:00'), 'completed_at' => Carbon::parse('2026-11-28 12:00:00')]);
+    // 1 chuyến xe thuê đặc biệt (xe lạnh)
+    Trip::factory()->create(['vehicle_id' => $coldRent->id, 'status' => TripStatus::Delivering, 'started_at' => Carbon::parse('2026-11-28 13:00:00')]);
+    // Xe công ty không tính vào biểu đồ xe thuê
+    Trip::factory()->create(['vehicle_id' => $companyVehicle->id, 'status' => TripStatus::Completed, 'started_at' => Carbon::parse('2026-11-28 09:00:00'), 'completed_at' => Carbon::parse('2026-11-28 10:00:00')]);
+
+    $widget = new RentedVehicleTrendChartWidget;
+    $widget->filter = '7days';
+    $data = (fn (): array => $this->getData())->call($widget);
+
+    expect(end($data['datasets'][0]['data']))->toBe(2)
+        ->and(end($data['datasets'][1]['data']))->toBe(1)
+        ->and(end($data['datasets'][2]['data']))->toBe(1);
+
+    Livewire::test(RentedVehicleTrendChartWidget::class)
+        ->assertStatus(200)
+        ->assertSee('2 xe')
+        ->assertSee('3 lượt chuyến')
+        ->set('filter', 'weekly')
+        ->assertStatus(200)
+        ->set('filter', 'monthly')
         ->assertStatus(200)
         ->assertHasNoErrors();
 });

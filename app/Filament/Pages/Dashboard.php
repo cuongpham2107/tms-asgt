@@ -8,7 +8,10 @@ use App\Filament\Widgets\FleetComplianceAlertWidget;
 use App\Filament\Widgets\OperationsStatsWidget;
 use App\Filament\Widgets\OrderAreaChartWidget;
 use App\Filament\Widgets\OrderTypeChartWidget;
+use App\Filament\Widgets\RentedVehicleTrendChartWidget;
 use App\Filament\Widgets\TopCustomerBillingWidget;
+use App\Filament\Widgets\TripKmTrendChartWidget;
+use App\Filament\Widgets\TripOperatingTimeChartWidget;
 use App\Filament\Widgets\TripTrendChartWidget;
 use App\Filament\Widgets\VehicleKmOverChartWidget;
 use App\Filament\Widgets\VehicleStatusChartWidget;
@@ -37,6 +40,12 @@ class Dashboard extends BaseDashboard
         OrderTypeChartWidget::class,
     ];
 
+    private const PERFORMANCE_TREND_WIDGETS = [
+        TripKmTrendChartWidget::class,
+        TripOperatingTimeChartWidget::class,
+        RentedVehicleTrendChartWidget::class,
+    ];
+
     public function getColumns(): int|array
     {
         return [
@@ -53,12 +62,14 @@ class Dashboard extends BaseDashboard
             ...self::SUMMARY_WIDGETS,
             ...self::CHART_WIDGETS,
             VehicleKmOverChartWidget::class,
+            ...self::PERFORMANCE_TREND_WIDGETS,
             TopCustomerBillingWidget::class,
         ];
     }
 
     /**
-     * 4 biểu đồ ghép lưới 2×2 chiếm 2/3 bên trái, bảng xếp hạng KM xe ở 1/3 bên phải cao bằng cả khối.
+     * 4 biểu đồ ghép lưới 2×2 chiếm 2/3 bên trái, bảng xếp hạng KM xe ở 1/3 bên phải cao bằng cả khối;
+     * bên dưới là 2 biểu đồ xu hướng hiệu suất (KM vận hành + Thời gian khai thác) chia đôi toàn chiều rộng.
      */
     public function getWidgetsContentComponent(): Component
     {
@@ -68,7 +79,11 @@ class Dashboard extends BaseDashboard
                 Grid::make(['default' => 1, 'md' => 2])
                     ->columnSpan(['default' => 'full', 'lg' => 2])
                     ->schema($this->getWidgetsSchemaComponents(self::CHART_WIDGETS)),
-                ...$this->getWidgetsSchemaComponents([VehicleKmOverChartWidget::class, TopCustomerBillingWidget::class]),
+                ...$this->getWidgetsSchemaComponents([VehicleKmOverChartWidget::class]),
+                Grid::make(['default' => 1, 'md' => 2, 'xl' => 3])
+                    ->columnSpanFull()
+                    ->schema($this->getWidgetsSchemaComponents(self::PERFORMANCE_TREND_WIDGETS)),
+                ...$this->getWidgetsSchemaComponents([TopCustomerBillingWidget::class]),
             ]);
     }
 }
