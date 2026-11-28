@@ -49,31 +49,35 @@ class CompletedHandler implements CheckpointHandlerInterface
     /** @param  Collection<int, TripCheckpoint>  $checkpoints */
     private function completeOrders(Collection $checkpoints): void
     {
-        $orderIds = $checkpoints->pluck('order_id')->unique();
+        $orderIds = $checkpoints->pluck('order_id')->filter()->unique();
 
         foreach ($orderIds as $orderId) {
+            $order = Order::find($orderId);
+            if (! $order) {
+                continue;
+            }
+
+            $order->syncDeliveryPointSequencesFromCheckpoints();
+
             $hasUndeliveredPoints = OrderDeliveryPoint::where('order_id', $orderId)
                 ->where('status', '!=', OrderDeliveryPointStatus::Delivered)
                 ->exists();
 
             if (! $hasUndeliveredPoints) {
-                $order = Order::find($orderId);
-                if ($order) {
-                    $order->status = OrderStatus::Completed;
+                $order->status = OrderStatus::Completed;
 
-                    $loadedKm = OrderLoadedKm::fromCheckpoints(TripCheckpoint::query()
-                        ->where('order_id', $orderId)
-                        ->whereIn('checkpoint_type', ['arrived_pickup', 'completed'])
-                        ->whereNotNull('km_reading')
-                        ->orderBy('id')
-                        ->get(['checkpoint_type', 'order_id', 'km_reading']))[(int) $orderId] ?? null;
+                $loadedKm = OrderLoadedKm::fromCheckpoints(TripCheckpoint::query()
+                    ->where('order_id', $orderId)
+                    ->whereIn('checkpoint_type', ['arrived_pickup', 'completed'])
+                    ->whereNotNull('km_reading')
+                    ->chronological()
+                    ->get(['checkpoint_type', 'order_id', 'km_reading']))[(int) $orderId] ?? null;
 
-                    if ($loadedKm !== null) {
-                        $order->loaded_km = $loadedKm;
-                    }
-
-                    $order->save();
+                if ($loadedKm !== null) {
+                    $order->loaded_km = $loadedKm;
                 }
+
+                $order->save();
             }
         }
     }

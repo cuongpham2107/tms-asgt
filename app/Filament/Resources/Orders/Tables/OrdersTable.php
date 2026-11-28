@@ -51,6 +51,7 @@ class OrdersTable extends BaseTable
                 'customer',
                 'createdBy',
                 'deliveryPoints.location',
+                'tripCheckpoints',
                 'area',
                 'pickupLocation',
                 'trip.vehicle',
@@ -351,12 +352,12 @@ class OrdersTable extends BaseTable
     private static function renderRouteTimeline(Order $record): HtmlString
     {
         $pickupLocationName = $record->pickupLocation?->code ?: $record->pickup_address ?: 'Chưa có điểm lấy';
-        $deliveryPoints = $record->deliveryPoints->sortBy('sequence');
+        $deliveryPoints = $record->orderedDeliveryPoints();
         $locations = collect([e($pickupLocationName)]);
 
         foreach ($deliveryPoints as $deliveryPoint) {
             $locations->push(
-                e($deliveryPoint->location->code ?: $deliveryPoint->location?->code ?: 'Chưa có điểm đến')
+                e($deliveryPoint->location?->code ?: $deliveryPoint->address ?: 'Chưa có điểm đến')
             );
         }
 
@@ -470,7 +471,7 @@ class OrdersTable extends BaseTable
                 ->toArray();
         }
 
-        $deliveryPoints = $record->deliveryPoints->sortBy('sequence');
+        $deliveryPoints = $record->orderedDeliveryPoints();
 
         foreach ($deliveryPoints as $dp) {
             $location = $dp->location;

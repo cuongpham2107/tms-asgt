@@ -160,7 +160,7 @@ class OrderForm extends CreatesOrderTransportCards
                                     ->searchable(['code', 'name'])
                                     ->preload()
                                     ->native(false)
-                                    ->required(fn (Get $get): bool => $requireSchedulingFields && self::isHhhkOrder($get))
+                                    ->required(fn (Get $get, ?Model $record): bool => $requireSchedulingFields && (self::isHhhkOrder($get) || blank($record?->pickup_address)))
                                     ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
                                     ->columnSpan(['default' => 1, 'sm' => 2, 'md' => 2]),
 

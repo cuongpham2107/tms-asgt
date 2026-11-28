@@ -522,7 +522,7 @@ class TripExcelExportService
                 $journey = $this->buildJourneyString($order, $trip, relationsLoaded: true);
 
                 // Kho đóng trả hàng
-                $warehouse = $order->deliveryPoints->first()?->location?->code
+                $warehouse = $order->orderedDeliveryPoints()->first()?->location?->code
                     ?? $checkpointDeliveryLocation
                     ?? $trip->endLocation?->code
                     ?? $order->pickupLocation?->code
@@ -1707,7 +1707,7 @@ class TripExcelExportService
             $points->push($pickupCode);
         }
 
-        $deliveryPoints = $order->deliveryPoints->sortBy('sequence');
+        $deliveryPoints = $order->orderedDeliveryPoints();
         $hasDeliveryPointCode = false;
         foreach ($deliveryPoints as $dp) {
             $code = $dp->location?->code ?: $this->extractLocationShortName($dp->address ?? '');

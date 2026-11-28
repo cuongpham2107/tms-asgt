@@ -215,7 +215,7 @@ class VehicleDispatchTable extends Widget
 
             $deliveryCodes = $trip->endLocation?->code
                 ?? $trip->orders
-                    ->flatMap(fn (Order $order) => $order->deliveryPoints->sortBy(fn ($dp): array => [(int) ($dp->sequence ?? 0), (int) $dp->id]))
+                    ->flatMap(fn (Order $order) => $order->orderedDeliveryPoints())
                     ->map(fn ($dp) => $dp->location?->code ?? $dp->address)
                     ->filter()
                     ->unique()
@@ -251,8 +251,7 @@ class VehicleDispatchTable extends Widget
                     'statusColor' => (string) ($status?->getColor() ?? 'gray'),
                     'customerCode' => $order->customer?->code,
                     'pickup' => $order->pickupLocation?->code ?? $order->pickup_address ?? '—',
-                    'destination' => $order->deliveryPoints
-                        ->sortBy(fn ($dp): array => [(int) ($dp->sequence ?? 0), (int) $dp->id])
+                    'destination' => $order->orderedDeliveryPoints()
                         ->map(fn ($dp) => $dp->location?->code ?? $dp->address)
                         ->filter()
                         ->join(' → ') ?: '—',

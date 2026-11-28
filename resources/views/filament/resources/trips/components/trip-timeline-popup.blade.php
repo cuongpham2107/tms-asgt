@@ -12,7 +12,8 @@
             'pickupLocation',
             'tripCheckpoints' => fn ($q) => $q
                 ->with(['driver', 'deliveryPoint.location', 'order.pickupLocation', 'photos'])
-                ->orderBy('occurred_at', 'desc'),
+                ->reorder()
+                ->chronological(),
         ])
         ->orderBy('planned_loading_at')
         ->get();
@@ -20,7 +21,8 @@
     $tripCheckpoints = $trip->checkpoints()
         ->with(['driver', 'deliveryPoint.location', 'order.pickupLocation', 'photos'])
         ->whereNull('order_id')
-        ->orderBy('occurred_at', 'desc')
+        ->reorder()
+        ->chronological()
         ->get();
 
     $photoUrl = static function ($photo): string {
@@ -56,6 +58,8 @@
         'arrived_delivery' => ['icon' => 'heroicon-o-map-pin',           'color' => 'orange'],
         'driver_swap'      => ['icon' => 'heroicon-o-arrow-path',        'color' => 'purple'],
         'completed'        => ['icon' => 'heroicon-o-check-circle',      'color' => 'emerald'],
+        'end'              => ['icon' => 'heroicon-o-flag',              'color' => 'rose'],
+        'cancelled'        => ['icon' => 'heroicon-o-x-circle',          'color' => 'rose'],
     ];
 
     $colorRing = [
@@ -64,6 +68,7 @@
         'orange'  => 'ring-orange-200 dark:ring-orange-800',
         'purple'  => 'ring-purple-200 dark:ring-purple-800',
         'emerald' => 'ring-emerald-200 dark:ring-emerald-800',
+        'rose'    => 'ring-rose-200 dark:ring-rose-800',
     ];
 
     $colorIcon = [
@@ -72,6 +77,7 @@
         'orange'  => 'text-orange-600 dark:text-orange-400',
         'purple'  => 'text-purple-600 dark:text-purple-400',
         'emerald' => 'text-emerald-600 dark:text-emerald-400',
+        'rose'    => 'text-rose-600 dark:text-rose-400',
     ];
 
     $orderCodes = $orders->pluck('order_code')->implode(', ');

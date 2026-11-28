@@ -12,6 +12,7 @@ use App\Services\Notification\DriverNotificationService;
 use App\Services\Order\OrderDispatchService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
@@ -41,6 +42,20 @@ class AssignTransportAction extends CreatesOrderTransportCards
             ->modalWidth(Width::MaxContent)
             ->stickyModalFooter()
             ->schema([
+                Placeholder::make('pickup_location_warning')
+                    ->label('')
+                    ->content(new HtmlString('<div class="p-3 bg-amber-50 border border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300 rounded-lg text-sm flex items-center gap-2 mb-2">⚠️ <strong>Cảnh báo:</strong> Đơn hàng này chưa có điểm nhận hàng. Vui lòng chọn điểm nhận hàng trước khi gán chuyến!</div>'))
+                    ->visible(fn (Order $record): bool => self::isMissingPickupLocation($record)),
+
+                Select::make('pickup_location_id')
+                    ->label('Điểm nhận hàng')
+                    ->options(fn (): array => self::getLocationOptions())
+                    ->searchable()
+                    ->native(false)
+                    ->default(fn (Order $record) => $record->pickup_location_id)
+                    ->required(fn (Order $record): bool => self::isMissingPickupLocation($record))
+                    ->visible(fn (Order $record): bool => self::isMissingPickupLocation($record)),
+
                 Placeholder::make('chargeable_weight_warning')
                     ->label('')
                     ->content(new HtmlString('<div class="p-3 bg-amber-50 border border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-300 rounded-lg text-sm flex items-center gap-2 mb-2">⚠️ <strong>Cảnh báo:</strong> Đơn hàng ngoài này chưa có trọng tải tính cước. Vui lòng nhập trước khi gán chuyến!</div>'))
@@ -88,8 +103,23 @@ class AssignTransportAction extends CreatesOrderTransportCards
             });
     }
 
+    private static function isMissingPickupLocation(Order $record): bool
+    {
+        return $record->pickup_location_id === null && blank($record->pickup_address);
+    }
+
     private static function createTripForOrder(Order $record, array $data, OrderStatus $orderStatus): void
     {
+        if (self::isMissingPickupLocation($record) && blank($data['pickup_location_id'] ?? null)) {
+            Notification::make()
+                ->title('Chưa chọn điểm nhận hàng')
+                ->body('Đơn hàng bắt buộc phải có điểm nhận hàng trước khi gán xe.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
         if ($record->type === OrderType::External) {
             $weight = $data['chargeable_weight'] ?? $record->chargeable_weight;
             if (blank($weight)) {
@@ -105,9 +135,15 @@ class AssignTransportAction extends CreatesOrderTransportCards
 
         try {
             DB::transaction(function () use ($record, $data, $orderStatus) {
-                $extraUpdates = $record->type === OrderType::External && filled($data['chargeable_weight'] ?? null)
-                    ? ['chargeable_weight' => $data['chargeable_weight']]
-                    : [];
+                $extraUpdates = [];
+
+                if ($record->type === OrderType::External && filled($data['chargeable_weight'] ?? null)) {
+                    $extraUpdates['chargeable_weight'] = $data['chargeable_weight'];
+                }
+
+                if (self::isMissingPickupLocation($record) && filled($data['pickup_location_id'] ?? null)) {
+                    $extraUpdates['pickup_location_id'] = (int) $data['pickup_location_id'];
+                }
 
                 $trip = app(OrderDispatchService::class)->assign(
                     $record,

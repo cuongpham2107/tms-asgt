@@ -41,9 +41,14 @@ class ArrivedDeliveryHandler implements CheckpointHandlerInterface
         // Nếu tài xế chọn giao thêm điểm trả tiếp theo sau khi điểm trước đã completed → mở lại InTransit cho đơn và Running cho xe
         $orderIds = $checkpoints->pluck('order_id')->filter()->unique();
         if ($orderIds->isNotEmpty()) {
-            Order::whereIn('id', $orderIds)
-                ->where('status', OrderStatus::Completed->value)
-                ->get()->each->update(['status' => OrderStatus::InTransit]);
+            $orders = Order::whereIn('id', $orderIds)->get();
+            foreach ($orders as $order) {
+                if ($order->status === OrderStatus::Completed) {
+                    $order->update(['status' => OrderStatus::InTransit]);
+                }
+
+                $order->syncDeliveryPointSequencesFromCheckpoints();
+            }
         }
 
         if ($trip->vehicle_id) {

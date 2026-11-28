@@ -758,7 +758,7 @@ class TripStatisticsReport extends Page
 
                 $formatTime = fn (mixed $value): ?string => $value instanceof Carbon ? $value->format('Y-m-d H:i:s') : ($value ? Carbon::parse($value)->format('Y-m-d H:i:s') : null);
 
-                $deliveryPoints = $order?->deliveryPoints->sortBy('sequence')->values() ?? collect();
+                $deliveryPoints = $order?->orderedDeliveryPoints() ?? collect();
                 $deliveryPointsData = [];
                 if ($deliveryPoints->count() > 1) {
                     $checkpoints = $order->tripCheckpoints->isNotEmpty()
@@ -1618,7 +1618,7 @@ class TripStatisticsReport extends Page
             $tB = $get('summary_departed_at') ? Carbon::parse($get('summary_departed_at')) : null;
             $loading = ($tA && $tB) ? (int) abs($tB->diffInMinutes($tA)) : 0;
 
-            $deliveryPoints = $order->deliveryPoints->sortBy('sequence')->values();
+            $deliveryPoints = $order->orderedDeliveryPoints();
             if ($deliveryPoints->count() > 1) {
                 $unloadingLegs = [];
                 foreach ($deliveryPoints as $dp) {
@@ -1916,7 +1916,7 @@ class TripStatisticsReport extends Page
     private function chargeSummarySchema(?OrderCharge $charge, int $orderId, ?Closure $refreshWaiting = null, ?Closure $refreshPrice = null): array
     {
         $order = Order::with(['customer', 'pickupLocation', 'deliveryPoints.location', 'tripCheckpoints'])->find($orderId);
-        $deliveryPoints = $order?->deliveryPoints->sortBy('sequence')->values() ?? collect();
+        $deliveryPoints = $order?->orderedDeliveryPoints() ?? collect();
         $row = $order === null
             ? []
             : (app(TripExcelExportService::class)->getTripSummaryRowsFromOrders(Order::query()->whereKey($orderId))->firstWhere('order_id', $orderId) ?? []);

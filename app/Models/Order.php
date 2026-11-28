@@ -8,6 +8,7 @@ use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\Priority;
 use App\Enums\TripStatus;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -185,7 +186,103 @@ class Order extends Model implements HasTimeline
 
     public function tripCheckpoints(): HasMany
     {
-        return $this->hasMany(TripCheckpoint::class)->orderBy('id');
+        return $this->hasMany(TripCheckpoint::class)->chronological();
+    }
+
+    /**
+     * Danh sách điểm giao theo lộ trình thực tế: các điểm đã có mốc hành trình đứng trước
+     * theo thứ tự thời gian đến/hoàn thành thực tế, tiếp theo là các điểm chưa giao theo `sequence`.
+     *
+     * @return Collection<int, OrderDeliveryPoint>
+     */
+    public function orderedDeliveryPoints(): Collection
+    {
+        $deliveryPoints = $this->relationLoaded('deliveryPoints')
+            ? $this->deliveryPoints->sortBy(fn (OrderDeliveryPoint $dp): array => [(int) ($dp->sequence ?? 0), (int) $dp->id])->values()
+            : $this->deliveryPoints()->get();
+
+        if ($deliveryPoints->count() <= 1) {
+            return $deliveryPoints;
+        }
+
+        $checkpoints = $this->relationLoaded('tripCheckpoints')
+            ? $this->tripCheckpoints
+            : $this->tripCheckpoints()->get();
+
+        $deliveryTypes = [
+            CheckpointType::ArrivedDelivery,
+            CheckpointType::Completed,
+            CheckpointType::End,
+        ];
+
+        $typeRank = [
+            CheckpointType::ArrivedDelivery->value => 1,
+            CheckpointType::Completed->value => 2,
+            CheckpointType::End->value => 3,
+        ];
+
+        $visitedIds = $checkpoints
+            ->filter(fn (TripCheckpoint $cp): bool => $cp->delivery_point_id !== null
+                && in_array($cp->checkpoint_type, $deliveryTypes, true))
+            ->sortBy(fn (TripCheckpoint $cp): array => [
+                $cp->occurred_at?->getTimestamp() ?? PHP_INT_MAX,
+                $typeRank[$cp->checkpoint_type?->value ?? ''] ?? 9,
+                (int) $cp->id,
+            ])
+            ->pluck('delivery_point_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($visitedIds->isEmpty()) {
+            return $deliveryPoints;
+        }
+
+        $pointsById = $deliveryPoints->keyBy('id');
+        $ordered = new Collection;
+
+        foreach ($visitedIds as $dpId) {
+            if ($pointsById->has($dpId)) {
+                $ordered->push($pointsById->get($dpId));
+            }
+        }
+
+        foreach ($deliveryPoints as $dp) {
+            if (! $visitedIds->contains((int) $dp->id)) {
+                $ordered->push($dp);
+            }
+        }
+
+        return $ordered->values();
+    }
+
+    /**
+     * Đồng bộ lại `sequence` của các điểm giao trong DB theo thứ tự mốc hành trình thực tế.
+     */
+    public function syncDeliveryPointSequencesFromCheckpoints(): bool
+    {
+        $this->load(['deliveryPoints', 'tripCheckpoints']);
+
+        $ordered = $this->orderedDeliveryPoints();
+        if ($ordered->count() <= 1) {
+            return false;
+        }
+
+        $changed = false;
+
+        foreach ($ordered->values() as $index => $dp) {
+            $targetSequence = $index + 1;
+            if ((int) $dp->sequence !== $targetSequence) {
+                $dp->update(['sequence' => $targetSequence]);
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $this->unsetRelation('deliveryPoints');
+        }
+
+        return $changed;
     }
 
     public function tripPhotos(): HasManyThrough

@@ -680,6 +680,10 @@ class DeliveryProgressSyncService
                 $orderTouched = true;
             }
 
+            if ($order->syncDeliveryPointSequencesFromCheckpoints()) {
+                $orderTouched = true;
+            }
+
             if ($orderTouched) {
                 $order->touch();
             }

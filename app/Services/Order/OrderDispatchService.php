@@ -31,7 +31,7 @@ class OrderDispatchService
                 'vehicle_id' => $vehicleId,
                 'driver_id' => $driverId,
                 'status' => TripStatus::Pending,
-                'start_location_id' => $order->pickup_location_id,
+                'start_location_id' => $extraOrderUpdates['pickup_location_id'] ?? $order->pickup_location_id,
                 'end_location_id' => $order->deliveryPoints()->orderBy('sequence', 'desc')->first()?->location_id,
             ]);
 

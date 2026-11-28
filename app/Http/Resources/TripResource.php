@@ -78,7 +78,7 @@ class TripResource extends JsonResource
                     }
                 }
                 if ($order->relationLoaded('deliveryPoints')) {
-                    foreach ($order->deliveryPoints->sortBy('sequence') as $dp) {
+                    foreach ($order->orderedDeliveryPoints() as $dp) {
                         $code = $dp->location?->code ?? $dp->address;
                         if ($code) {
                             $codes[] = $code;

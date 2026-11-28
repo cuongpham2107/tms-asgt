@@ -571,6 +571,7 @@ class TripsTable extends BaseTable
             'endLocation',
             'orders.pickupLocation',
             'orders.deliveryPoints.location',
+            'orders.tripCheckpoints',
             'checkpoints',
         ]);
 
@@ -625,7 +626,7 @@ class TripsTable extends BaseTable
 
         // 3. Điểm giao hàng (theo thứ tự các chặng)
         foreach ($record->orders as $order) {
-            $dps = $order->deliveryPoints->sortBy('sequence');
+            $dps = $order->orderedDeliveryPoints();
             foreach ($dps as $dp) {
                 if ($dp->location && $dp->location->lat !== null && $dp->location->lng !== null) {
                     $dLat = (float) $dp->location->lat;

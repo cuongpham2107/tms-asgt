@@ -110,7 +110,7 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                                             ->searchable()
                                             ->native(false)
                                             ->visible(fn (Get $get): bool => $get('order_type_code') === 'HHHK')
-                                            ->required(false)
+                                            ->required(fn (Get $get): bool => $get('order_type_code') === 'HHHK')
                                             ->createOptionForm(fn (Schema $schema, Get $get): array => LocationForm::configure($schema, $get('area_id'))->getComponents())
                                             ->createOptionUsing(fn (array $data, Schema $schema, Get $get): int => LocationForm::createFromOptionForm(
                                                 $data,
@@ -238,6 +238,16 @@ class CreateBulkOrdersAction extends CreatesOrderTransportCards
                 }
 
                 $orderTypeCode = $data['order_type_code'] ?? 'HHHK';
+
+                if ($orderTypeCode === 'HHHK' && blank($data['pickup_location_id'] ?? null)) {
+                    Notification::make()
+                        ->title('Thiếu điểm nhận hàng')
+                        ->body('Đơn hàng HHHK bắt buộc phải chọn điểm nhận hàng.')
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
 
                 // Compile pickup address parts if HN order
                 $pickupAddress = null;
